@@ -1,0 +1,845 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HHC 세척서비스 예약</title>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>emailjs.init('O99J6X4SGYUPMfGQy');</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --teal:#0D9488;--teal-dk:#0F766E;--teal-lt:#E6FAF8;--teal-mid:#99F6E4;
+  --navy:#0F1C3F;--white:#fff;--surface:#F8FFFE;--surface2:#F0FDFA;
+  --border:#CCFBF1;--border-dark:#99F6E4;
+  --text:#0F1C3F;--text2:#374151;--text3:#6B7280;
+  --green:#16A34A;--green-bg:#DCFCE7;
+  --red:#DC2626;--red-bg:#FEE2E2;
+  --amber:#D97706;--amber-bg:#FEF3C7;
+  --radius-sm:8px;--radius:12px;--radius-lg:16px;--radius-xl:24px;
+  --shadow:0 2px 8px rgba(13,148,136,.08),0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg:0 12px 40px rgba(13,148,136,.15);
+}
+body{font-family:'Inter',sans-serif;background:linear-gradient(160deg,#F0FDFA 0%,#E6FAF8 50%,#CCFBF1 100%);color:var(--text);font-size:14px;line-height:1.6;min-height:100vh}
+input,select,textarea,button{font-family:inherit;font-size:14px}
+
+/* HEADER */
+.header{background:var(--teal-dk);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(13,148,136,.2)}
+.logo-row{display:flex;align-items:center;gap:10px}
+.logo-badge{width:34px;height:34px;background:rgba(255,255,255,.2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:11px;color:#fff}
+.logo-name{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:#fff;line-height:1.2}
+.logo-sub{font-size:9px;color:rgba(255,255,255,.6)}
+
+/* STATES */
+.state-screen{max-width:420px;margin:60px auto;padding:0 20px;text-align:center}
+.state-icon{width:64px;height:64px;margin:0 auto 16px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.state-icon.loading{background:var(--teal-lt)}
+.state-icon.error{background:var(--red-bg)}
+.state-icon.success{background:var(--green-bg)}
+.spinner{width:28px;height:28px;border:3px solid var(--border-dark);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.state-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;color:var(--text);margin-bottom:6px}
+.state-desc{font-size:13px;color:var(--text3);line-height:1.7}
+
+/* MAIN */
+.page-wrap{max-width:520px;margin:0 auto;padding:20px 16px 60px}
+
+/* CUSTOMER HERO */
+.customer-hero{background:linear-gradient(135deg,var(--teal-dk),var(--teal));border-radius:var(--radius-xl);padding:20px 22px;margin-bottom:16px;position:relative;overflow:hidden}
+.customer-hero::before{content:'';position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.08)}
+.ch-greeting{font-size:11px;color:rgba(255,255,255,.6);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}
+.ch-name{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:#fff;margin-bottom:3px}
+.ch-address{font-size:12px;color:rgba(255,255,255,.65)}
+.ch-memo{font-size:12px;color:rgba(255,255,255,.5);margin-top:4px;font-style:italic}
+
+/* CARDS */
+.card{background:var(--white);border-radius:var(--radius-lg);border:1px solid var(--border);box-shadow:var(--shadow);overflow:hidden;margin-bottom:12px}
+.card-head{padding:14px 18px;border-bottom:1px solid var(--surface2);display:flex;align-items:center;gap:9px;background:var(--surface)}
+.card-icon{width:28px;height:28px;border-radius:8px;background:var(--teal-lt);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.card-icon svg{width:14px;height:14px;stroke:var(--teal);fill:none;stroke-width:1.8}
+.card-title{font-size:13px;font-weight:600;color:var(--text)}
+.card-body{padding:16px 18px}
+
+/* STEP INDICATOR */
+.steps{display:flex;align-items:center;gap:0;margin-bottom:16px}
+.step{display:flex;align-items:center;gap:6px;flex:1}
+.step-num{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;transition:all .3s}
+.step-num.active{background:var(--teal);color:#fff}
+.step-num.done{background:var(--green);color:#fff}
+.step-num.inactive{background:var(--border);color:var(--text3)}
+.step-label{font-size:11px;font-weight:500;color:var(--text3);transition:color .3s}
+.step-label.active{color:var(--teal);font-weight:600}
+.step-label.done{color:var(--green)}
+.step-line{flex:1;height:1px;background:var(--border);margin:0 4px}
+.step-line.done{background:var(--green)}
+
+/* CALENDAR */
+.cal-wrap{background:var(--surface2);border-radius:var(--radius);padding:12px}
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cal-nav{background:none;border:none;color:var(--teal);cursor:pointer;padding:4px 8px;border-radius:6px;font-size:14px;font-weight:700;transition:background .15s}
+.cal-nav:hover{background:var(--teal-lt)}
+.cal-month{font-size:13px;font-weight:600;color:var(--text)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-day-name{font-size:10px;font-weight:600;color:var(--text3);text-align:center;padding:4px 0}
+.cal-day{width:100%;aspect-ratio:1;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:default;border:none;background:none;color:var(--text3);transition:all .15s}
+.cal-day.available{background:rgba(13,148,136,.1);color:var(--teal);font-weight:600;cursor:pointer;border:1px solid rgba(13,148,136,.2)}
+.cal-day.available:hover{background:var(--teal);color:#fff}
+.cal-day.selected{background:var(--teal);color:#fff;font-weight:700;box-shadow:0 2px 8px rgba(13,148,136,.3)}
+.cal-day.today{border:2px solid var(--teal)}
+.cal-day.selected.today{border-color:transparent}
+.cal-day.empty{cursor:default}
+
+/* TIME SLOTS */
+.time-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px}
+.time-slot{padding:10px 12px;border:1.5px solid var(--border-dark);border-radius:var(--radius-sm);font-size:13px;font-weight:500;text-align:center;cursor:pointer;transition:all .15s;background:var(--white);color:var(--text2)}
+.time-slot:hover{border-color:var(--teal);color:var(--teal);background:var(--teal-lt)}
+.time-slot.selected{background:var(--teal);border-color:var(--teal);color:#fff;font-weight:600;box-shadow:0 2px 8px rgba(13,148,136,.25)}
+
+/* FORM */
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.field-label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase}
+.field-input{width:100%;padding:10px 13px;background:var(--surface2);border:1.5px solid var(--border-dark);border-radius:var(--radius-sm);color:var(--text);outline:none;transition:border-color .15s;font-size:13px}
+.field-input:focus{border-color:var(--teal);background:var(--white);box-shadow:0 0 0 3px rgba(13,148,136,.1)}
+.field-input::placeholder{color:var(--text3)}
+textarea.field-input{resize:vertical;min-height:72px}
+
+/* ITEMS */
+.item-row{background:var(--surface2);border:1px solid var(--border-dark);border-radius:var(--radius-sm);padding:12px;margin-bottom:8px;position:relative}
+.item-row-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.btn-add-item{width:100%;padding:10px;background:var(--teal-lt);border:1.5px dashed rgba(13,148,136,.4);border-radius:var(--radius-sm);color:var(--teal);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;margin-top:4px}
+.btn-add-item:hover{background:rgba(13,148,136,.1);border-color:var(--teal)}
+.btn-del-item{position:absolute;top:8px;right:8px;background:none;border:1px solid var(--border);color:var(--text3);padding:2px 7px;border-radius:4px;cursor:pointer;font-size:11px;transition:all .15s}
+.btn-del-item:hover{border-color:var(--red);color:var(--red);background:var(--red-bg)}
+
+/* SUBMIT */
+.btn-submit{width:100%;padding:14px;background:var(--teal);color:#fff;border:none;border-radius:var(--radius);font-size:15px;font-weight:700;cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:4px;letter-spacing:.01em}
+.btn-submit:hover{background:var(--teal-dk);transform:translateY(-1px);box-shadow:var(--shadow-lg)}
+.btn-submit:disabled{opacity:.5;cursor:not-allowed;transform:none}
+
+/* CONFIRM CARD */
+.confirm-card{background:linear-gradient(135deg,var(--teal-dk),var(--teal));border-radius:var(--radius-xl);padding:24px;text-align:center;margin-bottom:16px}
+.confirm-check{width:60px;height:60px;background:rgba(255,255,255,.2);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:28px}
+.confirm-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:#fff;margin-bottom:6px}
+.confirm-sub{font-size:13px;color:rgba(255,255,255,.7)}
+.confirm-detail{background:rgba(255,255,255,.12);border-radius:var(--radius-sm);padding:14px 16px;margin-top:14px;text-align:left;font-size:13px;color:rgba(255,255,255,.9);line-height:1.8}
+.confirm-detail strong{color:#fff}
+
+/* COPY MSG */
+.copy-msg-box{background:var(--white);border-radius:var(--radius-lg);border:1px solid var(--border);padding:16px 18px;margin-bottom:12px}
+.copy-msg-title{font-size:12px;font-weight:700;color:var(--teal);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
+.copy-msg-text{font-size:12px;color:var(--text2);line-height:1.7;background:var(--surface);border-radius:var(--radius-sm);padding:12px;border:1px solid var(--border);white-space:pre-wrap;word-break:break-word}
+.copy-actions{display:flex;gap:8px;margin-top:10px}
+.btn-copy-wa{flex:1;padding:10px;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:5px}
+.btn-copy-wa.wa{background:#25D366;color:#fff}.btn-copy-wa.wa:hover{background:#1ebd5c}
+.btn-copy-wa.kakao{background:#FEE500;color:#3A1D1D}.btn-copy-wa.kakao:hover{background:#f0d800}
+.btn-copy-wa.copy{background:var(--navy);color:#fff}.btn-copy-wa.copy:hover{background:var(--indigo,#3D52A0)}
+.copy-ok{text-align:center;font-size:12px;color:var(--green);font-weight:600;display:none;margin-top:6px;padding:8px;background:var(--green-bg);border-radius:6px}
+
+/* NAV BTNS */
+.nav-btns{display:flex;gap:10px;margin-top:12px}
+.btn-nav{flex:1;padding:10px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;border:1.5px solid}
+.btn-nav.prev{border-color:var(--border-dark);background:var(--white);color:var(--text2)}
+.btn-nav.prev:hover{background:var(--surface2)}
+.btn-nav.next{border-color:var(--teal);background:var(--teal);color:#fff}
+.btn-nav.next:hover{background:var(--teal-dk)}
+
+.hint{font-size:11px;color:var(--text3);margin-top:4px}
+.sel-summary{background:var(--teal-lt);border:1px solid rgba(13,148,136,.2);border-radius:var(--radius-sm);padding:10px 13px;font-size:13px;color:var(--teal);font-weight:500;margin-top:10px;display:none}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="logo-row">
+    <div class="logo-badge">HHC</div>
+    <div>
+      <div class="logo-name">Happy Home Care</div>
+      <div class="logo-sub">세척서비스 예약</div>
+    </div>
+  </div>
+</header>
+
+<!-- LOADING -->
+<div id="state-loading">
+  <div class="state-screen">
+    <div class="state-icon loading"><div class="spinner"></div></div>
+    <div class="state-title">예약 정보를 불러오는 중...</div>
+    <div class="state-desc">잠시만 기다려 주세요</div>
+  </div>
+</div>
+
+<!-- ERROR -->
+<div id="state-error" style="display:none">
+  <div class="state-screen">
+    <div class="state-icon error">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    </div>
+    <div class="state-title" id="err-title">오류가 발생했습니다</div>
+    <div class="state-desc" id="err-desc">링크를 확인하거나 관리자에게 문의해주세요.</div>
+  </div>
+</div>
+
+<!-- ALREADY BOOKED -->
+<div id="state-booked" style="display:none">
+  <div class="page-wrap">
+    <div class="confirm-card">
+      <div class="confirm-check">✅</div>
+      <div class="confirm-title">예약이 완료되었습니다</div>
+      <div class="confirm-sub">아래 내용을 카카오톡/WhatsApp으로 전송해 주세요</div>
+      <div class="confirm-detail" id="booked-detail"></div>
+    </div>
+    <div class="copy-msg-box">
+      <div class="copy-msg-title">📋 전송용 메시지</div>
+      <div class="copy-msg-text" id="booked-msg"></div>
+      <div class="copy-actions">
+        <button class="btn-copy-wa wa" id="booked-wa">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="white"><path d="M12 2.5A6.5 6.5 0 0 0 1.5 9.6L1 13l3.5-.5A6.5 6.5 0 1 0 12 2.5z"/></svg>
+          WhatsApp
+        </button>
+        <button class="btn-copy-wa kakao" id="booked-kakao">카카오 복사</button>
+        <button class="btn-copy-wa copy" id="booked-copy">복사</button>
+      </div>
+      <div class="copy-ok" id="booked-copy-ok">✓ 복사되었습니다!</div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN BOOKING FORM -->
+<div id="main-content" style="display:none">
+  <div class="page-wrap">
+    <div class="customer-hero">
+      <div class="ch-greeting">예약 안내</div>
+      <div class="ch-name" id="hero-name"></div>
+      <div class="ch-address" id="hero-address"></div>
+      <div class="ch-memo" id="hero-memo"></div>
+    </div>
+
+    <!-- STEP INDICATOR -->
+    <div class="steps">
+      <div class="step">
+        <div class="step-num active" id="step1-num">1</div>
+        <div class="step-label active" id="step1-lbl">일정 선택</div>
+      </div>
+      <div class="step-line" id="line1"></div>
+      <div class="step">
+        <div class="step-num inactive" id="step2-num">2</div>
+        <div class="step-label" id="step2-lbl">서비스 입력</div>
+      </div>
+      <div class="step-line" id="line2"></div>
+      <div class="step">
+        <div class="step-num inactive" id="step3-num">3</div>
+        <div class="step-label" id="step3-lbl">예약 완료</div>
+      </div>
+    </div>
+
+    <!-- STEP 1: Date & Time -->
+    <div id="step1-panel">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon"><svg viewBox="0 0 13 13"><rect x="1" y="2" width="11" height="10" rx="1"/><path d="M4 1v2M9 1v2M1 5h11"/></svg></div>
+          <div class="card-title">예약 날짜 선택</div>
+        </div>
+        <div class="card-body">
+          <div class="cal-wrap">
+            <div class="cal-header">
+              <button class="cal-nav" id="cal-prev">&#8249;</button>
+              <span id="cal-month-label" style="font-size:13px;font-weight:600;color:var(--text)"></span>
+              <button class="cal-nav" id="cal-next">&#8250;</button>
+            </div>
+            <div class="cal-grid" id="cal-grid">
+              <div class="cal-day-name">일</div><div class="cal-day-name">월</div><div class="cal-day-name">화</div>
+              <div class="cal-day-name">수</div><div class="cal-day-name">목</div><div class="cal-day-name">금</div><div class="cal-day-name">토</div>
+            </div>
+          </div>
+          <div class="hint" id="date-hint">노란색으로 표시된 날짜만 선택 가능합니다</div>
+          <div class="sel-summary" id="sel-date-summary"></div>
+        </div>
+      </div>
+
+      <div class="card" id="time-card" style="display:none">
+        <div class="card-head">
+          <div class="card-icon"><svg viewBox="0 0 13 13"><circle cx="6.5" cy="6.5" r="5"/><path d="M6.5 3.5v3l2 1.5"/></svg></div>
+          <div class="card-title" id="time-card-title">방문 시간 선택</div>
+        </div>
+        <div class="card-body">
+          <div id="time-slots" class="time-grid"></div>
+          <div class="sel-summary" id="sel-time-summary"></div>
+        </div>
+      </div>
+
+      <button class="btn-nav next" id="btn-step1-next" disabled style="width:100%;margin-top:4px">다음 단계 →</button>
+    </div>
+
+    <!-- STEP 2: Service Details -->
+    <div id="step2-panel" style="display:none">
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon"><svg viewBox="0 0 13 13"><path d="M6.5 1L8.5 5l4.5.5-3.3 3 .8 4.5-4-2.2-4 2.2.8-4.5L1 5.5 5.5 5z"/></svg></div>
+          <div class="card-title" id="service-title">서비스 품목</div>
+        </div>
+        <div class="card-body">
+          <div id="items-list"></div>
+          <button class="btn-add-item" id="btn-add-item">+ 품목 추가</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon"><svg viewBox="0 0 13 13"><path d="M2 2.5h9M2 5.5h6M2 8.5h4"/></svg></div>
+          <div class="card-title" id="memo-title">추가 요청사항</div>
+        </div>
+        <div class="card-body">
+          <textarea id="booking-memo" class="field-input" placeholder="기타 요청사항, 주의사항 등 자유롭게 입력해주세요"></textarea>
+        </div>
+      </div>
+
+      <div class="nav-btns">
+        <button class="btn-nav prev" id="btn-step2-prev">← 이전</button>
+        <button class="btn-nav next" id="btn-step2-next">예약 신청 →</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: Complete -->
+    <div id="step3-panel" style="display:none">
+      <div class="confirm-card">
+        <div class="confirm-check">🎉</div>
+        <div class="confirm-title" id="complete-title">예약 신청 완료!</div>
+        <div class="confirm-sub" id="complete-sub">아래 내용을 카카오톡 또는 WhatsApp으로 전송해 주세요</div>
+        <div class="confirm-detail" id="confirm-detail"></div>
+      </div>
+
+      <div class="copy-msg-box">
+        <div class="copy-msg-title" id="msg-label">📋 전송용 메시지</div>
+        <div class="copy-msg-text" id="confirm-msg-text"></div>
+        <div class="copy-actions">
+          <button class="btn-copy-wa wa" id="btn-send-wa">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="white"><path d="M12 2.5A6.5 6.5 0 0 0 1.5 9.6L1 13l3.5-.5A6.5 6.5 0 1 0 12 2.5z"/></svg>
+            WhatsApp
+          </button>
+          <button class="btn-copy-wa kakao" id="btn-send-kakao">카카오 복사</button>
+          <button class="btn-copy-wa copy" id="btn-copy-msg">📋 복사</button>
+        </div>
+        <div class="copy-ok" id="confirm-copy-ok">✓ 복사되었습니다! 카카오톡에 붙여넣기 하세요</div>
+      </div>
+
+      <div class="card">
+        <div class="card-body" id="contact-note" style="text-align:center;padding:20px;color:var(--text3);font-size:13px">
+          예약 확정 후 담당자가 연락드립니다.<br>
+          문의: <strong style="color:var(--teal)">+60172472774</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, doc, getDoc, updateDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const FIREBASE_CFG={
+  apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
+  authDomain:"happywork-packageplan.firebaseapp.com",
+  projectId:"happywork-packageplan",
+  storageBucket:"happywork-packageplan.firebasestorage.app",
+  messagingSenderId:"101289103022",
+  appId:"1:101289103022:web:d81aca7f3747dd26df673f"
+};
+
+const SVC_KO={
+  '에어컨(벽걸이)':['기본세척','약품세척','스팀세척','전체분해세척'],
+  '에어컨(매립형)':['기본세척','스팀그릴세척','전체분해세척'],
+  '에어컨(천정형)':['기본세척','약품세척','스팀살균세척','전체분해세척'],
+  '에어컨(실외기)':['기본세척','약품세척','분해세척'],
+  '매트리스':['건식방식','습식살균방식'],
+  '쇼파':['건식방식','습식살균방식'],
+  '커튼':['현장세탁','수거세탁'],
+  '건조기':['완전분해세척'],
+  '주방후드':['완전분해세척'],
+  '냉장고':['단문형','양문형'],
+  '세탁기':['드럼세탁기','통돌이세탁기'],
+  '기타품목':[]
+};
+
+const SVC_EN={
+  'AC (Wall Type)':['Basic Clean','Chemical Clean','Steam Clean','Full Disassembly Clean'],
+  'AC (Cassette Type)':['Basic Clean','Chemical Clean','Steam Clean','Full Disassembly Clean'],
+  'AC (FCU / Duct Type)':['Basic Clean','Steam Grill Clean','Full Disassembly Clean'],
+  'AC (Outdoor Unit)':['Basic Clean','Chemical Clean','Disassembly Clean'],
+  'Mattress':['Dry Method','Wet Sterilize Method'],
+  'Sofa':['Dry Method','Wet Sterilize Method'],
+  'Curtain':['On-site Wash','Take-away Wash'],
+  'Dryer':['Full Disassembly Clean'],
+  'Kitchen Hood':['Full Disassembly Clean'],
+  'Refrigerator':['Single Door','Double Door'],
+  'Washing Machine':['Front Load','Top Load'],
+  'Other':[]
+};
+
+let db=null, bookingData=null, bookingId=null;
+let calYear=new Date().getFullYear(), calMonth=new Date().getMonth();
+let selectedDate='', selectedTime='';
+let availableDates=[], scheduleMap={};
+let currentStep=1;
+
+const today=()=>new Date().toISOString().slice(0,10);
+const params=new URLSearchParams(window.location.search);
+bookingId=params.get('id');
+
+function showError(title,desc){
+  document.getElementById('state-loading').style.display='none';
+  document.getElementById('state-error').style.display='block';
+  document.getElementById('err-title').textContent=title;
+  document.getElementById('err-desc').textContent=desc;
+}
+
+if(!bookingId){
+  showError('링크가 올바르지 않습니다','예약 ID가 없습니다. 올바른 링크를 사용해주세요.');
+}else{
+  try{
+    const app=initializeApp(FIREBASE_CFG);
+    db=getFirestore(app);
+    onSnapshot(doc(db,'bookings',bookingId),(snap)=>{
+      if(!snap.exists()){showError('예약 정보를 찾을 수 없습니다','링크가 만료되었거나 잘못되었습니다. 관리자에게 문의해주세요.');return;}
+      bookingData={...snap.data(),__id:snap.id};
+      availableDates=bookingData.schedule_dates?JSON.parse(bookingData.schedule_dates):[];
+      scheduleMap=bookingData.schedule_times?JSON.parse(bookingData.schedule_times):{};
+      document.getElementById('state-loading').style.display='none';
+
+      if(bookingData.status==='booked'||bookingData.status==='confirmed'){
+        showAlreadyBooked();
+      }else{
+        document.getElementById('main-content').style.display='block';
+        initBookingForm();
+      }
+    },(err)=>showError('데이터 로드 실패',err.message));
+  }catch(e){showError('연결 실패',e.message);}
+}
+
+function showAlreadyBooked(){
+  const lang=bookingData.customer_lang||'ko';
+  const isEn=lang==='en';
+  window._bookingLang=lang;
+  document.getElementById('state-booked').style.display='block';
+  const rawTime=bookingData.booking_time||'';
+  const dispTime=getDisplayTime(rawTime,isEn);
+  const msg=buildMsg(bookingData.booking_items||'',bookingData.booking_memo||'');
+  document.getElementById('booked-detail').innerHTML=
+    `<strong>${isEn?'Name:':'이름:'}</strong> ${bookingData.customer_name||'—'}<br>
+    <strong>${isEn?'Date:':'예약일:'}</strong> ${bookingData.booking_date||'—'} ${dispTime}<br>
+    ${bookingData.booking_items?`<strong>${isEn?'Service:':'품목:'}</strong> ${bookingData.booking_items}<br>`:''}
+    ${bookingData.booking_memo?`<strong>${isEn?'Request:':'요청:'}</strong> ${bookingData.booking_memo}<br>`:''}
+    <strong>${isEn?'Status:':'상태:'}</strong> ${bookingData.status==='confirmed'?(isEn?'✅ Confirmed':'✅ 확정완료'):(isEn?'⏳ Pending':'⏳ 확인 중')}`;
+  document.querySelector('#state-booked .confirm-title').textContent=isEn?'Your booking is complete':'예약이 완료되었습니다';
+  document.querySelector('#state-booked .confirm-sub').textContent=isEn?'Please send the message below to our team':'아래 내용을 카카오톡/WhatsApp으로 전송해 주세요';
+  document.getElementById('booked-msg').textContent=msg;
+  setupCopyBtns('booked-wa','booked-kakao','booked-copy','booked-copy-ok',msg);
+}
+
+function initBookingForm(){
+  const lang=bookingData.customer_lang||'ko';
+  const L={
+    ko:{
+      greeting:'예약 안내',
+      step1:'일정 선택',step2:'서비스 입력',step3:'예약 완료',
+      dateTitle:'예약 날짜 선택',dateHint:'노란색으로 표시된 날짜만 선택 가능합니다',
+      timeTitle:'방문 시간 선택',
+      serviceTitle:'서비스 품목',memoTitle:'추가 요청사항',
+      memoPlaceholder:'기타 요청사항, 주의사항 등 자유롭게 입력해주세요',
+      prev:'← 이전',next:'예약 신청 →',nextStep:'다음 단계 →',
+      completeTitle:'예약 신청 완료!',completeSub:'아래 내용을 카카오톡 또는 WhatsApp으로 전송해 주세요',
+      msgLabel:'📋 전송용 메시지',
+      kakaoBtn:'카카오 복사',copyBtn:'📋 복사',
+      copyOk:'✓ 복사되었습니다! 카카오톡에 붙여넣기 하세요',
+      contactNote:'예약 확정 후 담당자가 연락드립니다.',
+      addItem:'+ 품목 추가',
+      nameLabel:'이름:',dateLabel:'예약일:',itemsLabel:'품목:',memoLabel:'요청:',statusLabel:'상태:',
+      confirmed:'✅ 확정완료',pending:'⏳ 확인 중',
+    },
+    en:{
+      greeting:'Booking Information',
+      step1:'Select Date',step2:'Service Details',step3:'Complete',
+      dateTitle:'Select Booking Date',dateHint:'Only highlighted dates are available for booking',
+      timeTitle:'Select Visit Time',
+      serviceTitle:'Service Items',memoTitle:'Additional Requests',
+      memoPlaceholder:'Please enter any special requests or notes',
+      prev:'← Back',next:'Submit Booking →',nextStep:'Next Step →',
+      completeTitle:'Booking Submitted!',completeSub:'Please send the message below via KakaoTalk or WhatsApp',
+      msgLabel:'📋 Message to Send',
+      kakaoBtn:'Copy for KakaoTalk',copyBtn:'📋 Copy',
+      copyOk:'✓ Copied! Please paste in KakaoTalk',
+      contactNote:'Our team will contact you after confirming your booking.',
+      addItem:'+ Add Item',
+      nameLabel:'Name:',dateLabel:'Date:',itemsLabel:'Service:',memoLabel:'Request:',statusLabel:'Status:',
+      confirmed:'✅ Confirmed',pending:'⏳ Pending',
+    }
+  }[lang]||{};
+
+  // Apply language to UI - all elements by ID
+  document.getElementById('hero-name').textContent=bookingData.customer_name||'고객님';
+  document.getElementById('hero-address').textContent=bookingData.customer_address||'';
+  const memo=bookingData.customer_memo||'';
+  if(memo){document.getElementById('hero-memo').textContent=memo;}
+  document.querySelector('.ch-greeting').textContent=L.greeting;
+
+  // Step labels
+  document.getElementById('step1-lbl').textContent=L.step1;
+  document.getElementById('step2-lbl').textContent=L.step2;
+  document.getElementById('step3-lbl').textContent=L.step3;
+
+  // Step 1
+  document.querySelectorAll('.card-title')[0].textContent=L.dateTitle;
+  document.getElementById('date-hint').textContent=L.dateHint;
+  document.getElementById('btn-step1-next').textContent=L.nextStep;
+
+  // Step 2
+  document.getElementById('service-title').textContent=L.serviceTitle;
+  document.getElementById('memo-title').textContent=L.memoTitle;
+  document.getElementById('booking-memo').placeholder=L.memoPlaceholder;
+  document.getElementById('btn-add-item').textContent=L.addItem;
+  document.getElementById('btn-step2-prev').textContent=L.prev;
+  document.getElementById('btn-step2-next').textContent=L.next;
+
+  // Step 3
+  document.getElementById('complete-title').textContent=L.completeTitle;
+  document.getElementById('complete-sub').textContent=L.completeSub;
+  document.getElementById('msg-label').textContent=L.msgLabel;
+  document.getElementById('btn-send-kakao').textContent=L.kakaoBtn;
+  document.getElementById('btn-copy-msg').textContent=L.copyBtn;
+  document.getElementById('confirm-copy-ok').textContent=L.copyOk;
+  document.getElementById('contact-note').innerHTML=
+    `${lang==='en'?'Our team will contact you after confirming your booking.':'예약 확정 후 담당자가 연락드립니다.'}<br>
+    ${lang==='en'?'Contact':'문의'}: <strong style="color:var(--teal)">+60172472774</strong>`;
+
+  // Time card title
+  if(document.getElementById('time-card-title')){
+    document.getElementById('time-card-title').textContent=L.timeTitle;
+  }
+
+  // Calendar months
+  if(lang==='en'){window._calMonths=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];}
+  else{window._calMonths=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];}
+
+  // Store lang globally
+  window._bookingLang=lang;
+  window._bookingL=L;
+
+  // Find right month
+  if(availableDates.length){
+    const first=availableDates[0];
+    const parts=first.split('-');
+    calYear=parseInt(parts[0]);calMonth=parseInt(parts[1])-1;
+  }
+  renderCalendar();
+  addFirstItem();
+}
+
+// ── CALENDAR ──
+function renderCalendar(){
+  const months=window._calMonths||['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  document.getElementById('cal-month-label').textContent=`${calYear}${months[calMonth]}`;
+  const grid=document.getElementById('cal-grid');
+  const dayNames=Array.from(grid.querySelectorAll('.cal-day-name'));
+  grid.innerHTML='';
+  dayNames.forEach(d=>grid.appendChild(d));
+
+  const firstDay=new Date(calYear,calMonth,1).getDay();
+  const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+  const todayStr=today();
+
+  for(let i=0;i<firstDay;i++){const d=document.createElement('div');d.className='cal-day empty';grid.appendChild(d);}
+  for(let d=1;d<=daysInMonth;d++){
+    const dateStr=`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.textContent=d;
+    const isAvail=availableDates.includes(dateStr);
+    const isSel=dateStr===selectedDate;
+    const isToday=dateStr===todayStr;
+    let cls='cal-day';
+    if(isAvail)cls+=' available';
+    if(isSel)cls+=' selected';
+    if(isToday)cls+=' today';
+    btn.className=cls;
+    if(isAvail){
+      btn.addEventListener('click',()=>{
+        selectedDate=dateStr;selectedTime='';
+        document.getElementById('btn-step1-next').disabled=true;
+        renderCalendar();
+        renderTimeSlots();
+        const lang=window._bookingLang||'ko';
+        const sum=document.getElementById('sel-date-summary');
+        sum.textContent=lang==='en'?`Selected date: ${dateStr}`:`선택된 날짜: ${dateStr}`;
+        sum.style.display='block';
+        document.getElementById('time-card').style.display='block';
+      });
+    }
+    grid.appendChild(btn);
+  }
+}
+
+document.getElementById('cal-prev').addEventListener('click',()=>{calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCalendar();});
+document.getElementById('cal-next').addEventListener('click',()=>{calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCalendar();});
+
+function renderTimeSlots(){
+  const lang=window._bookingLang||'ko';
+  const isEn=lang==='en';
+  const el=document.getElementById('time-slots');
+  const times=scheduleMap[selectedDate]||[];
+  if(!times.length){
+    el.innerHTML=`<div style="color:var(--text3);font-size:13px;grid-column:1/-1;text-align:center;padding:10px">${isEn?'No available times for this date':'해당 날짜에 방문 가능 시간이 없습니다'}</div>`;
+    return;
+  }
+  el.innerHTML=times.map(t=>{
+    const display=getDisplayTime(t,isEn);
+    return `<button type="button" class="time-slot${t===selectedTime?' selected':''}" data-time="${t}">${display}</button>`;
+  }).join('');
+  el.querySelectorAll('.time-slot').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      selectedTime=btn.dataset.time;
+      renderTimeSlots();
+      const sum=document.getElementById('sel-time-summary');
+      const dispTime=getDisplayTime(selectedTime,isEn);
+      sum.textContent=isEn?`Selected time: ${dispTime}`:`선택된 시간: ${dispTime}`;
+      sum.style.display='block';
+      document.getElementById('btn-step1-next').disabled=false;
+    });
+  });
+}
+
+// ── STEPS ──
+function goToStep(n){
+  currentStep=n;
+  [1,2,3].forEach(i=>{
+    document.getElementById(`step${i}-panel`).style.display=i===n?'block':'none';
+    const num=document.getElementById(`step${i}-num`);
+    const lbl=document.getElementById(`step${i}-lbl`);
+    if(i<n){num.className='step-num done';num.textContent='✓';lbl.className='step-label done';}
+    else if(i===n){num.className='step-num active';num.textContent=i;lbl.className='step-label active';}
+    else{num.className='step-num inactive';num.textContent=i;lbl.className='step-label';}
+  });
+  [1,2].forEach(i=>{
+    const line=document.getElementById(`line${i}`);
+    if(i<n)line.className='step-line done';else line.className='step-line';
+  });
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+document.getElementById('btn-step1-next').addEventListener('click',()=>{if(selectedDate&&selectedTime)goToStep(2);});
+document.getElementById('btn-step2-prev').addEventListener('click',()=>goToStep(1));
+document.getElementById('btn-step2-next').addEventListener('click',submitBooking);
+
+// ── ITEMS ──
+function addFirstItem(){
+  document.getElementById('items-list').innerHTML='';
+  addItem();
+}
+
+document.getElementById('btn-add-item').addEventListener('click',addItem);
+
+function addItem(){
+  const lang=window._bookingLang||'ko';
+  const isEn=lang==='en';
+  const list=document.getElementById('items-list');
+  const idx=Date.now();
+  const div=document.createElement('div');
+  div.className='item-row';
+  div.id=`item-${idx}`;
+
+  const SVC_EN={
+    'AC (Wall Type)':['Basic Clean','Chemical Clean','Steam Clean','Full Disassembly Clean'],
+    'AC (Cassette Type)':['Basic Clean','Chemical Clean','Steam Clean','Full Disassembly Clean'],
+    'AC (FCU / Duct Type)':['Basic Clean','Steam Grill Clean','Full Disassembly Clean'],
+    'AC (Outdoor Unit)':['Basic Clean','Chemical Clean','Disassembly Clean'],
+    'Mattress':['Dry Method','Wet Sterilize Method'],
+    'Sofa':['Dry Method','Wet Sterilize Method'],
+    'Curtain':['On-site Wash','Take-away Wash'],
+    'Dryer':['Full Disassembly Clean'],
+    'Kitchen Hood':['Full Disassembly Clean'],
+    'Refrigerator':['Single Door','Double Door'],
+    'Washing Machine':['Front Load','Top Load'],
+    'Other':[]
+  };
+
+  const serviceMap=isEn?SVC_EN:SVC_KO;
+  const delLabel=isEn?'✕ Remove':'✕ 삭제';
+  const itemLabel=isEn?'Item':'품목';
+  const itemPlaceholder=isEn?'Select item':'품목 선택';
+  const svcLabel=isEn?'Service Type':'서비스 종류';
+  const svcPlaceholder=isEn?'Select':'선택';
+  const qtyLabel=isEn?'Quantity':'수량';
+  const qtyPlaceholder=isEn?'Qty':'수량';
+  const qtyUnit=isEn?'unit(s)':'대';
+  const otherLabel=isEn?'Enter item name':'기타 품목 직접 입력';
+  const otherPlaceholder=isEn?'Enter item name':'품목명 입력';
+
+  div.innerHTML=`
+    <button type="button" class="btn-del-item" onclick="document.getElementById('item-${idx}').remove()">${delLabel}</button>
+    <div class="field">
+      <label class="field-label">${itemLabel}</label>
+      <select class="field-input item-select" onchange="updateSvcSelect(this,'svc-${idx}')">
+        <option value="">${itemPlaceholder}</option>
+        ${Object.keys(serviceMap).map(k=>`<option value="${k}">${k}</option>`).join('')}
+      </select>
+    </div>
+    <div class="item-row-grid">
+      <div class="field">
+        <label class="field-label">${svcLabel}</label>
+        <select class="field-input svc-select" id="svc-${idx}"><option value="">${svcPlaceholder}</option></select>
+      </div>
+      <div class="field">
+        <label class="field-label">${qtyLabel}</label>
+        <select class="field-input qty-select">
+          <option value="">${qtyPlaceholder}</option>
+          ${[1,2,3,4,5,6,7,8,9,10].map(n=>`<option value="${n}">${n} ${qtyUnit}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="field" id="other-${idx}" style="display:none">
+      <label class="field-label">${otherLabel}</label>
+      <input type="text" class="field-input other-input" placeholder="${otherPlaceholder}">
+    </div>`;
+  list.appendChild(div);
+}
+
+window.updateSvcSelect=function(sel,svcId){
+  const lang=window._bookingLang||'ko';
+  const isEn=lang==='en';
+  const v=sel.value;
+  const svcSel=document.getElementById(svcId);
+  const idx=svcId.replace('svc-','');
+  const otherDiv=document.getElementById(`other-${idx}`);
+  const otherKey=isEn?'Other':'기타품목';
+  svcSel.innerHTML=`<option value="">${isEn?'Select':'선택'}</option>`;
+  if(v===otherKey){
+    svcSel.disabled=true;otherDiv.style.display='block';
+  }else{
+    svcSel.disabled=false;otherDiv.style.display='none';
+    const map=isEn?SVC_EN:SVC_KO;
+    (map[v]||[]).forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;svcSel.appendChild(o);});
+  }
+};
+
+async function submitBooking(){
+  const lang=window._bookingLang||'ko';
+  const isEn=lang==='en';
+  const rows=document.querySelectorAll('.item-row');
+  if(!rows.length){alert(isEn?'Please add at least one service item.':'품목을 추가해주세요.');return;}
+
+  const items=[];
+  let valid=true;
+  rows.forEach(row=>{
+    const item=row.querySelector('.item-select').value;
+    const svc=row.querySelector('.svc-select')?.value;
+    const qty=row.querySelector('.qty-select').value;
+    const other=row.querySelector('.other-input')?.value;
+    const otherKey=isEn?'Other':'기타품목';
+    if(!item||!qty)valid=false;
+    if(item!==otherKey&&!svc)valid=false;
+    const itemName=item===otherKey?(other||(isEn?'Other':'기타')):item;
+    const svcName=item===otherKey?(isEn?'Other Service':'기타서비스'):svc;
+    const qtyUnit=isEn?'unit(s)':'대';
+    items.push(`${itemName}(${svcName}/${qty}${qtyUnit})`);
+  });
+
+  if(!valid){alert(isEn?'Please complete all item information.':'품목 정보를 모두 입력해주세요.');return;}
+
+  const memo=document.getElementById('booking-memo').value.trim();
+  const dispTime=getDisplayTime(selectedTime,isEn);
+
+  try{
+    await updateDoc(doc(db,'bookings',bookingId),{
+      status:'booked',
+      booking_date:selectedDate,
+      booking_time:selectedTime,
+      booking_items:items.join(', '),
+      booking_memo:memo,
+      booked_at:new Date().toISOString(),
+    });
+
+    // ── EmailJS 관리자 알림 발송 ──
+    try{
+      await emailjs.send(
+        'service_wf4f4eg',
+        'template_mu63ahr',
+        {
+          customer_name: bookingData.customer_name||'—',
+          customer_phone: bookingData.customer_phone||'—',
+          customer_address: bookingData.customer_address||'—',
+          booking_date: selectedDate,
+          booking_time: dispTime,
+          booking_items: items.join(', '),
+          booking_memo: memo||'없음',
+          submitted_at: new Date().toLocaleString('ko-KR'),
+        },
+        'O99J6X4SGYUPMfGQy'
+      );
+      console.log('알림 이메일 발송 완료');
+    }catch(emailErr){
+      console.warn('이메일 발송 실패 (예약은 저장됨):', emailErr);
+    }
+
+    showStep3(items.join(', '),memo);
+  }catch(e){alert('예약 저장 실패: '+e.message);}
+}
+
+function getDisplayTime(t,isEn){
+  if(!t)return '—';
+  // New format: "09:00 전후|Around 09:00"
+  if(t.includes('|')){
+    const parts=t.split('|');
+    return isEn?(parts[1]||parts[0]):(parts[0]||t);
+  }
+  // Old format: "09:00 전후" — auto convert to English if needed
+  if(isEn){
+    return t.replace('전후','').trim().replace(/^(\d{2}:\d{2})$/,'Around $1')
+            .replace(/^(\d{2}:\d{2}) 전후$/,'Around $1')
+            ||t.replace('전후','Around').trim();
+  }
+  return t;
+}
+
+function showStep3(items,memo){
+  const lang=window._bookingLang||'ko';
+  const isEn=lang==='en';
+  const dispTime=getDisplayTime(selectedTime,isEn);
+  goToStep(3);
+  document.getElementById('confirm-detail').innerHTML=
+    `<strong>${isEn?'Name:':'이름:'}</strong> ${bookingData.customer_name||'—'}<br>
+    <strong>${isEn?'Date:':'예약일:'}</strong> ${selectedDate} ${dispTime}<br>
+    <strong>${isEn?'Service:':'품목:'}</strong> ${items}<br>
+    ${memo?`<strong>${isEn?'Request:':'요청:'}</strong> ${memo}<br>`:''}
+    <strong>${isEn?'Contact:':'연락처:'}</strong> ${bookingData.customer_phone||'—'}`;
+
+  const msg=buildMsg(items,memo);
+  document.getElementById('confirm-msg-text').textContent=msg;
+  setupCopyBtns('btn-send-wa','btn-send-kakao','btn-copy-msg','confirm-copy-ok',msg);
+}
+
+function buildMsg(items,memo){
+  const b=bookingData;
+  const lang=window._bookingLang||'ko';
+  const isEn=lang==='en';
+  const date=b.booking_date||selectedDate;
+  const rawTime=b.booking_time||selectedTime;
+  const time=getDisplayTime(rawTime,isEn);
+  const itms=b.booking_items||items||'';
+  const m=b.booking_memo||memo||'';
+  if(isEn){
+    return `[Cleaning Service Booking Request]\nName: ${b.customer_name||'—'}\nContact: ${b.customer_phone||'—'}\n${b.customer_address?'Address: '+b.customer_address+'\n':''}\nDate: ${date}\nVisit Time: ${time}\nService: ${itms}\n${m?'Request: '+m+'\n':''}\nHAPPY WORKS SERVICES SDN.BHD.\n+60172472774`;
+  }
+  return `[세척서비스 예약신청]\n고객명: ${b.customer_name||'—'}\n연락처: ${b.customer_phone||'—'}\n${b.customer_address?'주소: '+b.customer_address+'\n':''}\n예약일: ${date}\n방문시간: ${time}\n품목: ${itms}\n${m?'요청사항: '+m+'\n':''}\nHAPPY WORKS SERVICES SDN.BHD.\n+60172472774`;
+}
+
+function setupCopyBtns(waId,kakaoId,copyId,okId,msg){
+  const waBtn=document.getElementById(waId);
+  const kakaoBtn=document.getElementById(kakaoId);
+  const copyBtn=document.getElementById(copyId);
+  const okEl=document.getElementById(okId);
+  if(waBtn)waBtn.onclick=()=>window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+  if(kakaoBtn)kakaoBtn.onclick=()=>{navigator.clipboard.writeText(msg).then(()=>{okEl.style.display='block';setTimeout(()=>okEl.style.display='none',3000);}).catch(()=>prompt('복사 후 카카오톡에 붙여넣기:',msg));};
+  if(copyBtn)copyBtn.onclick=()=>{navigator.clipboard.writeText(msg).then(()=>{okEl.style.display='block';setTimeout(()=>okEl.style.display='none',3000);});};
+}
+</script>
+</body>
+</html>

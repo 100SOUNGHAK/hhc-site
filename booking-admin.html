@@ -1,0 +1,1112 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HHC Booking — Admin</title>
+<script>
+// 카카오톡 인앱 브라우저 감지 → 외부 브라우저로 유도
+(function(){
+  const ua=navigator.userAgent.toLowerCase();
+  const isKakao=ua.indexOf('kakaotalk')>-1;
+  const isLine=ua.indexOf('line/')>-1;
+  const isInApp=isKakao||isLine;
+  if(isInApp){
+    const url=location.href;
+    const isAndroid=ua.indexOf('android')>-1;
+    const isIOS=/iphone|ipad|ipod/.test(ua);
+    if(isAndroid){
+      location.href='intent://'+url.replace(/https?:\/\//,'')+'#Intent;scheme=https;package=com.android.chrome;end';
+    } else if(isIOS){
+      // iOS 는 safari 로 유도하는 페이지 표시
+      document.addEventListener('DOMContentLoaded',function(){
+        document.body.innerHTML=`
+          <div style="font-family:sans-serif;padding:30px 20px;text-align:center;background:#f8f9fc;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center">
+            <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:320px;box-shadow:0 4px 20px rgba(0,0,0,.1)">
+              <div style="font-size:40px;margin-bottom:14px">🌐</div>
+              <div style="font-size:17px;font-weight:700;color:#0F1C3F;margin-bottom:8px">외부 브라우저에서 열기</div>
+              <div style="font-size:13px;color:#6B7280;line-height:1.6;margin-bottom:20px">카카오톡에서는 이 페이지를 열 수 없습니다.<br>아래 버튼을 눌러 Safari 에서 열어주세요.</div>
+              <button onclick="location.href='${url}'" style="width:100%;padding:13px;background:#0D9488;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">Safari 로 열기</button>
+              <div style="margin-top:12px;font-size:11px;color:#9CA3AF">또는 주소를 복사하여 Safari 에 붙여넣기 하세요<br><span style="color:#0D9488;word-break:break-all">${url}</span></div>
+            </div>
+          </div>`;
+      });
+    }
+  }
+})();
+</script>
+<link rel="manifest" href="/manifest-booking.json">
+<meta name="theme-color" content="#0D9488">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HHC Booking">
+<link rel="apple-touch-icon" href="/icon-booking-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0F1C3F;--indigo:#3D52A0;--violet:#7091E6;--teal:#0D9488;--teal-lt:#E6FAF8;
+  --white:#fff;--surface:#F8F9FC;--surface2:#F0F2F8;
+  --border:#DDE1EE;--text:#0F1C3F;--text2:#4A5578;--text3:#8693B5;
+  --green:#16A34A;--green-bg:#DCFCE7;--red:#DC2626;--red-bg:#FEE2E2;
+  --amber:#D97706;--amber-bg:#FEF3C7;
+  --radius-sm:6px;--radius:10px;--radius-lg:14px;--radius-xl:20px;
+  --shadow:0 1px 3px rgba(15,28,63,.06),0 4px 16px rgba(15,28,63,.06);
+  --shadow-lg:0 8px 32px rgba(15,28,63,.14);
+}
+body{font-family:'Inter',sans-serif;background:var(--surface);color:var(--text);font-size:14px;line-height:1.6;min-height:100vh}
+input,select,textarea,button{font-family:inherit;font-size:14px}
+
+/* HEADER */
+.header{background:var(--navy);position:sticky;top:0;z-index:100;box-shadow:0 2px 20px rgba(0,0,0,.25)}
+.header-inner{max-width:1200px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:0}
+.logo-block{display:flex;align-items:center;gap:10px;padding:13px 0;border-right:1px solid rgba(255,255,255,.1);padding-right:20px}
+.logo-badge{width:34px;height:34px;background:var(--teal);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:11px;color:#fff;letter-spacing:.04em;flex-shrink:0}
+.logo-name{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:#fff;line-height:1.2}
+.logo-sub{font-size:9px;color:rgba(255,255,255,.4);letter-spacing:.04em}
+.admin-badge{background:rgba(220,38,38,.2);color:#FCA5A5;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;letter-spacing:.06em;margin-left:6px;border:1px solid rgba(220,38,38,.3)}
+.nav-tabs{display:flex;gap:2px;padding:9px 20px;flex:1}
+.nav-tab{background:transparent;border:none;color:rgba(255,255,255,.5);padding:7px 14px;border-radius:var(--radius-sm);font-size:13px;font-weight:500;cursor:pointer;transition:all .18s;white-space:nowrap}
+.nav-tab:hover{background:rgba(255,255,255,.07);color:rgba(255,255,255,.8)}
+.nav-tab.active{background:rgba(13,148,136,.25);color:#5EEAD4;font-weight:600}
+.header-right{display:flex;align-items:center;gap:8px;padding:9px 0 9px 20px;border-left:1px solid rgba(255,255,255,.1)}
+.fb-status{display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,.4);padding:4px 9px;border-radius:20px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)}
+.fb-status .dot{width:6px;height:6px;border-radius:50%;background:#94A3B8;transition:background .3s}
+.fb-status.connected .dot{background:#4ADE80}
+.fb-status.connected{color:rgba(255,255,255,.6)}
+.btn-logout{background:none;border:none;color:rgba(255,255,255,.4);font-size:12px;cursor:pointer;padding:6px 8px}
+
+/* LOGIN */
+.login-wrap{max-width:400px;margin:80px auto;padding:0 20px}
+.login-card{background:var(--white);border-radius:var(--radius-xl);border:1px solid var(--border);box-shadow:var(--shadow-lg);overflow:hidden}
+.login-head{background:var(--navy);padding:24px 28px}
+.login-head-badge{font-size:10px;color:rgba(255,255,255,.5);letter-spacing:.1em;margin-bottom:5px}
+.login-head-title{font-family:'Syne',sans-serif;font-size:19px;font-weight:800;color:#fff;margin-bottom:2px}
+.login-head-sub{font-size:12px;color:rgba(255,255,255,.4)}
+.login-body{padding:24px 28px}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.field-label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase}
+.field-input{width:100%;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);outline:none;transition:border-color .15s;font-size:13px}
+.field-input:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(13,148,136,.1)}
+.field-input::placeholder{color:var(--text3)}
+.field-hint{font-size:11px;color:var(--text3);margin-top:2px}
+.btn-primary{width:100%;padding:11px;background:var(--navy);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;transition:all .18s;margin-top:4px}
+.btn-primary:hover{background:var(--indigo)}
+.err-msg{background:var(--red-bg);color:var(--red);padding:9px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:500;margin-top:8px;display:none}
+
+/* APP */
+.app-body{max-width:1200px;margin:0 auto;padding:20px;display:none}
+.app-body.active{display:block}
+
+/* CARDS */
+.card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)}
+.card+.card{margin-top:14px}
+.card-head{padding:13px 16px;border-bottom:1px solid var(--surface2);display:flex;align-items:center;gap:9px}
+.card-icon{width:26px;height:26px;border-radius:var(--radius-sm);background:var(--teal-lt);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.card-icon svg{width:13px;height:13px;stroke:var(--teal);fill:none;stroke-width:1.8}
+.card-title{font-size:13px;font-weight:600;color:var(--text)}
+.card-body{padding:16px}
+
+/* NEW CUSTOMER FORM */
+.new-customer-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:640px){.new-customer-grid{grid-template-columns:1fr}}
+.fg{display:grid;gap:10px}
+.fg.c2{grid-template-columns:1fr 1fr}
+@media(max-width:480px){.fg.c2{grid-template-columns:1fr}}
+.field-input.sm{padding:8px 10px;font-size:13px}
+select.field-input{cursor:pointer}
+
+/* CALENDAR */
+.cal-wrap{background:var(--surface);border-radius:var(--radius);padding:12px}
+.cal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cal-nav{background:none;border:none;color:var(--text2);cursor:pointer;padding:4px 8px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;transition:background .15s}
+.cal-nav:hover{background:var(--border)}
+.cal-month{font-size:13px;font-weight:600;color:var(--text)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.cal-day-name{font-size:10px;font-weight:600;color:var(--text3);text-align:center;padding:4px 0;letter-spacing:.04em}
+.cal-day{width:100%;aspect-ratio:1;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;cursor:pointer;transition:all .15s;position:relative;border:none;background:none;color:var(--text2)}
+.cal-day:hover:not(.empty):not(.past){background:var(--teal-lt);color:var(--teal)}
+.cal-day.empty{cursor:default;background:none}
+.cal-day.past{color:var(--border);cursor:default}
+.cal-day.selected{background:var(--teal);color:#fff;font-weight:600}
+.cal-day.today{border:2px solid var(--teal);color:var(--teal);font-weight:600}
+.cal-day.selected.today{border-color:transparent}
+
+/* TIME SLOTS */
+.time-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+@media(max-width:480px){.time-grid{grid-template-columns:repeat(2,1fr)}}
+.time-chip{padding:7px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-weight:500;text-align:center;cursor:pointer;transition:all .15s;background:var(--white);color:var(--text2);display:flex;align-items:center;justify-content:space-between;gap:4px}
+.time-chip:hover{border-color:var(--teal);color:var(--teal)}
+.time-chip.selected{background:var(--teal);border-color:var(--teal);color:#fff}
+.time-chip .del-time{background:rgba(255,255,255,.3);border:none;color:#fff;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;flex-shrink:0}
+.time-chip:not(.selected) .del-time{background:var(--surface2);color:var(--text3)}
+.time-chip:not(.selected) .del-time:hover{background:var(--red-bg);color:var(--red)}
+
+/* SELECTED DATES LIST */
+.sel-dates{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.sel-date-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:var(--teal-lt);border:1px solid rgba(13,148,136,.2);border-radius:20px;font-size:12px;color:var(--teal);font-weight:500}
+.sel-date-chip button{background:none;border:none;color:var(--teal);cursor:pointer;font-size:12px;line-height:1;padding:0;opacity:.7}
+.sel-date-chip button:hover{opacity:1}
+
+/* CUSTOMER LINK BOX */
+.link-box{background:linear-gradient(135deg,var(--teal-lt),rgba(230,250,248,.3));border:1px solid rgba(13,148,136,.2);border-radius:var(--radius);padding:12px 14px;margin-top:10px}
+.link-label{font-size:10px;font-weight:700;color:var(--teal);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px}
+.link-url{font-size:11px;color:var(--indigo);background:rgba(255,255,255,.7);border:1px solid rgba(13,148,136,.2);border-radius:var(--radius-sm);padding:7px 10px;word-break:break-all;font-family:'Inter',monospace;line-height:1.5;margin-bottom:8px}
+.link-actions{display:flex;gap:6px;flex-wrap:wrap}
+.btn-copy{padding:7px 12px;border-radius:var(--radius-sm);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;border:1px solid rgba(13,148,136,.3);background:var(--white);color:var(--teal);display:flex;align-items:center;gap:4px}
+.btn-copy:hover{background:var(--teal-lt)}
+.btn-wa{padding:7px 12px;border-radius:var(--radius-sm);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;border:none;background:#25D366;color:#fff;display:flex;align-items:center;gap:4px}
+.btn-wa:hover{background:#1ebd5c}
+.btn-kakao{padding:7px 12px;border-radius:var(--radius-sm);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;border:none;background:#FEE500;color:#3A1D1D;display:flex;align-items:center;gap:4px}
+.btn-kakao:hover{background:#f0d800}
+.copy-ok{font-size:11px;color:var(--green);font-weight:600;display:none;margin-top:4px}
+.kakao-ok{font-size:11px;color:var(--green);font-weight:600;display:none;margin-top:4px;padding:6px;background:var(--green-bg);border-radius:var(--radius-sm);text-align:center}
+
+/* CUSTOMER LIST */
+.customer-list{display:grid;gap:10px}
+.customer-item{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;transition:all .15s}
+.customer-item:hover{border-color:var(--teal);box-shadow:0 2px 12px rgba(13,148,136,.08)}
+.ci-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.ci-name{font-size:14px;font-weight:600;color:var(--text)}
+.ci-phone{font-size:12px;color:var(--text3);margin-top:1px}
+.ci-status{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.ci-status.pending{background:var(--amber-bg);color:var(--amber)}
+.ci-status.booked{background:var(--green-bg);color:var(--green)}
+.ci-status.confirmed{background:rgba(61,82,160,.1);color:var(--indigo)}
+.ci-dates{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.ci-date-tag{padding:2px 8px;background:var(--teal-lt);border-radius:20px;font-size:11px;color:var(--teal);font-weight:500}
+.ci-booking{background:var(--surface);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:8px;border-left:3px solid var(--teal)}
+.ci-actions{display:flex;gap:5px;flex-wrap:wrap}
+.btn-sm{padding:5px 10px;border-radius:var(--radius-sm);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;border:1px solid;white-space:nowrap}
+.btn-sm-teal{border-color:var(--teal);color:var(--teal);background:transparent}.btn-sm-teal:hover{background:var(--teal-lt)}
+.btn-sm-indigo{border-color:var(--indigo);color:var(--indigo);background:transparent}.btn-sm-indigo:hover{background:var(--surface2)}
+.btn-sm-green{border-color:var(--green);color:var(--green);background:transparent}.btn-sm-green:hover{background:var(--green-bg)}
+.btn-sm-red{border-color:var(--border);color:var(--text3);background:transparent}.btn-sm-red:hover{border-color:var(--red);color:var(--red);background:var(--red-bg)}
+.btn-sm-wa{border:none;background:#25D366;color:#fff}.btn-sm-wa:hover{background:#1ebd5c}
+.btn-sm-kakao{border:none;background:#FEE500;color:#3A1D1D}.btn-sm-kakao:hover{background:#f0d800}
+
+/* SAVE BTN */
+.btn-save{width:100%;padding:11px;background:var(--navy);color:#fff;border:none;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:7px;margin-top:12px}
+.btn-save:hover{background:var(--indigo)}
+.save-toast{display:none;margin-top:8px;padding:9px;background:var(--green-bg);color:var(--green);border-radius:var(--radius-sm);font-size:12px;font-weight:600;text-align:center}
+
+/* MODAL */
+.modal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:center;justify-content:center;padding:16px}
+.modal-ov.open{display:flex}
+.modal-box{background:var(--white);border-radius:var(--radius-xl);padding:24px;max-width:340px;width:100%;box-shadow:var(--shadow-lg)}
+.modal-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:5px}
+.modal-msg{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:18px}
+.modal-btns{display:flex;gap:7px;justify-content:flex-end}
+.modal-cancel{padding:8px 15px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--text2);font-size:13px;font-weight:500;cursor:pointer}
+.modal-ok{padding:8px 15px;border:none;border-radius:var(--radius-sm);background:var(--navy);color:#fff;font-size:13px;font-weight:600;cursor:pointer}
+.modal-ok.danger{background:var(--red)}
+
+/* LOADING */
+.loading-ov{display:none;position:fixed;inset:0;background:rgba(255,255,255,.6);z-index:998;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.loading-ov.open{display:flex}
+.loading-box{background:var(--white);border-radius:var(--radius-lg);padding:16px 22px;font-size:14px;font-weight:600;color:var(--text);box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px}
+.spinner{width:16px;height:16px;border:2px solid var(--surface2);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* TOAST */
+.toast-box{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 18px;border-radius:var(--radius);font-size:13px;font-weight:500;z-index:9999;box-shadow:var(--shadow-lg);display:none}
+
+/* EMPTY */
+.empty-st{text-align:center;padding:40px 20px;color:var(--text3)}
+.empty-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px}
+.empty-desc{font-size:12px}
+
+/* TIME PRESET BTNS */
+.time-presets{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.time-preset{padding:5px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;font-size:11px;font-weight:500;color:var(--text2);cursor:pointer;transition:all .15s}
+.time-preset:hover{background:var(--teal-lt);border-color:rgba(13,148,136,.3);color:var(--teal)}
+
+/* SECTION DIVIDER */
+.sec-div{font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.sec-div::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* STATS BAR */
+.stats-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.stat-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;text-align:center}
+.stat-val{font-family:'Syne',sans-serif;font-size:22px;font-weight:700;color:var(--navy);line-height:1}
+.stat-lbl{font-size:10px;color:var(--text3);font-weight:600;letter-spacing:.04em;text-transform:uppercase;margin-top:3px}
+
+@media print{.no-print{display:none!important}}
+
+/* ── 모바일 반응형 ── */
+@media(max-width:768px){
+  /* 헤더 */
+  .header-inner{padding:0 10px;flex-wrap:wrap}
+  .logo-block{padding:10px 0;padding-right:12px}
+  .logo-sub{display:none}
+  .admin-badge{display:none}
+  .nav-tabs{padding:5px 6px;gap:1px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .nav-tabs::-webkit-scrollbar{display:none}
+  .nav-tab{padding:6px 10px;font-size:11px;white-space:nowrap;flex-shrink:0}
+  .header-right{padding:6px 0 6px 10px}
+  .fb-status span{display:none}
+
+  /* 앱 바디 */
+  .app-body{padding:12px}
+
+  /* 새 예약 그리드 */
+  #new-grid{grid-template-columns:1fr!important;gap:12px}
+
+  /* 카드 */
+  .card-body{padding:12px!important}
+
+  /* 폼 필드 */
+  .fg.c2{grid-template-columns:1fr!important}
+  .field-input{font-size:16px!important} /* iOS 줌 방지 */
+  .field-input.sm{font-size:15px!important;padding:10px 12px!important}
+
+  /* 캘린더 */
+  .cal-day{font-size:11px}
+  .cal-day-name{font-size:9px}
+
+  /* 시간 프리셋 */
+  .time-presets{gap:4px}
+  .time-preset{padding:6px 8px;font-size:11px}
+  .time-grid{grid-template-columns:repeat(2,1fr)!important}
+
+  /* 링크 박스 */
+  .link-box{padding:10px 12px}
+  .link-url{font-size:10px}
+  .link-actions{flex-wrap:wrap;gap:5px}
+  .btn-copy,.btn-wa,.btn-kakao{font-size:11px;padding:7px 10px}
+
+  /* 고객 목록 */
+  .customer-item{padding:12px}
+  .ci-actions{gap:4px;flex-wrap:wrap}
+  .btn-sm{padding:6px 9px;font-size:11px}
+
+  /* 통계 바 */
+  .stats-bar{gap:6px}
+  .stat-val{font-size:18px}
+  .stat-lbl{font-size:9px}
+
+  /* 저장 버튼 */
+  .btn-save{padding:14px;font-size:15px}
+
+  /* 링크 카드 sticky 해제 */
+  .card[style*="sticky"]{position:static!important}
+}
+
+@media(max-width:480px){
+  .nav-tab{padding:5px 8px;font-size:10px}
+  .logo-name{font-size:13px}
+  .ci-top{flex-direction:column;align-items:flex-start;gap:6px}
+  .stats-bar{grid-template-columns:repeat(3,1fr)}
+  .stat-val{font-size:16px}
+  .time-chip span{font-size:10px}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen" style="display:none">
+  <div style="background:var(--navy);padding:0">
+    <div style="max-width:1200px;margin:0 auto;padding:13px 20px;display:flex;align-items:center;gap:10px">
+      <div class="logo-badge">HHC</div>
+      <div><div class="logo-name">Happy Home Care</div><div class="logo-sub">예약 관리 시스템</div></div>
+      <span class="admin-badge">ADMIN</span>
+    </div>
+  </div>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-head">
+        <div class="login-head-badge">관리자 전용</div>
+        <div class="login-head-title">예약 관리 시스템</div>
+        <div class="login-head-sub">비밀번호를 입력하여 로그인하세요</div>
+      </div>
+      <div class="login-body">
+        <div class="field">
+          <label class="field-label">비밀번호</label>
+          <input class="field-input" id="login-pw" type="password" placeholder="비밀번호 입력">
+        </div>
+        <button class="btn-primary" id="btn-login">로그인</button>
+        <div class="err-msg" id="login-err">비밀번호가 틀렸습니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN HEADER -->
+<header class="header no-print" id="app-header" style="display:none">
+  <div class="header-inner">
+    <div class="logo-block">
+      <div class="logo-badge">HHC</div>
+      <div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="logo-name">Happy Home Care</div>
+          <span class="admin-badge">ADMIN</span>
+        </div>
+        <div class="logo-sub">예약 관리 시스템</div>
+      </div>
+    </div>
+    <div class="nav-tabs" id="tab-nav">
+      <button class="nav-tab active" data-tab="new">새 예약 등록</button>
+      <button class="nav-tab" data-tab="list">예약 목록</button>
+    </div>
+    <div class="header-right">
+      <div class="fb-status" id="fb-status"><div class="dot"></div><span>Firebase</span></div>
+      <button class="btn-logout" id="btn-logout">로그아웃</button>
+    </div>
+  </div>
+</header>
+
+<!-- NEW BOOKING TAB -->
+<div id="tab-new" class="app-body active">
+  <div style="display:grid;grid-template-columns:1fr 360px;gap:16px;align-items:start" id="new-grid">
+
+    <!-- LEFT: Customer + Schedule -->
+    <div>
+      <!-- Customer Info -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon"><svg viewBox="0 0 13 13"><circle cx="6.5" cy="4" r="2.5"/><path d="M1.5 11.5c0-2.5 2.2-4 5-4s5 1.5 5 4"/></svg></div>
+          <div class="card-title">고객 정보</div>
+        </div>
+        <div class="card-body">
+          <div class="fg c2">
+            <div class="field">
+              <label class="field-label">고객명</label>
+              <input id="c-name" type="text" placeholder="고객 이름" class="field-input sm">
+            </div>
+            <div class="field">
+              <label class="field-label">연락처</label>
+              <input id="c-phone" type="text" placeholder="+60 ···" class="field-input sm">
+            </div>
+          </div>
+          <div class="field" style="margin-top:10px">
+            <label class="field-label">주소 / 콘도명</label>
+            <input id="c-address" type="text" placeholder="콘도명 및 동호수" class="field-input sm">
+          </div>
+          <div class="field" style="margin-top:10px">
+            <label class="field-label">메모</label>
+            <textarea id="c-memo" class="field-input sm" style="resize:vertical;min-height:60px" placeholder="특이사항, 품목 등"></textarea>
+          </div>
+          <div class="field" style="margin-top:10px">
+            <label class="field-label">발송 언어 / Message Language</label>
+            <div style="display:flex;gap:8px;margin-top:4px">
+              <label style="display:flex;align-items:center;gap:7px;padding:9px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;flex:1;transition:all .15s" id="lang-ko-label">
+                <input type="radio" name="c-lang" value="ko" checked style="accent-color:var(--teal)">
+                <span style="font-size:13px;font-weight:500">🇰🇷 한국어</span>
+              </label>
+              <label style="display:flex;align-items:center;gap:7px;padding:9px 14px;border:1.5px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;flex:1;transition:all .15s" id="lang-en-label">
+                <input type="radio" name="c-lang" value="en" style="accent-color:var(--teal)">
+                <span style="font-size:13px;font-weight:500">🇬🇧 English</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Schedule Picker -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon"><svg viewBox="0 0 13 13"><rect x="1" y="2" width="11" height="10" rx="1"/><path d="M4 1v2M9 1v2M1 5h11"/></svg></div>
+          <div class="card-title">이 고객 전용 예약 가능 일정 설정</div>
+        </div>
+        <div class="card-body">
+          <div class="sec-div">날짜 선택</div>
+          <div class="cal-wrap">
+            <div class="cal-header">
+              <button class="cal-nav" id="cal-prev">&#8249;</button>
+              <span class="cal-month" id="cal-month-label"></span>
+              <button class="cal-nav" id="cal-next">&#8250;</button>
+            </div>
+            <div class="cal-grid" id="cal-grid">
+              <div class="cal-day-name">일</div><div class="cal-day-name">월</div><div class="cal-day-name">화</div>
+              <div class="cal-day-name">수</div><div class="cal-day-name">목</div><div class="cal-day-name">금</div><div class="cal-day-name">토</div>
+            </div>
+          </div>
+
+          <!-- Selected dates -->
+          <div style="margin-top:12px">
+            <div class="sec-div">선택된 날짜</div>
+            <div class="sel-dates" id="sel-dates">
+              <span style="font-size:12px;color:var(--text3)">캘린더에서 날짜를 선택하세요</span>
+            </div>
+          </div>
+
+          <!-- Time slots per date -->
+          <div style="margin-top:14px" id="time-section">
+            <div class="sec-div">방문 가능 시간 설정</div>
+            <div class="field">
+              <label class="field-label">날짜 선택</label>
+              <select id="date-for-time" class="field-input sm">
+                <option value="">날짜를 먼저 선택하세요</option>
+              </select>
+            </div>
+            <div class="time-presets">
+              <button class="time-preset" data-time-ko="09:00 전후" data-time-en="Around 09:00">09:00 전후 / Around 09:00</button>
+              <button class="time-preset" data-time-ko="10:00 전후" data-time-en="Around 10:00">10:00 전후 / Around 10:00</button>
+              <button class="time-preset" data-time-ko="11:00 전후" data-time-en="Around 11:00">11:00 전후 / Around 11:00</button>
+              <button class="time-preset" data-time-ko="11:30 전후" data-time-en="Around 11:30">11:30 전후 / Around 11:30</button>
+              <button class="time-preset" data-time-ko="13:00 전후" data-time-en="Around 13:00">13:00 전후 / Around 13:00</button>
+              <button class="time-preset" data-time-ko="13:30 전후" data-time-en="Around 13:30">13:30 전후 / Around 13:30</button>
+              <button class="time-preset" data-time-ko="14:00 전후" data-time-en="Around 14:00">14:00 전후 / Around 14:00</button>
+              <button class="time-preset" data-time-ko="15:00 전후" data-time-en="Around 15:00">15:00 전후 / Around 15:00</button>
+              <button class="time-preset" data-time-ko="15:30 전후" data-time-en="Around 15:30">15:30 전후 / Around 15:30</button>
+              <button class="time-preset" data-time-ko="16:00 전후" data-time-en="Around 16:00">16:00 전후 / Around 16:00</button>
+            </div>
+            <div class="time-grid" id="time-chips"></div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-save" id="btn-save">
+        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 13H3a1 1 0 0 1-1-1V2.5L4.5 1h8a.5.5 0 0 1 .5.5V12a1 1 0 0 1-1 1z"/><path d="M5 1v4h5V1M5 9h5"/></svg>
+        예약 등록 & 고객 링크 생성
+      </button>
+      <div class="save-toast" id="save-toast">✓ 등록 완료! 고객 링크가 생성되었습니다</div>
+    </div>
+
+    <!-- RIGHT: Customer Link -->
+    <div class="card" style="position:sticky;top:70px">
+      <div class="card-head">
+        <div class="card-icon"><svg viewBox="0 0 13 13"><path d="M7.5 5.5L9 4a2 2 0 0 0-2.83-2.83L4 3.17"/><path d="M5.5 7.5L4 9a2 2 0 0 0 2.83 2.83L9 9.83"/><line x1="5.5" y1="7.5" x2="7.5" y2="5.5"/></svg></div>
+        <div class="card-title">고객 전용 예약 링크</div>
+      </div>
+      <div class="card-body">
+        <div id="link-empty" class="empty-st" style="padding:24px 0">
+          <div class="empty-title">아직 링크가 없습니다</div>
+          <div class="empty-desc">예약 등록 후 링크가 생성됩니다</div>
+        </div>
+        <div id="link-box" class="link-box" style="display:none">
+          <div class="link-label">📎 고객 전용 예약 링크</div>
+          <div class="link-url" id="link-url"></div>
+          <div class="link-actions">
+            <button class="btn-copy" id="btn-copy-link">
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="2"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1"/><path d="M1.5 7.5H1a1 1 0 0 1-1-1V1a1 1 0 0 1 1-1h5.5a1 1 0 0 1 1 1v1"/></svg>
+              URL 복사
+            </button>
+            <button class="btn-wa" id="btn-wa-link">
+              <svg width="11" height="11" viewBox="0 0 14 14" fill="white"><path d="M12 2.5A6.5 6.5 0 0 0 1.5 9.6L1 13l3.5-.5A6.5 6.5 0 1 0 12 2.5z"/></svg>
+              WhatsApp
+            </button>
+            <button class="btn-kakao" id="btn-kakao-link">
+              <svg width="11" height="11" viewBox="0 0 14 14" fill="#3A1D1D"><path d="M7 1C3.69 1 1 3.13 1 5.75c0 1.7 1.05 3.19 2.63 4.06L3 11.5l2.18-1.44C5.7 10.18 6.34 10.25 7 10.25c3.31 0 6-2.13 6-4.75S10.31 1 7 1z"/></svg>
+              카카오톡 복사
+            </button>
+          </div>
+          <div class="copy-ok" id="copy-ok">✓ 링크 복사됨!</div>
+          <div class="kakao-ok" id="kakao-ok">✓ 복사됨! 카카오톡에 붙여넣기 하세요</div>
+        </div>
+
+        <!-- Schedule summary -->
+        <div id="schedule-summary" style="display:none;margin-top:14px">
+          <div class="sec-div">설정된 일정</div>
+          <div id="schedule-summary-body" style="font-size:12px;color:var(--text2);line-height:1.8"></div>
+        </div>
+
+        <!-- Customer info summary -->
+        <div id="customer-summary" style="display:none;margin-top:14px">
+          <div class="sec-div">고객 정보</div>
+          <div id="customer-summary-body" style="font-size:12px;color:var(--text2);line-height:1.8;background:var(--surface);border-radius:var(--radius-sm);padding:10px 12px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LIST TAB -->
+<div id="tab-list" class="app-body">
+  <!-- Stats -->
+  <div class="stats-bar">
+    <div class="stat-card"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">전체 예약</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-pending" style="color:var(--amber)">0</div><div class="stat-lbl">신청 대기</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-confirmed" style="color:var(--green)">0</div><div class="stat-lbl">확정 완료</div></div>
+  </div>
+  <div class="customer-list" id="customer-list">
+    <div class="empty-st"><div class="empty-title">예약 내역이 없습니다</div><div class="empty-desc">새 예약 등록 탭에서 고객을 등록하세요</div></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-ov" id="modal-ov">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-msg" id="modal-msg"></div>
+    <div class="modal-btns">
+      <button class="modal-cancel" id="modal-cancel" style="display:none">취소</button>
+      <button class="modal-ok" id="modal-ok">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div class="loading-ov" id="loading-ov">
+  <div class="loading-box"><div class="spinner"></div> 처리 중...</div>
+</div>
+
+<!-- TOAST -->
+<div class="toast-box" id="toast-box"></div>
+
+<!-- FIREBASE -->
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const FIREBASE_CFG={
+  apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
+  authDomain:"happywork-packageplan.firebaseapp.com",
+  projectId:"happywork-packageplan",
+  storageBucket:"happywork-packageplan.firebasestorage.app",
+  messagingSenderId:"101289103022",
+  appId:"1:101289103022:web:d81aca7f3747dd26df673f"
+};
+const ADMIN_PW='hhc_booking_pw';
+const ADMIN_AUTH='hhc_booking_auth';
+const BASE_URL='https://hhc-3p8.pages.dev/';
+
+let db=null, unsub=null;
+let allBookings=[];
+let calYear=new Date().getFullYear();
+let calMonth=new Date().getMonth();
+let selectedDates=[];
+let scheduleMap={};
+let currentDateForTime='';
+let currentBookingId=null;
+
+const fmt=n=>n||'';
+const today=()=>new Date().toISOString().slice(0,10);
+
+// ── AUTH ──
+function checkAuth(){return localStorage.getItem(ADMIN_AUTH)==='1';}
+function setAuth(v){if(v)localStorage.setItem(ADMIN_AUTH,'1');else localStorage.removeItem(ADMIN_AUTH);}
+
+function showScreen(id){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app-header').style.display='none';
+  ['new','list'].forEach(t=>{const el=document.getElementById('tab-'+t);if(el)el.classList.remove('active');});
+  if(id==='login'){document.getElementById('login-screen').style.display='block';}
+  else if(id==='app'){
+    document.getElementById('app-header').style.display='block';
+    document.getElementById('tab-new').classList.add('active');
+  }
+}
+
+async function connectFirebase(){
+  try{
+    const app=initializeApp(FIREBASE_CFG);
+    db=getFirestore(app);
+    unsub=onSnapshot(collection(db,'bookings'),snap=>{
+      allBookings=snap.docs.map(d=>({...d.data(),__id:d.id}));
+      allBookings.sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+      renderList();
+      updateStats();
+      updateSendSelects();
+    });
+    document.getElementById('fb-status').classList.add('connected');
+    return true;
+  }catch(e){console.error(e);return false;}
+}
+
+// ── INIT ──
+(async()=>{
+  if(checkAuth()){
+    showLoading(true);
+    const ok=await connectFirebase();
+    showLoading(false);
+    if(ok){showScreen('app');}
+    else{setAuth(false);showScreen('login');}
+  }else{showScreen('login');}
+})();
+
+// ── LOGIN ──
+document.getElementById('btn-login').addEventListener('click',async()=>{
+  const pw=document.getElementById('login-pw').value.trim();
+  const saved=localStorage.getItem(ADMIN_PW);
+  const err=document.getElementById('login-err');
+  if(!saved){
+    if(!pw||pw.length<4){err.textContent='비밀번호는 4자리 이상이어야 합니다.';err.style.display='block';return;}
+    localStorage.setItem(ADMIN_PW,pw);
+  }else if(pw!==saved){err.textContent='비밀번호가 틀렸습니다.';err.style.display='block';return;}
+  err.style.display='none';
+  showLoading(true);
+  const ok=await connectFirebase();
+  showLoading(false);
+  if(ok){setAuth(true);showScreen('app');}
+  else{err.textContent='Firebase 연결 실패. 인터넷을 확인해주세요.';err.style.display='block';}
+});
+document.getElementById('login-pw').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('btn-login').click();});
+document.getElementById('btn-logout').addEventListener('click',()=>{setAuth(false);if(unsub)unsub();showScreen('login');});
+
+// ── TABS ──
+function switchTab(tab){
+  document.querySelectorAll('#tab-nav .nav-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  ['new','list'].forEach(t=>{const el=document.getElementById('tab-'+t);if(el)el.classList.toggle('active',t===tab);});
+  if(tab==='list'){renderList();updateStats();}
+}
+document.getElementById('tab-nav').addEventListener('click',e=>{
+  const b=e.target.closest('.nav-tab');
+  if(b&&b.dataset.tab)switchTab(b.dataset.tab);
+});
+
+// ── CALENDAR ──
+function renderCalendar(){
+  const months=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  document.getElementById('cal-month-label').textContent=`${calYear}년 ${months[calMonth]}`;
+  const grid=document.getElementById('cal-grid');
+  const dayNames=grid.querySelectorAll('.cal-day-name');
+  grid.innerHTML='';
+  dayNames.forEach(d=>grid.appendChild(d));
+
+  const firstDay=new Date(calYear,calMonth,1).getDay();
+  const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
+  const todayStr=today();
+
+  for(let i=0;i<firstDay;i++){const d=document.createElement('div');d.className='cal-day empty';grid.appendChild(d);}
+  for(let d=1;d<=daysInMonth;d++){
+    const dateStr=`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const btn=document.createElement('button');
+    btn.type='button';
+    btn.textContent=d;
+    const isPast=dateStr<todayStr;
+    const isSel=selectedDates.includes(dateStr);
+    const isToday=dateStr===todayStr;
+    let cls='cal-day';
+    if(isPast)cls+=' past';
+    if(isSel)cls+=' selected';
+    if(isToday)cls+=' today';
+    btn.className=cls;
+    if(!isPast){
+      btn.addEventListener('click',()=>{
+        if(selectedDates.includes(dateStr)){
+          selectedDates=selectedDates.filter(x=>x!==dateStr);
+          delete scheduleMap[dateStr];
+        }else{
+          selectedDates.push(dateStr);
+          selectedDates.sort();
+          scheduleMap[dateStr]=[];
+        }
+        renderCalendar();
+        renderSelDates();
+        updateDateForTimeSelect();
+      });
+    }
+    grid.appendChild(btn);
+  }
+}
+
+document.getElementById('cal-prev').addEventListener('click',()=>{calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCalendar();});
+document.getElementById('cal-next').addEventListener('click',()=>{calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCalendar();});
+
+function renderSelDates(){
+  const el=document.getElementById('sel-dates');
+  if(!selectedDates.length){el.innerHTML='<span style="font-size:12px;color:var(--text3)">캘린더에서 날짜를 선택하세요</span>';return;}
+  el.innerHTML=selectedDates.map(d=>`
+    <span class="sel-date-chip">${d}
+      <button type="button" onclick="removeDate('${d}')">✕</button>
+    </span>`).join('');
+}
+
+window.removeDate=function(d){
+  selectedDates=selectedDates.filter(x=>x!==d);
+  delete scheduleMap[d];
+  if(currentDateForTime===d){currentDateForTime='';renderTimeChips();}
+  renderCalendar();renderSelDates();updateDateForTimeSelect();
+};
+
+function updateDateForTimeSelect(){
+  const sel=document.getElementById('date-for-time');
+  sel.innerHTML='<option value="">날짜 선택</option>'+selectedDates.map(d=>`<option value="${d}">${d}</option>`).join('');
+  if(currentDateForTime&&selectedDates.includes(currentDateForTime))sel.value=currentDateForTime;
+  else{currentDateForTime='';renderTimeChips();}
+}
+
+document.getElementById('date-for-time').addEventListener('change',e=>{
+  currentDateForTime=e.target.value;
+  renderTimeChips();
+});
+
+document.querySelectorAll('.time-preset').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    if(!currentDateForTime){showToast('날짜를 먼저 선택하세요');return;}
+    const tKo=btn.dataset.timeKo;
+    const tEn=btn.dataset.timeEn;
+    const tVal=`${tKo}|${tEn}`;
+    if(!scheduleMap[currentDateForTime])scheduleMap[currentDateForTime]=[];
+    if(!scheduleMap[currentDateForTime].includes(tVal)){
+      scheduleMap[currentDateForTime].push(tVal);
+      renderTimeChips();
+    }
+  });
+});
+
+function renderTimeChips(){
+  const el=document.getElementById('time-chips');
+  if(!currentDateForTime||!scheduleMap[currentDateForTime]||!scheduleMap[currentDateForTime].length){
+    el.innerHTML='<div style="font-size:12px;color:var(--text3);grid-column:1/-1;padding:8px 0">날짜를 선택하고 위 버튼으로 시간을 추가하세요</div>';
+    return;
+  }
+  el.innerHTML=scheduleMap[currentDateForTime].map(t=>{
+    const parts=t.split('|');
+    const displayKo=parts[0]||t;
+    const displayEn=parts[1]||t;
+    return `<div class="time-chip">
+      <span style="font-size:11px">${displayKo}<br><span style="color:rgba(255,255,255,.7);font-size:10px">${displayEn}</span></span>
+      <button class="del-time" onclick="removeTime('${t}')">✕</button>
+    </div>`;
+  }).join('');
+}
+
+window.removeTime=function(t){
+  if(!currentDateForTime)return;
+  scheduleMap[currentDateForTime]=scheduleMap[currentDateForTime].filter(x=>x!==t);
+  renderTimeChips();
+};
+
+// ── SAVE ──
+document.getElementById('btn-save').addEventListener('click',async()=>{
+  const name=document.getElementById('c-name').value.trim();
+  const phone=document.getElementById('c-phone').value.trim();
+  const address=document.getElementById('c-address').value.trim();
+  const memo=document.getElementById('c-memo').value.trim();
+  const lang=document.querySelector('input[name="c-lang"]:checked')?.value||'ko';
+
+  if(!name||!phone){showModal(lang==='en'?'Input Error':'입력 오류',lang==='en'?'Please enter customer name and phone.':'고객명과 연락처를 입력해주세요.',false);return;}
+  if(!selectedDates.length){showModal(lang==='en'?'No Schedule':'일정 없음',lang==='en'?'Please select at least one date.':'예약 가능 날짜를 최소 1개 선택해주세요.',false);return;}
+
+  const hasTime=selectedDates.some(d=>scheduleMap[d]&&scheduleMap[d].length>0);
+  if(!hasTime){showModal(lang==='en'?'No Time':'시간 없음',lang==='en'?'Please set at least one available time.':'최소 1개 날짜에 방문 가능 시간을 설정해주세요.',false);return;}
+
+  showLoading(true);
+  try{
+    const data={
+      customer_name:name,
+      customer_phone:phone,
+      customer_address:address,
+      customer_memo:memo,
+      customer_lang:lang,
+      schedule_dates:JSON.stringify(selectedDates),
+      schedule_times:JSON.stringify(scheduleMap),
+      status:'waiting',
+      created_at:new Date().toISOString(),
+      booking_date:'',
+      booking_time:'',
+      booking_items:'',
+      booking_memo:'',
+    };
+
+    let docId;
+    if(currentBookingId){
+      await updateDoc(doc(db,'bookings',currentBookingId),data);
+      docId=currentBookingId;
+    }else{
+      const ref=await addDoc(collection(db,'bookings'),data);
+      docId=ref.id;
+      currentBookingId=docId;
+    }
+
+    showLoading(false);
+    const url=`${BASE_URL}booking.html?id=${docId}`;
+    document.getElementById('link-url').textContent=url;
+    document.getElementById('link-box').style.display='block';
+    document.getElementById('link-empty').style.display='none';
+
+    // Schedule summary
+    let sumHtml='';
+    selectedDates.forEach(d=>{
+      const times=scheduleMap[d]||[];
+      sumHtml+=`<div style="margin-bottom:4px"><strong>${d}</strong> → ${times.length?times.join(', '):'시간 미설정'}</div>`;
+    });
+    document.getElementById('schedule-summary-body').innerHTML=sumHtml;
+    document.getElementById('schedule-summary').style.display='block';
+
+    // Customer summary
+    document.getElementById('customer-summary-body').innerHTML=
+      `<div>이름: <strong>${name}</strong></div><div>연락처: ${phone}</div>${address?`<div>주소: ${address}</div>`:''}${memo?`<div>메모: ${memo}</div>`:''}`;
+    document.getElementById('customer-summary').style.display='block';
+
+    const t=document.getElementById('save-toast');
+    t.style.display='block';setTimeout(()=>t.style.display='none',3000);
+  }catch(e){
+    showLoading(false);
+    showModal('저장 실패',e.message||'다시 시도해주세요.',false);
+  }
+});
+
+// ── LINK BUTTONS ──
+document.getElementById('btn-copy-link').addEventListener('click',()=>{
+  const url=document.getElementById('link-url').textContent;
+  navigator.clipboard.writeText(url).then(()=>{
+    const ok=document.getElementById('copy-ok');ok.style.display='block';setTimeout(()=>ok.style.display='none',2000);
+  });
+});
+
+function getMsg(name,phone,url,dates,times,lang){
+  lang=lang||'ko';
+  const dateLines=dates.map(d=>{const t=(times[d]||[]).join(', ');return `  📅 ${d}${t?` (${t})`:''}`; }).join('\n');
+  if(lang==='en'){
+    return `Hello ${name} 😊\n\nHere is your Happy Home Care cleaning service booking link.\n\nPlease select your preferred date and time via the link below.\n👉 ${url}\n\n📋 Available Schedule:\n${dateLines}\n\nPlease feel free to contact us if you have any questions.\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
+  }
+  return `안녕하세요 ${name}님 😊\nHappy Home Care 세척서비스 예약 링크입니다.\n\n아래 링크에서 편하신 날짜와 시간을 선택해 주세요.\n👉 ${url}\n\n📋 예약 가능 일정:\n${dateLines}\n\n궁금한 사항은 언제든지 연락해 주세요.\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
+}
+
+function getConfirmMsg(name,date,time,items,lang){
+  lang=lang||'ko';
+  if(lang==='en'){
+    return `Hello ${name} 😊\n\nYour booking has been confirmed.\n\n📅 Date: ${date}\n⏰ Time: ${time}\n🔧 Service: ${items}\n\nPlease ensure that the work visit registration with management is completed before your scheduled date.\n\n📋 Information Required for Work Visit Registration\n\n🏢 Company: Happy Works Services Sdn.Bhd.\n🚗 Vehicle: KDV 8859, VJW 2582\n👷 Staff:\n  • SHAHIN  B00655480\n  • REBON   WJ0231305\n  • ASIB    BJ0861068\n  • SALAM   EJ0208298\n  • RAHMAN  BX0562957\n\nThank you 😊\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
+  }
+  return `안녕하세요 ${name}님 😊\n\n예약이 완료되었습니다.\n\n📅 예약일: ${date}\n⏰ 방문시간: ${time}\n🔧 품목: ${items}\n\n예약일 전까지 매니져먼트에 작업방문등록 반드시 완료 부탁드립니다.\n\n📋 작업방문등록에 필요한 정보 안내\n\n🏢 회사명: Happy Works Services Sdn.Bhd.\n🚗 차량: KDV 8859, VJW 2582\n👷 직원:\n  • SHAHIN  B00655480\n  • REBON   WJ0231305\n  • ASIB    BJ0861068\n  • SALAM   EJ0208298\n  • RAHMAN  BX0562957\n\n감사합니다 😊\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
+}
+
+document.getElementById('btn-wa-link').addEventListener('click',()=>{
+  const url=document.getElementById('link-url').textContent;
+  const name=document.getElementById('c-name').value||'고객';
+  const phone=document.getElementById('c-phone').value||'';
+  const lang=document.querySelector('input[name="c-lang"]:checked')?.value||'ko';
+  const msg=getMsg(name,phone,url,selectedDates,scheduleMap,lang);
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+});
+
+document.getElementById('btn-kakao-link').addEventListener('click',()=>{
+  const url=document.getElementById('link-url').textContent;
+  const name=document.getElementById('c-name').value||'고객';
+  const phone=document.getElementById('c-phone').value||'';
+  const lang=document.querySelector('input[name="c-lang"]:checked')?.value||'ko';
+  const msg=getMsg(name,phone,url,selectedDates,scheduleMap,lang);
+  navigator.clipboard.writeText(msg).then(()=>{
+    const ok=document.getElementById('kakao-ok');ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
+  }).catch(()=>prompt('복사 후 카카오톡에 붙여넣기 하세요:',msg));
+});
+
+// ── LIST ──
+function updateStats(){
+  const total=allBookings.length;
+  const pending=allBookings.filter(b=>b.status==='booked').length;
+  const confirmed=allBookings.filter(b=>b.status==='confirmed').length;
+  document.getElementById('stat-total').textContent=total;
+  document.getElementById('stat-pending').textContent=pending;
+  document.getElementById('stat-confirmed').textContent=confirmed;
+}
+
+function renderList(){
+  const el=document.getElementById('customer-list');
+  if(!allBookings.length){
+    el.innerHTML='<div class="empty-st"><div class="empty-title">예약 내역이 없습니다</div><div class="empty-desc">새 예약 등록 탭에서 고객을 등록하세요</div></div>';
+    return;
+  }
+  el.innerHTML=allBookings.map(b=>{
+    const dates=b.schedule_dates?JSON.parse(b.schedule_dates):[];
+    const times=b.schedule_times?JSON.parse(b.schedule_times):{};
+    const statusLabel={'waiting':'대기중','booked':'신청완료','confirmed':'확정완료'}[b.status]||b.status;
+    const statusCls={'waiting':'pending','booked':'pending','confirmed':'confirmed'}[b.status]||'pending';
+    const lang=b.customer_lang||'ko';
+    const langBadge=lang==='en'?'<span style="padding:2px 7px;background:#DBEAFE;color:#1D4ED8;border-radius:20px;font-size:10px;font-weight:600;margin-left:5px">EN</span>':'<span style="padding:2px 7px;background:#EDE8F5;color:#3D52A0;border-radius:20px;font-size:10px;font-weight:600;margin-left:5px">KO</span>';
+    const url=`${BASE_URL}booking.html?id=${b.__id}`;
+    const dateTags=dates.map(d=>`<span class="ci-date-tag">${d}</span>`).join('');
+    const bookingInfo=b.booking_date?`
+      <div class="ci-booking">
+        📅 예약일: <strong>${b.booking_date}</strong> ${b.booking_time}<br>
+        ${b.booking_items?`🔧 품목: ${b.booking_items}<br>`:''}
+        ${b.booking_memo?`📝 요청사항: ${b.booking_memo}`:''}
+      </div>`:'' ;
+    return `<div class="customer-item">
+      <div class="ci-top">
+        <div>
+          <div class="ci-name">${b.customer_name||'—'}${langBadge}</div>
+          <div class="ci-phone">${b.customer_phone||''} ${b.customer_address?'· '+b.customer_address:''}</div>
+        </div>
+        <span class="ci-status ${statusCls}">${statusLabel}</span>
+      </div>
+      ${dateTags?`<div class="ci-dates">${dateTags}</div>`:''}
+      ${bookingInfo}
+      ${b.customer_memo?`<div style="font-size:12px;color:var(--text3);margin-bottom:8px">📌 ${b.customer_memo}</div>`:''}
+      <div class="ci-actions">
+        <button class="btn-sm btn-sm-teal" onclick="editBooking('${b.__id}')">✏️ 수정</button>
+        <button class="btn-sm btn-sm-wa" onclick="sendWA('${b.__id}')">WhatsApp</button>
+        <button class="btn-sm btn-sm-kakao" onclick="sendKakao('${b.__id}')">카카오</button>
+        ${b.status==='booked'?`<button class="btn-sm btn-sm-green" onclick="confirmBooking('${b.__id}')">✓ 확정</button>`:''}
+        <button class="btn-sm btn-sm-red" onclick="deleteBooking('${b.__id}')">삭제</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function updateSendSelects(){}
+
+window.editBooking=function(id){
+  const b=allBookings.find(x=>x.__id===id);
+  if(!b)return;
+  document.getElementById('c-name').value=b.customer_name||'';
+  document.getElementById('c-phone').value=b.customer_phone||'';
+  document.getElementById('c-address').value=b.customer_address||'';
+  document.getElementById('c-memo').value=b.customer_memo||'';
+  // 언어 복원
+  const lang=b.customer_lang||'ko';
+  document.querySelectorAll('input[name="c-lang"]').forEach(r=>{r.checked=r.value===lang;});
+  selectedDates=b.schedule_dates?JSON.parse(b.schedule_dates):[];
+  scheduleMap=b.schedule_times?JSON.parse(b.schedule_times):{};
+  currentBookingId=id;
+  currentDateForTime='';
+  renderCalendar();renderSelDates();updateDateForTimeSelect();renderTimeChips();
+
+  const url=`${BASE_URL}booking.html?id=${id}`;
+  document.getElementById('link-url').textContent=url;
+  document.getElementById('link-box').style.display='block';
+  document.getElementById('link-empty').style.display='none';
+  switchTab('new');
+  window.scrollTo({top:0,behavior:'smooth'});
+};
+
+window.confirmBooking=async function(id){
+  const b=allBookings.find(x=>x.__id===id);
+  if(!b)return;
+  showLoading(true);
+  try{
+    await updateDoc(doc(db,'bookings',id),{...b,status:'confirmed'});
+    showLoading(false);
+    showToast('✓ 예약 확정 완료');
+    setTimeout(()=>showConfirmMsgModal(b),600);
+  }
+  catch(e){showLoading(false);showModal('오류',e.message,false);}
+};
+
+function showConfirmMsgModal(b){
+  const lang=b.customer_lang||'ko';
+  const msg=getConfirmMsg(
+    b.customer_name||'고객',
+    b.booking_date||'—',
+    b.booking_time||'—',
+    b.booking_items||'—',
+    lang
+  );
+  const title=lang==='en'?'✅ Booking Confirmation Message':'✅ 예약 확정 안내 메시지';
+  const subtitle=lang==='en'?`Please send the message below to ${b.customer_name||'customer'}`:`${b.customer_name||'고객'}님께 아래 메시지를 전송해 주세요`;
+  const closeLabel=lang==='en'?'Close':'닫기';
+  const waLabel=lang==='en'?'Send via WhatsApp':'WhatsApp 전송';
+  const kakaoLabel=lang==='en'?'Copy for KakaoTalk':'카카오톡 복사';
+  const copiedLabel=lang==='en'?'✓ Copied! Paste in KakaoTalk':'✓ 복사됨! 카카오톡에 붙여넣기 하세요';
+
+  const existing=document.getElementById('confirm-msg-modal');
+  if(existing)existing.remove();
+  const modal=document.createElement('div');
+  modal.id='confirm-msg-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML=`
+    <div style="background:#fff;border-radius:20px;padding:24px;max-width:420px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.14)">
+      <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">${title}</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">${subtitle}</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-size:12px;color:var(--text2);line-height:1.8;white-space:pre-wrap;max-height:280px;overflow-y:auto;margin-bottom:12px">${msg}</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px">
+        <button onclick="window.open('https://wa.me/?text='+encodeURIComponent(${JSON.stringify(msg)}),'_blank')" style="flex:1;padding:10px;border:none;border-radius:8px;background:#25D366;color:#fff;font-size:13px;font-weight:600;cursor:pointer">
+          ${waLabel}
+        </button>
+        <button id="confirm-kakao-btn" style="flex:1;padding:10px;border:none;border-radius:8px;background:#FEE500;color:#3A1D1D;font-size:13px;font-weight:600;cursor:pointer">${kakaoLabel}</button>
+      </div>
+      <div id="confirm-kakao-ok" style="display:none;text-align:center;padding:8px;background:var(--green-bg);color:var(--green);border-radius:6px;font-size:12px;font-weight:600;margin-bottom:8px">${copiedLabel}</div>
+      <button onclick="document.getElementById('confirm-msg-modal').remove()" style="width:100%;padding:9px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text2);font-size:13px;font-weight:500;cursor:pointer">${closeLabel}</button>
+    </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('confirm-kakao-btn').addEventListener('click',()=>{
+    navigator.clipboard.writeText(msg).then(()=>{
+      const ok=document.getElementById('confirm-kakao-ok');
+      ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
+    }).catch(()=>prompt('복사 후 붙여넣기:',msg));
+  });
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+}
+
+window.deleteBooking=function(id){
+  const b=allBookings.find(x=>x.__id===id);
+  showModal('삭제 확인',`'${b?.customer_name||''}' 예약을 삭제하시겠습니까?`,true,async()=>{
+    showLoading(true);
+    try{await deleteDoc(doc(db,'bookings',id));showToast('✓ 삭제되었습니다');}
+    catch(e){showModal('오류',e.message,false);}
+    showLoading(false);
+  });
+};
+
+window.sendWA=function(id){
+  const b=allBookings.find(x=>x.__id===id);
+  if(!b)return;
+  const lang=b.customer_lang||'ko';
+  let msg;
+  if(b.status==='confirmed'){
+    msg=getConfirmMsg(b.customer_name||'고객',b.booking_date||'—',b.booking_time||'—',b.booking_items||'—',lang);
+  }else{
+    const dates=b.schedule_dates?JSON.parse(b.schedule_dates):[];
+    const times=b.schedule_times?JSON.parse(b.schedule_times):{};
+    const url=`${BASE_URL}booking.html?id=${id}`;
+    msg=getMsg(b.customer_name||'고객',b.customer_phone||'',url,dates,times,lang);
+  }
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+};
+
+window.sendKakao=function(id){
+  const b=allBookings.find(x=>x.__id===id);
+  if(!b)return;
+  const lang=b.customer_lang||'ko';
+  let msg;
+  if(b.status==='confirmed'){
+    msg=getConfirmMsg(b.customer_name||'고객',b.booking_date||'—',b.booking_time||'—',b.booking_items||'—',lang);
+  }else{
+    const dates=b.schedule_dates?JSON.parse(b.schedule_dates):[];
+    const times=b.schedule_times?JSON.parse(b.schedule_times):{};
+    const url=`${BASE_URL}booking.html?id=${id}`;
+    msg=getMsg(b.customer_name||'고객',b.customer_phone||'',url,dates,times,lang);
+  }
+  navigator.clipboard.writeText(msg).then(()=>showToast('✓ 복사됨! 붙여넣기 하세요')).catch(()=>prompt('복사 후 붙여넣기:',msg));
+};
+
+// ── NEW BOOKING RESET ──
+document.getElementById('btn-save').addEventListener('click',()=>{},true);
+function resetNewForm(){
+  currentBookingId=null;selectedDates=[];scheduleMap={};currentDateForTime='';
+  ['c-name','c-phone','c-address','c-memo'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('link-box').style.display='none';
+  document.getElementById('link-empty').style.display='block';
+  document.getElementById('schedule-summary').style.display='none';
+  document.getElementById('customer-summary').style.display='none';
+  renderCalendar();renderSelDates();updateDateForTimeSelect();renderTimeChips();
+}
+
+// Add new button
+const newBtn=document.createElement('button');
+newBtn.className='btn-sm btn-sm-teal no-print';
+newBtn.style.cssText='position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:24px;font-size:13px;box-shadow:var(--shadow-lg);z-index:50;background:var(--teal);color:#fff;border:none';
+newBtn.textContent='+ 새 고객 등록';
+newBtn.addEventListener('click',()=>{resetNewForm();switchTab('new');window.scrollTo({top:0,behavior:'smooth'});});
+document.body.appendChild(newBtn);
+
+// ── MODAL ──
+function showModal(title,msg,showCancel,onOk){
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-msg').textContent=msg;
+  const ov=document.getElementById('modal-ov');
+  const ok=document.getElementById('modal-ok');
+  const ca=document.getElementById('modal-cancel');
+  ca.style.display=showCancel?'':'none';
+  ok.className=title.includes('삭제')?'modal-ok danger':'modal-ok';
+  ov.classList.add('open');
+  const ok2=ok.cloneNode(true);const ca2=ca.cloneNode(true);
+  ok.replaceWith(ok2);ca.replaceWith(ca2);
+  document.getElementById('modal-ok').addEventListener('click',()=>{ov.classList.remove('open');if(onOk)onOk();});
+  document.getElementById('modal-cancel').addEventListener('click',()=>ov.classList.remove('open'));
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open');});
+}
+function showLoading(v){document.getElementById('loading-ov').classList.toggle('open',v);}
+function showToast(msg){
+  const t=document.getElementById('toast-box');
+  t.textContent=msg;t.style.display='block';
+  setTimeout(()=>t.style.display='none',2500);
+}
+
+// Init
+renderCalendar();
+renderSelDates();
+renderTimeChips();
+
+// ── SERVICE WORKER ──
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw-booking.js').catch(e=>console.log('SW error:',e));
+}
+</script>
+</body>
+</html>

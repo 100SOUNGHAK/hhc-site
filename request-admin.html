@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HHC 의뢰 관리</title>
+<script>
+(function(){
+  const ua=navigator.userAgent.toLowerCase();
+  const isKakao=ua.indexOf('kakaotalk')>-1;
+  const isLine=ua.indexOf('line/')>-1;
+  const isInApp=isKakao||isLine;
+  if(isInApp){
+    const url=location.href;
+    const isAndroid=ua.indexOf('android')>-1;
+    const isIOS=/iphone|ipad|ipod/.test(ua);
+    if(isAndroid){
+      location.href='intent://'+url.replace(/https?:\/\//,'')+'#Intent;scheme=https;package=com.android.chrome;end';
+    } else if(isIOS){
+      document.addEventListener('DOMContentLoaded',function(){
+        document.body.innerHTML=`
+          <div style="font-family:sans-serif;padding:30px 20px;text-align:center;background:#f8f9fc;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center">
+            <div style="background:#fff;border-radius:16px;padding:28px 24px;max-width:320px;box-shadow:0 4px 20px rgba(0,0,0,.1)">
+              <div style="font-size:40px;margin-bottom:14px">🌐</div>
+              <div style="font-size:17px;font-weight:700;color:#0F1C3F;margin-bottom:8px">외부 브라우저에서 열기</div>
+              <div style="font-size:13px;color:#6B7280;line-height:1.6;margin-bottom:20px">카카오톡에서는 이 페이지를 열 수 없습니다.<br>아래 버튼을 눌러 Safari 에서 열어주세요.</div>
+              <button onclick="location.href='${url}'" style="width:100%;padding:13px;background:#0D9488;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">Safari 로 열기</button>
+              <div style="margin-top:12px;font-size:11px;color:#9CA3AF">또는 주소를 복사하여 Safari 에 붙여넣기 하세요<br><span style="color:#0D9488;word-break:break-all">${url}</span></div>
+            </div>
+          </div>`;
+      });
+    }
+  }
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0F1C3F;--indigo:#3D52A0;--violet:#7091E6;--teal:#0D9488;--teal-lt:#E6FAF8;
+  --white:#fff;--surface:#F8F9FC;--surface2:#F0F2F8;
+  --border:#DDE1EE;--text:#0F1C3F;--text2:#4A5578;--text3:#8693B5;
+  --green:#16A34A;--green-bg:#DCFCE7;--red:#DC2626;--red-bg:#FEE2E2;
+  --amber:#D97706;--amber-bg:#FEF3C7;
+  --radius-sm:6px;--radius:10px;--radius-lg:14px;--radius-xl:20px;
+  --shadow:0 1px 3px rgba(15,28,63,.06),0 4px 16px rgba(15,28,63,.06);
+  --shadow-lg:0 8px 32px rgba(15,28,63,.14);
+}
+body{font-family:'Inter',sans-serif;background:var(--surface);color:var(--text);font-size:14px;line-height:1.6;min-height:100vh}
+input,select,textarea,button{font-family:inherit;font-size:14px}
+
+/* LOGIN */
+.login-wrap{max-width:380px;margin:80px auto;padding:0 20px}
+.login-card{background:var(--white);border-radius:var(--radius-xl);border:1px solid var(--border);box-shadow:var(--shadow-lg);overflow:hidden}
+.login-head{background:var(--navy);padding:22px 26px}
+.login-head-badge{font-size:10px;color:rgba(255,255,255,.5);letter-spacing:.1em;margin-bottom:5px}
+.login-head-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:#fff;margin-bottom:2px}
+.login-head-sub{font-size:12px;color:rgba(255,255,255,.4)}
+.login-body{padding:22px 26px}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.field-label{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;text-transform:uppercase}
+.field-input{width:100%;padding:9px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);outline:none;transition:border-color .15s;font-size:13px}
+.field-input:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(13,148,136,.1)}
+.field-input.sm{padding:8px 10px}
+.btn-primary{width:100%;padding:11px;background:var(--navy);color:#fff;border:none;border-radius:var(--radius);font-size:14px;font-weight:600;cursor:pointer;transition:all .18s;margin-top:4px}
+.btn-primary:hover{background:var(--indigo)}
+.err-msg{background:var(--red-bg);color:var(--red);padding:8px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:500;margin-top:8px;display:none}
+
+/* HEADER */
+.header{background:var(--navy);position:sticky;top:0;z-index:100;box-shadow:0 2px 20px rgba(0,0,0,.25);display:none}
+.header-inner{max-width:900px;margin:0 auto;padding:0 16px;display:flex;align-items:center;gap:0}
+.logo-block{display:flex;align-items:center;gap:10px;padding:12px 0;padding-right:16px;border-right:1px solid rgba(255,255,255,.1)}
+.logo-badge{width:32px;height:32px;background:var(--teal);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:10px;color:#fff;flex-shrink:0}
+.logo-name{font-family:'Syne',sans-serif;font-weight:700;font-size:13px;color:#fff}
+.logo-sub{font-size:9px;color:rgba(255,255,255,.4)}
+.admin-badge{background:rgba(220,38,38,.2);color:#FCA5A5;font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;letter-spacing:.06em;margin-left:6px;border:1px solid rgba(220,38,38,.3)}
+.header-right{display:flex;align-items:center;gap:8px;padding:12px 0 12px 16px;border-left:1px solid rgba(255,255,255,.1);margin-left:auto}
+.fb-dot{width:7px;height:7px;border-radius:50%;background:#94A3B8;transition:background .3s}
+.fb-dot.on{background:#4ADE80}
+.btn-logout{background:none;border:none;color:rgba(255,255,255,.4);font-size:12px;cursor:pointer;padding:6px 8px}
+
+/* APP */
+.app-body{max-width:900px;margin:0 auto;padding:16px;display:none}
+.app-body.active{display:block}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.stat{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;text-align:center}
+.stat-val{font-family:'Syne',sans-serif;font-size:24px;font-weight:700;color:var(--navy);line-height:1}
+.stat-val.amber{color:var(--amber)}
+.stat-val.green{color:var(--green)}
+.stat-lbl{font-size:10px;color:var(--text3);font-weight:600;letter-spacing:.04em;text-transform:uppercase;margin-top:3px}
+
+/* CONTROLS */
+.controls{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.search-wrap{position:relative;flex:1;min-width:180px}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:13px;height:13px;stroke:var(--text3);fill:none;stroke-width:2}
+.search-input{width:100%;padding:8px 10px 8px 30px;background:var(--white);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);outline:none;font-size:13px}
+.search-input:focus{border-color:var(--teal)}
+.filter-sel{padding:8px 10px;background:var(--white);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:13px;cursor:pointer}
+
+/* REQUEST CARDS */
+.req-list{display:flex;flex-direction:column;gap:10px}
+.req-card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;transition:all .15s}
+.req-card:hover{border-color:var(--teal);box-shadow:0 2px 12px rgba(13,148,136,.08)}
+.req-card.pending{border-left:3px solid var(--amber)}
+.req-card.completed{border-left:3px solid var(--green);opacity:.85}
+.rc-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;gap:8px}
+.rc-info{}
+.rc-name{font-size:14px;font-weight:700;color:var(--text)}
+.rc-phone{font-size:12px;color:var(--text3);margin-top:1px}
+.rc-condo{font-size:12px;color:var(--text2);margin-top:2px}
+.rc-status{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;flex-shrink:0}
+.rc-status.pending{background:var(--amber-bg);color:var(--amber)}
+.rc-status.completed{background:var(--green-bg);color:var(--green)}
+.rc-items{background:var(--surface2);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:8px;font-size:12px;color:var(--text2);line-height:1.8}
+.rc-item-row{display:flex;align-items:baseline;gap:5px}
+.rc-item-dot{color:var(--teal);font-size:14px;line-height:1}
+.rc-remarks{font-size:12px;color:var(--text3);margin-bottom:8px;font-style:italic;padding:6px 10px;background:var(--surface);border-radius:var(--radius-sm);border-left:2px solid var(--border)}
+.rc-date{font-size:11px;color:var(--text3);margin-bottom:8px}
+.rc-actions{display:flex;gap:6px;flex-wrap:wrap}
+.btn-sm{padding:6px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;border:1px solid;white-space:nowrap}
+.btn-complete{border-color:var(--green);color:var(--green);background:transparent}.btn-complete:hover{background:var(--green-bg)}
+.btn-wa{border:none;background:#25D366;color:#fff}.btn-wa:hover{background:#1ebd5c}
+.btn-kakao{border:none;background:#FEE500;color:#3A1D1D}.btn-kakao:hover{background:#f0d800}
+.btn-del{border-color:var(--border);color:var(--text3);background:transparent}.btn-del:hover{border-color:var(--red);color:var(--red);background:var(--red-bg)}
+.rc-lang{display:inline-flex;align-items:center;padding:1px 6px;background:var(--surface2);border-radius:10px;font-size:10px;color:var(--text3);font-weight:600;margin-left:6px}
+
+/* EMPTY */
+.empty-st{text-align:center;padding:48px 20px;color:var(--text3)}
+.empty-title{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px}
+.empty-desc{font-size:12px}
+
+/* MODAL */
+.modal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;align-items:center;justify-content:center;padding:16px}
+.modal-ov.open{display:flex}
+.modal-box{background:var(--white);border-radius:var(--radius-xl);padding:22px;max-width:420px;width:100%;box-shadow:var(--shadow-lg)}
+.modal-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px}
+.modal-msg{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:16px}
+.modal-msg-box{font-size:12px;color:var(--text2);line-height:1.8;background:var(--surface);border-radius:var(--radius-sm);padding:12px;border:1px solid var(--border);white-space:pre-wrap;max-height:240px;overflow-y:auto;margin-bottom:12px}
+.modal-btns{display:flex;gap:7px;flex-wrap:wrap}
+.modal-btn{flex:1;padding:10px;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;min-width:100px}
+.modal-btn-wa{background:#25D366;color:#fff}.modal-btn-wa:hover{background:#1ebd5c}
+.modal-btn-kakao{background:#FEE500;color:#3A1D1D}.modal-btn-kakao:hover{background:#f0d800}
+.modal-btn-cancel{background:var(--surface2);color:var(--text2)}.modal-btn-cancel:hover{background:var(--border)}
+.copy-ok{display:none;text-align:center;margin-top:8px;padding:8px;background:var(--green-bg);color:var(--green);border-radius:var(--radius-sm);font-size:12px;font-weight:600}
+
+/* LOADING */
+.loading-ov{display:none;position:fixed;inset:0;background:rgba(255,255,255,.6);z-index:998;align-items:center;justify-content:center}
+.loading-ov.open{display:flex}
+.loading-box{background:var(--white);border-radius:var(--radius-lg);padding:14px 20px;font-size:14px;font-weight:600;color:var(--text);box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:10px}
+.spinner{width:16px;height:16px;border:2px solid var(--surface2);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* TOAST */
+.toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 18px;border-radius:var(--radius);font-size:13px;font-weight:500;z-index:9999;box-shadow:var(--shadow-lg);display:none}
+
+@media(max-width:600px){
+  .stats{grid-template-columns:repeat(3,1fr)}
+  .stat-val{font-size:18px}
+  .rc-actions{gap:4px}
+  .btn-sm{padding:5px 8px;font-size:11px}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div style="background:var(--navy);padding:12px 20px;display:flex;align-items:center;gap:10px">
+    <div class="logo-badge">HHC</div>
+    <div><div class="logo-name">Happy Home Care</div><div class="logo-sub">의뢰 관리 시스템</div></div>
+    <span class="admin-badge">ADMIN</span>
+  </div>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-head">
+        <div class="login-head-badge">관리자 전용</div>
+        <div class="login-head-title">의뢰 관리 시스템</div>
+        <div class="login-head-sub">비밀번호를 입력하여 로그인하세요</div>
+      </div>
+      <div class="login-body">
+        <div class="field">
+          <label class="field-label">비밀번호</label>
+          <input class="field-input" id="login-pw" type="password" placeholder="비밀번호 입력">
+        </div>
+        <button class="btn-primary" id="btn-login">로그인</button>
+        <div class="err-msg" id="login-err">비밀번호가 틀렸습니다.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header class="header" id="app-header">
+  <div class="header-inner">
+    <div class="logo-block">
+      <div class="logo-badge">HHC</div>
+      <div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <div class="logo-name">의뢰 관리 시스템</div>
+          <span class="admin-badge">ADMIN</span>
+        </div>
+        <div class="logo-sub">Happy Home Care Service Requests</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,.4)">
+        <div class="fb-dot" id="fb-dot"></div>Firebase
+      </div>
+      <button class="btn-logout" id="btn-logout">로그아웃</button>
+    </div>
+  </div>
+</header>
+
+<!-- APP -->
+<div id="app-body" class="app-body">
+  <!-- STATS -->
+  <div class="stats">
+    <div class="stat"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">전체 의뢰</div></div>
+    <div class="stat"><div class="stat-val amber" id="stat-pending">0</div><div class="stat-lbl">대기중</div></div>
+    <div class="stat"><div class="stat-val green" id="stat-done">0</div><div class="stat-lbl">접수완료</div></div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls">
+    <div class="search-wrap">
+      <svg class="search-icon" viewBox="0 0 13 13"><circle cx="5.5" cy="5.5" r="4"/><line x1="8.5" y1="8.5" x2="12" y2="12"/></svg>
+      <input class="search-input" id="search-inp" placeholder="콘도명, 전화번호 검색...">
+    </div>
+    <select class="filter-sel" id="filter-status">
+      <option value="all">전체</option>
+      <option value="pending">대기중</option>
+      <option value="completed">접수완료</option>
+    </select>
+    <select class="filter-sel" id="filter-sort">
+      <option value="newest">최근순</option>
+      <option value="oldest">과거순</option>
+    </select>
+  </div>
+
+  <div class="req-list" id="req-list">
+    <div class="empty-st"><div class="empty-title">의뢰 내역이 없습니다</div><div class="empty-desc">고객이 의뢰를 접수하면 여기에 표시됩니다</div></div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-ov" id="modal-ov">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-msg" id="modal-msg" style="display:none"></div>
+    <div class="modal-msg-box" id="modal-msg-box" style="display:none"></div>
+    <div class="modal-btns" id="modal-btns"></div>
+    <div class="copy-ok" id="modal-copy-ok">✓ 복사됨! 붙여넣기 하세요</div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div class="loading-ov" id="loading-ov">
+  <div class="loading-box"><div class="spinner"></div>처리 중...</div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import{getFirestore,collection,doc,updateDoc,deleteDoc,onSnapshot}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const FIREBASE_CFG={apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",authDomain:"happywork-packageplan.firebaseapp.com",projectId:"happywork-packageplan",storageBucket:"happywork-packageplan.firebasestorage.app",messagingSenderId:"101289103022",appId:"1:101289103022:web:d81aca7f3747dd26df673f"};
+const ADMIN_PW='hhc_req_admin_pw';
+const ADMIN_AUTH='hhc_req_admin_auth';
+
+let db=null,unsub=null,allRequests=[];
+
+// ── AUTH ──
+function checkAuth(){return localStorage.getItem(ADMIN_AUTH)==='1';}
+function setAuth(v){if(v)localStorage.setItem(ADMIN_AUTH,'1');else localStorage.removeItem(ADMIN_AUTH);}
+
+function showScreen(id){
+  document.getElementById('login-screen').style.display=id==='login'?'block':'none';
+  document.getElementById('app-header').style.display=id==='app'?'block':'none';
+  document.getElementById('app-body').classList.toggle('active',id==='app');
+}
+
+async function connectFirebase(){
+  try{
+    const app=initializeApp(FIREBASE_CFG);
+    db=getFirestore(app);
+    unsub=onSnapshot(collection(db,'requests'),snap=>{
+      allRequests=snap.docs.map(d=>({...d.data(),__id:d.id}));
+      renderList();
+      updateStats();
+    },(err)=>console.error(err));
+    document.getElementById('fb-dot').classList.add('on');
+    return true;
+  }catch(e){console.error(e);return false;}
+}
+
+// ── LOGIN ──
+document.getElementById('btn-login').addEventListener('click',async()=>{
+  const pw=document.getElementById('login-pw').value.trim();
+  const saved=localStorage.getItem(ADMIN_PW);
+  const err=document.getElementById('login-err');
+  if(!saved){
+    if(!pw||pw.length<4){err.textContent='비밀번호는 4자리 이상이어야 합니다.';err.style.display='block';return;}
+    localStorage.setItem(ADMIN_PW,pw);
+  }else if(pw!==saved){err.textContent='비밀번호가 틀렸습니다.';err.style.display='block';return;}
+  err.style.display='none';
+  showLoading(true);
+  const ok=await connectFirebase();
+  showLoading(false);
+  if(ok){setAuth(true);showScreen('app');}
+  else{err.textContent='Firebase 연결 실패.';err.style.display='block';}
+});
+document.getElementById('login-pw').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('btn-login').click();});
+document.getElementById('btn-logout').addEventListener('click',()=>{setAuth(false);if(unsub)unsub();showScreen('login');});
+
+// ── AUTO LOGIN ──
+(async()=>{
+  if(checkAuth()){showLoading(true);const ok=await connectFirebase();showLoading(false);if(ok){showScreen('app');}else{setAuth(false);showScreen('login');}}
+  else{showScreen('login');}
+})();
+
+// ── STATS ──
+function updateStats(){
+  document.getElementById('stat-total').textContent=allRequests.length;
+  document.getElementById('stat-pending').textContent=allRequests.filter(r=>r.status==='pending').length;
+  document.getElementById('stat-done').textContent=allRequests.filter(r=>r.status==='completed').length;
+}
+
+// ── RENDER LIST ──
+function renderList(){
+  const el=document.getElementById('req-list');
+  const search=document.getElementById('search-inp').value.toLowerCase().trim();
+  const statusFilter=document.getElementById('filter-status').value;
+  const sort=document.getElementById('filter-sort').value;
+
+  let list=[...allRequests];
+
+  // 필터
+  if(search)list=list.filter(r=>(r.condo||'').toLowerCase().includes(search)||(r.phone||'').toLowerCase().includes(search));
+  if(statusFilter!=='all')list=list.filter(r=>r.status===statusFilter);
+
+  // 정렬
+  list.sort((a,b)=>{
+    const da=a.submitted_at||'';const db2=b.submitted_at||'';
+    return sort==='newest'?db2.localeCompare(da):da.localeCompare(db2);
+  });
+
+  if(!list.length){
+    el.innerHTML=`<div class="empty-st"><div class="empty-title">${search?'검색 결과 없음':'의뢰 내역이 없습니다'}</div><div class="empty-desc">${search?'다른 검색어를 입력해보세요':'고객이 의뢰를 접수하면 여기에 표시됩니다'}</div></div>`;
+    return;
+  }
+
+  el.innerHTML=list.map(r=>{
+    const items=r.items?JSON.parse(r.items):[];
+    const isPending=r.status==='pending';
+    const statusLabel=isPending?'⏳ 대기중':'✅ 접수완료';
+    const statusCls=isPending?'pending':'completed';
+    const langBadge=r.lang==='en'?'<span class="rc-lang">EN</span>':'<span class="rc-lang">KO</span>';
+    const date=r.submitted_at?new Date(r.submitted_at).toLocaleString('ko-KR'):'—';
+
+    const itemsHtml=items.map(it=>{
+      const svc=it.svc?` · ${it.svc}`:'';
+      return `<div class="rc-item-row"><span class="rc-item-dot">•</span><span>${it.cat}${svc} × ${it.qty}</span></div>`;
+    }).join('');
+
+    return `<div class="req-card ${statusCls}" data-id="${r.__id}">
+      <div class="rc-top">
+        <div class="rc-info">
+          <div class="rc-name">${r.condo||'—'}${langBadge}</div>
+          <div class="rc-phone">📞 ${r.phone||'—'}</div>
+        </div>
+        <span class="rc-status ${statusCls}">${statusLabel}</span>
+      </div>
+      <div class="rc-items">${itemsHtml||'품목 없음'}</div>
+      ${r.remarks?`<div class="rc-remarks">📝 ${r.remarks}</div>`:''}
+      <div class="rc-date">📅 ${date}</div>
+      <div class="rc-actions">
+        ${isPending?`<button class="btn-sm btn-complete" data-complete="${r.__id}">✓ 접수완료</button>`:''}
+        <button class="btn-sm btn-wa" data-wa="${r.__id}">WhatsApp</button>
+        <button class="btn-sm btn-kakao" data-kakao="${r.__id}">카카오</button>
+        <button class="btn-sm btn-del" data-del="${r.__id}">삭제</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── 메시지 생성 ──
+function buildMsg(r,isComplete){
+  const items=r.items?JSON.parse(r.items):[];
+  const lang=r.lang||'ko';
+  const itemLines=items.map(it=>{const svc=it.svc?` - ${it.svc}`:'';return `  • ${it.cat}${svc} × ${it.qty}`;}).join('\n');
+
+  if(isComplete){
+    if(lang==='en'){
+      return `Hello 😊\n\nThank you for your service request.\nYour request has been received and confirmed.\n\n📋 Service Items:\n${itemLines}\n${r.remarks?`\n📝 Remarks: ${r.remarks}\n`:''}\nOur team will contact you shortly to schedule your service.\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
+    }
+    return `안녕하세요 😊\n\n서비스 의뢰 접수가 완료되었습니다.\n\n📋 의뢰 품목:\n${itemLines}\n${r.remarks?`\n📝 요청사항: ${r.remarks}\n`:''}\n담당자가 일정 확인 후 연락드립니다.\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
+  }else{
+    if(lang==='en'){
+      return `[HHC Service Request]\nCondo: ${r.condo||'—'}\nPhone: ${r.phone||'—'}\n\nService Items:\n${itemLines}${r.remarks?`\n\nRemarks: ${r.remarks}`:''}\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
+    }
+    return `[HHC 서비스 의뢰]\n콘도: ${r.condo||'—'}\n전화: ${r.phone||'—'}\n\n의뢰 품목:\n${itemLines}${r.remarks?`\n\n요청사항: ${r.remarks}`:''}\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
+  }
+}
+
+// ── EVENTS ──
+document.getElementById('req-list').addEventListener('click',async e=>{
+  // 접수완료
+  const completeBtn=e.target.closest('[data-complete]');
+  if(completeBtn){
+    const id=completeBtn.dataset.complete;
+    const r=allRequests.find(x=>x.__id===id);
+    if(!r)return;
+    const msg=buildMsg(r,true);
+    showCompleteModal(r,msg,async()=>{
+      showLoading(true);
+      try{await updateDoc(doc(db,'requests',id),{status:'completed',completed_at:new Date().toISOString()});showToast('✓ 접수완료 처리되었습니다');}
+      catch(err){console.error(err);}
+      showLoading(false);
+    });
+    return;
+  }
+
+  // WhatsApp
+  const waBtn=e.target.closest('[data-wa]');
+  if(waBtn){
+    const r=allRequests.find(x=>x.__id===waBtn.dataset.wa);
+    if(!r)return;
+    const msg=buildMsg(r,r.status==='completed');
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+    return;
+  }
+
+  // 카카오
+  const kakaoBtn=e.target.closest('[data-kakao]');
+  if(kakaoBtn){
+    const r=allRequests.find(x=>x.__id===kakaoBtn.dataset.kakao);
+    if(!r)return;
+    const msg=buildMsg(r,r.status==='completed');
+    navigator.clipboard.writeText(msg).then(()=>showToast('✓ 복사됨! 카카오톡에 붙여넣기 하세요')).catch(()=>prompt('복사:',msg));
+    return;
+  }
+
+  // 삭제
+  const delBtn=e.target.closest('[data-del]');
+  if(delBtn){
+    const id=delBtn.dataset.del;
+    const r=allRequests.find(x=>x.__id===id);
+    showConfirmModal(`'${r?.condo||''}' 의뢰를 삭제하시겠습니까?`,async()=>{
+      showLoading(true);
+      try{await deleteDoc(doc(db,'requests',id));showToast('✓ 삭제되었습니다');}
+      catch(err){console.error(err);}
+      showLoading(false);
+    });
+  }
+});
+
+// 검색/필터 이벤트
+document.getElementById('search-inp').addEventListener('input',renderList);
+document.getElementById('filter-status').addEventListener('change',renderList);
+document.getElementById('filter-sort').addEventListener('change',renderList);
+
+// ── MODALS ──
+function showCompleteModal(r,msg,onComplete){
+  const ov=document.getElementById('modal-ov');
+  document.getElementById('modal-title').textContent='✅ 접수완료 처리';
+  document.getElementById('modal-msg').textContent='아래 메시지를 고객에게 전송 후 접수완료 처리하세요.';
+  document.getElementById('modal-msg').style.display='block';
+  document.getElementById('modal-msg-box').textContent=msg;
+  document.getElementById('modal-msg-box').style.display='block';
+  document.getElementById('modal-copy-ok').style.display='none';
+
+  const btns=document.getElementById('modal-btns');
+  btns.innerHTML=`
+    <button class="modal-btn modal-btn-wa" id="m-wa">WhatsApp</button>
+    <button class="modal-btn modal-btn-kakao" id="m-kakao">카카오 복사</button>
+    <button class="modal-btn" style="background:var(--green);color:#fff" id="m-complete">✓ 접수완료</button>
+    <button class="modal-btn modal-btn-cancel" id="m-cancel">취소</button>`;
+
+  document.getElementById('m-wa').onclick=()=>window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+  document.getElementById('m-kakao').onclick=()=>{
+    navigator.clipboard.writeText(msg).then(()=>{
+      const ok=document.getElementById('modal-copy-ok');ok.style.display='block';setTimeout(()=>ok.style.display='none',2500);
+    });
+  };
+  document.getElementById('m-complete').onclick=()=>{ov.classList.remove('open');onComplete();};
+  document.getElementById('m-cancel').onclick=()=>ov.classList.remove('open');
+  ov.classList.add('open');
+  ov.onclick=e=>{if(e.target===ov)ov.classList.remove('open');};
+}
+
+function showConfirmModal(msg,onOk){
+  const ov=document.getElementById('modal-ov');
+  document.getElementById('modal-title').textContent='삭제 확인';
+  document.getElementById('modal-msg').textContent=msg;
+  document.getElementById('modal-msg').style.display='block';
+  document.getElementById('modal-msg-box').style.display='none';
+  document.getElementById('modal-copy-ok').style.display='none';
+  const btns=document.getElementById('modal-btns');
+  btns.innerHTML=`
+    <button class="modal-btn" style="background:var(--red);color:#fff" id="m-ok">삭제</button>
+    <button class="modal-btn modal-btn-cancel" id="m-cancel">취소</button>`;
+  document.getElementById('m-ok').onclick=()=>{ov.classList.remove('open');onOk();};
+  document.getElementById('m-cancel').onclick=()=>ov.classList.remove('open');
+  ov.classList.add('open');
+}
+
+function showLoading(v){document.getElementById('loading-ov').classList.toggle('open',v);}
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.style.display='block';
+  setTimeout(()=>t.style.display='none',2500);
+}
+</script>
+</body>
+</html>
