@@ -2282,9 +2282,9 @@ window.generateContractPDF=async function generateContractPDF(shareType){
     const storageRef=ref(_st,'contracts/'+fileName);
     const snapshot=await uploadBytes(storageRef,pdfBlob,{contentType:'application/pdf'});
     const downloadURL=await getDownloadURL(snapshot.ref);
-    // renderSendTab 완료 대기 후 메시지 생성
-    await new Promise(r=>setTimeout(r,300));
-    const baseMsg=getPanelMsg();
+    // 계약서 데이터로 직접 메시지 생성 (DOM 독립적)
+    const webURL=`https://hhc-3p8.pages.dev/customer.html?id=${contractId}&mode=contract`;
+    const baseMsg=buildContractMsg(c, webURL);
     const pdfMsg=baseMsg+'\n\n📄 계약서 PDF:\n'+downloadURL;
     // Google Drive 업로드 (실패해도 계속 진행)
     loadDiv.querySelector('span').textContent='Google Drive 업로드 중... (팝업 허용 필요)';
@@ -2298,7 +2298,7 @@ window.generateContractPDF=async function generateContractPDF(shareType){
 
     // 메시지 + 두 링크 포함
     const fullMsg=baseMsg+
-      (driveURL?'\n\n📄 PDF 보기 (카카오톡):\n'+driveURL:'\n\n📄 PDF 보기: Google Drive 연결 실패 — 아래 링크로 다운로드하세요')+
+      (driveURL?'\n\n📄 PDF 보기 (카카오톡):\n'+driveURL:'')+
       '\n\n📥 PDF 다운로드:\n'+downloadURL;
 
     if(shareType==='wa'){
@@ -2316,6 +2316,43 @@ window.generateContractPDF=async function generateContractPDF(shareType){
     alert('PDF 생성 실패: '+e.message);
     console.error(e);
   }
+}
+
+// 계약서 데이터로 직접 메시지 생성 (DOM 독립적)
+function buildContractMsg(c, webURL){
+  if(!c)return '';
+  const pkg=PACKAGES?PACKAGES.find(p=>p.id===c.package_id||p.id===c.package):null;
+  const paid=parseFloat(c.amount_paid||c.paid||0);
+  const bonus=parseFloat(c.bonus_credit||c.bonus||0);
+  const spec=parseFloat(c.special_bonus_credit||0);
+  const total=paid+bonus+spec;
+  const h=typeof c.usage_history==='string'?JSON.parse(c.usage_history||'[]'):(c.usage_history||[]);
+  const usedT=h.reduce((s,u)=>s+(parseFloat(u.amount)||0),0);
+  const discT=h.reduce((s,u)=>s+(parseFloat(u.discount)||0),0);
+  const carryT=h.reduce((s,u)=>s+(parseFloat(u.carryover)||0),0);
+  const remain=total-usedT+discT+carryT;
+  const name=c.name||'고객';
+  const url=webURL||`https://hhc-3p8.pages.dev/customer.html?id=${c.__id}&mode=contract`;
+  return `안녕하세요 ${name}님 😊 / Dear ${name},
+
+Happy Home Care 계약서를 확인하세요.
+Please check your Happy Home Care contract.
+
+👉 ${url}
+
+📋 계약 정보 / Contract Info
+• 패키지 / Package: ${pkg?pkg.label:'—'}
+• 납부금액 / Paid: RM ${paid.toFixed(2)}
+• 기본적립 / Bonus: RM ${bonus.toFixed(2)}
+
+💰 사용가능 잔액 / Available Balance
+RM ${remain.toFixed(2)}
+
+언제든지 위 링크에서 이용내역을 확인하실 수 있습니다.
+You can check your usage history anytime via the link above.
+
+HAPPY WORKS SERVICES SDN.BHD.
+📞 +60172472774`;
 }
 
 function getPanelMsg(){
