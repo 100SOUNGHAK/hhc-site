@@ -1530,6 +1530,7 @@ function getSignSection(){
 var GDRIVE_CLIENT_ID='101289103022-35gf4cl4u63m0ejfi3l3ortfah03nlme.apps.googleusercontent.com';
 var GDRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 var gdriveToken=null;
+try{var _gt=sessionStorage.getItem('gdrive_token');var _ge=sessionStorage.getItem('gdrive_token_exp');if(_gt&&_ge&&Date.now()<parseInt(_ge)){gdriveToken=_gt;}}catch(e){}
 
 function initGoogleAuth(){
   return new Promise(function(resolve){
@@ -1541,13 +1542,14 @@ function initGoogleAuth(){
         callback:function(resp){
           if(resp&&resp.access_token){
             gdriveToken=resp.access_token;
-            setTimeout(function(){gdriveToken=null;},3500000);
+            try{sessionStorage.setItem('gdrive_token',gdriveToken);sessionStorage.setItem('gdrive_token_exp',Date.now()+3500000);}catch(e){}
+            setTimeout(function(){gdriveToken=null;try{sessionStorage.removeItem('gdrive_token');}catch(e){}},3500000);
             resolve(true);
           }else{resolve(false);}
         },
         error_callback:function(e){console.warn('Google Auth 오류:',e);resolve(false);}
       });
-      client.requestAccessToken({prompt:'consent'});
+      client.requestAccessToken({prompt:''});
       // 10초 타임아웃 (팝업 차단 시 무한 대기 방지)
       setTimeout(function(){resolve(false);},10000);
     }catch(e){
