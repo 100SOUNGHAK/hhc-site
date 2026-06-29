@@ -2235,8 +2235,10 @@ async function uploadToDrive(pdfBlob,fileName){
       method:'POST',headers:{Authorization:'Bearer '+gdriveToken,'Content-Type':'application/json'},
       body:JSON.stringify({role:'reader',type:'anyone'})
     });
-    return 'https://drive.google.com/file/d/'+data.id+'/view';
-  }catch(e){console.error('Drive 오류:',e);return null;}
+    var viewURL='https://drive.google.com/file/d/'+data.id+'/view';
+    console.log('Drive 업로드 성공:', viewURL);
+    return viewURL;
+  }catch(e){console.error('Drive 오류:',e.message);return null;}
 }
 
 window.generateContractPDF=async function generateContractPDF(shareType){
@@ -2302,13 +2304,14 @@ window.generateContractPDF=async function generateContractPDF(shareType){
     const snapshot=await uploadBytes(storageRef,pdfBlob,{contentType:'application/pdf'});
     const downloadURL=await getDownloadURL(snapshot.ref);
 
-    // 2. Google Drive 업로드 (실패해도 계속 진행)
+    // 2. Google Drive 업로드
     loadDiv.querySelector('span').textContent='Google Drive 업로드 중...';
     let driveURL=null;
     try{
       var drivePromise=uploadToDrive(pdfBlob,fileName);
-      var timeoutPromise=new Promise(function(r){setTimeout(function(){r(null);},5000);});
+      var timeoutPromise=new Promise(function(r){setTimeout(function(){r(null);},30000);});
       driveURL=await Promise.race([drivePromise,timeoutPromise]);
+      console.log('Drive 업로드 결과:', driveURL);
     }catch(e){console.warn('Drive 실패:',e);}
 
     // 3. 모든 링크 TinyURL 단축
