@@ -2161,35 +2161,25 @@ window.generateContractPDF=async function generateContractPDF(shareType){
     if(!window.html2canvas){
       await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
     }
-    // 계약서 인쇄 영역 — 현재 보이는 계약서 뷰 캡처
-    // 임시 컨테이너 생성하여 계약서 HTML 렌더링
+    // 먼저 계약서 뷰 탭으로 이동하여 계약서 렌더링
     const c=allContracts.find(x=>x.__id===contractId);
-    if(!c){
-      // 혹시 다른 방식으로 찾기
-      alert('계약서 데이터를 찾을 수 없습니다. 고객을 다시 선택해주세요.');
-      document.body.removeChild(loadDiv);return;
-    }
-    // 계약서 HTML 생성 (인쇄 모드)
+    if(!c){alert('계약서 데이터를 찾을 수 없습니다. 고객을 다시 선택해주세요.');document.body.removeChild(loadDiv);return;}
+
+    // customer 탭에서 해당 계약서 렌더링
+    currentViewId=contractId;
+    renderCustomerView();
+
+    // 렌더링 완료 대기
+    await new Promise(r=>setTimeout(r,500));
+
+    // .contract-doc 요소 캡처 (실제 계약서 영역)
+    const contractDoc=document.querySelector('.contract-doc');
+    if(!contractDoc){alert('계약서 화면을 찾을 수 없습니다.');document.body.removeChild(loadDiv);return;}
+
+    // 스타일 포함하여 캡처용 컨테이너 생성
     const container=document.createElement('div');
-    container.style.cssText='position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:40px;font-family:sans-serif;font-size:12px;color:#0f172a;z-index:-1';
-    // 고객 뷰 탭으로 전환하여 내용 복사
-    const custView=document.getElementById('customer-contract-view')||document.getElementById('contract-preview')||document.getElementById('print-area')||document.getElementById('tab-customer');
-    if(custView){
-      container.innerHTML=custView.innerHTML;
-    }else{
-      // 기본 텍스트 계약서 생성
-      const pkg=PACKAGES?PACKAGES.find(p=>p.id===c.package):{};
-      container.innerHTML='<h2 style="color:#0F1729;margin-bottom:16px">Happy Home Care — 계약서</h2>'+
-        '<table style="width:100%;border-collapse:collapse;font-size:12px">'+
-        '<tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:600">고객명</td><td style="padding:6px;border:1px solid #e2e8f0">'+(c.name||'')+'</td></tr>'+
-        '<tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:600">연락처</td><td style="padding:6px;border:1px solid #e2e8f0">'+(c.phone||'')+'</td></tr>'+
-        '<tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:600">패키지</td><td style="padding:6px;border:1px solid #e2e8f0">'+(pkg&&pkg.label||c.package||'')+'</td></tr>'+
-        '<tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:600">납부금액</td><td style="padding:6px;border:1px solid #e2e8f0">RM '+(parseFloat(c.paid||0).toFixed(2))+'</td></tr>'+
-        '<tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:600">잔액</td><td style="padding:6px;border:1px solid #e2e8f0">RM '+(parseFloat(c.remain||c.paid||0).toFixed(2))+'</td></tr>'+
-        '<tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:600">계약일</td><td style="padding:6px;border:1px solid #e2e8f0">'+(c.created_at||'')+'</td></tr>'+
-        '</table>'+
-        '<p style="margin-top:20px;font-size:11px;color:#6b7280">HAPPY WORKS SERVICES SDN.BHD. (1278908-M) · +60172472774</p>';
-    }
+    container.style.cssText='position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:0;z-index:-1;font-family:sans-serif';
+    container.innerHTML=contractDoc.outerHTML;
     document.body.appendChild(container);
     const canvas=await window.html2canvas(container,{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false});
     document.body.removeChild(container);
