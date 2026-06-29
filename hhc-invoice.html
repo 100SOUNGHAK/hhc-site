@@ -500,6 +500,7 @@ textarea{resize:none;line-height:1.5}
 <div class="loading" id="loading"><div class="spinner"></div><span id="loading-text">처리 중...</span></div>
 <div class="toast" id="toast"></div>
 
+<script src="https://accounts.google.com/gsi/client" async></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
@@ -1524,6 +1525,79 @@ function getSignSection(){
 }
 
 // ═══════════════════════════════════════════════════════════
+// GOOGLE DRIVE
+// ═══════════════════════════════════════════════════════════
+var GDRIVE_CLIENT_ID='101289103022-35gf4cl4u63m0ejfi3l3ortfah03nlme.apps.googleusercontent.com';
+var GDRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+var gdriveToken=null;
+
+function initGoogleAuth(){
+  return new Promise(function(resolve){
+    if(gdriveToken){resolve(true);return;}
+    try{
+      google.accounts.oauth2.initTokenClient({
+        client_id:GDRIVE_CLIENT_ID,
+        scope:GDRIVE_SCOPE,
+        callback:function(resp){
+          if(resp.access_token){
+            gdriveToken=resp.access_token;
+            // 1시간 후 토큰 만료
+            setTimeout(function(){gdriveToken=null;},3500000);
+            resolve(true);
+          }else{
+            resolve(false);
+          }
+        }
+      }).requestAccessToken();
+    }catch(e){
+      console.warn('Google Auth 실패:',e.message);
+      resolve(false);
+    }
+  });
+}
+
+async function uploadToDrive(pdfBlob,fileName){
+  if(!gdriveToken){
+    var ok=await initGoogleAuth();
+    if(!ok){showToast('Google 인증 실패');return null;}
+  }
+  try{
+    // 1. 파일 메타데이터 + 파일 업로드 (multipart)
+    var metadata={name:fileName,mimeType:'application/pdf'};
+    var form=new FormData();
+    form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
+    form.append('file',pdfBlob);
+    var res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{
+      method:'POST',
+      headers:{Authorization:'Bearer '+gdriveToken},
+      body:form
+    });
+    if(!res.ok){
+      var err=await res.json();
+      // 토큰 만료 시 재시도
+      if(res.status===401){
+        gdriveToken=null;
+        return await uploadToDrive(pdfBlob,fileName);
+      }
+      throw new Error(err.error&&err.error.message||'Drive 업로드 실패');
+    }
+    var data=await res.json();
+    var fileId=data.id;
+    // 2. 파일 공개 설정 (anyone with link can view)
+    await fetch('https://www.googleapis.com/drive/v3/files/'+fileId+'/permissions',{
+      method:'POST',
+      headers:{Authorization:'Bearer '+gdriveToken,'Content-Type':'application/json'},
+      body:JSON.stringify({role:'reader',type:'anyone'})
+    });
+    // 3. 미리보기 링크 반환
+    return 'https://drive.google.com/file/d/'+fileId+'/view';
+  }catch(e){
+    console.error('Drive 업로드 오류:',e);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
 // PDF GENERATION
 // ═══════════════════════════════════════════════════════════
 // PDF 로컬 저장 — 인쇄 다이얼로그 이용
@@ -1573,23 +1647,38 @@ async function generateAndSharePDF(shareType){
     // Firestore에 저장
     var existing=invoices.find(function(i){return i.id===inv.id;});
     if(existing&&existing._docId&&DB){DB.collection('invoices').doc(existing._docId).update({pdfUrl:downloadURL}).catch(function(){});}
-    // 메시지 + PDF 링크
+    // Google Drive 업로드 (카카오톡 미리보기용)
+    showLoad('Google Drive 업로드 중...');
+    var driveURL=null;
+    try{
+      driveURL=await uploadToDrive(pdfBlob,'Invoice_'+inv.id+'.pdf');
+    }catch(e){console.warn('Drive 업로드 실패:',e);}
+
+    // 메시지 구성
     var webLnk=getLnk(inv.id);
     var status=inv.status||'billing';
     var tpl=(msgTemplates[status]||msgTemplates.billing)[msgLang]||(msgTemplates[status]||msgTemplates.billing).ko;
-    var pdfMsg=tpl(inv,webLnk)+'\n\n📄 PDF 다운로드:\n'+downloadURL;
+    var baseMsg=tpl(inv,webLnk);
+    // Firebase 링크 + Google Drive 링크 둘 다 포함
+    var pdfMsg=baseMsg+'\n\n📄 PDF 보기 (카카오톡):'+
+      (driveURL?'\n'+driveURL:'\n(Drive 업로드 실패)')+
+      '\n\n📥 PDF 다운로드:\n'+downloadURL;
+
     if(shareType==='wa'){
       var num=(inv.customer&&inv.customer.phone||val('wa-num')||'').replace(/[^0-9]/g,'');
       if(num){window.open('https://wa.me/'+num+'?text='+encodeURIComponent(pdfMsg),'_blank');}
       else{cpTxt(pdfMsg);showToast('번호 없음 — 메시지 복사됨');}
     }else if(shareType==='kakao'){
-      cpTxt(pdfMsg);showToast('카카오톡 메시지 복사됨 (PDF 링크 포함)',3000);
+      cpTxt(pdfMsg);showToast('✓ 카카오톡 메시지 복사됨 (PDF 링크 포함)',3000);
     }else if(shareType==='email'){
       var to=val('send-email');if(!to){showToast('이메일 주소를 입력해주세요.');return;}
       var sub=((emailSubjects[status]||emailSubjects.billing)[msgLang]||(emailSubjects[status]||emailSubjects.billing).ko);
       window.location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(pdfMsg);
-    }else{cpTxt(downloadURL);showToast('✓ PDF 링크 복사됨');}
-    showToast('✓ PDF 업로드 완료');
+    }else{
+      var links='Firebase: '+downloadURL+(driveURL?'\nDrive: '+driveURL:'');
+      cpTxt(links);showToast('✓ PDF 링크 복사됨');
+    }
+    showToast('✓ 업로드 완료');
   }catch(e){showToast('실패: '+e.message);console.error(e);}
   finally{hideLoad();}
 }

@@ -461,6 +461,7 @@ input[data-benefit]{display:none}
   #send-mode-bar button{flex:1;text-align:center}
 }
 </style>
+<script src="https://accounts.google.com/gsi/client" async></script>
 </head>
 <body>
 
@@ -2144,6 +2145,51 @@ document.getElementById('btn-copy-link').addEventListener('click',()=>{
 });
 
 // ── PDF 생성 + Firebase Storage 업로드 ──
+// ── Google Drive 업로드 ──
+var GDRIVE_CLIENT_ID='101289103022-35gf4cl4u63m0ejfi3l3ortfah03nlme.apps.googleusercontent.com';
+var GDRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+var gdriveToken=null;
+
+function initGoogleAuth(){
+  return new Promise(function(resolve){
+    if(gdriveToken){resolve(true);return;}
+    try{
+      google.accounts.oauth2.initTokenClient({
+        client_id:GDRIVE_CLIENT_ID,
+        scope:GDRIVE_SCOPE,
+        callback:function(resp){
+          if(resp.access_token){
+            gdriveToken=resp.access_token;
+            setTimeout(function(){gdriveToken=null;},3500000);
+            resolve(true);
+          }else{resolve(false);}
+        }
+      }).requestAccessToken();
+    }catch(e){console.warn('Google Auth 실패:',e.message);resolve(false);}
+  });
+}
+
+async function uploadToDrive(pdfBlob,fileName){
+  if(!gdriveToken){var ok=await initGoogleAuth();if(!ok)return null;}
+  try{
+    var metadata={name:fileName,mimeType:'application/pdf'};
+    var form=new FormData();
+    form.append('metadata',new Blob([JSON.stringify(metadata)],{type:'application/json'}));
+    form.append('file',pdfBlob);
+    var res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',{
+      method:'POST',headers:{Authorization:'Bearer '+gdriveToken},body:form
+    });
+    if(res.status===401){gdriveToken=null;return await uploadToDrive(pdfBlob,fileName);}
+    if(!res.ok)throw new Error('Drive 업로드 실패');
+    var data=await res.json();
+    await fetch('https://www.googleapis.com/drive/v3/files/'+data.id+'/permissions',{
+      method:'POST',headers:{Authorization:'Bearer '+gdriveToken,'Content-Type':'application/json'},
+      body:JSON.stringify({role:'reader',type:'anyone'})
+    });
+    return 'https://drive.google.com/file/d/'+data.id+'/view';
+  }catch(e){console.error('Drive 오류:',e);return null;}
+}
+
 window.generateContractPDF=async function generateContractPDF(shareType){
   // send-select 또는 currentViewId에서 계약서 ID 가져오기
   const sendSel=document.getElementById('send-select');
@@ -2208,13 +2254,23 @@ window.generateContractPDF=async function generateContractPDF(shareType){
     const downloadURL=await getDownloadURL(snapshot.ref);
     const baseMsg=getPanelMsg();
     const pdfMsg=baseMsg+'\n\n📄 계약서 PDF:\n'+downloadURL;
+    // Google Drive 업로드
+    loadDiv.querySelector('span').textContent='Google Drive 업로드 중...';
+    let driveURL=null;
+    try{driveURL=await uploadToDrive(pdfBlob,fileName);}catch(e){console.warn('Drive 실패:',e);}
+
+    // 메시지 + 두 링크 포함
+    const fullMsg=baseMsg+
+      '\n\n📄 PDF 보기 (카카오톡):'+(driveURL?'\n'+driveURL:'\n(Drive 업로드 실패)')+
+      '\n\n📥 PDF 다운로드:\n'+downloadURL;
+
     if(shareType==='wa'){
-      window.open('https://wa.me/?text='+encodeURIComponent(pdfMsg),'_blank');
+      window.open('https://wa.me/?text='+encodeURIComponent(fullMsg),'_blank');
     }else if(shareType==='kakao'){
-      navigator.clipboard.writeText(pdfMsg).then(()=>{
+      navigator.clipboard.writeText(fullMsg).then(()=>{
         const ok=document.getElementById('kakao-copy-ok');
         if(ok){ok.textContent='✓ PDF 링크 포함 복사됨! 카카오톡에 붙여넣기 하세요';ok.style.display='block';setTimeout(()=>{ok.style.display='none';ok.textContent='✓ 복사됨! 카카오톡에 붙여넣기 하세요';},3000);}
-      }).catch(()=>prompt('복사 후 카카오톡에 붙여넣기:',pdfMsg));
+      }).catch(()=>prompt('복사 후 카카오톡에 붙여넣기:',fullMsg));
     }
     loadDiv.querySelector('span').textContent='✓ 완료';
     setTimeout(()=>document.body.removeChild(loadDiv),1500);
