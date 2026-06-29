@@ -461,8 +461,6 @@ input[data-benefit]{display:none}
   #send-mode-bar button{flex:1;text-align:center}
 }
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 
@@ -2150,23 +2148,57 @@ document.getElementById('btn-copy-link').addEventListener('click',()=>{
 
 // ── PDF 생성 + Firebase Storage 업로드 ──
 async function generateContractPDF(shareType){
-  const contractId=currentViewId||currentSendId;
+  // currentViewId 또는 고객 선택에서 찾기
+  const contractId=currentViewId||
+    (document.getElementById('customer-select')&&document.getElementById('customer-select').value)||null;
   if(!contractId){alert('계약서를 먼저 선택해주세요.');return;}
-  // 로딩 표시
   const loadDiv=document.createElement('div');
   loadDiv.style.cssText='position:fixed;inset:0;background:rgba(255,255,255,.85);display:flex;align-items:center;justify-content:center;z-index:9999;font-size:14px;color:#0f172a;flex-direction:column;gap:12px';
   loadDiv.innerHTML='<div style="width:32px;height:32px;border:3px solid #e2e8f0;border-top-color:#4F6EF7;border-radius:50%;animation:spin .7s linear infinite"></div><span>PDF 생성 중...</span>';
   document.body.appendChild(loadDiv);
   try{
-    // 계약서 프린트 뷰 컨테이너 가져오기
-    const printArea=document.getElementById('print-view')||document.querySelector('.contract-print')||document.querySelector('[data-print]');
-    if(!printArea){alert('계약서 인쇄 영역을 찾을 수 없습니다.');return;}
-    // html2canvas로 캡처
-    const canvas=await html2canvas(printArea,{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false});
-    // jsPDF 생성
+    // 동적 CDN 로드
+    if(!window.jspdf){
+      await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+    }
+    if(!window.html2canvas){
+      await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+    }
+    // 계약서 인쇄 영역 — 현재 보이는 계약서 뷰 캡처
+    // 임시 컨테이너 생성하여 계약서 HTML 렌더링
+    const c=allContracts.find(x=>x.__id===contractId);
+    if(!c){
+      // 혹시 다른 방식으로 찾기
+      alert('계약서 데이터를 찾을 수 없습니다. 고객을 다시 선택해주세요.');
+      document.body.removeChild(loadDiv);return;
+    }
+    // 계약서 HTML 생성 (인쇄 모드)
+    const container=document.createElement('div');
+    container.style.cssText='position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:40px;font-family:sans-serif;font-size:12px;color:#0f172a;z-index:-1';
+    // 고객 뷰 탭으로 전환하여 내용 복사
+    const custView=document.getElementById('customer-contract-view')||document.getElementById('contract-preview')||document.getElementById('print-area')||document.getElementById('tab-customer');
+    if(custView){
+      container.innerHTML=custView.innerHTML;
+    }else{
+      // 기본 텍스트 계약서 생성
+      const pkg=PACKAGES?PACKAGES.find(p=>p.id===c.package):{};
+      container.innerHTML='<h2 style="color:#0F1729;margin-bottom:16px">Happy Home Care — 계약서</h2>'+
+        '<table style="width:100%;border-collapse:collapse;font-size:12px">'+
+        '<tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:600">고객명</td><td style="padding:6px;border:1px solid #e2e8f0">'+(c.name||'')+'</td></tr>'+
+        '<tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:600">연락처</td><td style="padding:6px;border:1px solid #e2e8f0">'+(c.phone||'')+'</td></tr>'+
+        '<tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:600">패키지</td><td style="padding:6px;border:1px solid #e2e8f0">'+(pkg&&pkg.label||c.package||'')+'</td></tr>'+
+        '<tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:600">납부금액</td><td style="padding:6px;border:1px solid #e2e8f0">RM '+(parseFloat(c.paid||0).toFixed(2))+'</td></tr>'+
+        '<tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:600">잔액</td><td style="padding:6px;border:1px solid #e2e8f0">RM '+(parseFloat(c.remain||c.paid||0).toFixed(2))+'</td></tr>'+
+        '<tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:600">계약일</td><td style="padding:6px;border:1px solid #e2e8f0">'+(c.created_at||'')+'</td></tr>'+
+        '</table>'+
+        '<p style="margin-top:20px;font-size:11px;color:#6b7280">HAPPY WORKS SERVICES SDN.BHD. (1278908-M) · +60172472774</p>';
+    }
+    document.body.appendChild(container);
+    const canvas=await window.html2canvas(container,{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false});
+    document.body.removeChild(container);
     const {jsPDF}=window.jspdf;
     const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-    const imgData=canvas.toDataURL('image/jpeg',0.95);
+    const imgData=canvas.toDataURL('image/jpeg',0.92);
     const pdfW=pdf.internal.pageSize.getWidth();
     const pdfH=(canvas.height*pdfW)/canvas.width;
     const pageH=pdf.internal.pageSize.getHeight();
@@ -2182,11 +2214,11 @@ async function generateContractPDF(shareType){
     // Firebase Storage 업로드
     loadDiv.querySelector('span').textContent='업로드 중...';
     const pdfBlob=pdf.output('blob');
-    const _st=window._storage;if(!_st){alert('Storage 초기화 안됨');return;}
+    const _st=window._storage;
+    if(!_st){alert('Firebase Storage가 초기화되지 않았습니다.');document.body.removeChild(loadDiv);return;}
     const storageRef=ref(_st,'contracts/'+fileName);
     const snapshot=await uploadBytes(storageRef,pdfBlob,{contentType:'application/pdf'});
     const downloadURL=await getDownloadURL(snapshot.ref);
-    // 기존 메시지 + PDF 링크
     const baseMsg=getPanelMsg();
     const pdfMsg=baseMsg+'\n\n📄 계약서 PDF:\n'+downloadURL;
     if(shareType==='wa'){
@@ -2200,7 +2232,7 @@ async function generateContractPDF(shareType){
     loadDiv.querySelector('span').textContent='✓ 완료';
     setTimeout(()=>document.body.removeChild(loadDiv),1500);
   }catch(e){
-    document.body.removeChild(loadDiv);
+    if(document.body.contains(loadDiv))document.body.removeChild(loadDiv);
     alert('PDF 생성 실패: '+e.message);
     console.error(e);
   }

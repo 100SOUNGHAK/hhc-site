@@ -500,10 +500,7 @@ textarea{resize:none;line-height:1.5}
 <div class="loading" id="loading"><div class="spinner"></div><span id="loading-text">처리 중...</span></div>
 <div class="toast" id="toast"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════
@@ -1529,88 +1526,69 @@ function getSignSection(){
 // ═══════════════════════════════════════════════════════════
 // PDF GENERATION
 // ═══════════════════════════════════════════════════════════
-async function buildPDFBlob(inv){
-  // 임시 컨테이너
-  var container=document.createElement('div');
-  container.style.cssText='position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:40px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;color:#0f172a;z-index:-1';
-  container.innerHTML=buildInvHTML(inv);
-  document.body.appendChild(container);
-  var canvas=await html2canvas(container,{scale:2,useCORS:true,backgroundColor:'#ffffff',width:794,logging:false});
-  document.body.removeChild(container);
-  var jsPDF=window.jspdf.jsPDF;
-  var pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-  var imgData=canvas.toDataURL('image/jpeg',0.95);
-  var pdfW=pdf.internal.pageSize.getWidth();
-  var pdfH=(canvas.height*pdfW)/canvas.width;
-  var pageH=pdf.internal.pageSize.getHeight();
-  if(pdfH<=pageH){pdf.addImage(imgData,'JPEG',0,0,pdfW,pdfH);}
-  else{var y=0;while(y<pdfH){if(y>0)pdf.addPage();pdf.addImage(imgData,'JPEG',0,-y,pdfW,pdfH);y+=pageH;}}
-  return pdf;
-}
-
-// PDF 로컬 저장 (다운로드)
-async function generatePDF(){
-  showLoad('PDF 생성 중...');
-  try{
-    var inv=getInvData();
-    var pdf=await buildPDFBlob(inv);
-    var fileName='Invoice_'+(inv.id||'HHC')+'.pdf';
-    pdf.save(fileName);
-    showToast('✓ PDF 저장됨 — '+fileName);
-  }catch(e){showToast('PDF 생성 실패: '+e.message);console.error(e);}
-  finally{hideLoad();}
+// PDF 로컬 저장 — 인쇄 다이얼로그 이용
+function generatePDF(){
+  printInv(getInvData());
+  showToast('인쇄 다이얼로그에서 PDF로 저장하세요');
 }
 window.generatePDF=generatePDF;
 
-// PDF → Firebase Storage 업로드 → 링크 생성 → 공유
+// PDF → Firebase Storage → 공유 (필요 시 CDN 동적 로드)
 async function generateAndSharePDF(shareType){
   if(!ST){showToast('Firebase Storage 연결 안됨');return;}
-  showLoad('PDF 생성 및 업로드 중...');
+  var inv=getInvData();
+  if(!inv.id){showToast('먼저 인보이스를 저장해주세요.');return;}
+  showLoad('PDF 생성 중...');
   try{
-    var inv=getInvData();
-    if(!inv.id){showToast('먼저 저장해주세요.');return;}
-    var pdf=await buildPDFBlob(inv);
+    // 동적으로 라이브러리 로드
+    if(!window.jspdf){
+      await new Promise(function(res,rej){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+    }
+    if(!window.html2canvas){
+      await new Promise(function(res,rej){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+    }
+    // 렌더링
+    var container=document.createElement('div');
+    container.style.cssText='position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:40px;font-family:-apple-system,sans-serif;font-size:12px;color:#0f172a;z-index:-1';
+    container.innerHTML=buildInvHTML(inv);
+    document.body.appendChild(container);
+    var canvas=await window.html2canvas(container,{scale:2,useCORS:true,backgroundColor:'#ffffff',width:794,logging:false});
+    document.body.removeChild(container);
+    // PDF 생성
+    var jsPDF=window.jspdf.jsPDF;
+    var pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    var imgData=canvas.toDataURL('image/jpeg',0.92);
+    var pdfW=pdf.internal.pageSize.getWidth();
+    var pdfH=(canvas.height*pdfW)/canvas.width;
+    var pageH=pdf.internal.pageSize.getHeight();
+    if(pdfH<=pageH){pdf.addImage(imgData,'JPEG',0,0,pdfW,pdfH);}
+    else{var y=0;while(y<pdfH){if(y>0)pdf.addPage();pdf.addImage(imgData,'JPEG',0,-y,pdfW,pdfH);y+=pageH;}}
     var fileName='Invoice_'+inv.id+'.pdf';
-    // PDF를 Blob으로 변환
+    // Storage 업로드
+    showLoad('업로드 중...');
     var pdfBlob=pdf.output('blob');
-    // Firebase Storage 업로드
     var storageRef=ST.ref('invoices/'+fileName);
     var snapshot=await storageRef.put(pdfBlob,{contentType:'application/pdf'});
     var downloadURL=await snapshot.ref.getDownloadURL();
-    // 링크 저장 (Firebase Firestore에도 저장)
+    // Firestore에 저장
     var existing=invoices.find(function(i){return i.id===inv.id;});
-    if(existing&&existing._docId&&DB){
-      DB.collection('invoices').doc(existing._docId).update({pdfUrl:downloadURL}).catch(function(){});
-    }
-    // 메시지 생성 (PDF 링크 포함)
+    if(existing&&existing._docId&&DB){DB.collection('invoices').doc(existing._docId).update({pdfUrl:downloadURL}).catch(function(){});}
+    // 메시지 + PDF 링크
     var webLnk=getLnk(inv.id);
     var status=inv.status||'billing';
-    var statusTpls=msgTemplates[status]||msgTemplates.billing;
-    var tpl=statusTpls[msgLang]||statusTpls.ko;
-    var baseMsg=tpl(inv,webLnk);
-    var pdfMsg=baseMsg+'
-
-📄 PDF 다운로드:
-'+downloadURL;
+    var tpl=(msgTemplates[status]||msgTemplates.billing)[msgLang]||(msgTemplates[status]||msgTemplates.billing).ko;
+    var pdfMsg=tpl(inv,webLnk)+'\n\n📄 PDF 다운로드:\n'+downloadURL;
     if(shareType==='wa'){
-      var num=(inv.customer&&inv.customer.phone||val('wa-num')||'').replace(/[\s\-()]/g,'').replace('+','');
+      var num=(inv.customer&&inv.customer.phone||val('wa-num')||'').replace(/[^0-9]/g,'');
       if(num){window.open('https://wa.me/'+num+'?text='+encodeURIComponent(pdfMsg),'_blank');}
       else{cpTxt(pdfMsg);showToast('번호 없음 — 메시지 복사됨');}
     }else if(shareType==='kakao'){
-      cpTxt(pdfMsg);
-      showToast('카카오톡 메시지 복사됨 (PDF 링크 포함)',3000);
+      cpTxt(pdfMsg);showToast('카카오톡 메시지 복사됨 (PDF 링크 포함)',3000);
     }else if(shareType==='email'){
-      var to=val('send-email');
-      if(!to){showToast('이메일 주소를 입력해주세요.');return;}
-      var subjSet=emailSubjects[status]||emailSubjects.billing;
-      var sub=subjSet[msgLang]||subjSet.ko;
-      var body=pdfMsg;
-      window.location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(body);
-    }else{
-      // 링크만 복사
-      cpTxt(downloadURL);
-      showToast('✓ PDF 링크 복사됨');
-    }
+      var to=val('send-email');if(!to){showToast('이메일 주소를 입력해주세요.');return;}
+      var sub=((emailSubjects[status]||emailSubjects.billing)[msgLang]||(emailSubjects[status]||emailSubjects.billing).ko);
+      window.location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(pdfMsg);
+    }else{cpTxt(downloadURL);showToast('✓ PDF 링크 복사됨');}
     showToast('✓ PDF 업로드 완료');
   }catch(e){showToast('실패: '+e.message);console.error(e);}
   finally{hideLoad();}
@@ -1661,7 +1639,7 @@ function bindAll(){
 // ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
-function init(){
+async function init(){
   // SW 제거
   if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister();});});}
 
@@ -1684,7 +1662,18 @@ function init(){
     var fbApp;
     try{fbApp=firebase.app();}catch(e){fbApp=firebase.initializeApp(FB_CFG);}
     DB=firebase.firestore(fbApp);
-    ST=firebase.storage(fbApp);
+    // Storage SDK 동적 로드
+    try{
+      if(!firebase.storage){
+        await new Promise(function(res,rej){
+          var s=document.createElement('script');
+          s.src='https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js';
+          s.onload=res;s.onerror=function(){console.warn('Storage SDK 로드 실패');res();};
+          document.head.appendChild(s);
+        });
+      }
+      if(firebase.storage)ST=firebase.storage(fbApp);
+    }catch(e){console.warn('Storage 초기화 실패:',e.message);}
     setSS('sy');
 
     DB.collection('invoices').orderBy('createdAt','desc').onSnapshot(function(snap){
