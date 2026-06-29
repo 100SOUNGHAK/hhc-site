@@ -2154,18 +2154,45 @@ function initGoogleAuth(){
   return new Promise(function(resolve){
     if(gdriveToken){resolve(true);return;}
     try{
-      google.accounts.oauth2.initTokenClient({
+      var client=google.accounts.oauth2.initTokenClient({
         client_id:GDRIVE_CLIENT_ID,
         scope:GDRIVE_SCOPE,
         callback:function(resp){
-          if(resp.access_token){
+          if(resp&&resp.access_token){
             gdriveToken=resp.access_token;
             setTimeout(function(){gdriveToken=null;},3500000);
             resolve(true);
-          }else{resolve(false);}
+          }else{
+            console.warn('Google Auth 응답 없음');
+            resolve(false);
+          }
+        },
+        error_callback:function(e){
+          console.warn('Google Auth 오류:',e);
+          resolve(false);
         }
-      }).requestAccessToken();
-    }catch(e){console.warn('Google Auth 실패:',e.message);resolve(false);}
+      });
+      // 팝업 차단 감지 후 처리
+      var popupBlocked=false;
+      var origOpen=window.open;
+      window.open=function(){
+        var w=origOpen.apply(this,arguments);
+        if(!w||w.closed||typeof w.closed==='undefined'){popupBlocked=true;}
+        return w;
+      };
+      client.requestAccessToken({prompt:'consent'});
+      // 3초 후 팝업 차단 여부 확인
+      setTimeout(function(){
+        window.open=origOpen;
+        if(popupBlocked){
+          // 팝업 차단 시 사용자에게 안내
+          resolve(false);
+        }
+      },3000);
+    }catch(e){
+      console.warn('Google Auth 실패:',e.message);
+      resolve(false);
+    }
   });
 }
 
@@ -2254,14 +2281,19 @@ window.generateContractPDF=async function generateContractPDF(shareType){
     const downloadURL=await getDownloadURL(snapshot.ref);
     const baseMsg=getPanelMsg();
     const pdfMsg=baseMsg+'\n\n📄 계약서 PDF:\n'+downloadURL;
-    // Google Drive 업로드
-    loadDiv.querySelector('span').textContent='Google Drive 업로드 중...';
+    // Google Drive 업로드 (실패해도 계속 진행)
+    loadDiv.querySelector('span').textContent='Google Drive 업로드 중... (팝업 허용 필요)';
     let driveURL=null;
-    try{driveURL=await uploadToDrive(pdfBlob,fileName);}catch(e){console.warn('Drive 실패:',e);}
+    try{
+      // 타임아웃 5초 설정
+      var drivePromise=uploadToDrive(pdfBlob,fileName);
+      var timeoutPromise=new Promise(function(r){setTimeout(function(){r(null);},5000);});
+      driveURL=await Promise.race([drivePromise,timeoutPromise]);
+    }catch(e){console.warn('Drive 실패:',e);}
 
     // 메시지 + 두 링크 포함
     const fullMsg=baseMsg+
-      '\n\n📄 PDF 보기 (카카오톡):'+(driveURL?'\n'+driveURL:'\n(Drive 업로드 실패)')+
+      (driveURL?'\n\n📄 PDF 보기 (카카오톡):\n'+driveURL:'\n\n📄 PDF 보기: Google Drive 연결 실패 — 아래 링크로 다운로드하세요')+
       '\n\n📥 PDF 다운로드:\n'+downloadURL;
 
     if(shareType==='wa'){

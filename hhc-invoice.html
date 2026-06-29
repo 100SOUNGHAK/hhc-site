@@ -1535,20 +1535,21 @@ function initGoogleAuth(){
   return new Promise(function(resolve){
     if(gdriveToken){resolve(true);return;}
     try{
-      google.accounts.oauth2.initTokenClient({
+      var client=google.accounts.oauth2.initTokenClient({
         client_id:GDRIVE_CLIENT_ID,
         scope:GDRIVE_SCOPE,
         callback:function(resp){
-          if(resp.access_token){
+          if(resp&&resp.access_token){
             gdriveToken=resp.access_token;
-            // 1시간 후 토큰 만료
             setTimeout(function(){gdriveToken=null;},3500000);
             resolve(true);
-          }else{
-            resolve(false);
-          }
-        }
-      }).requestAccessToken();
+          }else{resolve(false);}
+        },
+        error_callback:function(e){console.warn('Google Auth 오류:',e);resolve(false);}
+      });
+      client.requestAccessToken({prompt:'consent'});
+      // 10초 타임아웃 (팝업 차단 시 무한 대기 방지)
+      setTimeout(function(){resolve(false);},10000);
     }catch(e){
       console.warn('Google Auth 실패:',e.message);
       resolve(false);
@@ -1651,7 +1652,9 @@ async function generateAndSharePDF(shareType){
     showLoad('Google Drive 업로드 중...');
     var driveURL=null;
     try{
-      driveURL=await uploadToDrive(pdfBlob,'Invoice_'+inv.id+'.pdf');
+      var dp=uploadToDrive(pdfBlob,'Invoice_'+inv.id+'.pdf');
+      var tp=new Promise(function(r){setTimeout(function(){r(null);},8000);});
+      driveURL=await Promise.race([dp,tp]);
     }catch(e){console.warn('Drive 업로드 실패:',e);}
 
     // 메시지 구성
