@@ -269,7 +269,8 @@ textarea{resize:none;line-height:1.5}
   </div>
 
   <div id="tab-send" style="display:none">
-    <!-- 언어 선택 -->
+    <!-- 상태 표시 + 언어 선택 -->
+    <div id="send-status-label" style="font-size:12px;font-weight:600;color:var(--indigo);margin-bottom:8px;padding:6px 10px;background:var(--il);border-radius:8px;text-align:center"></div>
     <div style="display:flex;gap:8px;margin-bottom:12px">
       <button class="btn bsm" id="lang-ko" onclick="setMsgLang('ko')" style="flex:1;background:var(--navy);color:#fff">🇰🇷 한국어</button>
       <button class="btn bsm bgh" id="lang-en" onclick="setMsgLang('en')" style="flex:1">🇬🇧 English</button>
@@ -605,8 +606,15 @@ function Tab(t){
   });
   if(t==='send'){
     var inv=getInvData();
-    setVal('send-subject',emailSubjects[msgLang]||emailSubjects.ko);
-    setVal('send-msg',(emailBodies[msgLang]||emailBodies.ko)(inv));
+    var status=inv.status||'billing';
+    var subjSet=emailSubjects[status]||emailSubjects.billing;
+    var bodySet=emailBodies[status]||emailBodies.billing;
+    setVal('send-subject',subjSet[msgLang]||subjSet.ko);
+    setVal('send-msg',(bodySet[msgLang]||bodySet.ko)(inv));
+    // 상태 표시
+    var statusLabels={billing:'청구',paid:'결제완료',overdue:'연체'};
+    var statusEl=document.getElementById('send-status-label');
+    if(statusEl)statusEl.textContent='현재 상태: '+( statusLabels[status]||status);
   }
 }
 window.Tab=Tab;
@@ -671,8 +679,13 @@ App.resetForm=function(){
   ['c-name','c-phone','c-email','c-addr','c-biz','inv-notes','inv-terms'].forEach(function(id){setVal(id,'');});
   setVal('tax-rate','0');setVal('disc-val','0');setVal('disc-type','pct');
   setVal('parking-fee','0');setVal('min-charge','0');setVal('extra-fee','0');setVal('credit-use','0');
-  setVal('send-email','');setVal('send-subject',emailSubjects[msgLang]||emailSubjects.ko);
-  var _tmpInv=getInvData();setVal('send-msg',(emailBodies[msgLang]||emailBodies.ko)(_tmpInv));
+  setVal('send-email','');
+  var _tmpInv=getInvData();
+  var _status=_tmpInv.status||'billing';
+  var _sSet=emailSubjects[_status]||emailSubjects.billing;
+  var _bSet=emailBodies[_status]||emailBodies.billing;
+  setVal('send-subject',_sSet[msgLang]||_sSet.ko);
+  setVal('send-msg',(_bSet[msgLang]||_bSet.ko)(_tmpInv));
   setVal('wa-num','');setVal('bank-select','');
   var bp=$('bank-prev');if(bp)bp.style.display='none';
   lineItems=[];
@@ -714,8 +727,11 @@ function loadInvToForm(inv){
   setVal('inv-notes',inv.notes||'');setVal('inv-terms',inv.terms||'');
   setVal('send-email',inv.customer&&inv.customer.email||'');
   setVal('wa-num',inv.customer&&inv.customer.phone||'');
-  setVal('send-subject',emailSubjects[msgLang]||emailSubjects.ko);
-  setVal('send-msg',(emailBodies[msgLang]||emailBodies.ko)(inv));
+  var _ls=inv.status||'billing';
+  var _lss=emailSubjects[_ls]||emailSubjects.billing;
+  var _lbs=emailBodies[_ls]||emailBodies.billing;
+  setVal('send-subject',_lss[msgLang]||_lss.ko);
+  setVal('send-msg',(_lbs[msgLang]||_lbs.ko)(inv));
   if(inv.bankId){setVal('bank-select',inv.bankId);onBankSel();}else{setVal('bank-select','');var bp=$('bank-prev');if(bp)bp.style.display='none';}
   lineItems=(inv.items||[]).map(function(it){
     var copy=Object.assign({},it);
@@ -955,28 +971,77 @@ async function saveAndShare(){
 // ═══════════════════════════════════════════════════════════
 var msgLang='ko';
 
+// 상태별 × 언어별 메시지 템플릿
 var msgTemplates={
-  ko:function(inv,lnk){
-    return '안녕하세요, '+(inv.customer&&inv.customer.name||'고객')+'님 👋\n\nHappy Home Care 인보이스입니다.\n\n📋 인보이스번호: '+inv.id+'\n💰 청구금액: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 만기일: '+fmtDate(inv.due)+'\n\n🔗 인보이스 확인:\n'+lnk+'\n\n감사합니다 🙏';
+  // ── 청구 (billing) ──
+  billing:{
+    ko:function(inv,lnk){
+      var name=inv.customer&&inv.customer.name||'고객';
+      return '안녕하세요, '+name+'님 👋\n\nHappy Home Care 인보이스입니다.\n\n📋 인보이스번호: '+inv.id+'\n💰 청구금액: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 만기일: '+fmtDate(inv.due)+'\n\n🔗 인보이스 확인:\n'+lnk+'\n\n감사합니다 🙏\nHappy Home Care';
+    },
+    en:function(inv,lnk){
+      var name=inv.customer&&inv.customer.name||'Customer';
+      return 'Dear '+name+' 👋\n\nPlease find your invoice from Happy Home Care.\n\n📋 Invoice No: '+inv.id+'\n💰 Amount Due: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Due Date: '+inv.due+'\n\n🔗 View Invoice:\n'+lnk+'\n\nThank you 🙏\nHappy Home Care';
+    },
+    ms:function(inv,lnk){
+      var name=inv.customer&&inv.customer.name||'Pelanggan';
+      return 'Salam '+name+' 👋\n\nSila semak invois daripada Happy Home Care.\n\n📋 No. Invois: '+inv.id+'\n💰 Jumlah: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Tarikh Akhir: '+inv.due+'\n\n🔗 Lihat Invois:\n'+lnk+'\n\nTerima kasih 🙏\nHappy Home Care';
+    }
   },
-  en:function(inv,lnk){
-    return 'Dear '+(inv.customer&&inv.customer.name||'Customer')+' 👋\n\nPlease find your invoice from Happy Home Care.\n\n📋 Invoice No: '+inv.id+'\n💰 Amount Due: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Due Date: '+inv.due+'\n\n🔗 View Invoice:\n'+lnk+'\n\nThank you 🙏\nHappy Home Care';
+  // ── 결제완료 (paid) ──
+  paid:{
+    ko:function(inv,lnk){
+      var name=inv.customer&&inv.customer.name||'고객';
+      return '안녕하세요, '+name+'님 👋\n\n결제가 확인되었습니다. 감사합니다! ✅\n\n📋 인보이스번호: '+inv.id+'\n💰 결제금액: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 결제일: '+fmtDate(inv.date)+'\n\n🔗 인보이스 확인:\n'+lnk+'\n\n항상 이용해 주셔서 감사합니다 🙏\nHappy Home Care';
+    },
+    en:function(inv,lnk){
+      var name=inv.customer&&inv.customer.name||'Customer';
+      return 'Dear '+name+' 👋\n\nYour payment has been received. Thank you! ✅\n\n📋 Invoice No: '+inv.id+'\n💰 Amount Paid: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Payment Date: '+inv.date+'\n\n🔗 View Invoice:\n'+lnk+'\n\nThank you for choosing Happy Home Care 🙏';
+    },
+    ms:function(inv,lnk){
+      var name=inv.customer&&inv.customer.name||'Pelanggan';
+      return 'Salam '+name+' 👋\n\nPembayaran anda telah diterima. Terima kasih! ✅\n\n📋 No. Invois: '+inv.id+'\n💰 Jumlah Dibayar: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Tarikh Bayaran: '+inv.date+'\n\n🔗 Lihat Invois:\n'+lnk+'\n\nTerima kasih kerana memilih Happy Home Care 🙏';
+    }
   },
-  ms:function(inv,lnk){
-    return 'Salam '+(inv.customer&&inv.customer.name||'Pelanggan')+' 👋\n\nSila semak invois daripada Happy Home Care.\n\n📋 No. Invois: '+inv.id+'\n💰 Jumlah: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Tarikh Akhir: '+inv.due+'\n\n🔗 Lihat Invois:\n'+lnk+'\n\nTerima kasih 🙏\nHappy Home Care';
+  // ── 연체 (overdue) ──
+  overdue:{
+    ko:function(inv,lnk){
+      var name=inv.customer&&inv.customer.name||'고객';
+      return '안녕하세요, '+name+'님 👋\n\n인보이스 만기일이 지났습니다. 확인 부탁드립니다. ⚠️\n\n📋 인보이스번호: '+inv.id+'\n💰 미결제금액: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 만기일: '+fmtDate(inv.due)+'\n\n🔗 인보이스 확인:\n'+lnk+'\n\n문의사항은 언제든지 연락주세요 🙏\nHappy Home Care';
+    },
+    en:function(inv,lnk){
+      var name=inv.customer&&inv.customer.name||'Customer';
+      return 'Dear '+name+' 👋\n\nYour invoice is overdue. Please arrange payment at your earliest convenience. ⚠️\n\n📋 Invoice No: '+inv.id+'\n💰 Amount Overdue: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Due Date: '+inv.due+'\n\n🔗 View Invoice:\n'+lnk+'\n\nPlease contact us if you have any questions 🙏\nHappy Home Care';
+    },
+    ms:function(inv,lnk){
+      var name=inv.customer&&inv.customer.name||'Pelanggan';
+      return 'Salam '+name+' 👋\n\nInvois anda telah tamat tempoh. Sila buat pembayaran segera. ⚠️\n\n📋 No. Invois: '+inv.id+'\n💰 Jumlah Tertunggak: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Tarikh Akhir: '+inv.due+'\n\n🔗 Lihat Invois:\n'+lnk+'\n\nSila hubungi kami jika ada pertanyaan 🙏\nHappy Home Care';
+    }
   }
 };
 
 var emailSubjects={
-  ko:'인보이스 안내 — Happy Home Care',
-  en:'Invoice from Happy Home Care',
-  ms:'Invois daripada Happy Home Care'
+  billing:{ko:'인보이스 안내 — Happy Home Care',en:'Invoice from Happy Home Care',ms:'Invois daripada Happy Home Care'},
+  paid:{ko:'결제 완료 확인 — Happy Home Care',en:'Payment Confirmed — Happy Home Care',ms:'Pembayaran Disahkan — Happy Home Care'},
+  overdue:{ko:'인보이스 만기 안내 — Happy Home Care',en:'Invoice Overdue — Happy Home Care',ms:'Invois Tertunggak — Happy Home Care'}
 };
 
 var emailBodies={
-  ko:function(inv){return '안녕하세요,\n\nHappy Home Care를 이용해 주셔서 감사합니다.\n인보이스를 확인 부탁드립니다.\n\n인보이스 번호: '+inv.id+'\n청구 금액: '+fmtAmt(inv.total||0,inv.currency)+'\n만기일: '+fmtDate(inv.due)+'\n\n감사합니다.\nHappy Home Care 팀';},
-  en:function(inv){return 'Dear '+(inv.customer&&inv.customer.name||'Customer')+',\n\nThank you for choosing Happy Home Care.\nPlease find your invoice details below.\n\nInvoice No: '+inv.id+'\nAmount Due: '+fmtAmt(inv.total||0,inv.currency)+'\nDue Date: '+inv.due+'\n\nThank you,\nHappy Home Care Team';},
-  ms:function(inv){return 'Salam '+(inv.customer&&inv.customer.name||'Pelanggan')+',\n\nTerima kasih kerana memilih Happy Home Care.\nSila semak butiran invois anda.\n\nNo. Invois: '+inv.id+'\nJumlah: '+fmtAmt(inv.total||0,inv.currency)+'\nTarikh Akhir: '+inv.due+'\n\nTerima kasih,\nPassukan Happy Home Care';}
+  billing:{
+    ko:function(inv){return '안녕하세요,\n\nHappy Home Care를 이용해 주셔서 감사합니다.\n인보이스를 확인 부탁드립니다.\n\n인보이스 번호: '+inv.id+'\n청구 금액: '+fmtAmt(inv.total||0,inv.currency)+'\n만기일: '+fmtDate(inv.due)+'\n\n감사합니다.\nHappy Home Care 팀';},
+    en:function(inv){return 'Dear '+(inv.customer&&inv.customer.name||'Customer')+',\n\nThank you for choosing Happy Home Care.\nPlease find your invoice details below.\n\nInvoice No: '+inv.id+'\nAmount Due: '+fmtAmt(inv.total||0,inv.currency)+'\nDue Date: '+inv.due+'\n\nThank you,\nHappy Home Care Team';},
+    ms:function(inv){return 'Salam '+(inv.customer&&inv.customer.name||'Pelanggan')+',\n\nTerima kasih kerana memilih Happy Home Care.\nSila semak butiran invois anda.\n\nNo. Invois: '+inv.id+'\nJumlah: '+fmtAmt(inv.total||0,inv.currency)+'\nTarikh Akhir: '+inv.due+'\n\nTerima kasih,\nPasukan Happy Home Care';}
+  },
+  paid:{
+    ko:function(inv){return '안녕하세요,\n\n결제가 확인되었습니다. 감사합니다!\n\n인보이스 번호: '+inv.id+'\n결제 금액: '+fmtAmt(inv.total||0,inv.currency)+'\n결제일: '+fmtDate(inv.date)+'\n\n항상 이용해 주셔서 감사합니다.\nHappy Home Care 팀';},
+    en:function(inv){return 'Dear '+(inv.customer&&inv.customer.name||'Customer')+',\n\nYour payment has been received. Thank you!\n\nInvoice No: '+inv.id+'\nAmount Paid: '+fmtAmt(inv.total||0,inv.currency)+'\nPayment Date: '+inv.date+'\n\nThank you for choosing Happy Home Care.\nHappy Home Care Team';},
+    ms:function(inv){return 'Salam '+(inv.customer&&inv.customer.name||'Pelanggan')+',\n\nPembayaran anda telah diterima. Terima kasih!\n\nNo. Invois: '+inv.id+'\nJumlah Dibayar: '+fmtAmt(inv.total||0,inv.currency)+'\nTarikh Bayaran: '+inv.date+'\n\nTerima kasih kerana memilih Happy Home Care.\nPasukan Happy Home Care';}
+  },
+  overdue:{
+    ko:function(inv){return '안녕하세요,\n\n인보이스 만기일이 지났습니다. 빠른 결제 부탁드립니다.\n\n인보이스 번호: '+inv.id+'\n미결제 금액: '+fmtAmt(inv.total||0,inv.currency)+'\n만기일: '+fmtDate(inv.due)+'\n\n문의사항은 언제든지 연락주세요.\nHappy Home Care 팀';},
+    en:function(inv){return 'Dear '+(inv.customer&&inv.customer.name||'Customer')+',\n\nYour invoice is overdue. Please arrange payment at your earliest convenience.\n\nInvoice No: '+inv.id+'\nAmount Overdue: '+fmtAmt(inv.total||0,inv.currency)+'\nDue Date: '+inv.due+'\n\nPlease contact us if you have any questions.\nHappy Home Care Team';},
+    ms:function(inv){return 'Salam '+(inv.customer&&inv.customer.name||'Pelanggan')+',\n\nInvois anda telah tamat tempoh. Sila buat pembayaran segera.\n\nNo. Invois: '+inv.id+'\nJumlah Tertunggak: '+fmtAmt(inv.total||0,inv.currency)+'\nTarikh Akhir: '+inv.due+'\n\nSila hubungi kami jika ada pertanyaan.\nPasukan Happy Home Care';}
+  }
 };
 
 function setMsgLang(lang){
@@ -986,16 +1051,21 @@ function setMsgLang(lang){
     var btn=$('lang-'+l);
     if(btn){btn.style.background=l===lang?'var(--navy)':'';btn.style.color=l===lang?'#fff':'';btn.className='btn bsm '+(l===lang?'':'bgh');}
   });
-  // 메시지 업데이트
+  // 상태에 맞는 메시지 업데이트
   var inv=getInvData();
-  setVal('send-subject',emailSubjects[lang]||emailSubjects.ko);
-  setVal('send-msg',(emailBodies[lang]||emailBodies.ko)(inv));
+  var status=inv.status||'billing';
+  var subjSet=emailSubjects[status]||emailSubjects.billing;
+  var bodySet=emailBodies[status]||emailBodies.billing;
+  setVal('send-subject',subjSet[lang]||subjSet.ko);
+  setVal('send-msg',(bodySet[lang]||bodySet.ko)(inv));
 }
 window.setMsgLang=setMsgLang;
 
 function buildMsg(inv){
   var lnk=getLnk(inv.id);
-  var tpl=msgTemplates[msgLang]||msgTemplates.ko;
+  var status=inv.status||val('inv-status')||'billing';
+  var statusTpls=msgTemplates[status]||msgTemplates.billing;
+  var tpl=statusTpls[msgLang]||statusTpls.ko;
   return tpl(inv,lnk);
 }
 function shareWa(id){
