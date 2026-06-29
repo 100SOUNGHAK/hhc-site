@@ -2317,7 +2317,9 @@ window.generateContractPDF=async function generateContractPDF(shareType){
     const urlsToShorten=[webURL,downloadURL];
     if(driveURL)urlsToShorten.push(driveURL);
     const shortened=await shortenAll(urlsToShorten);
-    const shortWeb=shortened[0],shortDL=shortened[1],shortDrive=driveURL?shortened[2]:null;
+    const shortWeb=shortened[0],shortDL=shortened[1];
+    // driveURL 없으면 downloadURL을 PDF 보기로 대체
+    const shortDrive=driveURL?shortened[2]:shortDL;
 
     // 4. 메시지 구성 (PDF 링크 포함)
     const fullMsg=buildContractMsg(c, shortWeb, shortDrive, shortDL);
@@ -2354,8 +2356,13 @@ function buildContractMsg(c, webURL, pdfViewURL, pdfDlURL){
   const remain=total-usedT+discT+carryT;
   const name=c.name||'고객';
   const url=webURL||`https://hhc-3p8.pages.dev/customer.html?id=${c.__id}&mode=contract`;
-  const pdfLines=(pdfViewURL||pdfDlURL)?
-    '\n'+(pdfViewURL?'📄 PDF 보기: '+pdfViewURL+'\n':'')+(pdfDlURL?'📥 PDF 다운로드: '+pdfDlURL+'\n':''):'';
+  // PDF 보기와 다운로드가 같으면 하나만 표시
+  let pdfLines='';
+  if(pdfViewURL&&pdfDlURL&&pdfViewURL===pdfDlURL){
+    pdfLines='\n📄 PDF 보기/다운로드: '+pdfViewURL+'\n';
+  }else if(pdfViewURL||pdfDlURL){
+    pdfLines='\n'+(pdfViewURL?'📄 PDF 보기: '+pdfViewURL+'\n':'')+(pdfDlURL&&pdfDlURL!==pdfViewURL?'📥 PDF 다운로드: '+pdfDlURL+'\n':'');
+  }
   return `안녕하세요 ${name}님 😊 / Dear ${name},
 
 Happy Home Care 계약서를 확인하세요.
