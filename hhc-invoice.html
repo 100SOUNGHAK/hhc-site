@@ -277,13 +277,26 @@ textarea{resize:none;line-height:1.5}
       <button class="btn bsm bgh" id="lang-ms" onclick="setMsgLang('ms')" style="flex:1">🇲🇾 Bahasa</button>
     </div>
     <div class="card cp" style="margin-bottom:12px">
-      <div class="sht" style="margin-bottom:8px">PDF 저장</div>
-      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">PDF로 저장 후 카카오톡 / WhatsApp에 파일로 직접 첨부해서 전송하세요.</div>
-      <button class="btn bn bfu" id="pdf-save-btn">
-        📄 PDF 저장 (다운로드)
+      <div class="sht" style="margin-bottom:10px">PDF 전송</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:12px">PDF를 자동 생성하여 안내 메시지와 함께 전송합니다.</div>
+      <!-- PDF + 메시지 함께 전송 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <button class="btn bw bfu" onclick="generateAndSharePDF('wa')" style="font-size:13px">
+          📄+💬 WhatsApp 전송
+        </button>
+        <button class="btn bk bfu" onclick="generateAndSharePDF('kakao')" style="font-size:13px;color:#3A1D1D">
+          📄+💬 카카오 복사
+        </button>
+      </div>
+      <button class="btn bp bfu" onclick="generateAndSharePDF('email')" style="margin-bottom:8px;font-size:13px">
+        📄+📧 이메일 전송 (PDF 링크 포함)
       </button>
-      <div style="font-size:11px;color:var(--gray);margin-top:8px;line-height:1.6">
-        저장된 PDF → 카카오톡/WhatsApp 열기 → 파일 첨부 → 전송
+      <button class="btn bgh bfu" id="pdf-save-btn" style="font-size:13px">
+        📄 PDF 로컬 저장 (다운로드)
+      </button>
+      <div style="font-size:11px;color:var(--gray);margin-top:8px;line-height:1.6;background:var(--il);border-radius:8px;padding:8px">
+        💡 WhatsApp/카카오: 메시지 + PDF 다운로드 링크 함께 전송<br>
+        💡 저장된 PDF는 카카오톡에서 파일로 직접 첨부 가능
       </div>
     </div>
     <div class="card cp" style="margin-bottom:12px">
@@ -490,6 +503,7 @@ textarea{resize:none;line-height:1.5}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════
@@ -502,6 +516,7 @@ var FB_CFG={apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",authDomain:"happywo
 // STATE
 // ═══════════════════════════════════════════════════════════
 var DB=null;
+var ST=null; // Firebase Storage
 var invoices=[],services=[],banks=[],customers=[],lineItems=[];
 var currentFilter='all',currentSort='date',selYear=new Date().getFullYear();
 var viewingId=null,statusEditId=null;
@@ -1514,58 +1529,93 @@ function getSignSection(){
 // ═══════════════════════════════════════════════════════════
 // PDF GENERATION
 // ═══════════════════════════════════════════════════════════
+async function buildPDFBlob(inv){
+  // 임시 컨테이너
+  var container=document.createElement('div');
+  container.style.cssText='position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:40px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;color:#0f172a;z-index:-1';
+  container.innerHTML=buildInvHTML(inv);
+  document.body.appendChild(container);
+  var canvas=await html2canvas(container,{scale:2,useCORS:true,backgroundColor:'#ffffff',width:794,logging:false});
+  document.body.removeChild(container);
+  var jsPDF=window.jspdf.jsPDF;
+  var pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+  var imgData=canvas.toDataURL('image/jpeg',0.95);
+  var pdfW=pdf.internal.pageSize.getWidth();
+  var pdfH=(canvas.height*pdfW)/canvas.width;
+  var pageH=pdf.internal.pageSize.getHeight();
+  if(pdfH<=pageH){pdf.addImage(imgData,'JPEG',0,0,pdfW,pdfH);}
+  else{var y=0;while(y<pdfH){if(y>0)pdf.addPage();pdf.addImage(imgData,'JPEG',0,-y,pdfW,pdfH);y+=pageH;}}
+  return pdf;
+}
+
+// PDF 로컬 저장 (다운로드)
 async function generatePDF(){
   showLoad('PDF 생성 중...');
   try{
     var inv=getInvData();
-    // 임시 div에 인보이스 HTML 렌더링
-    var container=document.createElement('div');
-    container.style.cssText='position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:40px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;color:#0f172a;z-index:-1';
-    container.innerHTML=buildInvHTML(inv);
-    document.body.appendChild(container);
-
-    // html2canvas로 이미지 변환
-    var canvas=await html2canvas(container,{
-      scale:2,
-      useCORS:true,
-      backgroundColor:'#ffffff',
-      width:794,
-      logging:false
-    });
-    document.body.removeChild(container);
-
-    // jsPDF로 PDF 생성
-    var jsPDF=window.jspdf.jsPDF;
-    var pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
-    var imgData=canvas.toDataURL('image/jpeg',0.95);
-    var pdfW=pdf.internal.pageSize.getWidth();
-    var pdfH=(canvas.height*pdfW)/canvas.width;
-
-    // 페이지 넘침 처리
-    var pageH=pdf.internal.pageSize.getHeight();
-    if(pdfH<=pageH){
-      pdf.addImage(imgData,'JPEG',0,0,pdfW,pdfH);
-    }else{
-      var y=0;
-      while(y<pdfH){
-        if(y>0)pdf.addPage();
-        pdf.addImage(imgData,'JPEG',0,-y,pdfW,pdfH);
-        y+=pageH;
-      }
-    }
-
-    // 파일명: 인보이스번호
+    var pdf=await buildPDFBlob(inv);
     var fileName='Invoice_'+(inv.id||'HHC')+'.pdf';
     pdf.save(fileName);
     showToast('✓ PDF 저장됨 — '+fileName);
-  }catch(e){
-    showToast('PDF 생성 실패: '+e.message);
-    console.error(e);
-  }finally{
-    hideLoad();
-  }
+  }catch(e){showToast('PDF 생성 실패: '+e.message);console.error(e);}
+  finally{hideLoad();}
 }
 window.generatePDF=generatePDF;
+
+// PDF → Firebase Storage 업로드 → 링크 생성 → 공유
+async function generateAndSharePDF(shareType){
+  if(!ST){showToast('Firebase Storage 연결 안됨');return;}
+  showLoad('PDF 생성 및 업로드 중...');
+  try{
+    var inv=getInvData();
+    if(!inv.id){showToast('먼저 저장해주세요.');return;}
+    var pdf=await buildPDFBlob(inv);
+    var fileName='Invoice_'+inv.id+'.pdf';
+    // PDF를 Blob으로 변환
+    var pdfBlob=pdf.output('blob');
+    // Firebase Storage 업로드
+    var storageRef=ST.ref('invoices/'+fileName);
+    var snapshot=await storageRef.put(pdfBlob,{contentType:'application/pdf'});
+    var downloadURL=await snapshot.ref.getDownloadURL();
+    // 링크 저장 (Firebase Firestore에도 저장)
+    var existing=invoices.find(function(i){return i.id===inv.id;});
+    if(existing&&existing._docId&&DB){
+      DB.collection('invoices').doc(existing._docId).update({pdfUrl:downloadURL}).catch(function(){});
+    }
+    // 메시지 생성 (PDF 링크 포함)
+    var webLnk=getLnk(inv.id);
+    var status=inv.status||'billing';
+    var statusTpls=msgTemplates[status]||msgTemplates.billing;
+    var tpl=statusTpls[msgLang]||statusTpls.ko;
+    var baseMsg=tpl(inv,webLnk);
+    var pdfMsg=baseMsg+'
+
+📄 PDF 다운로드:
+'+downloadURL;
+    if(shareType==='wa'){
+      var num=(inv.customer&&inv.customer.phone||val('wa-num')||'').replace(/[\s\-()]/g,'').replace('+','');
+      if(num){window.open('https://wa.me/'+num+'?text='+encodeURIComponent(pdfMsg),'_blank');}
+      else{cpTxt(pdfMsg);showToast('번호 없음 — 메시지 복사됨');}
+    }else if(shareType==='kakao'){
+      cpTxt(pdfMsg);
+      showToast('카카오톡 메시지 복사됨 (PDF 링크 포함)',3000);
+    }else if(shareType==='email'){
+      var to=val('send-email');
+      if(!to){showToast('이메일 주소를 입력해주세요.');return;}
+      var subjSet=emailSubjects[status]||emailSubjects.billing;
+      var sub=subjSet[msgLang]||subjSet.ko;
+      var body=pdfMsg;
+      window.location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(body);
+    }else{
+      // 링크만 복사
+      cpTxt(downloadURL);
+      showToast('✓ PDF 링크 복사됨');
+    }
+    showToast('✓ PDF 업로드 완료');
+  }catch(e){showToast('실패: '+e.message);console.error(e);}
+  finally{hideLoad();}
+}
+window.generateAndSharePDF=generateAndSharePDF;
 
 // ═══════════════════════════════════════════════════════════
 // BIND EVENTS
@@ -1634,6 +1684,7 @@ function init(){
     var fbApp;
     try{fbApp=firebase.app();}catch(e){fbApp=firebase.initializeApp(FB_CFG);}
     DB=firebase.firestore(fbApp);
+    ST=firebase.storage(fbApp);
     setSS('sy');
 
     DB.collection('invoices').orderBy('createdAt','desc').onSnapshot(function(snap){

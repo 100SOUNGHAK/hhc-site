@@ -461,6 +461,8 @@ input[data-benefit]{display:none}
   #send-mode-bar button{flex:1;text-align:center}
 }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 
@@ -1020,6 +1022,7 @@ input[data-benefit]{display:none}
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
 // ── DATA ──
 const PACKAGES=[
@@ -1089,6 +1092,7 @@ async function connectFirebase(cfg){
   try{
     const app=initializeApp(cfg);
     db=getFirestore(app);
+    window._storage=getStorage(app);
     unsub=onSnapshot(collection(db,'contracts'),snap=>{
       allContracts=snap.docs.map(d=>({...d.data(),__id:d.id}));
       allContracts.sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
@@ -1690,7 +1694,17 @@ function renderSendTab(){
 
   // ── 발송 버튼 HTML ──
   const sendBtns=`
-    <button class="btn-wa" id="btn-wa-send" style="margin-top:10px">
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;margin-top:10px">📄 PDF 포함 전송</div>
+    <button class="btn-wa" id="btn-wa-pdf" style="margin-bottom:4px">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><path d="M12 2.5A6.5 6.5 0 0 0 1.5 9.6L1 13l3.5-.5A6.5 6.5 0 1 0 12 2.5z"/></svg>
+      📄 WhatsApp (PDF 링크 포함)
+    </button>
+    <button class="btn-wa" id="btn-kakao-pdf" style="background:#FEE500;color:#3A1D1D;margin-bottom:8px">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="#3A1D1D"><path d="M7 1C3.69 1 1 3.13 1 5.75c0 1.7 1.05 3.19 2.63 4.06L3 11.5l2.18-1.44C5.7 10.18 6.34 10.25 7 10.25c3.31 0 6-2.13 6-4.75S10.31 1 7 1z"/></svg>
+      📄 카카오톡 (PDF 링크 포함)
+    </button>
+    <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">💬 메시지만 전송</div>
+    <button class="btn-wa" id="btn-wa-send">
       <svg width="14" height="14" viewBox="0 0 14 14" fill="white"><path d="M12 2.5A6.5 6.5 0 0 0 1.5 9.6L1 13l3.5-.5A6.5 6.5 0 1 0 12 2.5z"/></svg>
       WhatsApp 전송
     </button>
@@ -1699,6 +1713,7 @@ function renderSendTab(){
       카카오톡 메시지 복사
     </button>
     <div id="kakao-copy-ok" style="display:none;text-align:center;margin-top:6px;padding:8px;background:#DCFCE7;color:#16A34A;border-radius:6px;font-size:12px;font-weight:600">✓ 복사됨! 카카오톡에 붙여넣기 하세요</div>
+    <button class="btn-print-send" id="btn-pdf-download" style="margin-top:6px">📄 PDF 저장 (다운로드)</button>
     <button class="btn-print-send" id="btn-print-send" style="margin-top:6px">🖨 인쇄용으로 보기</button>
     <div style="margin-top:10px;text-align:center;font-size:10px;color:var(--text3)">HAPPY WORKS SERVICES SDN.BHD. (1278908-M) · +60172472774</div>`;
 
@@ -1723,6 +1738,9 @@ function renderSendTab(){
 
   const msg=makeMsg(currentSendMode);
 
+  document.getElementById('btn-wa-pdf').addEventListener('click',()=>{generateContractPDF('wa');});
+  document.getElementById('btn-kakao-pdf').addEventListener('click',()=>{generateContractPDF('kakao');});
+  document.getElementById('btn-pdf-download').addEventListener('click',()=>{generateContractPDF('download');});
   document.getElementById('btn-wa-send').addEventListener('click',()=>{
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
   });
@@ -2129,6 +2147,64 @@ document.getElementById('btn-copy-link').addEventListener('click',()=>{
     const ok=document.getElementById('copy-ok');ok.style.display='block';setTimeout(()=>ok.style.display='none',2000);
   });
 });
+
+// ── PDF 생성 + Firebase Storage 업로드 ──
+async function generateContractPDF(shareType){
+  const contractId=currentViewId||currentSendId;
+  if(!contractId){alert('계약서를 먼저 선택해주세요.');return;}
+  // 로딩 표시
+  const loadDiv=document.createElement('div');
+  loadDiv.style.cssText='position:fixed;inset:0;background:rgba(255,255,255,.85);display:flex;align-items:center;justify-content:center;z-index:9999;font-size:14px;color:#0f172a;flex-direction:column;gap:12px';
+  loadDiv.innerHTML='<div style="width:32px;height:32px;border:3px solid #e2e8f0;border-top-color:#4F6EF7;border-radius:50%;animation:spin .7s linear infinite"></div><span>PDF 생성 중...</span>';
+  document.body.appendChild(loadDiv);
+  try{
+    // 계약서 프린트 뷰 컨테이너 가져오기
+    const printArea=document.getElementById('print-view')||document.querySelector('.contract-print')||document.querySelector('[data-print]');
+    if(!printArea){alert('계약서 인쇄 영역을 찾을 수 없습니다.');return;}
+    // html2canvas로 캡처
+    const canvas=await html2canvas(printArea,{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false});
+    // jsPDF 생성
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const imgData=canvas.toDataURL('image/jpeg',0.95);
+    const pdfW=pdf.internal.pageSize.getWidth();
+    const pdfH=(canvas.height*pdfW)/canvas.width;
+    const pageH=pdf.internal.pageSize.getHeight();
+    if(pdfH<=pageH){pdf.addImage(imgData,'JPEG',0,0,pdfW,pdfH);}
+    else{let y=0;while(y<pdfH){if(y>0)pdf.addPage();pdf.addImage(imgData,'JPEG',0,-y,pdfW,pdfH);y+=pageH;}}
+    const fileName='Contract_'+contractId+'.pdf';
+    if(shareType==='download'){
+      pdf.save(fileName);
+      loadDiv.querySelector('span').textContent='✓ PDF 저장됨';
+      setTimeout(()=>document.body.removeChild(loadDiv),1500);
+      return;
+    }
+    // Firebase Storage 업로드
+    loadDiv.querySelector('span').textContent='업로드 중...';
+    const pdfBlob=pdf.output('blob');
+    const _st=window._storage;if(!_st){alert('Storage 초기화 안됨');return;}
+    const storageRef=ref(_st,'contracts/'+fileName);
+    const snapshot=await uploadBytes(storageRef,pdfBlob,{contentType:'application/pdf'});
+    const downloadURL=await getDownloadURL(snapshot.ref);
+    // 기존 메시지 + PDF 링크
+    const baseMsg=getPanelMsg();
+    const pdfMsg=baseMsg+'\n\n📄 계약서 PDF:\n'+downloadURL;
+    if(shareType==='wa'){
+      window.open('https://wa.me/?text='+encodeURIComponent(pdfMsg),'_blank');
+    }else if(shareType==='kakao'){
+      navigator.clipboard.writeText(pdfMsg).then(()=>{
+        const ok=document.getElementById('kakao-copy-ok');
+        if(ok){ok.textContent='✓ PDF 링크 포함 복사됨! 카카오톡에 붙여넣기 하세요';ok.style.display='block';setTimeout(()=>{ok.style.display='none';ok.textContent='✓ 복사됨! 카카오톡에 붙여넣기 하세요';},3000);}
+      }).catch(()=>prompt('복사 후 카카오톡에 붙여넣기:',pdfMsg));
+    }
+    loadDiv.querySelector('span').textContent='✓ 완료';
+    setTimeout(()=>document.body.removeChild(loadDiv),1500);
+  }catch(e){
+    document.body.removeChild(loadDiv);
+    alert('PDF 생성 실패: '+e.message);
+    console.error(e);
+  }
+}
 
 function getPanelMsg(){
   const url=document.getElementById('clink-url').textContent;
