@@ -1092,6 +1092,8 @@ async function connectFirebase(cfg){
     const app=initializeApp(cfg);
     db=getFirestore(app);
     window._storage=getStorage(app);
+    // shorten 함수에서 db 접근 가능하도록 window에 노출
+    window._db=db;
     unsub=onSnapshot(collection(db,'contracts'),snap=>{
       allContracts=snap.docs.map(d=>({...d.data(),__id:d.id}));
       allContracts.sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
@@ -2159,17 +2161,16 @@ var BASE_SHORT='https://hhc-3p8.pages.dev/r.html?k=';
 async function shorten(url){
   if(!url)return url;
   if(tinyCache[url])return tinyCache[url];
-  if(!db)return url;
+  var _db=window._db||db;
+  if(!_db)return url;
   try{
-    // 이미 저장된 단축키 확인
-    var snap=await db.collection('shorts').where('url','==',url).limit(1).get();
+    var snap=await _db.collection('shorts').where('url','==',url).limit(1).get();
     var key;
     if(!snap.empty){
       key=snap.docs[0].data().key;
     }else{
-      // 새 단축키 생성 (6자리 랜덤)
       key=Math.random().toString(36).slice(2,8);
-      await db.collection('shorts').add({key:key,url:url,created:new Date().toISOString()});
+      await _db.collection('shorts').add({key:key,url:url,created:new Date().toISOString()});
     }
     var short=BASE_SHORT+key;
     tinyCache[url]=short;
