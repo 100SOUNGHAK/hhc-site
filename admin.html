@@ -1020,7 +1020,7 @@ input[data-benefit]{display:none}
 <!-- FIREBASE SDK -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, where, getDocs, limit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
 // ── DATA ──
@@ -2161,23 +2161,29 @@ var BASE_SHORT='https://hhc-3p8.pages.dev/r.html?k=';
 async function shorten(url){
   if(!url)return url;
   if(tinyCache[url])return tinyCache[url];
-  var _db=window._db||db;
-  if(!_db)return url;
+  if(!db){console.warn('[shorten] db null');return url;}
   try{
-    var snap=await _db.collection('shorts').where('url','==',url).limit(1).get();
+    // 모듈 방식 Firebase API 사용
+    const shortsCol=collection(db,'shorts');
+    const q=query(shortsCol,where('url','==',url),limit(1));
+    const snap=await getDocs(q);
     var key;
     if(!snap.empty){
       key=snap.docs[0].data().key;
     }else{
       key=Math.random().toString(36).slice(2,8);
-      await _db.collection('shorts').add({key:key,url:url,created:new Date().toISOString()});
+      await addDoc(shortsCol,{key:key,url:url,created:new Date().toISOString()});
     }
     var short=BASE_SHORT+key;
     tinyCache[url]=short;
+    console.log('[shorten] success:', short);
     return short;
-  }catch(e){console.warn('단축 실패:',e.message);return url;}
+  }catch(e){console.warn('[shorten] 실패:',e.message);return url;}
 }
-async function shortenAll(urls){return await Promise.all(urls.map(function(u){return shorten(u);}));}
+async function shortenAll(urls){
+  console.log('[shortenAll] shortening',urls.length,'urls');
+  return await Promise.all(urls.map(function(u){return shorten(u);}));
+}
 
 // ── Google Drive 업로드 ──
 var GDRIVE_CLIENT_ID='101289103022-35gf4cl4u63m0ejfi3l3ortfah03nlme.apps.googleusercontent.com';
