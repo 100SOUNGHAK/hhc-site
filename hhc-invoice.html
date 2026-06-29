@@ -1544,20 +1544,26 @@ function getSignSection(){
 // ═══════════════════════════════════════════════════════════
 var tinyCache={};  // 캐시 (같은 URL 반복 단축 방지)
 
+// 자체 단축 URL — Firebase에 저장 후 r.html로 리다이렉트
+var BASE_SHORT='https://hhc-3p8.pages.dev/r.html?k=';
+
 async function shorten(url){
   if(!url)return url;
   if(tinyCache[url])return tinyCache[url];
+  if(!DB)return url;
   try{
-    var res=await fetch('https://is.gd/create.php?format=simple&url='+encodeURIComponent(url));
-    if(res.ok){
-      var s=await res.text();
-      if(s&&s.startsWith('http')){
-        tinyCache[url]=s.trim();
-        return tinyCache[url];
-      }
+    var snap=await DB.collection('shorts').where('url','==',url).limit(1).get();
+    var key;
+    if(!snap.empty){
+      key=snap.docs[0].data().key;
+    }else{
+      key=Math.random().toString(36).slice(2,8);
+      await DB.collection('shorts').add({key:key,url:url,created:new Date().toISOString()});
     }
-  }catch(e){console.warn('URL 단축 실패:',e);}
-  return url;
+    var short=BASE_SHORT+key;
+    tinyCache[url]=short;
+    return short;
+  }catch(e){console.warn('단축 실패:',e.message);return url;}
 }
 
 async function shortenAll(urls){

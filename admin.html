@@ -2153,21 +2153,28 @@ document.getElementById('btn-copy-link').addEventListener('click',()=>{
 // ── PDF 생성 + Firebase Storage 업로드 ──
 // ── TinyURL 단축 ──
 var tinyCache={};
+// 자체 단축 URL — Firebase에 저장 후 r.html로 리다이렉트
+var BASE_SHORT='https://hhc-3p8.pages.dev/r.html?k=';
+
 async function shorten(url){
   if(!url)return url;
   if(tinyCache[url])return tinyCache[url];
+  if(!db)return url;
   try{
-    // is.gd API - CORS 지원
-    var res=await fetch('https://is.gd/create.php?format=simple&url='+encodeURIComponent(url));
-    if(res.ok){
-      var s=await res.text();
-      if(s&&s.startsWith('http')){
-        tinyCache[url]=s.trim();
-        return tinyCache[url];
-      }
+    // 이미 저장된 단축키 확인
+    var snap=await db.collection('shorts').where('url','==',url).limit(1).get();
+    var key;
+    if(!snap.empty){
+      key=snap.docs[0].data().key;
+    }else{
+      // 새 단축키 생성 (6자리 랜덤)
+      key=Math.random().toString(36).slice(2,8);
+      await db.collection('shorts').add({key:key,url:url,created:new Date().toISOString()});
     }
-  }catch(e){console.warn('URL 단축 실패:',e);}
-  return url;
+    var short=BASE_SHORT+key;
+    tinyCache[url]=short;
+    return short;
+  }catch(e){console.warn('단축 실패:',e.message);return url;}
 }
 async function shortenAll(urls){return await Promise.all(urls.map(function(u){return shorten(u);}));}
 
