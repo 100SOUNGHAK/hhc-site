@@ -372,7 +372,7 @@ select.field-input{cursor:pointer}
         <div class="card-body">
           <div class="fg c2">
             <div class="field">
-              <label class="field-label">고객명</label>
+              <label class="field-label">콘도명/동호수(상호)</label>
               <input id="c-name" type="text" placeholder="고객 이름" class="field-input sm">
             </div>
             <div class="field">
@@ -381,8 +381,8 @@ select.field-input{cursor:pointer}
             </div>
           </div>
           <div class="field" style="margin-top:10px">
-            <label class="field-label">주소 / 콘도명</label>
-            <input id="c-address" type="text" placeholder="콘도명 및 동호수" class="field-input sm">
+            <label class="field-label">주소</label>
+            <input id="c-address" type="text" placeholder="주소 입력" class="field-input sm">
           </div>
           <div class="field" style="margin-top:10px">
             <label class="field-label">메모</label>
@@ -606,13 +606,49 @@ async function connectFirebase(){
   }catch(e){console.error(e);return false;}
 }
 
+// ── 의뢰 데이터 자동 반영 ──
+function applyTransferData(){
+  const params=new URLSearchParams(window.location.search);
+  if(params.get('from')!=='request')return;
+  try{
+    const d=JSON.parse(localStorage.getItem('hhc_transfer_booking')||'{}');
+    if(!d.condo)return;
+    // 폼에 자동 입력
+    const nameEl=document.getElementById('c-name');
+    const phoneEl=document.getElementById('c-phone');
+    const memoEl=document.getElementById('c-memo');
+    const langKo=document.querySelector('input[name="c-lang"][value="ko"]');
+    const langEn=document.querySelector('input[name="c-lang"][value="en"]');
+    if(nameEl)nameEl.value=d.condo;
+    if(phoneEl)phoneEl.value=d.phone||'';
+    if(memoEl){
+      // 의뢰 품목을 메모에 추가
+      const items=JSON.parse(d.items||'[]');
+      const itemText=items.map(it=>it.cat+(it.svc?' - '+it.svc:'')+' × '+it.qty).join(', ');
+      memoEl.value=(itemText?'[의뢰품목] '+itemText+'
+':'')+(d.remarks||'');
+    }
+    // 언어 설정
+    if(d.lang==='en'&&langEn){langEn.checked=true;if(langKo)langKo.checked=false;}
+    localStorage.removeItem('hhc_transfer_booking');
+    // 안내 토스트
+    setTimeout(function(){
+      const t=document.createElement('div');
+      t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0D9488;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;z-index:999;font-family:inherit';
+      t.textContent='✓ 의뢰 정보가 자동으로 입력됐습니다';
+      document.body.appendChild(t);
+      setTimeout(function(){t.remove();},3000);
+    },500);
+  }catch(e){console.warn('전환 데이터 오류:',e);}
+}
+
 // ── INIT ──
 (async()=>{
   if(checkAuth()){
     showLoading(true);
     const ok=await connectFirebase();
     showLoading(false);
-    if(ok){showScreen('app');}
+    if(ok){showScreen('app');applyTransferData();}
     else{setAuth(false);showScreen('login');}
   }else{showScreen('login');}
 })();
@@ -769,7 +805,7 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
   const memo=document.getElementById('c-memo').value.trim();
   const lang=document.querySelector('input[name="c-lang"]:checked')?.value||'ko';
 
-  if(!name||!phone){showModal(lang==='en'?'Input Error':'입력 오류',lang==='en'?'Please enter customer name and phone.':'고객명과 연락처를 입력해주세요.',false);return;}
+  if(!name||!phone){showModal(lang==='en'?'Input Error':'입력 오류',lang==='en'?'Please enter condo/unit name and phone.':'콘도명/동호수(상호)와 연락처를 입력해주세요.',false);return;}
   if(!selectedDates.length){showModal(lang==='en'?'No Schedule':'일정 없음',lang==='en'?'Please select at least one date.':'예약 가능 날짜를 최소 1개 선택해주세요.',false);return;}
 
   const hasTime=selectedDates.some(d=>scheduleMap[d]&&scheduleMap[d].length>0);
