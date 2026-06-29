@@ -276,6 +276,16 @@ textarea{resize:none;line-height:1.5}
       <button class="btn bsm bgh" id="lang-ms" onclick="setMsgLang('ms')" style="flex:1">🇲🇾 Bahasa</button>
     </div>
     <div class="card cp" style="margin-bottom:12px">
+      <div class="sht" style="margin-bottom:8px">PDF 저장</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:10px">PDF로 저장 후 카카오톡 / WhatsApp에 파일로 직접 첨부해서 전송하세요.</div>
+      <button class="btn bn bfu" id="pdf-save-btn">
+        📄 PDF 저장 (다운로드)
+      </button>
+      <div style="font-size:11px;color:var(--gray);margin-top:8px;line-height:1.6">
+        저장된 PDF → 카카오톡/WhatsApp 열기 → 파일 첨부 → 전송
+      </div>
+    </div>
+    <div class="card cp" style="margin-bottom:12px">
       <div class="sht" style="margin-bottom:8px">링크 공유 / Share Link</div>
       <div style="font-size:12px;color:var(--gray);margin-bottom:10px">저장 후 고객 전용 링크 생성 → WhatsApp / 카카오톡 공유</div>
       <div id="link-box-wrap"><button class="btn bg bfu" id="sas-btn">저장하고 링크 생성</button></div>
@@ -476,6 +486,8 @@ textarea{resize:none;line-height:1.5}
 <div class="loading" id="loading"><div class="spinner"></div><span id="loading-text">처리 중...</span></div>
 <div class="toast" id="toast"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
@@ -1430,6 +1442,62 @@ function getSignSection(){
 }
 
 // ═══════════════════════════════════════════════════════════
+// PDF GENERATION
+// ═══════════════════════════════════════════════════════════
+async function generatePDF(){
+  showLoad('PDF 생성 중...');
+  try{
+    var inv=getInvData();
+    // 임시 div에 인보이스 HTML 렌더링
+    var container=document.createElement('div');
+    container.style.cssText='position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:40px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;color:#0f172a;z-index:-1';
+    container.innerHTML=buildInvHTML(inv);
+    document.body.appendChild(container);
+
+    // html2canvas로 이미지 변환
+    var canvas=await html2canvas(container,{
+      scale:2,
+      useCORS:true,
+      backgroundColor:'#ffffff',
+      width:794,
+      logging:false
+    });
+    document.body.removeChild(container);
+
+    // jsPDF로 PDF 생성
+    var jsPDF=window.jspdf.jsPDF;
+    var pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    var imgData=canvas.toDataURL('image/jpeg',0.95);
+    var pdfW=pdf.internal.pageSize.getWidth();
+    var pdfH=(canvas.height*pdfW)/canvas.width;
+
+    // 페이지 넘침 처리
+    var pageH=pdf.internal.pageSize.getHeight();
+    if(pdfH<=pageH){
+      pdf.addImage(imgData,'JPEG',0,0,pdfW,pdfH);
+    }else{
+      var y=0;
+      while(y<pdfH){
+        if(y>0)pdf.addPage();
+        pdf.addImage(imgData,'JPEG',0,-y,pdfW,pdfH);
+        y+=pageH;
+      }
+    }
+
+    // 파일명: 인보이스번호
+    var fileName='Invoice_'+(inv.id||'HHC')+'.pdf';
+    pdf.save(fileName);
+    showToast('✓ PDF 저장됨 — '+fileName);
+  }catch(e){
+    showToast('PDF 생성 실패: '+e.message);
+    console.error(e);
+  }finally{
+    hideLoad();
+  }
+}
+window.generatePDF=generatePDF;
+
+// ═══════════════════════════════════════════════════════════
 // BIND EVENTS
 // ═══════════════════════════════════════════════════════════
 function bindAll(){
@@ -1443,6 +1511,10 @@ function bindAll(){
   $('cust-search').addEventListener('input',renderCusts);
   $('cp-search').addEventListener('input',function(){renderCustPicker(this.value);});
   var sas=$('sas-btn');if(sas)sas.addEventListener('click',saveAndShare);
+  var pdfBtn=$('pdf-save-btn');
+  if(pdfBtn)pdfBtn.addEventListener('click',generatePDF);
+  var pdfBtn=document.getElementById('pdf-save-btn');
+  if(pdfBtn)pdfBtn.addEventListener('click',generatePDF);
   $('email-btn').addEventListener('click',function(){
     var to=val('send-email');if(!to){showToast('이메일 주소 필요');return;}
     var inv=getInvData(),lnk=getLnk(inv.id);
