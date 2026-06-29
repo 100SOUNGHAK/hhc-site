@@ -358,10 +358,10 @@ const SVC_KO={
   '주방후드':['완전분해세척'],
   '냉장고':['단문형','양문형'],
   '세탁기':['드럼세탁기','통돌이세탁기'],
-  '식탁의자':[],
+  '식탁의자':null,
   '실링팬청소':['기본청소','분해청소'],
-  '전등교체':[],
-  '콘센트교체':[],
+  '전등교체':null,
+  '콘센트교체':null,
   '기타품목':[]
 };
 
@@ -377,10 +377,10 @@ const SVC_EN={
   'Kitchen Hood':['Full Disassembly Clean'],
   'Refrigerator':['Single Door','Double Door'],
   'Washing Machine':['Front Load','Top Load'],
-  'Dining Chair':[],
+  'Dining Chair':null,
   'Ceiling Fan Clean':['Basic Clean','Disassembly Clean'],
-  'Light Replacement':[],
-  'Socket/Outlet Replacement':[],
+  'Light Replacement':null,
+  'Socket/Outlet Replacement':null,
   'Other':[]
 };
 
@@ -433,7 +433,7 @@ function showAlreadyBooked(){
   const dispTime=getDisplayTime(rawTime,isEn);
   const msg=buildMsg(bookingData.booking_items||'',bookingData.booking_memo||'');
   document.getElementById('booked-detail').innerHTML=
-    `<strong>${isEn?'Condo/Unit(Company):':'콘도명/동호수(상호):'}</strong> ${bookingData.customer_name||'—'}<br>
+    `<strong>${isEn?'Name:':'이름:'}</strong> ${bookingData.customer_name||'—'}<br>
     <strong>${isEn?'Date:':'예약일:'}</strong> ${bookingData.booking_date||'—'} ${dispTime}<br>
     ${bookingData.booking_items?`<strong>${isEn?'Service:':'품목:'}</strong> ${bookingData.booking_items}<br>`:''}
     ${bookingData.booking_memo?`<strong>${isEn?'Request:':'요청:'}</strong> ${bookingData.booking_memo}<br>`:''}
@@ -461,7 +461,7 @@ function initBookingForm(){
       copyOk:'✓ 복사되었습니다! 카카오톡에 붙여넣기 하세요',
       contactNote:'예약 확정 후 담당자가 연락드립니다.',
       addItem:'+ 품목 추가',
-      nameLabel:'콘도명/동호수(상호):',dateLabel:'예약일:',itemsLabel:'품목:',memoLabel:'요청:',statusLabel:'상태:',
+      nameLabel:'이름:',dateLabel:'예약일:',itemsLabel:'품목:',memoLabel:'요청:',statusLabel:'상태:',
       confirmed:'✅ 확정완료',pending:'⏳ 확인 중',
     },
     en:{
@@ -478,7 +478,7 @@ function initBookingForm(){
       copyOk:'✓ Copied! Please paste in KakaoTalk',
       contactNote:'Our team will contact you after confirming your booking.',
       addItem:'+ Add Item',
-      nameLabel:'Condo/Unit(Company):',dateLabel:'Date:',itemsLabel:'Service:',memoLabel:'Request:',statusLabel:'Status:',
+      nameLabel:'Name:',dateLabel:'Date:',itemsLabel:'Service:',memoLabel:'Request:',statusLabel:'Status:',
       confirmed:'✅ Confirmed',pending:'⏳ Pending',
     }
   }[lang]||{};
@@ -666,6 +666,10 @@ function addItem(){
     'Kitchen Hood':['Full Disassembly Clean'],
     'Refrigerator':['Single Door','Double Door'],
     'Washing Machine':['Front Load','Top Load'],
+    'Dining Chair':null,
+    'Ceiling Fan Clean':['Basic Clean','Disassembly Clean'],
+    'Light Replacement':null,
+    'Socket/Outlet Replacement':null,
     'Other':[]
   };
 
@@ -722,9 +726,17 @@ window.updateSvcSelect=function(sel,svcId){
   if(v===otherKey){
     svcSel.disabled=true;otherDiv.style.display='block';
   }else{
-    svcSel.disabled=false;otherDiv.style.display='none';
+    otherDiv.style.display='none';
     const map=isEn?SVC_EN:SVC_KO;
-    (map[v]||[]).forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;svcSel.appendChild(o);});
+    const svcs=map[v];
+    if(svcs===null||svcs===undefined){
+      // 서비스 종류 없는 품목 → 비활성화
+      svcSel.disabled=true;
+      svcSel.innerHTML=`<option value="">${isEn?'N/A':'해당없음'}</option>`;
+    }else{
+      svcSel.disabled=false;
+      (svcs||[]).forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;svcSel.appendChild(o);});
+    }
   }
 };
 
@@ -813,7 +825,7 @@ function showStep3(items,memo){
   const dispTime=getDisplayTime(selectedTime,isEn);
   goToStep(3);
   document.getElementById('confirm-detail').innerHTML=
-    `<strong>${isEn?'Condo/Unit(Company):':'콘도명/동호수(상호):'}</strong> ${bookingData.customer_name||'—'}<br>
+    `<strong>${isEn?'Name:':'이름:'}</strong> ${bookingData.customer_name||'—'}<br>
     <strong>${isEn?'Date:':'예약일:'}</strong> ${selectedDate} ${dispTime}<br>
     <strong>${isEn?'Service:':'품목:'}</strong> ${items}<br>
     ${memo?`<strong>${isEn?'Request:':'요청:'}</strong> ${memo}<br>`:''}
@@ -834,9 +846,9 @@ function buildMsg(items,memo){
   const itms=b.booking_items||items||'';
   const m=b.booking_memo||memo||'';
   if(isEn){
-    return `[Cleaning Service Booking Request]\nCondo/Unit: ${b.customer_name||'—'}\nContact: ${b.customer_phone||'—'}\n${b.customer_address?'Address: '+b.customer_address+'\n':''}\nDate: ${date}\nVisit Time: ${time}\nService: ${itms}\n${m?'Request: '+m+'\n':''}\nHAPPY WORKS SERVICES SDN.BHD.\n+60172472774`;
+    return `[Cleaning Service Booking Request]\nName: ${b.customer_name||'—'}\nContact: ${b.customer_phone||'—'}\n${b.customer_address?'Address: '+b.customer_address+'\n':''}\nDate: ${date}\nVisit Time: ${time}\nService: ${itms}\n${m?'Request: '+m+'\n':''}\nHAPPY WORKS SERVICES SDN.BHD.\n+60172472774`;
   }
-  return `[세척서비스 예약신청]\n콘도명/동호수(상호): ${b.customer_name||'—'}\n연락처: ${b.customer_phone||'—'}\n${b.customer_address?'주소: '+b.customer_address+'\n':''}\n예약일: ${date}\n방문시간: ${time}\n품목: ${itms}\n${m?'요청사항: '+m+'\n':''}\nHAPPY WORKS SERVICES SDN.BHD.\n+60172472774`;
+  return `[세척서비스 예약신청]\n고객명: ${b.customer_name||'—'}\n연락처: ${b.customer_phone||'—'}\n${b.customer_address?'주소: '+b.customer_address+'\n':''}\n예약일: ${date}\n방문시간: ${time}\n품목: ${itms}\n${m?'요청사항: '+m+'\n':''}\nHAPPY WORKS SERVICES SDN.BHD.\n+60172472774`;
 }
 
 function setupCopyBtns(waId,kakaoId,copyId,okId,msg){
