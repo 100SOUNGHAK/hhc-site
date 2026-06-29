@@ -1717,12 +1717,21 @@ function renderSendTab(){
   // ── 메시지 생성 ──
   function makeMsg(mode){
     const name=c.name||'고객';
+    if(L==='en'){
+      const header=`Dear ${name} 😊\n\nHappy Home Care`;
+      const balLine=`\n\n💰 Available Balance: RM ${fmt(remain)}\n(Total: RM ${fmt(total)} / Used: RM ${fmt(usedT)} / Discount: RM ${fmt(discT)} / Carryover: RM ${fmt(carryT)})`;
+      const contractInfo=`\n\n📋 Contract Info\n• Package: ${pkg?pkg.label:'—'}\n• Paid: RM ${fmt(paid)}\n• Bonus: RM ${fmt(bonus)}${spec>0?'\n• Special: RM '+fmt(spec):''}`;
+      const link=`\n\n📋 View Contract:\n${customerUrl}`;
+      const footer=`\n\nYou can check your usage history anytime via the link above.\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
+      if(mode==='contract') return `${header} Contract.${contractInfo}${balLine}${link}${footer}`;
+      if(mode==='usage') return `${header} Usage Update.${balLine}${link}${footer}`;
+      return `${header} Contract & Usage.${contractInfo}${balLine}${link}${footer}`;
+    }
     const header=`안녕하세요 ${name}님 😊\n\nHappy Home Care`;
     const balLine=`\n\n💰 사용가능 잔액: RM ${fmt(remain)}\n(총: RM ${fmt(total)} / 이용: RM ${fmt(usedT)} / 할인: RM ${fmt(discT)} / 이월: RM ${fmt(carryT)})`;
     const contractInfo=`\n\n📋 계약 정보\n• 패키지: ${pkg?pkg.label:'—'}\n• 납부금액: RM ${fmt(paid)}\n• 기본적립: RM ${fmt(bonus)}${spec>0?'\n• 특별적립: RM '+fmt(spec):''}`;
     const link=`\n\n📋 계약서 확인:\n${customerUrl}`;
     const footer=`\n\n언제든지 위 링크에서 이용내역을 확인하실 수 있습니다.\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
-
     if(mode==='contract') return `${header} 계약서입니다.${contractInfo}${balLine}${link}${footer}`;
     if(mode==='usage') return `${header} 이용내역입니다.${balLine}${link}${footer}`;
     return `${header} 계약 및 이용내역입니다.${contractInfo}${balLine}${link}${footer}`;
@@ -2381,7 +2390,8 @@ window.generateContractPDF=async function generateContractPDF(shareType){
     const shortDrive=driveURL?shortened[2]:shortDL;
 
     // 4. 메시지 구성 (PDF 링크 포함)
-    const fullMsg=buildContractMsg(c, shortWeb, shortDrive, shortDL);
+    const lang=currentSendLang||'ko';
+    const fullMsg=buildContractMsg(c, shortWeb, shortDrive, shortDL, lang);
 
     if(shareType==='wa'){
       window.open('https://wa.me/?text='+encodeURIComponent(fullMsg),'_blank');
@@ -2401,7 +2411,7 @@ window.generateContractPDF=async function generateContractPDF(shareType){
 }
 
 // 계약서 데이터로 직접 메시지 생성 (DOM 독립적)
-function buildContractMsg(c, webURL, pdfViewURL, pdfDlURL){
+function buildContractMsg(c, webURL, pdfViewURL, pdfDlURL, lang){
   if(!c)return '';
   const pkg=PACKAGES?PACKAGES.find(p=>p.id===c.package_id||p.id===c.package):null;
   const paid=parseFloat(c.amount_paid||c.paid||0);
@@ -2422,24 +2432,12 @@ function buildContractMsg(c, webURL, pdfViewURL, pdfDlURL){
   }else if(pdfViewURL||pdfDlURL){
     pdfLines=''+(pdfViewURL?'📄 PDF 보기: '+pdfViewURL:'')+(pdfDlURL&&pdfDlURL!==pdfViewURL?'\n📥 PDF 다운로드: '+pdfDlURL:'');
   }
-  return `안녕하세요 ${name}님 😊
+  if(lang==='en'){
+    const enPdfLines=pdfLines.replace('PDF 보기/다운로드','PDF View/Download').replace('PDF 보기','PDF View').replace('PDF 다운로드','PDF Download').replace('계약서 확인','View Contract');
+    return `Dear ${name} 😊\n\nPlease check your Happy Home Care contract.\n\n📋 Contract Info\n• Package: ${pkg?pkg.label:'—'}\n• Paid: RM ${paid.toFixed(2)}\n• Bonus: RM ${bonus.toFixed(2)}\n\n💰 Available Balance: RM ${remain.toFixed(2)}\n${enPdfLines?enPdfLines+'\n':''}\n📋 View Contract:\n${url}\n\nYou can check your usage history anytime via the link above.\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
+  }
+  return `안녕하세요 ${name}님 😊\n\nHappy Home Care 계약서를 확인해 주세요.\n\n📋 계약 정보\n• 패키지: ${pkg?pkg.label:'—'}\n• 납부금액: RM ${paid.toFixed(2)}\n• 기본적립: RM ${bonus.toFixed(2)}\n\n💰 사용가능 잔액: RM ${remain.toFixed(2)}\n${pdfLines?pdfLines+'\n':''}\n📋 계약서 확인:\n${url}\n\n언제든지 위 링크에서 이용내역을 확인하실 수 있습니다.\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
 
-Happy Home Care 계약서를 확인해 주세요.
-
-📋 계약 정보
-• 패키지: ${pkg?pkg.label:'—'}
-• 납부금액: RM ${paid.toFixed(2)}
-• 기본적립: RM ${bonus.toFixed(2)}
-
-💰 사용가능 잔액: RM ${remain.toFixed(2)}
-${pdfLines}
-📋 계약서 확인:
-${url}
-
-언제든지 위 링크에서 이용내역을 확인하실 수 있습니다.
-
-HAPPY WORKS SERVICES SDN.BHD.
-📞 +60172472774`;
 }
 
 function getPanelMsg(){
@@ -2449,6 +2447,9 @@ function getPanelMsg(){
   const pkg=PACKAGES.find(p=>p.id===document.getElementById('f-package').value);
   const paid=document.getElementById('f-paid').value||'0';
   const bonus=document.getElementById('f-bonus').value||'0';
+  if(currentSendLang==='en'){
+    return `Dear ${name} 😊\n\nPlease check your Happy Home Care contract.\n\n📋 Contract Info\n• Package: ${pkg?pkg.label:'—'}\n• Paid: RM ${parseFloat(paid).toFixed(2)}\n• Bonus: RM ${parseFloat(bonus).toFixed(2)}\n\n💰 Available Balance: RM ${remain}\n\n📋 View Contract:\n${url}\n\nYou can check your usage history anytime via the link above.\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
+  }
   return `안녕하세요 ${name}님 😊\n\nHappy Home Care 계약서를 확인해 주세요.\n\n📋 계약 정보\n• 패키지: ${pkg?pkg.label:'—'}\n• 납부금액: RM ${parseFloat(paid).toFixed(2)}\n• 기본적립: RM ${parseFloat(bonus).toFixed(2)}\n\n💰 사용가능 잔액: RM ${remain}\n\n📋 계약서 확인:\n${url}\n\n언제든지 위 링크에서 이용내역을 확인하실 수 있습니다.\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
 }
 
