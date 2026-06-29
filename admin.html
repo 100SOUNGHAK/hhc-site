@@ -1737,15 +1737,21 @@ function renderSendTab(){
 
   const msg=makeMsg(currentSendMode);
 
-  document.getElementById('btn-wa-send').addEventListener('click',()=>{
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+  document.getElementById('btn-wa-send').addEventListener('click',async()=>{
+    const lnk=document.getElementById('clink-url')?document.getElementById('clink-url').textContent:'';
+    const shortLnk=lnk?await shorten(lnk):'';
+    const shortMsg=lnk?msg.replace(lnk,shortLnk):msg;
+    window.open(`https://wa.me/?text=${encodeURIComponent(shortMsg)}`,'_blank');
   });
-  document.getElementById('btn-kakao-send').addEventListener('click',()=>{
-    navigator.clipboard.writeText(msg).then(()=>{
+  document.getElementById('btn-kakao-send').addEventListener('click',async()=>{
+    const lnk=document.getElementById('clink-url')?document.getElementById('clink-url').textContent:'';
+    const shortLnk=lnk?await shorten(lnk):'';
+    const shortMsg=lnk?msg.replace(lnk,shortLnk):msg;
+    navigator.clipboard.writeText(shortMsg).then(()=>{
       const ok=document.getElementById('kakao-copy-ok');
       ok.style.display='block';
       setTimeout(()=>ok.style.display='none',3000);
-    }).catch(()=>prompt('복사 후 카카오톡에 붙여넣기:',msg));
+    }).catch(()=>prompt('복사 후 카카오톡에 붙여넣기:',shortMsg));
   });
   document.getElementById('btn-print-send').addEventListener('click',()=>{currentViewId=c.__id;switchTab('customer');setTimeout(()=>document.getElementById('btn-print-view').click(),100);});
 }
@@ -2145,6 +2151,19 @@ document.getElementById('btn-copy-link').addEventListener('click',()=>{
 });
 
 // ── PDF 생성 + Firebase Storage 업로드 ──
+// ── TinyURL 단축 ──
+var tinyCache={};
+async function shorten(url){
+  if(!url)return url;
+  if(tinyCache[url])return tinyCache[url];
+  try{
+    var res=await fetch('https://tinyurl.com/api-create.php?url='+encodeURIComponent(url));
+    if(res.ok){var s=await res.text();if(s&&s.startsWith('http')){tinyCache[url]=s.trim();return tinyCache[url];}}
+  }catch(e){console.warn('TinyURL 실패:',e);}
+  return url;
+}
+async function shortenAll(urls){return await Promise.all(urls.map(function(u){return shorten(u);}));}
+
 // ── Google Drive 업로드 ──
 var GDRIVE_CLIENT_ID='101289103022-35gf4cl4u63m0ejfi3l3ortfah03nlme.apps.googleusercontent.com';
 var GDRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
@@ -2282,10 +2301,15 @@ window.generateContractPDF=async function generateContractPDF(shareType){
     const storageRef=ref(_st,'contracts/'+fileName);
     const snapshot=await uploadBytes(storageRef,pdfBlob,{contentType:'application/pdf'});
     const downloadURL=await getDownloadURL(snapshot.ref);
-    // 계약서 데이터로 직접 메시지 생성 (DOM 독립적)
+    // 모든 링크 TinyURL 단축
+    loadDiv.querySelector('span').textContent='링크 단축 중...';
     const webURL=`https://hhc-3p8.pages.dev/customer.html?id=${contractId}&mode=contract`;
-    const baseMsg=buildContractMsg(c, webURL);
-    const pdfMsg=baseMsg+'\n\n📄 계약서 PDF:\n'+downloadURL;
+    const urlsToShorten=[webURL,downloadURL];
+    if(driveURL)urlsToShorten.push(driveURL);
+    const shortened=await shortenAll(urlsToShorten);
+    const shortWeb=shortened[0],shortDL=shortened[1],shortDrive=driveURL?shortened[2]:null;
+    const baseMsg=buildContractMsg(c, shortWeb);
+    const pdfMsg=baseMsg+'\n\n📄 계약서 PDF:\n'+shortDL;
     // Google Drive 업로드 (실패해도 계속 진행)
     loadDiv.querySelector('span').textContent='Google Drive 업로드 중... (팝업 허용 필요)';
     let driveURL=null;
@@ -2298,8 +2322,8 @@ window.generateContractPDF=async function generateContractPDF(shareType){
 
     // 메시지 + 두 링크 포함
     const fullMsg=baseMsg+
-      (driveURL?'\n\n📄 PDF 보기 (카카오톡):\n'+driveURL:'')+
-      '\n\n📥 PDF 다운로드:\n'+downloadURL;
+      (shortDrive?'\n\n📄 PDF 보기 (카카오톡):\n'+shortDrive:'')+
+      '\n\n📥 PDF 다운로드:\n'+shortDL;
 
     if(shareType==='wa'){
       window.open('https://wa.me/?text='+encodeURIComponent(fullMsg),'_blank');
@@ -2365,15 +2389,21 @@ function getPanelMsg(){
   return `안녕하세요 ${name}님 😊 / Dear ${name},\n\nHappy Home Care 계약서를 확인하세요.\nPlease check your Happy Home Care contract.\n\n👉 ${url}\n\n📋 계약 정보 / Contract Info\n• 패키지 / Package: ${pkg?pkg.label:'—'}\n• 납부금액 / Paid: RM ${parseFloat(paid).toFixed(2)}\n• 기본적립 / Bonus: RM ${parseFloat(bonus).toFixed(2)}\n\n💰 사용가능 잔액 / Available Balance\n${remain}\n\n언제든지 위 링크에서 이용내역을 확인하실 수 있습니다.\nYou can check your usage history anytime via the link above.\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
 }
 
-document.getElementById('btn-wa-link').addEventListener('click',()=>{
-  window.open(`https://wa.me/?text=${encodeURIComponent(getPanelMsg())}`,'_blank');
+document.getElementById('btn-wa-link').addEventListener('click',async()=>{
+  const msg=getPanelMsg();
+  const lnk=document.getElementById('clink-url').textContent;
+  const shortLnk=await shorten(lnk);
+  const shortMsg=msg.replace(lnk,shortLnk);
+  window.open(`https://wa.me/?text=${encodeURIComponent(shortMsg)}`,'_blank');
 });
-document.getElementById('btn-kakao-link').addEventListener('click',()=>{
-  navigator.clipboard.writeText(getPanelMsg()).then(()=>{
+document.getElementById('btn-kakao-link').addEventListener('click',async()=>{
+  const msg=getPanelMsg();
+  const lnk=document.getElementById('clink-url').textContent;
+  const shortLnk=await shorten(lnk);
+  const shortMsg=msg.replace(lnk,shortLnk);
+  navigator.clipboard.writeText(shortMsg).then(()=>{
     const ok=document.getElementById('kakao-ok');ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
-  }).catch(()=>{
-    prompt('아래 메시지를 복사하세요 / Copy the message below:',getPanelMsg());
-  });
+  }).catch(()=>{prompt('아래 메시지를 복사하세요:',shortMsg);});
 });
 
 // ── 인쇄 모드 선택 ──

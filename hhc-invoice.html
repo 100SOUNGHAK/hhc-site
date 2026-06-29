@@ -1074,23 +1074,38 @@ function setMsgLang(lang){
 }
 window.setMsgLang=setMsgLang;
 
-function buildMsg(inv){
+async function buildMsgAsync(inv){
   var lnk=getLnk(inv.id);
+  var shortLnk=await shorten(lnk);
   var status=inv.status||val('inv-status')||'billing';
   var statusTpls=msgTemplates[status]||msgTemplates.billing;
   var tpl=statusTpls[msgLang]||statusTpls.ko;
-  return tpl(inv,lnk);
+  return tpl(inv,shortLnk);
 }
-function shareWa(id){
+function buildMsg(inv){
+  // 동기 버전 (캐시된 경우 단축 URL 사용)
+  var lnk=getLnk(inv.id);
+  var shortLnk=tinyCache[lnk]||lnk;
+  var status=inv.status||val('inv-status')||'billing';
+  var statusTpls=msgTemplates[status]||msgTemplates.billing;
+  var tpl=statusTpls[msgLang]||statusTpls.ko;
+  return tpl(inv,shortLnk);
+}
+async function shareWa(id){
   var inv=invoices.find(function(i){return i.id===id;})||getInvData();
-  var num=(inv.customer&&inv.customer.phone||val('wa-num')||'').replace(/[\s\-()]/g,'').replace('+','');
-  var msg=buildMsg(inv);
+  var num=(inv.customer&&inv.customer.phone||val('wa-num')||'').replace(/[^0-9]/g,'');
+  showLoad('링크 단축 중...');
+  var msg=await buildMsgAsync(inv);
+  hideLoad();
   if(num)window.open('https://wa.me/'+num+'?text='+encodeURIComponent(msg),'_blank');
   else{cpTxt(msg);showToast('번호 없음 — 메시지 복사됨');}
 }
-function shareKakao(id){
+async function shareKakao(id){
   var inv=invoices.find(function(i){return i.id===id;})||getInvData();
-  cpTxt(buildMsg(inv));showToast('카카오톡 메시지 복사됨',3000);
+  showLoad('링크 단축 중...');
+  var msg=await buildMsgAsync(inv);
+  hideLoad();
+  cpTxt(msg);showToast('카카오톡 메시지 복사됨',3000);
 }
 function quickEmail(id){
   var inv=invoices.find(function(i){return i.id===id;});if(!inv)return;
@@ -1525,6 +1540,31 @@ function getSignSection(){
 }
 
 // ═══════════════════════════════════════════════════════════
+// TINYURL 단축
+// ═══════════════════════════════════════════════════════════
+var tinyCache={};  // 캐시 (같은 URL 반복 단축 방지)
+
+async function shorten(url){
+  if(!url)return url;
+  if(tinyCache[url])return tinyCache[url];
+  try{
+    var res=await fetch('https://tinyurl.com/api-create.php?url='+encodeURIComponent(url));
+    if(res.ok){
+      var short=await res.text();
+      if(short&&short.startsWith('http')){
+        tinyCache[url]=short.trim();
+        return tinyCache[url];
+      }
+    }
+  }catch(e){console.warn('TinyURL 실패:',e);}
+  return url; // 실패 시 원본 반환
+}
+
+async function shortenAll(urls){
+  return await Promise.all(urls.map(function(u){return shorten(u);}));
+}
+
+// ═══════════════════════════════════════════════════════════
 // GOOGLE DRIVE
 // ═══════════════════════════════════════════════════════════
 var GDRIVE_CLIENT_ID='101289103022-35gf4cl4u63m0ejfi3l3ortfah03nlme.apps.googleusercontent.com';
@@ -1659,15 +1699,21 @@ async function generateAndSharePDF(shareType){
       driveURL=await Promise.race([dp,tp]);
     }catch(e){console.warn('Drive 업로드 실패:',e);}
 
-    // 메시지 구성
+    // 모든 링크 TinyURL 단축
+    showLoad('링크 단축 중...');
     var webLnk=getLnk(inv.id);
+    var urlsToShorten=[webLnk,downloadURL];
+    if(driveURL)urlsToShorten.push(driveURL);
+    var shortened=await shortenAll(urlsToShorten);
+    var shortWeb=shortened[0],shortDL=shortened[1],shortDrive=driveURL?shortened[2]:null;
+
     var status=inv.status||'billing';
     var tpl=(msgTemplates[status]||msgTemplates.billing)[msgLang]||(msgTemplates[status]||msgTemplates.billing).ko;
-    var baseMsg=tpl(inv,webLnk);
+    var baseMsg=tpl(inv,shortWeb);
     // Firebase 링크 + Google Drive 링크 둘 다 포함
-    var pdfMsg=baseMsg+'\n\n📄 PDF 보기 (카카오톡):'+
-      (driveURL?'\n'+driveURL:'\n(Drive 업로드 실패)')+
-      '\n\n📥 PDF 다운로드:\n'+downloadURL;
+    var pdfMsg=baseMsg+
+      (shortDrive?'\n\n📄 PDF 보기 (카카오톡):\n'+shortDrive:'')+
+      '\n\n📥 PDF 다운로드:\n'+shortDL;
 
     if(shareType==='wa'){
       var num=(inv.customer&&inv.customer.phone||val('wa-num')||'').replace(/[^0-9]/g,'');
