@@ -320,8 +320,8 @@ textarea{resize:none;line-height:1.5}
 
   <div style="display:flex;gap:8px;margin-top:16px">
     <button class="btn bgh" onclick="App.resetForm()" style="padding:12px 14px" title="초기화">↺</button>
-    <button class="btn bg bfu" id="save-btn">저장하기</button>
     <button class="btn bgh" id="prev-btn" style="padding:12px 14px" title="미리보기">👁</button>
+    <button class="btn bg bfu" id="save-btn" style="flex:1;padding:12px;font-size:14px">💾 저장하기</button>
   </div>
 </div>
 <div class="frd pri"><div class="sht" style="margin-bottom:12px">실시간 미리보기</div><div class="card cp" id="prev-desktop"></div></div>
@@ -521,19 +521,34 @@ var DB=null;
 var ST=null; // Firebase Storage
 var invoices=[],services=[],banks=[],customers=[],lineItems=[];
 var currentFilter='all',currentSort='date',selYear=new Date().getFullYear();
-var viewingId=null,statusEditId=null;
+var viewingId=null,statusEditId=null,currentNav='list';
 var issuer={name:'Happy Works Services Sdn. Bhd.',email:'admin@happyhomecare.com.my',phone:'+60 12-000 0000',addr:'Kuala Lumpur, Malaysia',biz:''};
 
 var LSVC='hhc_svc5',LBANK='hhc_bnk5',LCUST='hhc_cst5',LINV='hhc_inv5',LISS='hhc_iss5';
 
 // 카테고리 구조 (3단계)
 var CAT_STRUCT={
-  '청소':['에어컨(가정용)','에어컨(매장용)','세탁기','매트리스','쇼파','커튼','기타제품'],
-  '수리':['현장수리','인건비용','자재비용'],
-  '설치':['사전준비인건비용','본설치인건비용','자재비용'],
-  '기타':['기타']
+  '청소':{
+    '에어컨(가정용)':['벽걸이형','매립형','카세트형','실외기'],
+    '에어컨(매장용)':['벽걸이형','매립형','카세트형','실외기'],
+    '세탁기':[],'매트리스':[],'쇼파':[],'커튼':[],'기타제품':[]
+  },
+  '수리':{'현장수리':[],'인건비용':[],'자재비용':[]},
+  '설치':{'사전준비인건비용':[],'본설치인건비용':[],'자재비용':[]},
+  '회원제상품':{'회원제상품':[]},
+  '기타':{'기타':[]}
 };
-var TOP_CATS=['청소','수리','설치','기타'];
+// 평탄화된 서브캣 리스트 (하위카테고리용)
+function getSubcats(cat){
+  var entry=CAT_STRUCT[cat];if(!entry)return [];
+  return Object.keys(entry);
+}
+// 서브캣의 3단계 항목 (있으면)
+function getSubcatItems(cat,subcat){
+  var entry=CAT_STRUCT[cat];if(!entry)return [];
+  return entry[subcat]||[];
+}
+var TOP_CATS=['청소','수리','설치','회원제상품','기타'];
 
 var DEF_SVC=[
   {id:'ds1',cat:'청소',subcat:'에어컨(가정용)',name:'기본청소',price:80,unit:'대',order:0},
@@ -601,7 +616,7 @@ function genId(dateStr){
 // ═══════════════════════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════════════════════
-function Nav(name){
+function Nav(name){currentNav=name;
   document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});
   var sc=$('screen-'+name);if(sc)sc.classList.add('active');
   ['new','list','accounting','customers','settings'].forEach(function(n){
@@ -810,19 +825,27 @@ window.rmLI=rmLI;
 
 function onTopCat(id,cat){
   var li=lineItems.find(function(l){return l.id===id;});if(!li)return;
-  li.cat=cat;li.subcat='';li.svcId='';li.name='';li.price=0;
+  li.cat=cat;li.subcat='';li.sub2='';li.svcId='';li.name='';li.price=0;
   renderLI();App.upPrev();
 }
 function onSubCat(id,sub){
   var li=lineItems.find(function(l){return l.id===id;});if(!li)return;
-  li.subcat=sub;li.svcId='';li.name='';li.price=0;
+  li.subcat=sub;li.sub2='';li.svcId='';li.name='';li.price=0;
   renderLI();App.upPrev();
 }
+function onSub2(id,v){
+  var li=lineItems.find(function(l){return l.id===id;});if(!li)return;
+  li.sub2=v;li.svcId='';li.name='';li.price=0;
+  renderLI();App.upPrev();
+}
+window.onSub2=onSub2;
 function onSvcSel(id,svcId){
   var li=lineItems.find(function(l){return l.id===id;});if(!li)return;
   var sv=services.find(function(s){return s.id===svcId;});
   li.svcId=svcId;li.name=sv?sv.name:li.name;li.price=sv?sv.price:li.price;
   if(sv){li.cat=sv.cat||li.cat;li.subcat=sv.subcat||li.subcat;}
+  renderLI();App.upPrev();
+}
   renderLI();App.upPrev();
 }
 function onQty(id,v){var li=lineItems.find(function(l){return l.id===id;});if(li){li.qty=parseFloat(v)||1;var t=$('lit-'+id);if(t)t.textContent=fmtAmt(li.price*li.qty);calcTotals();App.upPrev();}}
@@ -845,20 +868,31 @@ function renderLI(){
   if(!lineItems.length){c.innerHTML='<div style="text-align:center;padding:20px;color:var(--gray);font-size:13px">서비스 항목을 추가하세요</div>';calcTotals();return;}
   var topOpts='<option value="">대분류 선택</option>'+TOP_CATS.map(function(tc){return '<option value="'+tc+'">'+tc+'</option>';}).join('');
   c.innerHTML=lineItems.map(function(li){
-    var subs=li.cat&&CAT_STRUCT[li.cat]?CAT_STRUCT[li.cat]:[];
-    // 실제 데이터의 subcat도 포함
+    // 중분류 (기존 subcat → 에어컨의 경우 sub2 존재)
+    var subs=getSubcats(li.cat);
     services.forEach(function(s){if(s.cat===li.cat&&s.subcat&&subs.indexOf(s.subcat)<0)subs.push(s.subcat);});
     var subOpts='<option value="">중분류 선택</option>'+subs.map(function(s){return '<option value="'+s+'">'+s+'</option>';}).join('');
-    var svcs=li.subcat?services.filter(function(s){return s.cat===li.cat&&s.subcat===li.subcat;}):[];
+    // 소분류 (3단계: 에어컨 → 벽걸이형 등)
+    var sub2items=li.subcat?getSubcatItems(li.cat,li.subcat):[];
+    var hasSub2=sub2items.length>0;
+    var sub2Opts='<option value="">소분류 선택</option>'+sub2items.map(function(s){return '<option value="'+s+'">'+s+'</option>';}).join('');
+    // 서비스 목록 (sub2 있으면 sub2 기준, 없으면 subcat 기준)
+    var svcKey=hasSub2?li.sub2||'':li.subcat||'';
+    var svcs=svcKey?services.filter(function(s){
+      if(hasSub2)return s.cat===li.cat&&s.subcat===li.subcat&&(s.sub2===li.sub2||s.subcat===li.sub2);
+      return s.cat===li.cat&&s.subcat===li.subcat;
+    }):[];
     if(li.svcId&&svcs.findIndex(function(s){return s.id===li.svcId;})<0){var lsv=services.find(function(s){return s.id===li.svcId;});if(lsv)svcs.unshift(lsv);}
     var svcOpts='<option value="">서비스 선택</option>'+svcs.map(function(s){return '<option value="'+s.id+'">'+s.name+'</option>';}).join('');
+    var canPickSvc=hasSub2?!!li.sub2:!!li.subcat;
     return '<div class="li" data-lid="'+li.id+'">'+
       '<div style="display:flex;gap:6px;margin-bottom:8px;align-items:flex-start">'+
         '<div style="flex:1;display:flex;flex-direction:column;gap:6px">'+
           '<select onchange="onTopCat(\''+li.id+'\',this.value)" style="font-size:13px">'+topOpts+'</select>'+
-          '<select onchange="onSubCat(\''+li.id+'\',this.value)" style="font-size:13px"'+(li.cat?'':' disabled')+'">'+subOpts+'</select>'+
-          '<select onchange="onSvcSel(\''+li.id+'\',this.value)" style="font-size:13px"'+(li.subcat?'':' disabled')+'">'+svcOpts+'</select>'+
-          (li.subcat&&!li.svcId?'<input placeholder="서비스명 직접 입력" value="'+(li.name||'')+'" oninput="onName(\''+li.id+'\',this.value)" style="font-size:13px">':'')+
+          '<select onchange="onSubCat(\''+li.id+'\',this.value)" style="font-size:13px"'+(li.cat?'':' disabled')+'>'+subOpts+'</select>'+
+          (hasSub2?'<select onchange="onSub2(\''+li.id+'\',this.value)" style="font-size:13px"'+(li.subcat?'':' disabled')+'>'+sub2Opts+'</select>':'')+
+          '<select onchange="onSvcSel(\''+li.id+'\',this.value)" style="font-size:13px"'+(canPickSvc?'':' disabled')+'>'+svcOpts+'</select>'+
+          (canPickSvc&&!li.svcId?'<input placeholder="서비스명 직접 입력" value="'+(li.name||'')+'" oninput="onName(\''+li.id+'\',this.value)" style="font-size:13px">':'')+
         '</div>'+
         '<button class="ld" onclick="rmLI(\''+li.id+'\')">×</button>'+
       '</div>'+
@@ -872,9 +906,12 @@ function renderLI(){
   lineItems.forEach(function(li){
     var row=c.querySelector('[data-lid="'+li.id+'"]');if(!row)return;
     var sels=row.querySelectorAll('select');
-    if(sels[0]&&li.cat)sels[0].value=li.cat;
-    if(sels[1]&&li.subcat)sels[1].value=li.subcat;
-    if(sels[2]&&li.svcId)sels[2].value=li.svcId;
+    var idx=0;
+    if(sels[idx]&&li.cat){sels[idx].value=li.cat;idx++;}
+    if(sels[idx]&&li.subcat){sels[idx].value=li.subcat;idx++;}
+    var sub2items=getSubcatItems(li.cat,li.subcat);
+    if(sub2items.length&&sels[idx]&&li.sub2){sels[idx].value=li.sub2;idx++;}
+    if(sels[idx]&&li.svcId){sels[idx].value=li.svcId;}
   });
   calcTotals();
 }
@@ -1133,7 +1170,15 @@ function buildMsg(inv){
   return tpl(inv,shortLnk);
 }
 async function shareWa(id){
-  var inv=invoices.find(function(i){return i.id===id;})||getInvData();
+  // 목록에서 호출 시 → 인보이스 로드 후 발송탭 이동
+  var inv=invoices.find(function(i){return i.id===id;});
+  if(inv&&currentNav!=='new'){
+    loadInvToForm(inv);
+    Nav('new');
+    setTimeout(function(){Tab('send');},200);
+    return;
+  }
+  inv=inv||getInvData();
   var num=(inv.customer&&inv.customer.phone||val('wa-num')||'').replace(/[^0-9]/g,'');
   showLoad('링크 단축 중...');
   var msg=await buildMsgAsync(inv);
@@ -1142,7 +1187,14 @@ async function shareWa(id){
   else{cpTxt(msg);showToast('번호 없음 — 메시지 복사됨');}
 }
 async function shareKakao(id){
-  var inv=invoices.find(function(i){return i.id===id;})||getInvData();
+  var inv=invoices.find(function(i){return i.id===id;});
+  if(inv&&currentNav!=='new'){
+    loadInvToForm(inv);
+    Nav('new');
+    setTimeout(function(){Tab('send');},200);
+    return;
+  }
+  inv=inv||getInvData();
   showLoad('링크 단축 중...');
   var msg=await buildMsgAsync(inv);
   hideLoad();
