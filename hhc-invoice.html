@@ -527,27 +527,22 @@ var issuer={name:'Happy Works Services Sdn. Bhd.',email:'admin@happyhomecare.com
 var LSVC='hhc_svc5',LBANK='hhc_bnk5',LCUST='hhc_cst5',LINV='hhc_inv5',LISS='hhc_iss5';
 
 // 카테고리 구조 (3단계)
-var CAT_STRUCT={
-  '청소':{
-    '에어컨(가정용)':['벽걸이형','매립형','카세트형','실외기'],
-    '에어컨(매장용)':['벽걸이형','매립형','카세트형','실외기'],
-    '세탁기':[],'매트리스':[],'쇼파':[],'커튼':[],'기타제품':[]
-  },
-  '수리':{'현장수리':[],'인건비용':[],'자재비용':[]},
-  '설치':{'사전준비인건비용':[],'본설치인건비용':[],'자재비용':[]},
-  '회원제상품':{'회원제상품':[]},
-  '기타':{'기타':[]}
+// 에어컨 3단계 구조: 중분류 → 소분류
+var AC_SUBTYPES={
+  '에어컨(가정용)':['벽걸이형','매립형','카세트형','실외기'],
+  '에어컨(매장용)':['벽걸이형','매립형','카세트형','실외기']
 };
-// 평탄화된 서브캣 리스트 (하위카테고리용)
-function getSubcats(cat){
-  var entry=CAT_STRUCT[cat];if(!entry)return [];
-  return Object.keys(entry);
-}
-// 서브캣의 3단계 항목 (있으면)
-function getSubcatItems(cat,subcat){
-  var entry=CAT_STRUCT[cat];if(!entry)return [];
-  return entry[subcat]||[];
-}
+// 기존 방식 유지 (배열)
+var CAT_STRUCT={
+  '청소':['에어컨(가정용)','에어컨(매장용)','세탁기','매트리스','쇼파','커튼','기타제품'],
+  '수리':['현장수리','인건비용','자재비용'],
+  '설치':['사전준비인건비용','본설치인건비용','자재비용'],
+  '회원제상품':['회원제상품'],
+  '기타':['기타']
+};
+function getSubcats(cat){return CAT_STRUCT[cat]||[];}
+// 에어컨 소분류 (3단계)
+function getSubcatItems(cat,subcat){return AC_SUBTYPES[subcat]||[];}
 var TOP_CATS=['청소','수리','설치','회원제상품','기타'];
 
 var DEF_SVC=[
@@ -843,7 +838,7 @@ function onSvcSel(id,svcId){
   var li=lineItems.find(function(l){return l.id===id;});if(!li)return;
   var sv=services.find(function(s){return s.id===svcId;});
   li.svcId=svcId;li.name=sv?sv.name:li.name;li.price=sv?sv.price:li.price;
-  if(sv){li.cat=sv.cat||li.cat;li.subcat=sv.subcat||li.subcat;}
+  if(sv){li.cat=sv.cat||li.cat;li.subcat=sv.subcat||li.subcat;if(sv.sub2)li.sub2=sv.sub2;}
   renderLI();App.upPrev();
 }
 function onQty(id,v){var li=lineItems.find(function(l){return l.id===id;});if(li){li.qty=parseFloat(v)||1;var t=$('lit-'+id);if(t)t.textContent=fmtAmt(li.price*li.qty);calcTotals();App.upPrev();}}
@@ -877,8 +872,8 @@ function renderLI(){
     // 서비스 목록 (sub2 있으면 sub2 기준, 없으면 subcat 기준)
     var svcKey=hasSub2?li.sub2||'':li.subcat||'';
     var svcs=svcKey?services.filter(function(s){
-      if(hasSub2)return s.cat===li.cat&&s.subcat===li.subcat&&(s.sub2===li.sub2||s.subcat===li.sub2);
-      return s.cat===li.cat&&s.subcat===li.subcat;
+      if(hasSub2)return s.cat===li.cat&&s.subcat===li.subcat&&s.sub2===li.sub2;
+      return s.cat===li.cat&&s.subcat===li.subcat&&!s.sub2;
     }):[];
     if(li.svcId&&svcs.findIndex(function(s){return s.id===li.svcId;})<0){var lsv=services.find(function(s){return s.id===li.svcId;});if(lsv)svcs.unshift(lsv);}
     var svcOpts='<option value="">서비스 선택</option>'+svcs.map(function(s){return '<option value="'+s.id+'">'+s.name+'</option>';}).join('');
@@ -1463,27 +1458,44 @@ function renderSvcs(){
   var html='';
   TOP_CATS.forEach(function(topCat){
     html+='<div class="svc-cat-hdr"><span>'+topCat+'</span></div>';
-    var subcats=[].concat(CAT_STRUCT[topCat]||['기타']);
-    // 실제 데이터에만 있는 중분류도 추가
+    var subcats=(CAT_STRUCT[topCat]||[]).slice();
     services.forEach(function(s){
       if(s.cat===topCat&&s.subcat&&subcats.indexOf(s.subcat)<0)subcats.push(s.subcat);
     });
     subcats.forEach(function(subcat){
-      var svcs=services.filter(function(s){return s.cat===topCat&&s.subcat===subcat;});
-      svcs.sort(function(a,b){return(a.order||0)-(b.order||0);});
-      html+='<div class="svc-sub-hdr"><span>'+subcat+'</span>'+
-        '<button class="btn bxs bp" onclick="addSvcTo(\''+topCat+'\',\''+subcat+'\')">+ 추가</button></div>';
-      svcs.forEach(function(s){
-        html+='<div class="svc-row" data-sid="'+s.id+'">'+
-          '<div class="svc-ord">'+
-            '<button onclick="moveSvc(\''+s.id+'\',\'up\')">▲</button>'+
-            '<button onclick="moveSvc(\''+s.id+'\',\'dn\')">▼</button>'+
-          '</div>'+
-          '<input class="svc-name" placeholder="서비스명" style="font-size:13px">'+
-          '<input class="svc-price" type="number" min="0" step="0.5" style="font-size:13px">'+
-          '<button class="btn bxs br" onclick="delSvc(\''+s.id+'\')">삭제</button>'+
-        '</div>';
-      });
+      var acSubs=AC_SUBTYPES[subcat]||[];
+      if(acSubs.length){
+        // 에어컨처럼 소분류가 있는 경우 → 소분류별로 그룹
+        html+='<div class="svc-sub-hdr" style="background:var(--il)"><span>📦 '+subcat+'</span></div>';
+        acSubs.forEach(function(sub2){
+          var svcs=services.filter(function(s){return s.cat===topCat&&s.subcat===subcat&&s.sub2===sub2;});
+          svcs.sort(function(a,b){return(a.order||0)-(b.order||0);});
+          html+='<div class="svc-sub-hdr" style="padding-left:20px"><span>↳ '+sub2+'</span>'+
+            '<button class="btn bxs bp" onclick="addSvcTo(\''+topCat+'\',\''+subcat+'\',\''+sub2+'\')">+ 추가</button></div>';
+          svcs.forEach(function(s){
+            html+='<div class="svc-row" data-sid="'+s.id+'" style="padding-left:20px">'+
+              '<div class="svc-ord"><button onclick="moveSvc(\''+s.id+'\',\'up\')">▲</button><button onclick="moveSvc(\''+s.id+'\',\'dn\')">▼</button></div>'+
+              '<input class="svc-name" placeholder="서비스명" style="font-size:13px">'+
+              '<input class="svc-price" type="number" min="0" step="0.5" style="font-size:13px">'+
+              '<button class="btn bxs br" onclick="delSvc(\''+s.id+'\')">삭제</button>'+
+            '</div>';
+          });
+        });
+      }else{
+        // 일반 중분류
+        var svcs=services.filter(function(s){return s.cat===topCat&&s.subcat===subcat&&!s.sub2;});
+        svcs.sort(function(a,b){return(a.order||0)-(b.order||0);});
+        html+='<div class="svc-sub-hdr"><span>'+subcat+'</span>'+
+          '<button class="btn bxs bp" onclick="addSvcTo(\''+topCat+'\',\''+subcat+'\')">+ 추가</button></div>';
+        svcs.forEach(function(s){
+          html+='<div class="svc-row" data-sid="'+s.id+'">'+
+            '<div class="svc-ord"><button onclick="moveSvc(\''+s.id+'\',\'up\')">▲</button><button onclick="moveSvc(\''+s.id+'\',\'dn\')">▼</button></div>'+
+            '<input class="svc-name" placeholder="서비스명" style="font-size:13px">'+
+            '<input class="svc-price" type="number" min="0" step="0.5" style="font-size:13px">'+
+            '<button class="btn bxs br" onclick="delSvc(\''+s.id+'\')">삭제</button>'+
+          '</div>';
+        });
+      }
     });
   });
   el.innerHTML=html;
@@ -1503,10 +1515,11 @@ function saveSvcFld(id,f,v){
   if(s._docId&&DB)DB.collection('services').doc(s._docId).update({[f]:s[f]}).catch(function(){});
   showToast('저장됨 ✓');
 }
-function addSvcTo(cat,subcat){
+function addSvcTo(cat,subcat,sub2){
   if(!DB){showToast('Firebase 연결 안됨');return;}
   var maxO=services.reduce(function(m,s){return Math.max(m,s.order||0);},0);
   var ns={id:'s'+Date.now(),cat:cat,subcat:subcat,name:'새 서비스',price:0,unit:'식',order:maxO+1};
+  if(sub2)ns.sub2=sub2;
   DB.collection('services').add(ns).then(function(ref){
     ns._docId=ref.id;services.push(ns);
     localStorage.setItem(LSVC,JSON.stringify(services));
