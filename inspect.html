@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HHC 에어컨 기술점검보고서</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:#f0f2f8;color:#1a1a2e}
+
+/* 페이지 네비게이션 */
+.pg-nav{position:sticky;top:0;z-index:100;background:#fff;border-bottom:1px solid #e0e0e8;display:flex;overflow-x:auto}
+.pg-tab{flex:1;min-width:80px;padding:10px 8px;text-align:center;font-size:11px;font-weight:500;color:#8a8a9a;border-bottom:3px solid transparent;cursor:pointer;white-space:nowrap;transition:all .2s}
+.pg-tab.on{color:#0F1C3F;border-bottom-color:#0D9488}
+.pg-tab.always{color:#1e40af}
+.pg-tab.always.on{border-bottom-color:#1e40af}
+
+/* 페이지 */
+.page{display:none}.page.on{display:block}
+.main{max-width:680px;margin:0 auto;padding:0 0 40px}
+
+/* 1페이지 헤더 */
+.rpt-hdr{background:linear-gradient(135deg,#0F1C3F 0%,#1a3a6b 100%);padding:22px}
+.rpt-hdr-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
+.rpt-logo-row{display:flex;align-items:center;gap:10px}
+.rpt-logo{width:36px;height:36px;background:#0D9488;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
+.rpt-title-en{font-size:13px;font-weight:700;color:#fff;letter-spacing:.4px}
+.rpt-title-ko{font-size:10px;color:rgba(255,255,255,.6);margin-top:2px}
+.rpt-num-label{font-size:9px;color:rgba(255,255,255,.5);text-align:right}
+.rpt-num-val{font-size:11px;font-weight:600;font-family:monospace;color:#4FC3B7;text-align:right}
+.rpt-info-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.rpt-info-item{background:rgba(255,255,255,.08);border-radius:6px;padding:7px 9px}
+.rpt-info-label{font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.rpt-info-val{font-size:12px;font-weight:500;color:#fff}
+
+/* 섹션 */
+.sec{padding:14px 16px;border-bottom:1px solid #f0f0f0;background:#fff}
+.sec:last-child{border-bottom:none}
+.sec-title{display:flex;align-items:center;gap:7px;margin-bottom:10px}
+.sec-icon{width:22px;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0}
+.sec-label{font-size:13px;font-weight:600;color:#0F1C3F}
+.sec-en{font-size:10px;color:#8a8a9a;margin-left:3px}
+
+/* 종합결과 테이블 */
+.res-tbl{border:0.5px solid #e8e8f0;border-radius:8px;overflow:hidden}
+.res-hdr{display:grid;grid-template-columns:1fr 110px 54px;background:#0F1C3F;padding:7px 12px;font-size:10px;font-weight:600;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.04em}
+.res-row{display:grid;grid-template-columns:1fr 110px 54px;align-items:center;padding:8px 12px;border-top:0.5px solid #f0f0f0;font-size:12px}
+.res-name{font-weight:500}
+.res-pill{font-size:11px;padding:3px 9px;border-radius:20px;font-weight:500;text-align:center}
+.pill-ok{background:#e8f8f0;color:#0a7a4a}
+.pill-w{background:#fff4e0;color:#b36000}
+.pill-b{background:#fde8e8;color:#c0392b}
+.risk-row{display:flex;align-items:center;gap:5px;justify-content:center}
+.risk-dot{width:12px;height:12px;border-radius:50%}
+.rd-g{background:#2ecc71}.rd-o{background:#e67e22}.rd-r{background:#e74c3c}
+
+/* 냉방검사 측정값 */
+.cool-unit-card{border:0.5px solid #e8e8f0;border-radius:8px;overflow:hidden;margin-bottom:8px}
+.cuc-hdr{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:0.5px solid #f0f0f0}
+.cuc-num{width:22px;height:22px;border-radius:50%;background:#0F1C3F;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.cuc-num.warn{background:#e67e22}
+.cuc-body{padding:10px 12px}
+.mv-grid{display:grid;gap:6px}
+.mv3{grid-template-columns:repeat(3,1fr)}
+.mvb{background:#f8f9fc;border-radius:5px;padding:7px 9px;text-align:center;border-left:3px solid #0D9488}
+.mvb-w{border-left-color:#e67e22;background:#fff4e0}
+.mvb-b{border-left-color:#e74c3c;background:#fde8e8}
+.mml{font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+.mmv{font-size:13px;font-weight:600;color:#0F1C3F}
+.mmu{font-size:9px;color:#8a8a9a;margin-top:1px}
+
+/* 종합평가 */
+.eval-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.ev{border-radius:8px;padding:10px 6px;text-align:center;border:1.5px solid #e8e8f0;font-size:10px;font-weight:500;line-height:1.5;opacity:.5}
+.ev.sel{opacity:1;box-shadow:0 0 0 2.5px currentColor}
+.ev-g{background:#e8f8f0;color:#0a7a4a;border-color:#2ecc71}
+.ev-y{background:#fffae0;color:#856600;border-color:#f1c40f}
+.ev-o{background:#fff4e0;color:#b36000;border-color:#e67e22}
+.ev-r{background:#fde8e8;color:#c0392b;border-color:#e74c3c}
+
+/* 최종의견 */
+.final-box{background:linear-gradient(135deg,#f0f7ff,#e8f4ff);border:0.5px solid #b0cdf0;border-radius:8px;padding:13px}
+.final-title{font-size:11px;font-weight:600;color:#1e40af;margin-bottom:6px}
+.final-text{font-size:12px;color:#1a2a4a;line-height:1.8}
+
+/* 서명/푸터 */
+.rpt-footer{background:#0F1C3F;padding:13px 16px;display:flex;align-items:center;justify-content:space-between}
+.footer-co{font-size:10px;color:rgba(255,255,255,.6);line-height:1.7}
+.sign-area{text-align:right}
+.sign-line{width:90px;height:1px;background:rgba(255,255,255,.3);margin-bottom:4px;margin-left:auto}
+.sign-name{font-size:10px;color:rgba(255,255,255,.7)}
+
+/* 사진 페이지 */
+.photo-page{background:#fff}
+.photo-page-hdr{padding:16px 16px 10px;border-bottom:0.5px solid #f0f0f0}
+.photo-page-title{font-size:14px;font-weight:600;color:#0F1C3F;display:flex;align-items:center;gap:7px}
+.photo-page-sub{font-size:11px;color:#8a8a9a;margin-top:2px}
+
+/* 냉방검사 사진 */
+.cool-photo-sec{padding:12px 16px;border-bottom:0.5px solid #f0f0f0}
+.cps-hdr{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.cps-num{width:22px;height:22px;border-radius:50%;background:#0F1C3F;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.cps-num.warn{background:#e67e22}
+.cps-loc{font-size:10px;color:#6b7280}
+.cps-badge{font-size:10px;padding:2px 7px;border-radius:10px;font-weight:500;margin-left:auto}
+
+/* 이름표 포함 사진 */
+.named-ph{display:flex;gap:0;border:0.5px solid #dde1ee;border-radius:7px;overflow:hidden;margin-bottom:6px}
+.named-ph-label{background:#0F1C3F;color:#fff;font-size:9px;font-weight:600;writing-mode:vertical-rl;padding:6px 5px;display:flex;align-items:center;justify-content:center;min-width:22px;flex-shrink:0;letter-spacing:.04em}
+.named-ph-img{flex:1;min-height:120px;object-fit:cover;display:block}
+.named-ph-placeholder{flex:1;min-height:80px;background:#f4f6fb;display:flex;align-items:center;justify-content:center;font-size:28px}
+
+/* 사진 그리드 */
+.photo-grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:12px 16px}
+.photo-grid-3 img,.photo-grid-3 .photo-placeholder{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:7px;background:#f4f6fb;display:flex;align-items:center;justify-content:center;font-size:24px}
+
+/* PDF 버튼 */
+.btn-pdf{position:fixed;bottom:20px;right:16px;padding:12px 20px;background:#0F1C3F;color:#fff;border:none;border-radius:30px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2);display:flex;align-items:center;gap:7px;z-index:200}
+
+/* 조건부 표시용 */
+.hidden{display:none}
+.divider-light{height:1px;background:#f0f0f0;margin:0 16px}
+</style>
+</head>
+<body>
+
+<!-- 페이지 탭 -->
+<div class="pg-nav" id="pg-nav">
+  <div class="pg-tab always on" data-page="p1">📋<br>본문</div>
+  <div class="pg-tab always" data-page="p2">🌡️<br>냉방검사</div>
+  <div class="pg-tab" data-page="p3" id="tab-p3">📸<br>작업과정</div>
+  <div class="pg-tab" data-page="p4" id="tab-p4">🧹<br>청소</div>
+  <div class="pg-tab" data-page="p5" id="tab-p5">🔧<br>점검항목</div>
+</div>
+
+<div class="main">
+
+<!-- ━━━━━━━━━━━━ 1페이지: 보고서 본문 ━━━━━━━━━━━━ -->
+<div class="page on" id="p1">
+
+  <div class="rpt-hdr">
+    <div class="rpt-hdr-top">
+      <div class="rpt-logo-row">
+        <div class="rpt-logo">HHC</div>
+        <div>
+          <div class="rpt-title-en">AIR CONDITIONING TECHNICAL INSPECTION REPORT</div>
+          <div class="rpt-title-ko">에어컨 기술점검보고서</div>
+        </div>
+      </div>
+      <div>
+        <div class="rpt-num-label">Report No.</div>
+        <div class="rpt-num-val" id="report-num">HHC-INS-—</div>
+      </div>
+    </div>
+    <div class="rpt-info-grid">
+      <div class="rpt-info-item"><div class="rpt-info-label">고객 / Client</div><div class="rpt-info-val" id="r-client">—</div></div>
+      <div class="rpt-info-item"><div class="rpt-info-label">점검일 / Date</div><div class="rpt-info-val" id="r-date">—</div></div>
+      <div class="rpt-info-item"><div class="rpt-info-label">주소 / Location</div><div class="rpt-info-val" id="r-addr">—</div></div>
+      <div class="rpt-info-item"><div class="rpt-info-label">엔지니어</div><div class="rpt-info-val" id="r-eng">—</div></div>
+      <div class="rpt-info-item"><div class="rpt-info-label">점검대수</div><div class="rpt-info-val" id="r-units">—</div></div>
+      <div class="rpt-info-item"><div class="rpt-info-label">다음 점검 권장</div><div class="rpt-info-val" id="r-next">—</div></div>
+    </div>
+  </div>
+
+  <!-- 종합결과 -->
+  <div class="sec">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:#eef2ff">📋</div>
+      <span class="sec-label">종합 점검 결과</span><span class="sec-en">Overall Summary</span>
+    </div>
+    <div class="res-tbl" id="res-tbl">
+      <div class="res-hdr"><span>점검 항목</span><span>상태</span><span>위험도</span></div>
+      <div id="res-rows"></div>
+    </div>
+  </div>
+
+  <!-- 냉방검사 측정값 -->
+  <div class="sec">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:#eff6ff">🌡️</div>
+      <span class="sec-label">냉방검사 측정값 (TDM)</span><span class="sec-en">Cooling Performance</span>
+    </div>
+    <div style="background:#f0f7ff;border:0.5px solid #bdd7f5;border-radius:6px;padding:8px 10px;font-size:10px;color:#1e40af;margin-bottom:10px">
+      기준: 흡입(A) − 토출(B) ≥15°C 양호 · 12~15°C 정상범위 · &lt;12°C 저하
+    </div>
+    <div id="cool-results"></div>
+  </div>
+
+  <!-- 실외기 (값 있을 때만) -->
+  <div class="sec" id="ou-sec">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:#f0fdfb">🔌</div>
+      <span class="sec-label">실외기 점검</span><span class="sec-en">Outdoor Unit</span>
+    </div>
+    <div class="mv-grid mv3" id="ou-values"></div>
+    <div id="ou-note-box" style="margin-top:8px;font-size:12px;color:#555;line-height:1.7"></div>
+  </div>
+
+  <!-- 누설검사 -->
+  <div class="sec">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:#f0fdfb">🔍</div>
+      <span class="sec-label">누설검사</span><span class="sec-en">Refrigerant Leak Test</span>
+    </div>
+    <div id="leak-results" style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px"></div>
+  </div>
+
+  <!-- 풍량측정 (값 있을 때만) -->
+  <div class="sec" id="af-sec">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:#fff4e0">💨</div>
+      <span class="sec-label">풍량측정</span><span class="sec-en">Airflow</span>
+    </div>
+    <div class="mv-grid" id="af-values" style="grid-template-columns:repeat(3,1fr)"></div>
+  </div>
+
+  <!-- 추가 점검항목 -->
+  <div id="extra-sec"></div>
+
+  <!-- 종합평가 -->
+  <div class="sec">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:#f0f7ff">⭐</div>
+      <span class="sec-label">종합 평가</span><span class="sec-en">Overall Assessment</span>
+    </div>
+    <div class="eval-grid">
+      <div class="ev ev-g" id="ev-normal">🟢<br>정상<br>Normal</div>
+      <div class="ev ev-y" id="ev-preventive">🟡<br>예방정비<br>권장</div>
+      <div class="ev ev-o" id="ev-repair">🟠<br>수리 권장</div>
+      <div class="ev ev-r" id="ev-urgent">🔴<br>즉시수리<br>필요</div>
+    </div>
+  </div>
+
+  <!-- 최종의견 -->
+  <div class="sec">
+    <div class="sec-title">
+      <div class="sec-icon" style="background:#f0f7ff">📑</div>
+      <span class="sec-label">최종 의견</span><span class="sec-en">Final Assessment</span>
+    </div>
+    <div class="final-box">
+      <div class="final-title">종합 진단 의견</div>
+      <div class="final-text" id="r-opinion">—</div>
+    </div>
+  </div>
+
+  <!-- 푸터/서명 -->
+  <div class="rpt-footer">
+    <div class="footer-co">HAPPY WORKS SERVICES SDN.BHD. (1278908-M)<br>📞 +60172472774</div>
+    <div class="sign-area">
+      <div class="sign-line"></div>
+      <div class="sign-name" id="r-eng-sign">Engineer Signature</div>
+    </div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━ 2페이지: 냉방검사 사진 (항상) ━━━━━━━━━━━━ -->
+<div class="page" id="p2">
+  <div class="photo-page">
+    <div class="photo-page-hdr" style="background:linear-gradient(90deg,#1e40af,#2563eb);padding:14px 16px">
+      <div class="photo-page-title" style="color:#fff">🌡️ 냉방검사 사진</div>
+      <div class="photo-page-sub" style="color:rgba(255,255,255,.7)">Cooling Performance Test Photos · TDM</div>
+    </div>
+    <div id="cool-photos-container" style="padding:12px 16px;display:flex;flex-direction:column;gap:12px"></div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━ 3페이지: 작업과정 사진 ━━━━━━━━━━━━ -->
+<div class="page" id="p3">
+  <div class="photo-page">
+    <div class="photo-page-hdr" style="background:linear-gradient(90deg,#065f46,#047857);padding:14px 16px">
+      <div class="photo-page-title" style="color:#fff">📸 작업과정 사진</div>
+      <div class="photo-page-sub" style="color:rgba(255,255,255,.7)">Service Process Photos</div>
+    </div>
+    <div class="photo-grid-3" id="work-photos-grid"></div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━ 4페이지: 청소 사진 ━━━━━━━━━━━━ -->
+<div class="page" id="p4">
+  <div class="photo-page">
+    <div class="photo-page-hdr" style="background:linear-gradient(90deg,#9a3412,#c2410c);padding:14px 16px">
+      <div class="photo-page-title" style="color:#fff">🧹 청소 사진</div>
+      <div class="photo-page-sub" style="color:rgba(255,255,255,.7)">Cleaning Photos</div>
+    </div>
+    <div class="photo-grid-3" id="clean-photos-grid"></div>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━ 5페이지: 점검항목별 사진 ━━━━━━━━━━━━ -->
+<div class="page" id="p5">
+  <div class="photo-page">
+    <div class="photo-page-hdr" style="background:linear-gradient(90deg,#4c1d95,#6d28d9);padding:14px 16px">
+      <div class="photo-page-title" style="color:#fff">🔧 점검항목별 사진</div>
+      <div class="photo-page-sub" style="color:rgba(255,255,255,.7)">Inspection Item Photos</div>
+    </div>
+
+    <!-- 실외기 명판/압력/전류 -->
+    <div style="padding:12px 16px;border-bottom:0.5px solid #f0f0f0">
+      <div style="font-size:12px;font-weight:600;color:#0F1C3F;margin-bottom:8px">🔌 실외기 — 명판 · 냉매보유압력 · 정격전류</div>
+      <div id="outdoor-named-photos" style="display:flex;flex-direction:column;gap:6px">
+        <div class="named-ph" id="np-nameplate-wrap">
+          <div class="named-ph-label">명판 사진</div>
+          <div class="named-ph-placeholder" id="np-nameplate-ph">📷</div>
+        </div>
+        <div class="named-ph" id="np-pressure-wrap">
+          <div class="named-ph-label">냉매보유압력</div>
+          <div class="named-ph-placeholder" id="np-pressure-ph">📷</div>
+        </div>
+        <div class="named-ph" id="np-current-wrap">
+          <div class="named-ph-label">정격전류</div>
+          <div class="named-ph-placeholder" id="np-current-ph">📷</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 누설검사 사진 -->
+    <div style="padding:12px 16px;border-bottom:0.5px solid #f0f0f0" id="leak-photos-sec">
+      <div style="font-size:12px;font-weight:600;color:#0F1C3F;margin-bottom:8px">🔍 누설검사 사진</div>
+      <div class="photo-grid-3" id="leak-photos-grid"></div>
+    </div>
+
+    <!-- 추가항목 사진 -->
+    <div id="extra-photos-sec" style="padding:12px 16px"></div>
+
+    <!-- 풍량측정 사진 -->
+    <div style="padding:12px 16px;border-bottom:0.5px solid #f0f0f0" id="af-photos-sec">
+      <div style="font-size:12px;font-weight:600;color:#0F1C3F;margin-bottom:8px">💨 풍량측정 사진</div>
+      <div class="photo-grid-3" id="af-photos-grid"></div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<button class="btn-pdf" onclick="window.print()">⬇️ PDF 저장</button>
+
+<script>
+// ── 탭 전환
+document.querySelectorAll('.pg-tab').forEach(function(tab){
+  tab.addEventListener('click',function(){
+    document.querySelectorAll('.pg-tab').forEach(function(t){t.classList.remove('on');});
+    document.querySelectorAll('.page').forEach(function(p){p.classList.remove('on');});
+    tab.classList.add('on');
+    document.getElementById(tab.dataset.page).classList.add('on');
+  });
+});
+
+// ── Firebase에서 데이터 로드
+var FB_CFG={
+  apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
+  authDomain:"happywork-packageplan.firebaseapp.com",
+  projectId:"happywork-packageplan",
+  storageBucket:"happywork-packageplan.firebasestorage.app",
+  messagingSenderId:"101289103022",
+  appId:"1:101289103022:web:d81aca7f3747dd26df673f"
+};
+
+// URL 파라미터에서 ID 읽기
+var params=new URLSearchParams(location.search);
+var reportId=params.get('id');
+
+function renderReport(data){
+  if(!data)return;
+  // 기본정보
+  document.getElementById('r-client').textContent=data.client||'—';
+  document.getElementById('r-date').textContent=data.date||'—';
+  document.getElementById('r-addr').textContent=data.addr||'—';
+  document.getElementById('r-eng').textContent=data.engineer||'—';
+  document.getElementById('r-eng-sign').textContent=(data.engineer||'Engineer')+' / Signature';
+  document.getElementById('r-units').textContent=data.units||'—';
+  document.getElementById('r-next').textContent=data.next||'—';
+  document.getElementById('report-num').textContent='HHC-INS-'+(data.date||'').replace(/-/g,'').slice(2)+'-'+String(Math.floor(Math.random()*900)+100);
+  document.getElementById('r-opinion').textContent=data.opinion||'—';
+
+  // 종합평가
+  if(data.eval){var ev=document.getElementById('ev-'+data.eval);if(ev)ev.classList.add('sel');}
+
+  // 종합결과
+  var rows=document.getElementById('res-rows');
+  (data.results||[]).forEach(function(r){
+    var statusMap={ok:'✅ 정상',warn:'⚠️ 주의',bad:'❌ 불량'};
+    var pillMap={ok:'pill-ok',warn:'pill-w',bad:'pill-b'};
+    var riskDotMap={g:'rd-g',o:'rd-o',r:'rd-r'};
+    var div=document.createElement('div');
+    div.className='res-row';
+    div.innerHTML='<span class="res-name">'+r.name+'</span>'+
+      '<span class="res-pill '+(pillMap[r.status]||'')+'">'+( statusMap[r.status]||r.status)+'</span>'+
+      '<div class="risk-row"><div class="risk-dot '+(riskDotMap[r.risk]||'rd-g')+'"></div></div>';
+    rows.appendChild(div);
+  });
+
+  // 냉방검사 측정값
+  var cr=document.getElementById('cool-results');
+  (data.coolUnits||[]).forEach(function(u){
+    var diff=(parseFloat(u.a||0)-parseFloat(u.b||0)).toFixed(1);
+    var isWarn=parseFloat(diff)<15;
+    var card=document.createElement('div');
+    card.className='cool-unit-card';
+    card.innerHTML='<div class="cuc-hdr" style="'+(isWarn?'background:#fff4e0':'')+'">'+
+      '<div class="cuc-num '+(isWarn?'warn':'')+'">'+u.label+'</div>'+
+      '<div style="flex:1;font-size:12px;font-weight:500">에어컨 '+u.label+' 유닛'+(u.loc?' — '+u.loc:'')+'</div>'+
+      '<span class="res-pill '+(isWarn?'pill-w':'pill-ok')+'">'+(isWarn?'저하':'양호')+'</span>'+
+      '</div>'+
+      '<div class="cuc-body">'+
+        '<div class="mv-grid mv3">'+
+          '<div class="mvb"><div class="mml">흡입온도 A</div><div class="mmv">'+u.a+'°C</div></div>'+
+          '<div class="mvb"><div class="mml">토출온도 B</div><div class="mmv">'+u.b+'°C</div></div>'+
+          '<div class="mvb '+(isWarn?'mvb-b':'')+'"><div class="mml">온도차 A-B</div><div class="mmv" style="color:'+(isWarn?'#c0392b':'#0a7a4a')+'">'+diff+'°C</div><div class="mmu" style="color:'+(isWarn?'#c0392b':'#0a7a4a')+'">'+(isWarn?'⚠️ 저하':'✓ 양호')+'</div></div>'+
+        '</div>'+
+      '</div>';
+    cr.appendChild(card);
+  });
+
+  // 실외기 (값 있을 때)
+  var ouSec=document.getElementById('ou-sec');
+  var ouVals=document.getElementById('ou-values');
+  var ouFields=[{key:'current',label:'정격전류',unit:'A'},{key:'pressure',label:'가스압력',unit:'PSI'},{key:'temp',label:'온도 H/L',unit:'°C'}];
+  var hasOu=false;
+  ouFields.forEach(function(f){
+    if(data['ou_'+f.key]){
+      hasOu=true;
+      var b=document.createElement('div');
+      b.className='mvb';
+      b.innerHTML='<div class="mml">'+f.label+'</div><div class="mmv">'+data['ou_'+f.key]+'</div><div class="mmu">'+f.unit+'</div>';
+      ouVals.appendChild(b);
+    }
+  });
+  if(!hasOu)ouSec.style.display='none';
+  if(data.ou_note)document.getElementById('ou-note-box').textContent=data.ou_note;
+
+  // 누설검사
+  var lkRes=document.getElementById('leak-results');
+  (data.leakUnits||[]).forEach(function(u){
+    var isOk=u.status==='ok';
+    var b=document.createElement('div');
+    b.style='border-radius:6px;padding:7px;text-align:center;border:0.5px solid;background:'+(isOk?'#e8f8f0':'#fde8e8')+';border-color:'+(isOk?'#9fe1cb':'#fca5a5')+';color:'+(isOk?'#0a7a4a':'#c0392b');
+    b.innerHTML='<div style="font-size:10px;font-weight:600">'+u.label+'</div><div style="font-size:11px;margin-top:2px">'+(isOk?'이상없음':'누설감지')+'</div>';
+    lkRes.appendChild(b);
+  });
+
+  // 풍량측정 (값 있을 때)
+  var afSec=document.getElementById('af-sec');
+  var afVals=document.getElementById('af-values');
+  var hasAf=false;
+  (data.airflowUnits||[]).forEach(function(u){
+    if(u.speed){
+      hasAf=true;
+      var ok=parseFloat(u.speed)>=2.5;
+      var b=document.createElement('div');
+      b.className='mvb'+(ok?'':' mvb-b');
+      b.innerHTML='<div class="mml">'+u.label+'</div><div class="mmv" style="color:'+(ok?'#0a7a4a':'#c0392b')+'">'+u.speed+'</div><div class="mmu" style="color:'+(ok?'#0a7a4a':'#c0392b')+'">m/s '+(ok?'✓':'⚠️')+'</div>';
+      afVals.appendChild(b);
+    }
+  });
+  if(!hasAf)afSec.style.display='none';
+
+  // 냉방검사 사진 (2페이지)
+  var cpContainer=document.getElementById('cool-photos-container');
+  (data.coolUnits||[]).forEach(function(u){
+    var isWarn=u.result==='warn';
+    var sec=document.createElement('div');
+    sec.innerHTML='<div class="cps-hdr">'+
+      '<div class="cps-num '+(isWarn?'warn':'')+'">'+u.label+'</div>'+
+      (u.loc?'<span class="cps-loc">📍 '+u.loc+'</span>':'')+
+      '<span class="cps-badge '+(isWarn?'pill-w':'pill-ok')+'">'+(isWarn?'저하':'양호')+'</span>'+
+      '</div>';
+    if(u.photo){
+      var np=document.createElement('div');
+      np.className='named-ph';
+      np.innerHTML='<div class="named-ph-label">'+u.label+'</div><img class="named-ph-img" src="'+u.photo+'">';
+      sec.appendChild(np);
+    }
+    cpContainer.appendChild(sec);
+  });
+
+  // 작업과정 사진 (3페이지)
+  var wg=document.getElementById('work-photos-grid');
+  if(data.workPhotos&&data.workPhotos.length){
+    data.workPhotos.forEach(function(ph){
+      var img=document.createElement('img');
+      img.src=ph;img.style='width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:7px';
+      wg.appendChild(img);
+    });
+    document.getElementById('tab-p3').classList.remove('hidden');
+  }else{document.getElementById('tab-p3').style.display='none';}
+
+  // 청소 사진 (4페이지)
+  var cg=document.getElementById('clean-photos-grid');
+  if(data.cleanPhotos&&data.cleanPhotos.length){
+    data.cleanPhotos.forEach(function(ph){
+      var img=document.createElement('img');
+      img.src=ph;img.style='width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:7px';
+      cg.appendChild(img);
+    });
+  }else{document.getElementById('tab-p4').style.display='none';}
+
+  // 실외기 명판사진 (5페이지)
+  ['nameplate','pressure','current'].forEach(function(key){
+    if(data['photo_'+key]){
+      var el=document.getElementById('np-'+key+'-ph');
+      if(el){el.outerHTML='<img class="named-ph-img" src="'+data['photo_'+key]+'" id="np-'+key+'-ph">';}
+    }
+  });
+
+  // 페이지 5 표시 여부
+  var has5=data.photo_nameplate||data.photo_pressure||data.photo_current||(data.leakPhotos&&data.leakPhotos.length)||(data.afPhotos&&data.afPhotos.length);
+  if(!has5)document.getElementById('tab-p5').style.display='none';
+}
+
+// 샘플 데이터 (실제는 Firebase에서 로드)
+var sampleData={
+  client:'홍길동',date:'2026-06-30',addr:'Kuala Lumpur',engineer:'승학 백',units:'4 Units',next:'3개월 후',
+  opinion:'본 장비는 냉방은 가능하나 에바포레이터 냉각 불균형이 확인되었습니다. 조속한 정비를 권장합니다.',
+  eval:'repair',
+  results:[
+    {name:'냉방성능',status:'warn',risk:'o'},
+    {name:'에바포레이터',status:'warn',risk:'r'},
+    {name:'드레인 배관',status:'bad',risk:'r'},
+    {name:'팬모터',status:'warn',risk:'o'},
+    {name:'냉매',status:'ok',risk:'g'},
+    {name:'실외기',status:'ok',risk:'g'}
+  ],
+  coolUnits:[
+    {label:'A1',a:'28.5',b:'12.3',result:'ok'},
+    {label:'A2',a:'27.8',b:'16.1',result:'warn',loc:'방 1 벽걸이형'}
+  ],
+  ou_current:'6.83',ou_pressure:'145',ou_temp:'30.2/9.5',
+  leakUnits:[
+    {label:'AC 1',status:'ok'},{label:'AC 2',status:'ok'},
+    {label:'AC 3',status:'ok'},{label:'AC 4',status:'ok'}
+  ],
+  airflowUnits:[{label:'AC1',speed:'1.8'},{label:'AC2',speed:'3.2'}]
+};
+
+window.onload=function(){
+  renderReport(sampleData);
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HHC 점검보고서 관리자</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:#f0f2f8;color:#1a1a2e;min-height:100vh}
+.hdr{background:linear-gradient(90deg,#0F1C3F,#1a3060);padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
+.hdr-logo{width:32px;height:32px;background:#0D9488;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.hdr-title{color:#fff;font-size:14px;font-weight:600;flex:1}
+.hdr-fb{display:flex;align-items:center;gap:5px;font-size:11px;color:rgba(255,255,255,.4)}
+.fb-dot{width:7px;height:7px;border-radius:50%;background:#e74c3c}
+.fb-dot.on{background:#2ecc71}
+.main{max-width:680px;margin:0 auto;padding:16px}
+.card{background:#fff;border-radius:12px;overflow:hidden;margin-bottom:14px;border:0.5px solid #e0e0e8}
+.card-hdr{background:#0F1C3F;padding:10px 14px;display:flex;align-items:center;gap:8px}
+.card-hdr-icon{width:22px;height:22px;background:#0D9488;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
+.card-hdr-title{color:#fff;font-size:12px;font-weight:500;flex:1}
+.card-body{padding:14px}
+.fl{font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+.frow{display:grid;gap:8px;margin-bottom:10px}
+.f2{grid-template-columns:1fr 1fr}
+.f3{grid-template-columns:repeat(3,1fr)}
+.flabel{font-size:10px;color:#6b7280;margin-bottom:3px}
+input,select,textarea{width:100%;padding:8px 10px;font-size:13px;border:0.5px solid #dde1ee;border-radius:6px;background:#f8f9fc;color:#1a1a2e;outline:none;font-family:inherit}
+input:focus,select:focus,textarea:focus{border-color:#0D9488;background:#fff}
+textarea{resize:vertical;line-height:1.6}
+
+/* 명판사진 */
+.named-photo{display:flex;gap:0;border:0.5px solid #dde1ee;border-radius:8px;overflow:hidden;margin-bottom:8px}
+.np-label{background:#0F1C3F;color:#fff;font-size:10px;font-weight:600;writing-mode:vertical-rl;text-orientation:mixed;padding:10px 7px;display:flex;align-items:center;justify-content:center;min-width:30px;letter-spacing:.05em;cursor:default}
+.np-body{flex:1;background:#f8f9fc;display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;transition:background .15s}
+.np-body:hover{background:#e8f0fe}
+.np-preview{width:56px;height:56px;border-radius:6px;object-fit:cover;display:none}
+.np-icon{font-size:20px}
+.np-text{display:flex;flex-direction:column;gap:2px}
+.np-main{font-size:12px;font-weight:500;color:#374151}
+.np-sub{font-size:10px;color:#9ca3af}
+.np-del{margin-left:auto;padding:4px 8px;border-radius:4px;background:#fde8e8;color:#c0392b;border:none;font-size:11px;cursor:pointer;display:none}
+
+/* 종합결과 테이블 */
+.rtbl{border:0.5px solid #e8e8f0;border-radius:8px;overflow:hidden}
+.rtbl-hdr{display:grid;grid-template-columns:1fr 110px 60px 30px;background:#f8f9fc;padding:7px 10px;font-size:10px;font-weight:600;color:#8a8a9a;text-transform:uppercase;letter-spacing:.04em;gap:4px}
+.rtbl-row{display:grid;grid-template-columns:1fr 110px 60px 30px;align-items:center;padding:7px 10px;border-top:0.5px solid #f0f0f0;gap:4px}
+.rtbl-row input{font-size:11px;padding:4px 7px}
+.rtbl-row select{font-size:11px;padding:4px 5px}
+.sel-ok{background:#e8f8f0;color:#0a7a4a;border-color:#9fe1cb}
+.sel-w{background:#fff4e0;color:#b36000;border-color:#fcd34d}
+.sel-b{background:#fde8e8;color:#c0392b;border-color:#fca5a5}
+.del-btn{width:24px;height:24px;border-radius:4px;background:#fde8e8;color:#c0392b;border:none;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.add-row{display:flex;align-items:center;gap:6px;font-size:11px;color:#0D9488;padding:8px 10px;cursor:pointer;border-top:0.5px dashed #c0d0e0;transition:background .15s}
+.add-row:hover{background:#f0fdfb}
+
+/* 점검항목 */
+.insp-item{border:0.5px solid #e8e8f0;border-radius:8px;overflow:hidden;margin-bottom:8px}
+.insp-hdr{display:flex;align-items:center;gap:8px;padding:10px 12px;background:#f8f9fc;cursor:pointer;user-select:none}
+.insp-chk{width:18px;height:18px;border-radius:4px;border:0.5px solid #dde1ee;background:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;color:transparent;flex-shrink:0;transition:all .15s}
+.insp-chk.on{background:#0D9488;border-color:#0D9488;color:#fff}
+.insp-name{flex:1;font-size:12px;font-weight:500}
+.insp-badge{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:500}
+.bdg-ok{background:#e8f8f0;color:#0a7a4a}
+.bdg-w{background:#fff4e0;color:#b36000}
+.bdg-b{background:#fde8e8;color:#c0392b}
+.bdg-n{background:#f0f0f0;color:#9ca3af}
+.insp-body{padding:12px;border-top:0.5px solid #f0f0f0;display:none;flex-direction:column;gap:10px}
+.insp-body.open{display:flex}
+
+/* 냉방검사 유닛 */
+.cool-unit{border:0.5px solid #e8e8f0;border-radius:8px;overflow:hidden;margin-bottom:8px}
+.cu-hdr{display:flex;align-items:center;gap:8px;padding:9px 12px;background:#f8f9fc;border-bottom:0.5px solid #f0f0f0}
+.cu-num{width:22px;height:22px;border-radius:50%;background:#0F1C3F;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.cu-body{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.mv-grid{display:grid;gap:6px}
+.mv3{grid-template-columns:repeat(3,1fr)}
+.mv2{grid-template-columns:1fr 1fr}
+.mvb{background:#f8f9fc;border:0.5px solid #dde1ee;border-radius:6px;padding:8px;text-align:center}
+.mvl{font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+.mvv{font-size:13px;font-weight:600;color:#0F1C3F}
+.mvu{font-size:9px;color:#8a8a9a;margin-top:1px}
+.mvb input{font-size:13px;padding:2px 4px;border:none;border-bottom:1px solid #dde1ee;background:transparent;text-align:center;font-weight:600;color:#0F1C3F;width:100%}
+
+/* 결과 선택 버튼 */
+.result-sel{display:flex;gap:6px}
+.rsel-btn{flex:1;padding:8px;border-radius:6px;border:0.5px solid #dde1ee;background:#f8f9fc;font-size:12px;font-weight:500;cursor:pointer;text-align:center;transition:all .15s}
+.rsel-btn:hover{background:#e8f0fe}
+.rsel-btn.ok{border-color:#2ecc71;background:#e8f8f0;color:#0a7a4a}
+.rsel-btn.warn{border-color:#e67e22;background:#fff4e0;color:#b36000}
+
+/* 위치 입력 */
+.loc-box{display:flex;align-items:center;gap:8px;background:#fff4e0;border:0.5px solid #fcd34d;border-radius:6px;padding:8px 10px;display:none}
+.loc-box.show{display:flex}
+.loc-label{font-size:11px;font-weight:600;color:#b36000;white-space:nowrap}
+.loc-box input{flex:1;background:transparent;border:none;border-bottom:1px solid #e67e22;font-size:12px;color:#1a1a2e;padding:2px 0}
+
+/* 기준 안내 */
+.ref-box{background:#f0f7ff;border:0.5px solid #bdd7f5;border-radius:6px;padding:8px 10px;font-size:10px;color:#1e40af;line-height:1.6}
+.ref-title{font-weight:600;font-size:11px;margin-bottom:3px}
+
+/* 사진 업로드 */
+.photo-upload-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ph-item{display:flex;border-radius:6px;overflow:hidden;border:0.5px solid #dde1ee}
+.ph-label-v{background:#0F1C3F;color:#fff;font-size:9px;font-weight:600;writing-mode:vertical-rl;padding:5px 4px;display:flex;align-items:center;justify-content:center;min-width:20px}
+.ph-area{width:60px;height:60px;background:#e8f0fe;display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;position:relative;overflow:hidden}
+.ph-area img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.ph-area input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.ph-add{width:60px;height:60px;border:1.5px dashed #c0c8e0;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:18px;cursor:pointer;color:#9ca3af;gap:2px;position:relative}
+.ph-add input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+.ph-add span{font-size:9px}
+
+/* 원인분석 */
+.cause-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.cause-item{display:flex;align-items:center;gap:6px;font-size:11px;color:#555;cursor:pointer;padding:4px}
+.cause-chk{width:14px;height:14px;border-radius:3px;border:1.5px solid #c0c8e0;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px;color:transparent;transition:all .15s}
+.cause-chk.on{background:#0D9488;border-color:#0D9488;color:#fff}
+
+/* 저장 토글 */
+.stog{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:#f0fdfb;border:0.5px solid #9fe1cb;border-radius:5px;margin-top:4px}
+.stog-label{font-size:10px;color:#0a7a4a;font-weight:500}
+.stog-sw{width:32px;height:18px;border-radius:9px;background:#dde1ee;display:flex;align-items:center;padding:2px;cursor:pointer;transition:background .2s;flex-shrink:0}
+.stog-sw.on{background:#0D9488}
+.stog-sw.on .stog-dot{margin-left:auto}
+.stog-dot{width:14px;height:14px;background:#fff;border-radius:50%;transition:margin .2s}
+
+/* 종합평가 */
+.eval-row{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.ev-btn{border-radius:8px;padding:10px 6px;text-align:center;border:1.5px solid #e8e8f0;cursor:pointer;font-size:10px;font-weight:500;line-height:1.5;transition:all .15s}
+.ev-btn.sel{box-shadow:0 0 0 2.5px currentColor}
+.ev-g{background:#e8f8f0;color:#0a7a4a;border-color:#2ecc71}
+.ev-y{background:#fffae0;color:#856600;border-color:#f1c40f}
+.ev-o{background:#fff4e0;color:#b36000;border-color:#e67e22}
+.ev-r{background:#fde8e8;color:#c0392b;border-color:#e74c3c}
+
+/* 버튼 */
+.btn-add{display:flex;align-items:center;gap:6px;width:100%;padding:9px;border-radius:8px;border:1.5px dashed #0D9488;background:#f0fdfb;color:#0D9488;font-size:12px;cursor:pointer;justify-content:center;transition:background .15s}
+.btn-add:hover{background:#e0faf5}
+.btn-save{width:100%;padding:14px;background:#0F1C3F;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s}
+.btn-save:hover{background:#1a3060}
+.divider{height:1px;background:#f0f0f0;margin:4px 0}
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#0F1C3F;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div class="hdr-logo">HHC</div>
+  <div class="hdr-title">에어컨 기술점검보고서 작성</div>
+  <div class="hdr-fb"><div class="fb-dot" id="fb-dot"></div>Firebase</div>
+</div>
+<div class="main">
+
+<!-- 기본정보 -->
+<div class="card">
+  <div class="card-hdr"><div class="card-hdr-icon">📋</div><div class="card-hdr-title">기본 정보</div></div>
+  <div class="card-body">
+    <div class="frow f2">
+      <div><div class="flabel">고객명 / 상호</div><input id="f-client" placeholder="홍길동"></div>
+      <div><div class="flabel">점검일</div><input id="f-date" type="date"></div>
+      <div><div class="flabel">주소</div><input id="f-addr" placeholder="Kuala Lumpur"></div>
+      <div><div class="flabel">엔지니어</div><input id="f-eng" placeholder="승학 백"></div>
+      <div><div class="flabel">점검대수</div><input id="f-units" placeholder="4 Units"></div>
+      <div><div class="flabel">다음 점검 권장</div><input id="f-next" placeholder="3개월 후"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 실외기 명판/압력/전류 사진 -->
+<div class="card">
+  <div class="card-hdr"><div class="card-hdr-icon">🔌</div><div class="card-hdr-title">실외기 — 명판 · 냉매보유압력 · 정격전류 사진</div></div>
+  <div class="card-body">
+    <div class="named-photo" onclick="triggerPhoto('outdoor-nameplate')">
+      <div class="np-label">명판 사진</div>
+      <div class="np-body" id="np-body-nameplate">
+        <span class="np-icon">📷</span>
+        <div class="np-text"><div class="np-main">명판 사진 업로드</div><div class="np-sub">장비 스펙 확인용</div></div>
+        <button class="np-del" id="np-del-nameplate" onclick="event.stopPropagation();delPhoto('outdoor-nameplate')">삭제</button>
+      </div>
+      <input type="file" accept="image/*" id="outdoor-nameplate" style="display:none" onchange="previewNamedPhoto(this,'nameplate')">
+    </div>
+    <div class="named-photo" onclick="triggerPhoto('outdoor-pressure')">
+      <div class="np-label">냉매보유압력</div>
+      <div class="np-body" id="np-body-pressure">
+        <span class="np-icon">📷</span>
+        <div class="np-text"><div class="np-main">압력계 사진 업로드</div><div class="np-sub">가스 압력 측정 장면</div></div>
+        <button class="np-del" id="np-del-pressure" onclick="event.stopPropagation();delPhoto('outdoor-pressure')">삭제</button>
+      </div>
+      <input type="file" accept="image/*" id="outdoor-pressure" style="display:none" onchange="previewNamedPhoto(this,'pressure')">
+    </div>
+    <div class="named-photo" onclick="triggerPhoto('outdoor-current')">
+      <div class="np-label">정격전류</div>
+      <div class="np-body" id="np-body-current">
+        <span class="np-icon">📷</span>
+        <div class="np-text"><div class="np-main">전류계 사진 업로드</div><div class="np-sub">전류 측정 장면</div></div>
+        <button class="np-del" id="np-del-current" onclick="event.stopPropagation();delPhoto('outdoor-current')">삭제</button>
+      </div>
+      <input type="file" accept="image/*" id="outdoor-current" style="display:none" onchange="previewNamedPhoto(this,'current')">
+    </div>
+  </div>
+</div>
+
+<!-- 종합결과 -->
+<div class="card">
+  <div class="card-hdr"><div class="card-hdr-icon">📊</div><div class="card-hdr-title">종합 점검 결과 — 항목 추가 · 직접 입력 · 삭제</div></div>
+  <div class="card-body" style="padding:0">
+    <div class="rtbl">
+      <div class="rtbl-hdr"><span>점검 항목</span><span>상태</span><span>위험도</span><span></span></div>
+      <div id="result-rows"></div>
+      <div class="add-row" onclick="addResultRow()">+ 점검 항목 추가</div>
+    </div>
+  </div>
+</div>
+
+<!-- 냉방검사 -->
+<div class="card">
+  <div class="card-hdr"><div class="card-hdr-icon">🌡️</div><div class="card-hdr-title">냉방검사 (TDM) — 유닛별 측정</div></div>
+  <div class="card-body">
+    <div class="ref-box">
+      <div class="ref-title">기준 / Standard — 흡입온도(A) − 토출온도(B)</div>
+      ≥15°C 양호 &nbsp;|&nbsp; 12~15°C 정상범위 &nbsp;|&nbsp; 10~12°C 저하 의심 &nbsp;|&nbsp; ≤10°C 점검 필요
+    </div>
+    <div id="cool-units" style="margin-top:10px"></div>
+    <button class="btn-add" onclick="addCoolUnit()">+ 유닛 추가 (A3, A4...)</button>
+  </div>
+</div>
+
+<!-- 실외기 측정값 -->
+<div class="card">
+  <div class="card-hdr"><div class="card-hdr-icon">🔌</div><div class="card-hdr-title">실외기 점검 측정값 — 입력된 값만 보고서 표시</div></div>
+  <div class="card-body">
+    <div class="frow f3">
+      <div><div class="flabel">정격전류 (A)</div><input id="ou-current" placeholder="예: 6.83"></div>
+      <div><div class="flabel">가스압력 (PSI)</div><input id="ou-pressure" placeholder="예: 145"></div>
+      <div><div class="flabel">온도 고압/저압 (°C)</div><input id="ou-temp" placeholder="예: 30.2/9.5"></div>
+    </div>
+    <div class="frow" style="margin-top:0">
+      <div><div class="flabel">기타 상태 / 특이사항</div><textarea id="ou-note" rows="2" placeholder="상태 체크 또는 특이사항"></textarea></div>
+    </div>
+    <div style="margin-top:8px">
+      <div class="flabel" style="margin-bottom:5px">실외기 사진</div>
+      <div class="photo-upload-row" id="ou-photos">
+        <div class="ph-add"><input type="file" accept="image/*" multiple onchange="addPhotos(this,'ou-photos')">📷<span>추가</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 누설검사 -->
+<div class="card">
+  <div class="card-hdr"><div class="card-hdr-icon">🔍</div><div class="card-hdr-title">누설검사 (Refrigerant Leak Test)</div></div>
+  <div class="card-body">
+    <div class="ref-box" style="margin-bottom:10px">
+      전체 분해 후 배관 연결부 재조립 완료 → 냉매 누설 여부 검지기로 확인
+    </div>
+    <div id="leak-units"></div>
+    <button class="btn-add" onclick="addLeakUnit()" style="margin-bottom:10px">+ 유닛 추가</button>
+    <div><div class="flabel" style="margin-bottom:5px">누설검사 사진</div>
+    <div class="photo-upload-row" id="leak-photos">
+      <div class="ph-add"><input type="file" accept="image/*" multiple onchange="addPhotos(this,'leak-photos')">📷<span>추가</span></div>
+    </div></div>
+  </div>
+</div>
+
+<!-- 풍량측정 -->
+<div class="card">
+  <div class="card-hdr"><div class="card-hdr-icon">💨</div><div class="card-hdr-title">풍량측정 — 입력된 값만 보고서 표시</div></div>
+  <div class="card-body">
+    <div class="ref-box" style="margin-bottom:10px">
+      <div class="ref-title">기준 풍속</div>
+      벽걸이형: 2.5~6.0 m/s &nbsp;|&nbsp; 천장형(카세트): 2.5~7.0 m/s
+    </div>
+    <div id="airflow-units"></div>
+    <button class="btn-add" onclick="addAirflowUnit()" style="margin-bottom:10px">+ 유닛 추가</button>
+    <div><div class="flabel" style="margin-bottom:5px">풍량측정 사진</div>
+    <div class="photo-upload-row" id="airflow-photos">
+      <div class="ph-add"><input type="file" accept="image/*" multiple onchange="addPhotos(this,'airflow-photos')">📷<span>추가</span></div>
+    </div></div>
+  </div>
+</div>
+
+<!-- 추가 점검항목 -->
+<div class="card">
+  <div class="card-hdr"><div class="card-hdr-icon">🔧</div><div class="card-hdr-title">추가 점검 항목 — 선택 시 보고서 포함</div></div>
+  <div class="card-body">
+    <div id="extra-items"></div>
+    <button class="btn-add" onclick="addExtraItem()">+ 점검 항목 추가 작성</button>
+  </div>
+</div>
+
+<!-- 작업과정 사진 -->
+<div class="card">
+  <div class="card-hdr"><div class="card-hdr-icon">📸</div><div class="card-hdr-title">작업과정 사진</div></div>
+  <div class="card-body">
+    <div class="photo-upload-row" id="work-photos">
+      <div class="ph-add"><input type="file" accept="image/*" multiple onchange="addPhotos(this,'work-photos')">📷<span>추가</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 청소 사진 -->
+<div class="card">
+  <div class="card-hdr"><div class="card-hdr-icon">🧹</div><div class="card-hdr-title">청소 사진</div></div>
+  <div class="card-body">
+    <div class="photo-upload-row" id="clean-photos">
+      <div class="ph-add"><input type="file" accept="image/*" multiple onchange="addPhotos(this,'clean-photos')">📷<span>추가</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- 종합평가 + 최종의견 -->
+<div class="card">
+  <div class="card-hdr"><div class="card-hdr-icon">⭐</div><div class="card-hdr-title">종합 평가 · 최종 의견</div></div>
+  <div class="card-body">
+    <div class="fl" style="margin-bottom:8px">종합 평가</div>
+    <div class="eval-row" id="eval-row">
+      <div class="ev-btn ev-g" data-val="normal" onclick="setEval(this)">🟢<br>정상<br>Normal</div>
+      <div class="ev-btn ev-y" data-val="preventive" onclick="setEval(this)">🟡<br>예방정비<br>권장</div>
+      <div class="ev-btn ev-o" data-val="repair" onclick="setEval(this)">🟠<br>수리 권장</div>
+      <div class="ev-btn ev-r" data-val="urgent" onclick="setEval(this)">🔴<br>즉시수리<br>필요</div>
+    </div>
+    <div style="margin-top:12px">
+      <div class="fl" style="margin-bottom:5px">최종 의견</div>
+      <textarea id="f-opinion" rows="4" placeholder="종합 진단 의견을 입력하세요..."></textarea>
+      <div class="stog" onclick="toggleStog(this)">
+        <div class="stog-label">📌 최종 의견 템플릿으로 저장 (다음 보고서 재사용)</div>
+        <div class="stog-sw"><div class="stog-dot"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<button class="btn-save" id="btn-save" onclick="saveReport()">💾 저장하고 고객 링크 생성</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── 전역 상태
+var coolUnits=[], leakUnits=[], airflowUnits=[], extraItems=[], resultRows=[], evalVal='', photoData={};
+var savedOpinion='', savedCauses={};
+
+// ── 토스트
+function showToast(msg,ms){var t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},ms||2000);}
+
+// ── 사진 미리보기 (명판류)
+function triggerPhoto(id){document.getElementById(id).click();}
+function previewNamedPhoto(input,key){
+  var f=input.files[0];if(!f)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    photoData[key]=e.target.result;
+    var body=document.getElementById('np-body-'+key);
+    var icon=body.querySelector('.np-icon');
+    var delBtn=document.getElementById('np-del-'+key);
+    if(icon)icon.textContent='✅';
+    body.querySelector('.np-main').textContent='사진 업로드 완료';
+    body.querySelector('.np-sub').textContent=f.name;
+    if(delBtn)delBtn.style.display='block';
+    body.style.background='#e8f0fe';
+  };
+  reader.readAsDataURL(f);
+}
+function delPhoto(id){
+  var key=id.replace('outdoor-','');
+  delete photoData[key];
+  var body=document.getElementById('np-body-'+key);
+  if(body){body.querySelector('.np-icon').textContent='📷';body.querySelector('.np-main').textContent=key==='nameplate'?'명판 사진 업로드':key==='pressure'?'압력계 사진 업로드':'전류계 사진 업로드';body.querySelector('.np-sub').textContent=key==='nameplate'?'장비 스펙 확인용':key==='pressure'?'가스 압력 측정 장면':'전류 측정 장면';body.style.background='';var del=document.getElementById('np-del-'+key);if(del)del.style.display='none';}
+  document.getElementById(id).value='';
+}
+
+// ── 일반 사진 추가
+function addPhotos(input, containerId){
+  var files=input.files;
+  var container=document.getElementById(containerId);
+  Array.from(files).forEach(function(f){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var key=containerId+'-'+Date.now();
+      photoData[key]=e.target.result;
+      var item=document.createElement('div');
+      item.className='ph-item';
+      item.dataset.key=key;
+      item.innerHTML='<div class="ph-label-v">'+containerId.split('-')[0].toUpperCase().slice(0,3)+'</div><div class="ph-area" onclick="delGeneralPhoto(\''+key+'\',\''+containerId+'\')"><img src="'+e.target.result+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"><div style="position:absolute;inset:0;background:rgba(0,0,0,0);display:flex;align-items:center;justify-content:center;font-size:16px;opacity:0;transition:opacity .2s" class="ph-del-overlay">🗑️</div></div>';
+      item.querySelector('.ph-area').addEventListener('mouseenter',function(){this.querySelector('.ph-del-overlay').style.opacity='1';this.querySelector('.ph-del-overlay').style.background='rgba(0,0,0,.3)';});
+      item.querySelector('.ph-area').addEventListener('mouseleave',function(){this.querySelector('.ph-del-overlay').style.opacity='0';this.querySelector('.ph-del-overlay').style.background='rgba(0,0,0,0)';});
+      var addBtn=container.querySelector('.ph-add');
+      container.insertBefore(item,addBtn);
+    };
+    reader.readAsDataURL(f);
+  });
+  input.value='';
+}
+function delGeneralPhoto(key,containerId){
+  delete photoData[key];
+  var container=document.getElementById(containerId);
+  var item=container.querySelector('[data-key="'+key+'"]');
+  if(item)item.remove();
+}
+
+// ── 종합결과 행
+function addResultRow(name,status,risk){
+  var id='r'+Date.now();
+  resultRows.push(id);
+  var row=document.createElement('div');
+  row.className='rtbl-row';
+  row.id='row-'+id;
+  row.innerHTML='<input placeholder="점검 항목명" value="'+(name||'')+'" onchange="updateRow(\''+id+'\',\'name\',this.value)">'+
+    '<select onchange="updateRow(\''+id+'\',\'status\',this.value);updateRowColor(this)">'+
+    '<option value="">상태 선택</option>'+
+    '<option value="ok" '+(status==='ok'?'selected':'')+'>✅ 정상</option>'+
+    '<option value="warn" '+(status==='warn'?'selected':'')+'>⚠️ 주의</option>'+
+    '<option value="bad" '+(status==='bad'?'selected':'')+'>❌ 불량</option>'+
+    '</select>'+
+    '<select onchange="updateRow(\''+id+'\',\'risk\',this.value)">'+
+    '<option value="">위험도</option>'+
+    '<option value="g" '+(risk==='g'?'selected':'')+'>🟢 정상</option>'+
+    '<option value="o" '+(risk==='o'?'selected':'')+'>🟠 중간</option>'+
+    '<option value="r" '+(risk==='r'?'selected':'')+'>🔴 높음</option>'+
+    '</select>'+
+    '<button class="del-btn" onclick="delResultRow(\''+id+'\')">×</button>';
+  document.getElementById('result-rows').appendChild(row);
+  if(status)updateRowColor(row.querySelector('select'));
+}
+function updateRowColor(sel){
+  var v=sel.value;
+  sel.className='';
+  if(v==='ok')sel.className='sel-ok';
+  else if(v==='warn')sel.className='sel-w';
+  else if(v==='bad')sel.className='sel-b';
+}
+function updateRow(id,field,val){/* 상태 업데이트 */}
+function delResultRow(id){document.getElementById('row-'+id).remove();}
+
+// ── 냉방검사 유닛
+var coolCount=0;
+function addCoolUnit(){
+  coolCount++;
+  var id='cu'+Date.now();
+  var label='A'+coolCount;
+  var div=document.createElement('div');
+  div.className='cool-unit';
+  div.id='cool-'+id;
+  div.innerHTML=
+    '<div class="cu-hdr">'+
+      '<div class="cu-num" id="cu-num-'+id+'">'+label+'</div>'+
+      '<div style="flex:1;font-size:12px;font-weight:500">에어컨 '+coolCount+'번 유닛</div>'+
+      '<span class="insp-badge bdg-n" id="cu-badge-'+id+'">미측정</span>'+
+      '<button onclick="delCoolUnit(\''+id+'\')" style="background:#fde8e8;color:#c0392b;border:none;border-radius:4px;width:22px;height:22px;font-size:11px;cursor:pointer;margin-left:6px">×</button>'+
+    '</div>'+
+    '<div class="cu-body">'+
+      '<div class="mv-grid mv3">'+
+        '<div class="mvb"><div class="mvl">흡입온도 A (°C)</div><input placeholder="28.5" oninput="calcCoolDiff(\''+id+'\')" id="cu-a-'+id+'"></div>'+
+        '<div class="mvb"><div class="mvl">토출온도 B (°C)</div><input placeholder="12.3" oninput="calcCoolDiff(\''+id+'\')" id="cu-b-'+id+'"></div>'+
+        '<div class="mvb" id="cu-diff-box-'+id+'"><div class="mvl">온도차 A-B</div><div class="mvv" id="cu-diff-'+id+'">—</div><div class="mvu" id="cu-diff-u-'+id+'">입력 후 자동계산</div></div>'+
+      '</div>'+
+      '<div class="result-sel">'+
+        '<div class="rsel-btn" id="cu-ok-'+id+'" onclick="setCoolResult(\''+id+'\',\'ok\')">✅ 양호</div>'+
+        '<div class="rsel-btn" id="cu-warn-'+id+'" onclick="setCoolResult(\''+id+'\',\'warn\')">⚠️ 저하</div>'+
+      '</div>'+
+      '<div class="loc-box" id="cu-loc-'+id+'">'+
+        '<div class="loc-label">📍 위치</div>'+
+        '<input placeholder="예: 방1 벽걸이형, 거실 좌측..." id="cu-loc-inp-'+id+'">'+
+      '</div>'+
+      '<div>'+
+        '<div class="flabel" style="margin-bottom:5px">측정 사진</div>'+
+        '<div class="photo-upload-row" id="cu-photos-'+id+'">'+
+          '<div class="ph-item"><div class="ph-label-v">'+label+'</div><div class="ph-area" id="cu-ph-'+id+'"><span style="font-size:20px">📷</span><input type="file" accept="image/*" onchange="setCoolPhoto(this,\''+id+'\',\''+label+'\')"></div></div>'+
+          '<div class="ph-add"><input type="file" accept="image/*" onchange="addCoolExtraPhoto(this,\''+id+'\',\''+label+'\')">📷<span>추가</span></div>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  document.getElementById('cool-units').appendChild(div);
+}
+function delCoolUnit(id){var el=document.getElementById('cool-'+id);if(el)el.remove();}
+function calcCoolDiff(id){
+  var a=parseFloat(document.getElementById('cu-a-'+id).value)||0;
+  var b=parseFloat(document.getElementById('cu-b-'+id).value)||0;
+  if(a&&b){
+    var diff=(a-b).toFixed(1);
+    document.getElementById('cu-diff-'+id).textContent=diff+'°C';
+    var ok=parseFloat(diff)>=15;
+    var warn=parseFloat(diff)<15&&parseFloat(diff)>=10;
+    document.getElementById('cu-diff-u-'+id).textContent=parseFloat(diff)>=15?'✓ 양호':parseFloat(diff)>=12?'정상범위':parseFloat(diff)>=10?'⚠️ 저하의심':'⚠️ 점검필요';
+    document.getElementById('cu-diff-u-'+id).style.color=parseFloat(diff)>=15?'#0a7a4a':parseFloat(diff)>=12?'#374151':'#c0392b';
+    document.getElementById('cu-diff-'+id).style.color=parseFloat(diff)>=15?'#0a7a4a':parseFloat(diff)>=12?'#374151':'#c0392b';
+  }
+}
+function setCoolResult(id,result){
+  var ok=document.getElementById('cu-ok-'+id);
+  var warn=document.getElementById('cu-warn-'+id);
+  var loc=document.getElementById('cu-loc-'+id);
+  var badge=document.getElementById('cu-badge-'+id);
+  var num=document.getElementById('cu-num-'+id);
+  ok.className='rsel-btn'+(result==='ok'?' ok':'');
+  warn.className='rsel-btn'+(result==='warn'?' warn':'');
+  if(result==='warn'){loc.classList.add('show');badge.className='insp-badge bdg-w';badge.textContent='저하';num.style.background='#e67e22';}
+  else{loc.classList.remove('show');badge.className='insp-badge bdg-ok';badge.textContent='양호';num.style.background='#0F1C3F';}
+}
+function setCoolPhoto(input,id,label){
+  var f=input.files[0];if(!f)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    photoData['cool-'+id]=e.target.result;
+    var ph=document.getElementById('cu-ph-'+id);
+    ph.innerHTML='<img src="'+e.target.result+'" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover">';
+  };reader.readAsDataURL(f);
+}
+function addCoolExtraPhoto(input,id,label){addPhotos(input,'cu-photos-'+id);}
+
+// ── 누설검사 유닛
+var leakCount=0;
+function addLeakUnit(){
+  leakCount++;
+  var id='lk'+Date.now();
+  var label='AC '+leakCount;
+  var row=document.createElement('div');
+  row.style='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid #f0f0f0';
+  row.innerHTML='<div style="width:36px;text-align:center;font-size:11px;font-weight:600;color:#0F1C3F">'+label+'</div>'+
+    '<input placeholder="유닛 위치 (선택)" style="flex:1;font-size:12px;padding:5px 8px">'+
+    '<select style="font-size:11px;padding:5px 7px;border-radius:5px" class="sel-ok">'+
+    '<option value="ok">✅ 이상없음</option>'+
+    '<option value="bad">❌ 누설감지</option>'+
+    '</select>'+
+    '<button onclick="this.parentElement.remove()" style="background:#fde8e8;color:#c0392b;border:none;border-radius:4px;width:22px;height:22px;font-size:11px;cursor:pointer">×</button>';
+  row.querySelector('select').addEventListener('change',function(){
+    this.className=this.value==='ok'?'sel-ok':'sel-b';
+    this.style.cssText=this.value==='ok'?'font-size:11px;padding:5px 7px;border-radius:5px;background:#e8f8f0;color:#0a7a4a;border:0.5px solid #9fe1cb':'font-size:11px;padding:5px 7px;border-radius:5px;background:#fde8e8;color:#c0392b;border:0.5px solid #fca5a5';
+  });
+  document.getElementById('leak-units').appendChild(row);
+}
+
+// ── 풍량측정 유닛
+var airflowCount=0;
+function addAirflowUnit(){
+  airflowCount++;
+  var id='af'+Date.now();
+  var label='유닛 '+airflowCount;
+  var row=document.createElement('div');
+  row.style='display:grid;grid-template-columns:80px 1fr 100px 80px 28px;gap:7px;align-items:center;margin-bottom:7px';
+  row.innerHTML='<input placeholder="AC'+airflowCount+'" style="font-size:12px" value="AC'+airflowCount+'">'+
+    '<input placeholder="위치(선택)" style="font-size:12px">'+
+    '<div style="position:relative"><input placeholder="풍속 m/s" style="font-size:12px" type="number" step="0.1" oninput="checkAirflow(this)"><div style="font-size:9px;color:#8a8a9a;margin-top:2px" id="af-status-'+id+'"></div></div>'+
+    '<select style="font-size:11px;padding:5px 6px;border-radius:5px">'+
+    '<option>벽걸이형</option><option>카세트형</option><option>매립형</option></select>'+
+    '<button onclick="this.parentElement.remove()" style="background:#fde8e8;color:#c0392b;border:none;border-radius:4px;width:22px;height:22px;font-size:11px;cursor:pointer">×</button>';
+  document.getElementById('airflow-units').appendChild(row);
+}
+function checkAirflow(input){
+  var v=parseFloat(input.value);
+  var status=input.nextElementSibling;
+  if(!status)return;
+  if(!v){status.textContent='';return;}
+  if(v>=2.5)status.textContent='✓ 정상';else status.textContent='⚠️ 기준 미달(2.5)';
+  status.style.color=v>=2.5?'#0a7a4a':'#c0392b';
+}
+
+// ── 추가 점검항목
+var extraCount=0;
+function addExtraItem(){
+  extraCount++;
+  var id='ex'+Date.now();
+  var div=document.createElement('div');
+  div.className='insp-item';
+  div.id='extra-'+id;
+  div.innerHTML=
+    '<div class="insp-hdr" onclick="toggleExtra(\''+id+'\')" >'+
+      '<div class="insp-chk" id="exck-'+id+'"></div>'+
+      '<input placeholder="점검 항목명 입력..." style="flex:1;border:none;background:transparent;font-size:12px;font-weight:500;padding:0;outline:none;cursor:pointer" onclick="event.stopPropagation()">'+
+      '<select style="font-size:11px;padding:2px 5px;border-radius:5px;margin-right:6px" onclick="event.stopPropagation()"><option>위험도</option><option>🟢 정상</option><option>🟠 중간</option><option>🔴 높음</option></select>'+
+      '<button onclick="event.stopPropagation();document.getElementById(\'extra-'+id+'\').remove()" style="background:#fde8e8;color:#c0392b;border:none;border-radius:4px;width:20px;height:20px;font-size:10px;cursor:pointer">×</button>'+
+    '</div>'+
+    '<div class="insp-body" id="exbody-'+id+'">'+
+      '<div><div class="flabel">점검 결과</div><textarea rows="3" placeholder="점검 결과 내용을 입력하세요..."></textarea>'+
+      '<div class="stog" onclick="toggleStog(this)"><div class="stog-label">📌 이 내용 템플릿으로 저장</div><div class="stog-sw"><div class="stog-dot"></div></div></div></div>'+
+      '<div><div class="flabel">원인 분석</div><div class="cause-grid" id="excause-'+id+'">'+
+        '<div class="cause-item" onclick="toggleCause(this)"><div class="cause-chk"></div><span>직접 입력1</span></div>'+
+        '<div class="cause-item" onclick="toggleCause(this)"><div class="cause-chk"></div><span>직접 입력2</span></div>'+
+      '</div>'+
+      '<div class="stog" onclick="toggleStog(this)"><div class="stog-label">📌 원인 분석 패턴 저장</div><div class="stog-sw"><div class="stog-dot"></div></div></div></div>'+
+      '<div><div class="flabel">권장 조치</div><textarea rows="2" placeholder="권장 조치 사항..."></textarea></div>'+
+      '<div><div class="flabel" style="margin-bottom:5px">사진</div><div class="photo-upload-row"><div class="ph-add"><input type="file" accept="image/*" multiple onchange="addPhotos(this,\'exph-'+id+'\')">📷<span>추가</span></div></div></div>'+
+    '</div>';
+  document.getElementById('extra-items').appendChild(div);
+}
+function toggleExtra(id){
+  var body=document.getElementById('exbody-'+id);
+  var chk=document.getElementById('exck-'+id);
+  var isOpen=body.classList.contains('open');
+  if(isOpen){body.classList.remove('open');chk.classList.remove('on');chk.textContent='';}
+  else{body.classList.add('open');chk.classList.add('on');chk.textContent='✓';}
+}
+function toggleCause(el){
+  var chk=el.querySelector('.cause-chk');
+  chk.classList.toggle('on');
+  chk.textContent=chk.classList.contains('on')?'✓':'';
+}
+
+// ── 저장 토글
+function toggleStog(el){
+  var sw=el.querySelector('.stog-sw');
+  sw.classList.toggle('on');
+}
+
+// ── 종합평가
+function setEval(btn){
+  document.querySelectorAll('.ev-btn').forEach(function(b){b.classList.remove('sel');});
+  btn.classList.add('sel');
+  evalVal=btn.dataset.val;
+}
+
+// ── 초기화
+function init(){
+  // 오늘 날짜
+  var today=new Date().toISOString().split('T')[0];
+  document.getElementById('f-date').value=today;
+  // 기본 종합결과 행
+  ['냉방성능','에바포레이터','드레인 배관','팬모터','냉매','실외기'].forEach(function(name){addResultRow(name);});
+  // 냉방검사 기본 2유닛
+  addCoolUnit();addCoolUnit();
+  // 누설검사 기본 1유닛
+  addLeakUnit();
+  // Firebase 연결 표시
+  setTimeout(function(){document.getElementById('fb-dot').className='fb-dot on';},1000);
+}
+
+// ── 저장
+function saveReport(){
+  showToast('저장 중...');
+  // Firebase 저장 로직 (실제 구현 시 추가)
+  setTimeout(function(){showToast('✓ 보고서 저장됨 · 고객 링크 생성 완료');},1000);
+}
+
+window.onload=init;
+</script>
+</body>
+</html>
