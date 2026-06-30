@@ -818,6 +818,17 @@ async function uploadPhotoToStorage(key,dataUrl,reportId){
   }catch(e){console.error('photo upload err',e);return null;}
 }
 
+// ── Google Translate (비공식 무료 엔드포인트)
+async function translateToEn(text){
+  if(!text||!text.trim())return '';
+  try{
+    var url='https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q='+encodeURIComponent(text);
+    var res=await fetch(url);
+    var data=await res.json();
+    return data[0]?data[0].map(function(x){return x[0]||'';}).join(''):'';
+  }catch(e){console.error('translate err',e);return text;}
+}
+
 // ── 단축 URL
 async function shorten(url){
   if(!DB)return url;
@@ -833,14 +844,25 @@ async function shorten(url){
 // ── 링크 발송 모달
 var currentReportId='';
 var currentShortUrl='';
-function showSendModal(id,shortUrl){
-  currentReportId=id;currentShortUrl=shortUrl;
+// 언어별 단축 URL 캐시
+var shortUrls={ko:'',en:''};
+
+async function showSendModal(id,shortUrl){
+  currentReportId=id;
   var modal=document.getElementById('send-modal');
-  if(modal){
-    document.getElementById('sm-link').textContent=shortUrl;
-    updateSendMsg();
-    modal.style.display='flex';
-  }
+  if(!modal)return;
+
+  // 한국어 링크 (기본)
+  shortUrls.ko=shortUrl;
+  document.getElementById('sm-link').textContent=shortUrl;
+
+  // 영어 링크 미리 생성
+  var enUrl='https://hhc-3p8.pages.dev/inspect.html?id='+id+'&lang=en';
+  shortUrls.en=await shorten(enUrl);
+
+  currentShortUrl=shortUrl;
+  updateSendMsg();
+  modal.style.display='flex';
 }
 function updateSendMsg(){
   var lang=document.querySelector('input[name="send-lang"]:checked');
@@ -885,6 +907,42 @@ async function saveReport(){
   try{
     var data=collectData();
     if(!data.client||!data.date){showToast('고객명과 점검일을 입력해 주세요.');btn.disabled=false;btn.textContent='💾 저장하고 고객 링크 생성';return;}
+
+    showToast('저장 중...');
+
+    // 번역 (한국어 → 영어) 병렬 처리
+    showToast('번역 중...');
+    var toTranslate=[
+      data.opinion,
+      data.ou_note
+    ];
+    // 추가 점검항목 텍스트들도 수집
+    var extraTexts=(data.extraItems||[]).map(function(ei){return ei.result||'';});
+
+    var allTexts=toTranslate.concat(extraTexts).filter(Boolean);
+    var translated=await Promise.all(allTexts.map(function(t){return translateToEn(t);}));
+
+    data.opinion_en=translated[0]||'';
+    data.ou_note_en=translated[1]||'';
+    if(data.extraItems){
+      data.extraItems=data.extraItems.map(function(ei,i){
+        return Object.assign({},ei,{result_en:translated[2+i]||''});
+      });
+    }
+
+    // 종합결과 항목명 번역
+    var resultNames=(data.results||[]).map(function(r){return r.name||'';});
+    var resultNamesEn=await Promise.all(resultNames.map(function(n){return translateToEn(n);}));
+    data.results=(data.results||[]).map(function(r,i){
+      return Object.assign({},r,{name_en:resultNamesEn[i]||r.name});
+    });
+
+    // 냉방검사 위치 번역
+    var coolLocs=(data.coolUnits||[]).map(function(u){return u.loc||'';});
+    var coolLocsEn=await Promise.all(coolLocs.map(function(l){return l?translateToEn(l):Promise.resolve('');}));
+    data.coolUnits=(data.coolUnits||[]).map(function(u,i){
+      return Object.assign({},u,{loc_en:coolLocsEn[i]||''});
+    });
 
     showToast('저장 중...');
 
