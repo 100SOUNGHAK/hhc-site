@@ -212,7 +212,11 @@ textarea{resize:none;line-height:1.5}
   <div id="tab-info">
     <div class="card cp" style="margin-bottom:12px">
       <div class="fr c3">
-        <div class="f"><label class="lb">인보이스번호</label><input id="inv-num" readonly></div>
+        <div class="f"><label class="lb">인보이스번호</label>
+<div style="display:flex;gap:6px;align-items:center">
+  <input id="inv-num" readonly style="flex:1;background:var(--il)">
+  <button class="btn bsm bgh" onclick="toggleInvNumEdit()" id="inv-num-edit-btn" title="번호 수정">✏️</button>
+</div></div>
         <div class="f"><label class="lb">발행일</label><input type="date" id="inv-date" oninput="App.onDateChange()"></div>
         <div class="f"><label class="lb">만기일</label><input type="date" id="inv-due" oninput="App.upPrev()"></div>
       </div>
@@ -358,8 +362,8 @@ textarea{resize:none;line-height:1.5}
 
 <!-- SCREEN: SETTINGS -->
 <div class="screen" id="screen-settings">
-  <!-- 발행처 정보 -->
-  <div class="sh"><span class="sht">발행처 정보</span><button class="btn bxs bgh bsm" id="iss-toggle-btn" onclick="toggleIssuer()">✏️ 수정</button></div>
+  <!-- Issued By 정보 -->
+  <div class="sh"><span class="sht">Issued By 정보</span><button class="btn bxs bgh bsm" id="iss-toggle-btn" onclick="toggleIssuer()">✏️ 수정</button></div>
   <div class="card cp" style="margin:0 16px 20px">
     <div id="iss-view" class="iss-view"></div>
     <div id="iss-edit" style="display:none;border-top:1px solid var(--bdr);margin-top:12px;padding-top:12px">
@@ -672,7 +676,7 @@ function saveIssuer(){
   var ed=$('iss-edit'),btn=$('iss-toggle-btn');
   if(ed)ed.style.display='none';
   if(btn){btn.style.display='';}
-  showToast('✓ 발행처 정보 저장됨');App.upPrev();
+  showToast('✓ Issued By 정보 저장됨');App.upPrev();
 }
 window.toggleIssuer=toggleIssuer;window.cancelIssuer=cancelIssuer;window.saveIssuer=saveIssuer;
 
@@ -774,7 +778,7 @@ function onBankSel(){
   var b=banks.find(function(x){return x.id===id;});
   if(!b){bp.style.display='none';return;}
   bp.style.display='block';
-  bp.innerHTML='<b>'+b.bankName+'</b><br>예금주: '+b.accName+'<br>계좌번호: '+b.accNum;
+  bp.innerHTML='<b>'+b.bankName+'</b><br>예금주: '+b.accName+'<br>Account No: '+b.accNum;
   App.upPrev();
 }
 window.onBankSel=onBankSel;
@@ -783,10 +787,24 @@ window.onBankSel=onBankSel;
 // LINE ITEMS
 // ═══════════════════════════════════════════════════════════
 function addLI(){
-  lineItems.push({id:'li'+Date.now(),cat:'',subcat:'',svcId:'',name:'',price:0,qty:1});
+  lineItems.push({id:'li'+Date.now(),cat:'',subcat:'',svcId:'',name:'',price:0,qty:1,disc:0});
   renderLI();App.upPrev();
 }
 window.addLI=addLI;
+
+function toggleInvNumEdit(){
+  var inp=$('inv-num');var btn=$('inv-num-edit-btn');
+  if(!inp)return;
+  if(inp.readOnly){
+    inp.readOnly=false;inp.style.background='';inp.style.borderColor='var(--indigo)';
+    inp.focus();inp.select();
+    if(btn)btn.textContent='✓';
+  }else{
+    inp.readOnly=true;inp.style.background='var(--il)';inp.style.borderColor='';
+    if(btn)btn.textContent='✏️';
+  }
+}
+window.toggleInvNumEdit=toggleInvNumEdit;
 function rmLI(id){lineItems=lineItems.filter(function(l){return l.id!==id;});renderLI();App.upPrev();}
 window.rmLI=rmLI;
 
@@ -810,6 +828,16 @@ function onSvcSel(id,svcId){
 function onQty(id,v){var li=lineItems.find(function(l){return l.id===id;});if(li){li.qty=parseFloat(v)||1;var t=$('lit-'+id);if(t)t.textContent=fmtAmt(li.price*li.qty);calcTotals();App.upPrev();}}
 function onPrice(id,v){var li=lineItems.find(function(l){return l.id===id;});if(li){li.price=parseFloat(v)||0;var t=$('lit-'+id);if(t)t.textContent=fmtAmt(li.price*li.qty);calcTotals();App.upPrev();}}
 function onName(id,v){var li=lineItems.find(function(l){return l.id===id;});if(li){li.name=v;App.upPrev();}}
+function onDisc(id,v){
+  var li=lineItems.find(function(l){return l.id===id;});
+  if(li){
+    li.disc=parseFloat(v)||0;
+    var t=$('lit-'+id);
+    if(t)t.textContent=fmtAmt(((li.price||0)*(li.qty||1))-(li.disc||0));
+    calcTotals();App.upPrev();
+  }
+}
+window.onDisc=onDisc;
 window.onTopCat=onTopCat;window.onSubCat=onSubCat;window.onSvcSel=onSvcSel;window.onQty=onQty;window.onPrice=onPrice;window.onName=onName;
 
 function renderLI(){
@@ -837,7 +865,8 @@ function renderLI(){
       '<div class="lin">'+
         '<div><label class="lb">수량</label><input type="number" value="'+li.qty+'" min="0.5" step="0.5" oninput="onQty(\''+li.id+'\',this.value)" style="text-align:center"></div>'+
         '<div><label class="lb">단가</label><input type="number" value="'+li.price+'" min="0" step="0.5" oninput="onPrice(\''+li.id+'\',this.value)"></div>'+
-        '<div><label class="lb">소계</label><div class="lt" id="lit-'+li.id+'">'+fmtAmt((li.price||0)*(li.qty||1))+'</div></div>'+
+        '<div><label class="lb">할인</label><input type="number" value="'+(li.disc||0)+'" min="0" step="0.5" oninput="onDisc(\''+li.id+'\',this.value)" placeholder="0" style="text-align:center"></div>'+
+        '<div><label class="lb">소계</label><div class="lt" id="lit-'+li.id+'">'+fmtAmt(((li.price||0)*(li.qty||1))-(li.disc||0))+'</div></div>'+
       '</div></div>';
   }).join('');
   lineItems.forEach(function(li){
@@ -856,7 +885,7 @@ function renderLI(){
 function calcTotals(inv){
   var items=inv?inv.items:lineItems;
   var cur=inv?inv.currency:getCur();
-  var sub=items.reduce(function(s,l){return s+(l.price||0)*(l.qty||1);},0);
+  var sub=items.reduce(function(s,l){return s+((l.price||0)*(l.qty||1))-(l.disc||0);},0);
   var taxRate=parseFloat(inv?inv.taxRate:val('tax-rate'))||0;
   var discVal=parseFloat(inv?inv.discVal:val('disc-val'))||0;
   var discType=inv?inv.discType:val('disc-type');
@@ -903,34 +932,46 @@ function buildInvHTML(inv){
   var t=inv._t||calcTotals(inv);
   var cur=inv.currency||'MYR';
   function fa(n){return fmtAmt(n,cur);}
-  var sl={billing:'청구',paid:'결제완료',overdue:'연체'};
+  var sl={billing:'Billing',paid:'Paid',overdue:'Overdue'};
   var sc={billing:'db',paid:'dp',overdue:'do'};
   var cust=inv.customer||{};var iss=inv.issuer||issuer;
   var items=inv.items||[];
-  var rows=items.length?items.map(function(li){return '<tr><td>'+(li.name||'—')+'</td><td style="text-align:center">'+li.qty+'</td><td style="text-align:right">'+fa(li.price)+'</td><td>'+fa((li.price||0)*(li.qty||1))+'</td></tr>';}).join(''):'<tr><td colspan="4" style="text-align:center;padding:12px;color:var(--gray)">항목 없음</td></tr>';
+  var hasDisc=items.some(function(li){return (li.disc||0)>0;});
+  var rows=items.length?items.map(function(li){
+    var lineAmt=((li.price||0)*(li.qty||1))-(li.disc||0);
+    var discCell=hasDisc?'<td style="text-align:right;color:#16a34a">'+(li.disc>0?'- '+fa(li.disc):'—')+'</td>':'';
+    return '<tr><td>'+(li.name||'—')+'</td><td style="text-align:center">'+li.qty+'</td><td style="text-align:right">'+fa(li.price)+'</td>'+discCell+'<td style="text-align:right">'+fa(lineAmt)+'</td></tr>';
+  }).join(''):('<tr><td colspan="'+(hasDisc?5:4)+'" style="text-align:center;padding:12px;color:var(--gray)">No items</td></tr>');
   var ci=[cust.addr,cust.phone,cust.email,cust.biz?'사업자: '+cust.biz:''].filter(Boolean).join('<br>');
   var issInfo=[iss.email,iss.phone,iss.addr,iss.biz?'사업자: '+iss.biz:''].filter(Boolean).join('<br>');
   var chargeRows='';
-  if(t.taxRate>0)chargeRows+='<div class="idtrow"><span>세금 '+t.taxRate+'%</span><span>'+fa(t.tax)+'</span></div>';
-  if(t.discVal>0)chargeRows+='<div class="idtrow"><span>할인'+(t.discType==='pct'?' '+t.discVal+'%':'')+'</span><span>-'+fa(t.disc)+'</span></div>';
-  if(t.park>0)chargeRows+='<div class="idtrow"><span>주차비용</span><span>+'+fa(t.park)+'</span></div>';
-  if(t.extra>0)chargeRows+='<div class="idtrow"><span>추가비용</span><span>+'+fa(t.extra)+'</span></div>';
-  if(t.credit>0)chargeRows+='<div class="idtrow" style="color:var(--red)"><span>적립잔액사용</span><span>-'+fa(t.credit)+'</span></div>';
-  var bankSec=inv.bankInfo?'<div style="margin-top:10px;padding:10px;background:#f8faff;border-radius:8px;font-size:10px;color:var(--gray)"><b style="color:var(--txt)">결제 계좌</b><br>'+inv.bankInfo.bankName+' | '+inv.bankInfo.accName+'<br>계좌번호: '+inv.bankInfo.accNum+'</div>':'';
+  if(t.taxRate>0)chargeRows+='<div class="idtrow"><span>Tax '+t.taxRate+'%</span><span>'+fa(t.tax)+'</span></div>';
+  if(t.discVal>0)chargeRows+='<div class="idtrow"><span>Discount'+(t.discType==='pct'?' '+t.discVal+'%':'')+'</span><span>-'+fa(t.disc)+'</span></div>';
+  if(t.park>0)chargeRows+='<div class="idtrow"><span>Parking</span><span>+'+fa(t.park)+'</span></div>';
+  if(t.extra>0)chargeRows+='<div class="idtrow"><span>Extra</span><span>+'+fa(t.extra)+'</span></div>';
+  if(t.credit>0)chargeRows+='<div class="idtrow" style="color:var(--red)"><span>Credit Used</span><span>-'+fa(t.credit)+'</span></div>';
+  var bankSec='';
+  if(inv.bankInfo){
+    var qrHtml=inv.bankInfo.qr?'<img src="'+inv.bankInfo.qr+'" style="width:80px;height:80px;object-fit:contain;display:block;margin-top:8px">':'';
+    bankSec='<div style="margin-top:10px;padding:10px;background:#f8faff;border-radius:8px;font-size:10px;color:var(--gray);display:flex;gap:12px;align-items:flex-start">'+
+      '<div style="flex:1"><b style="color:var(--txt)">Payment Details</b><br>'+inv.bankInfo.bankName+' | '+inv.bankInfo.accName+'<br>Account No: '+inv.bankInfo.accNum+'</div>'+
+      (inv.bankInfo.qr?'<div style="flex-shrink:0"><img src="'+inv.bankInfo.qr+'" style="width:72px;height:72px;object-fit:contain;border-radius:4px;border:1px solid #e2e8f0"></div>':'')+
+    '</div>';
+  }
   return '<div class="idoc">'+
-    (inv.status==='paid'?'<div style="text-align:center;margin-bottom:12px"><span class="idstamp">PAID ✓</span></div>':'')+
+    (inv.status==='paid'?'<div style="text-align:center;margin-bottom:12px"><span class="idstamp">PAID ✓</span></div>':inv.status==='overdue'?'<div style="text-align:center;margin-bottom:12px"><span class="idstamp" style="border-color:#dc2626;color:#dc2626">OVERDUE</span></div>':'')+
     '<div class="idh"><div>'+(imgData&&imgData.logo?'<img src="'+imgData.logo+'" style="max-height:48px;max-width:130px;object-fit:contain;margin-bottom:4px;display:block">':'')+'<div class="idl">Happy<span>Home</span>Care</div><div style="font-size:10px;color:var(--gray);margin-top:3px">'+iss.name+'</div></div>'+
-    '<div class="idm"><strong>INVOICE</strong><span style="font-family:monospace;color:var(--indigo);display:block">'+(inv.id||'—')+'</span>발행: '+fmtDate(inv.date)+'<br>만기: '+fmtDate(inv.due)+'<br><span class="bdg '+(sc[inv.status]||'db')+'" style="margin-top:4px">'+(sl[inv.status]||'청구')+'</span></div></div>'+
-    '<div class="idp"><div><div class="idpl">청구 대상</div><div class="idpn">'+(cust.name||'—')+'</div><div class="idpi">'+ci+'</div></div>'+
-    '<div><div class="idpl">발행처</div><div class="idpn">'+iss.name+'</div><div class="idpi">'+issInfo+'</div></div></div>'+
-    '<table class="itbl"><thead><tr><th>서비스</th><th style="text-align:center">수량</th><th style="text-align:right">단가</th><th style="text-align:right">금액</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+    '<div class="idm"><strong>INVOICE</strong><span style="font-family:monospace;color:var(--indigo);display:block">'+(inv.id||'—')+'</span>Date: '+fmtDate(inv.date)+'<br>Due: '+fmtDate(inv.due)+'<br><span class="bdg '+(sc[inv.status]||'db')+'" style="margin-top:4px">'+(sl[inv.status]||'청구')+'</span></div></div>'+
+    '<div class="idp"><div><div class="idpl">Bill To</div><div class="idpn">'+(cust.name||'—')+'</div><div class="idpi">'+ci+'</div></div>'+
+    '<div><div class="idpl">Issued By</div><div class="idpn">'+iss.name+'</div><div class="idpi">'+issInfo+'</div></div></div>'+
+    '<table class="itbl"><thead><tr><th>Description</th><th style="text-align:center">Qty</th><th style="text-align:right">Unit Price</th>'+(hasDisc?'<th style="text-align:right">Discount</th>':'')+' <th style="text-align:right">Amount</th></tr></thead><tbody>'+rows+'</tbody></table>'+
     '<div style="display:flex;justify-content:flex-end"><div class="idtotals">'+
-      '<div class="idtrow"><span>소계</span><span>'+fa(t.sub)+'</span></div>'+
+      '<div class="idtrow"><span>Subtotal</span><span>'+fa(t.sub)+'</span></div>'+
       chargeRows+
-      '<div class="idgrand"><span>합계 ('+cur+')</span><span>'+fa(t.grand)+'</span></div>'+
+      '<div class="idgrand"><span>Total ('+cur+')</span><span>'+fa(t.grand)+'</span></div>'+
     '</div></div>'+
     bankSec+
-    ((inv.notes||inv.terms)?'<div class="idfn">'+(inv.notes?'<b>메모:</b> '+inv.notes+'<br>':'')+(inv.terms?'<b>결제 조건:</b> '+inv.terms:'')+'</div>':'')+
+    ((inv.notes||inv.terms)?'<div class="idfn">'+(inv.notes?'<b>Notes:</b> '+inv.notes+'<br>':'')+(inv.terms?'<b>Payment Terms:</b> '+inv.terms:'')+'</div>':'')+
     (imgData&&imgData.sign?'<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--bdr)"><div style="font-size:10px;color:var(--gray);margin-bottom:4px">담당자 서명</div><img src="'+imgData.sign+'" style="max-height:50px;max-width:120px;object-fit:contain"></div>':'')+
   '</div>';
 }
@@ -1145,15 +1186,24 @@ function renderList(){
   if(!filtered.length){el.innerHTML='<div class="empty"><div class="et">인보이스 없음</div><div style="font-size:13px;color:var(--gray)">조건에 맞는 인보이스가 없습니다</div></div>';return;}
   el.innerHTML=filtered.map(function(inv){
     var eid=inv.id.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    var st=inv.status||'billing';
+    var stColor={billing:'var(--amber)',paid:'var(--green)',overdue:'var(--red)'};
+    var stBg={billing:'#fef3c7',paid:'#d1fae5',overdue:'#fee2e2'};
     return '<div class="ir" onclick="openInvView(\''+eid+'\')">'+
       '<div class="iic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>'+
       '<div class="ii"><div class="iname">'+(inv.customer&&inv.customer.name||'(이름 없음)')+'</div>'+
       '<div class="isub"><span style="font-family:monospace;font-size:10px">'+(inv.id||'')+'</span> · '+fmtDate(inv.date)+'</div></div>'+
-      '<div class="irt"><div class="iamt">'+fmtAmt(inv.total||0,inv.currency)+'</div><span class="bdg '+(sb2[inv.status]||'db')+'">'+(sl2[inv.status]||inv.status)+'</span></div>'+
+      '<div class="irt">'+
+        '<div class="iamt">'+fmtAmt(inv.total||0,inv.currency)+'</div>'+
+        '<select onclick="event.stopPropagation()" onchange="quickStatusChange(\''+eid+'\',this.value)" style="font-size:11px;padding:3px 6px;border-radius:12px;border:1px solid '+(stColor[st]||'#ccc')+';background:'+(stBg[st]||'#f9f9f9')+';color:'+(stColor[st]||'#333')+';font-weight:600;cursor:pointer">'+
+          '<option value="billing" '+(st==='billing'?'selected':'')+'>⏳ 청구중</option>'+
+          '<option value="paid" '+(st==='paid'?'selected':'')+'>✅ 결제완료</option>'+
+          '<option value="overdue" '+(st==='overdue'?'selected':'')+'>⚠️ 연체</option>'+
+        '</select>'+
+      '</div>'+
     '</div>'+
     '<div class="ira">'+
-      '<button class="btn bxs bgh" onclick="event.stopPropagation();openStatusModal(\''+eid+'\')">상태변경</button>'+
-      '<button class="btn bxs bw" onclick="event.stopPropagation();shareWa(\''+eid+'\')">WA</button>'+
+      '<button class="btn bxs bw" onclick="event.stopPropagation();shareWa(\''+eid+'\')">💬 WA</button>'+
       '<button class="btn bxs bk" onclick="event.stopPropagation();shareKakao(\''+eid+'\')">카카오</button>'+
       '<button class="btn bxs bgh" onclick="event.stopPropagation();quickEmail(\''+eid+'\')">메일</button>'+
       '<button class="btn bxs br" onclick="event.stopPropagation();delInv(\''+eid+'\')">삭제</button>'+
@@ -1180,6 +1230,18 @@ window.delInv=delInv;
 // ═══════════════════════════════════════════════════════════
 // STATUS MODAL
 // ═══════════════════════════════════════════════════════════
+async function quickStatusChange(id, newStatus){
+  var inv=invoices.find(function(i){return i.id===id;});
+  if(!inv||!inv._docId||!DB)return;
+  try{
+    await DB.collection('invoices').doc(inv._docId).update({status:newStatus});
+    inv.status=newStatus;
+    renderList();
+    showToast('✓ 상태 변경: '+(newStatus==='paid'?'결제완료':newStatus==='overdue'?'연체':'청구중'));
+  }catch(e){showToast('변경 실패: '+e.message);}
+}
+window.quickStatusChange=quickStatusChange;
+
 function openStatusModal(id){
   statusEditId=id;
   var sm=$('sm-id');if(sm)sm.textContent=id;
@@ -1221,7 +1283,7 @@ function renderAcc(){
   var mo={};
   yi.forEach(function(inv){var m=inv.date&&inv.date.slice(0,7);if(!m)return;if(!mo[m])mo[m]={invoices:[],total:0,paid:0};mo[m].invoices.push(inv);mo[m].total+=(inv.total||0);if(inv.status==='paid')mo[m].paid+=(inv.total||0);});
   var mn=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-  var sl={billing:'청구',paid:'결제완료',overdue:'연체'},sb={billing:'db',paid:'dp',overdue:'do'};
+  var sl={billing:'Billing',paid:'Paid',overdue:'Overdue'},sb={billing:'db',paid:'dp',overdue:'do'};
   var html='<div class="acs"><div class="acc"><div class="acv">'+yi.length+'</div><div class="acl">총 건수</div></div><div class="acc"><div class="acv" style="color:var(--green)">'+fmtAmt(pr)+'</div><div class="acl">수금</div></div><div class="acc"><div class="acv" style="color:var(--red)">'+fmtAmt(pa)+'</div><div class="acl">미수금</div></div></div><div style="padding:0 16px 8px;font-size:12px;font-weight:700;color:var(--navy)">'+selYear+'년 총 매출: '+fmtAmt(tr)+'</div>';
   var sorted=Object.keys(mo).sort(function(a,b){return b.localeCompare(a);});
   if(!sorted.length){html+='<div class="empty"><div class="et">'+selYear+'년 데이터 없음</div></div>';}
@@ -1422,6 +1484,33 @@ async function delSvc(id){
   localStorage.setItem(LSVC,JSON.stringify(services));
   renderSvcs();showToast('삭제됨');
 }
+// QR코드 업로드
+async function uploadBankQR(bankId, input){
+  var file=input.files[0];if(!file)return;
+  var reader=new FileReader();
+  reader.onload=async function(e){
+    var dataUrl=e.target.result;
+    var b=banks.find(function(x){return x.id===bankId;});
+    if(!b)return;
+    b.qr=dataUrl;
+    if(b._docId&&DB){
+      try{await DB.collection('banks').doc(b._docId).update({qr:dataUrl});}catch(e2){}
+    }
+    localStorage.setItem(LBNK,JSON.stringify(banks));
+    renderBanks();showToast('QR 저장됨');
+  };
+  reader.readAsDataURL(file);
+}
+async function delBankQR(bankId){
+  var b=banks.find(function(x){return x.id===bankId;});
+  if(!b)return;
+  b.qr='';
+  if(b._docId&&DB){try{await DB.collection('banks').doc(b._docId).update({qr:''});}catch(e){}}
+  localStorage.setItem(LBNK,JSON.stringify(banks));
+  renderBanks();showToast('QR 삭제됨');
+}
+window.uploadBankQR=uploadBankQR;window.delBankQR=delBankQR;
+
 window.addSvcTo=addSvcTo;window.moveSvc=moveSvc;window.delSvc=delSvc;window.saveSvcFld=saveSvcFld;
 
 // ═══════════════════════════════════════════════════════════
@@ -1432,14 +1521,25 @@ function renderBanks(){
   var cnt=$('bank-count');if(cnt)cnt.textContent=banks.length;
   if(!banks.length){el.innerHTML='<div style="text-align:center;padding:20px;color:var(--gray)">등록된 은행 없음</div>';return;}
   el.innerHTML=banks.map(function(b){
+    var qrSrc=b.qr||'';
     return '<div class="bkr" data-bid="'+b.id+'">'+
       '<div class="fr c2" style="margin-bottom:6px">'+
         '<input class="bnk-name" placeholder="은행명" style="font-size:13px">'+
         '<input class="bnk-num" placeholder="계좌번호" style="font-size:13px">'+
       '</div>'+
-      '<div style="display:flex;gap:8px;align-items:center">'+
+      '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'+
         '<input class="bnk-acc" placeholder="예금주" style="font-size:13px;flex:1">'+
         '<button class="btn bxs br" onclick="delBank(\''+b.id+'\')" style="flex-shrink:0">삭제</button>'+
+      '</div>'+
+      '<div style="display:flex;gap:10px;align-items:center">'+
+        '<div id="qr-prev-'+b.id+'" style="width:64px;height:64px;border:1px dashed var(--bdr);border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--il)">'+
+          (qrSrc?'<img src="'+qrSrc+'" style="width:100%;height:100%;object-fit:contain">':'<span style="font-size:10px;color:var(--gray)">QR</span>')+
+        '</div>'+
+        '<div style="display:flex;flex-direction:column;gap:4px">'+
+          '<label class="lb">QR코드 업로드</label>'+
+          '<input type="file" accept="image/*" onchange="uploadBankQR(\''+b.id+'\',this)" style="font-size:11px">'+
+          (qrSrc?'<button class="btn bxs br" onclick="delBankQR(\''+b.id+'\')">QR 삭제</button>':'')+
+        '</div>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -1534,7 +1634,7 @@ function getImgSection(){
 function getSignSection(){
   if(!imgData.sign)return'';
   return '<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--bdr)">'+
-    '<div style="font-size:10px;color:var(--gray);margin-bottom:4px">담당자 서명</div>'+
+    '<div style="font-size:10px;color:var(--gray);margin-bottom:4px">Authorized Signature</div>'+
     '<img src="'+imgData.sign+'" style="max-height:50px;max-width:120px;object-fit:contain">'+
   '</div>';
 }
