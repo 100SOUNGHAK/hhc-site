@@ -145,8 +145,19 @@ textarea{resize:vertical;line-height:1.6}
 <body>
 <div class="hdr">
   <div class="hdr-logo">HHC</div>
-  <div class="hdr-title">에어컨 기술점검보고서 작성</div>
+  <div class="hdr-title" id="hdr-title">에어컨 기술점검보고서 작성</div>
+  <button onclick="toggleView()" id="view-toggle-btn" style="padding:5px 12px;background:rgba(255,255,255,.15);color:#fff;border:0.5px solid rgba(255,255,255,.3);border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap">📋 목록</button>
   <div class="hdr-fb"><div class="fb-dot" id="fb-dot"></div>Firebase</div>
+</div>
+<!-- 보고서 목록 화면 -->
+<div id="list-view" style="display:none;max-width:680px;margin:0 auto;padding:16px">
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    <input id="list-search" placeholder="고객명 검색..." style="flex:1;padding:9px 12px;border-radius:8px;border:0.5px solid #dde1ee;font-size:13px" oninput="filterList()">
+    <button onclick="loadInspections()" style="padding:9px 14px;background:#0F1C3F;color:#fff;border:none;border-radius:8px;font-size:12px;cursor:pointer">🔄</button>
+  </div>
+  <div id="list-container">
+    <div style="text-align:center;padding:40px;color:#8a8a9a;font-size:13px">불러오는 중...</div>
+  </div>
 </div>
 <div class="main">
 
@@ -608,6 +619,108 @@ function setEval(btn){
   evalVal=btn.dataset.val;
 }
 
+// ── 뷰 토글
+var isListView=false;
+var allInspections=[];
+
+function toggleView(){
+  isListView=!isListView;
+  var form=document.querySelector('.main');
+  var list=document.getElementById('list-view');
+  var btn=document.getElementById('view-toggle-btn');
+  var title=document.getElementById('hdr-title');
+  if(isListView){
+    form.style.display='none';list.style.display='block';
+    btn.textContent='✏️ 작성';title.textContent='보고서 목록';
+    loadInspections();
+  }else{
+    form.style.display='block';list.style.display='none';
+    btn.textContent='📋 목록';title.textContent='에어컨 기술점검보고서 작성';
+  }
+}
+
+async function loadInspections(){
+  if(!DB)return;
+  try{
+    var snap=await DB.collection('inspections').orderBy('createdAt','desc').limit(50).get();
+    allInspections=snap.docs.map(function(d){return Object.assign({_id:d.id},d.data());});
+    renderList(allInspections);
+  }catch(e){
+    document.getElementById('list-container').innerHTML='<div style="text-align:center;padding:30px;color:#c0392b;font-size:13px">로딩 실패: '+e.message+'</div>';
+  }
+}
+
+function filterList(){
+  var q=(document.getElementById('list-search').value||'').toLowerCase();
+  var filtered=allInspections.filter(function(i){
+    return !q||(i.client||'').toLowerCase().includes(q)||(i.addr||'').toLowerCase().includes(q);
+  });
+  renderList(filtered);
+}
+
+function renderList(items){
+  var el=document.getElementById('list-container');
+  if(!items.length){el.innerHTML='<div style="text-align:center;padding:40px;color:#8a8a9a;font-size:13px">보고서 없음</div>';return;}
+  var evalLabels={normal:'🟢 정상',preventive:'🟡 예방정비',repair:'🟠 수리 권장',urgent:'🔴 즉시수리'};
+  el.innerHTML=items.map(function(inv){
+    var eid=inv._id;
+    var evalLabel=evalLabels[inv.eval]||'—';
+    return '<div style="background:#fff;border:0.5px solid #e0e0e8;border-radius:10px;overflow:hidden;margin-bottom:10px">'+
+      '<div style="padding:12px 14px;border-bottom:0.5px solid #f0f0f0">'+
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">'+
+          '<div style="font-size:14px;font-weight:600;color:#0F1C3F">'+(inv.client||'(이름없음)')+'</div>'+
+          '<div style="font-size:11px;color:#8a8a9a">'+(inv.date||'')+'</div>'+
+        '</div>'+
+        '<div style="font-size:12px;color:#6b7280;margin-bottom:6px">'+(inv.addr||'')+(inv.engineer?' · '+inv.engineer:'')+'</div>'+
+        '<div style="font-size:11px;font-weight:500;color:#374151">'+evalLabel+'</div>'+
+      '</div>'+
+      '<div style="display:flex;gap:6px;padding:10px 12px;flex-wrap:wrap">'+
+        '<button onclick="viewReport(''+eid+'')" style="flex:1;padding:7px;background:#f0f7ff;color:#1e40af;border:0.5px solid #bdd7f5;border-radius:6px;font-size:11px;cursor:pointer;font-weight:500">👁 보기</button>'+
+        '<button onclick="sendReport(''+eid+'')" style="flex:1;padding:7px;background:#25D366;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;font-weight:500">💬 WA 발송</button>'+
+        '<button onclick="copyKakao(''+eid+'')" style="flex:1;padding:7px;background:#FEE500;color:#3A1D1D;border:none;border-radius:6px;font-size:11px;cursor:pointer;font-weight:500">카카오</button>'+
+        '<button onclick="deleteInspection(''+eid+'')" style="padding:7px 10px;background:#fde8e8;color:#c0392b;border:none;border-radius:6px;font-size:11px;cursor:pointer">삭제</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+async function getShortUrl(id){
+  var url='https://hhc-3p8.pages.dev/inspect.html?id='+id;
+  try{
+    var snap=await DB.collection('shorts').where('url','==',url).limit(1).get();
+    if(!snap.empty)return 'https://hhc-3p8.pages.dev/r.html?k='+snap.docs[0].data().key;
+    var key=Math.random().toString(36).slice(2,8);
+    await DB.collection('shorts').add({key:key,url:url});
+    return 'https://hhc-3p8.pages.dev/r.html?k='+key;
+  }catch(e){return url;}
+}
+
+function viewReport(id){
+  window.open('https://hhc-3p8.pages.dev/inspect.html?id='+id,'_blank');
+}
+
+async function sendReport(id){
+  var shortUrl=await getShortUrl(id);
+  var msg='안녕하세요 😊\n\nHappy Home Care 에어컨 기술점검보고서를 확인해 주세요.\n\n📋 '+shortUrl+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+
+async function copyKakao(id){
+  var shortUrl=await getShortUrl(id);
+  var msg='안녕하세요 😊\n\nHappy Home Care 에어컨 기술점검보고서를 확인해 주세요.\n\n📋 '+shortUrl+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
+  navigator.clipboard.writeText(msg).then(function(){showToast('✓ 카카오톡 메시지 복사됨');});
+}
+
+async function deleteInspection(id){
+  if(!confirm('이 보고서를 삭제하시겠습니까?'))return;
+  try{
+    await DB.collection('inspections').doc(id).delete();
+    allInspections=allInspections.filter(function(i){return i._id!==id;});
+    renderList(allInspections);
+    showToast('✓ 삭제됨');
+  }catch(e){showToast('삭제 실패: '+e.message);}
+}
+
 // ── 초기화
 function init(){
   // 오늘 날짜
@@ -623,14 +736,297 @@ function init(){
   setTimeout(function(){document.getElementById('fb-dot').className='fb-dot on';},1000);
 }
 
-// ── 저장
-function saveReport(){
-  showToast('저장 중...');
-  // Firebase 저장 로직 (실제 구현 시 추가)
-  setTimeout(function(){showToast('✓ 보고서 저장됨 · 고객 링크 생성 완료');},1000);
+// ── 데이터 수집
+function collectData(){
+  // 냉방검사 유닛
+  var cu=[];
+  document.querySelectorAll('.cool-unit').forEach(function(el){
+    var id=el.id.replace('cool-','');
+    var label=el.querySelector('.cu-num').textContent;
+    var a=el.querySelector('[id^="cu-a-"]');
+    var b=el.querySelector('[id^="cu-b-"]');
+    var locInp=el.querySelector('[id^="cu-loc-inp-"]');
+    var isWarn=el.querySelector('.rsel-btn.warn');
+    cu.push({
+      label:label,
+      a:a?a.value:'',
+      b:b?b.value:'',
+      result:isWarn?'warn':'ok',
+      loc:locInp?locInp.value:'',
+      photoKey:'cool-'+id
+    });
+  });
+
+  // 종합결과
+  var results=[];
+  document.querySelectorAll('#result-rows .rtbl-row').forEach(function(row){
+    var inp=row.querySelector('input');
+    var sels=row.querySelectorAll('select');
+    if(inp&&sels[0]&&inp.value){
+      results.push({name:inp.value,status:sels[0].value,risk:sels[1]?sels[1].value:''});
+    }
+  });
+
+  // 누설검사 유닛
+  var lu=[];
+  document.querySelectorAll('#leak-units>div').forEach(function(row,i){
+    var inp=row.querySelector('input');
+    var sel=row.querySelector('select');
+    lu.push({label:'AC '+(i+1),loc:inp?inp.value:'',status:sel?sel.value:'ok'});
+  });
+
+  // 풍량측정
+  var af=[];
+  document.querySelectorAll('#airflow-units>div').forEach(function(row){
+    var inps=row.querySelectorAll('input');
+    if(inps[1]&&inps[1].value){
+      af.push({label:inps[0]?inps[0].value:'',speed:inps[1].value});
+    }
+  });
+
+  return {
+    client:document.getElementById('f-client').value,
+    date:document.getElementById('f-date').value,
+    addr:document.getElementById('f-addr').value,
+    engineer:document.getElementById('f-eng').value,
+    units:document.getElementById('f-units').value,
+    next:document.getElementById('f-next').value,
+    results:results,
+    coolUnits:cu,
+    ou_current:document.getElementById('ou-current').value,
+    ou_pressure:document.getElementById('ou-pressure').value,
+    ou_temp:document.getElementById('ou-temp').value,
+    ou_note:document.getElementById('ou-note').value,
+    leakUnits:lu,
+    airflowUnits:af,
+    eval:evalVal,
+    opinion:document.getElementById('f-opinion').value,
+    createdAt:new Date().toISOString()
+  };
 }
 
-window.onload=init;
+// ── Firebase Storage 사진 업로드
+async function uploadPhotoToStorage(key,dataUrl,reportId){
+  if(!dataUrl||!ST)return null;
+  try{
+    var blob=await fetch(dataUrl).then(function(r){return r.blob();});
+    var ext=blob.type.includes('png')?'png':'jpg';
+    var ref=ST.ref('inspections/'+reportId+'/'+key+'.'+ext);
+    var snap=await ref.put(blob,{contentType:blob.type});
+    return await snap.ref.getDownloadURL();
+  }catch(e){console.error('photo upload err',e);return null;}
+}
+
+// ── 단축 URL
+async function shorten(url){
+  if(!DB)return url;
+  try{
+    var snap=await DB.collection('shorts').where('url','==',url).limit(1).get();
+    if(!snap.empty)return 'https://hhc-3p8.pages.dev/r.html?k='+snap.docs[0].data().key;
+    var key=Math.random().toString(36).slice(2,8);
+    await DB.collection('shorts').add({key:key,url:url});
+    return 'https://hhc-3p8.pages.dev/r.html?k='+key;
+  }catch(e){return url;}
+}
+
+// ── 링크 발송 모달
+var currentReportId='';
+var currentShortUrl='';
+function showSendModal(id,shortUrl){
+  currentReportId=id;currentShortUrl=shortUrl;
+  var modal=document.getElementById('send-modal');
+  if(modal){
+    document.getElementById('sm-link').textContent=shortUrl;
+    updateSendMsg();
+    modal.classList.remove('hidden');
+  }
+}
+function updateSendMsg(){
+  var lang=document.querySelector('input[name="send-lang"]:checked');
+  var l=lang?lang.value:'ko';
+  var link=currentShortUrl;
+  var msgs={
+    ko:'안녕하세요 😊
+
+Happy Home Care 에어컨 기술점검보고서를 확인해 주세요.
+
+📋 '+link+'
+
+HAPPY WORKS SERVICES SDN.BHD.
+📞 +60172472774',
+    en:'Hello 😊
+
+Please check your Happy Home Care AC Inspection Report.
+
+📋 '+link+'
+
+HAPPY WORKS SERVICES SDN.BHD.
+📞 +60172472774'
+  };
+  var box=document.getElementById('sm-msg');
+  if(box)box.value=msgs[l]||msgs.ko;
+}
+function sendWa(){
+  var msg=document.getElementById('sm-msg').value;
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+function sendKakao(){
+  var msg=document.getElementById('sm-msg').value;
+  navigator.clipboard.writeText(msg).then(function(){showToast('✓ 카카오톡 메시지 복사됨');});
+}
+
+// ── 실제 저장
+async function saveReport(){
+  if(!DB){showToast('Firebase 연결 안됨');return;}
+  var btn=document.getElementById('btn-save');
+  btn.disabled=true;btn.textContent='저장 중...';
+
+  try{
+    var data=collectData();
+    if(!data.client||!data.date){showToast('고객명과 점검일을 입력해 주세요.');btn.disabled=false;btn.textContent='💾 저장하고 고객 링크 생성';return;}
+
+    showToast('저장 중...');
+
+    // Firestore에 먼저 저장해서 ID 확보
+    var ref=await DB.collection('inspections').add(data);
+    var reportId=ref.id;
+
+    // 사진 업로드 (명판류)
+    var photoUploads={};
+    for(var key of['nameplate','pressure','current']){
+      if(photoData[key]){
+        var url=await uploadPhotoToStorage(key,photoData[key],reportId);
+        if(url)photoUploads['photo_'+key]=url;
+      }
+    }
+
+    // 냉방검사 사진
+    var coolPhotoUrls={};
+    for(var cu of data.coolUnits){
+      var pk=cu.photoKey;
+      if(photoData[pk]){
+        var purl=await uploadPhotoToStorage(pk,photoData[pk],reportId);
+        if(purl)coolPhotoUrls[pk]=purl;
+      }
+    }
+
+    // 일반 사진들
+    var genPhotos={workPhotos:[],cleanPhotos:[],leakPhotos:[],afPhotos:[],ouPhotos:[]};
+    for(var pkey of Object.keys(photoData)){
+      if(pkey.startsWith('work-photos')){var u2=await uploadPhotoToStorage(pkey,photoData[pkey],reportId);if(u2)genPhotos.workPhotos.push(u2);}
+      else if(pkey.startsWith('clean-photos')){var u2=await uploadPhotoToStorage(pkey,photoData[pkey],reportId);if(u2)genPhotos.cleanPhotos.push(u2);}
+      else if(pkey.startsWith('leak-photos')){var u2=await uploadPhotoToStorage(pkey,photoData[pkey],reportId);if(u2)genPhotos.leakPhotos.push(u2);}
+      else if(pkey.startsWith('airflow-photos')){var u2=await uploadPhotoToStorage(pkey,photoData[pkey],reportId);if(u2)genPhotos.afPhotos.push(u2);}
+    }
+
+    // coolPhotoUrls를 coolUnits에 포함
+    data.coolUnits=data.coolUnits.map(function(cu){
+      var url=coolPhotoUrls[cu.photoKey];
+      return Object.assign({},cu,url?{photo:url}:{});
+    });
+
+    // 최종 업데이트
+    var finalData=Object.assign({},data,photoUploads,genPhotos,{_id:reportId,updatedAt:new Date().toISOString()});
+    await DB.collection('inspections').doc(reportId).set(finalData);
+
+    // 단축 URL 생성
+    var reportUrl='https://hhc-3p8.pages.dev/inspect.html?id='+reportId;
+    var shortUrl=await shorten(reportUrl);
+
+    showToast('✓ 저장 완료');
+    btn.disabled=false;btn.textContent='💾 저장하고 고객 링크 생성';
+
+    // 발송 모달 표시
+    showSendModal(reportId,shortUrl);
+
+  }catch(e){
+    console.error(e);
+    showToast('저장 실패: '+e.message);
+    btn.disabled=false;btn.textContent='💾 저장하고 고객 링크 생성';
+  }
+}
+
+// ── Firebase 초기화
+var DB=null,ST=null;
+function initFirebase(){
+  var FB_CFG={
+    apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
+    authDomain:"happywork-packageplan.firebaseapp.com",
+    projectId:"happywork-packageplan",
+    storageBucket:"happywork-packageplan.firebasestorage.app",
+    messagingSenderId:"101289103022",
+    appId:"1:101289103022:web:d81aca7f3747dd26df673f"
+  };
+  if(!firebase.apps.length)firebase.initializeApp(FB_CFG);
+  DB=firebase.firestore();
+  ST=firebase.storage();
+  document.getElementById('fb-dot').className='fb-dot on';
+  loadTemplates();
+}
+
+// ── 저장된 템플릿 불러오기
+async function loadTemplates(){
+  try{
+    var snap=await DB.collection('inspect_templates').doc('default').get();
+    if(snap.exists){
+      var t=snap.data();
+      if(t.opinion&&!document.getElementById('f-opinion').value){
+        document.getElementById('f-opinion').value=t.opinion;
+      }
+    }
+  }catch(e){}
+}
+
+// ── 토글 ON 시 템플릿 저장
+document.addEventListener('click',function(e){
+  var tog=e.target.closest('.stog');
+  if(!tog)return;
+  var sw=tog.querySelector('.stog-sw');
+  if(!sw)return;
+  var isOn=sw.classList.contains('on');
+  if(isOn&&DB){
+    // 최종의견 저장
+    var opinion=document.getElementById('f-opinion');
+    if(opinion&&tog.closest('.card')){
+      DB.collection('inspect_templates').doc('default').set({opinion:opinion.value},{merge:true})
+        .then(function(){showToast('📌 템플릿 저장됨');}).catch(function(){});
+    }
+  }
+});
+
+window.onload=function(){
+  init();
+};
 </script>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script>initFirebase();</script>
+
+<!-- 발송 모달 -->
+<div class="hidden" id="send-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;display:flex;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)this.classList.add('hidden')">
+  <div style="background:#fff;border-radius:16px;padding:20px;max-width:380px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+    <div style="font-size:15px;font-weight:700;color:#0F1C3F;margin-bottom:4px">📤 보고서 링크 발송</div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:12px">저장 완료 · 고객 링크 생성됨</div>
+    <div style="background:#f0f7ff;border:0.5px solid #bdd7f5;border-radius:6px;padding:8px 10px;font-size:11px;font-family:monospace;color:#1e40af;margin-bottom:12px;word-break:break-all" id="sm-link"></div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <label style="flex:1;display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:7px;border:0.5px solid #dde1ee;border-radius:6px">
+        <input type="radio" name="send-lang" value="ko" checked onchange="updateSendMsg()"> 🇰🇷 한국어
+      </label>
+      <label style="flex:1;display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:7px;border:0.5px solid #dde1ee;border-radius:6px">
+        <input type="radio" name="send-lang" value="en" onchange="updateSendMsg()"> 🇬🇧 English
+      </label>
+    </div>
+    <textarea id="sm-msg" rows="6" style="width:100%;font-size:11px;padding:8px;border:0.5px solid #dde1ee;border-radius:6px;resize:none;margin-bottom:10px;line-height:1.6"></textarea>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <button onclick="sendWa()" style="padding:10px;background:#25D366;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">💬 WhatsApp</button>
+      <button onclick="sendKakao()" style="padding:10px;background:#FEE500;color:#3A1D1D;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">카카오 복사</button>
+    </div>
+    <button onclick="document.getElementById('send-modal').classList.add('hidden')" style="width:100%;padding:9px;background:#f0f2f8;color:#6b7280;border:0.5px solid #dde1ee;border-radius:8px;font-size:12px;cursor:pointer">닫기</button>
+  </div>
+</div>
+
 </body>
 </html>

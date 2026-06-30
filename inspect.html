@@ -507,34 +507,133 @@ function renderReport(data){
   if(!has5)document.getElementById('tab-p5').style.display='none';
 }
 
-// 샘플 데이터 (실제는 Firebase에서 로드)
-var sampleData={
-  client:'홍길동',date:'2026-06-30',addr:'Kuala Lumpur',engineer:'승학 백',units:'4 Units',next:'3개월 후',
-  opinion:'본 장비는 냉방은 가능하나 에바포레이터 냉각 불균형이 확인되었습니다. 조속한 정비를 권장합니다.',
-  eval:'repair',
-  results:[
-    {name:'냉방성능',status:'warn',risk:'o'},
-    {name:'에바포레이터',status:'warn',risk:'r'},
-    {name:'드레인 배관',status:'bad',risk:'r'},
-    {name:'팬모터',status:'warn',risk:'o'},
-    {name:'냉매',status:'ok',risk:'g'},
-    {name:'실외기',status:'ok',risk:'g'}
-  ],
-  coolUnits:[
-    {label:'A1',a:'28.5',b:'12.3',result:'ok'},
-    {label:'A2',a:'27.8',b:'16.1',result:'warn',loc:'방 1 벽걸이형'}
-  ],
-  ou_current:'6.83',ou_pressure:'145',ou_temp:'30.2/9.5',
-  leakUnits:[
-    {label:'AC 1',status:'ok'},{label:'AC 2',status:'ok'},
-    {label:'AC 3',status:'ok'},{label:'AC 4',status:'ok'}
-  ],
-  airflowUnits:[{label:'AC1',speed:'1.8'},{label:'AC2',speed:'3.2'}]
-};
+// ── Firebase 초기화 및 데이터 로드
+var DB=null;
+function initFirebase(){
+  var FB_CFG={
+    apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
+    authDomain:"happywork-packageplan.firebaseapp.com",
+    projectId:"happywork-packageplan",
+    storageBucket:"happywork-packageplan.firebasestorage.app",
+    messagingSenderId:"101289103022",
+    appId:"1:101289103022:web:d81aca7f3747dd26df673f"
+  };
+  if(!firebase.apps.length)firebase.initializeApp(FB_CFG);
+  DB=firebase.firestore();
+  loadReport();
+}
+
+async function loadReport(){
+  var params=new URLSearchParams(location.search);
+  var id=params.get('id');
+  if(!id){
+    // id 없으면 샘플 표시
+    renderReport(getSampleData());
+    return;
+  }
+  try{
+    document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:-apple-system,sans-serif;color:#6b7280;font-size:14px">보고서 불러오는 중...</div>';
+    var snap=await DB.collection('inspections').doc(id).get();
+    if(!snap.exists){document.body.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:-apple-system,sans-serif;color:#c0392b;font-size:14px">보고서를 찾을 수 없습니다.</div>';return;}
+    location.reload(); // 페이지 구조 복원 후 데이터 주입
+  }catch(e){
+    console.error(e);
+    renderReport(getSampleData());
+  }
+}
+
+// 새로고침 없이 직접 주입하는 방식으로 개선
+window._reportData=null;
+async function loadAndRender(){
+  var params=new URLSearchParams(location.search);
+  var id=params.get('id');
+  if(!id){renderReport(getSampleData());return;}
+  var loading=document.createElement('div');
+  loading.id='loading-overlay';
+  loading.style='position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:-apple-system,sans-serif;color:#0F1C3F;font-size:14px;gap:10px';
+  loading.innerHTML='<div style="width:20px;height:20px;border:2px solid #0D9488;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></div>보고서 불러오는 중...';
+  document.head.insertAdjacentHTML('beforeend','<style>@keyframes spin{to{transform:rotate(360deg)}}</style>');
+  document.body.appendChild(loading);
+  try{
+    var snap=await DB.collection('inspections').doc(id).get();
+    if(!snap.exists){loading.innerHTML='<div style="color:#c0392b">보고서를 찾을 수 없습니다.</div>';return;}
+    var data=snap.data();
+    data._id=id;
+    renderReport(data);
+    loading.remove();
+  }catch(e){
+    console.error(e);
+    loading.innerHTML='<div style="color:#c0392b">로딩 오류: '+e.message+'</div>';
+    setTimeout(function(){loading.remove();renderReport(getSampleData());},2000);
+  }
+}
+
+function getSampleData(){
+  return {
+    client:'홍길동',date:'2026-06-30',addr:'Kuala Lumpur',engineer:'승학 백',units:'4 Units',next:'3개월 후',
+    opinion:'본 장비는 냉방은 가능하나 에바포레이터 냉각 불균형이 확인되었습니다. 조속한 정비를 권장합니다.',
+    eval:'repair',
+    results:[
+      {name:'냉방성능',status:'warn',risk:'o'},
+      {name:'에바포레이터',status:'warn',risk:'r'},
+      {name:'드레인 배관',status:'bad',risk:'r'},
+      {name:'팬모터',status:'warn',risk:'o'},
+      {name:'냉매',status:'ok',risk:'g'},
+      {name:'실외기',status:'ok',risk:'g'}
+    ],
+    coolUnits:[
+      {label:'A1',a:'28.5',b:'12.3',result:'ok'},
+      {label:'A2',a:'27.8',b:'16.1',result:'warn',loc:'방 1 벽걸이형'}
+    ],
+    ou_current:'6.83',ou_pressure:'145',ou_temp:'30.2/9.5',
+    leakUnits:[
+      {label:'AC 1',status:'ok'},{label:'AC 2',status:'ok'},
+      {label:'AC 3',status:'ok'},{label:'AC 4',status:'ok'}
+    ],
+    airflowUnits:[{label:'AC1',speed:'1.8'},{label:'AC2',speed:'3.2'}]
+  };
+}
 
 window.onload=function(){
-  renderReport(sampleData);
+  // DOM 로드 후 Firebase 초기화
 };
+</script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script>
+  var FB_CFG2={
+    apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
+    authDomain:"happywork-packageplan.firebaseapp.com",
+    projectId:"happywork-packageplan",
+    storageBucket:"happywork-packageplan.firebasestorage.app",
+    messagingSenderId:"101289103022",
+    appId:"1:101289103022:web:d81aca7f3747dd26df673f"
+  };
+  if(!firebase.apps.length)firebase.initializeApp(FB_CFG2);
+  var DB2=firebase.firestore();
+  var params2=new URLSearchParams(location.search);
+  var rid=params2.get('id');
+  if(rid){
+    var lov=document.createElement('div');
+    lov.style='position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:-apple-system,sans-serif;color:#0F1C3F;font-size:14px;gap:10px';
+    lov.innerHTML='<div style="width:20px;height:20px;border:2px solid #0D9488;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></div>보고서 불러오는 중...';
+    document.head.insertAdjacentHTML('beforeend','<style>@keyframes spin{to{transform:rotate(360deg)}}</style>');
+    document.body.appendChild(lov);
+    DB2.collection('inspections').doc(rid).get().then(function(snap){
+      lov.remove();
+      if(snap.exists){renderReport(snap.data());}
+      else{
+        var s=document.createElement('div');
+        s.style='position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;font-family:-apple-system,sans-serif;color:#c0392b;font-size:14px';
+        s.textContent='보고서를 찾을 수 없습니다.';
+        document.body.appendChild(s);
+      }
+    }).catch(function(e){lov.remove();renderReport(getSampleData());});
+  }else{
+    // id 없으면 샘플
+    window.onload=function(){renderReport(getSampleData());};
+  }
 </script>
 </body>
 </html>
