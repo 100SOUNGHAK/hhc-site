@@ -381,7 +381,7 @@ textarea{resize:none;line-height:1.5}
     </div>
   </div>
   <!-- 서비스 항목 -->
-  <div class="sh"><span class="sht">서비스 항목 (<span id="svc-count">0</span>개)</span><span style="font-size:11px;color:var(--gray)">각 분류별 + 추가 버튼 사용</span></div>
+  <div class="sh"><span class="sht">서비스 항목 (<span id="svc-count">0</span>개)</span><button class="btn bxs bgh" onclick="migrateCats()" style="font-size:11px">🔄 카테고리 업데이트</button></div>
   <div class="card" style="margin:0 16px 20px" id="services-list"></div>
   <!-- 은행 계좌 -->
   <div class="sh"><span class="sht">은행 계좌 (<span id="bank-count">0</span>개)</span><button class="btn bp bsm" id="add-bank-btn">+ 추가</button></div>
@@ -545,6 +545,8 @@ function getSubcats(cat){return CAT_STRUCT[cat]||[];}
 // 에어컨 소분류 (3단계)
 function getSubcatItems(cat,subcat){return AC_SUBTYPES[subcat]||[];}
 var TOP_CATS=['청소','수리','설치','회원제상품(가정용)','회원제상품(매장용)','기타'];
+// 구버전 카테고리명 → 신버전 매핑
+var CAT_MIGRATE={'회원제상품':'회원제상품(가정용)'};
 
 var DEF_SVC=[
   {id:'ds1',cat:'청소',subcat:'에어컨(가정용)',name:'기본청소',price:80,unit:'대',order:0},
@@ -1472,8 +1474,11 @@ function renderSvcs(){
   TOP_CATS.forEach(function(topCat){
     html+='<div class="svc-cat-hdr"><span>'+topCat+'</span></div>';
     var subcats=(CAT_STRUCT[topCat]||[]).slice();
+    // 구버전 카테고리명으로 저장된 데이터도 현재 카테고리에 표시
+    var legacyCatKey=Object.keys(CAT_MIGRATE).find(function(k){return CAT_MIGRATE[k]===topCat;});
     services.forEach(function(s){
-      if(s.cat===topCat&&s.subcat&&subcats.indexOf(s.subcat)<0)subcats.push(s.subcat);
+      var effCat=(CAT_MIGRATE[s.cat]||s.cat);
+      if(effCat===topCat&&s.subcat&&subcats.indexOf(s.subcat)<0)subcats.push(s.subcat);
     });
     subcats.forEach(function(subcat){
       var acSubs=AC_SUBTYPES[subcat]||[];
@@ -1481,7 +1486,7 @@ function renderSvcs(){
         // 에어컨처럼 소분류가 있는 경우 → 소분류별로 그룹
         html+='<div class="svc-sub-hdr" style="background:var(--il)"><span>📦 '+subcat+'</span></div>';
         // 기존 sub2 없는 서비스 (기존 데이터 마이그레이션용) → 별도 표시
-        var legacySvcs=services.filter(function(s){return s.cat===topCat&&s.subcat===subcat&&!s.sub2;});
+        var legacySvcs=services.filter(function(s){return (s.cat===topCat||(CAT_MIGRATE[s.cat]===topCat))&&s.subcat===subcat&&!s.sub2;});
         if(legacySvcs.length){
           html+='<div class="svc-sub-hdr" style="padding-left:20px;background:#fff8e1"><span>↳ 기존 서비스 (소분류 미지정)</span>'+
             '<button class="btn bxs bgh" onclick="showLegacyMigrate(\''+topCat+'\',\''+subcat+'\')" style="font-size:10px">소분류 배정</button></div>';
@@ -1514,7 +1519,7 @@ function renderSvcs(){
         });
       }else{
         // 일반 중분류
-        var svcs=services.filter(function(s){return s.cat===topCat&&s.subcat===subcat&&!s.sub2;});
+        var svcs=services.filter(function(s){return (s.cat===topCat||(CAT_MIGRATE[s.cat]===topCat))&&s.subcat===subcat&&!s.sub2;});
         svcs.sort(function(a,b){return(a.order||0)-(b.order||0);});
         html+='<div class="svc-sub-hdr"><span>'+subcat+'</span>'+
           '<button class="btn bxs bp" onclick="addSvcTo(\''+topCat+'\',\''+subcat+'\')">+ 추가</button></div>';
@@ -1571,6 +1576,26 @@ function moveSvc(id,dir){
   renderSvcs();
 }
 // 기존 에어컨 서비스에 소분류 배정
+// 구버전 카테고리명 자동 마이그레이션
+async function migrateCats(){
+  var toMigrate=services.filter(function(s){return CAT_MIGRATE[s.cat];});
+  if(!toMigrate.length){showToast('마이그레이션할 데이터 없음');return;}
+  showLoad('마이그레이션 중...');
+  try{
+    for(var i=0;i<toMigrate.length;i++){
+      var s=toMigrate[i];
+      var newCat=CAT_MIGRATE[s.cat];
+      s.cat=newCat;
+      if(s._docId&&DB)await DB.collection('services').doc(s._docId).update({cat:newCat});
+    }
+    localStorage.setItem(LSVC,JSON.stringify(services));
+    renderSvcs();
+    showToast('✓ '+toMigrate.length+'개 항목 마이그레이션 완료');
+  }catch(e){showToast('마이그레이션 실패: '+e.message);}
+  finally{hideLoad();}
+}
+window.migrateCats=migrateCats;
+
 async function assignSub2(id, sub2){
   if(!sub2)return;
   var s=services.find(function(x){return x.id===id;});if(!s)return;
