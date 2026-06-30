@@ -1484,30 +1484,36 @@ async function delSvc(id){
   localStorage.setItem(LSVC,JSON.stringify(services));
   renderSvcs();showToast('삭제됨');
 }
-// QR코드 업로드
+// QR코드 업로드 — Firebase Storage에 저장
 async function uploadBankQR(bankId, input){
   var file=input.files[0];if(!file)return;
-  var reader=new FileReader();
-  reader.onload=async function(e){
-    var dataUrl=e.target.result;
+  showLoad('QR 업로드 중...');
+  try{
     var b=banks.find(function(x){return x.id===bankId;});
-    if(!b)return;
-    b.qr=dataUrl;
+    if(!b){hideLoad();return;}
+    // Firebase Storage에 업로드
+    if(!ST){showToast('Storage 연결 안됨');hideLoad();return;}
+    var fileName='banks/qr_'+bankId+'_'+Date.now()+'.png';
+    var storageRef=ST.ref(fileName);
+    var snapshot=await storageRef.put(file,{contentType:file.type||'image/png'});
+    var downloadURL=await snapshot.ref.getDownloadURL();
+    // Firestore에 URL 저장
+    b.qr=downloadURL;
     if(b._docId&&DB){
-      try{await DB.collection('banks').doc(b._docId).update({qr:dataUrl});}catch(e2){}
+      await DB.collection('banks').doc(b._docId).update({qr:downloadURL});
     }
-    localStorage.setItem(LBNK,JSON.stringify(banks));
-    renderBanks();showToast('QR 저장됨');
-  };
-  reader.readAsDataURL(file);
+    renderBanks();
+    App.upPrev();
+    showToast('✓ QR 저장됨');
+  }catch(e){showToast('QR 업로드 실패: '+e.message);console.error(e);}
+  finally{hideLoad();}
 }
 async function delBankQR(bankId){
   var b=banks.find(function(x){return x.id===bankId;});
   if(!b)return;
   b.qr='';
   if(b._docId&&DB){try{await DB.collection('banks').doc(b._docId).update({qr:''});}catch(e){}}
-  localStorage.setItem(LBNK,JSON.stringify(banks));
-  renderBanks();showToast('QR 삭제됨');
+  renderBanks();App.upPrev();showToast('QR 삭제됨');
 }
 window.uploadBankQR=uploadBankQR;window.delBankQR=delBankQR;
 
