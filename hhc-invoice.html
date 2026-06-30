@@ -1467,6 +1467,24 @@ function renderSvcs(){
       if(acSubs.length){
         // 에어컨처럼 소분류가 있는 경우 → 소분류별로 그룹
         html+='<div class="svc-sub-hdr" style="background:var(--il)"><span>📦 '+subcat+'</span></div>';
+        // 기존 sub2 없는 서비스 (기존 데이터 마이그레이션용) → 별도 표시
+        var legacySvcs=services.filter(function(s){return s.cat===topCat&&s.subcat===subcat&&!s.sub2;});
+        if(legacySvcs.length){
+          html+='<div class="svc-sub-hdr" style="padding-left:20px;background:#fff8e1"><span>↳ 기존 서비스 (소분류 미지정)</span>'+
+            '<button class="btn bxs bgh" onclick="showLegacyMigrate(\''+topCat+'\',\''+subcat+'\')" style="font-size:10px">소분류 배정</button></div>';
+          legacySvcs.forEach(function(s){
+            html+='<div class="svc-row" data-sid="'+s.id+'" style="padding-left:20px;background:#fff8e1">'+
+              '<div class="svc-ord"><button onclick="moveSvc(\''+s.id+'\',\'up\')">▲</button><button onclick="moveSvc(\''+s.id+'\',\'dn\')">▼</button></div>'+
+              '<input class="svc-name" placeholder="서비스명" style="font-size:13px">'+
+              '<input class="svc-price" type="number" min="0" step="0.5" style="font-size:13px">'+
+              '<select class="svc-sub2" style="font-size:11px" onchange="assignSub2(\''+s.id+'\',this.value)">'+
+                '<option value="">소분류 배정...</option>'+
+                acSubs.map(function(a){return '<option value="'+a+'">'+a+'</option>';}).join('')+
+              '</select>'+
+              '<button class="btn bxs br" onclick="delSvc(\''+s.id+'\')">삭제</button>'+
+            '</div>';
+          });
+        }
         acSubs.forEach(function(sub2){
           var svcs=services.filter(function(s){return s.cat===topCat&&s.subcat===subcat&&s.sub2===sub2;});
           svcs.sort(function(a,b){return(a.order||0)-(b.order||0);});
@@ -1539,6 +1557,17 @@ function moveSvc(id,dir){
   localStorage.setItem(LSVC,JSON.stringify(services));
   renderSvcs();
 }
+// 기존 에어컨 서비스에 소분류 배정
+async function assignSub2(id, sub2){
+  if(!sub2)return;
+  var s=services.find(function(x){return x.id===id;});if(!s)return;
+  s.sub2=sub2;
+  if(s._docId&&DB){try{await DB.collection('services').doc(s._docId).update({sub2:sub2});}catch(e){}}
+  localStorage.setItem(LSVC,JSON.stringify(services));
+  renderSvcs();showToast('소분류 배정됨: '+sub2);
+}
+window.assignSub2=assignSub2;
+
 async function delSvc(id){
   if(!confirm('삭제?'))return;
   var s=services.find(function(x){return x.id===id;});
