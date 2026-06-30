@@ -142,10 +142,7 @@ textarea{resize:vertical;line-height:1.6}
 .toast.show{opacity:1}
 .hidden{display:none!important}
 </style>
-<!-- Firebase SDK -->
-<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/compat/app.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/compat/firestore.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/firebase@9.23.0/compat/storage.js"></script>
+<!-- Firebase SDK는 module script에서 import -->
 </head>
 <body>
 <div class="hdr">
@@ -359,7 +356,11 @@ textarea{resize:vertical;line-height:1.6}
 
 <div class="toast" id="toast"></div>
 
-<script>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, doc, addDoc, setDoc, getDocs, deleteDoc, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
+
 // ── 전역 상태
 var coolUnits=[], leakUnits=[], airflowUnits=[], extraItems=[], resultRows=[], evalVal='', photoData={};
 var savedOpinion='', savedCauses={};
@@ -667,7 +668,7 @@ function toggleView(){
 async function loadInspections(){
   if(!DB)return;
   try{
-    var snap=await DB.collection('inspections').orderBy('createdAt','desc').limit(50).get();
+    var snap=await getDocs(query(collection(DB,'inspections'),orderBy('createdAt','desc'),limit(50)));
     allInspections=snap.docs.map(function(d){return Object.assign({_id:d.id},d.data());});
     renderList(allInspections);
   }catch(e){
@@ -712,10 +713,10 @@ function renderList(items){
 async function getShortUrl(id){
   var url='https://hhc-3p8.pages.dev/inspect.html?id='+id;
   try{
-    var snap=await DB.collection('shorts').where('url','==',url).limit(1).get();
+    var snap=await getDocs(query(collection(DB,'shorts'),where('url','==',url),limit(1)));
     if(!snap.empty)return 'https://hhc-3p8.pages.dev/r.html?k='+snap.docs[0].data().key;
     var key=Math.random().toString(36).slice(2,8);
-    await DB.collection('shorts').add({key:key,url:url});
+    await addDoc(collection(DB,'shorts'),{key:key,url:url});
     return 'https://hhc-3p8.pages.dev/r.html?k='+key;
   }catch(e){return url;}
 }
@@ -739,7 +740,7 @@ async function copyKakao(id){
 async function deleteInspection(id){
   if(!confirm('이 보고서를 삭제하시겠습니까?'))return;
   try{
-    await DB.collection('inspections').doc(id).delete();
+    await deleteDoc(doc(DB,'inspections',id));
     allInspections=allInspections.filter(function(i){return i._id!==id;});
     renderList(allInspections);
     showToast('✓ 삭제됨');
@@ -836,9 +837,9 @@ async function uploadPhotoToStorage(key,dataUrl,reportId){
   try{
     var blob=await fetch(dataUrl).then(function(r){return r.blob();});
     var ext=blob.type.includes('png')?'png':'jpg';
-    var ref=ST.ref('inspections/'+reportId+'/'+key+'.'+ext);
-    var snap=await ref.put(blob,{contentType:blob.type});
-    return await snap.ref.getDownloadURL();
+    var storageRef=ref(ST,'inspections/'+reportId+'/'+key+'.'+ext);
+    var snap=await uploadBytes(storageRef,blob,{contentType:blob.type});
+    return await getDownloadURL(snap.ref);
   }catch(e){console.error('photo upload err',e);return null;}
 }
 
@@ -857,10 +858,10 @@ async function translateToEn(text){
 async function shorten(url){
   if(!DB)return url;
   try{
-    var snap=await DB.collection('shorts').where('url','==',url).limit(1).get();
+    var snap=await getDocs(query(collection(DB,'shorts'),where('url','==',url),limit(1)));
     if(!snap.empty)return 'https://hhc-3p8.pages.dev/r.html?k='+snap.docs[0].data().key;
     var key=Math.random().toString(36).slice(2,8);
-    await DB.collection('shorts').add({key:key,url:url});
+    await addDoc(collection(DB,'shorts'),{key:key,url:url});
     return 'https://hhc-3p8.pages.dev/r.html?k='+key;
   }catch(e){return url;}
 }
@@ -957,7 +958,7 @@ async function saveReport(){
     showToast('저장 중...');
 
     // Firestore에 먼저 저장해서 ID 확보
-    var ref=await DB.collection('inspections').add(data);
+    var ref=await addDoc(collection(DB,'inspections'),data);
     var reportId=ref.id;
 
     // 사진 업로드 (명판류)
@@ -996,7 +997,7 @@ async function saveReport(){
 
     // 최종 업데이트
     var finalData=Object.assign({},data,photoUploads,genPhotos,{_id:reportId,updatedAt:new Date().toISOString()});
-    await DB.collection('inspections').doc(reportId).set(finalData);
+    await setDoc(doc(DB,'inspections',reportId),finalData);
 
     // 단축 URL 생성
     var reportUrl='https://hhc-3p8.pages.dev/inspect.html?id='+reportId;
@@ -1029,9 +1030,9 @@ function initFirebase(){
       messagingSenderId:"101289103022",
       appId:"1:101289103022:web:d81aca7f3747dd26df673f"
     };
-    if(!firebase.apps.length)firebase.initializeApp(FB_CFG);
-    DB=firebase.firestore();
-    ST=firebase.storage();
+    var app=initializeApp(FB_CFG);
+    DB=getFirestore(app);
+    ST=getStorage(app);
     var dot=document.getElementById('fb-dot');
     if(dot)dot.className='fb-dot on';
     loadTemplates();
@@ -1047,9 +1048,9 @@ function initFirebase(){
 // ── 저장된 템플릿 불러오기
 async function loadTemplates(){
   try{
-    var snap=await DB.collection('inspect_templates').doc('default').get();
-    if(snap.exists){
-      var t=snap.data();
+    var snap=await getDocs(query(collection(DB,'inspect_templates')));
+    if(!snap.empty){
+      var t=snap.docs[0].data();
       if(t.opinion&&!document.getElementById('f-opinion').value){
         document.getElementById('f-opinion').value=t.opinion;
       }
@@ -1068,29 +1069,51 @@ document.addEventListener('click',function(e){
     // 최종의견 저장
     var opinion=document.getElementById('f-opinion');
     if(opinion&&tog.closest('.card')){
-      DB.collection('inspect_templates').doc('default').set({opinion:opinion.value},{merge:true})
+      setDoc(doc(DB,'inspect_templates','default'),{opinion:opinion.value},{merge:true})
         .then(function(){showToast('📌 템플릿 저장됨');}).catch(function(){});
     }
   }
 });
 
+// module에서 전역 함수 노출
+window.saveReport=saveReport;
+window.addResultRow=addResultRow;
+window.delResultRow=delResultRow;
+window.addCoolUnit=addCoolUnit;
+window.delCoolUnit=delCoolUnit;
+window.calcCoolDiff=calcCoolDiff;
+window.setCoolResult=setCoolResult;
+window.setCoolPhoto=setCoolPhoto;
+window.addLeakUnit=addLeakUnit;
+window.addAirflowUnit=addAirflowUnit;
+window.checkAirflow=checkAirflow;
+window.addExtraItem=addExtraItem;
+window.toggleExtra=toggleExtra;
+window.toggleCause=toggleCause;
+window.toggleStog=toggleStog;
+window.setEval=setEval;
+window.triggerPhoto=triggerPhoto;
+window.previewNamedPhoto=previewNamedPhoto;
+window.delPhoto=delPhoto;
+window.addPhotos=addPhotos;
+window.addResultRow=addResultRow;
+window.updateRow=updateRow;
+window.updateRowColor=updateRowColor;
+window.toggleView=toggleView;
+window.loadInspections=loadInspections;
+window.filterList=filterList;
+window.viewReport=viewReport;
+window.sendReport=sendReport;
+window.copyKakao=copyKakao;
+window.deleteInspection=deleteInspection;
+window.setAdminLang=setAdminLang;
+window.updateSendMsg=updateSendMsg;
+window.sendWa=sendWa;
+window.sendKakao=sendKakao;
+
 window.onload=function(){
   init();
-  // Firebase SDK 로드 확인 후 초기화
-  var tries=0;
-  function tryInitFb(){
-    tries++;
-    if(typeof firebase !== 'undefined'){
-      initFirebase();
-    } else if(tries < 10){
-      setTimeout(tryInitFb, 300);
-    } else {
-      showToast('Firebase SDK 로드 실패',4000);
-      var dot=document.getElementById('fb-dot');
-      if(dot)dot.style.background='#e74c3c';
-    }
-  }
-  tryInitFb();
+  initFirebase();
 };
 </script>
 
