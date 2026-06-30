@@ -796,12 +796,92 @@ function collectData(){
 // ── 번역
 async function translateData(data){
   showToast('번역 중...');
-  var texts=[data.verdict,data.opinion,...(data.results||[]).map(function(r){return r.name;}),(data.defects||[]).map(function(d){return d.defect+'\n'+d.action;}).join('\n')];
-  var results=await Promise.all(texts.map(translateToEn));
-  data.verdict_en=results[0]||'';
-  data.opinion_en=results[1]||'';
-  var offset=2;
-  (data.results||[]).forEach(function(r,i){r.name_en=results[offset+i]||r.name;});
+
+  // 번역 대상 텍스트 목록 수집
+  var tasks=[];
+
+  // 기본 텍스트
+  tasks.push({key:'verdict_en', src:data.verdict||''});
+  tasks.push({key:'opinion_en', src:data.opinion||''});
+
+  // 항목별 결과 — 구분, 항목명, 비고
+  (data.results||[]).forEach(function(r,i){
+    tasks.push({key:'results_'+i+'_cat', src:r.cat||''});
+    tasks.push({key:'results_'+i+'_name', src:r.name||''});
+    tasks.push({key:'results_'+i+'_note', src:r.note||''});
+  });
+
+  // 설비 목록 — 형식, 위치
+  (data.equipments||[]).forEach(function(e,i){
+    tasks.push({key:'equip_'+i+'_type', src:e.type||''});
+    tasks.push({key:'equip_'+i+'_loc', src:e.loc||''});
+  });
+
+  // 냉방검사 유닛 — 위치
+  (data.coolUnits||[]).forEach(function(u,i){
+    tasks.push({key:'cool_'+i+'_loc', src:u.loc||''});
+  });
+
+  // 측정 데이터 — 라벨
+  (data.measurements||[]).forEach(function(m,i){
+    tasks.push({key:'msr_'+i+'_label', src:m.label||''});
+  });
+
+  // 발견 결함 — 결함, 위치, 조치
+  (data.defects||[]).forEach(function(d,i){
+    tasks.push({key:'defect_'+i+'_defect', src:d.defect||''});
+    tasks.push({key:'defect_'+i+'_loc', src:d.loc||''});
+    tasks.push({key:'defect_'+i+'_action', src:d.action||''});
+  });
+
+  // 권장 정비 — 제목, 설명
+  (data.recommendations||[]).forEach(function(r,i){
+    tasks.push({key:'rec_'+i+'_title', src:r.title||''});
+    tasks.push({key:'rec_'+i+'_desc', src:r.desc||''});
+  });
+
+  // 일괄 번역
+  var translated=await Promise.all(tasks.map(function(t){
+    return t.src?translateToEn(t.src):Promise.resolve('');
+  }));
+
+  // 결과 매핑
+  var map={};
+  tasks.forEach(function(t,i){map[t.key]=translated[i]||t.src;});
+
+  data.verdict_en=map.verdict_en||'';
+  data.opinion_en=map.opinion_en||'';
+
+  (data.results||[]).forEach(function(r,i){
+    r.cat_en=map['results_'+i+'_cat']||r.cat||'';
+    r.name_en=map['results_'+i+'_name']||r.name||'';
+    r.note_en=map['results_'+i+'_note']||r.note||'';
+  });
+
+  (data.equipments||[]).forEach(function(e,i){
+    e.type_en=map['equip_'+i+'_type']||e.type||'';
+    e.loc_en=map['equip_'+i+'_loc']||e.loc||'';
+  });
+
+  (data.coolUnits||[]).forEach(function(u,i){
+    u.loc_en=map['cool_'+i+'_loc']||u.loc||'';
+  });
+
+  (data.measurements||[]).forEach(function(m,i){
+    m.label_en=map['msr_'+i+'_label']||m.label||'';
+  });
+
+  (data.defects||[]).forEach(function(d,i){
+    d.defect_en=map['defect_'+i+'_defect']||d.defect||'';
+    d.loc_en=map['defect_'+i+'_loc']||d.loc||'';
+    d.action_en=map['defect_'+i+'_action']||d.action||'';
+  });
+
+  (data.recommendations||[]).forEach(function(r,i){
+    r.title_en=map['rec_'+i+'_title']||r.title||'';
+    r.desc_en=map['rec_'+i+'_desc']||r.desc||'';
+  });
+
   return data;
 }
 
