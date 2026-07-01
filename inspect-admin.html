@@ -196,7 +196,8 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
     <div class="fgrid f2">
       <div><div class="flabel">고객명 / 상호</div><input id="f-client" placeholder="홍길동 / 그린오피스타워"></div>
       <div><div class="flabel">점검일</div><input id="f-date" type="date"></div>
-      <div style="grid-column:span 2"><div class="flabel">주소 / 점검 장소</div><input id="f-addr" placeholder="서울 강남구 테헤란로"></div>
+      <div><div class="flabel">주소 / 점검 장소</div><input id="f-addr" placeholder="서울 강남구 테헤란로"></div>
+      <div><div class="flabel">점검 대수</div><input id="f-units" placeholder="4 대"></div>
     </div>
     <div style="margin-top:4px">
       <div class="flabel">점검 범위</div>
@@ -275,7 +276,7 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
 
 <!-- 냉방검사 -->
 <div class="card">
-  <div class="card-hdr"><div class="card-icon">🌡️</div><div class="card-title">냉방검사 (TDM) — 유닛별 측정</div></div>
+  <div class="card-hdr"><div class="card-icon">🌡️</div><div class="card-title">측정 데이터 (냉방능력 점검상태)</div></div>
   <div class="card-body">
     <div style="background:#f0f7ff;border:0.5px solid #bdd7f5;border-radius:6px;padding:8px 10px;font-size:10px;color:#1e40af;margin-bottom:10px">
       기준: 흡입(A) − 토출(B) ≥15°C 양호 · 12~15°C 정상범위 · &lt;12°C 저하
@@ -285,11 +286,11 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
   </div>
 </div>
 
-<!-- 측정 데이터 -->
+<!-- 측정 데이터 2 - 실외기 점검상태 -->
 <div class="card">
-  <div class="card-hdr"><div class="card-icon">📈</div><div class="card-title">측정 데이터 (고압/저압/전류/절연저항)</div></div>
+  <div class="card-hdr"><div class="card-icon">🔌</div><div class="card-title">측정 데이터 (실외기 점검상태)</div></div>
   <div class="card-body">
-    <div style="font-size:11px;color:#6b7280;margin-bottom:10px">시운전 30분 후 정상 부하 상태 측정값. 외기온, 실내 설정온도 기재 가능.</div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:10px">고압/저압/운전전류/절연저항 — 미입력시 고객 보고서에 미표시</div>
     <div id="msr-rows"></div>
     <button class="btn-add" onclick="addMsrRow()">+ 측정 유닛 추가</button>
   </div>
@@ -701,24 +702,20 @@ function setCoolPhoto(input,id,label){
 
 // ── 측정 데이터
 var msrCount=0;
-window.addMsrRow=function(label,a,b,hp,lp,curr,ins){
+window.addMsrRow=function(label,hp,lp,curr,ins){
   msrCount++;
   var row=document.createElement('div');
   row.style='border:0.5px solid #e8e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px';
   row.innerHTML='<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">'+
-    '<input placeholder="1호기 · 로비" value="'+(label||'')+'" style="flex:1;font-size:12px">'+
+    '<input placeholder="1호기 위치 (예: 1F 로비)" value="'+(label||'')+'" style="flex:1;font-size:12px">'+
     '<button class="btn-del" onclick="this.parentElement.parentElement.remove()">×</button>'+
   '</div>'+
-  '<div class="mv-grid mv4">'+
-    '<div class="mvb"><div class="mvl">흡입온도(°C)</div><input placeholder="27.1" value="'+(a||'')+'"></div>'+
-    '<div class="mvb"><div class="mvl">토출온도(°C)</div><input placeholder="12.3" value="'+(b||'')+'"></div>'+
+  '<div class="mv-grid" style="grid-template-columns:repeat(4,1fr)">'+
     '<div class="mvb"><div class="mvl">고압(kgf/cm²)</div><input placeholder="29.1" value="'+(hp||'')+'"></div>'+
     '<div class="mvb"><div class="mvl">저압(kgf/cm²)</div><input placeholder="9.4" value="'+(lp||'')+'"></div>'+
     '<div class="mvb"><div class="mvl">운전전류(A)</div><input placeholder="5.9/7.2" value="'+(curr||'')+'"></div>'+
     '<div class="mvb"><div class="mvl">절연저항(MΩ)</div><input placeholder="320" value="'+(ins||'')+'"></div>'+
   '</div>';
-  // mv4 → 4 cols, last 2 → 2 cols
-  row.querySelector('.mv-grid').style.gridTemplateColumns='repeat(4,1fr)';
   $('msr-rows').appendChild(row);
 };
 
@@ -870,12 +867,17 @@ function collectData(){
     var locInp=el.querySelector('[id^="clocinp"]');
     coolUnits.push({label:label,a:ta?ta.value:'',b:tb?tb.value:'',result:isWarn?'warn':'ok',loc:locInp?locInp.value:'',photoKey:'cool-'+id});
   });
-  // 측정 데이터
+  // 측정 데이터 (실외기 점검상태 — 고압/저압/전류/절연저항)
   var measurements=[];
   $('msr-rows').querySelectorAll('div[style*="border"]').forEach(function(row){
     var label=row.querySelector('input').value;
     var inps=row.querySelectorAll('.mvb input');
-    if(label)measurements.push({label:label,a:inps[0]?inps[0].value:'',b:inps[1]?inps[1].value:'',hp:inps[2]?inps[2].value:'',lp:inps[3]?inps[3].value:'',current:inps[4]?inps[4].value:'',insulation:inps[5]?inps[5].value:''});
+    var hp=inps[0]?inps[0].value:'';
+    var lp=inps[1]?inps[1].value:'';
+    var curr=inps[2]?inps[2].value:'';
+    var ins=inps[3]?inps[3].value:'';
+    // 하나라도 입력된 경우만 저장
+    if(label||hp||lp||curr||ins)measurements.push({label:label,hp:hp,lp:lp,current:curr,insulation:ins});
   });
   // 누설검사
   var leakUnits=[];
