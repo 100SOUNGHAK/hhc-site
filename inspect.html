@@ -387,14 +387,27 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:#f0f2f8;colo
     <div style="padding:10px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px" id="work-photos-grid"></div>
   </div>
 
-  <!-- 5. 청소 사진 -->
+  <!-- 5. 청소 사진 — 전/후 좌우 -->
   <div id="clean-photo-wrap" style="display:none">
     <div style="height:0.5px;background:#f0f0f0"></div>
-    <div style="display:flex;align-items:center;gap:8px;padding:10px 16px 6px;border-bottom:0.5px solid #f0f0f0">
+    <!-- 헤더 -->
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 16px 0;border-bottom:0.5px solid #f0f0f0">
       <div style="width:20px;height:20px;border-radius:4px;background:#fff7ed;color:#9a3412;font-size:9px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">5</div>
       <div style="font-size:12px;font-weight:500;color:#0F1C3F;flex:1" id="photo-clean-title">청소 사진 · Cleaning Photos</div>
     </div>
-    <div style="padding:10px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px" id="clean-photos-grid"></div>
+    <!-- 전/후 컬럼 레이블 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:0.5px solid #f0f0f0">
+      <div style="padding:7px 12px;display:flex;align-items:center;gap:5px;border-right:0.5px solid #f0f0f0">
+        <div style="width:3px;height:13px;background:#e74c3c;border-radius:2px;flex-shrink:0"></div>
+        <span style="font-size:11px;font-weight:600;color:#c0392b" id="lbl-clean-before">청소 전 · Before</span>
+      </div>
+      <div style="padding:7px 12px;display:flex;align-items:center;gap:5px">
+        <div style="width:3px;height:13px;background:#2ecc71;border-radius:2px;flex-shrink:0"></div>
+        <span style="font-size:11px;font-weight:600;color:#0a7a4a" id="lbl-clean-after">청소 후 · After</span>
+      </div>
+    </div>
+    <!-- 사진 그리드: 전(좌) / 후(우) -->
+    <div id="clean-photos-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:0;border-collapse:collapse"></div>
   </div>
 
   <!-- 6. 실외기 명판/압력/전류 사진 -->
@@ -792,24 +805,50 @@ window.renderReport=function renderReport(data){
     (data.workPhotos||[]).forEach(function(ph){
       var div=document.createElement('div');
       div.style='border-radius:7px;overflow:hidden;border:0.5px solid #e8e8f0';
-      div.innerHTML='<img src="'+ph+'" style="width:100%;height:160px;object-fit:contain;background:#f4f6fb;display:block">';
+      div.style='border-radius:7px;overflow:hidden';
+      div.innerHTML='<img src="'+ph+'" style="width:100%;height:180px;object-fit:cover;display:block">';
       wGrid.appendChild(div);
     });
   }
 
-  // 3. 청소 사진
+  // 3. 청소 사진 — 전(좌)/후(우) 좌우 나란히
   var cGrid=document.getElementById('clean-photos-grid');
   var cWrap=document.getElementById('clean-photo-wrap');
   if(cGrid){
     cGrid.innerHTML='';
-    var hasClean=(data.cleanPhotos||[]).length>0;
+    var beforeArr=data.cleanBefore||(data.cleanPhotos||[]);  // 레거시: cleanPhotos → before로 표시
+    var afterArr=data.cleanAfter||[];
+    var hasClean=beforeArr.length>0||afterArr.length>0;
     if(cWrap)cWrap.style.display=hasClean?'block':'none';
-    (data.cleanPhotos||[]).forEach(function(ph){
-      var div=document.createElement('div');
-      div.style='border-radius:7px;overflow:hidden;border:0.5px solid #e8e8f0';
-      div.innerHTML='<img src="'+ph+'" style="width:100%;height:160px;object-fit:contain;background:#f4f6fb;display:block">';
-      cGrid.appendChild(div);
-    });
+    var maxRows=Math.max(beforeArr.length, afterArr.length);
+    for(var ri=0;ri<maxRows;ri++){
+      // Before 셀
+      var bc=document.createElement('div');
+      bc.style='border-right:0.5px solid #f0f0f0;border-bottom:0.5px solid #f0f0f0';
+      if(beforeArr[ri]){
+        var bi=document.createElement('img');
+        bi.src=beforeArr[ri];
+        bi.style='width:100%;aspect-ratio:1;object-fit:cover;display:block';
+        bc.appendChild(bi);
+      }else{
+        bc.style+='background:#f8f9fc;aspect-ratio:1;display:flex;align-items:center;justify-content:center';
+        bc.innerHTML='<span style="font-size:11px;color:#c0c8e0">—</span>';
+      }
+      cGrid.appendChild(bc);
+      // After 셀
+      var ac=document.createElement('div');
+      ac.style='border-bottom:0.5px solid #f0f0f0';
+      if(afterArr[ri]){
+        var ai=document.createElement('img');
+        ai.src=afterArr[ri];
+        ai.style='width:100%;aspect-ratio:1;object-fit:cover;display:block';
+        ac.appendChild(ai);
+      }else{
+        ac.style+='background:#f8f9fc;aspect-ratio:1;display:flex;align-items:center;justify-content:center';
+        ac.innerHTML='<span style="font-size:11px;color:#c0c8e0">—</span>';
+      }
+      cGrid.appendChild(ac);
+    }
   }
 
   // 4. 명판/압력/전류 사진
