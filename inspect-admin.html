@@ -456,6 +456,9 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
 <script>
 // ━━━ 전역 유틸 (module 밖에서 접근 가능) ━━━
 function $(id){return document.getElementById(id);}
+window.$=$;  // module에서 접근 가능하도록
+function v(id){var el=$(id);return el?el.value:'';}
+window.v=v;
 function showToast(msg,ms){
   var t=document.getElementById('toast');
   if(!t)return;
@@ -489,28 +492,48 @@ var MSR_LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','�
 var LEAK_LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
 var DEFECT_LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
 
+// ━━━ 실외기 사진 세트 ━━━
+function makeNpRow(sid,type,label,sub,existingUrl){
+  var key='outdoor-'+sid+'-'+type;
+  var hasImg=!!existingUrl;
+  return '<div class="named-photo" style="margin-bottom:6px">'+
+    '<div class="np-label">'+label+'</div>'+
+    '<div class="np-body" style="position:relative;cursor:pointer;background:'+(hasImg?'#e8f0fe':'')+'" >'+
+      '<span class="np-icon">'+(hasImg?'✅':'📷')+'</span>'+
+      '<div class="np-text">'+
+        '<div class="np-main">'+(hasImg?'업로드 완료':label+' 사진 업로드')+'</div>'+
+        '<div class="np-sub">'+sub+'</div>'+
+      '</div>'+
+      '<button class="np-del2" data-del-key="'+key+'" style="display:'+(hasImg?'block':'none')+';margin-left:auto;padding:4px 8px;border-radius:4px;background:#fde8e8;color:#c0392b;border:none;font-size:11px;cursor:pointer">삭제</button>'+
+      '<input type="file" accept="image/*" data-outdoor-key="'+key+'" style="position:absolute;inset:0;opacity:0;cursor:pointer">'+
+    '</div>'+
+  '</div>';
+}
+
 // ━━━ 점검 통계 자동 집계 ━━━
 function updateResultStats(){
   var rows=document.querySelectorAll('#result-rows .rtbl-row');
   var total=0,okN=0,warnN=0,badN=0;
   rows.forEach(function(row){
+    // 항목명 input (첫번째 input)
     var inp=row.querySelector('input');
     if(!inp||!inp.value.trim())return;
     total++;
-    var sel=row.querySelector('select:nth-child(3)');
-    var v=sel?sel.value:'ok';
+    // 상태 select = querySelectorAll('select')[1] (0:구분, 1:결과, 2:위험도)
+    var sels=row.querySelectorAll('select');
+    var v=sels[1]?sels[1].value:'ok';
     if(v==='ok')okN++;
     else if(v==='warn')warnN++;
     else if(v==='bad')badN++;
   });
-  var t=document.getElementById('stat-total');
-  var ok=document.getElementById('stat-ok');
-  var warn=document.getElementById('stat-warn');
-  var bad=document.getElementById('stat-bad');
-  if(t)t.value=total||'';
-  if(ok)ok.value=okN||'';
-  if(warn)warn.value=warnN||'';
-  if(bad)bad.value=badN||'';
+  var tEl=document.getElementById('stat-total');
+  var okEl=document.getElementById('stat-ok');
+  var warnEl=document.getElementById('stat-warn');
+  var badEl=document.getElementById('stat-bad');
+  if(tEl)tEl.value=total>0?total:'';
+  if(okEl)okEl.value=okN>0?okN:'';
+  if(warnEl)warnEl.value=warnN>0?warnN:'';
+  if(badEl)badEl.value=badN>0?badN:'';
 }
 </script>
 
@@ -648,18 +671,7 @@ document.addEventListener('change',function(e){
 });
 
 // 온도차 자동계산
-// 항목별 결과 통계 자동 집계
-document.addEventListener('change',function(e){
-  if(e.target.closest('#result-rows')){
-    setTimeout(updateResultStats, 0);
-  }
-});
-document.addEventListener('click',function(e){
-  // 결과 행 삭제 후 통계 갱신
-  if(e.target.classList.contains('btn-del')&&e.target.closest('#result-rows')){
-    setTimeout(updateResultStats,50);
-  }
-});
+// result-rows 이벤트 (change는 addResultRow 내 직접 등록으로 처리)
 document.addEventListener('input',function(e){
   if(e.target.classList.contains('cu-ta')||e.target.classList.contains('cu-tb')){
     calcDiff(e.target.dataset.cuid);
@@ -689,24 +701,7 @@ window.addOutdoorSet=function(unitLabel,npUrl,prUrl,curUrl){
   return sid;
 };
 
-function makeNpRow(sid,type,label,sub,existingUrl){
-  var key='outdoor-'+sid+'-'+type;
-  var hasImg=!!existingUrl;
-  return '<div class="named-photo" style="margin-bottom:6px">'+
-    '<div class="np-label">'+label+'</div>'+
-    '<div class="np-body" style="position:relative;cursor:pointer;background:'+(hasImg?'#e8f0fe':'')+'">'+
-      '<span class="np-icon">'+(hasImg?'✅':'📷')+'</span>'+
-      '<div class="np-text">'+
-        '<div class="np-main">'+(hasImg?'업로드 완료':label+' 사진 업로드')+'</div>'+
-        '<div class="np-sub">'+sub+'</div>'+
-      '</div>'+
-      '<button class="np-del2" data-del-key="'+key+'" style="display:'+(hasImg?'block':'none')+';margin-left:auto;padding:4px 8px;border-radius:4px;background:#fde8e8;color:#c0392b;border:none;font-size:11px;cursor:pointer">삭제</button>'+
-      '<input type="file" accept="image/*" data-outdoor-key="'+key+'" style="position:absolute;inset:0;opacity:0;cursor:pointer">'+
-    '</div>'+
-  '</div>';
-}
-
-// delOutdoorPhoto handled via click delegation
+// makeNpRow moved to global script
 function previewNp(input,key){
   var f=input.files[0];if(!f)return;
   var reader=new FileReader();
@@ -800,10 +795,15 @@ window.addResultRow=function(cat,name,status,risk,note){
     '<button class="btn-del">×</button>';
   // 삭제 버튼 — row 자체 제거
   row.querySelector('.btn-del').addEventListener('click',function(){row.remove();setTimeout(updateResultStats,50);});
-  // 상태 select 색상
-  row.querySelector('select:nth-child(3)').addEventListener('change',function(){
-    var v=this.value;this.style.cssText='font-size:10px;padding:3px 4px;background:'+(v==='ok'?'#e8f8f0;color:#0a7a4a':v==='bad'?'#fde8e8;color:#c0392b':'#fff4e0;color:#b36000');
-  });
+  // 상태 select — 색상 변경 + 통계 갱신
+  var stSelEl=row.querySelectorAll('select')[1];
+  if(stSelEl){
+    stSelEl.addEventListener('change',function(){
+      var v=this.value;
+      this.style.cssText='font-size:10px;padding:3px 4px;background:'+(v==='ok'?'#e8f8f0;color:#0a7a4a':v==='bad'?'#fde8e8;color:#c0392b':'#fff4e0;color:#b36000');
+      updateResultStats();
+    });
+  }
   $('result-rows').appendChild(row);
 };
 
