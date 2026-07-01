@@ -156,7 +156,9 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
 .btn-save-main:hover{background:#1a3060}
 
 /* 목록 */
-.list-search{width:100%;padding:9px 12px;border-radius:8px;border:0.5px solid #dde1ee;font-size:13px;margin-bottom:12px}
+.list-search{width:100%;padding:9px 12px;border-radius:8px;border:0.5px solid #dde1ee;font-size:13px}
+.sort-btn{padding:6px 12px;border-radius:6px;border:0.5px solid #dde1ee;background:#f8f9fc;color:#374151;font-size:11px;font-weight:500;cursor:pointer;transition:all .15s}
+.sort-btn-on{background:#0F1C3F;color:#fff;border-color:#0F1C3F}
 .list-card{background:#fff;border:0.5px solid #e0e0e8;border-radius:10px;overflow:hidden;margin-bottom:10px}
 .list-card-body{padding:12px 14px;border-bottom:0.5px solid #f0f0f0}
 .list-card-name{font-size:14px;font-weight:600;color:#0F1C3F;margin-bottom:2px}
@@ -198,7 +200,11 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
   <div class="card-hdr"><div class="card-icon">📋</div><div class="card-title">기본 정보</div></div>
   <div class="card-body">
     <div class="fgrid f2">
-      <div><div class="flabel">고객명 / 상호</div><input id="f-client" placeholder="홍길동 / 그린오피스타워"></div>
+      <div>
+  <div class="flabel">고객명 / 상호</div>
+  <input id="f-client" placeholder="홍길동 / 그린오피스타워" oninput="checkDuplicateClient(this.value)">
+  <div id="client-dup-box" style="display:none;margin-top:4px;padding:7px 10px;border-radius:6px;background:#fff4e0;border:0.5px solid #fcd34d;font-size:11px;color:#b36000"></div>
+</div>
       <div><div class="flabel">점검일</div><input id="f-date" type="date"></div>
       <div><div class="flabel">주소 / 점검 장소</div><input id="f-addr" placeholder="서울 강남구 테헤란로"></div>
       <div><div class="flabel">점검 대수</div><input id="f-units" placeholder="4 대"></div>
@@ -424,7 +430,14 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
 
 <!-- ════ 목록 화면 ════ -->
 <div id="view-list" style="display:none" class="main">
-  <input class="list-search" id="list-search" placeholder="고객명 검색..." oninput="filterList()">
+  <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+  <input class="list-search" id="list-search" placeholder="고객명 검색..." oninput="filterList()" style="flex:1;min-width:180px;margin-bottom:0">
+</div>
+<div style="display:flex;gap:6px;margin-bottom:12px">
+  <button onclick="sortList('date-desc')" id="sort-date-desc" class="sort-btn sort-btn-on">📅 최신순</button>
+  <button onclick="sortList('date-asc')" id="sort-date-asc" class="sort-btn">📅 과거순</button>
+  <button onclick="sortList('name-asc')" id="sort-name-asc" class="sort-btn">🔤 이름순</button>
+</div>
   <div id="list-container"><div style="text-align:center;padding:40px;color:#8a8a9a;font-size:13px">불러오는 중...</div></div>
 </div>
 
@@ -491,6 +504,26 @@ var riskLabels={'':'위험도','h':'중','m':'하','l':'최하','-':'없음'};
 var MSR_LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
 var LEAK_LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
 var DEFECT_LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
+
+// ━━━ 고객명 중복 확인 ━━━
+function checkDuplicateClient(val){
+  var box=document.getElementById('client-dup-box');
+  if(!box)return;
+  if(!val||val.length<2){box.style.display='none';return;}
+  var q=val.toLowerCase();
+  var matches=(window._allReports||[]).filter(function(r){
+    return (r.client||'').toLowerCase().includes(q);
+  });
+  if(matches.length>0){
+    box.style.display='block';
+    box.innerHTML='⚠️ 유사 고객 '+matches.length+'건: '+matches.slice(0,3).map(function(r){
+      return '<strong>'+r.client+'</strong> ('+r.date+')';
+    }).join(', ')+(matches.length>3?'...':'');
+  }else{
+    box.style.display='none';
+  }
+}
+window.checkDuplicateClient=checkDuplicateClient;
 
 // ━━━ 실외기 사진 세트 ━━━
 function makeNpRow(sid,type,label,sub,existingUrl){
@@ -561,7 +594,7 @@ try{
 }catch(e){console.error('Firebase init:',e);}
 
 // ── 유틸
-function v(id){var el=$(id);return el?el.value:'';}
+function v(id){var el=document.getElementById(id);return el?el.value:'';}
 
 // ── 뷰 전환
 window.toggleScope=function(btn,text){
@@ -576,9 +609,9 @@ window.toggleScope=function(btn,text){
 };
 window.switchView=function(view){
   document.querySelectorAll('.view-tab').forEach(function(t){t.classList.toggle('on',t.dataset.view===view);});
-  $('view-form').style.display=view==='form'?'block':'none';
-  $('view-list').style.display=view==='list'?'block':'none';
-  $('hdr-title').textContent=view==='form'?'에어컨 점검보고서 작성':'보고서 목록';
+  document.getElementById('view-form').style.display=view==='form'?'block':'none';
+  document.getElementById('view-list').style.display=view==='list'?'block':'none';
+  document.getElementById('hdr-title').textContent=view==='form'?'에어컨 점검보고서 작성':'보고서 목록';
   if(view==='list')loadList();
 };
 
@@ -645,7 +678,7 @@ document.addEventListener('change',function(e){
   if(t.dataset.cuId){
     var cuid=t.dataset.cuId;
     var clbl2=t.dataset.cuLabel||cuid;
-    var cuCont=$('cu-photos-'+cuid);
+    var cuCont=document.getElementById('cu-photos-'+cuid);
     if(!cuCont){t.value='';return;}
     Array.from(t.files).forEach(function(f,fi){
       var rd=new FileReader();
@@ -697,7 +730,7 @@ window.addOutdoorSet=function(unitLabel,npUrl,prUrl,curUrl){
     makeNpRow(sid,'pressure','냉매보유압력','압력계 측정 사진',prUrl)+
     makeNpRow(sid,'current','정격전류','전류계 측정 사진',curUrl);
   set.querySelector('.btn-del').addEventListener('click',function(){set.remove();});
-  $('outdoor-sets').appendChild(set);
+  document.getElementById('outdoor-sets').appendChild(set);
   return sid;
 };
 
@@ -707,26 +740,26 @@ function previewNp(input,key){
   var reader=new FileReader();
   reader.onload=function(e){
     photoData['np_'+key]=e.target.result;
-    var body=$('npb-'+key);
+    var body=document.getElementById('npb-'+key);
     if(body){
       body.querySelector('.np-icon').textContent='✅';
       body.querySelector('.np-main').textContent='업로드 완료';
       body.querySelector('.np-sub').textContent=f.name;
       body.style.background='#e8f0fe';
-      var del=$('npd-'+key);if(del)del.style.display='block';
+      var del=document.getElementById('npd-'+key);if(del)del.style.display='block';
     }
   };reader.readAsDataURL(f);
 }
 window.delNp=function(key){
   delete photoData['np_'+key];
-  var body=$('npb-'+key);
-  if(body){body.querySelector('.np-icon').textContent='📷';body.querySelector('.np-main').textContent=key==='nameplate'?'명판 사진 업로드':key==='pressure'?'압력계 사진 업로드':'전류계 사진 업로드';body.querySelector('.np-sub').textContent='';body.style.background='';var del=$('npd-'+key);if(del)del.style.display='none';}
-  $('np-'+key).value='';
+  var body=document.getElementById('npb-'+key);
+  if(body){body.querySelector('.np-icon').textContent='📷';body.querySelector('.np-main').textContent=key==='nameplate'?'명판 사진 업로드':key==='pressure'?'압력계 사진 업로드':'전류계 사진 업로드';body.querySelector('.np-sub').textContent='';body.style.background='';var del=document.getElementById('npd-'+key);if(del)del.style.display='none';}
+  document.getElementById('np-'+key).value='';
 };
 
 // ── 일반 사진
 function addPhotos(input,containerId){
-  var files=input.files;var container=$(containerId);if(!container)return;
+  var files=input.files;var container=document.getElementById(containerId);if(!container)return;
   Array.from(files).forEach(function(f){
     var reader=new FileReader();
     reader.onload=function(e){
@@ -777,7 +810,7 @@ window.addEquip=function(unit,type,loc,model,cap){
       '<div><div class="flabel">모델</div><input placeholder="예: AP-145C" value="'+(model||'')+'" id="model-inp-'+eid+'"></div>'+
       makeDdField('냉방능력',capOpts,cap||'','cap-sel-'+eid,'cap-custom-'+eid,true)+
     '</div>';
-  $('equip-rows').appendChild(div);
+  document.getElementById('equip-rows').appendChild(div);
 };
 
 
@@ -804,7 +837,7 @@ window.addResultRow=function(cat,name,status,risk,note){
       updateResultStats();
     });
   }
-  $('result-rows').appendChild(row);
+  document.getElementById('result-rows').appendChild(row);
 };
 
 // ── 냉방검사
@@ -838,16 +871,16 @@ window.addCoolUnit=function(label,a,b,loc,result){
       '<div class="ph-add">📷<span>사진 추가</span><input type="file" accept="image/*" multiple data-cu-id="'+id+'" data-cu-label="'+lbl+'"></div>'+
     '</div></div>'+
   '</div>';
-  $('cool-units').appendChild(div);
+  document.getElementById('cool-units').appendChild(div);
   if(a&&b)calcDiff(id);
 };
 
 function calcDiff(id){
-  var a=parseFloat($('cu-'+id)&&$('cu-'+id).querySelector('.cu-ta').value)||0;
-  var b=parseFloat($('cu-'+id)&&$('cu-'+id).querySelector('.cu-tb').value)||0;
+  var a=parseFloat(document.getElementById('cu-'+id)&&document.getElementById('cu-'+id).querySelector('.cu-ta').value)||0;
+  var b=parseFloat(document.getElementById('cu-'+id)&&document.getElementById('cu-'+id).querySelector('.cu-tb').value)||0;
   if(!a||!b)return;
   var d=(a-b).toFixed(1);var dn=parseFloat(d);
-  var el=$('cdiff-'+id);var eu=$('cdiffu-'+id);
+  var el=document.getElementById('cdiff-'+id);var eu=document.getElementById('cdiffu-'+id);
   if(!el)return;
   el.textContent=d+'°C';
   var cls=dn>=15?'diff-ok':dn>=12?'diff-warn':'diff-bad';
@@ -856,9 +889,9 @@ function calcDiff(id){
   eu.style.color=dn>=15?'#0a7a4a':dn>=12?'#374151':'#c0392b';
 }
 window.setCoolResult=function(id,result){
-  $('cok-'+id).className='rsel-btn'+(result==='ok'?' ok':'');
-  $('cwarn-'+id).className='rsel-btn'+(result==='warn'?' warn':'');
-  var loc=$('cloc-'+id);var badge=$('cbadge-'+id);var num=$('cnum-'+id);
+  document.getElementById('cok-'+id).className='rsel-btn'+(result==='ok'?' ok':'');
+  document.getElementById('cwarn-'+id).className='rsel-btn'+(result==='warn'?' warn':'');
+  var loc=document.getElementById('cloc-'+id);var badge=document.getElementById('cbadge-'+id);var num=document.getElementById('cnum-'+id);
   if(result==='warn'){if(loc)loc.classList.add('show');if(badge){badge.style.background='#fff4e0';badge.style.color='#b36000';badge.textContent='저하';}if(num)num.className='cu-num warn';}
   else{if(loc)loc.classList.remove('show');if(badge){badge.style.background='#e8f8f0';badge.style.color='#0a7a4a';badge.textContent='양호';}if(num)num.className='cu-num';}
 };
@@ -867,7 +900,7 @@ function setCoolPhoto(input,id,label){
   var reader=new FileReader();
   reader.onload=function(e){
     photoData['cool-'+id]=e.target.result;
-    var ph=$('cuph-'+id);
+    var ph=document.getElementById('cuph-'+id);
     if(ph)ph.innerHTML='<img src="'+e.target.result+'">';
   };reader.readAsDataURL(f);
 }
@@ -904,7 +937,7 @@ window.addMsrRow=function(label,hp,lp,curr,ins,jdg){
       '<button class="msr-jdg-btn" data-jdg="repair" onclick="setMsrJdg(this)">🔧 수리요망</button>'+
     '</div>';
   row.querySelector('#msr-del-'+mid).addEventListener('click',function(){row.remove();});
-  $('msr-rows').appendChild(row);
+  document.getElementById('msr-rows').appendChild(row);
   // 초기 판정 설정
   var initJdg=jdg||'ok';
   var jdgCls={ok:'jdg-ok',watch:'jdg-watch',repair:'jdg-repair'};
@@ -963,7 +996,7 @@ window.addLeakRow=function(label,loc,status){
     this.style.cssText='font-size:11px;padding:5px 7px;height:32px;background:'+(v==='ok'?'#e8f8f0;color:#0a7a4a':'#fde8e8;color:#c0392b');
   });
   div.querySelector('#lk-del-'+lid).addEventListener('click',function(){div.remove();});
-  $('leak-rows').appendChild(div);
+  document.getElementById('leak-rows').appendChild(div);
 }
 window.addDefectRow=function(defect,loc,risk,action,status){
   defectCount++;
@@ -996,7 +1029,7 @@ window.addDefectRow=function(defect,loc,risk,action,status){
     '</div>';
   // 삭제 버튼
   item.querySelector('.btn-del').addEventListener('click',function(){item.remove();});
-  $('defect-rows').appendChild(item);
+  document.getElementById('defect-rows').appendChild(item);
 };
 window.setDefectStatus=function(btn,status){
   var statusCfg={
@@ -1030,7 +1063,7 @@ window.addRecRow=function(type,title,desc){
     '<div><div class="flabel">제목</div><input placeholder="1호기 냉매 누설 정밀점검 및 보충" value="'+(title||'')+'"></div>'+
     '<div style="margin-top:6px"><div class="flabel">설명</div><input placeholder="미세 누설점 확인 후 냉매 보충, 1~2주 이내 권장" value="'+(desc||'')+'"></div>';
   item.querySelector('.btn-del').addEventListener('click',function(){item.remove();});
-  $('rec-rows').appendChild(item);
+  document.getElementById('rec-rows').appendChild(item);
 };
 window.setRecType=function(btn,type){
   var btns=btn.parentElement.querySelectorAll('button');
@@ -1072,7 +1105,7 @@ async function uploadPhoto(key,dataUrl,reportId){
 function collectData(){
   // 설비
   var equipments=[];
-  $('equip-rows').querySelectorAll('div[style*="border"]').forEach(function(div){
+  document.getElementById('equip-rows').querySelectorAll('div[style*="border"]').forEach(function(div){
     function getVal2(selId,customId){
       var sel=div.querySelector('[id="'+selId+'"]');
       var custom=div.querySelector('[id="'+customId+'"]');
@@ -1093,7 +1126,7 @@ function collectData(){
   });
   // 항목별 결과
   var results=[];
-  $('result-rows').querySelectorAll('.rtbl-row').forEach(function(row){
+  document.getElementById('result-rows').querySelectorAll('.rtbl-row').forEach(function(row){
     var sels=row.querySelectorAll('select');
     var inps=row.querySelectorAll('input');
     var name=inps[0]?inps[0].value:'';
@@ -1112,7 +1145,7 @@ function collectData(){
   });
   // 측정 데이터 (실외기 점검상태 — PSI + 판정)
   var measurements=[];
-  $('msr-rows').querySelectorAll('div[style*="border"]').forEach(function(row){
+  document.getElementById('msr-rows').querySelectorAll('div[style*="border"]').forEach(function(row){
     // 위치: 드롭다운 또는 직접입력
     var locSel=row.querySelector('select.dd-sel');
     var locCustom=row.querySelector('input.dd-custom');
@@ -1131,7 +1164,7 @@ function collectData(){
   });
   // 누설검사
   var leakUnits=[];
-  $('leak-rows').querySelectorAll('div[style*="border"]').forEach(function(row){
+  document.getElementById('leak-rows').querySelectorAll('div[style*="border"]').forEach(function(row){
     function getDdVal(ddSel,ddCustom){
       if(!ddSel)return '';
       if(ddSel.value==='__custom__'||ddSel.value==='')return ddCustom?ddCustom.value:'';
@@ -1146,7 +1179,7 @@ function collectData(){
   });
   // 발견 결함
   var defects=[];
-  $('defect-rows').querySelectorAll('.defect-item').forEach(function(item){
+  document.getElementById('defect-rows').querySelectorAll('.defect-item').forEach(function(item){
     var inps=item.querySelectorAll('input');var sel=item.querySelector('select');
     var activeStatus=item.querySelector('[data-active-status]');
     var status=activeStatus?activeStatus.dataset.activeStatus:'plan';
@@ -1158,7 +1191,7 @@ function collectData(){
   });
   // 권장 정비
   var recommendations=[];
-  $('rec-rows').querySelectorAll('.rec-item').forEach(function(item){
+  document.getElementById('rec-rows').querySelectorAll('.rec-item').forEach(function(item){
     var inps=item.querySelectorAll('input');
     var activeBtn=item.querySelector('.rt-btn.urgent,.rt-btn.regular,.rt-btn.review');
     var type=activeBtn?activeBtn.className.split(' ').find(function(c){return c!=='rt-btn';})||'regular':'regular';
@@ -1280,7 +1313,7 @@ async function shorten(url){
 // ── 저장
 window.saveReport=async function(){
   if(!DB){showToast('Firebase 연결 안됨');return;}
-  var btn=$('btn-save');btn.disabled=true;btn.textContent='저장 중...';
+  var btn=document.getElementById('btn-save');btn.disabled=true;btn.textContent='저장 중...';
   try{
     var data=collectData();
     if(!data.client||!data.date){showToast('고객명과 점검일을 입력해 주세요.');btn.disabled=false;btn.textContent='💾 저장하고 고객 링크 생성';return;}
@@ -1343,11 +1376,11 @@ window.saveReport=async function(){
     btn.disabled=false;btn.textContent='💾 저장하고 고객 링크 생성';
     showToast(currentEditId?'✓ 수정 저장 완료':'✓ 저장 완료');
     currentEditId=null;
-    var btn=$('btn-save');if(btn){btn.textContent='💾 저장하고 고객 링크 생성';btn.style.background='';}
+    var btn=document.getElementById('btn-save');if(btn){btn.textContent='💾 저장하고 고객 링크 생성';btn.style.background='';}
     // 발송 모달
-    $('sm-link').textContent=shortUrls.ko;
+    document.getElementById('sm-link').textContent=shortUrls.ko;
     updateSendMsg();
-    $('send-modal').style.display='flex';
+    document.getElementById('send-modal').style.display='flex';
   }catch(e){
     console.error(e);
     alert('저장 실패: '+e.message);
@@ -1368,13 +1401,13 @@ window.updateSendMsg=function(){
   var lang=document.querySelector('input[name="slang"]:checked');
   var l=lang?lang.value:'ko';
   var link=l==='en'?(shortUrls.en||shortUrls.ko):shortUrls.ko;
-  $('sm-link').textContent=link;
+  document.getElementById('sm-link').textContent=link;
   var ko='안녕하세요 😊\n\nHappy Home Care 에어컨 기술점검보고서를 확인해 주세요.\n\n📋 '+link+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
   var en='Hello 😊\n\nPlease check your Happy Home Care AC Inspection Report.\n\n📋 '+link+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
-  $('sm-msg').value=l==='en'?en:ko;
+  document.getElementById('sm-msg').value=l==='en'?en:ko;
 };
-window.sendWa=function(){window.open('https://wa.me/?text='+encodeURIComponent($('sm-msg').value),'_blank');};
-window.sendKakao=function(){navigator.clipboard.writeText($('sm-msg').value).then(function(){showToast('✓ 카카오톡 메시지 복사됨');});};
+window.sendWa=function(){window.open('https://wa.me/?text='+encodeURIComponent(document.getElementById('sm-msg').value),'_blank');};
+window.sendKakao=function(){navigator.clipboard.writeText(document.getElementById('sm-msg').value).then(function(){showToast('✓ 카카오톡 메시지 복사됨');});};
 
 // ── 목록
 async function loadList(){
@@ -1382,17 +1415,25 @@ async function loadList(){
   try{
     var snap=await getDocs(query(collection(DB,'inspections'),orderBy('createdAt','desc'),limit(50)));
     allReports=snap.docs.map(function(d){return Object.assign({_id:d.id},d.data());});
+    window._allReports=allReports;
     renderList(allReports);
-  }catch(e){$('list-container').innerHTML='<div style="text-align:center;padding:30px;color:#c0392b">로딩 실패: '+e.message+'</div>';}
+  }catch(e){document.getElementById('list-container').innerHTML='<div style="text-align:center;padding:30px;color:#c0392b">로딩 실패: '+e.message+'</div>';}
 }
 function filterList(){
-  var q=($('list-search').value||'').toLowerCase();
-  renderList(allReports.filter(function(r){return !q||(r.client||'').toLowerCase().includes(q)||(r.addr||'').toLowerCase().includes(q);}));
+  var q=(document.getElementById('list-search').value||'').toLowerCase();
+  var filtered=(window._allReports||allReports||[]).filter(function(r){return !q||(r.client||'').toLowerCase().includes(q)||(r.addr||'').toLowerCase().includes(q);});
+  // 현재 정렬 유지
+  var onBtn=document.querySelector('.sort-btn-on');
+  var mode=onBtn?(onBtn.id||'').replace('sort-','').replace('_','-'):'date-desc';
+  if(mode==='date-asc')filtered.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
+  else if(mode==='name-asc')filtered.sort(function(a,b){return (a.client||'').localeCompare(b.client||'','ko');});
+  else filtered.sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
+  renderList(filtered);
 }
 window.filterList=filterList;
 var evalLabel={normal:'🟢 정상',preventive:'🟡 예방정비 권장',repair:'🟠 수리 권장',urgent:'🔴 즉시수리 필요'};
 function renderList(items){
-  var el=$('list-container');
+  var el=document.getElementById('list-container');
   if(!items.length){el.innerHTML='<div style="text-align:center;padding:40px;color:#8a8a9a;font-size:13px">보고서 없음</div>';return;}
   el.innerHTML=items.map(function(r){
     var eid=r._id;
@@ -1412,6 +1453,20 @@ function renderList(items){
     '</div>';
   }).join('');
 }
+window.sortList=function(mode){
+  document.querySelectorAll('.sort-btn').forEach(function(b){b.classList.remove('sort-btn-on');});
+  var btn=document.getElementById('sort-'+mode.replace('-','_'));
+  if(!btn){btn=document.querySelector('[onclick="sortList(\''+mode+'\')"]');}
+  if(btn)btn.classList.add('sort-btn-on');
+  var q=(document.getElementById('list-search').value||'').toLowerCase();
+  var filtered=(window._allReports||[]).filter(function(r){
+    return !q||(r.client||'').toLowerCase().includes(q)||(r.addr||'').toLowerCase().includes(q);
+  });
+  if(mode==='date-desc')filtered.sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
+  else if(mode==='date-asc')filtered.sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
+  else if(mode==='name-asc')filtered.sort(function(a,b){return (a.client||'').localeCompare(b.client||'','ko');});
+  renderList(filtered);
+};
 window.viewReport=function(id){window.open('https://hhc-3p8.pages.dev/inspect.html?id='+id,'_blank');};
 window.sendFromList=async function(id){
   var url=await shorten('https://hhc-3p8.pages.dev/inspect.html?id='+id+'&lang=ko');
@@ -1439,17 +1494,17 @@ window.editReport=async function(id){
 
 window.loadIntoForm=function(data){
   // 기본정보
-  if($('f-client'))$('f-client').value=data.client||'';
-  if($('f-date'))$('f-date').value=data.date||'';
-  if($('f-addr'))$('f-addr').value=data.addr||'';
-  if($('f-units'))$('f-units').value=data.units||'';
-  if($('f-scope'))$('f-scope').value=data.scope||'';
-  if($('f-verdict'))$('f-verdict').value=data.verdict||'';
-  if($('f-opinion'))$('f-opinion').value=data.opinion||'';
-  if($('stat-total'))$('stat-total').value=data.statTotal||'';
-  if($('stat-ok'))$('stat-ok').value=data.statOk||'';
-  if($('stat-warn'))$('stat-warn').value=data.statWarn||'';
-  if($('stat-bad'))$('stat-bad').value=data.statBad||'';
+  if(document.getElementById('f-client'))document.getElementById('f-client').value=data.client||'';
+  if(document.getElementById('f-date'))document.getElementById('f-date').value=data.date||'';
+  if(document.getElementById('f-addr'))document.getElementById('f-addr').value=data.addr||'';
+  if(document.getElementById('f-units'))document.getElementById('f-units').value=data.units||'';
+  if(document.getElementById('f-scope'))document.getElementById('f-scope').value=data.scope||'';
+  if(document.getElementById('f-verdict'))document.getElementById('f-verdict').value=data.verdict||'';
+  if(document.getElementById('f-opinion'))document.getElementById('f-opinion').value=data.opinion||'';
+  if(document.getElementById('stat-total'))document.getElementById('stat-total').value=data.statTotal||'';
+  if(document.getElementById('stat-ok'))document.getElementById('stat-ok').value=data.statOk||'';
+  if(document.getElementById('stat-warn'))document.getElementById('stat-warn').value=data.statWarn||'';
+  if(document.getElementById('stat-bad'))document.getElementById('stat-bad').value=data.statBad||'';
 
   // 종합평가
   if(data.eval){
@@ -1458,13 +1513,13 @@ window.loadIntoForm=function(data){
   }
 
   // 설비
-  $('equip-rows').innerHTML='';
+  document.getElementById('equip-rows').innerHTML='';
   (data.equipments||[]).forEach(function(e){
     addEquip(e.unit,e.type,e.loc,e.model,e.capacity);
   });
 
   // 항목별 결과
-  $('result-rows').innerHTML='';
+  document.getElementById('result-rows').innerHTML='';
   if((data.results||[]).length){
     data.results.forEach(function(r){addResultRow(r.cat,r.name,r.status,r.risk,r.note);});
   }else{
@@ -1473,32 +1528,32 @@ window.loadIntoForm=function(data){
   }
 
   // 냉방검사
-  $('cool-units').innerHTML='';coolCount=0;
+  document.getElementById('cool-units').innerHTML='';coolCount=0;
   (data.coolUnits||[]).forEach(function(u){
     addCoolUnit(u.label,u.a,u.b,u.loc,u.result);
   });
 
   // 누설검사
-  $('leak-rows').innerHTML='';leakCount=0;
+  document.getElementById('leak-rows').innerHTML='';leakCount=0;
   (data.leakUnits||[]).forEach(function(u){
     addLeakRow(u.label,u.loc,u.status);
   });
 
   // 발견 결함
-  $('defect-rows').innerHTML='';defectCount=0;
+  document.getElementById('defect-rows').innerHTML='';defectCount=0;
   (data.defects||[]).forEach(function(d){
     addDefectRow(d.defect,d.loc,d.risk,d.action,d.status);
   });
 
   // 권장 정비
-  $('rec-rows').innerHTML='';recCount=0;
+  document.getElementById('rec-rows').innerHTML='';recCount=0;
   (data.recommendations||[]).forEach(function(r){
     addRecRow(r.type,r.title,r.desc);
   });
 
   // 수정 모드 — 저장 버튼 텍스트 변경, 기존 ID 기억
   currentEditId=data._id;
-  var btn=$('btn-save');
+  var btn=document.getElementById('btn-save');
   if(btn){btn.textContent='💾 수정 저장';btn.style.background='#1e40af';}
   showToast('보고서 불러왔습니다. 수정 후 저장하세요.');
 };
@@ -1512,7 +1567,7 @@ window.delReport=async function(id){
 // ── 초기화
 window.onload=function(){
   var today=new Date().toISOString().split('T')[0];
-  $('f-date').value=today;
+  document.getElementById('f-date').value=today;
   // 항목별 결과 기본 (상태는 ok이지만 비고 공란)
   DEFAULT_RESULTS.forEach(function(r){addResultRow(r.cat,r.name,'ok','','');});
   setTimeout(updateResultStats,100);
