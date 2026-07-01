@@ -244,8 +244,8 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
     <div class="flabel" style="margin-bottom:6px">점검 통계 (직접 입력)</div>
     <div class="fgrid" style="grid-template-columns:repeat(4,1fr);margin-bottom:10px">
       <div style="text-align:center">
-        <div style="font-size:9px;color:#8a8a9a;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">점검 대수</div>
-        <input id="stat-total" type="number" min="0" value="" placeholder="4" style="text-align:center;font-size:18px;font-weight:500;padding:6px 4px;border-color:#dde1ee">
+        <div style="font-size:9px;color:#8a8a9a;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">점검항목수</div>
+        <input id="stat-total" type="number" readonly min="0" value="" placeholder="4" style="text-align:center;font-size:18px;font-weight:500;padding:6px 4px;border-color:#dde1ee">
       </div>
       <div style="text-align:center">
         <div style="font-size:9px;color:#0a7a4a;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">양호</div>
@@ -453,14 +453,73 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
 
 <div class="toast" id="toast"></div>
 
+<script>
+// ━━━ 전역 유틸 (module 밖에서 접근 가능) ━━━
+function $(id){return document.getElementById(id);}
+function showToast(msg,ms){
+  var t=document.getElementById('toast');
+  if(!t)return;
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(function(){t.classList.remove('show');},ms||2500);
+}
+var photoData={};
+var evalVal='';
+var currentReportId='';
+var currentEditId=null;
+var shortUrls={ko:'',en:''};
+var equipCount=0,coolCount=0,msrCount=0,leakCount=0,defectCount=0,recCount=0,outdoorSetCount=0;
+var CAT_OPTIONS=['외관·설치','전기','냉매 계통','열교환·성능','배수','운전','기타'];
+var DEFAULT_RESULTS=[
+  {cat:'외관·설치',name:'본체 고정 및 수평 상태',status:'ok',note:''},
+  {cat:'외관·설치',name:'패널·필터 오염도',status:'ok',note:''},
+  {cat:'전기',name:'전원 결선 및 단자 조임',status:'ok',note:''},
+  {cat:'전기',name:'절연저항 측정',status:'ok',note:''},
+  {cat:'냉매 계통',name:'냉매 압력 (고압/저압)',status:'ok',note:''},
+  {cat:'냉매 계통',name:'배관 단열 및 누설 점검',status:'ok',note:''},
+  {cat:'열교환·성능',name:'실내 토출 온도차 ΔT',status:'ok',note:''},
+  {cat:'열교환·성능',name:'응축기 핀 오염도',status:'ok',note:''},
+  {cat:'배수',name:'드레인 배수 및 배관 상태',status:'ok',note:''},
+  {cat:'운전',name:'소음·진동 / 컨트롤러',status:'ok',note:''}
+];
+var statusOpts=['ok','warn','bad'];
+var statusLabels={ok:'✅ 정상',warn:'⚠️ 주의',bad:'❌ 불량/정비필요'};
+var riskOpts=['','-','h','m','l'];
+var riskLabels={'':'위험도','h':'중','m':'하','l':'최하','-':'없음'};
+var MSR_LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
+var LEAK_LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
+var DEFECT_LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
+
+// ━━━ 점검 통계 자동 집계 ━━━
+function updateResultStats(){
+  var rows=document.querySelectorAll('#result-rows .rtbl-row');
+  var total=0,okN=0,warnN=0,badN=0;
+  rows.forEach(function(row){
+    var inp=row.querySelector('input');
+    if(!inp||!inp.value.trim())return;
+    total++;
+    var sel=row.querySelector('select:nth-child(3)');
+    var v=sel?sel.value:'ok';
+    if(v==='ok')okN++;
+    else if(v==='warn')warnN++;
+    else if(v==='bad')badN++;
+  });
+  var t=document.getElementById('stat-total');
+  var ok=document.getElementById('stat-ok');
+  var warn=document.getElementById('stat-warn');
+  var bad=document.getElementById('stat-bad');
+  if(t)t.value=total||'';
+  if(ok)ok.value=okN||'';
+  if(warn)warn.value=warnN||'';
+  if(bad)bad.value=badN||'';
+}
+</script>
+
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getFirestore, collection, doc, addDoc, setDoc, getDocs, deleteDoc, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
 var DB=null, ST=null;
-var photoData={}, evalVal='', currentReportId='', shortUrls={ko:'',en:''};
-var currentEditId=null;
 var allReports=[];
 
 // ── Firebase 초기화
@@ -479,8 +538,6 @@ try{
 }catch(e){console.error('Firebase init:',e);}
 
 // ── 유틸
-function $(id){return document.getElementById(id);}
-function showToast(msg,ms){var t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},ms||2500);}
 function v(id){var el=$(id);return el?el.value:'';}
 
 // ── 뷰 전환
@@ -591,6 +648,18 @@ document.addEventListener('change',function(e){
 });
 
 // 온도차 자동계산
+// 항목별 결과 통계 자동 집계
+document.addEventListener('change',function(e){
+  if(e.target.closest('#result-rows')){
+    setTimeout(updateResultStats, 0);
+  }
+});
+document.addEventListener('click',function(e){
+  // 결과 행 삭제 후 통계 갱신
+  if(e.target.classList.contains('btn-del')&&e.target.closest('#result-rows')){
+    setTimeout(updateResultStats,50);
+  }
+});
 document.addEventListener('input',function(e){
   if(e.target.classList.contains('cu-ta')||e.target.classList.contains('cu-tb')){
     calcDiff(e.target.dataset.cuid);
@@ -600,7 +669,6 @@ document.addEventListener('input',function(e){
 // ── 명판 사진
 // triggerNp deprecated - using outdoor sets
 var outdoorPhotoCount=0;
-var outdoorSetCount=0;
 window.addOutdoorSet=function(unitLabel,npUrl,prUrl,curUrl){
   outdoorSetCount++;
   var sid='ods'+Date.now();
@@ -683,7 +751,6 @@ function addPhotos(input,containerId){
 }
 
 // ── 설비 추가
-var equipCount=0;
 function makeDdField(label,opts,val,selId,customId,spanCols){
   var isCustom=val&&!opts.includes(val);
   var span=spanCols?'grid-column:span 2;':'';
@@ -720,23 +787,6 @@ window.addEquip=function(unit,type,loc,model,cap){
 
 
 // ── 항목별 점검 결과
-var CAT_OPTIONS=['외관·설치','전기','냉매 계통','열교환·성능','배수','운전','기타'];
-var DEFAULT_RESULTS=[
-  {cat:'외관·설치',name:'본체 고정 및 수평 상태',status:'ok',note:''},
-  {cat:'외관·설치',name:'패널·필터 오염도',status:'ok',note:''},
-  {cat:'전기',name:'전원 결선 및 단자 조임',status:'ok',note:''},
-  {cat:'전기',name:'절연저항 측정',status:'ok',note:''},
-  {cat:'냉매 계통',name:'냉매 압력 (고압/저압)',status:'ok',note:''},
-  {cat:'냉매 계통',name:'배관 단열 및 누설 점검',status:'ok',note:''},
-  {cat:'열교환·성능',name:'실내 토출 온도차 ΔT',status:'ok',note:''},
-  {cat:'열교환·성능',name:'응축기 핀 오염도',status:'ok',note:''},
-  {cat:'배수',name:'드레인 배수 및 배관 상태',status:'ok',note:''},
-  {cat:'운전',name:'소음·진동 / 컨트롤러',status:'ok',note:''}
-];
-var statusOpts=['ok','warn','bad'];
-var statusLabels={ok:'✅ 정상',warn:'⚠️ 주의',bad:'❌ 불량/정비필요'};
-var riskOpts=['','-','h','m','l'];
-var riskLabels={'':'위험도','h':'중','m':'하','l':'최하','-':'없음'};
 
 window.addResultRow=function(cat,name,status,risk,note){
   var row=document.createElement('div');row.className='rtbl-row';
@@ -749,7 +799,7 @@ window.addResultRow=function(cat,name,status,risk,note){
     '<input placeholder="비고" value="'+(note||'')+'" style="font-size:10px;padding:4px 5px;color:#555">'+
     '<button class="btn-del">×</button>';
   // 삭제 버튼 — row 자체 제거
-  row.querySelector('.btn-del').addEventListener('click',function(){row.remove();});
+  row.querySelector('.btn-del').addEventListener('click',function(){row.remove();setTimeout(updateResultStats,50);});
   // 상태 select 색상
   row.querySelector('select:nth-child(3)').addEventListener('change',function(){
     var v=this.value;this.style.cssText='font-size:10px;padding:3px 4px;background:'+(v==='ok'?'#e8f8f0;color:#0a7a4a':v==='bad'?'#fde8e8;color:#c0392b':'#fff4e0;color:#b36000');
@@ -758,7 +808,6 @@ window.addResultRow=function(cat,name,status,risk,note){
 };
 
 // ── 냉방검사
-var coolCount=0;
 window.addCoolUnit=function(label,a,b,loc,result){
   coolCount++;
   var lbl=label||'A'+coolCount;
@@ -824,8 +873,6 @@ function setCoolPhoto(input,id,label){
 }
 
 // ── 측정 데이터 (실외기 PSI + 판정)
-var msrCount=0;
-var MSR_LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
 window.addMsrRow=function(label,hp,lp,curr,ins,jdg){
   msrCount++;
   var mid='msr'+Date.now();
@@ -881,8 +928,6 @@ window.checkLpPsi=function(input){
 };
 
 // ── 누설검사
-var leakCount=0;
-var LEAK_LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
 window.addLeakRow=function(label,loc,status){
   leakCount++;
   var lid='lk'+Date.now();
@@ -920,7 +965,6 @@ window.addLeakRow=function(label,loc,status){
   div.querySelector('#lk-del-'+lid).addEventListener('click',function(){div.remove();});
   $('leak-rows').appendChild(div);
 }
-var DEFECT_LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
 window.addDefectRow=function(defect,loc,risk,action,status){
   defectCount++;
   var did='def'+defectCount+'-'+Date.now();
@@ -973,7 +1017,6 @@ window.setDefectStatus=function(btn,status){
 };
 
 // ── 권장 정비
-var recCount=0;
 window.addRecRow=function(type,title,desc){
   recCount++;
   var item=document.createElement('div');item.className='rec-item';
@@ -1426,6 +1469,7 @@ window.loadIntoForm=function(data){
     data.results.forEach(function(r){addResultRow(r.cat,r.name,r.status,r.risk,r.note);});
   }else{
     DEFAULT_RESULTS.forEach(function(r){addResultRow(r.cat,r.name,'ok','','');});
+  setTimeout(updateResultStats,100);
   }
 
   // 냉방검사
@@ -1471,6 +1515,7 @@ window.onload=function(){
   $('f-date').value=today;
   // 항목별 결과 기본 (상태는 ok이지만 비고 공란)
   DEFAULT_RESULTS.forEach(function(r){addResultRow(r.cat,r.name,'ok','','');});
+  setTimeout(updateResultStats,100);
   // 나머지는 공란 — 사용자가 직접 추가
 };
 </script>
