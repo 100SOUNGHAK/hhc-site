@@ -851,17 +851,84 @@ window.renderReport=function renderReport(data){
     }
   }
 
-  // 4. 명판/압력/전류 사진
+  // 6. 실외기 사진 — outdoorSets 배열 + 레거시 단일 필드
   var iWrap=document.getElementById('item-photo-wrap');
-  var has5=false;
-  ['nameplate','pressure','current'].forEach(function(key){
-    if(data['photo_'+key]){
-      has5=true;
-      var el=document.getElementById('np-'+key+'-ph');
-      if(el)el.outerHTML='<img class="named-ph-img" src="'+data['photo_'+key]+'" id="np-'+key+'-ph" style="flex:1;height:140px;object-fit:contain;background:#f4f6fb">';
-    }
+  var has6=false;
+  var oRep=document.getElementById('outdoor-sets-report');
+  var oLeg=document.getElementById('outdoor-legacy-sec');
+  if(oRep) oRep.innerHTML='';
+  if(oLeg) oLeg.innerHTML='';
+
+  var TYPE_LABELS={
+    nameplate:isEn?'Nameplate':'명판',
+    pressure:isEn?'Refrigerant Pressure':'냉매보유압력',
+    current:isEn?'Rated Current':'정격전류'
+  };
+
+  // 신규: outdoorSets 배열 방식
+  (data.outdoorSets||[]).forEach(function(s){
+    var photos=s.photos||{};
+    var hasAny=photos.nameplate||photos.pressure||photos.current;
+    if(!hasAny||!oRep)return;
+    has6=true;
+    var setDiv=document.createElement('div');
+    setDiv.style='margin-bottom:12px';
+    // 세트 제목
+    var title=document.createElement('div');
+    title.style='font-size:11px;font-weight:600;color:#0F1C3F;margin-bottom:6px;padding:4px 0;border-bottom:0.5px solid #e8e8f0';
+    title.textContent=s.label||'실외기';
+    setDiv.appendChild(title);
+    // 3장 가로 배열
+    var grid=document.createElement('div');
+    grid.style='display:grid;grid-template-columns:repeat(3,1fr);gap:6px';
+    ['nameplate','pressure','current'].forEach(function(type){
+      var cell=document.createElement('div');
+      if(photos[type]){
+        cell.style='border-radius:7px;overflow:hidden;border:0.5px solid #e8e8f0';
+        var lbl=document.createElement('div');
+        lbl.style='font-size:9px;font-weight:600;color:#6b7280;text-align:center;padding:4px;background:#f8f9fc;border-bottom:0.5px solid #f0f0f0';
+        lbl.textContent=TYPE_LABELS[type];
+        var img=document.createElement('img');
+        img.src=photos[type];
+        img.style='width:100%;aspect-ratio:1;object-fit:cover;display:block';
+        cell.appendChild(lbl);cell.appendChild(img);
+      }else{
+        cell.style='border-radius:7px;border:0.5px solid #f0f0f0;background:#f8f9fc;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px';
+        cell.innerHTML='<span style="font-size:18px;opacity:.3">📷</span><span style="font-size:9px;color:#c0c8e0">'+TYPE_LABELS[type]+'</span>';
+      }
+      grid.appendChild(cell);
+    });
+    setDiv.appendChild(grid);
+    oRep.appendChild(setDiv);
   });
-  var iWrap2=document.getElementById('item-photo-wrap');if(iWrap2)iWrap2.style.display=has5?'block':'none';
+
+  // 레거시: photo_nameplate / photo_pressure / photo_current 단일 필드
+  var legPhotos=['nameplate','pressure','current'].filter(function(k){return !!data['photo_'+k];});
+  if(legPhotos.length>0&&oLeg){
+    has6=true;
+    var legGrid=document.createElement('div');
+    legGrid.style='display:grid;grid-template-columns:repeat(3,1fr);gap:6px';
+    ['nameplate','pressure','current'].forEach(function(k){
+      var cell=document.createElement('div');
+      if(data['photo_'+k]){
+        cell.style='border-radius:7px;overflow:hidden;border:0.5px solid #e8e8f0';
+        var lbl=document.createElement('div');
+        lbl.style='font-size:9px;font-weight:600;color:#6b7280;text-align:center;padding:4px;background:#f8f9fc;border-bottom:0.5px solid #f0f0f0';
+        lbl.textContent=TYPE_LABELS[k];
+        var img=document.createElement('img');
+        img.src=data['photo_'+k];
+        img.style='width:100%;aspect-ratio:1;object-fit:cover;display:block';
+        cell.appendChild(lbl);cell.appendChild(img);
+      }else{
+        cell.style='border-radius:7px;border:0.5px solid #f0f0f0;background:#f8f9fc;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;opacity:.4';
+        cell.innerHTML='<span style="font-size:18px">📷</span><span style="font-size:9px;color:#9ca3af">'+TYPE_LABELS[k]+'</span>';
+      }
+      legGrid.appendChild(cell);
+    });
+    oLeg.appendChild(legGrid);
+  }
+
+  if(iWrap)iWrap.style.display=has6?'block':'none';
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
