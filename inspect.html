@@ -108,6 +108,8 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:#f0f2f8;colo
 .rd-h{background:#e67e22}.rd-l{background:#2ecc71}
 .st-done{color:#0a7a4a;font-weight:600;font-size:11px}
 .st-plan{color:#b36000;font-weight:600;font-size:11px}
+.st-rec{color:#1e40af;font-weight:600;font-size:11px}
+.st-adv{color:#9d174d;font-weight:600;font-size:11px}
 
 /* ━━━ 06 권장 정비 ━━━ */
 .rec-item{border:0.5px solid #e8e8f0;border-radius:8px;padding:11px 14px;margin-bottom:8px;display:flex;gap:12px;align-items:flex-start}
@@ -415,7 +417,7 @@ var T={
     'r-scope':'냉방 성능 · 전기 안전 · 냉매 계통 · 배수 · 소음/진동',
     statusOk:'✅ 정상',statusWarn:'⚠️ 주의',statusBad:'❌ 불량',
     riskH:'중','riskL':'하',
-    stDone:'조치완료',stPlan:'조치예정',
+    stDone:'조치완료',stPlan:'조치예정',stRecommend:'조치권유',stAdvise:'조치권고',
     good:'양호',degrade:'저하',leakOk:'이상없음',leakBad:'누설감지',
     evalLabels:{normal:'정상',preventive:'예방정비 권장',repair:'수리 권장',urgent:'즉시수리 필요'},
     evalSubs:{normal:'양호',preventive:'조건부 양호',repair:'조건부 양호',urgent:'즉시 조치 필요'},
@@ -457,7 +459,7 @@ var T={
     'r-scope':'Cooling performance · Electrical safety · Refrigerant circuit · Drainage · Noise/Vibration',
     statusOk:'✅ Good',statusWarn:'⚠️ Caution',statusBad:'❌ Fault',
     riskH:'Med','riskL':'Low',
-    stDone:'Completed',stPlan:'Planned',
+    stDone:'Completed',stPlan:'Planned',stRecommend:'Recommended',stAdvise:'Advised',
     good:'Good',degrade:'Degraded',leakOk:'No Leakage',leakBad:'Leakage Detected',
     evalLabels:{normal:'Normal',preventive:'Preventive Maint.',repair:'Repair Needed',urgent:'Urgent Repair'},
     evalSubs:{normal:'All Good',preventive:'Conditional OK',repair:'Conditional OK',urgent:'Immediate Action'},
@@ -539,10 +541,11 @@ function renderReport(data){
   var okN=results.filter(function(r){return r.status==='ok';}).length;
   var warnN=results.filter(function(r){return r.status==='warn';}).length;
   var badN=results.filter(function(r){return r.status==='bad';}).length;
-  document.getElementById('stat-total').textContent=results.length||data.units||'—';
-  document.getElementById('stat-ok').textContent=okN;
-  document.getElementById('stat-warn').textContent=warnN;
-  document.getElementById('stat-bad').textContent=badN;
+  // 직접 입력값 우선, 없으면 자동 계산
+  document.getElementById('stat-total').textContent=data.statTotal||results.length||data.units||'—';
+  document.getElementById('stat-ok').textContent=data.statOk!==undefined&&data.statOk!==''?data.statOk:okN;
+  document.getElementById('stat-warn').textContent=data.statWarn!==undefined&&data.statWarn!==''?data.statWarn:warnN;
+  document.getElementById('stat-bad').textContent=data.statBad!==undefined&&data.statBad!==''?data.statBad:badN;
 
   // 항목별 결과
   var resBody=document.getElementById('result-body');
@@ -591,7 +594,7 @@ function renderReport(data){
     tr.innerHTML='<td>'+(i+1)+'</td><td>'+defect+'</td><td style="font-size:11px">'+loc+'</td>'+
       '<td><span class="risk-dot '+(d.risk==='h'?'rd-h':'rd-l')+'"></span>'+(d.risk==='h'?t.riskH:t.riskL)+'</td>'+
       '<td style="font-size:11px">'+action+'</td>'+
-      '<td class="'+(d.status==='done'?'st-done':'st-plan')+'">'+(d.status==='done'?t.stDone:t.stPlan)+'</td>';
+      '<td class="'+(d.status==='done'?'st-done':d.status==='recommend'?'st-rec':d.status==='advise'?'st-adv':'st-plan')+'">'+(d.status==='done'?t.stDone:d.status==='recommend'?t.stRecommend:d.status==='advise'?t.stAdvise:t.stPlan)+'</td>';
     defBody.appendChild(tr);
   });
   if(!data.defects||!data.defects.length)document.getElementById('defect-sec').style.display='none';
