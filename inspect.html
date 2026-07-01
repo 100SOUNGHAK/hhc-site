@@ -723,212 +723,190 @@ window.renderReport=function renderReport(data){
   if(!data.recommendations||!data.recommendations.length)document.getElementById('rec-sec').style.display='none';
 
   // ━━━ 사진 섹션 통합 렌더 ━━━
-  // 1. 냉방검사 사진 (항상 표시)
-  var cpSec=document.getElementById('cool-photos-sec');
-  if(cpSec){
-    cpSec.innerHTML='';
-    (data.coolUnits||[]).forEach(function(u){
-      var diff=u.a&&u.b?(parseFloat(u.a)-parseFloat(u.b)).toFixed(1):null;
-      var isWarn=diff&&parseFloat(diff)<15;
-      var label=u.label||'';
-      var locT=isEn?(u.loc_en||u.loc||''):(u.loc||'');
-      var item=document.createElement('div');
-      item.style='padding:10px 16px;border-bottom:0.5px solid #f0f0f0';
-      item.innerHTML=
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'+
-          '<div style="width:22px;height:22px;border-radius:50%;background:'+(isWarn?'#e67e22':'#0F2040')+';color:#fff;font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+label+'</div>'+
-          '<div style="flex:1;font-size:12px;font-weight:500;color:#0F1C3F">'+(isEn?'Unit ':'에어컨 ')+label+(locT?' — '+locT:'')+
-            '<span style="margin-left:8px;font-size:10px;padding:2px 7px;border-radius:10px;'+(isWarn?'background:#fff4e0;color:#b36000':'background:#e8f8f0;color:#0a7a4a')+'">'+
-            (isWarn?t.degrade:t.good)+'</span>'+
-          '</div>'+
-        '</div>'+
-        (diff?
-          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px">'+
-            '<div style="background:#f8f9fc;border-radius:5px;padding:7px;text-align:center;border-left:3px solid #0D9488"><div style="font-size:9px;color:#6b7280;margin-bottom:2px">'+(isEn?'Inlet A':'흡입온도 A')+'</div><div style="font-size:13px;font-weight:500">'+u.a+'°C</div></div>'+
-            '<div style="background:#f8f9fc;border-radius:5px;padding:7px;text-align:center;border-left:3px solid #0D9488"><div style="font-size:9px;color:#6b7280;margin-bottom:2px">'+(isEn?'Discharge B':'토출온도 B')+'</div><div style="font-size:13px;font-weight:500">'+u.b+'°C</div></div>'+
-            '<div style="border-radius:5px;padding:7px;text-align:center;border-left:3px solid '+(isWarn?'#e74c3c':'#0D9488')+';background:'+(isWarn?'#fde8e8':'#f8f9fc')+'"><div style="font-size:9px;color:#6b7280;margin-bottom:2px">ΔT</div><div style="font-size:13px;font-weight:500;color:'+(isWarn?'#c0392b':'#0a7a4a')+'">'+diff+'°C</div></div>'+
+
+  function makePhotoGrid(container, urls, opts) {
+    opts = opts || {};
+    container.innerHTML = '';
+    if (!urls || urls.length === 0) return false;
+    urls.forEach(function(ph) {
+      if (!ph) return;
+      var div = document.createElement('div');
+      div.style = 'border-radius:7px;overflow:hidden;border:0.5px solid #e8e8f0';
+      var img = document.createElement('img');
+      img.src = ph;
+      img.style = 'width:100%;height:' + (opts.height || '160px') + ';object-fit:' + (opts.fit || 'contain') + ';background:#f4f6fb;display:block';
+      div.appendChild(img);
+      container.appendChild(div);
+    });
+    return true;
+  }
+
+  function showWrap(id, show) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = show ? 'block' : 'none';
+  }
+
+  // 1. 냉방검사 사진
+  var cpSec = document.getElementById('cool-photos-sec');
+  if (cpSec) {
+    cpSec.innerHTML = '';
+    (data.coolUnits || []).forEach(function(u) {
+      var diff = u.a && u.b ? (parseFloat(u.a) - parseFloat(u.b)).toFixed(1) : null;
+      var isWarn = diff && parseFloat(diff) < 15;
+      var label = u.label || '';
+      var locT = isEn ? (u.loc_en || u.loc || '') : (u.loc || '');
+      var item = document.createElement('div');
+      item.style = 'padding:10px 16px;border-bottom:0.5px solid #f0f0f0';
+      item.innerHTML =
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+          '<div style="width:22px;height:22px;border-radius:50%;background:' + (isWarn ? '#e67e22' : '#0F2040') + ';color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">' + label + '</div>' +
+          '<div style="flex:1;font-size:12px;font-weight:500;color:#0F1C3F">' + (isEn ? 'Unit ' : '에어컨 ') + label + (locT ? ' — ' + locT : '') +
+            '<span style="margin-left:8px;font-size:10px;padding:2px 7px;border-radius:10px;' + (isWarn ? 'background:#fff4e0;color:#b36000' : 'background:#e8f8f0;color:#0a7a4a') + '">' + (isWarn ? t.degrade : t.good) + '</span>' +
+          '</div>' +
+        '</div>' +
+        (diff ?
+          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px">' +
+            '<div style="background:#f8f9fc;border-radius:5px;padding:7px;text-align:center;border-left:3px solid #0D9488"><div style="font-size:9px;color:#6b7280;margin-bottom:2px">' + (isEn ? 'Inlet A' : '흡입온도 A') + '</div><div style="font-size:13px;font-weight:500">' + u.a + '°C</div></div>' +
+            '<div style="background:#f8f9fc;border-radius:5px;padding:7px;text-align:center;border-left:3px solid #0D9488"><div style="font-size:9px;color:#6b7280;margin-bottom:2px">' + (isEn ? 'Discharge B' : '토출온도 B') + '</div><div style="font-size:13px;font-weight:500">' + u.b + '°C</div></div>' +
+            '<div style="border-radius:5px;padding:7px;text-align:center;border-left:3px solid ' + (isWarn ? '#e74c3c' : '#0D9488') + ';background:' + (isWarn ? '#fde8e8' : '#f8f9fc') + '"><div style="font-size:9px;color:#6b7280;margin-bottom:2px">ΔT</div><div style="font-size:13px;font-weight:500;color:' + (isWarn ? '#c0392b' : '#0a7a4a') + '">' + diff + '°C</div></div>' +
           '</div>'
-        :'');
-      var photoUrls=u.photos||(u.photo?[u.photo]:[]);
-      if(photoUrls.length){
-        var photoGrid=document.createElement('div');
-        photoGrid.style='display:grid;grid-template-columns:'+(photoUrls.length>1?'1fr 1fr':'1fr')+';gap:6px;margin-top:4px';
-        photoUrls.forEach(function(ph){
-          var img=document.createElement('img');
-          img.src=ph;
-          img.style='width:100%;height:150px;object-fit:contain;border-radius:7px;background:#f4f6fb;border:0.5px solid #e8e8f0;display:block';
-          photoGrid.appendChild(img);
+        : '');
+      var photoUrls = u.photos || (u.photo ? [u.photo] : []);
+      if (photoUrls.length) {
+        var pg = document.createElement('div');
+        pg.style = 'display:grid;grid-template-columns:' + (photoUrls.length > 1 ? '1fr 1fr' : '1fr') + ';gap:6px';
+        photoUrls.forEach(function(ph) {
+          var img = document.createElement('img');
+          img.src = ph;
+          img.style = 'width:100%;height:150px;object-fit:contain;border-radius:7px;background:#f4f6fb;border:0.5px solid #e8e8f0;display:block';
+          pg.appendChild(img);
         });
-        item.appendChild(photoGrid);
+        item.appendChild(pg);
       }
       cpSec.appendChild(item);
     });
   }
 
   // 2. 누설검사 사진
-  var leakGrid=document.getElementById('leak-photos-grid');
-  var leakWrap=document.getElementById('leak-photo-wrap');
-  if(leakGrid){
-    leakGrid.innerHTML='';
-    var hasLeak=(data.leakPhotos||[]).length>0;
-    if(leakWrap)leakWrap.style.display=hasLeak?'block':'none';
-    (data.leakPhotos||[]).forEach(function(ph){
-      var div=document.createElement('div');
-      div.style='border-radius:7px;overflow:hidden;border:0.5px solid #e8e8f0';
-      div.innerHTML='<img src="'+ph+'" style="width:100%;height:160px;object-fit:contain;background:#f4f6fb;display:block">';
-      leakGrid.appendChild(div);
-    });
-  }
+  var leakGrid = document.getElementById('leak-photos-grid');
+  var hasLeak = makePhotoGrid(leakGrid, data.leakPhotos, {height:'160px',fit:'cover'});
+  showWrap('leak-photo-wrap', hasLeak);
 
   // 3. 실외기 측정 사진
-  var msrGrid=document.getElementById('msr-photos-grid');
-  var msrPhWrap=document.getElementById('msr-photo-wrap');
-  if(msrGrid){
-    msrGrid.innerHTML='';
-    var hasMsrPh=(data.msrPhotos||[]).length>0;
-    if(msrPhWrap)msrPhWrap.style.display=hasMsrPh?'block':'none';
-    (data.msrPhotos||[]).forEach(function(ph){
-      var div=document.createElement('div');
-      div.style='border-radius:7px;overflow:hidden;border:0.5px solid #e8e8f0';
-      div.innerHTML='<img src="'+ph+'" style="width:100%;height:160px;object-fit:contain;background:#f4f6fb;display:block">';
-      msrGrid.appendChild(div);
-    });
-  }
+  var msrGrid = document.getElementById('msr-photos-grid');
+  var hasMsrPh = makePhotoGrid(msrGrid, data.msrPhotos, {height:'160px',fit:'cover'});
+  showWrap('msr-photo-wrap', hasMsrPh);
 
   // 4. 작업과정 사진
-  var wGrid=document.getElementById('work-photos-grid');
-  var wWrap=document.getElementById('work-photo-wrap');
-  if(wGrid){
-    wGrid.innerHTML='';
-    var hasWork=(data.workPhotos||[]).length>0;
-    if(wWrap)wWrap.style.display=hasWork?'block':'none';
-    (data.workPhotos||[]).forEach(function(ph){
-      var div=document.createElement('div');
-      div.style='border-radius:7px;overflow:hidden;border:0.5px solid #e8e8f0';
-      div.style='border-radius:7px;overflow:hidden';
-      div.innerHTML='<img src="'+ph+'" style="width:100%;height:180px;object-fit:cover;display:block">';
-      wGrid.appendChild(div);
-    });
-  }
+  var wGrid = document.getElementById('work-photos-grid');
+  var hasWork = makePhotoGrid(wGrid, data.workPhotos, {height:'180px',fit:'cover'});
+  showWrap('work-photo-wrap', hasWork);
 
-  // 3. 청소 사진 — 전(좌)/후(우) 좌우 나란히
-  var cGrid=document.getElementById('clean-photos-grid');
-  var cWrap=document.getElementById('clean-photo-wrap');
-  if(cGrid){
-    cGrid.innerHTML='';
-    var beforeArr=data.cleanBefore||(data.cleanPhotos||[]);  // 레거시: cleanPhotos → before로 표시
-    var afterArr=data.cleanAfter||[];
-    var hasClean=beforeArr.length>0||afterArr.length>0;
-    if(cWrap)cWrap.style.display=hasClean?'block':'none';
-    var maxRows=Math.max(beforeArr.length, afterArr.length);
-    for(var ri=0;ri<maxRows;ri++){
-      // Before 셀
-      var bc=document.createElement('div');
-      bc.style='border-right:0.5px solid #f0f0f0;border-bottom:0.5px solid #f0f0f0';
-      if(beforeArr[ri]){
-        var bi=document.createElement('img');
-        bi.src=beforeArr[ri];
-        bi.style='width:100%;aspect-ratio:1;object-fit:cover;display:block';
+  // 5. 청소 사진 — 전(좌)/후(우) 좌우 나란히
+  var cGrid = document.getElementById('clean-photos-grid');
+  var cWrap = document.getElementById('clean-photo-wrap');
+  if (cGrid) {
+    cGrid.innerHTML = '';
+    var beforeArr = data.cleanBefore || (data.cleanPhotos || []);
+    var afterArr  = data.cleanAfter  || [];
+    var hasClean  = beforeArr.length > 0 || afterArr.length > 0;
+    showWrap('clean-photo-wrap', hasClean);
+    var maxRows = Math.max(beforeArr.length, afterArr.length);
+    for (var ri = 0; ri < maxRows; ri++) {
+      var bc = document.createElement('div');
+      bc.style = 'border-right:0.5px solid #f0f0f0;border-bottom:0.5px solid #f0f0f0';
+      if (beforeArr[ri]) {
+        var bi = document.createElement('img');
+        bi.src = beforeArr[ri]; bi.style = 'width:100%;aspect-ratio:1;object-fit:cover;display:block';
         bc.appendChild(bi);
-      }else{
-        bc.style+='background:#f8f9fc;aspect-ratio:1;display:flex;align-items:center;justify-content:center';
-        bc.innerHTML='<span style="font-size:11px;color:#c0c8e0">—</span>';
+      } else {
+        bc.style += ';background:#f8f9fc;aspect-ratio:1;display:flex;align-items:center;justify-content:center';
+        bc.innerHTML = '<span style="font-size:11px;color:#c0c8e0">—</span>';
       }
       cGrid.appendChild(bc);
-      // After 셀
-      var ac=document.createElement('div');
-      ac.style='border-bottom:0.5px solid #f0f0f0';
-      if(afterArr[ri]){
-        var ai=document.createElement('img');
-        ai.src=afterArr[ri];
-        ai.style='width:100%;aspect-ratio:1;object-fit:cover;display:block';
+      var ac = document.createElement('div');
+      ac.style = 'border-bottom:0.5px solid #f0f0f0';
+      if (afterArr[ri]) {
+        var ai = document.createElement('img');
+        ai.src = afterArr[ri]; ai.style = 'width:100%;aspect-ratio:1;object-fit:cover;display:block';
         ac.appendChild(ai);
-      }else{
-        ac.style+='background:#f8f9fc;aspect-ratio:1;display:flex;align-items:center;justify-content:center';
-        ac.innerHTML='<span style="font-size:11px;color:#c0c8e0">—</span>';
+      } else {
+        ac.style += ';background:#f8f9fc;aspect-ratio:1;display:flex;align-items:center;justify-content:center';
+        ac.innerHTML = '<span style="font-size:11px;color:#c0c8e0">—</span>';
       }
       cGrid.appendChild(ac);
     }
   }
 
-  // 6. 실외기 사진 — outdoorSets 배열 + 레거시 단일 필드
-  var iWrap=document.getElementById('item-photo-wrap');
-  var has6=false;
-  var oRep=document.getElementById('outdoor-sets-report');
-  var oLeg=document.getElementById('outdoor-legacy-sec');
-  if(oRep) oRep.innerHTML='';
-  if(oLeg) oLeg.innerHTML='';
-
-  var TYPE_LABELS={
-    nameplate:isEn?'Nameplate':'명판',
-    pressure:isEn?'Refrigerant Pressure':'냉매보유압력',
-    current:isEn?'Rated Current':'정격전류'
+  // 6. 실외기 명판/압력/전류 사진
+  var iWrap = document.getElementById('item-photo-wrap');
+  if (iWrap) iWrap.style.display = 'none';
+  var has6 = false;
+  var oRep = document.getElementById('outdoor-sets-report');
+  var oLeg = document.getElementById('outdoor-legacy-sec');
+  if (oRep) oRep.innerHTML = '';
+  if (oLeg) oLeg.innerHTML = '';
+  var TYPE_LABELS = {
+    nameplate: isEn ? 'Nameplate' : '명판',
+    pressure:  isEn ? 'Refrigerant Pressure' : '냉매보유압력',
+    current:   isEn ? 'Rated Current' : '정격전류'
   };
-
-  // 신규: outdoorSets 배열 방식
-  (data.outdoorSets||[]).forEach(function(s){
-    var photos=s.photos||{};
-    var hasAny=photos.nameplate||photos.pressure||photos.current;
-    if(!hasAny||!oRep)return;
-    has6=true;
-    var setDiv=document.createElement('div');
-    setDiv.style='margin-bottom:12px';
-    // 세트 제목
-    var title=document.createElement('div');
-    title.style='font-size:11px;font-weight:600;color:#0F1C3F;margin-bottom:6px;padding:4px 0;border-bottom:0.5px solid #e8e8f0';
-    title.textContent=s.label||'실외기';
+  (data.outdoorSets || []).forEach(function(s) {
+    var photos = s.photos || {};
+    if (!photos.nameplate && !photos.pressure && !photos.current) return;
+    has6 = true;
+    if (!oRep) return;
+    var setDiv = document.createElement('div');
+    setDiv.style = 'margin-bottom:12px';
+    var title = document.createElement('div');
+    title.style = 'font-size:11px;font-weight:600;color:#0F1C3F;margin-bottom:6px;padding:4px 0;border-bottom:0.5px solid #e8e8f0';
+    title.textContent = s.label || '실외기';
     setDiv.appendChild(title);
-    // 3장 가로 배열
-    var grid=document.createElement('div');
-    grid.style='display:grid;grid-template-columns:repeat(3,1fr);gap:6px';
-    ['nameplate','pressure','current'].forEach(function(type){
-      var cell=document.createElement('div');
-      if(photos[type]){
-        cell.style='border-radius:7px;overflow:hidden;border:0.5px solid #e8e8f0';
-        var lbl=document.createElement('div');
-        lbl.style='font-size:9px;font-weight:600;color:#6b7280;text-align:center;padding:4px;background:#f8f9fc;border-bottom:0.5px solid #f0f0f0';
-        lbl.textContent=TYPE_LABELS[type];
-        var img=document.createElement('img');
-        img.src=photos[type];
-        img.style='width:100%;aspect-ratio:1;object-fit:cover;display:block';
-        cell.appendChild(lbl);cell.appendChild(img);
-      }else{
-        cell.style='border-radius:7px;border:0.5px solid #f0f0f0;background:#f8f9fc;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px';
-        cell.innerHTML='<span style="font-size:18px;opacity:.3">📷</span><span style="font-size:9px;color:#c0c8e0">'+TYPE_LABELS[type]+'</span>';
+    var grid = document.createElement('div');
+    grid.style = 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px';
+    ['nameplate','pressure','current'].forEach(function(type) {
+      var cell = document.createElement('div');
+      if (photos[type]) {
+        cell.style = 'border-radius:7px;overflow:hidden;border:0.5px solid #e8e8f0';
+        var lbl = document.createElement('div');
+        lbl.style = 'font-size:9px;font-weight:600;color:#6b7280;text-align:center;padding:4px;background:#f8f9fc;border-bottom:0.5px solid #f0f0f0';
+        lbl.textContent = TYPE_LABELS[type];
+        var img = document.createElement('img');
+        img.src = photos[type];
+        img.style = 'width:100%;aspect-ratio:1;object-fit:cover;display:block';
+        cell.appendChild(lbl); cell.appendChild(img);
+      } else {
+        cell.style = 'border-radius:7px;border:0.5px solid #f0f0f0;background:#f8f9fc;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;opacity:.4';
+        cell.innerHTML = '<span style="font-size:18px">📷</span><span style="font-size:9px;color:#9ca3af">' + TYPE_LABELS[type] + '</span>';
       }
       grid.appendChild(cell);
     });
     setDiv.appendChild(grid);
     oRep.appendChild(setDiv);
   });
-
-  // 레거시: photo_nameplate / photo_pressure / photo_current 단일 필드
-  var legPhotos=['nameplate','pressure','current'].filter(function(k){return !!data['photo_'+k];});
-  if(legPhotos.length>0&&oLeg){
-    has6=true;
-    var legGrid=document.createElement('div');
-    legGrid.style='display:grid;grid-template-columns:repeat(3,1fr);gap:6px';
-    ['nameplate','pressure','current'].forEach(function(k){
-      var cell=document.createElement('div');
-      if(data['photo_'+k]){
-        cell.style='border-radius:7px;overflow:hidden;border:0.5px solid #e8e8f0';
-        var lbl=document.createElement('div');
-        lbl.style='font-size:9px;font-weight:600;color:#6b7280;text-align:center;padding:4px;background:#f8f9fc;border-bottom:0.5px solid #f0f0f0';
-        lbl.textContent=TYPE_LABELS[k];
-        var img=document.createElement('img');
-        img.src=data['photo_'+k];
-        img.style='width:100%;aspect-ratio:1;object-fit:cover;display:block';
-        cell.appendChild(lbl);cell.appendChild(img);
-      }else{
-        cell.style='border-radius:7px;border:0.5px solid #f0f0f0;background:#f8f9fc;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;opacity:.4';
-        cell.innerHTML='<span style="font-size:18px">📷</span><span style="font-size:9px;color:#9ca3af">'+TYPE_LABELS[k]+'</span>';
+  // 레거시 단일 photo_nameplate 필드
+  var legPhotos = ['nameplate','pressure','current'].filter(function(k){return !!data['photo_'+k];});
+  if (legPhotos.length > 0 && oLeg) {
+    has6 = true;
+    var legGrid2 = document.createElement('div');
+    legGrid2.style = 'display:grid;grid-template-columns:repeat(3,1fr);gap:6px';
+    ['nameplate','pressure','current'].forEach(function(k) {
+      var cell = document.createElement('div');
+      if (data['photo_'+k]) {
+        cell.style = 'border-radius:7px;overflow:hidden;border:0.5px solid #e8e8f0';
+        var lbl = document.createElement('div');
+        lbl.style = 'font-size:9px;font-weight:600;color:#6b7280;text-align:center;padding:4px;background:#f8f9fc;border-bottom:0.5px solid #f0f0f0';
+        lbl.textContent = TYPE_LABELS[k];
+        var img = document.createElement('img');
+        img.src = data['photo_'+k];
+        img.style = 'width:100%;aspect-ratio:1;object-fit:cover;display:block';
+        cell.appendChild(lbl); cell.appendChild(img);
       }
-      legGrid.appendChild(cell);
+      legGrid2.appendChild(cell);
     });
-    oLeg.appendChild(legGrid);
+    oLeg.appendChild(legGrid2);
   }
-
-  if(iWrap)iWrap.style.display=has6?'block':'none';
+  showWrap('item-photo-wrap', has6);
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
