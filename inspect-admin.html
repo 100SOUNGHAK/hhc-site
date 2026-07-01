@@ -225,7 +225,7 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
   <div class="card-body" style="padding:10px 0">
     <div id="equip-rows" style="padding:0 10px;margin-top:8px"></div>
     <div style="padding:0 10px">
-      <button class="btn-add" onclick="addEquip()">+ 설비 추가</button>
+      <button class="btn-add" data-action="addEquip">+ 설비 추가</button>
     </div>
   </div>
 </div>
@@ -273,7 +273,7 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
     <div class="rtbl-hdr"><span>구분</span><span>점검 항목</span><span>결과</span><span>위험도</span><span>비고</span><span></span></div>
     <div id="result-rows"></div>
     <div style="padding:0 10px 10px">
-      <button class="btn-add" onclick="addResultRow()">+ 항목 추가</button>
+      <button class="btn-add" data-action="addResultRow">+ 항목 추가</button>
     </div>
   </div>
 </div>
@@ -286,7 +286,7 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
       기준: 흡입(A) − 토출(B) ≥15°C 양호 · 12~15°C 정상범위 · &lt;12°C 저하
     </div>
     <div id="cool-units"></div>
-    <button class="btn-add" onclick="addCoolUnit()">+ 유닛 추가</button>
+    <button class="btn-add" data-action="addCoolUnit">+ 유닛 추가</button>
   </div>
 </div>
 
@@ -296,7 +296,7 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
   <div class="card-body">
     <div style="font-size:11px;color:#6b7280;margin-bottom:10px">고압/저압/운전전류/절연저항 — 미입력시 고객 보고서에 미표시</div>
     <div id="msr-rows"></div>
-    <button class="btn-add" onclick="addMsrRow()">+ 측정 유닛 추가</button>
+    <button class="btn-add" data-action="addMsrRow">+ 측정 유닛 추가</button>
     <div style="margin-top:10px">
       <div class="flabel" style="margin-bottom:5px">실외기 측정 사진 (선택)</div>
       <div class="photo-upload-row" id="msr-photos">
@@ -314,7 +314,7 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
       전체 분해 후 배관 연결부 재조립 완료 → 냉매 누설 여부 검지기로 확인
     </div>
     <div id="leak-rows"></div>
-    <button class="btn-add" onclick="addLeakRow()">+ 유닛 추가</button>
+    <button class="btn-add" data-action="addLeakRow">+ 유닛 추가</button>
     <div style="margin-top:10px">
       <div class="flabel" style="margin-bottom:5px">누설검사 사진</div>
       <div class="photo-upload-row" id="leak-photos">
@@ -329,7 +329,7 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
   <div class="card-hdr"><div class="card-icon">⚠️</div><div class="card-title">발견 결함 및 조치 내역</div></div>
   <div class="card-body">
     <div id="defect-rows"></div>
-    <button class="btn-add" onclick="addDefectRow()">+ 결함 추가</button>
+    <button class="btn-add" data-action="addDefectRow">+ 결함 추가</button>
   </div>
 </div>
 
@@ -338,7 +338,7 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
   <div class="card-hdr"><div class="card-icon">🔧</div><div class="card-title">권장 정비 · 교체 제안</div></div>
   <div class="card-body">
     <div id="rec-rows"></div>
-    <button class="btn-add" onclick="addRecRow()">+ 정비 항목 추가</button>
+    <button class="btn-add" data-action="addRecRow">+ 정비 항목 추가</button>
   </div>
 </div>
 
@@ -350,7 +350,7 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
     <div style="margin-bottom:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <div class="flabel" style="margin-bottom:0">명판 / 압력 / 전류 사진</div>
-        <button onclick="addOutdoorPhoto()" style="padding:4px 10px;border-radius:5px;border:1px dashed #0D9488;background:#f0fdfb;color:#0D9488;font-size:11px;cursor:pointer">+ 사진 추가</button>
+        <button data-action="addOutdoorSet" style="padding:4px 10px;border-radius:5px;border:1px dashed #0D9488;background:#f0fdfb;color:#0D9488;font-size:11px;cursor:pointer">+ 사진 추가</button>
       </div>
       <div id="outdoor-photos-list">
         <!-- 기본 3개 -->
@@ -503,6 +503,35 @@ window.switchView=function(view){
 };
 
 // ── 이벤트 위임 (파일 업로드)
+// 클릭 이벤트 위임
+document.addEventListener('click',function(e){
+  // 실외기 사진 삭제
+  var del2=e.target.closest('.np-del2');
+  if(del2){
+    e.stopPropagation();
+    var key=del2.dataset.delKey;
+    if(key)delete photoData[key];
+    var body=del2.closest('.np-body');
+    if(body){body.querySelector('.np-icon').textContent='📷';var main=body.querySelector('.np-main');if(main)main.textContent='사진 업로드';body.style.background='';del2.style.display='none';}
+    return;
+  }
+  // btn-add
+  var btn=e.target.closest('[data-action]');
+  if(!btn)return;
+  var action=btn.dataset.action;
+  var fns={
+    addMsrRow:window.addMsrRow,
+    addLeakRow:window.addLeakRow,
+    addDefectRow:window.addDefectRow,
+    addRecRow:window.addRecRow,
+    addEquip:window.addEquip,
+    addResultRow:window.addResultRow,
+    addCoolUnit:window.addCoolUnit,
+    addOutdoorSet:window.addOutdoorSet
+  };
+  if(fns[action])fns[action]();
+});
+
 document.addEventListener('change',function(e){
   // 드롭다운 셀렉트 → 직접입력 표시
   if(e.target.classList.contains('dd-sel')){
@@ -562,23 +591,67 @@ document.addEventListener('input',function(e){
 });
 
 // ── 명판 사진
-window.triggerNp=function(id){$(id).click();};
+// triggerNp deprecated - using outdoor sets
 var outdoorPhotoCount=0;
-window.addOutdoorPhoto=function(){
-  outdoorPhotoCount++;
-  var key='outdoor-extra-'+outdoorPhotoCount;
-  var row=document.createElement('div');
-  row.className='named-photo';row.style='margin-bottom:6px';
-  row.innerHTML='<div class="np-label" contenteditable="true" style="outline:none;cursor:text;min-width:30px" title="이름 클릭하여 편집">사진'+outdoorPhotoCount+'</div>'+
-    '<div class="np-body" style="cursor:pointer">'+
-      '<span class="np-icon">📷</span>'+
-      '<div class="np-text"><div class="np-main">사진 업로드</div><div class="np-sub">클릭하여 선택</div></div>'+
-      '<button class="np-del" style="display:block" onclick="event.stopPropagation();this.parentElement.parentElement.remove()">삭제</button>'+
-      '<input type="file" accept="image/*" data-outdoor-extra="'+key+'" style="position:absolute;inset:0;opacity:0;cursor:pointer">'+
-    '</div>';
-  row.querySelector('.np-body').style.position='relative';
-  $('outdoor-photos-list').appendChild(row);
+var outdoorSetCount=0;
+window.addOutdoorSet=function(unitLabel,npUrl,prUrl,curUrl){
+  outdoorSetCount++;
+  var sid='ods'+Date.now();
+  var label=unitLabel||('에어컨 A'+outdoorSetCount);
+  var set=document.createElement('div');
+  set.style='border:0.5px solid #e8e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px;position:relative';
+  set.id='outdoor-set-'+sid;
+  set.innerHTML=
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'+
+      '<input value="'+label+'" style="flex:1;font-size:12px;font-weight:500;border:none;border-bottom:1px solid #dde1ee;padding:2px 4px;background:transparent" placeholder="유닛 이름 (예: 에어컨 A1)">'+
+      '<button class="btn-del" style="flex-shrink:0">×</button>'+
+    '</div>'+
+    makeNpRow(sid,'nameplate','명판','장비 명판 사진',npUrl)+
+    makeNpRow(sid,'pressure','냉매보유압력','압력계 측정 사진',prUrl)+
+    makeNpRow(sid,'current','정격전류','전류계 측정 사진',curUrl);
+  set.querySelector('.btn-del').addEventListener('click',function(){set.remove();});
+  // 파일 input 이벤트 연결
+  set.querySelectorAll('input[type=file]').forEach(function(inp){
+    inp.addEventListener('change',function(){
+      if(!this.files[0])return;
+      var rd=new FileReader();
+      var key=this.dataset.outdoorKey;
+      var self=this;
+      rd.onload=function(e){
+        photoData[key]=e.target.result;
+        var body=self.closest('.np-body');
+        if(body){
+          body.querySelector('.np-icon').textContent='✅';
+          body.querySelector('.np-main').textContent='업로드 완료';
+          body.style.background='#e8f0fe';
+          var del=body.querySelector('.np-del2');
+          if(del)del.style.display='block';
+        }
+      };rd.readAsDataURL(this.files[0]);this.value='';
+    });
+  });
+  $('outdoor-sets').appendChild(set);
+  return sid;
 };
+
+function makeNpRow(sid,type,label,sub,existingUrl){
+  var key='outdoor-'+sid+'-'+type;
+  var hasImg=!!existingUrl;
+  return '<div class="named-photo" style="margin-bottom:6px">'+
+    '<div class="np-label">'+label+'</div>'+
+    '<div class="np-body" style="position:relative;cursor:pointer;background:'+(hasImg?'#e8f0fe':'')+'">'+
+      '<span class="np-icon">'+(hasImg?'✅':'📷')+'</span>'+
+      '<div class="np-text">'+
+        '<div class="np-main">'+(hasImg?'업로드 완료':label+' 사진 업로드')+'</div>'+
+        '<div class="np-sub">'+sub+'</div>'+
+      '</div>'+
+      '<button class="np-del2" data-del-key="'+key+'" style="display:'+(hasImg?'block':'none')+';margin-left:auto;padding:4px 8px;border-radius:4px;background:#fde8e8;color:#c0392b;border:none;font-size:11px;cursor:pointer">삭제</button>'+
+      '<input type="file" accept="image/*" data-outdoor-key="'+key+'" style="position:absolute;inset:0;opacity:0;cursor:pointer">'+
+    '</div>'+
+  '</div>';
+}
+
+// delOutdoorPhoto handled via click delegation
 function previewNp(input,key){
   var f=input.files[0];if(!f)return;
   var reader=new FileReader();
@@ -687,7 +760,10 @@ window.addResultRow=function(cat,name,status,risk,note){
     '<input placeholder="점검 항목명" value="'+(name||'')+'" style="font-size:11px;padding:4px 6px">'+
     stSel+rkSel+
     '<input placeholder="비고" value="'+(note||'')+'" style="font-size:10px;padding:4px 5px;color:#555">'+
-    '<button class="btn-del" onclick="this.parentElement.remove()">×</button>';
+    '<button class="btn-del">×</button>';
+  // 삭제 버튼 — row 자체 제거
+  row.querySelector('.btn-del').addEventListener('click',function(){row.remove();});
+  // 상태 select 색상
   row.querySelector('select:nth-child(3)').addEventListener('change',function(){
     var v=this.value;this.style.cssText='font-size:10px;padding:3px 4px;background:'+(v==='ok'?'#e8f8f0;color:#0a7a4a':v==='bad'?'#fde8e8;color:#c0392b':'#fff4e0;color:#b36000');
   });
@@ -886,6 +962,8 @@ window.addDefectRow=function(defect,loc,risk,action,status){
       '<button onclick="setDefectStatus(this,\'plan\')" style="flex:1;padding:6px;border-radius:5px;border:0.5px solid #fcd34d;background:'+(status!=='done'?'#fff4e0':'#f8f9fc')+';color:'+(status!=='done'?'#b36000':'#8a8a9a')+';font-size:11px;cursor:pointer">조치예정</button>'+
       '<button onclick="setDefectStatus(this,\'done\')" style="flex:1;padding:6px;border-radius:5px;border:0.5px solid '+(status==='done'?'#9fe1cb':'#dde1ee')+';background:'+(status==='done'?'#e8f8f0':'#f8f9fc')+';color:'+(status==='done'?'#0a7a4a':'#8a8a9a')+';font-size:11px;cursor:pointer">조치완료</button>'+
     '</div>';
+  // 삭제 버튼
+  item.querySelector('.btn-del').addEventListener('click',function(){item.remove();});
   $('defect-rows').appendChild(item);
 };
 window.setDefectStatus=function(btn,status){
@@ -920,6 +998,7 @@ window.addRecRow=function(type,title,desc){
     '</div>'+
     '<div><div class="flabel">제목</div><input placeholder="1호기 냉매 누설 정밀점검 및 보충" value="'+(title||'')+'"></div>'+
     '<div style="margin-top:6px"><div class="flabel">설명</div><input placeholder="미세 누설점 확인 후 냉매 보충, 1~2주 이내 권장" value="'+(desc||'')+'"></div>';
+  item.querySelector('.btn-del').addEventListener('click',function(){item.remove();});
   $('rec-rows').appendChild(item);
 };
 window.setRecType=function(btn,type){
@@ -1192,6 +1271,22 @@ window.saveReport=async function(){
       var url2=await uploadPhoto(key,photoData[key],rid);
       if(url2){
         if(key.startsWith('np_'))data['photo_'+key.replace('np_','')]=url2;
+        else if(key.startsWith('outdoor-')&&!key.startsWith('outdoor-extra')){
+          // outdoor-SID-type 형식
+          var parts=key.split('-');
+          if(parts.length>=3){
+            var otype=parts[parts.length-1]; // nameplate/pressure/current
+            var osid=parts.slice(1,parts.length-1).join('-');
+            if(data.outdoorSets){
+              data.outdoorSets=data.outdoorSets.map(function(s){
+                if(s.label&&key.includes(osid)){
+                  var photos=s.photos||{};photos[otype]=url2;
+                  return Object.assign({},s,{photos:photos});
+                }return s;
+              });
+            }
+          }
+        }
         else if(key.startsWith('cool-')){
           // coolUnits 사진 (여러 장 지원)
     data.coolUnits=(data.coolUnits||[]).map(function(u){
