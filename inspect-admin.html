@@ -1209,6 +1209,8 @@ async function tr(text){
 // ── 사진 업로드
 async function uploadPhoto(key,dataUrl,rid){
   if(!dataUrl||!ST)return null;
+  // 이미 Firebase Storage URL인 경우 재업로드 없이 그대로 반환
+  if(dataUrl.startsWith('http')){return dataUrl;}
   try{
     var blob=await fetch(dataUrl).then(function(r){return r.blob();});
     var sref=ref(ST,'inspections/'+rid+'/'+key+'.'+(blob.type.includes('png')?'png':'jpg'));
@@ -1426,9 +1428,95 @@ window.loadIntoForm=function(data){
   // 권장정비
   recCount=0;document.getElementById('rec-rows').innerHTML='';
   (data.recommendations||[]).forEach(function(r){addRecRow(r.type,r.title,r.desc);});
-  // 실외기 사진
+  // 실외기 사진 세트 (photos URL 포함)
   outdoorCount=0;document.getElementById('outdoor-sets').innerHTML='';
   (data.outdoorSets||[]).forEach(function(s){addOutdoorSet(s.label,s.photos);});
+
+  // ── 기존 사진 복원 (Firebase Storage URL → 썸네일 표시)
+  // addPhotoFromUrl: URL을 받아 썸네일 생성, photoData에는 URL 그대로 저장
+  function restorePhoto(containerId, url, key){
+    var container=document.getElementById(containerId);
+    if(!container||!url)return;
+    // photoData에 URL 저장 (Storage URL이므로 재업로드 불필요)
+    photoData[key]=url;
+    var item=document.createElement('div');item.className='ph-item';
+    var img=document.createElement('img');img.className='ph-img';img.src=url;
+    var dBtn=document.createElement('button');dBtn.className='ph-del';dBtn.textContent='×';
+    dBtn.onclick=function(){delete photoData[key];item.remove();};
+    item.appendChild(img);item.appendChild(dBtn);
+    var addBtn=container.querySelector('.ph-add');
+    container.insertBefore(item,addBtn);
+  }
+
+  // 작업과정 사진
+  var wpCont=document.getElementById('work-photos');
+  if(wpCont){
+    wpCont.querySelectorAll('.ph-item').forEach(function(el){el.remove();});
+    (data.workPhotos||[]).forEach(function(url,i){
+      restorePhoto('work-photos',url,'work-photos-restore-'+i);
+    });
+  }
+
+  // 청소 전 사진
+  var cbCont=document.getElementById('clean-before-photos');
+  if(cbCont){
+    cbCont.querySelectorAll('.ph-item').forEach(function(el){el.remove();});
+    (data.cleanBefore||data.cleanPhotos||[]).forEach(function(url,i){
+      restorePhoto('clean-before-photos',url,'clean-before-restore-'+i);
+    });
+  }
+
+  // 청소 후 사진
+  var caCont=document.getElementById('clean-after-photos');
+  if(caCont){
+    caCont.querySelectorAll('.ph-item').forEach(function(el){el.remove();});
+    (data.cleanAfter||[]).forEach(function(url,i){
+      restorePhoto('clean-after-photos',url,'clean-after-restore-'+i);
+    });
+  }
+
+  // 누설검사 사진
+  var lkCont=document.getElementById('leak-photos');
+  if(lkCont){
+    lkCont.querySelectorAll('.ph-item').forEach(function(el){el.remove();});
+    (data.leakPhotos||[]).forEach(function(url,i){
+      restorePhoto('leak-photos',url,'leak-photos-restore-'+i);
+    });
+  }
+
+  // 실외기 측정 사진
+  var msrCont=document.getElementById('msr-photos');
+  if(msrCont){
+    msrCont.querySelectorAll('.ph-item').forEach(function(el){el.remove();});
+    (data.msrPhotos||[]).forEach(function(url,i){
+      restorePhoto('msr-photos',url,'msr-photos-restore-'+i);
+    });
+  }
+
+  // 냉방검사 유닛 사진 복원
+  (data.coolUnits||[]).forEach(function(u,ui){
+    var photos=u.photos||(u.photo?[u.photo]:[]);
+    if(!photos.length)return;
+    // 유닛 컨테이너 찾기 (순서로 매칭)
+    var cuItems=document.getElementById('cool-units').querySelectorAll('.cu-item');
+    var target=cuItems[ui];
+    if(!target)return;
+    var phRow=target.querySelector('[id^="cu-photos-"]');
+    if(!phRow)return;
+    phRow.querySelectorAll('.ph-item').forEach(function(el){el.remove();});
+    photos.forEach(function(url,pi){
+      var key='cool-restore-'+ui+'-'+pi;
+      photoData[key]=url;
+      var item=document.createElement('div');item.className='ph-item';
+      var img=document.createElement('img');img.className='ph-img';img.src=url;
+      var dBtn=document.createElement('button');dBtn.className='ph-del';dBtn.textContent='×';
+      dBtn.onclick=function(){delete photoData[key];item.remove();};
+      item.appendChild(img);item.appendChild(dBtn);
+      var addBtn=phRow.querySelector('.ph-add');
+      phRow.insertBefore(item,addBtn);
+    });
+  });
+
   // 수정 모드
   currentEditId=data._id;
   var btn=document.getElementById('btn-save');
