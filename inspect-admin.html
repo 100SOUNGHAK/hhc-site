@@ -628,12 +628,12 @@ function makeDdField(label,opts,val,selId,customId,spanCols){
   var isCustom=val&&!opts.includes(val);
   var span=spanCols?'grid-column:span 2;':'';
   return '<div style="'+span+'"><div class="flabel">'+label+'</div>'+
-    '<select class="dd-sel" id="'+selId+'">'+
+    '<select class="dd-sel" id="'+selId+'" data-custom="'+customId+'">'+
       '<option value="">선택</option>'+
       opts.map(function(o){return '<option value="'+o+'" '+(val===o?'selected':'')+'>'+o+'</option>';}).join('')+
-      '<option value="__custom__">직접 입력</option>'+
+      '<option value="__custom__">✏️ 직접 입력</option>'+
     '</select>'+
-    '<input class="dd-custom'+(isCustom?' show':'')+'" id="'+customId+'" placeholder="직접 입력" value="'+(isCustom?val:'')+'">'+
+    '<input class="dd-custom'+(isCustom?' show':'')+'" id="'+customId+'" placeholder="직접 입력..." value="'+(isCustom?val:'')+'">'+
   '</div>';
 }
 
@@ -763,14 +763,23 @@ function setCoolPhoto(input,id,label){
 
 // ── 측정 데이터 (실외기 PSI + 판정)
 var msrCount=0;
+var MSR_LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
 window.addMsrRow=function(label,hp,lp,curr,ins,jdg){
   msrCount++;
-  var id='msr'+Date.now();
+  var mid='msr'+Date.now();
+  var isCustomLoc=label&&!MSR_LOC_OPTS.includes(label);
   var row=document.createElement('div');
   row.style='border:0.5px solid #e8e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px';
   row.innerHTML=
     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">'+
-      '<input placeholder="호기 위치 (예: 1호기 · 1F 로비)" value="'+(label||'')+'" style="flex:1;font-size:12px">'+
+      '<div style="flex:1">'+
+        '<select class="dd-sel" data-custom="msr-loc-custom-'+mid+'" style="margin-bottom:3px">'+
+          '<option value="">위치 선택</option>'+
+          MSR_LOC_OPTS.map(function(o){return '<option value="'+o+'" '+(label===o?'selected':'')+'>'+o+'</option>';}).join('')+
+          '<option value="__custom__">✏️ 직접 입력</option>'+
+        '</select>'+
+        '<input class="dd-custom'+(isCustomLoc?' show':'')+'" id="msr-loc-custom-'+mid+'" placeholder="직접 입력..." value="'+(isCustomLoc?label:'')+'">'+
+      '</div>'+
       '<button class="btn-del" onclick="this.parentElement.parentElement.remove()">×</button>'+
     '</div>'+
     '<div class="mv-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px">'+
@@ -810,31 +819,60 @@ window.checkLpPsi=function(input){
 
 // ── 누설검사
 var leakCount=0;
+var LEAK_LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
 window.addLeakRow=function(label,loc,status){
   leakCount++;
-  var row=document.createElement('div');row.className='leak-row';
-  row.innerHTML='<input placeholder="AC '+(leakCount)+'" value="'+(label||('AC '+leakCount))+'" style="font-size:11px;padding:5px 7px">'+
-    '<input placeholder="위치" value="'+(loc||'')+'" style="font-size:11px;padding:5px 7px">'+
-    '<select style="font-size:11px;padding:5px 7px;background:#e8f8f0;color:#0a7a4a">'+
+  var lid='lk'+Date.now();
+  var AC_OPTS=['AC 1','AC 2','AC 3','AC 4','AC 5','AC 6','AC 7','AC 8'];
+  var isCustomLbl=label&&!AC_OPTS.includes(label);
+  var isCustomLoc=loc&&!LEAK_LOC_OPTS.includes(loc);
+  var div=document.createElement('div');
+  div.style='border:0.5px solid #e8e8f0;border-radius:7px;padding:8px 10px;margin-bottom:6px;display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px;align-items:start';
+  div.innerHTML=
+    '<div>'+
+      '<select class="dd-sel" data-custom="lk-lbl-'+lid+'" style="margin-bottom:3px">'+
+        '<option value="">호기 선택</option>'+
+        AC_OPTS.map(function(o){return '<option value="'+o+'" '+(label===o?'selected':'')+'>'+o+'</option>';}).join('')+
+        '<option value="__custom__">✏️ 직접 입력</option>'+
+      '</select>'+
+      '<input class="dd-custom'+(isCustomLbl?' show':'')+'" id="lk-lbl-'+lid+'" placeholder="직접 입력..." value="'+(isCustomLbl?label:'')+'">'+
+    '</div>'+
+    '<div>'+
+      '<select class="dd-sel" data-custom="lk-loc-'+lid+'" style="margin-bottom:3px">'+
+        '<option value="">위치 선택</option>'+
+        LEAK_LOC_OPTS.map(function(o){return '<option value="'+o+'" '+(loc===o?'selected':'')+'>'+o+'</option>';}).join('')+
+        '<option value="__custom__">✏️ 직접 입력</option>'+
+      '</select>'+
+      '<input class="dd-custom'+(isCustomLoc?' show':'')+'" id="lk-loc-'+lid+'" placeholder="직접 입력..." value="'+(isCustomLoc?loc:'')+'">'+
+    '</div>'+
+    '<select style="font-size:11px;padding:5px 7px;height:32px;background:'+(status==='bad'?'#fde8e8;color:#c0392b':'#e8f8f0;color:#0a7a4a')+'">'+
       '<option value="ok" '+(status!=='bad'?'selected':'')+'>✅ 이상없음</option>'+
       '<option value="bad" '+(status==='bad'?'selected':'')+'>❌ 누설감지</option>'+
     '</select>'+
-    '<button class="btn-del" onclick="this.parentElement.remove()">×</button>';
-  row.querySelector('select').addEventListener('change',function(){
-    var v=this.value;this.style.cssText='font-size:11px;padding:5px 7px;background:'+(v==='ok'?'#e8f8f0;color:#0a7a4a':'#fde8e8;color:#c0392b');
+    '<button class="btn-del" onclick="this.parentElement.remove()" style="height:32px">×</button>';
+  div.querySelector('select:nth-of-type(3)').addEventListener('change',function(){
+    var v=this.value;
+    this.style.cssText='font-size:11px;padding:5px 7px;height:32px;background:'+(v==='ok'?'#e8f8f0;color:#0a7a4a':'#fde8e8;color:#c0392b');
   });
-  $('leak-rows').appendChild(row);
-};
-
-// ── 발견 결함
-var defectCount=0;
+  $('leak-rows').appendChild(div);
+}
+var DEFECT_LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
 window.addDefectRow=function(defect,loc,risk,action,status){
   defectCount++;
+  var did='def'+defectCount+'-'+Date.now();
+  var isCustomLoc=loc&&!DEFECT_LOC_OPTS.includes(loc);
   var item=document.createElement('div');item.className='defect-item';
   item.innerHTML='<button class="btn-del" style="position:absolute;top:8px;right:8px" onclick="this.parentElement.remove()">×</button>'+
     '<div class="defect-grid">'+
       '<div><div class="flabel">발견 결함</div><input placeholder="냉매 저압 저하 (누설 의심)" value="'+(defect||'')+'"></div>'+
-      '<div><div class="flabel">위치</div><input placeholder="1호기 · 천장형" value="'+(loc||'')+'"></div>'+
+      '<div><div class="flabel">위치</div>'+
+        '<select class="dd-sel" data-custom="def-loc-'+did+'">'+
+          '<option value="">위치 선택</option>'+
+          DEFECT_LOC_OPTS.map(function(o){return '<option value="'+o+'" '+(loc===o?'selected':'')+'>'+o+'</option>';}).join('')+
+          '<option value="__custom__">✏️ 직접 입력</option>'+
+        '</select>'+
+        '<input class="dd-custom'+(isCustomLoc?' show':'')+'" id="def-loc-'+did+'" placeholder="직접 입력..." value="'+(isCustomLoc?loc:'')+'">'+
+      '</div>'+
     '</div>'+
     '<div class="defect-grid3">'+
       '<div><div class="flabel">위험도</div><select>'+
@@ -965,7 +1003,13 @@ function collectData(){
   // 측정 데이터 (실외기 점검상태 — PSI + 판정)
   var measurements=[];
   $('msr-rows').querySelectorAll('div[style*="border"]').forEach(function(row){
-    var label=row.querySelector('input').value;
+    // 위치: 드롭다운 또는 직접입력
+    var locSel=row.querySelector('select.dd-sel');
+    var locCustom=row.querySelector('input.dd-custom');
+    var label='';
+    if(locSel){
+      label=(locSel.value==='__custom__'||locSel.value==='')?( locCustom?locCustom.value:''):locSel.value;
+    }
     var inps=row.querySelectorAll('.mvb input');
     var hp=inps[0]?inps[0].value:'';
     var lp=inps[1]?inps[1].value:'';
@@ -977,9 +1021,18 @@ function collectData(){
   });
   // 누설검사
   var leakUnits=[];
-  $('leak-rows').querySelectorAll('.leak-row').forEach(function(row){
-    var inps=row.querySelectorAll('input');var sel=row.querySelector('select');
-    if(inps[0]&&inps[0].value)leakUnits.push({label:inps[0].value,loc:inps[1]?inps[1].value:'',status:sel?sel.value:'ok'});
+  $('leak-rows').querySelectorAll('div[style*="border"]').forEach(function(row){
+    function getDdVal(ddSel,ddCustom){
+      if(!ddSel)return '';
+      if(ddSel.value==='__custom__'||ddSel.value==='')return ddCustom?ddCustom.value:'';
+      return ddSel.value;
+    }
+    var sels=row.querySelectorAll('select');
+    var customs=row.querySelectorAll('input.dd-custom');
+    var label=getDdVal(sels[0],customs[0]);
+    var loc=getDdVal(sels[1],customs[1]);
+    var status=sels[2]?sels[2].value:'ok';
+    if(label||loc)leakUnits.push({label:label,loc:loc,status:status});
   });
   // 발견 결함
   var defects=[];
@@ -987,7 +1040,11 @@ function collectData(){
     var inps=item.querySelectorAll('input');var sel=item.querySelector('select');
     var activeStatus=item.querySelector('[data-active-status]');
     var status=activeStatus?activeStatus.dataset.activeStatus:'plan';
-    if(inps[0]&&inps[0].value)defects.push({defect:inps[0].value,loc:inps[1]?inps[1].value:'',risk:sel?sel.value:'h',action:inps[2]?inps[2].value:'',status:status});
+    // 위치: 드롭다운 또는 직접입력
+    var locSel=item.querySelector('.defect-grid select.dd-sel');
+    var locCustom=item.querySelector('.defect-grid input.dd-custom');
+    var locVal=locSel?(locSel.value==='__custom__'||locSel.value===''?(locCustom?locCustom.value:''):locSel.value):(inps[1]?inps[1].value:'');
+    if(inps[0]&&inps[0].value)defects.push({defect:inps[0].value,loc:locVal,risk:sel?sel.value:'h',action:inps[2]?inps[2].value:'',status:status});
   });
   // 권장 정비
   var recommendations=[];
