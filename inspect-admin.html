@@ -51,10 +51,16 @@ textarea{resize:vertical;line-height:1.6}
 .equip-hdr span{font-size:9px;font-weight:600;color:#8a8a9a;text-transform:uppercase;letter-spacing:.04em;padding:0 7px}
 
 /* 종합결과 테이블 */
-.rtbl-hdr{display:grid;grid-template-columns:75px 1fr 100px 55px 100px 24px;background:#f8f9fc;padding:7px 10px;font-size:10px;font-weight:600;color:#8a8a9a;text-transform:uppercase;letter-spacing:.04em;gap:5px;border-bottom:0.5px solid #e8e8f0}
-.rtbl-row{display:grid;grid-template-columns:75px 1fr 100px 55px 100px 24px;align-items:center;padding:6px 10px;border-bottom:0.5px solid #f0f0f0;gap:5px}
-.rtbl-row:last-child{border-bottom:none}
-.rtbl-row input,.rtbl-row select{font-size:11px;padding:4px 6px}
+/* 항목별 점검 결과 — 카드형 (모바일 친화) */
+.rtbl-hdr{display:none} /* 헤더 숨김 — 카드에 레이블 표시 */
+.rtbl-row{background:#fff;border:0.5px solid #e8e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px;position:relative;display:flex;flex-direction:column;gap:7px}
+.rtbl-row:last-child{margin-bottom:0}
+.rtbl-row-top{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.rtbl-row-mid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.rtbl-row input,.rtbl-row select{font-size:13px;padding:7px 9px;width:100%;border:0.5px solid #dde1ee;border-radius:6px;background:#f8f9fc;color:#1a1a2e}
+.rtbl-row input:focus,.rtbl-row select:focus{border-color:#0D9488;background:#fff;outline:none}
+.rtbl-flabel{font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+.rtbl-del-btn{position:absolute;top:10px;right:10px;width:28px;height:28px;border-radius:6px;background:#fde8e8;color:#c0392b;border:none;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 
 /* 냉방검사 유닛 */
 .cu-item{border:0.5px solid #e8e8f0;border-radius:8px;overflow:hidden;margin-bottom:8px}
@@ -276,7 +282,7 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
 <div class="card">
   <div class="card-hdr"><div class="card-icon">📊</div><div class="card-title">항목별 점검 결과</div></div>
   <div class="card-body" style="padding:0">
-    <div class="rtbl-hdr"><span>구분</span><span>점검 항목</span><span>결과</span><span>위험도</span><span>비고</span><span></span></div>
+    
     <div id="result-rows"></div>
     <div style="padding:0 10px 10px">
       <button class="btn-add" onclick="window.addResultRow()">+ 항목 추가</button>
@@ -553,7 +559,7 @@ function updateResultStats(){
     if(!inp||!inp.value.trim())return;
     total++;
     // 상태 select = querySelectorAll('select')[1] (0:구분, 1:결과, 2:위험도)
-    var sels=row.querySelectorAll('select');
+    var sels=row.querySelectorAll('select'); // 0:구분, 1:결과, 2:위험도
     var v=sels[1]?sels[1].value:'ok';
     if(v==='ok')okN++;
     else if(v==='warn')warnN++;
@@ -818,22 +824,50 @@ window.addEquip=function(unit,type,loc,model,cap){
 
 window.addResultRow=function(cat,name,status,risk,note){
   var row=document.createElement('div');row.className='rtbl-row';
-  var catSel='<select style="font-size:10px;padding:3px 4px">'+CAT_OPTIONS.map(function(c){return '<option value="'+c+'" '+(cat===c?'selected':'')+'>'+c+'</option>';}).join('')+'</select>';
-  var stSel='<select style="font-size:10px;padding:3px 4px;'+(status==='ok'?'background:#e8f8f0;color:#0a7a4a':status==='bad'?'background:#fde8e8;color:#c0392b':'background:#fff4e0;color:#b36000')+'">'+statusOpts.map(function(s){return '<option value="'+s+'" '+(status===s?'selected':'')+'>'+statusLabels[s]+'</option>';}).join('')+'</select>';
-  var rkSel='<select style="font-size:10px;padding:3px 4px">'+riskOpts.map(function(r){return '<option value="'+r+'" '+(risk===r?'selected':'')+'>'+riskLabels[r]+'</option>';}).join('')+'</select>';
-  row.innerHTML=catSel+
-    '<input placeholder="점검 항목명" value="'+(name||'')+'" style="font-size:11px;padding:4px 6px">'+
-    stSel+rkSel+
-    '<input placeholder="비고" value="'+(note||'')+'" style="font-size:10px;padding:4px 5px;color:#555">'+
-    '<button class="btn-del">×</button>';
-  // 삭제 버튼 — row 자체 제거
-  row.querySelector('.btn-del').addEventListener('click',function(){row.remove();setTimeout(updateResultStats,50);});
-  // 상태 select — 색상 변경 + 통계 갱신
+
+  // 구분 select
+  var catSel='<select>'+CAT_OPTIONS.map(function(c){
+    return '<option value="'+c+'" '+(cat===c?'selected':'')+'>'+c+'</option>';
+  }).join('')+'</select>';
+
+  // 결과 select
+  var stBg=status==='ok'?'background:#e8f8f0;color:#0a7a4a':status==='bad'?'background:#fde8e8;color:#c0392b':'background:#fff4e0;color:#b36000';
+  var stSel='<select style="'+stBg+'">'+statusOpts.map(function(s){
+    return '<option value="'+s+'" '+(status===s?'selected':'')+'>'+statusLabels[s]+'</option>';
+  }).join('')+'</select>';
+
+  // 위험도 select
+  var rkSel='<select>'+riskOpts.map(function(r){
+    return '<option value="'+r+'" '+(risk===r?'selected':'')+'>'+riskLabels[r]+'</option>';
+  }).join('')+'</select>';
+
+  row.innerHTML=
+    '<button class="rtbl-del-btn">×</button>'+
+    '<div class="rtbl-row-top">'+
+      '<div><div class="rtbl-flabel">구분</div>'+catSel+'</div>'+
+      '<div><div class="rtbl-flabel">결과</div>'+stSel+'</div>'+
+    '</div>'+
+    '<div><div class="rtbl-flabel">점검 항목명</div>'+
+      '<input placeholder="예: 본체 고정 및 수평 상태" value="'+(name||'')+'">'+
+    '</div>'+
+    '<div class="rtbl-row-mid">'+
+      '<div><div class="rtbl-flabel">위험도</div>'+rkSel+'</div>'+
+      '<div><div class="rtbl-flabel">비고</div>'+
+        '<input placeholder="이상 없음, 현장 세척 등" value="'+(note||'')+'">'+
+      '</div>'+
+    '</div>';
+
+  // 삭제 버튼
+  row.querySelector('.rtbl-del-btn').addEventListener('click',function(){
+    row.remove();setTimeout(updateResultStats,50);
+  });
+
+  // 결과 select 색상 + 통계 갱신
   var stSelEl=row.querySelectorAll('select')[1];
   if(stSelEl){
     stSelEl.addEventListener('change',function(){
       var v=this.value;
-      this.style.cssText='font-size:10px;padding:3px 4px;background:'+(v==='ok'?'#e8f8f0;color:#0a7a4a':v==='bad'?'#fde8e8;color:#c0392b':'#fff4e0;color:#b36000');
+      this.style.cssText=v==='ok'?'background:#e8f8f0;color:#0a7a4a':v==='bad'?'background:#fde8e8;color:#c0392b':'background:#fff4e0;color:#b36000';
       updateResultStats();
     });
   }
@@ -1127,11 +1161,17 @@ function collectData(){
   // 항목별 결과
   var results=[];
   document.getElementById('result-rows').querySelectorAll('.rtbl-row').forEach(function(row){
-    var sels=row.querySelectorAll('select');
-    var inps=row.querySelectorAll('input');
+    var sels=row.querySelectorAll('select');   // 0:구분, 1:결과, 2:위험도
+    var inps=row.querySelectorAll('input');    // 0:항목명, 1:비고
     var name=inps[0]?inps[0].value:'';
     var note=inps[1]?inps[1].value:'';
-    if(name)results.push({cat:sels[0]?sels[0].value:'',name:name,status:sels[1]?sels[1].value:'ok',risk:sels[2]?sels[2].value:'',note:note});
+    if(name)results.push({
+      cat:sels[0]?sels[0].value:'',
+      name:name,
+      status:sels[1]?sels[1].value:'ok',
+      risk:sels[2]?sels[2].value:'',
+      note:note
+    });
   });
   // 냉방검사
   var coolUnits=[];
