@@ -145,6 +145,10 @@ input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;h
 .dd-custom.show{display:block}
 .scope-tag{padding:4px 10px;border-radius:20px;border:0.5px solid #0D9488;background:#f0fdfb;color:#0D9488;font-size:11px;font-weight:500;cursor:pointer;transition:all .15s}
 .scope-tag.on{background:#0D9488;color:#fff}
+.msr-jdg-btn{flex:1;padding:7px 4px;border-radius:6px;border:0.5px solid #dde1ee;background:#f8f9fc;font-size:11px;font-weight:500;cursor:pointer;text-align:center;color:#6b7280;transition:all .15s}
+.jdg-ok{border-color:#2ecc71!important;background:#e8f8f0!important;color:#0a7a4a!important}
+.jdg-watch{border-color:#f1c40f!important;background:#fffae0!important;color:#856600!important}
+.jdg-repair{border-color:#e74c3c!important;background:#fde8e8!important;color:#c0392b!important}
 .btn-add{display:flex;align-items:center;gap:5px;width:100%;padding:9px;border-radius:8px;border:1.5px dashed #0D9488;background:#f0fdfb;color:#0D9488;font-size:12px;cursor:pointer;justify-content:center;transition:background .15s;margin-top:4px}
 .btn-add:hover{background:#e0faf5}
 .btn-del{width:24px;height:24px;border-radius:4px;background:#fde8e8;color:#c0392b;border:none;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -700,23 +704,51 @@ function setCoolPhoto(input,id,label){
   };reader.readAsDataURL(f);
 }
 
-// ── 측정 데이터
+// ── 측정 데이터 (실외기 PSI + 판정)
 var msrCount=0;
-window.addMsrRow=function(label,hp,lp,curr,ins){
+window.addMsrRow=function(label,hp,lp,curr,ins,jdg){
   msrCount++;
+  var id='msr'+Date.now();
   var row=document.createElement('div');
   row.style='border:0.5px solid #e8e8f0;border-radius:8px;padding:10px 12px;margin-bottom:8px';
-  row.innerHTML='<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">'+
-    '<input placeholder="1호기 위치 (예: 1F 로비)" value="'+(label||'')+'" style="flex:1;font-size:12px">'+
-    '<button class="btn-del" onclick="this.parentElement.parentElement.remove()">×</button>'+
-  '</div>'+
-  '<div class="mv-grid" style="grid-template-columns:repeat(4,1fr)">'+
-    '<div class="mvb"><div class="mvl">고압(kgf/cm²)</div><input placeholder="29.1" value="'+(hp||'')+'"></div>'+
-    '<div class="mvb"><div class="mvl">저압(kgf/cm²)</div><input placeholder="9.4" value="'+(lp||'')+'"></div>'+
-    '<div class="mvb"><div class="mvl">운전전류(A)</div><input placeholder="5.9/7.2" value="'+(curr||'')+'"></div>'+
-    '<div class="mvb"><div class="mvl">절연저항(MΩ)</div><input placeholder="320" value="'+(ins||'')+'"></div>'+
-  '</div>';
+  row.innerHTML=
+    '<div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">'+
+      '<input placeholder="호기 위치 (예: 1호기 · 1F 로비)" value="'+(label||'')+'" style="flex:1;font-size:12px">'+
+      '<button class="btn-del" onclick="this.parentElement.parentElement.remove()">×</button>'+
+    '</div>'+
+    '<div class="mv-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:8px">'+
+      '<div class="mvb"><div class="mvl">고압 (PSI)</div><input placeholder="380" value="'+(hp||'')+'" class="msr-hp"></div>'+
+      '<div class="mvb" id="msr-lp-box-'+id+'"><div class="mvl">저압 (PSI)</div><input placeholder="98" value="'+(lp||'')+'" class="msr-lp" data-id="'+id+'" oninput="checkLpPsi(this)"></div>'+
+      '<div class="mvb"><div class="mvl">운전전류 (A)</div><input placeholder="5.9/7.2" value="'+(curr||'')+'"></div>'+
+      '<div class="mvb"><div class="mvl">절연저항 (MΩ)</div><input placeholder="320" value="'+(ins||'')+'"></div>'+
+    '</div>'+
+    '<div style="font-size:10px;font-weight:600;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px">판정</div>'+
+    '<div style="display:flex;gap:5px" id="msr-jdg-'+id+'">'+
+      '<button class="msr-jdg-btn" data-jdg="ok" onclick="setMsrJdg(this)">✅ 양호</button>'+
+      '<button class="msr-jdg-btn" data-jdg="watch" onclick="setMsrJdg(this)">👁 관찰</button>'+
+      '<button class="msr-jdg-btn" data-jdg="repair" onclick="setMsrJdg(this)">🔧 수리요망</button>'+
+    '</div>';
   $('msr-rows').appendChild(row);
+  // 초기 판정 설정
+  var initJdg=jdg||'ok';
+  var jdgCls={ok:'jdg-ok',watch:'jdg-watch',repair:'jdg-repair'};
+  var initBtn=row.querySelector('[data-jdg="'+initJdg+'"]');
+  if(initBtn)initBtn.classList.add(jdgCls[initJdg]||'jdg-ok');
+};
+window.setMsrJdg=function(btn){
+  var grp=btn.parentElement;
+  grp.querySelectorAll('.msr-jdg-btn').forEach(function(b){
+    b.className='msr-jdg-btn';
+  });
+  var jdgCls={'ok':'jdg-ok','watch':'jdg-watch','repair':'jdg-repair'};
+  btn.className='msr-jdg-btn '+(jdgCls[btn.dataset.jdg]||'');
+};
+window.checkLpPsi=function(input){
+  var v=parseFloat(input.value);
+  var box=document.getElementById('msr-lp-box-'+input.dataset.id);
+  if(!box)return;
+  if(v>0&&v<80){box.style.background='#fff4e0';box.style.borderColor='#fcd34d';}
+  else{box.style.background='';box.style.borderColor='';}
 };
 
 // ── 누설검사
@@ -869,7 +901,7 @@ function collectData(){
     var locInp=el.querySelector('[id^="clocinp"]');
     coolUnits.push({label:label,a:ta?ta.value:'',b:tb?tb.value:'',result:isWarn?'warn':'ok',loc:locInp?locInp.value:'',photoKey:'cool-'+id});
   });
-  // 측정 데이터 (실외기 점검상태 — 고압/저압/전류/절연저항)
+  // 측정 데이터 (실외기 점검상태 — PSI + 판정)
   var measurements=[];
   $('msr-rows').querySelectorAll('div[style*="border"]').forEach(function(row){
     var label=row.querySelector('input').value;
@@ -878,8 +910,9 @@ function collectData(){
     var lp=inps[1]?inps[1].value:'';
     var curr=inps[2]?inps[2].value:'';
     var ins=inps[3]?inps[3].value:'';
-    // 하나라도 입력된 경우만 저장
-    if(label||hp||lp||curr||ins)measurements.push({label:label,hp:hp,lp:lp,current:curr,insulation:ins});
+    var activeJdg=row.querySelector('.jdg-ok,.jdg-watch,.jdg-repair');
+    var jdg=activeJdg?activeJdg.dataset.jdg:'ok';
+    if(label||hp||lp||curr||ins)measurements.push({label:label,hp:hp,lp:lp,current:curr,insulation:ins,judgment:jdg});
   });
   // 누설검사
   var leakUnits=[];
