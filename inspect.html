@@ -9,6 +9,20 @@
 body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:#f0f2f8;color:#1a1a2e}
 @keyframes spin{to{transform:rotate(360deg)}}
 
+/* PDF 인쇄 최적화 */
+@media print{
+  body{background:#fff}
+  .top-bar,.btn-pdf{display:none!important}
+  .sec{break-inside:avoid;border:0.5px solid #e0e0e8;border-radius:0;margin-bottom:8px}
+  .sec-hdr{break-after:avoid}
+  .cover{break-inside:avoid;border-radius:0}
+  .mtbl tr{break-inside:avoid}
+  .rec-item{break-inside:avoid}
+  .photo-record-sec .photo-box{break-inside:avoid}
+  .named-ph{break-inside:avoid}
+  @page{margin:12mm;size:A4}
+}
+
 /* 상단 네비 */
 .top-bar{background:#fff;border-bottom:0.5px solid #e0e0e8;display:flex;align-items:center;justify-content:space-between;padding:8px 16px;position:sticky;top:0;z-index:100}
 .top-bar-tabs{display:flex;overflow-x:auto;gap:0;flex:1}
@@ -263,6 +277,15 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:#f0f2f8;colo
       </table>
     </div>
     <div class="msr-unit" id="cool-msr-unit">단위 — 온도: °C</div>
+  </div>
+
+  <!-- 04.5 누설검사 -->
+  <div class="sec" id="leak-sec">
+    <div class="sec-hdr">
+      <div class="sec-num" style="font-size:9px">누설</div>
+      <div class="sec-title" id="sec-leak">누설검사 (Refrigerant Leak Test)</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding:12px 16px" id="leak-results"></div>
   </div>
 
   <!-- 05 측정 데이터 (실외기 점검상태) -->
@@ -569,6 +592,56 @@ window.renderReport=function renderReport(data){
       '<td style="font-size:11px;color:#6b7280">'+note+'</td>';
     resBody.appendChild(tr);
   });
+
+  // ── 누설검사
+  var leakResults=document.getElementById('leak-results');
+  var leakSec=document.getElementById('leak-sec');
+  if(leakResults){
+    leakResults.innerHTML='';
+    var hasLeak=(data.leakUnits||[]).length>0;
+    if(leakSec)leakSec.style.display=hasLeak?'block':'none';
+    (data.leakUnits||[]).forEach(function(u){
+      var isOk=u.status==='ok';
+      var b=document.createElement('div');
+      b.style='border-radius:6px;padding:7px;text-align:center;border:0.5px solid;background:'+(isOk?'#e8f8f0':'#fde8e8')+';border-color:'+(isOk?'#9fe1cb':'#fca5a5')+';color:'+(isOk?'#0a7a4a':'#c0392b');
+      b.innerHTML='<div style="font-size:10px;font-weight:600">'+u.label+'</div><div style="font-size:11px;margin-top:3px">'+(isOk?t.leakOk:t.leakBad)+'</div>'+(u.loc?'<div style="font-size:9px;color:#6b7280;margin-top:2px">'+u.loc+'</div>':'');
+      leakResults.appendChild(b);
+    });
+  }
+
+  // ── 냉방능력 점검상태 (coolUnits 테이블)
+  var coolMsrBody=document.getElementById('cool-msr-body');
+  var coolMsrSec=document.getElementById('cool-msr-sec');
+  if(coolMsrBody){
+    coolMsrBody.innerHTML='';
+    var hasCoolMsr=(data.coolUnits||[]).some(function(u){return u.a||u.b;});
+    if(coolMsrSec)coolMsrSec.style.display=hasCoolMsr?'block':'none';
+    var coolRefEl=document.getElementById('cool-msr-ref');
+    if(coolRefEl)coolRefEl.textContent=isEn
+      ?'Standard: Inlet(A) − Discharge(B) ≥15°C Good · 12~15°C Normal · <12°C Degraded'
+      :'기준: 흡입(A) − 토출(B) ≥15°C 양호 · 12~15°C 정상범위 · <12°C 저하';
+    (data.coolUnits||[]).forEach(function(u){
+      if(!u.a&&!u.b)return;
+      var a=parseFloat(u.a||0); var b=parseFloat(u.b||0);
+      var diff=(a&&b)?(a-b).toFixed(1):'—';
+      var dn=parseFloat(diff);
+      var isBad=dn>0&&dn<12; var isW=dn>0&&dn<15;
+      var dtColor=isBad?'#c0392b':isW?'#e67e22':'#0a7a4a';
+      var jdgHtml=isW
+        ?'<span style="display:inline-flex;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:500;background:#fff4e0;color:#b36000">'+t.degrade+'</span>'
+        :'<span style="display:inline-flex;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:500;background:#e8f8f0;color:#0a7a4a">'+t.good+'</span>';
+      var label=u.label||'';
+      var locT=isEn?(u.loc_en||u.loc||''):(u.loc||'');
+      var tr=document.createElement('tr');
+      tr.innerHTML=
+        '<td style="font-weight:500">'+label+(locT?' · '+locT:'')+'</td>'+
+        '<td style="text-align:right">'+(u.a?u.a+'°C':'—')+'</td>'+
+        '<td style="text-align:right">'+(u.b?u.b+'°C':'—')+'</td>'+
+        '<td style="text-align:right;color:'+dtColor+';font-weight:500">'+diff+'°C</td>'+
+        '<td style="text-align:right">'+jdgHtml+'</td>';
+      coolMsrBody.appendChild(tr);
+    });
+  }
 
   // ── 실외기 측정 (measurements) — 고압/저압/전류/절연저항
   var msrBody=document.getElementById('msr-body');
