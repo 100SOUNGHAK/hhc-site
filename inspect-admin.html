@@ -674,7 +674,7 @@ function addCoolUnit(label,a,b,loc,result){
   var phLbl=document.createElement('div');phLbl.className='fl';phLbl.style='margin-bottom:6px';phLbl.textContent='측정 사진 (여러 장 선택 가능)';
   var phRow=document.createElement('div');phRow.className='photo-row';phRow.id='cu-photos-'+id;
   var phAdd=document.createElement('div');phAdd.className='ph-add';phAdd.innerHTML='📷<span>추가</span>';
-  var phInp=document.createElement('input');phInp.type='file';phInp.accept='image/*';phInp.multiple=true;
+  var phInp=document.createElement('input');phInp.type='file';phInp.accept='image/*';
   phInp.addEventListener('change',function(){handleCuPhotos(this,id,lbl);});
   phAdd.appendChild(phInp);
   phRow.appendChild(phAdd);
@@ -723,14 +723,24 @@ function calcCuDiff(id){
 
 function handleCuPhotos(input,id,lbl){
   var container=document.getElementById('cu-photos-'+id);if(!container)return;
-  Array.from(input.files).forEach(function(f,fi){
-    var rd=new FileReader();
-    rd.onload=function(e){
-      var k=fi===0?'cool-'+id:'cool-'+id+'-x'+Date.now()+fi;
-      photoData[k]=e.target.result;
-      addPhotoThumb(container,k,e.target.result);
-    };rd.readAsDataURL(f);
+  var f=input.files[0];if(!f)return;
+  // 기존 사진 제거 후 새 사진으로 교체
+  container.querySelectorAll('.ph-item').forEach(function(el){
+    var key=el.dataset.key;if(key)delete photoData[key];
+    el.remove();
   });
+  var rd=new FileReader();
+  rd.onload=function(e){
+    var k='cool-'+id;
+    photoData[k]=e.target.result;
+    var item=document.createElement('div');item.className='ph-item';item.dataset.key=k;
+    var img=document.createElement('img');img.className='ph-img';img.src=e.target.result;
+    var dBtn=document.createElement('button');dBtn.className='ph-del';dBtn.textContent='×';
+    dBtn.onclick=function(){delete photoData[k];item.remove();};
+    item.appendChild(img);item.appendChild(dBtn);
+    var addBtn=container.querySelector('.ph-add');
+    container.insertBefore(item,addBtn);
+  };rd.readAsDataURL(f);
   input.value='';
 }
 
@@ -1353,7 +1363,15 @@ window.saveReport=async function(){
     var enUrl='https://hhc-3p8.pages.dev/inspect.html?id='+rid+'&lang=en';
     shortUrls.ko=await shorten(koUrl);shortUrls.en=await shorten(enUrl);
     btn.disabled=false;btn.textContent='💾 저장하고 고객 링크 생성';
-    toast(currentEditId?'✓ 수정 저장 완료':'✓ 저장 완료');
+    var wasEdit=!!currentEditId;
+    // allReports 갱신 — 수정이면 기존 항목 교체, 신규면 맨 앞에 추가
+    var updatedEntry=Object.assign({_id:rid},data);
+    if(wasEdit){
+      allReports=allReports.map(function(r){return r._id===rid?updatedEntry:r;});
+    }else{
+      allReports.unshift(updatedEntry);
+    }
+    toast(wasEdit?'✓ 수정 저장 완료':'✓ 저장 완료');
     currentEditId=null;
     document.getElementById('sm-link').textContent=shortUrls.ko;
     updateSendMsg();
