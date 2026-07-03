@@ -227,7 +227,9 @@ textarea{resize:vertical;line-height:1.6}
 
 <!-- 항목별 점검 결과 -->
 <div class="card">
-  <div class="card-hdr"><div class="card-icon">📊</div><div class="card-title">항목별 점검 결과</div></div>
+  <div class="card-hdr"><div class="card-icon">📊</div><div class="card-title">항목별 점검 결과</div>
+    <button onclick="sortResultRows()" style="margin-left:auto;padding:4px 10px;border-radius:5px;border:0.5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;font-size:10px;font-weight:500;cursor:pointer">⇅ 구분별 정렬</button>
+  </div>
   <div class="card-body" id="result-rows-wrap">
     <div id="result-rows"></div>
     <button class="btn-add" onclick="addResultRow()">+ 항목 추가</button>
@@ -537,6 +539,57 @@ function addEquip(unit,type,loc,model,cap){
 // ═══════════════════════════════════════════
 // 항목별 점검 결과
 // ═══════════════════════════════════════════
+// ━━━ 구분별 정렬 ━━━
+var CAT_COLORS={
+  '외관·설치':{bar:'#166534',bg:'#f0fdf4',txt:'#166534'},
+  '전기':{bar:'#854d0e',bg:'#fef9c3',txt:'#854d0e'},
+  '냉매 계통':{bar:'#1e40af',bg:'#e8f0fe',txt:'#1e40af'},
+  '열교환·성능':{bar:'#b45309',bg:'#fef3c7',txt:'#b45309'},
+  '배수':{bar:'#6b21a8',bg:'#f0e7ff',txt:'#6b21a8'},
+  '운전':{bar:'#0F2040',bg:'#e8e8f0',txt:'#0F2040'},
+  '기타':{bar:'#6b7280',bg:'#f3f4f6',txt:'#6b7280'}
+};
+
+function sortResultRows(){
+  var wrap=gid('result-rows');
+  if(!wrap)return;
+  // 기존 구분 헤더 제거
+  wrap.querySelectorAll('.cat-sort-hdr').forEach(function(el){el.remove();});
+  // 카드 수집
+  var cards=Array.from(wrap.querySelectorAll('.rcard'));
+  if(!cards.length)return;
+  // 구분별 그룹화
+  var groups={};
+  CAT.forEach(function(cat){groups[cat]=[];});
+  cards.forEach(function(card){
+    var cat=card._getCatSel?card._getCatSel().value:CAT[0];
+    if(!groups[cat])groups[cat]=[];
+    groups[cat].push(card);
+    // 구분 컬러 테두리 추가
+    var col=CAT_COLORS[cat];
+    card.style.borderLeft=col?'2.5px solid '+col.bar:'';
+  });
+  // 카드 재배치 + 헤더 삽입
+  wrap.innerHTML='';
+  CAT.forEach(function(cat){
+    var grp=groups[cat]||[];
+    if(!grp.length)return;
+    var col=CAT_COLORS[cat]||{bar:'#6b7280',bg:'#f3f4f6',txt:'#6b7280'};
+    // 구분 헤더
+    var hdr=document.createElement('div');
+    hdr.className='cat-sort-hdr';
+    hdr.style='display:flex;align-items:center;gap:8px;padding:6px 2px 4px;margin-bottom:4px'+(Object.keys(groups).indexOf(cat)>0?';margin-top:8px':'');
+    hdr.innerHTML='<div style="width:3px;height:16px;border-radius:2px;background:'+col.bar+';flex-shrink:0"></div>'+
+      '<span style="font-size:11px;font-weight:600;color:'+col.txt+'">'+cat+'</span>'+
+      '<div style="flex:1;height:0.5px;background:#e8e8f0;margin-left:2px"></div>'+
+      '<span style="font-size:10px;color:#9ca3af">'+grp.length+'개</span>';
+    wrap.appendChild(hdr);
+    grp.forEach(function(card){wrap.appendChild(card);});
+  });
+  updateStats();
+  toast('✓ 구분별 정렬 완료');
+}
+
 function updateStats(){
   var rows=gid('result-rows').querySelectorAll('.rcard');
   var total=0,ok=0,warn=0,bad=0;
