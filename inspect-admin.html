@@ -747,7 +747,7 @@ function handleCuPhotos(input,id,lbl){
 // ═══════════════════════════════════════════
 // 측정 데이터 (실외기)
 // ═══════════════════════════════════════════
-function addMsrRow(label,hp,lp,curr,ins,jdg){
+function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl){
   msrCount++;
   var id='msr'+msrCount;
   var wrap=document.createElement('div');wrap.className='unit-item';
@@ -800,6 +800,44 @@ function addMsrRow(label,hp,lp,curr,ins,jdg){
   });
   wrap.appendChild(jdgRow);
 
+  // 메모 칸
+  var memoLbl=document.createElement('div');memoLbl.className='fl';memoLbl.style='margin:8px 0 4px';memoLbl.textContent='메모';
+  wrap.appendChild(memoLbl);
+  var memoInp=document.createElement('textarea');memoInp.rows=2;memoInp.placeholder='예: 고압 정상범위 상단, 냉매 충전 상태 양호...';
+  memoInp.style='width:100%;padding:7px 9px;font-size:12px;border:0.5px solid #dde1ee;border-radius:6px;background:#f8f9fc;resize:none;font-family:inherit;line-height:1.5;margin-bottom:6px';
+  if(memo)memoInp.value=memo;
+  wrap.appendChild(memoInp);
+
+  // 유닛별 사진 업로드
+  var phLbl=document.createElement('div');phLbl.className='fl';phLbl.style='margin-bottom:6px';phLbl.textContent='측정 사진 (유닛별)';
+  wrap.appendChild(phLbl);
+  var phRow=document.createElement('div');phRow.className='photo-row';
+  var phContId='msr-unit-photos-'+id;
+  phRow.id=phContId;
+  var phAdd=document.createElement('div');phAdd.className='ph-add';phAdd.innerHTML='📷<span>추가</span>';
+  var phInp=document.createElement('input');phInp.type='file';phInp.accept='image/*';
+  phInp.addEventListener('change',function(){
+    if(!this.files[0])return;
+    var f=this.files[0];var rd=new FileReader();var self=this;
+    // 기존 사진 교체
+    phRow.querySelectorAll('.ph-item').forEach(function(el){
+      var k=el.dataset.key;if(k)delete photoData[k];el.remove();
+    });
+    rd.onload=function(e){
+      var k='msr-unit-'+id;
+      photoData[k]=e.target.result;
+      var item=document.createElement('div');item.className='ph-item';item.dataset.key=k;
+      var img=document.createElement('img');img.className='ph-img';img.src=e.target.result;
+      var dBtn=document.createElement('button');dBtn.className='ph-del';dBtn.textContent='×';
+      dBtn.onclick=function(){delete photoData[k];item.remove();};
+      item.appendChild(img);item.appendChild(dBtn);
+      phRow.insertBefore(item,phAdd);
+    };rd.readAsDataURL(f);self.value='';
+  });
+  phAdd.appendChild(phInp);
+  phRow.appendChild(phAdd);
+  wrap.appendChild(phRow);
+
   wrap._getMsrData=function(){
     var inps=grid.querySelectorAll('input');
     var activeJdg=jdgRow.querySelector('[class*="jdg-ok"],[class*="jdg-watch"],[class*="jdg-repair"]');
@@ -809,7 +847,9 @@ function addMsrRow(label,hp,lp,curr,ins,jdg){
       lp:inps[1]?inps[1].value:'',
       current:inps[2]?inps[2].value:'',
       insulation:inps[3]?inps[3].value:'',
-      judgment:activeJdg?activeJdg.dataset.jdg:'ok'
+      judgment:activeJdg?activeJdg.dataset.jdg:'ok',
+      memo:memoInp.value,
+      photoKey:'msr-unit-'+id
     };
   };
 
@@ -1356,6 +1396,13 @@ window.saveReport=async function(){
       else if(key.startsWith('clean-after-photos')){data.cleanAfter=(data.cleanAfter||[]).concat(url2);}
       else if(key.startsWith('clean-photos')){data.cleanPhotos=(data.cleanPhotos||[]).concat(url2);}
       else if(key.startsWith('leak-photos')){data.leakPhotos=(data.leakPhotos||[]).concat(url2);}
+      else if(key.startsWith('msr-unit-')){
+        // 유닛별 사진: measurements 배열에서 photoKey로 매핑
+        data.measurements=(data.measurements||[]).map(function(m){
+          if(m.photoKey===key){m.photo=url2;}
+          return m;
+        });
+      }
       else if(key.startsWith('msr-photos')){data.msrPhotos=(data.msrPhotos||[]).concat(url2);}
     }
     await setDoc(doc(DB,'inspections',rid),data);
@@ -1436,7 +1483,27 @@ window.loadIntoForm=function(data){
   (data.coolUnits||[]).forEach(function(u){addCoolUnit(u.label,u.a,u.b,u.loc,u.result);});
   // 실외기 측정
   msrCount=0;document.getElementById('msr-rows').innerHTML='';
-  (data.measurements||[]).forEach(function(m){addMsrRow(m.label,m.hp,m.lp,m.current,m.insulation,m.judgment);});
+  (data.measurements||[]).forEach(function(m){
+    addMsrRow(m.label,m.hp,m.lp,m.current,m.insulation,m.judgment,m.memo,m.photo);
+  });
+  // msr 유닛별 사진 복원
+  setTimeout(function(){
+    document.getElementById('msr-rows').querySelectorAll('.unit-item').forEach(function(wrap,wi){
+      var m=(data.measurements||[])[wi];
+      if(!m||!m.photo)return;
+      var phRow=wrap.querySelector('[id^="msr-unit-photos-"]');
+      if(!phRow)return;
+      var key=m.photoKey||('msr-unit-msr'+(wi+1));
+      photoData[key]=m.photo;
+      var phAdd=phRow.querySelector('.ph-add');
+      var item=document.createElement('div');item.className='ph-item';item.dataset.key=key;
+      var img=document.createElement('img');img.className='ph-img';img.src=m.photo;
+      var dBtn=document.createElement('button');dBtn.className='ph-del';dBtn.textContent='×';
+      dBtn.onclick=function(){delete photoData[key];item.remove();};
+      item.appendChild(img);item.appendChild(dBtn);
+      phRow.insertBefore(item,phAdd);
+    });
+  },100);
   // 누설검사
   leakCount=0;document.getElementById('leak-rows').innerHTML='';
   (data.leakUnits||[]).forEach(function(u){addLeakRow(u.label,u.loc,u.status);});
@@ -1511,28 +1578,28 @@ window.loadIntoForm=function(data){
     });
   }
 
-  // 냉방검사 유닛 사진 복원
+  // 냉방검사 유닛 사진 복원 (key를 u.photoKey와 일치시킴)
   (data.coolUnits||[]).forEach(function(u,ui){
-    var photos=u.photos||(u.photo?[u.photo]:[]);
-    if(!photos.length)return;
-    // 유닛 컨테이너 찾기 (순서로 매칭)
+    // 1장만: photos[0] 또는 photo 사용
+    var url=u.photos&&u.photos[0]?u.photos[0]:(u.photo||null);
+    if(!url)return;
     var cuItems=document.getElementById('cool-units').querySelectorAll('.cu-item');
     var target=cuItems[ui];
     if(!target)return;
     var phRow=target.querySelector('[id^="cu-photos-"]');
     if(!phRow)return;
     phRow.querySelectorAll('.ph-item').forEach(function(el){el.remove();});
-    photos.forEach(function(url,pi){
-      var key='cool-restore-'+ui+'-'+pi;
-      photoData[key]=url;
-      var item=document.createElement('div');item.className='ph-item';
-      var img=document.createElement('img');img.className='ph-img';img.src=url;
-      var dBtn=document.createElement('button');dBtn.className='ph-del';dBtn.textContent='×';
-      dBtn.onclick=function(){delete photoData[key];item.remove();};
-      item.appendChild(img);item.appendChild(dBtn);
-      var addBtn=phRow.querySelector('.ph-add');
-      phRow.insertBefore(item,addBtn);
-    });
+    // photoKey는 addCoolUnit에서 'cool-cuN' 형태로 설정됨
+    var cuId=phRow.id.replace('cu-photos-','');
+    var key='cool-'+cuId;
+    photoData[key]=url;
+    var item=document.createElement('div');item.className='ph-item';item.dataset.key=key;
+    var img=document.createElement('img');img.className='ph-img';img.src=url;
+    var dBtn=document.createElement('button');dBtn.className='ph-del';dBtn.textContent='×';
+    dBtn.onclick=function(){delete photoData[key];item.remove();};
+    item.appendChild(img);item.appendChild(dBtn);
+    var addBtn=phRow.querySelector('.ph-add');
+    phRow.insertBefore(item,addBtn);
   });
 
   // 수정 모드
