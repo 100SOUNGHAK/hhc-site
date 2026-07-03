@@ -452,7 +452,7 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:#F0F4FB;colo
   <div id="msr-photo-wrap" style="display:none">
     <div style="height:0.5px;background:#f0f0f0"></div>
     <div class="photo-section-hdr"><div class="psn">3</div><div class="pst" id="photo-msr-title">실외기 측정 사진 · Outdoor Unit Measurement Photos</div></div>
-    <div style="padding:10px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px" id="msr-photos-grid"></div>
+    <div id="msr-units-photo-sec"></div>
   </div>
 
   <!-- 4. 작업과정 사진 -->
@@ -917,9 +917,75 @@ window.renderReport=function renderReport(data){
   var hasLeak = makePhotoGrid(leakGrid, data.leakPhotos, {height:'160px',fit:'cover'});
   showWrap('leak-photo-wrap', hasLeak);
 
-  // 3. 실외기 측정 사진
-  var msrGrid = document.getElementById('msr-photos-grid');
-  var hasMsrPh = makePhotoGrid(msrGrid, data.msrPhotos, {height:'160px',fit:'cover'});
+  // 3. 실외기 측정 사진 — 유닛별 수치+사진 (냉방검사와 동일 방식)
+  var msrUnitSec = document.getElementById('msr-units-photo-sec');
+  var hasMsrPh = false;
+  if(msrUnitSec){
+    msrUnitSec.innerHTML='';
+    (data.measurements||[]).forEach(function(m,mi){
+      var msrPhotos=m.photos||(m.photo?[m.photo]:[]);
+      if(!msrPhotos.length&&!m.hp&&!m.lp&&!m.current&&!m.insulation)return;
+      hasMsrPh=true;
+      var lpNum=parseFloat(m.lp||0);var lpBad=lpNum>0&&lpNum<80;
+      var hpNum=parseFloat(m.hp||0);var hpWarn=hpNum>400;
+      var isOk=(m.judgment||'ok')==='ok';
+      var item=document.createElement('div');
+      item.style='padding:12px 14px;border-bottom:0.5px solid #F0F4FB';
+      // 유닛 헤더
+      var uHdr=document.createElement('div');
+      uHdr.style='display:flex;align-items:center;gap:8px;margin-bottom:10px';
+      var uNum=document.createElement('div');
+      uNum.style='width:26px;height:26px;border-radius:50%;background:#0B1833;color:#0BB5A4;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0';
+      uNum.textContent=mi+1;
+      var uLoc=document.createElement('div');
+      uLoc.style='flex:1;font-size:12px;font-weight:500;color:#0B1833';
+      uLoc.textContent=isEn?(m.label_en||m.label||''):(m.label||'');
+      var jdgMap={ok:'<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:#ECFDF5;color:#059669">✓ '+t.good+'</span>',watch:'<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:#FFFBEB;color:#D97706">⚠ '+t.watch+'</span>',repair:'<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:#FEF2F2;color:#DC2626">✕ '+t.repair+'</span>'};
+      uHdr.appendChild(uNum);uHdr.appendChild(uLoc);
+      uHdr.innerHTML+=jdgMap[m.judgment||'ok']||jdgMap.ok;
+      item.appendChild(uHdr);
+      // 수치 미니 카드
+      if(m.hp||m.lp||m.current||m.insulation){
+        var mGrid=document.createElement('div');
+        mGrid.style='display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:10px';
+        var mkMC=function(lbl2,val,isBad){
+          var d=document.createElement('div');
+          d.style='background:'+(isBad?'#FEF2F2':'#F8FAFF')+';border-radius:6px;padding:7px;text-align:center'+(isBad?';border:0.5px solid #FECACA':'');
+          d.innerHTML='<div style="font-size:8px;color:'+(isBad?'#DC2626':'#9AA0B0')+';margin-bottom:3px">'+lbl2+'</div><div style="font-size:13px;font-weight:'+(isBad?'600':'400')+';color:'+(isBad?'#DC2626':'#1A2035')+'">'+val+'</div>';
+          return d;
+        };
+        mGrid.appendChild(mkMC(isEn?'High PSI':'고압 PSI',m.hp||'—',hpWarn));
+        mGrid.appendChild(mkMC(isEn?'Low PSI':'저압 PSI',m.lp||'—',lpBad));
+        mGrid.appendChild(mkMC(isEn?'Current A':'전류 A',m.current||'—',false));
+        mGrid.appendChild(mkMC(isEn?'Insulation MΩ':'절연 MΩ',m.insulation||'—',false));
+        item.appendChild(mGrid);
+      }
+      // 메모
+      if(m.memo){
+        var memoDiv=document.createElement('div');
+        memoDiv.style='font-size:11px;color:#5C6478;background:#F8FAFF;border-radius:6px;padding:7px 10px;margin-bottom:8px;line-height:1.6';
+        memoDiv.textContent='📝 '+m.memo;
+        item.appendChild(memoDiv);
+      }
+      // 사진 1~3장 한줄
+      if(msrPhotos.length){
+        var pGrid=document.createElement('div');
+        pGrid.style='display:grid;grid-template-columns:repeat('+msrPhotos.length+',1fr);gap:6px';
+        msrPhotos.forEach(function(ph){
+          var cell=document.createElement('div');
+          cell.style='border-radius:8px;overflow:hidden;border:0.5px solid #E8EDF6';
+          var img=document.createElement('img');
+          img.src=ph;img.style='width:100%;aspect-ratio:4/3;object-fit:cover;display:block';
+          cell.appendChild(img);pGrid.appendChild(cell);
+        });
+        item.appendChild(pGrid);
+      }
+      msrUnitSec.appendChild(item);
+    });
+    // 마지막 border-bottom 제거
+    var lastItem=msrUnitSec.lastChild;
+    if(lastItem)lastItem.style.borderBottom='none';
+  }
   showWrap('msr-photo-wrap', hasMsrPh);
 
   // 4. 작업과정 사진
