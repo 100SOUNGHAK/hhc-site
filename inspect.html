@@ -99,17 +99,18 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:#F0F4FB;colo
 /* ━━━ 종합판정 ━━━ */
 .verdict{display:flex;border-radius:10px;overflow:hidden;border:0.5px solid;margin-bottom:12px}
 .verdict.warn{border-color:#FCD34D;background:#FFFBEB}
+.verdict.repair{border-color:#FB923C;background:#FFF7ED}
 .verdict.bad{border-color:#FECACA;background:#FEF2F2}
 .verdict.ok{border-color:#A7F3D0;background:#ECFDF5}
 .verdict.urgent{border-color:#FECACA;background:#FEF2F2}
 .verdict-left{width:88px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px 8px;border-right:0.5px solid rgba(0,0,0,.08)}
 .verdict-icon{font-size:24px;margin-bottom:5px}
-.verdict-grade{font-size:28px;font-weight:300;line-height:1}
-.verdict-grade-sub{font-size:9px;font-weight:600;letter-spacing:.04em;margin-top:4px;text-align:center}
+.verdict-grade{font-size:28px;font-weight:400;line-height:1}
+.verdict-grade-sub{font-size:11px;font-weight:700;letter-spacing:.02em;margin-top:5px;text-align:center}
 .verdict.warn .verdict-grade,.verdict.warn .verdict-grade-sub{color:#D97706}
-.verdict.bad .verdict-grade,.verdict.bad .verdict-grade-sub,.verdict.urgent .verdict-grade,.verdict.urgent .verdict-grade-sub{color:#DC2626}
+.verdict.repair .verdict-grade,.verdict.repair .verdict-grade-sub,.verdict.repair .verdict.bad .verdict-grade,.verdict.bad .verdict-grade-sub,.verdict.urgent .verdict-grade,.verdict.urgent .verdict-grade-sub{color:#DC2626}
 .verdict.ok .verdict-grade,.verdict.ok .verdict-grade-sub{color:#059669}
-.verdict-badge{font-size:9px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px}
+.verdict-badge{font-size:13px;font-weight:700;letter-spacing:.03em;margin-bottom:6px}
 .verdict.warn .verdict-badge{color:#D97706}
 .verdict.bad .verdict-badge,.verdict.urgent .verdict-badge{color:#DC2626}
 .verdict.ok .verdict-badge{color:#059669}
@@ -546,7 +547,7 @@ var T={
     stDone:'조치완료',stPlan:'조치예정',stRecommend:'조치권유',stAdvise:'조치권고',
     good:'양호',degrade:'저하',leakOk:'이상없음',leakBad:'누설감지',
     evalLabels:{normal:'정상',preventive:'예방정비 권장',repair:'수리 권장',urgent:'즉시수리 필요'},
-    evalSubs:{normal:'양호',preventive:'조건부 양호',repair:'조건부 양호',urgent:'즉시 조치 필요'},
+    evalSubs:{normal:'양호',preventive:'조건부 양호',repair:'수리 권장',urgent:'즉시 조치 필요'},
     verdictBadge:'종합 판정',
     rbUrgent:'우선',rbRegular:'정기',rbReview:'검토',
     'r-overview-desc':'본 보고서는 정기 점검 결과로, 대상 설비에 대해 육안 검사·계측·시운전을 통해 냉방 성능과 안전 상태를 종합 평가한 내용입니다.',
@@ -588,7 +589,7 @@ var T={
     stDone:'Completed',stPlan:'Planned',stRecommend:'Recommended',stAdvise:'Advised',
     good:'Good',degrade:'Degraded',leakOk:'No Leakage',leakBad:'Leakage Detected',
     evalLabels:{normal:'Normal',preventive:'Preventive Maint.',repair:'Repair Needed',urgent:'Urgent Repair'},
-    evalSubs:{normal:'All Good',preventive:'Conditional OK',repair:'Conditional OK',urgent:'Immediate Action'},
+    evalSubs:{normal:'All Good',preventive:'Conditional OK',repair:'Repair Needed',urgent:'Immediate Action'},
     verdictBadge:'Overall Assessment',
     rbUrgent:'Priority',rbRegular:'Regular',rbReview:'Review',
     'r-overview-desc':'This report summarizes the periodic inspection conducted on the target equipment through visual inspection, measurement, and test operation to comprehensively evaluate cooling performance and safety status.',
@@ -655,7 +656,7 @@ window.renderReport=function renderReport(data){
   });
 
   // 종합 판정
-  var evalMap={normal:{cls:'ok',label:t.evalLabels.normal},preventive:{cls:'warn',label:t.evalLabels.preventive},repair:{cls:'warn',label:t.evalLabels.repair},urgent:{cls:'bad',label:t.evalLabels.urgent}};
+  var evalMap={normal:{cls:'ok',label:t.evalLabels.normal},preventive:{cls:'warn',label:t.evalLabels.preventive},repair:{cls:'repair',label:t.evalLabels.repair},urgent:{cls:'bad',label:t.evalLabels.urgent}};
   var ev=evalMap[data.eval]||{cls:'warn',label:data.eval||'—'};
   var vbox=document.getElementById('verdict-box');
   vbox.className='verdict '+ev.cls;
@@ -793,28 +794,7 @@ window.renderReport=function renderReport(data){
       memoTr.innerHTML='<td colspan="6" style="padding:4px 8px 8px;font-size:11px;color:#6b7280;background:#f8f9fc;border-bottom:0.5px solid #f0f0f0">📝 '+m.memo+'</td>';
       msrBody.appendChild(memoTr);
     }
-    // 유닛별 사진 — 최대 3장 한줄 그리드
-    var msrPhotos=m.photos||(m.photo?[m.photo]:[]);
-    if(msrPhotos.length){
-      var photoTr=document.createElement('tr');
-      var photTd=document.createElement('td');
-      photTd.colSpan=6;
-      photTd.style='padding:6px 10px 10px';
-      var msrPGrid=document.createElement('div');
-      msrPGrid.style='display:grid;grid-template-columns:repeat('+msrPhotos.length+',1fr);gap:6px';
-      msrPhotos.forEach(function(ph){
-        var cell=document.createElement('div');
-        cell.style='border-radius:7px;overflow:hidden;border:0.5px solid #e8e8f0';
-        var img=document.createElement('img');
-        img.src=ph;
-        img.style='width:100%;aspect-ratio:4/3;object-fit:cover;display:block';
-        cell.appendChild(img);
-        msrPGrid.appendChild(cell);
-      });
-      photTd.appendChild(msrPGrid);
-      photoTr.appendChild(photTd);
-      msrBody.appendChild(photoTr);
-    }
+    // 사진은 점검 사진 기록(msr-units-photo-sec)에서만 표시
   });
 
   // 발견 결함
