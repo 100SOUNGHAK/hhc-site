@@ -297,6 +297,15 @@ textarea{resize:vertical;line-height:1.6}
   </div>
 </div>
 
+<!-- 문제 사진 -->
+<div class="card">
+  <div class="card-hdr"><div class="card-icon">📸</div><div class="card-title">문제 사진</div></div>
+  <div class="card-body">
+    <div id="problem-rows"></div>
+    <button class="btn-add" onclick="addProblemRow()">+ 문제 사진 추가</button>
+  </div>
+</div>
+
 <!-- 실외기 사진 세트 -->
 <div class="card">
   <div class="card-hdr"><div class="card-icon">📷</div><div class="card-title">실외기 사진 — 명판 · 냉매압력 · 정격전류</div></div>
@@ -403,7 +412,7 @@ var evalVal='';
 var currentEditId=null;
 var shortUrls={ko:'',en:''};
 var allReports=[];
-var coolCount=0, msrCount=0, leakCount=0, defectCount=0, recCount=0, outdoorCount=0;
+var coolCount=0, msrCount=0, leakCount=0, defectCount=0, recCount=0, outdoorCount=0, problemCount=0;
 
 var CAT=['외관·설치','전기','냉매 계통','열교환·성능','배수','운전','실외기 오염상태','기타'];
 var STATUS_OPTS=['ok','warn','bad'];
@@ -1106,6 +1115,61 @@ function addRecRow(type,title,desc){
 }
 
 // ═══════════════════════════════════════════
+// 문제 사진
+// ═══════════════════════════════════════════
+function addProblemRow(memo, photoUrl){
+  problemCount++;
+  var id='prob'+problemCount;
+  var wrap=document.createElement('div');
+  wrap.className='unit-item';wrap.style.paddingTop='40px';wrap.style.marginBottom='8px';
+
+  var del=document.createElement('button');del.className='btn-del';
+  del.style='position:absolute;top:10px;right:10px;width:32px;height:32px;font-size:16px';
+  del.textContent='×';del.onclick=function(){wrap.remove();};
+  wrap.appendChild(del);
+
+  // 번호 + 제목
+  var hdr=document.createElement('div');
+  hdr.style='display:flex;align-items:center;gap:8px;margin-bottom:10px';
+  var num=document.createElement('div');num.className='unit-num';num.textContent=problemCount;
+  var ttl=document.createElement('div');ttl.style='font-size:12px;font-weight:500;color:#0F1C3F';
+  ttl.textContent='문제 사진 '+problemCount;
+  hdr.appendChild(num);hdr.appendChild(ttl);
+  wrap.appendChild(hdr);
+
+  // 메모
+  var memoLbl=document.createElement('div');memoLbl.className='fl';memoLbl.style='margin-bottom:4px';memoLbl.textContent='메모';
+  var memoInp=document.createElement('textarea');memoInp.rows=2;
+  memoInp.placeholder='문제 내용 설명 (예: 1호기 배관 연결부 냉매 누설 흔적)';
+  memoInp.style='width:100%;padding:7px 9px;font-size:12px;border:0.5px solid #dde1ee;border-radius:6px;background:#f8f9fc;resize:none;font-family:inherit;line-height:1.5;margin-bottom:10px';
+  if(memo)memoInp.value=memo;
+  wrap.appendChild(memoLbl);wrap.appendChild(memoInp);
+
+  // 사진
+  var phLbl=document.createElement('div');phLbl.className='fl';phLbl.style='margin-bottom:6px';phLbl.textContent='사진';
+  var phContId='problem-photos-'+id;
+  var phRow=document.createElement('div');phRow.className='photo-row';phRow.id=phContId;
+  var phAdd=document.createElement('div');phAdd.className='ph-add';phAdd.innerHTML='📷<span>추가</span>';
+  var phInp=document.createElement('input');phInp.type='file';phInp.accept='image/*';phInp.multiple=true;
+  phInp.dataset.container=phContId;
+  phAdd.appendChild(phInp);phRow.appendChild(phAdd);
+  wrap.appendChild(phLbl);wrap.appendChild(phRow);
+
+  // 기존 사진 복원
+  if(photoUrl){
+    var k='problem-photos-'+id+'-0';
+    photoData[k]=photoUrl;
+    addPhotoThumb(phRow,k,photoUrl);
+  }
+
+  wrap._getProblemData=function(){
+    return {memo:memoInp.value,photoKey:'problem-photos-'+id};
+  };
+
+  document.getElementById('problem-rows').appendChild(wrap);
+}
+
+// ═══════════════════════════════════════════
 // 실외기 사진 세트
 // ═══════════════════════════════════════════
 function addOutdoorSet(unitLabel,photos){
@@ -1405,6 +1469,12 @@ function collectData(){
   document.getElementById('rec-rows').querySelectorAll('.unit-item').forEach(function(w){
     if(w._getRecData){var d=w._getRecData();if(d.title)recommendations.push(d);}
   });
+  // 문제 사진
+  var problemPhotos=[];
+  document.getElementById('problem-rows').querySelectorAll('.unit-item').forEach(function(w){
+    if(w._getProblemData){var d=w._getProblemData();if(d.memo||photoData[d.photoKey+'-0'])problemPhotos.push(d);}
+  });
+
   // 실외기 사진 세트
   var outdoorSets=[];
   document.getElementById('outdoor-sets').querySelectorAll('.np-set').forEach(function(w){
@@ -1416,7 +1486,7 @@ function collectData(){
     eval:evalVal,verdict:gv('f-verdict'),opinion:gv('f-opinion'),
     statTotal:gv('stat-total'),statOk:gv('stat-ok'),statWarn:gv('stat-warn'),statBad:gv('stat-bad'),
     equipments:equipments,results:results,coolUnits:coolUnits,measurements:measurements,
-    leakUnits:leakUnits,defects:defects,recommendations:recommendations,outdoorSets:outdoorSets,
+    leakUnits:leakUnits,defects:defects,recommendations:recommendations,problemPhotos:problemPhotos,outdoorSets:outdoorSets,
     createdAt:new Date().toISOString()
   };
 }
@@ -1491,6 +1561,14 @@ window.saveReport=async function(){
         });
       }
       else if(key.startsWith('msr-photos')){data.msrPhotos=(data.msrPhotos||[]).concat(url2);}
+      else if(key.startsWith('problem-photos-')){
+        // 문제 사진: problemPhotos 배열에서 photoKey로 매핑
+        data.problemPhotos=(data.problemPhotos||[]).map(function(p){
+          if(key.startsWith(p.photoKey)){
+            p.photos=(p.photos||[]).concat(url2);
+          }return p;
+        });
+      }
     }
     await setDoc(doc(DB,'inspections',rid),data);
     var koUrl='https://hhc-3p8.pages.dev/inspect.html?id='+rid+'&lang=ko';
@@ -1695,6 +1773,13 @@ window.loadIntoForm=function(data){
     item.appendChild(img);item.appendChild(dBtn);
     var addBtn=phRow.querySelector('.ph-add');
     phRow.insertBefore(item,addBtn);
+  });
+
+  // 문제 사진 복원
+  problemCount=0;document.getElementById('problem-rows').innerHTML='';
+  (data.problemPhotos||[]).forEach(function(p){
+    var ph=p.photos&&p.photos[0]?p.photos[0]:null;
+    addProblemRow(p.memo,ph);
   });
 
   // 수정 모드
