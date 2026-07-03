@@ -873,39 +873,59 @@ function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl){
   if(memo)memoInp.value=memo;
   wrap.appendChild(memoInp);
 
-  // 유닛별 사진 업로드
-  var phLbl=document.createElement('div');phLbl.className='fl';phLbl.style='margin-bottom:6px';phLbl.textContent='측정 사진 (유닛별)';
+  // 유닛별 사진 — 최대 3장 슬롯
+  var phLbl=document.createElement('div');phLbl.className='fl';phLbl.style='margin-bottom:6px';phLbl.textContent='측정 사진 (최대 3장)';
   wrap.appendChild(phLbl);
-  var phRow=document.createElement('div');phRow.className='photo-row';
-  var phContId='msr-unit-photos-'+id;
-  phRow.id=phContId;
-  var phAdd=document.createElement('div');phAdd.className='ph-add';phAdd.innerHTML='📷<span>추가</span>';
-  var phInp=document.createElement('input');phInp.type='file';phInp.accept='image/*';
-  phInp.addEventListener('change',function(){
-    if(!this.files[0])return;
-    var f=this.files[0];var rd=new FileReader();var self=this;
-    // 기존 사진 교체
-    phRow.querySelectorAll('.ph-item').forEach(function(el){
-      var k=el.dataset.key;if(k)delete photoData[k];el.remove();
+  var phGrid=document.createElement('div');
+  phGrid.style='display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:6px';
+  var msrPhotoKeys=[];
+  var MAX_MSR_PHOTOS=3;
+
+  function makeMsrSlot(slotIdx){
+    var k='msr-unit-'+id+'-'+slotIdx;
+    var slot=document.createElement('div');slot.style='position:relative';
+    var addBtn=document.createElement('div');
+    addBtn.className='ph-add';
+    addBtn.style='width:100%;height:64px;border-radius:7px';
+    addBtn.innerHTML='📷<span>추가</span>';
+    var inp=document.createElement('input');inp.type='file';inp.accept='image/*';
+    inp.addEventListener('change',function(){
+      if(!this.files[0])return;
+      var f=this.files[0];var rd=new FileReader();var self=this;
+      rd.onload=function(e){
+        photoData[k]=e.target.result;
+        // 슬롯을 썸네일로 교체
+        slot.innerHTML='';
+        var img=document.createElement('img');
+        img.className='ph-img';img.src=e.target.result;
+        img.style='width:100%;height:64px;border-radius:7px;object-fit:cover;display:block;border:0.5px solid #dde1ee';
+        var dBtn=document.createElement('button');dBtn.className='ph-del';dBtn.textContent='×';
+        dBtn.style='position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#c0392b;color:#fff;border:none;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1';
+        dBtn.onclick=function(){
+          delete photoData[k];
+          slot.innerHTML='';
+          slot.appendChild(addBtn);
+          addBtn.appendChild(inp);
+        };
+        slot.appendChild(img);slot.appendChild(dBtn);
+      };rd.readAsDataURL(f);self.value='';
     });
-    rd.onload=function(e){
-      var k='msr-unit-'+id;
-      photoData[k]=e.target.result;
-      var item=document.createElement('div');item.className='ph-item';item.dataset.key=k;
-      var img=document.createElement('img');img.className='ph-img';img.src=e.target.result;
-      var dBtn=document.createElement('button');dBtn.className='ph-del';dBtn.textContent='×';
-      dBtn.onclick=function(){delete photoData[k];item.remove();};
-      item.appendChild(img);item.appendChild(dBtn);
-      phRow.insertBefore(item,phAdd);
-    };rd.readAsDataURL(f);self.value='';
-  });
-  phAdd.appendChild(phInp);
-  phRow.appendChild(phAdd);
-  wrap.appendChild(phRow);
+    addBtn.appendChild(inp);
+    slot.appendChild(addBtn);
+    return slot;
+  }
+
+  for(var si=0;si<MAX_MSR_PHOTOS;si++){
+    phGrid.appendChild(makeMsrSlot(si));
+  }
+  wrap.appendChild(phGrid);
 
   wrap._getMsrData=function(){
     var inps=grid.querySelectorAll('input');
     var activeJdg=jdgRow.querySelector('[class*="jdg-ok"],[class*="jdg-watch"],[class*="jdg-repair"]');
+    // 3장 슬롯 photoKey 배열
+    var photoKeys=[];
+    for(var si=0;si<MAX_MSR_PHOTOS;si++){photoKeys.push('msr-unit-'+id+'-'+si);}
     return {
       label:ddLoc.getDdVal(),
       hp:inps[0]?inps[0].value:'',
@@ -914,7 +934,7 @@ function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl){
       insulation:inps[3]?inps[3].value:'',
       judgment:activeJdg?activeJdg.dataset.jdg:'ok',
       memo:memoInp.value,
-      photoKey:'msr-unit-'+id
+      photoKeys:photoKeys
     };
   };
 
@@ -1462,9 +1482,11 @@ window.saveReport=async function(){
       else if(key.startsWith('clean-photos')){data.cleanPhotos=(data.cleanPhotos||[]).concat(url2);}
       else if(key.startsWith('leak-photos')){data.leakPhotos=(data.leakPhotos||[]).concat(url2);}
       else if(key.startsWith('msr-unit-')){
-        // 유닛별 사진: measurements 배열에서 photoKey로 매핑
+        // 유닛별 사진 (최대 3장): measurements에서 photoKeys 배열로 매핑
         data.measurements=(data.measurements||[]).map(function(m){
-          if(m.photoKey===key){m.photo=url2;}
+          if((m.photoKeys||[]).includes(key)){
+            m.photos=(m.photos||[]).concat(url2);
+          }
           return m;
         });
       }
@@ -1555,18 +1577,26 @@ window.loadIntoForm=function(data){
   setTimeout(function(){
     document.getElementById('msr-rows').querySelectorAll('.unit-item').forEach(function(wrap,wi){
       var m=(data.measurements||[])[wi];
-      if(!m||!m.photo)return;
-      var phRow=wrap.querySelector('[id^="msr-unit-photos-"]');
-      if(!phRow)return;
-      var key=m.photoKey||('msr-unit-msr'+(wi+1));
-      photoData[key]=m.photo;
-      var phAdd=phRow.querySelector('.ph-add');
-      var item=document.createElement('div');item.className='ph-item';item.dataset.key=key;
-      var img=document.createElement('img');img.className='ph-img';img.src=m.photo;
-      var dBtn=document.createElement('button');dBtn.className='ph-del';dBtn.textContent='×';
-      dBtn.onclick=function(){delete photoData[key];item.remove();};
-      item.appendChild(img);item.appendChild(dBtn);
-      phRow.insertBefore(item,phAdd);
+      if(!m)return;
+      var photos=m.photos||(m.photo?[m.photo]:[]);
+      if(!photos.length)return;
+      // 3슬롯 그리드에서 슬롯 찾아 복원
+      var slots=wrap.querySelectorAll('.ph-add');
+      photos.forEach(function(url,pi){
+        if(pi>=3)return;
+        var k='msr-unit-msr'+(wi+1)+'-'+pi;
+        photoData[k]=url;
+        var slot=slots[pi]?slots[pi].parentElement:null;
+        if(!slot)return;
+        slot.innerHTML='';
+        var img=document.createElement('img');
+        img.className='ph-img';img.src=url;
+        img.style='width:100%;height:64px;border-radius:7px;object-fit:cover;display:block;border:0.5px solid #dde1ee';
+        var dBtn=document.createElement('button');dBtn.className='ph-del';dBtn.textContent='×';
+        dBtn.style='position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#c0392b;color:#fff;border:none;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1';
+        dBtn.onclick=function(){delete photoData[k];slot.innerHTML='';};
+        slot.appendChild(img);slot.appendChild(dBtn);
+      });
     });
   },100);
   // 누설검사
