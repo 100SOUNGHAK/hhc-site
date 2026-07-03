@@ -405,13 +405,13 @@ var shortUrls={ko:'',en:''};
 var allReports=[];
 var coolCount=0, msrCount=0, leakCount=0, defectCount=0, recCount=0, outdoorCount=0;
 
-var CAT=['외관·설치','전기','냉매 계통','열교환·성능','배수','운전','기타'];
+var CAT=['외관·설치','전기','냉매 계통','열교환·성능','배수','운전','실외기 오염상태','기타'];
 var STATUS_OPTS=['ok','warn','bad'];
 var STATUS_LBL={ok:'✅ 정상',warn:'⚠️ 주의',bad:'❌ 정비필요'};
-var RISK_OPTS=[{v:'',l:'위험도'},{v:'-',l:'없음'},{v:'h',l:'중'},{v:'m',l:'하'},{v:'l',l:'최하'}];
+var RISK_OPTS=[{v:'',l:'위험도'},{v:'-',l:'없음'},{v:'vh',l:'상'},{v:'h',l:'중'},{v:'m',l:'하'},{v:'l',l:'최하'}];
 var LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
 var AC_OPTS=['AC 1','AC 2','AC 3','AC 4','AC 5','AC 6','AC 7','AC 8'];
-var UNIT_OPTS=['1호기','2호기','3호기','4호기','5호기','6호기','7호기','8호기','9호기','10호기'];
+var UNIT_OPTS=['1대','2대','3대','4대','5대','6대','7대','8대','9대','10대'];
 var TYPE_OPTS=['벽걸이형','4WAY 카세트형','FCU형 (덕트형)','실외기'];
 var CAP_OPTS=['1.0 HP','1.5 HP','2.0 HP','2.5 HP','3.0 HP'];
 var DEFAULT_RESULTS=[
@@ -424,7 +424,10 @@ var DEFAULT_RESULTS=[
   {cat:'열교환·성능',name:'실내 토출 온도차 ΔT'},
   {cat:'열교환·성능',name:'응축기 핀 오염도'},
   {cat:'배수',name:'드레인 배수 및 배관 상태'},
-  {cat:'운전',name:'소음·진동 / 컨트롤러'}
+  {cat:'운전',name:'소음·진동 / 컨트롤러'},
+  {cat:'운전',name:'루버 작동 상태'},
+  {cat:'실외기 오염상태',name:'오염 수준'},
+  {cat:'실외기 오염상태',name:'청소 필요 유무'}
 ];
 
 function gid(id){return document.getElementById(id);}
@@ -502,8 +505,16 @@ function addEquip(unit,type,loc,model,cap){
 
   var grid=document.createElement('div');grid.className='fgrid f2';
 
-  var ddUnit=makeDd(UNIT_OPTS,unit||'','호기 선택');
+  var ddUnit=makeDd(UNIT_OPTS,unit||'','대수/호기 선택');
   ddUnit.style.gridColumn='1';
+  // 직접입력란: 숫자만 입력 시 'N대' 자동 변환
+  var ddUnitInp=ddUnit.querySelector('.dd-custom');
+  if(ddUnitInp){
+    ddUnitInp.addEventListener('blur',function(){
+      var v=this.value.trim();
+      if(v&&/^\d+$/.test(v))this.value=v+'대';
+    });
+  }
   var ddType=makeDd(TYPE_OPTS,type||'','형식 선택');
   var ddLoc=makeDd(LOC_OPTS,loc||'','설치 위치 선택');
   var mdiv=document.createElement('div');
@@ -523,7 +534,7 @@ function addEquip(unit,type,loc,model,cap){
     var l=document.createElement('div');l.className='fl';l.textContent=lbl;
     d.appendChild(l);d.appendChild(dd);return d;
   }
-  grid.appendChild(wrapLabel('호기',ddUnit));
+  grid.appendChild(wrapLabel('대수/호기',ddUnit));
   grid.appendChild(wrapLabel('형식',ddType));
   grid.appendChild(wrapLabel('설치 위치',ddLoc));
   grid.appendChild(mdiv);
@@ -547,6 +558,7 @@ var CAT_COLORS={
   '열교환·성능':{bar:'#b45309',bg:'#fef3c7',txt:'#b45309'},
   '배수':{bar:'#6b21a8',bg:'#f0e7ff',txt:'#6b21a8'},
   '운전':{bar:'#0F2040',bg:'#e8e8f0',txt:'#0F2040'},
+  '실외기 오염상태':{bar:'#0D9488',bg:'#f0fdfb',txt:'#0D9488'},
   '기타':{bar:'#6b7280',bg:'#f3f4f6',txt:'#6b7280'}
 };
 
@@ -986,7 +998,7 @@ function addDefectRow(defect,loc,risk,action,status){
   var rkDiv=document.createElement('div');
   var rkLbl=document.createElement('div');rkLbl.className='fl';rkLbl.textContent='위험도';
   var rkSel=document.createElement('select');
-  [{v:'h',l:'🟠 중'},{v:'m',l:'🟡 하'},{v:'l',l:'🟢 최하'}].forEach(function(r){
+  [{v:'vh',l:'🔴 상'},{v:'h',l:'🟠 중'},{v:'m',l:'🟡 하'},{v:'l',l:'🟢 최하'}].forEach(function(r){
     var o=document.createElement('option');o.value=r.v;o.textContent=r.l;if((risk||'h')===r.v)o.selected=true;rkSel.appendChild(o);
   });
   rkDiv.appendChild(rkLbl);rkDiv.appendChild(rkSel);
