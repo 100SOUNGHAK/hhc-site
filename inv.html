@@ -132,7 +132,7 @@ function showError(msg){
 
 function calcTotals(inv){
   var items=inv.items||[];
-  var sub=items.reduce(function(s,l){return s+(l.price||0)*(l.qty||1);},0);
+  var sub=items.reduce(function(s,l){var lineAmt=(l.price||0)*(l.qty||1);var lineDisc=l.discType==='pct'?lineAmt*(l.discVal||l.disc||0)/100:(l.disc||0);return s+lineAmt-lineDisc;},0);
   var taxRate=parseFloat(inv.taxRate)||0;
   var discVal=parseFloat(inv.discVal)||0;
   var discType=inv.discType||'pct';
@@ -170,10 +170,11 @@ function renderInvoice(inv){
   var issInfo=[iss.email,iss.phone,iss.addr,
     iss.biz?'Reg No: '+iss.biz:''].filter(Boolean).join('<br>');
   // Service rows
-  var hasDisc=items.some(function(li){return (li.disc||0)>0;});
+  var hasDisc=items.some(function(li){return (li.disc||0)>0||(li.discVal||0)>0;});
   var rows=items.length?items.map(function(li){
-    var lineAmt=((li.price||0)*(li.qty||1))-(li.disc||0);
-    var discCell=hasDisc?'<td style="text-align:right;color:#16a34a;font-size:11px">'+(li.disc>0?'− '+fa(li.disc):'—')+'</td>':'';
+    var lineAmt=(li.price||0)*(li.qty||1);var lineDiscAmt=li.discType==='pct'?lineAmt*((li.discVal||li.disc||0)/100):(li.disc||0);lineAmt=lineAmt-lineDiscAmt;
+    var discDisplay=li.discType==='pct'?((li.discVal||li.disc||0)+'%'):fa(li.disc||0);
+    var discCell=hasDisc?'<td style="text-align:right;color:#16a34a;font-size:11px">'+(lineDiscAmt>0?'− '+discDisplay:'—')+'</td>':''
     return '<tr>'+
       '<td>'+li.name+'</td>'+
       '<td>'+li.qty+'</td>'+
