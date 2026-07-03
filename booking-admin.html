@@ -454,6 +454,11 @@ select.field-input{cursor:pointer}
               <button class="time-preset" data-time-ko="15:30 전후" data-time-en="Around 15:30">15:30 전후 / Around 15:30</button>
               <button class="time-preset" data-time-ko="16:00 전후" data-time-en="Around 16:00">16:00 전후 / Around 16:00</button>
             </div>
+            <!-- 직접 입력 -->
+            <div style="display:flex;gap:6px;align-items:center;margin-top:8px">
+              <input id="custom-time-inp" type="text" placeholder="12:00 또는 12 입력" onkeydown="if(event.key==='Enter')addCustomTime()" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:20px;font-size:12px;background:var(--surface);font-family:inherit;min-width:0">
+              <button onclick="addCustomTime()" style="padding:7px 14px;background:var(--teal);color:#fff;border:none;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">+ 추가</button>
+            </div>
             <div class="time-grid" id="time-chips"></div>
           </div>
         </div>
@@ -735,6 +740,42 @@ function renderCalendar(){
     grid.appendChild(btn);
   }
 }
+
+// ── 직접 입력 시간 추가 ──
+function formatTimeInput(v){
+  v=v.trim();
+  if(!v)return null;
+  // 숫자 패턴 감지: 12, 12:00, 12:30 등
+  var numMatch=v.match(/^(\d{1,2})(?::(\d{2}))?/);
+  if(numMatch){
+    var h=numMatch[1].padStart(2,'0');
+    var m=numMatch[2]||'00';
+    var timeStr=h+':'+m;
+    var ko=timeStr+' 전후';
+    var en='Around '+timeStr;
+    return ko+'|'+en;
+  }
+  // 숫자 없는 텍스트 → 그대로 저장 (한/영 동일)
+  return v+'|'+v;
+}
+
+function addCustomTime(){
+  if(!currentDateForTime){showToast('날짜를 먼저 선택하세요');return;}
+  var inp=document.getElementById('custom-time-inp');
+  if(!inp)return;
+  var tVal=formatTimeInput(inp.value);
+  if(!tVal){showToast('시간을 입력하세요');return;}
+  if(!scheduleMap[currentDateForTime])scheduleMap[currentDateForTime]=[];
+  if(!scheduleMap[currentDateForTime].includes(tVal)){
+    scheduleMap[currentDateForTime].push(tVal);
+    renderTimeChips();
+    renderSelDates();
+  }else{
+    showToast('이미 추가된 시간입니다');
+  }
+  inp.value='';
+}
+window.addCustomTime=addCustomTime;
 
 document.getElementById('cal-prev').addEventListener('click',()=>{calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCalendar();});
 document.getElementById('cal-next').addEventListener('click',()=>{calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderCalendar();});
