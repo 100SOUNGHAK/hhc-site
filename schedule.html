@@ -58,7 +58,7 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:var(--g);col
 .day-name{padding:6px 0;text-align:center;font-size:10px;font-weight:600;color:var(--tx3);background:var(--g)}
 .day-name:first-child{color:#DC2626}
 .day-name:last-child{color:#3B5BDB}
-.cal-day{min-height:72px;background:var(--w);cursor:pointer;display:flex;flex-direction:column;padding:4px 3px 3px;gap:1.5px;position:relative;transition:background .12s}
+.cal-day{height:56px;background:var(--w);cursor:pointer;display:flex;flex-direction:column;align-items:center;padding:5px 2px 3px;gap:1.5px;position:relative;transition:background .12s}
 .cal-day:active{background:var(--teal-lt)}
 .cal-day.today .day-num{background:var(--teal);color:#fff;border-radius:50%;font-weight:700}
 .cal-day.sel{background:#F0FDF9}
@@ -67,12 +67,14 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:var(--g);col
 .cal-day.other-m .day-num{color:#C8D0E0}
 .cal-day.sun .day-num{color:#DC2626}
 .cal-day.sat .day-num{color:#3B5BDB}
-.day-num{width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;margin-bottom:1px;flex-shrink:0}
-.day-chip{border-radius:3px;padding:1.5px 4px;font-size:8.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.5}
-.chip-b{background:#CCF2EE;color:#085048}
-.chip-m{background:var(--purple-lt);color:#5B21B6}
-.chip-h{background:#FFE4E6;color:#9F1239}
-.day-more{font-size:8px;color:var(--tx3);padding:0 3px}
+.day-num{width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;flex-shrink:0}
+.day-dots{display:flex;flex-wrap:wrap;justify-content:center;gap:2px;max-width:34px}
+.day-dot{width:4.5px;height:4.5px;border-radius:50%;flex-shrink:0}
+.dot-b{background:#0BB5A4}
+.dot-m{background:var(--purple)}
+.dot-h{background:#DC2626}
+.dot-gg{background:#4285F4}
+.day-cnt{font-size:8px;font-weight:700;color:var(--tx3)}
 .legend-bar{display:flex;gap:12px;flex-wrap:wrap;padding:6px 14px;border-top:0.5px solid var(--ln);font-size:10px;color:var(--tx2)}
 .leg{display:flex;align-items:center;gap:4px}
 .leg-dot{width:8px;height:8px;border-radius:2px}
@@ -108,6 +110,7 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:var(--g);col
 .week-event.type-b{background:#CCF2EE;color:#085048;border-left:2.5px solid #0BB5A4}
 .week-event.type-m{background:var(--purple-lt);color:#5B21B6;border-left:2.5px solid var(--purple)}
 .week-event.type-h{background:#FFE4E6;color:#9F1239;border-left:2.5px solid #DC2626}
+.week-event.type-gg{background:#E8F0FE;color:#1A56DB;border-left:2.5px solid #4285F4}
 .week-now-line{position:absolute;left:0;right:0;height:2px;background:var(--bd);z-index:2;pointer-events:none}
 .week-now-dot{position:absolute;left:-4px;top:-4px;width:10px;height:10px;border-radius:50%;background:var(--bd)}
 
@@ -441,12 +444,18 @@ function renderCal(){
     };})(ds);
     const dn=document.createElement('div');dn.className='day-num';dn.textContent=d2;cell.appendChild(dn);
     const list=getMerged(ds);
-    list.forEach(s=>{
-      const chip=document.createElement('div');
-      chip.className='day-chip chip-'+(s.type==='booking'?'b':s.type==='holiday'?'h':'m');
-      chip.textContent=(s.time_s?s.time_s.slice(0,5)+' ':'')+s.title;
-      cell.appendChild(chip);
-    });
+    if(list.length){
+      const dots=document.createElement('div');dots.className='day-dots';
+      list.slice(0,8).forEach(s=>{
+        const dot=document.createElement('span');
+        dot.className='day-dot dot-'+(s.type==='booking'?'b':s.type==='holiday'?'h':s.type==='google'?'gg':'m');
+        dots.appendChild(dot);
+      });
+      cell.appendChild(dots);
+      const cnt=document.createElement('div');cnt.className='day-cnt';
+      cnt.textContent=curLang==='en'?list.length+(list.length>1?' items':' item'):list.length+'건';
+      cell.appendChild(cnt);
+    }
     grid.appendChild(cell);
   }
   const rem=(7-((first+last)%7))%7;
@@ -521,7 +530,7 @@ function renderWeek(){
       const top=(sh*60+sm)/(HOURS*60)*HOURS*SLOT_H;
       const height=Math.max(((eh*60+em)-(sh*60+sm))/(HOURS*60)*HOURS*SLOT_H,28);
       const ev=document.createElement('div');
-      ev.className='week-event type-'+(s.type==='booking'?'b':s.type==='holiday'?'h':'m');
+      ev.className='week-event type-'+(s.type==='booking'?'b':s.type==='holiday'?'h':s.type==='google'?'gg':'m');
       ev.style.cssText=`top:${top}px;height:${height}px`;
       ev.textContent=s.time_s.slice(0,5)+' '+s.title;
       ev.onclick=e=>{e.stopPropagation();selDate=ds;setView('month');curY=d.getFullYear();curM=d.getMonth();renderCal();renderDay(ds);};
@@ -630,9 +639,9 @@ async function renderDay(ds){
   let html='<div class="sch-list">';
   list.forEach((s,idx)=>{
     const ds2=displayList[idx];
-    const barColor=s.type==='booking'?'#0BB5A4':s.type==='holiday'?'#DC2626':'#8B5CF6';
-    const typeBg=s.type==='booking'?'background:#CCF2EE;color:#085048':s.type==='holiday'?'background:#FFE4E6;color:#9F1239':'background:#EDE9FE;color:#5B21B6';
-    const typeLabel=curLang==='en'?(s.type==='booking'?'Confirmed':s.type==='holiday'?'Holiday':'Internal'):(s.type==='booking'?'예약확정':s.type==='holiday'?'휴일':'직접입력');
+    const barColor=s.type==='booking'?'#0BB5A4':s.type==='holiday'?'#DC2626':s.type==='google'?'#4285F4':'#8B5CF6';
+    const typeBg=s.type==='booking'?'background:#CCF2EE;color:#085048':s.type==='holiday'?'background:#FFE4E6;color:#9F1239':s.type==='google'?'background:#E8F0FE;color:#1A56DB':'background:#EDE9FE;color:#5B21B6';
+    const typeLabel=curLang==='en'?(s.type==='booking'?'Confirmed':s.type==='holiday'?'Holiday':s.type==='google'?'Google':'Internal'):(s.type==='booking'?'예약확정':s.type==='holiday'?'휴일':s.type==='google'?'구글 캘린더':'직접입력');
     const isAuto=s.source==='booking';
     html+=`<div class="sch-item">
       <div class="sch-bar" style="background:${barColor}"></div>
