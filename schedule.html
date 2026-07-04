@@ -570,25 +570,66 @@ function renderWeek(){
 async function translateText(text){
   if(!text||curLang==='ko')return text;
   if(translCache[text])return translCache[text];
+  const key=localStorage.getItem('hhc_ak')||'';
+  if(!key){return text;}
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
       headers:{
         'Content-Type':'application/json',
-        'x-api-key':ANTHROPIC_KEY,
+        'x-api-key':key,
         'anthropic-version':'2023-06-01',
         'anthropic-dangerous-direct-browser-access':'true'
       },
       body:JSON.stringify({
-        model:'claude-sonnet-4-6',max_tokens:500,
-        messages:[{role:'user',content:`Translate the following Korean text to English. Return ONLY the translated text, nothing else. Keep emojis and formatting:\n\n${text}`}]
+        model:'claude-sonnet-4-6',max_tokens:800,
+        messages:[{role:'user',content:'Translate the following text to English. Return ONLY the translated text, nothing else. Keep emojis, symbols and line breaks exactly as they are:\n\n'+text}]
       })
     });
     const data=await res.json();
+    if(data.error){console.warn('Translation error:',data.error.message);return text;}
     const translated=data.content?.[0]?.text||text;
     translCache[text]=translated;
     return translated;
-  }catch(e){return text;}
+  }catch(e){console.warn('Translation failed:',e);return text;}
+}
+
+// 번역 일괄 처리 — 여러 필드를 한 번에
+async function translateItem(s){
+  if(curLang==='ko')return s;
+  const key=localStorage.getItem('hhc_ak')||'';
+  if(!key)return s;
+  try{
+    // 제목과 메모를 구분자로 묶어 한 번에 번역 (API 호출 최소화)
+    const combined='[TITLE]'+s.title+'[/TITLE]'+(s.memo?'[MEMO]'+s.memo+'[/MEMO]':'');
+    const cacheKey='item:'+combined;
+    if(translCache[cacheKey]){
+      const cached=translCache[cacheKey];
+      return Object.assign({},s,{title:cached.title,memo:cached.memo});
+    }
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':key,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({
+        model:'claude-sonnet-4-6',max_tokens:800,
+        messages:[{role:'user',content:'Translate the following Korean schedule data to English. Keep emojis, symbols (📍📞🔧📝), and line breaks exactly. Return in exact same format with [TITLE] and [MEMO] tags:\n\n'+combined}]
+      })
+    });
+    const data=await res.json();
+    if(data.error){console.warn('Translation error:',data.error.message);return s;}
+    const result=data.content?.[0]?.text||combined;
+    const titleMatch=result.match(/\[TITLE\]([\s\S]*?)\[\/TITLE\]/);
+    const memoMatch=result.match(/\[MEMO\]([\s\S]*?)\[\/MEMO\]/);
+    const translTitle=titleMatch?titleMatch[1].trim():s.title;
+    const translMemo=memoMatch?memoMatch[1].trim():s.memo;
+    translCache[cacheKey]={title:translTitle,memo:translMemo};
+    return Object.assign({},s,{title:translTitle,memo:translMemo});
+  }catch(e){console.warn('Translation failed:',e);return s;}
 }
 
 // ── 일정 패널
@@ -614,12 +655,8 @@ async function renderDay(ds){
   }
 
   // 번역 처리
-  const displayList=await Promise.all(list.map(async s=>{
-    if(curLang==='ko')return s;
-    const translTitle=await translateText(s.title);
-    const translMemo=await translateText(s.memo);
-    return Object.assign({},s,{title:translTitle,memo:translMemo});
-  }));
+  // 번역 (한 번에 처리)
+  const displayList=await Promise.all(list.map(s=>translateItem(s)));
 
   let html='<div class="sch-list">';
   list.forEach((s,idx)=>{
