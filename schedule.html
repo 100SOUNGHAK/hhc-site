@@ -23,14 +23,7 @@
 html,body{height:100%;overflow:hidden}
 body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:var(--g);color:var(--tx);display:flex;flex-direction:column}
 
-/* ── 로그인 ── */
-.login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:32px;gap:16px;background:var(--g)}
-.login-logo{width:70px;height:70px;background:var(--navy);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--teal);margin-bottom:8px}
-.login-ttl{font-size:22px;font-weight:700;color:var(--navy)}
-.login-sub{font-size:12px;color:var(--tx3)}
-.login-input{width:100%;padding:14px 16px;border:0.5px solid var(--ln);border-radius:12px;font-size:20px;font-family:inherit;background:var(--w);color:var(--tx);text-align:center;letter-spacing:.3em}
-.login-btn{width:100%;padding:15px;border:none;border-radius:12px;background:var(--navy);color:#fff;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit}
-.login-err{font-size:12px;color:var(--bd);display:none;text-align:center}
+/* 로그인 없음 */
 
 /* ── 앱 ── */
 .app{display:none;flex-direction:column;height:100%}
@@ -181,18 +174,10 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:var(--g);col
 </head>
 <body>
 
-<!-- 로그인 -->
-<div class="login-screen" id="login-screen">
-  <div class="login-logo">HHC</div>
-  <div class="login-ttl">일정 캘린더</div>
-  <div class="login-sub">Happy Home Care · Schedule</div>
-  <input type="password" class="login-input" id="login-pw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doLogin()">
-  <button class="login-btn" onclick="doLogin()">로그인</button>
-  <div class="login-err" id="login-err">비밀번호가 올바르지 않습니다</div>
-</div>
+<!-- 로그인 없음 -->
 
 <!-- 앱 -->
-<div class="app" id="app">
+<div class="app on" id="app">
   <!-- 헤더 -->
   <div class="hdr">
     <div class="hdr-logo">
@@ -258,7 +243,7 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:var(--g);col
 </div>
 
 <!-- FAB -->
-<button class="fab" id="fab" onclick="openModal()">＋</button>
+<button class="fab" id="fab" style="display:flex" onclick="openModal()">＋</button>
 
 <!-- 입력 모달 -->
 <div class="modal-ov" id="modal-ov" onclick="if(event.target===this)closeModal()">
@@ -302,8 +287,6 @@ const FIREBASE_CFG={
   messagingSenderId:"101289103022",
   appId:"1:101289103022:web:d81aca7f3747dd26df673f"
 };
-const PW='080731';
-const ANTHROPIC_KEY=localStorage.getItem('hhc_ak')||'';
 
 let db=null;
 let schedules={};  // Firestore schedules
@@ -318,24 +301,11 @@ let curView='month';
 let curType='booking';
 
 // ── 로그인
-window.doLogin=function(){
-  const pw=document.getElementById('login-pw').value;
-  if(pw===PW){
-    document.getElementById('login-err').style.display='none';
-    document.getElementById('login-screen').style.display='none';
-    document.getElementById('app').classList.add('on');
-    document.getElementById('fab').style.display='flex';
-    // API 키가 없으면 localStorage에서 확인 후 없으면 설정
-    if(!localStorage.getItem('hhc_ak')){
-      const ak=prompt('번역 API 키를 입력하세요 (건너뛰면 번역 기능 비활성화):','');
-      if(ak&&ak.trim()){localStorage.setItem('hhc_ak',ak.trim());}
-    }
-    initApp();
-  } else {
-    document.getElementById('login-err').style.display='block';
-  }
-};
-document.getElementById('login-pw').addEventListener('keydown',e=>{if(e.key==='Enter')window.doLogin();});
+// 로그인 없이 바로 시작
+if(!localStorage.getItem('hhc_ak')){
+  const ak=prompt('번역 API 키를 입력하세요 (건너뛰면 번역 기능 비활성화):','');
+  if(ak&&ak.trim()){localStorage.setItem('hhc_ak',ak.trim());}
+}
 
 async function initApp(){
   showLoading(true);
@@ -756,8 +726,49 @@ window.saveItem=async function(){
 };
 
 // ── 언어
-window.setLang=function(lang){
+window.setLang=async function(lang){
   curLang=lang;translCache={};
+  // 번역 테스트
+  if(lang==='en'){
+    const key=localStorage.getItem('hhc_ak')||'';
+    if(!key){
+      alert('API 키가 없습니다. 페이지를 새로고침 후 다시 로그인하세요.');
+      return;
+    }
+    try{
+      showLoading(true);
+      const testRes=await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'x-api-key':key,
+          'anthropic-version':'2023-06-01',
+          'anthropic-dangerous-direct-browser-access':'true'
+        },
+        body:JSON.stringify({
+          model:'claude-sonnet-4-6',max_tokens:50,
+          messages:[{role:'user',content:'Say "OK" in English only.'}]
+        })
+      });
+      const testData=await testRes.json();
+      showLoading(false);
+      if(testData.error){
+        alert('번역 API 오류: '+testData.error.message+'\n\nAPI 키를 확인하세요.');
+        curLang='ko';
+        document.getElementById('btn-ko').className='lang-btn on';
+        document.getElementById('btn-en').className='lang-btn';
+        return;
+      }
+      showToast('✓ 번역 API 연결됨');
+    }catch(e){
+      showLoading(false);
+      alert('번역 API 연결 실패: '+e.message);
+      curLang='ko';
+      document.getElementById('btn-ko').className='lang-btn on';
+      document.getElementById('btn-en').className='lang-btn';
+      return;
+    }
+  }
   document.getElementById('btn-ko').className='lang-btn'+(lang==='ko'?' on':'');
   document.getElementById('btn-en').className='lang-btn'+(lang==='en'?' on':'');
   document.getElementById('leg-b').textContent=lang==='en'?'Confirmed':'예약확정';
@@ -770,7 +781,8 @@ window.setLang=function(lang){
 function showLoading(v){document.getElementById('loading').classList.toggle('on',v);}
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2000);}
 
-// 초기 렌더
+// 초기 실행
+initApp();
 renderNav();
 </script>
 </body>
