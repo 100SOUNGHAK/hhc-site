@@ -1251,6 +1251,68 @@ async function schSubscribe(){
   }catch(e){console.error('schedules subscribe error:',e);}
 }
 
+function schRenderCal(){
+  const months=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  const lbl=document.getElementById('sch-cal-label');
+  if(lbl)lbl.textContent=schYear+'년 '+months[schMonth];
+  const grid=document.getElementById('sch-cal-grid');
+  if(!grid)return;
+  // 요일 헤더 보존
+  const headers=Array.from(grid.querySelectorAll('.cal-day-name'));
+  grid.innerHTML='';
+  headers.forEach(h=>grid.appendChild(h));
+
+  const today=new Date();
+  const first=new Date(schYear,schMonth,1).getDay();
+  const last=new Date(schYear,schMonth+1,0).getDate();
+  const prevLast=new Date(schYear,schMonth,0).getDate();
+
+  // 이전달 빈칸
+  for(let i=0;i<first;i++){
+    const d=document.createElement('div');d.className='sch-day sch-other';
+    const dn=document.createElement('div');dn.className='sch-dn';dn.textContent=prevLast-first+1+i;
+    d.appendChild(dn);grid.appendChild(d);
+  }
+  // 이번달
+  for(let d2=1;d2<=last;d2++){
+    const ds=schYear+'-'+String(schMonth+1).padStart(2,'0')+'-'+String(d2).padStart(2,'0');
+    const cell=document.createElement('div');
+    let cls='sch-day';
+    if(today.getFullYear()===schYear&&today.getMonth()===schMonth&&today.getDate()===d2)cls+=' sch-today';
+    if(schSelDate===ds)cls+=' sch-sel';
+    cell.className=cls;
+    cell.onclick=(function(s){return function(){schSelectDate(s);};})(ds);
+    const dn2=document.createElement('div');dn2.className='sch-dn';dn2.textContent=d2;
+    cell.appendChild(dn2);
+    // 일정 칩
+    const list=schedules[ds]||[];
+    list.slice(0,2).forEach(s=>{
+      const chip=document.createElement('div');
+      chip.className='sch-chip sch-chip-'+(s.type||'manual');
+      chip.textContent=(s.time_s?s.time_s.slice(0,5)+' ':'')+s.title;
+      cell.appendChild(chip);
+    });
+    if(list.length>2){
+      const more=document.createElement('div');more.className='sch-more';more.textContent='+'+(list.length-2)+'개';
+      cell.appendChild(more);
+    }
+    grid.appendChild(cell);
+  }
+  // 다음달 빈칸
+  const remain=(7-((first+last)%7))%7;
+  for(let j=1;j<=remain;j++){
+    const dc=document.createElement('div');dc.className='sch-day sch-other';
+    const dn3=document.createElement('div');dn3.className='sch-dn';dn3.textContent=j;
+    dc.appendChild(dn3);grid.appendChild(dc);
+  }
+}
+
+function schSelectDate(ds){
+  schSelDate=ds;
+  schRenderCal();
+  schRenderDay(ds);
+}
+
 function schRenderDay(ds){
   const card=document.getElementById('sch-day-card');
   if(!card)return;
