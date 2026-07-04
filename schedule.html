@@ -303,6 +303,7 @@ const FIREBASE_CFG={
   appId:"1:101289103022:web:d81aca7f3747dd26df673f"
 };
 const PW='080731';
+const ANTHROPIC_KEY=localStorage.getItem('hhc_ak')||'';
 
 let db=null;
 let schedules={};  // Firestore schedules
@@ -324,6 +325,11 @@ window.doLogin=function(){
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').classList.add('on');
     document.getElementById('fab').style.display='flex';
+    // API 키가 없으면 localStorage에서 확인 후 없으면 설정
+    if(!localStorage.getItem('hhc_ak')){
+      const ak=prompt('번역 API 키를 입력하세요 (건너뛰면 번역 기능 비활성화):','');
+      if(ak&&ak.trim()){localStorage.setItem('hhc_ak',ak.trim());}
+    }
     initApp();
   } else {
     document.getElementById('login-err').style.display='block';
@@ -567,7 +573,12 @@ async function translateText(text){
   try{
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':ANTHROPIC_KEY,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
       body:JSON.stringify({
         model:'claude-sonnet-4-6',max_tokens:500,
         messages:[{role:'user',content:`Translate the following Korean text to English. Return ONLY the translated text, nothing else. Keep emojis and formatting:\n\n${text}`}]
