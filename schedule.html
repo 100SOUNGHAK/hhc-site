@@ -124,8 +124,10 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:var(--g);col
 .sch-body{flex:1;min-width:0}
 .sch-type{display:inline-flex;padding:1px 7px;border-radius:8px;font-size:9px;font-weight:700;margin-bottom:3px}
 .sch-ttl{font-size:13px;font-weight:500;color:var(--tx);margin-bottom:3px;line-height:1.4}
+.sch-ttl-condo{font-size:16px;font-weight:800;color:var(--tx);margin-bottom:4px;line-height:1.3}
 .sch-sub{font-size:11px;color:var(--tx2);line-height:1.65}
 .sch-auto{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:600;background:var(--g);color:var(--tx3);margin-top:4px}
+.sch-edit{flex-shrink:0;width:24px;height:24px;border:none;background:none;color:var(--tx3);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .sch-del{width:28px;height:28px;border-radius:50%;border:none;background:var(--bdbg);color:var(--bd);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .translating{opacity:.5;font-style:italic}
 
@@ -265,9 +267,9 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:var(--g);col
     <div class="field"><div class="flbl">제목</div><input id="f-title" type="text" placeholder="예: 김민준 에어컨 청소"></div>
     <div class="t2">
       <div class="field"><div class="flbl">시작</div><input id="f-ts" type="time" value="09:00"></div>
-      <div class="field"><div class="flbl">종료</div><input id="f-te" type="time" value="13:00"></div>
+      <div class="field"><div class="flbl">종료</div><input id="f-te" type="time"></div>
     </div>
-    <div class="field"><div class="flbl">메모 (주소·연락처·품목)</div><textarea id="f-memo" placeholder="강남구 테헤란로 123&#10;010-1234-5678 · 에어컨 3대"></textarea></div>
+    <div class="field"><div class="flbl">메모 (콘도명·품목·추가요청)</div><textarea id="f-memo" placeholder="Seni A-16-05&#10;에어컨 3대 · 필터 교체 요청"></textarea></div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="closeModal()">취소</button>
       <button class="btn-save-m" onclick="saveItem()">저장</button>
@@ -280,7 +282,7 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:var(--g);col
 
 <script type="module">
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import {getFirestore,collection,doc,addDoc,deleteDoc,onSnapshot} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import {getFirestore,collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const FIREBASE_CFG={
   apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
@@ -336,12 +338,10 @@ async function initApp(){
         bookings[b.booking_date].push({
           _id:'bk_'+b._id,source:'booking',
           date:b.booking_date,
-          title:b.customer_name||'고객',
+          title:b.customer_address||b.customer_name||(curLang==='en'?'Booking':'예약'),
           time_s:b.booking_time?b.booking_time.replace(/[^0-9:]/g,'').slice(0,5):'',
           time_e:'',type:'booking',
           memo:[
-            b.customer_address?'📍 '+b.customer_address:'',
-            b.customer_phone?'📞 '+b.customer_phone:'',
             b.booking_items?'🔧 '+b.booking_items:'',
             b.booking_memo?'📝 '+b.booking_memo:''
           ].filter(Boolean).join('\n'),
@@ -508,9 +508,8 @@ function renderWeek(){
     for(let h=0;h<HOURS;h++){
       const cell=document.createElement('div');cell.className='week-cell';
       cell.onclick=(function(s,hr){return function(){
-        selDate=s;document.getElementById('f-ts').value=String(hr).padStart(2,'0')+':00';
-        document.getElementById('f-te').value=String(hr+4>23?23:hr+4).padStart(2,'0')+':00';
-        openModal();
+        selDate=s;openModal();
+        document.getElementById('f-ts').value=String(hr).padStart(2,'0')+':00';
       };})(ds,h);
       col.appendChild(cell);
     }
@@ -648,11 +647,11 @@ async function renderDay(ds){
       <div class="sch-time-col"><div class="sch-ts">${s.time_s||'—'}</div>${s.time_e?`<div class="sch-te">~${s.time_e}</div>`:''}</div>
       <div class="sch-body">
         <div class="sch-type" style="${typeBg}">${typeLabel}</div>
-        <div class="sch-ttl">${ds2.title}</div>
+        <div class="sch-ttl${isAuto?' sch-ttl-condo':''}">${ds2.title}</div>
         ${ds2.memo?`<div class="sch-sub">${ds2.memo.replace(/\n/g,'<br>')}</div>`:''}
         ${isAuto?`<div class="sch-auto">📋 ${curLang==='en'?'Auto from booking':'예약시스템 자동반영'}</div>`:''}
       </div>
-      ${!isAuto?`<button class="sch-del" onclick="deleteItem('${s._id}')">×</button>`:''}
+      ${!isAuto?`<button class="sch-edit" onclick="editItem('${s._id}')">✏️</button><button class="sch-del" onclick="deleteItem('${s._id}')">×</button>`:''}
     </div>`;
   });
   html+='</div>';
@@ -706,29 +705,51 @@ window.deleteItem=async function(id){
 };
 
 // ── 모달
+let editingId=null;
 window.openModal=function(){
   if(!selDate){showToast(curLang==='en'?'Select a date':'날짜를 선택하세요');return;}
+  editingId=null;
+  document.getElementById('modal-ttl').textContent=curLang==='en'?'Add Schedule':'일정 추가';
   document.getElementById('f-title').value='';document.getElementById('f-memo').value='';
-  document.getElementById('f-ts').value='09:00';document.getElementById('f-te').value='13:00';
+  document.getElementById('f-ts').value='09:00';document.getElementById('f-te').value='';
   curType='booking';document.querySelectorAll('.type-btn').forEach(b=>b.classList.toggle('on',b.dataset.type==='booking'));
   document.getElementById('modal-ov').classList.add('open');
   setTimeout(()=>document.getElementById('f-title').focus(),300);
 };
-window.closeModal=function(){document.getElementById('modal-ov').classList.remove('open');};
+window.editItem=function(id){
+  const item=(schedules[selDate]||[]).find(s=>s._id===id);
+  if(!item)return;
+  editingId=id;
+  document.getElementById('modal-ttl').textContent=curLang==='en'?'Edit Schedule':'일정 수정';
+  document.getElementById('f-title').value=item.title||'';
+  document.getElementById('f-memo').value=item.memo||'';
+  document.getElementById('f-ts').value=item.time_s||'';
+  document.getElementById('f-te').value=item.time_e||'';
+  curType=item.type||'manual';
+  document.querySelectorAll('.type-btn').forEach(b=>b.classList.toggle('on',b.dataset.type===curType));
+  document.getElementById('modal-ov').classList.add('open');
+  setTimeout(()=>document.getElementById('f-title').focus(),300);
+};
+window.closeModal=function(){document.getElementById('modal-ov').classList.remove('open');editingId=null;};
 window.setType=function(btn){document.querySelectorAll('.type-btn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');curType=btn.dataset.type;};
 window.saveItem=async function(){
   const title=document.getElementById('f-title').value.trim();
   if(!title){showToast(curLang==='en'?'Enter title':'제목을 입력하세요');return;}
   try{
     showLoading(true);
-    await addDoc(collection(db,'schedules'),{
+    const fields={
       date:selDate,title,
       time_s:document.getElementById('f-ts').value,
       time_e:document.getElementById('f-te').value,
       type:curType,
-      memo:document.getElementById('f-memo').value.trim(),
-      created_at:new Date().toISOString()
-    });
+      memo:document.getElementById('f-memo').value.trim()
+    };
+    if(editingId){
+      await updateDoc(doc(db,'schedules',editingId),fields);
+    }else{
+      fields.created_at=new Date().toISOString();
+      await addDoc(collection(db,'schedules'),fields);
+    }
     showLoading(false);window.closeModal();showToast(curLang==='en'?'✓ Saved':'✓ 저장됨');
   }catch(e){showLoading(false);alert(e.message);}
 };
