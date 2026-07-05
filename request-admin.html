@@ -108,6 +108,7 @@ input,select,textarea,button{font-family:inherit;font-size:14px}
 .rc-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;gap:8px}
 .rc-info{}
 .rc-name{font-size:14px;font-weight:700;color:var(--text)}
+.rc-unit{font-size:12px;color:var(--text2);margin-top:1px}
 .rc-phone{font-size:12px;color:var(--text3);margin-top:1px}
 .rc-condo{font-size:12px;color:var(--text2);margin-top:2px}
 .rc-status{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;flex-shrink:0}
@@ -360,7 +361,7 @@ function renderList(){
   let list=[...allRequests];
 
   // 필터
-  if(search)list=list.filter(r=>(r.condo||'').toLowerCase().includes(search)||(r.phone||'').toLowerCase().includes(search));
+  if(search)list=list.filter(r=>(r.condo||'').toLowerCase().includes(search)||(r.condo_name||'').toLowerCase().includes(search)||(r.condo_unit||'').toLowerCase().includes(search)||(r.phone||'').toLowerCase().includes(search));
   if(statusFilter!=='all')list=list.filter(r=>r.status===statusFilter);
 
   // 정렬
@@ -390,7 +391,8 @@ function renderList(){
     return `<div class="req-card ${statusCls}" data-id="${r.__id}">
       <div class="rc-top">
         <div class="rc-info">
-          <div class="rc-name">${r.condo||'—'}${langBadge}</div>
+          <div class="rc-name">${r.condo_name||r.condo||'—'}${langBadge}</div>
+          ${r.condo_unit?`<div class="rc-unit">🏠 ${r.condo_unit}</div>`:''}
           <div class="rc-phone">📞 ${r.phone||'—'}</div>
         </div>
         <span class="rc-status ${statusCls}">${statusLabel}</span>
@@ -422,9 +424,9 @@ function buildMsg(r,isComplete){
     return `안녕하세요 😊\n\n서비스 의뢰 접수가 완료되었습니다.\n\n📋 의뢰 품목:\n${itemLines}\n${r.remarks?`\n📝 요청사항: ${r.remarks}\n`:''}\n담당자가 일정 확인 후 연락드립니다.\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
   }else{
     if(lang==='en'){
-      return `[HHC Service Request]\nCondo: ${r.condo||'—'}\nPhone: ${r.phone||'—'}\n\nService Items:\n${itemLines}${r.remarks?`\n\nRemarks: ${r.remarks}`:''}\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
+      return `[HHC Service Request]\nCondo: ${r.condo_name||r.condo||'—'}\nUnit/Address: ${r.condo_unit||'—'}\nPhone: ${r.phone||'—'}\n\nService Items:\n${itemLines}${r.remarks?`\n\nRemarks: ${r.remarks}`:''}\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
     }
-    return `[HHC 서비스 의뢰]\n콘도: ${r.condo||'—'}\n전화: ${r.phone||'—'}\n\n의뢰 품목:\n${itemLines}${r.remarks?`\n\n요청사항: ${r.remarks}`:''}\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
+    return `[HHC 서비스 의뢰]\n콘도: ${r.condo_name||r.condo||'—'}\n동호수: ${r.condo_unit||'—'}\n전화: ${r.phone||'—'}\n\n의뢰 품목:\n${itemLines}${r.remarks?`\n\n요청사항: ${r.remarks}`:''}\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774`;
   }
 }
 
@@ -471,7 +473,7 @@ document.getElementById('slm-kakao').addEventListener('click',()=>{
 
 // ── 의뢰 예약전환 ──
 function transferToBooking(r){
-  const d={condo:r.condo||'',phone:r.phone||'',lang:r.lang||'ko',remarks:r.remarks||'',items:r.items||'[]',fromRequest:r.__id};
+  const d={condo:r.condo||'',condo_name:r.condo_name||'',condo_unit:r.condo_unit||'',phone:r.phone||'',lang:r.lang||'ko',remarks:r.remarks||'',items:r.items||'[]',fromRequest:r.__id};
   localStorage.setItem('hhc_transfer_booking',JSON.stringify(d));
   window.open('https://hhc-3p8.pages.dev/booking-admin.html?from=request','_blank');
 }
@@ -522,7 +524,7 @@ document.getElementById('req-list').addEventListener('click',async e=>{
   if(delBtn){
     const id=delBtn.dataset.del;
     const r=allRequests.find(x=>x.__id===id);
-    showConfirmModal(`'${r?.condo||''}' 의뢰를 삭제하시겠습니까?`,async()=>{
+    showConfirmModal(`'${r?.condo_name||r?.condo||''}' 의뢰를 삭제하시겠습니까?`,async()=>{
       showLoading(true);
       try{await deleteDoc(doc(db,'requests',id));showToast('✓ 삭제되었습니다');}
       catch(err){console.error(err);}
