@@ -456,6 +456,10 @@ select.field-input{cursor:pointer}
             <label class="field-label">추가 요청사항</label>
             <textarea id="b-memo" class="field-input sm" style="resize:vertical;min-height:50px" placeholder="추가 요청사항"></textarea>
           </div>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 12px;background:var(--teal-lt);border:1px solid rgba(13,148,136,.25);border-radius:var(--radius-sm);cursor:pointer">
+            <input type="checkbox" id="b-instant-confirm" style="accent-color:var(--teal);width:16px;height:16px">
+            <span style="font-size:12px;color:#085048;font-weight:500">고객 링크 없이 바로 확정 등록 (전화로 이미 일정 확인된 경우)</span>
+          </label>
         </div>
       </div>
 
@@ -1015,12 +1019,17 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
   const bTime=document.getElementById('b-time').value.trim();
   const bItems=document.getElementById('b-items').value.trim();
   const bMemo=document.getElementById('b-memo').value.trim();
+  const instantConfirm=document.getElementById('b-instant-confirm').checked;
 
   if(!name||!phone){showModal(lang==='en'?'Input Error':'입력 오류',lang==='en'?'Please enter condo/unit name and phone.':'콘도명/동호수(상호)와 연락처를 입력해주세요.',false);return;}
-  if(!selectedDates.length){showModal(lang==='en'?'No Schedule':'일정 없음',lang==='en'?'Please select at least one date.':'예약 가능 날짜를 최소 1개 선택해주세요.',false);return;}
 
-  const hasTime=selectedDates.some(d=>scheduleMap[d]&&scheduleMap[d].length>0);
-  if(!hasTime){showModal(lang==='en'?'No Time':'시간 없음',lang==='en'?'Please set at least one available time.':'최소 1개 날짜에 방문 가능 시간을 설정해주세요.',false);return;}
+  if(instantConfirm){
+    if(!bDate||!bItems){showModal(lang==='en'?'Input Error':'입력 오류',lang==='en'?'Please enter the booking date and items.':'예약일과 의뢰 품목을 입력해주세요.',false);return;}
+  }else{
+    if(!selectedDates.length){showModal(lang==='en'?'No Schedule':'일정 없음',lang==='en'?'Please select at least one date.':'예약 가능 날짜를 최소 1개 선택해주세요.',false);return;}
+    const hasTime=selectedDates.some(d=>scheduleMap[d]&&scheduleMap[d].length>0);
+    if(!hasTime){showModal(lang==='en'?'No Time':'시간 없음',lang==='en'?'Please set at least one available time.':'최소 1개 날짜에 방문 가능 시간을 설정해주세요.',false);return;}
+  }
 
   showLoading(true);
   try{
@@ -1033,7 +1042,7 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
       customer_lang:lang,
       schedule_dates:JSON.stringify(selectedDates),
       schedule_times:JSON.stringify(scheduleMap),
-      status:existing?existing.status:'waiting',
+      status:instantConfirm?'confirmed':(existing?existing.status:'waiting'),
       booking_date:bDate,
       booking_time:bTime,
       booking_items:bItems,
@@ -1049,6 +1058,25 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
       const ref=await addDoc(collection(db,'bookings'),data);
       docId=ref.id;
       currentBookingId=docId;
+    }
+
+    if(instantConfirm){
+      const schData={
+        date:bDate,
+        title:(name||'고객')+(bItems?' — '+bItems:''),
+        time_s:bTime?bTime.replace(/[^0-9:]/g,'').slice(0,5):'',
+        time_e:'',
+        type:'booking',
+        memo:[
+          address?'📍 '+address:'',
+          phone?'📞 '+phone:'',
+          bItems?'🔧 '+bItems:'',
+          bMemo?'📝 '+bMemo:''
+        ].filter(Boolean).join(' · '),
+        booking_id:docId,
+        created_at:new Date().toISOString()
+      };
+      await addDoc(collection(db,'schedules'),schData);
     }
 
     showLoading(false);
@@ -1072,6 +1100,12 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
     document.getElementById('customer-summary').style.display='block';
 
     const t=document.getElementById('save-toast');
+    if(instantConfirm){
+      t.textContent='✓ 즉시 확정 등록 완료! 예약목록·캘린더에 바로 반영되었습니다';
+      setTimeout(()=>showConfirmMsgModal({customer_name:name,customer_lang:lang,booking_date:bDate,booking_time:bTime,booking_items:bItems}),600);
+    }else{
+      t.textContent='✓ 등록 완료! 고객 링크가 생성되었습니다';
+    }
     t.style.display='block';setTimeout(()=>t.style.display='none',3000);
   }catch(e){
     showLoading(false);
@@ -1712,6 +1746,7 @@ document.getElementById('btn-save').addEventListener('click',()=>{},true);
 function resetNewForm(){
   currentBookingId=null;selectedDates=[];scheduleMap={};currentDateForTime='';
   ['c-name','c-phone','c-address','c-memo','b-date','b-time','b-items','b-memo'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('b-instant-confirm').checked=false;
   document.getElementById('link-box').style.display='none';
   document.getElementById('link-empty').style.display='block';
   document.getElementById('schedule-summary').style.display='none';
