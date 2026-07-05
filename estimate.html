@@ -148,9 +148,9 @@ let curLang='ko';
 let trSeq=0;
 window._trCache=window._trCache||{};
 
-// 특정 용어는 자동번역 대신 지정된 한글 용어로 고정
+// 특정 용어는 자동번역 대신 지정된 한글 용어로 고정 (품목명에서 분리된 "서비스명" 부분에만 적용)
 const EN_TO_KO_OVERRIDE={
-  'chemical cleaning':'화학 세척',
+  'chemical cleaning':'약품세척',
   'semi-overhaul cleaning':'반분해세척',
   'overhaul cleaning':'전체분해세척',
   'professional collection laundry':'전문수거세탁'
@@ -165,38 +165,81 @@ const KO_FIX={
   '(10kg 추가시 또는 그 일부당)':'(10kg 이내 추가시마다)',
   '(5kg 추가시 또는 그 일부당)':'(5kg 이내 추가시마다)'
 };
+function hasHangul(s){return /[\uAC00-\uD7A3]/.test(s||'');}
+function langOf(s){return hasHangul(s)?'ko':'en';}
+
+// 품목명에서 "코드 [분류] 서비스명" 형태를 분리 — 코드/분류는 절대 건드리지 않고 서비스명만 처리
+function parseItemName(name){
+  const m=(name||'').match(/^(.*?\[[^\]]+\]\s*)(.+)$/);
+  if(m)return {prefix:m[1],label:m[2].trim()};
+  return {prefix:'',label:(name||'').trim()};
+}
+
 function fixKo(t){
   if(!t)return t;
   let out=t;
   Object.keys(KO_FIX).forEach(k=>{if(out.indexOf(k)>-1)out=out.split(k).join(KO_FIX[k]);});
   return out;
 }
-function findOverride(text,srcLang,targetLang){
-  if(srcLang!=='en'||targetLang!=='ko')return undefined;
-  const t=(text||'').trim().toLowerCase();
-  if(!t)return undefined;
+// 영어 서비스명 단어를 정확히(완전일치 우선) 지정된 한글로 치환
+function applyEnOverride(label){
+  const t=(label||'').trim().toLowerCase();
   if(EN_TO_KO_OVERRIDE[t])return EN_TO_KO_OVERRIDE[t];
-  let found;
-  Object.keys(EN_TO_KO_OVERRIDE).forEach(k=>{if(!found&&t.indexOf(k)>-1)found=EN_TO_KO_OVERRIDE[k];});
-  return found;
+  return null;
 }
 
-function autoTr(text,srcLang,applyFn){
+// label 하나(접두어 제외한 순수 서비스명)만 번역/보정
+function trLabel(label,applyFn){
   const targetLang=curLang;
-  if(targetLang===srcLang){applyFn(targetLang==='ko'?fixKo(text||''):(text||''));return;}
-  if(!text){applyFn('');return;}
-  const key=srcLang+'|'+targetLang+'|'+text;
+  const srcLang=langOf(label);
+  if(targetLang===srcLang){applyFn(targetLang==='ko'?fixKo(label||''):(label||''));return;}
+  if(!label){applyFn('');return;}
+  const key=srcLang+'|'+targetLang+'|'+label;
   if(window._trCache[key]){applyFn(window._trCache[key]);return;}
-  const ov=findOverride(text,srcLang,targetLang);
-  if(ov){window._trCache[key]=ov;applyFn(ov);return;}
-  fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl='+srcLang+'&tl='+targetLang+'&dt=t&q='+encodeURIComponent(text))
+  if(srcLang==='en'&&targetLang==='ko'){
+    const ov=applyEnOverride(label);
+    if(ov){window._trCache[key]=ov;applyFn(ov);return;}
+  }
+  fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl='+srcLang+'&tl='+targetLang+'&dt=t&q='+encodeURIComponent(label))
     .then(r=>r.json())
     .then(j=>{
-      let tr=(j&&j[0])?j[0].map(seg=>seg[0]).join(''):text;
+      let tr=(j&&j[0])?j[0].map(seg=>seg[0]).join(''):label;
       if(targetLang==='ko')tr=fixKo(tr);
       window._trCache[key]=tr;
       if(curLang===targetLang)applyFn(tr);
     }).catch(()=>{});
+}
+function trLabelCached(label){
+  const targetLang=curLang;
+  const srcLang=langOf(label);
+  if(targetLang===srcLang)return targetLang==='ko'?fixKo(label||''):(label||'');
+  const key=srcLang+'|'+targetLang+'|'+label;
+  if(window._trCache[key])return window._trCache[key];
+  if(srcLang==='en'&&targetLang==='ko'){
+    const ov=applyEnOverride(label);
+    if(ov)return ov;
+  }
+  return label||'';
+}
+// 접두어(코드/분류)는 그대로 두고, 서비스명만 분리해서 span으로 표시
+function trItemLabel(name){
+  const {label}=parseItemName(name);
+  const id='tr'+(trSeq++);
+  const targetLang=curLang;
+  const srcLang=langOf(label);
+  let placeholder=label||'';
+  if(targetLang===srcLang){
+    placeholder=targetLang==='ko'?fixKo(placeholder):placeholder;
+  }else{
+    const key=srcLang+'|'+targetLang+'|'+label;
+    if(window._trCache[key])placeholder=window._trCache[key];
+    else if(srcLang==='en'&&targetLang==='ko'){
+      const ov=applyEnOverride(label);
+      if(ov)placeholder=ov;
+    }
+  }
+  trLabel(label,v=>{const el=document.getElementById(id);if(el)el.textContent=v;});
+  return '<span id="'+id+'">'+placeholder+'</span>';
 }
 function trSpan(text,srcLang){
   const id='tr'+(trSeq++);
@@ -207,20 +250,42 @@ function trSpan(text,srcLang){
   }else{
     const key=srcLang+'|'+targetLang+'|'+text;
     if(window._trCache[key])placeholder=window._trCache[key];
-    else{
-      const ov=findOverride(text,srcLang,targetLang);
+    else if(srcLang==='en'&&targetLang==='ko'){
+      const ov=applyEnOverride(text);
       if(ov)placeholder=ov;
     }
   }
   autoTr(text,srcLang,v=>{const el=document.getElementById(id);if(el)el.textContent=v;});
   return '<span id="'+id+'">'+placeholder+'</span>';
 }
+function autoTr(text,srcLang,applyFn){
+  const targetLang=curLang;
+  if(targetLang===srcLang){applyFn(targetLang==='ko'?fixKo(text||''):(text||''));return;}
+  if(!text){applyFn('');return;}
+  const key=srcLang+'|'+targetLang+'|'+text;
+  if(window._trCache[key]){applyFn(window._trCache[key]);return;}
+  if(srcLang==='en'&&targetLang==='ko'){
+    const ov=applyEnOverride(text);
+    if(ov){window._trCache[key]=ov;applyFn(ov);return;}
+  }
+  fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl='+srcLang+'&tl='+targetLang+'&dt=t&q='+encodeURIComponent(text))
+    .then(r=>r.json())
+    .then(j=>{
+      let tr=(j&&j[0])?j[0].map(seg=>seg[0]).join(''):text;
+      if(targetLang==='ko')tr=fixKo(tr);
+      window._trCache[key]=tr;
+      if(curLang===targetLang)applyFn(tr);
+    }).catch(()=>{});
+}
 function trCached(text,srcLang){
   if(curLang===srcLang)return curLang==='ko'?fixKo(text||''):(text||'');
   const key=srcLang+'|'+curLang+'|'+text;
   if(window._trCache[key])return window._trCache[key];
-  const ov=findOverride(text,srcLang,curLang);
-  return ov||text||'';
+  if(srcLang==='en'&&curLang==='ko'){
+    const ov=applyEnOverride(text);
+    if(ov)return ov;
+  }
+  return text||'';
 }
 
 // 고정 UI 문구 (한글 원본 → 영어 직접 지정, API 호출 없이 즉시/안정적으로 전환)
@@ -272,16 +337,27 @@ window.setLang=function(lang){
 
 function fmt(n){return 'RM '+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});}
 
+const SERVICE_ORDER=['기본필터세척','기본세척','약품세척','살균세척','스팀그릴세척','반분해세척','약품분해세척','분해세척','전분해세척','전체분해세척'];
+function serviceRank(label){
+  for(let i=0;i<SERVICE_ORDER.length;i++){if((label||'').indexOf(SERVICE_ORDER[i])>-1)return i;}
+  return 99;
+}
+
 function renderBody(){
   const body=document.getElementById('cat-body');
   const items=services.filter(s=>s.cat==='청소'&&s.subcat!=='에어컨(매장용)').sort((a,b)=>(a.order||0)-(b.order||0));
-  const bySubcat={};
+  const groups={}; // groupKey -> items[]
   items.forEach(s=>{
-    const key=s.subcat||'기타';
-    if(!bySubcat[key])bySubcat[key]=[];
-    bySubcat[key].push(s);
+    const {prefix}=parseItemName(s.name);
+    let groupKey=s.subcat||'기타';
+    if(prefix){
+      const m=prefix.match(/\[([^\]]+)\]/);
+      if(m)groupKey=m[1].trim();
+    }
+    if(!groups[groupKey])groups[groupKey]=[];
+    groups[groupKey].push(s);
   });
-  const subKeys=Object.keys(bySubcat).sort((a,b)=>{
+  const groupKeys=Object.keys(groups).sort((a,b)=>{
     const aMisc=a.indexOf('기타')>-1;
     const bMisc=b.indexOf('기타')>-1;
     if(aMisc&&!bMisc)return 1;
@@ -289,13 +365,19 @@ function renderBody(){
     return 0;
   });
   let html='';
-  subKeys.forEach(sub=>{
-    html+=`<div class="subcat-hdr">${trSpan(sub,'ko')}</div>`;
-    bySubcat[sub].forEach(s=>{
+  groupKeys.forEach(g=>{
+    const groupItems=groups[g].slice().sort((a,b)=>{
+      const ra=serviceRank(parseItemName(a.name).label);
+      const rb=serviceRank(parseItemName(b.name).label);
+      if(ra!==rb)return ra-rb;
+      return (a.order||0)-(b.order||0);
+    });
+    html+=`<div class="subcat-hdr">${trSpan(g,langOf(g))}</div>`;
+    groupItems.forEach(s=>{
       const q=quote[s.id]?quote[s.id].qty:0;
       html+=`<div class="item-row">
         <div style="flex:1">
-          <div class="item-name">${trSpan(s.name,'en')}</div>
+          <div class="item-name">${trItemLabel(s.name)}</div>
           <div class="item-price">${fmt(s.price)} / ${s.unit||'건'}</div>
         </div>
         <div class="qty-box">
@@ -315,7 +397,13 @@ window.changeQty=function(id,delta){
   const cur=quote[id]?quote[id].qty:0;
   const next=Math.max(0,cur+delta);
   if(next===0)delete quote[id];
-  else quote[id]={name:svc.name,unit:svc.unit,price:svc.price,qty:next};
+  else{
+    const {prefix,label}=parseItemName(svc.name);
+    let group=svc.subcat||'';
+    const m=(prefix||'').match(/\[([^\]]+)\]/);
+    if(m)group=m[1].trim();
+    quote[id]={group,label,unit:svc.unit,price:svc.price,qty:next};
+  }
   renderBody();
   renderBar();
 };
@@ -336,9 +424,11 @@ window.openQuote=function(){
   document.getElementById('q-date').textContent=now.toLocaleDateString('ko-KR')+' 기준 예상 견적';
   document.getElementById('q-lines').innerHTML=items.map(i=>{
     const amt=i.price*i.qty;
+    const groupPart=i.group?trSpan(i.group,langOf(i.group))+' · ':'';
+    const labelPart=trSpan(i.label,langOf(i.label));
     return `<div class="q-line">
       <div>
-        <div class="q-line-name">${trSpan(i.name,'en')}</div>
+        <div class="q-line-name">${groupPart}${labelPart}</div>
         <div class="q-line-sub">${fmt(i.price)} × ${i.qty}${i.unit||''}</div>
       </div>
       <div class="q-line-amt">${fmt(amt)}</div>
@@ -354,7 +444,12 @@ function buildMsg(){
   const items=Object.values(quote);
   const now=new Date();
   let lines=['[HHC 예상 견적서]',now.toLocaleDateString('ko-KR'),''];
-  items.forEach(i=>{lines.push(`• ${trCached(i.name,'en')} ${fmt(i.price)} × ${i.qty}${i.unit||''} = ${fmt(i.price*i.qty)}`);});
+  items.forEach(i=>{
+    const g=i.group?trCached(i.group,langOf(i.group)):'';
+    const l=trCached(i.label,langOf(i.label));
+    const nameStr=g?`${g} · ${l}`:l;
+    lines.push(`• ${nameStr} ${fmt(i.price)} × ${i.qty}${i.unit||''} = ${fmt(i.price*i.qty)}`);
+  });
   const total=items.reduce((s,i)=>s+i.price*i.qty,0);
   lines.push('');
   lines.push(`예상 총액: ${fmt(total)}`);
