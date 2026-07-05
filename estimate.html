@@ -66,9 +66,13 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:var(--g);col
 <div class="hdr">
   <div class="hdr-row">
     <div class="logo">H</div>
-    <div>
+    <div style="flex:1">
       <div class="hdr-ttl">간편 견적 계산기</div>
       <div class="hdr-sub">Happy Home Care</div>
+    </div>
+    <div style="display:flex;background:rgba(255,255,255,.08);border-radius:20px;padding:2px">
+      <button id="lang-ko-btn" onclick="setLang('ko')" style="padding:5px 11px;border-radius:16px;border:none;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;background:#0BB5A4;color:#fff">한글</button>
+      <button id="lang-en-btn" onclick="setLang('en')" style="padding:5px 11px;border-radius:16px;border:none;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;background:transparent;color:rgba(255,255,255,.5)">English</button>
     </div>
   </div>
 </div>
@@ -143,6 +147,35 @@ const DEF_SVC=[
 
 let services=DEF_SVC.slice();
 let quote={}; // { svcId: {name,price,unit,qty} }
+let curLang='ko';
+let trSeq=0;
+window._trCache=window._trCache||{};
+
+function autoTr(en,applyFn){
+  if(curLang==='en'){applyFn(en||'');return;}
+  if(!en){applyFn('');return;}
+  if(window._trCache[en]){applyFn(window._trCache[en]);return;}
+  fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ko&dt=t&q='+encodeURIComponent(en))
+    .then(r=>r.json())
+    .then(j=>{
+      const tr=(j&&j[0])?j[0].map(seg=>seg[0]).join(''):en;
+      window._trCache[en]=tr;
+      if(curLang==='ko')applyFn(tr);
+    }).catch(()=>{});
+}
+function trSpan(en){
+  const id='tr'+(trSeq++);
+  autoTr(en,v=>{const el=document.getElementById(id);if(el)el.textContent=v;});
+  return '<span id="'+id+'">'+(en||'')+'</span>';
+}
+function trCached(en){return (curLang==='ko'&&window._trCache[en])?window._trCache[en]:(en||'');}
+
+window.setLang=function(lang){
+  curLang=lang;
+  document.getElementById('lang-ko-btn').style.cssText='padding:5px 11px;border-radius:16px;border:none;font-size:11px;cursor:pointer;font-family:inherit;'+(lang==='ko'?'font-weight:700;background:#0BB5A4;color:#fff':'font-weight:500;background:transparent;color:rgba(255,255,255,.5)');
+  document.getElementById('lang-en-btn').style.cssText='padding:5px 11px;border-radius:16px;border:none;font-size:11px;cursor:pointer;font-family:inherit;'+(lang==='en'?'font-weight:700;background:#0BB5A4;color:#fff':'font-weight:500;background:transparent;color:rgba(255,255,255,.5)');
+  renderBody();
+};
 
 function fmt(n){return 'RM '+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});}
 
@@ -162,12 +195,12 @@ function renderBody(){
   });
   let html='';
   subKeys.forEach(sub=>{
-    html+=`<div class="subcat-hdr">${sub}</div>`;
+    html+=`<div class="subcat-hdr">${trSpan(sub)}</div>`;
     bySubcat[sub].forEach(s=>{
       const q=quote[s.id]?quote[s.id].qty:0;
       html+=`<div class="item-row">
         <div style="flex:1">
-          <div class="item-name">${s.name}</div>
+          <div class="item-name">${trSpan(s.name)}</div>
           <div class="item-price">${fmt(s.price)} / ${s.unit||'건'}</div>
         </div>
         <div class="qty-box">
@@ -210,7 +243,7 @@ window.openQuote=function(){
     const amt=i.price*i.qty;
     return `<div class="q-line">
       <div>
-        <div class="q-line-name">${i.name}</div>
+        <div class="q-line-name">${trSpan(i.name)}</div>
         <div class="q-line-sub">${fmt(i.price)} × ${i.qty}${i.unit||''}</div>
       </div>
       <div class="q-line-amt">${fmt(amt)}</div>
@@ -226,7 +259,7 @@ function buildMsg(){
   const items=Object.values(quote);
   const now=new Date();
   let lines=['[HHC 예상 견적서]',now.toLocaleDateString('ko-KR'),''];
-  items.forEach(i=>{lines.push(`• ${i.name} ${fmt(i.price)} × ${i.qty}${i.unit||''} = ${fmt(i.price*i.qty)}`);});
+  items.forEach(i=>{lines.push(`• ${trCached(i.name)} ${fmt(i.price)} × ${i.qty}${i.unit||''} = ${fmt(i.price*i.qty)}`);});
   const total=items.reduce((s,i)=>s+i.price*i.qty,0);
   lines.push('');
   lines.push(`예상 총액: ${fmt(total)}`);
