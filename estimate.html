@@ -148,29 +148,69 @@ let curLang='ko';
 let trSeq=0;
 window._trCache=window._trCache||{};
 
+// 특정 용어는 자동번역 대신 지정된 한글 용어로 고정
+const EN_TO_KO_OVERRIDE={
+  'chemical cleaning':'화학 세척',
+  'semi-overhaul cleaning':'반분해세척',
+  'overhaul cleaning':'전체분해세척',
+  'professional collection laundry':'전문수거세탁'
+};
+// 자동번역 결과가 어색한 경우 보정
+const KO_FIX={
+  '드라이석션클리닝':'건식세탁',
+  '웨트스팀클리닝':'습식살균세탁',
+  '온사이드 스팀클리닝':'현장스팀세탁',
+  '세탁기(탑로드형)':'세탁기(통돌이)',
+  '세탁기(전 투입형)':'세탁기(드럼)',
+  '(10kg 추가시 또는 그 일부당)':'(10kg 이내 추가시마다)',
+  '(5kg 추가시 또는 그 일부당)':'(5kg 이내 추가시마다)'
+};
+function fixKo(t){return KO_FIX[t]!==undefined?KO_FIX[t]:t;}
+function findOverride(text,srcLang,targetLang){
+  if(srcLang==='en'&&targetLang==='ko')return EN_TO_KO_OVERRIDE[(text||'').trim().toLowerCase()];
+  return undefined;
+}
+
 function autoTr(text,srcLang,applyFn){
   const targetLang=curLang;
-  if(targetLang===srcLang){applyFn(text||'');return;}
+  if(targetLang===srcLang){applyFn(targetLang==='ko'?fixKo(text||''):(text||''));return;}
   if(!text){applyFn('');return;}
   const key=srcLang+'|'+targetLang+'|'+text;
   if(window._trCache[key]){applyFn(window._trCache[key]);return;}
+  const ov=findOverride(text,srcLang,targetLang);
+  if(ov){window._trCache[key]=ov;applyFn(ov);return;}
   fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl='+srcLang+'&tl='+targetLang+'&dt=t&q='+encodeURIComponent(text))
     .then(r=>r.json())
     .then(j=>{
-      const tr=(j&&j[0])?j[0].map(seg=>seg[0]).join(''):text;
+      let tr=(j&&j[0])?j[0].map(seg=>seg[0]).join(''):text;
+      if(targetLang==='ko')tr=fixKo(tr);
       window._trCache[key]=tr;
       if(curLang===targetLang)applyFn(tr);
     }).catch(()=>{});
 }
 function trSpan(text,srcLang){
   const id='tr'+(trSeq++);
+  const targetLang=curLang;
+  let placeholder=text||'';
+  if(targetLang===srcLang){
+    placeholder=targetLang==='ko'?fixKo(placeholder):placeholder;
+  }else{
+    const key=srcLang+'|'+targetLang+'|'+text;
+    if(window._trCache[key])placeholder=window._trCache[key];
+    else{
+      const ov=findOverride(text,srcLang,targetLang);
+      if(ov)placeholder=ov;
+    }
+  }
   autoTr(text,srcLang,v=>{const el=document.getElementById(id);if(el)el.textContent=v;});
-  return '<span id="'+id+'">'+(text||'')+'</span>';
+  return '<span id="'+id+'">'+placeholder+'</span>';
 }
 function trCached(text,srcLang){
-  if(curLang===srcLang)return text||'';
+  if(curLang===srcLang)return curLang==='ko'?fixKo(text||''):(text||'');
   const key=srcLang+'|'+curLang+'|'+text;
-  return window._trCache[key]||text||'';
+  if(window._trCache[key])return window._trCache[key];
+  const ov=findOverride(text,srcLang,curLang);
+  return ov||text||'';
 }
 
 // 고정 UI 문구 (한글 원본 → 영어 직접 지정, API 호출 없이 즉시/안정적으로 전환)
