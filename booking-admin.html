@@ -730,6 +730,9 @@ let selectedDates=[];
 let scheduleMap={};
 let currentDateForTime='';
 let currentBookingId=null;
+let editingListId=null;
+function escAttr(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
+function escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 const fmt=n=>n||'';
 const today=()=>new Date().toISOString().slice(0,10);
@@ -1148,13 +1151,53 @@ function renderList(){
   }
   el.innerHTML=allBookings.map(b=>{
     const dates=b.schedule_dates?JSON.parse(b.schedule_dates):[];
-    const times=b.schedule_times?JSON.parse(b.schedule_times):{};
     const statusLabel={'waiting':'대기중','booked':'신청완료','confirmed':'확정완료'}[b.status]||b.status;
     const statusCls={'waiting':'pending','booked':'pending','confirmed':'confirmed'}[b.status]||'pending';
     const lang=b.customer_lang||'ko';
     const langBadge=lang==='en'?'<span style="padding:2px 7px;background:#DBEAFE;color:#1D4ED8;border-radius:20px;font-size:10px;font-weight:600;margin-left:5px">EN</span>':'<span style="padding:2px 7px;background:#EDE8F5;color:#3D52A0;border-radius:20px;font-size:10px;font-weight:600;margin-left:5px">KO</span>';
-    const url=`${BASE_URL}booking.html?id=${b.__id}`;
     const dateTags=dates.map(d=>`<span class="ci-date-tag">${d}</span>`).join('');
+
+    if(editingListId===b.__id){
+      return `<div class="customer-item" style="border-color:var(--teal);box-shadow:0 2px 12px rgba(13,148,136,.12)">
+        <div class="fg c2" style="margin-bottom:8px">
+          <div class="field">
+            <label class="field-label">콘도명/동호수(상호)</label>
+            <input class="field-input sm" id="el-name-${b.__id}" value="${escAttr(b.customer_name)}">
+          </div>
+          <div class="field">
+            <label class="field-label">연락처</label>
+            <input class="field-input sm" id="el-phone-${b.__id}" value="${escAttr(b.customer_phone)}">
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:8px">
+          <label class="field-label">주소</label>
+          <input class="field-input sm" id="el-addr-${b.__id}" value="${escAttr(b.customer_address)}">
+        </div>
+        <div class="fg c2" style="margin-bottom:8px">
+          <div class="field">
+            <label class="field-label">예약일</label>
+            <input type="date" class="field-input sm" id="el-bdate-${b.__id}" value="${escAttr(b.booking_date)}">
+          </div>
+          <div class="field">
+            <label class="field-label">예약 시간</label>
+            <input class="field-input sm" id="el-btime-${b.__id}" placeholder="예: 오전 9시, 14:00" value="${escAttr(b.booking_time)}">
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:8px">
+          <label class="field-label">의뢰 품목</label>
+          <input class="field-input sm" id="el-bitems-${b.__id}" value="${escAttr(b.booking_items)}">
+        </div>
+        <div class="field" style="margin-bottom:10px">
+          <label class="field-label">추가 요청사항</label>
+          <textarea class="field-input sm" id="el-bmemo-${b.__id}" style="resize:vertical;min-height:50px">${escHtml(b.booking_memo)}</textarea>
+        </div>
+        <div class="ci-actions">
+          <button class="btn-sm btn-sm-teal" onclick="saveEditList('${b.__id}')">✓ 저장</button>
+          <button class="btn-sm btn-sm-red" onclick="cancelEditList()">취소</button>
+        </div>
+      </div>`;
+    }
+
     const bookingInfo=b.booking_date?`
       <div class="ci-booking">
         📅 예약일: <strong>${b.booking_date}</strong> ${b.booking_time}<br>
@@ -1174,7 +1217,7 @@ function renderList(){
       ${b.customer_memo?`<div style="font-size:12px;color:var(--text3);margin-bottom:8px">📌 ${b.customer_memo}</div>`:''}
 
       <div class="ci-actions" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
-        <button class="btn-sm btn-sm-teal" onclick="editBooking('${b.__id}')">✏️ 수정</button>
+        <button class="btn-sm btn-sm-teal" onclick="startEditList('${b.__id}')">✏️ 수정</button>
         <button class="btn-sm btn-sm-wa" onclick="sendWA('${b.__id}')">WhatsApp</button>
         <button class="btn-sm btn-sm-kakao" onclick="sendKakao('${b.__id}')">카카오</button>
         ${b.status==='booked'?`<button class="btn-sm btn-sm-green" onclick="confirmBooking('${b.__id}')">✓ 확정</button>`:''}
@@ -1183,6 +1226,37 @@ function renderList(){
     </div>`;
   }).join('');
 }
+
+window.startEditList=function(id){editingListId=id;renderList();};
+window.cancelEditList=function(){editingListId=null;renderList();};
+window.saveEditList=async function(id){
+  const name=document.getElementById('el-name-'+id).value.trim();
+  const phone=document.getElementById('el-phone-'+id).value.trim();
+  const addr=document.getElementById('el-addr-'+id).value.trim();
+  const bdate=document.getElementById('el-bdate-'+id).value.trim();
+  const btime=document.getElementById('el-btime-'+id).value.trim();
+  const bitems=document.getElementById('el-bitems-'+id).value.trim();
+  const bmemo=document.getElementById('el-bmemo-'+id).value.trim();
+  if(!name||!phone){showToast('콘도명과 연락처는 필수입니다');return;}
+  showLoading(true);
+  try{
+    await updateDoc(doc(db,'bookings',id),{
+      customer_name:name,
+      customer_phone:phone,
+      customer_address:addr,
+      booking_date:bdate,
+      booking_time:btime,
+      booking_items:bitems,
+      booking_memo:bmemo
+    });
+    editingListId=null;
+    showLoading(false);
+    showToast('✓ 저장됨');
+  }catch(e){
+    showLoading(false);
+    showToast('저장 실패: '+e.message);
+  }
+};
 
 function updateSendSelects(){}
 
