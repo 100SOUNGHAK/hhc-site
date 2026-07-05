@@ -850,13 +850,23 @@ function onName(id,v){var li=lineItems.find(function(l){return l.id===id;});if(l
 function onDisc(id,v){
   var li=lineItems.find(function(l){return l.id===id;});
   if(li){
-    li.disc=parseFloat(v)||0;
+    li.discVal=parseFloat(v)||0;
     var t=$('lit-'+id);
-    if(t)t.textContent=(function(l){var la=(l.price||0)*(l.qty||1);var da=l.discType==='pct'?la*((l.discVal||0)/100):(l.disc||0);return fmtAmt(la-da);})(li);
+    if(t)t.textContent=(function(l){var la=(l.price||0)*(l.qty||1);var da=l.discType==='pct'?la*((l.discVal||0)/100):(l.discVal||0);return fmtAmt(la-da);})(li);
     calcTotals();App.upPrev();
   }
 }
 window.onDisc=onDisc;
+function onDiscType(id,v){
+  var li=lineItems.find(function(l){return l.id===id;});
+  if(li){
+    li.discType=v;
+    var t=$('lit-'+id);
+    if(t)t.textContent=(function(l){var la=(l.price||0)*(l.qty||1);var da=l.discType==='pct'?la*((l.discVal||0)/100):(l.discVal||0);return fmtAmt(la-da);})(li);
+    calcTotals();App.upPrev();
+  }
+}
+window.onDiscType=onDiscType;
 window.onTopCat=onTopCat;window.onSubCat=onSubCat;window.onSvcSel=onSvcSel;window.onQty=onQty;window.onPrice=onPrice;window.onName=onName;
 
 function renderLI(){
@@ -902,7 +912,7 @@ function renderLI(){
             '<option value="pct"'+(li.discType==='pct'?' selected':'')+'>%</option>'+
           '</select>'+
         '</div></div>'+
-        '<div><label class="lb">소계</label><div class="lt" id="lit-'+li.id+'">'+(function(l){var la=(l.price||0)*(l.qty||1);var da=l.discType==='pct'?la*((l.discVal||0)/100):(l.disc||0);return fmtAmt(la-da);})(li)+'</div></div>'+
+        '<div><label class="lb">소계</label><div class="lt" id="lit-'+li.id+'">'+(function(l){var la=(l.price||0)*(l.qty||1);var da=l.discType==='pct'?la*((l.discVal||0)/100):(l.discVal||l.disc||0);return fmtAmt(la-da);})(li)+'</div></div>'+
       '</div></div>';
   }).join('');
   lineItems.forEach(function(li){
@@ -926,7 +936,7 @@ function calcTotals(inv){
   var cur=inv?inv.currency:getCur();
   var sub=items.reduce(function(s,l){
     var lineAmt=(l.price||0)*(l.qty||1);
-    var discAmt=l.discType==='pct'?lineAmt*((l.discVal||0)/100):(l.disc||0);
+    var discAmt=l.discType==='pct'?lineAmt*((l.discVal||0)/100):(l.discVal||l.disc||0);
     return s+lineAmt-discAmt;
   },0);
   var taxRate=parseFloat(inv?inv.taxRate:val('tax-rate'))||0;
@@ -979,10 +989,13 @@ function buildInvHTML(inv){
   var sc={billing:'db',paid:'dp',overdue:'do'};
   var cust=inv.customer||{};var iss=inv.issuer||issuer;
   var items=inv.items||[];
-  var hasDisc=items.some(function(li){return (li.disc||0)>0;});
+  var hasDisc=items.some(function(li){return (li.discVal||li.disc||0)>0;});
   var rows=items.length?items.map(function(li){
-    var lineAmt=((li.price||0)*(li.qty||1))-(li.disc||0);
-    var discCell=hasDisc?'<td style="text-align:right;color:#16a34a">'+(li.disc>0?'- '+fa(li.disc):'—')+'</td>':'';
+    var la=(li.price||0)*(li.qty||1);
+    var da=li.discType==='pct'?la*((li.discVal||0)/100):(li.discVal||li.disc||0);
+    var lineAmt=la-da;
+    var discDisplay=li.discType==='pct'?((li.discVal||0)+'%'):fa(da);
+    var discCell=hasDisc?'<td style="text-align:right;color:#16a34a">'+(da>0?'- '+discDisplay:'—')+'</td>':'';
     return '<tr><td>'+(li.name||'—')+'</td><td style="text-align:center">'+li.qty+'</td><td style="text-align:right">'+fa(li.price)+'</td>'+discCell+'<td style="text-align:right">'+fa(lineAmt)+'</td></tr>';
   }).join(''):('<tr><td colspan="'+(hasDisc?5:4)+'" style="text-align:center;padding:12px;color:var(--gray)">No items</td></tr>');
   var ci=[cust.addr,cust.phone,cust.email,cust.biz?'사업자: '+cust.biz:''].filter(Boolean).join('<br>');
