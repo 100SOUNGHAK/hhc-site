@@ -162,6 +162,14 @@ const EN_TO_KO_OVERRIDE={
   'overhaul cleaning':'전체분해세척',
   'professional collection laundry':'전문수거세탁'
 };
+// 한글 → 영어 자동번역 결과가 어색한 경우, 지정된 영어 표현으로 고정
+const KO_TO_EN_OVERRIDE={
+  '세탁기(통돌이) 추가비용':'Additional cost for washing machine (Type Top-load)',
+  '세탁기(드럼) 추가비용':'Additional cost for washing machine (Type Front-load)'
+};
+function applyKoOverride(text){
+  return KO_TO_EN_OVERRIDE[(text||'').trim()]||null;
+}
 // 자동번역 결과가 어색한 경우 보정 (또는 용어 자체를 지정된 표현으로 고정 교체)
 const KO_FIX={
   '드라이석션클리닝':'건식세탁',
@@ -278,6 +286,9 @@ function trSpan(text,srcLang){
     else if(srcLang==='en'&&targetLang==='ko'){
       const ov=applyEnOverride(text);
       if(ov)placeholder=ov;
+    }else if(srcLang==='ko'&&targetLang==='en'){
+      const ov=applyKoOverride(text);
+      if(ov)placeholder=ov;
     }
   }
   autoTr(text,srcLang,v=>{const el=document.getElementById(id);if(el)el.textContent=v;});
@@ -291,6 +302,10 @@ function autoTr(text,srcLang,applyFn){
   if(window._trCache[key]){applyFn(window._trCache[key]);return;}
   if(srcLang==='en'&&targetLang==='ko'){
     const ov=applyEnOverride(text);
+    if(ov){window._trCache[key]=ov;applyFn(ov);return;}
+  }
+  if(srcLang==='ko'&&targetLang==='en'){
+    const ov=applyKoOverride(text);
     if(ov){window._trCache[key]=ov;applyFn(ov);return;}
   }
   fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl='+srcLang+'&tl='+targetLang+'&dt=t&q='+encodeURIComponent(text))
@@ -308,6 +323,10 @@ function trCached(text,srcLang){
   if(window._trCache[key])return window._trCache[key];
   if(srcLang==='en'&&curLang==='ko'){
     const ov=applyEnOverride(text);
+    if(ov)return ov;
+  }
+  if(srcLang==='ko'&&curLang==='en'){
+    const ov=applyKoOverride(text);
     if(ov)return ov;
   }
   return text||'';
