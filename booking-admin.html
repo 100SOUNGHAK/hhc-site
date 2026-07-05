@@ -712,7 +712,7 @@ select.field-input{cursor:pointer}
 <!-- FIREBASE -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, getDoc, query, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const FIREBASE_CFG={
   apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
@@ -1701,9 +1701,15 @@ function showConfirmMsgModal(b){
 
 window.deleteBooking=function(id){
   const b=allBookings.find(x=>x.__id===id);
-  showModal('삭제 확인',`'${b?.customer_name||''}' 예약을 삭제하시겠습니까?`,true,async()=>{
+  showModal('삭제 확인',`'${b?.customer_name||''}' 예약을 삭제하시겠습니까? (연결된 캘린더 일정도 함께 삭제됩니다)`,true,async()=>{
     showLoading(true);
-    try{await deleteDoc(doc(db,'bookings',id));showToast('✓ 삭제되었습니다');}
+    try{
+      await deleteDoc(doc(db,'bookings',id));
+      const q=query(collection(db,'schedules'),where('booking_id','==',id));
+      const snap=await getDocs(q);
+      await Promise.all(snap.docs.map(d=>deleteDoc(doc(db,'schedules',d.id))));
+      showToast('✓ 삭제되었습니다 (캘린더 일정 포함)');
+    }
     catch(e){showModal('오류',e.message,false);}
     showLoading(false);
   });
