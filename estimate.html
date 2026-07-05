@@ -155,15 +155,30 @@ const EN_TO_KO_OVERRIDE={
   'overhaul cleaning':'전체분해세척',
   'professional collection laundry':'전문수거세탁'
 };
-// 자동번역 결과가 어색한 경우 보정
+// 자동번역 결과가 어색한 경우 보정 (또는 용어 자체를 지정된 표현으로 고정 교체)
 const KO_FIX={
   '드라이석션클리닝':'건식세탁',
   '웨트스팀클리닝':'습식살균세탁',
   '온사이드 스팀클리닝':'현장스팀세탁',
   '세탁기(탑로드형)':'세탁기(통돌이)',
   '세탁기(전 투입형)':'세탁기(드럼)',
+  '세탁기(전통 투입형)':'세탁기(드럼)',
   '(10kg 추가시 또는 그 일부당)':'(10kg 이내 추가시마다)',
-  '(5kg 추가시 또는 그 일부당)':'(5kg 이내 추가시마다)'
+  '(5kg 추가시 또는 그 일부당)':'(5kg 이내 추가시마다)',
+  '빛':'전등',
+  '기본청소':'기본세척',
+  '기본 청소':'기본 세척',
+  '기본 필터 청소':'기본 필터 세척',
+  '스팀 그릴 청소':'스팀 그릴 세척',
+  '화학적 세척':'약품 세척',
+  '스팀 청소':'스팀 세척',
+  '전체분해세척':'분해세척',
+  '추가비용(추가 10kg당 또는 그 일부당)':'통돌이형 추가비용(추가 10kg이내 당)',
+  '추가비용(추가 10 kg당 또는 그 일부당)':'통돌이형 추가비용(추가 10kg이내 당)',
+  '추가비용(추가 5kg당 또는 그 일부당)':'드럼형 추가비용(추가 5kg이내 당)',
+  '추가비용(추가 5 kg당 또는 그 일부당)':'드럼형 추가비용(추가 5kg이내 당)',
+  '섶나무 다발':'매트리스',
+  '완전한 분해 청소':'완전 분해 청소'
 };
 function hasHangul(s){return /[\uAC00-\uD7A3]/.test(s||'');}
 function langOf(s){return hasHangul(s)?'ko':'en';}
@@ -181,10 +196,10 @@ function fixKo(t){
   Object.keys(KO_FIX).forEach(k=>{if(out.indexOf(k)>-1)out=out.split(k).join(KO_FIX[k]);});
   return out;
 }
-// 영어 서비스명 단어를 정확히(완전일치 우선) 지정된 한글로 치환
+// 영어 서비스명 단어를 정확히 지정된 한글로 치환 (보정 규칙도 함께 적용)
 function applyEnOverride(label){
   const t=(label||'').trim().toLowerCase();
-  if(EN_TO_KO_OVERRIDE[t])return EN_TO_KO_OVERRIDE[t];
+  if(EN_TO_KO_OVERRIDE[t])return fixKo(EN_TO_KO_OVERRIDE[t]);
   return null;
 }
 
@@ -337,9 +352,10 @@ window.setLang=function(lang){
 
 function fmt(n){return 'RM '+Number(n||0).toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:2});}
 
-const SERVICE_ORDER=['기본필터세척','기본세척','약품세척','살균세척','스팀그릴세척','반분해세척','약품분해세척','분해세척','전분해세척','전체분해세척'];
+const SERVICE_ORDER=['기본필터세척','기본세척','약품세척','살균세척','스팀그릴세척','반분해세척','약품분해세척','분해세척','전분해세척','전체분해세척','통돌이형 추가비용','드럼형 추가비용'];
 function serviceRank(label){
-  for(let i=0;i<SERVICE_ORDER.length;i++){if((label||'').indexOf(SERVICE_ORDER[i])>-1)return i;}
+  const fixed=fixKo(label||'');
+  for(let i=0;i<SERVICE_ORDER.length;i++){if(fixed.indexOf(SERVICE_ORDER[i])>-1)return i;}
   return 99;
 }
 
@@ -354,6 +370,10 @@ function renderBody(){
       const m=prefix.match(/\[([^\]]+)\]/);
       if(m)groupKey=m[1].trim();
     }
+    // 세탁기 추가비용 항목은 지정된 상위 목록(통돌이/드럼) 아래로 강제 편입
+    if(/10\s*kg/i.test(s.name))groupKey='세탁기(통돌이)';
+    else if(/5\s*kg/i.test(s.name))groupKey='세탁기(드럼)';
+    groupKey=fixKo(groupKey); // 표기가 달라도(예: 탑로드형→통돌이) 같은 그룹으로 합쳐지도록 정규화
     if(!groups[groupKey])groups[groupKey]=[];
     groups[groupKey].push(s);
   });
