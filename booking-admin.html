@@ -431,6 +431,34 @@ select.field-input{cursor:pointer}
         </div>
       </div>
 
+      <!-- 확정 예약 정보 (관리자 직접 수정) -->
+      <div class="card">
+        <div class="card-head">
+          <div class="card-icon"><svg viewBox="0 0 13 13"><rect x="1" y="2" width="11" height="10" rx="1"/><path d="M4 1v2M9 1v2M1 5h11"/></svg></div>
+          <div class="card-title">확정 예약 정보 (직접 수정 가능)</div>
+        </div>
+        <div class="card-body">
+          <div class="fg c2">
+            <div class="field">
+              <label class="field-label">예약일</label>
+              <input id="b-date" type="date" class="field-input sm">
+            </div>
+            <div class="field">
+              <label class="field-label">예약 시간</label>
+              <input id="b-time" type="text" placeholder="예: 오전 9시, 14:00" class="field-input sm">
+            </div>
+          </div>
+          <div class="field" style="margin-top:10px">
+            <label class="field-label">의뢰 품목</label>
+            <input id="b-items" type="text" placeholder="예: 에어컨 3대 청소" class="field-input sm">
+          </div>
+          <div class="field" style="margin-top:10px">
+            <label class="field-label">추가 요청사항</label>
+            <textarea id="b-memo" class="field-input sm" style="resize:vertical;min-height:50px" placeholder="추가 요청사항"></textarea>
+          </div>
+        </div>
+      </div>
+
       <!-- Schedule Picker -->
       <div class="card">
         <div class="card-head">
@@ -980,6 +1008,10 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
   const address=document.getElementById('c-address').value.trim();
   const memo=document.getElementById('c-memo').value.trim();
   const lang=document.querySelector('input[name="c-lang"]:checked')?.value||'ko';
+  const bDate=document.getElementById('b-date').value.trim();
+  const bTime=document.getElementById('b-time').value.trim();
+  const bItems=document.getElementById('b-items').value.trim();
+  const bMemo=document.getElementById('b-memo').value.trim();
 
   if(!name||!phone){showModal(lang==='en'?'Input Error':'입력 오류',lang==='en'?'Please enter condo/unit name and phone.':'콘도명/동호수(상호)와 연락처를 입력해주세요.',false);return;}
   if(!selectedDates.length){showModal(lang==='en'?'No Schedule':'일정 없음',lang==='en'?'Please select at least one date.':'예약 가능 날짜를 최소 1개 선택해주세요.',false);return;}
@@ -989,6 +1021,7 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
 
   showLoading(true);
   try{
+    const existing=currentBookingId?allBookings.find(x=>x.__id===currentBookingId):null;
     const data={
       customer_name:name,
       customer_phone:phone,
@@ -997,13 +1030,13 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
       customer_lang:lang,
       schedule_dates:JSON.stringify(selectedDates),
       schedule_times:JSON.stringify(scheduleMap),
-      status:'waiting',
-      created_at:new Date().toISOString(),
-      booking_date:'',
-      booking_time:'',
-      booking_items:'',
-      booking_memo:'',
+      status:existing?existing.status:'waiting',
+      booking_date:bDate,
+      booking_time:bTime,
+      booking_items:bItems,
+      booking_memo:bMemo,
     };
+    if(!existing)data.created_at=new Date().toISOString();
 
     let docId;
     if(currentBookingId){
@@ -1460,6 +1493,10 @@ window.editBooking=function(id){
   document.getElementById('c-phone').value=b.customer_phone||'';
   document.getElementById('c-address').value=b.customer_address||'';
   document.getElementById('c-memo').value=b.customer_memo||'';
+  document.getElementById('b-date').value=b.booking_date||'';
+  document.getElementById('b-time').value=b.booking_time||'';
+  document.getElementById('b-items').value=b.booking_items||'';
+  document.getElementById('b-memo').value=b.booking_memo||'';
   // 언어 복원
   const lang=b.customer_lang||'ko';
   document.querySelectorAll('input[name="c-lang"]').forEach(r=>{r.checked=r.value===lang;});
@@ -1600,7 +1637,7 @@ window.sendKakao=function(id){
 document.getElementById('btn-save').addEventListener('click',()=>{},true);
 function resetNewForm(){
   currentBookingId=null;selectedDates=[];scheduleMap={};currentDateForTime='';
-  ['c-name','c-phone','c-address','c-memo'].forEach(id=>document.getElementById(id).value='');
+  ['c-name','c-phone','c-address','c-memo','b-date','b-time','b-items','b-memo'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('link-box').style.display='none';
   document.getElementById('link-empty').style.display='block';
   document.getElementById('schedule-summary').style.display='none';
