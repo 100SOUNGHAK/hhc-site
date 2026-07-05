@@ -78,7 +78,7 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:var(--g);col
 </div>
 
 <div class="wrap">
-  <div class="notice">📋 원하시는 서비스 품목과 수량을 선택하시면, 참고용 예상 견적을 바로 확인하실 수 있어요. 정확한 방문 견적은 현장 상태에 따라 달라질 수 있습니다.</div>
+  <div class="notice" id="notice-txt">📋 원하시는 서비스 품목과 수량을 선택하시면, 참고용 예상 견적을 바로 확인하실 수 있어요. 정확한 방문 견적은 현장 상태에 따라 달라질 수 있습니다.</div>
 
   <div id="cat-body"></div>
 </div>
@@ -96,20 +96,20 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:var(--g);col
 <div class="sheet-ov" id="sheet-ov" onclick="if(event.target===this)closeQuote()">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <div class="q-hdr"><div class="q-ttl">예상 견적서</div></div>
+    <div class="q-hdr"><div class="q-ttl" id="q-ttl-txt">예상 견적서</div></div>
     <div class="q-date" id="q-date"></div>
     <div id="q-lines"></div>
     <div class="q-total-row">
-      <div class="q-total-lbl">예상 총액</div>
+      <div class="q-total-lbl" id="q-total-lbl">예상 총액</div>
       <div class="q-total-val" id="q-total"></div>
     </div>
-    <div class="q-disclaimer">⚠️ 본 견적은 참고용 예상 금액이며, 실제 현장 상태(오염도·접근성·자재 필요 여부 등)에 따라 변동될 수 있습니다. 정확한 견적은 방문 확인 후 안내드립니다.</div>
+    <div class="q-disclaimer" id="q-disclaimer-txt">⚠️ 본 견적은 참고용 예상 금액이며, 실제 현장 상태(오염도·접근성·자재 필요 여부 등)에 따라 변동될 수 있습니다. 정확한 견적은 방문 확인 후 안내드립니다.</div>
     <div class="q-actions">
-      <button class="q-btn q-btn-wa" onclick="shareWA()">💬 WhatsApp 문의</button>
-      <button class="q-btn q-btn-kakao" onclick="shareKakao()">📋 카카오 복사</button>
+      <button class="q-btn q-btn-wa" id="q-btn-wa-txt" onclick="shareWA()">💬 WhatsApp 문의</button>
+      <button class="q-btn q-btn-kakao" id="q-btn-kakao-txt" onclick="shareKakao()">📋 카카오 복사</button>
     </div>
     <div class="copy-ok" id="copy-ok">✓ 복사되었습니다! 카카오톡에 붙여넣기 하세요</div>
-    <button class="q-btn-reset" onclick="closeQuote()">닫기</button>
+    <button class="q-btn-reset" id="q-btn-reset-txt" onclick="closeQuote()">닫기</button>
   </div>
 </div>
 
@@ -131,9 +131,6 @@ const DEF_SVC=[
   {id:'ds1',cat:'청소',subcat:'에어컨(가정용)',name:'기본청소',price:80,unit:'대',order:0},
   {id:'ds2',cat:'청소',subcat:'에어컨(가정용)',name:'화학청소',price:120,unit:'대',order:1},
   {id:'ds3',cat:'청소',subcat:'에어컨(가정용)',name:'스팀청소',price:150,unit:'대',order:2},
-  {id:'ds4',cat:'청소',subcat:'에어컨(매장용)',name:'카세트형 기본청소',price:150,unit:'대',order:3},
-  {id:'ds5',cat:'청소',subcat:'에어컨(매장용)',name:'카세트형 화학청소',price:200,unit:'대',order:4},
-  {id:'ds6',cat:'청소',subcat:'에어컨(매장용)',name:'FCU 청소',price:180,unit:'대',order:5},
   {id:'ds7',cat:'청소',subcat:'세탁기',name:'통돌이 세탁기 청소',price:120,unit:'대',order:6},
   {id:'ds8',cat:'청소',subcat:'세탁기',name:'드럼 세탁기 청소',price:150,unit:'대',order:7},
   {id:'ds9',cat:'청소',subcat:'매트리스',name:'싱글 매트리스 청소',price:80,unit:'개',order:8},
@@ -151,29 +148,75 @@ let curLang='ko';
 let trSeq=0;
 window._trCache=window._trCache||{};
 
-function autoTr(en,applyFn){
-  if(curLang==='en'){applyFn(en||'');return;}
-  if(!en){applyFn('');return;}
-  if(window._trCache[en]){applyFn(window._trCache[en]);return;}
-  fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ko&dt=t&q='+encodeURIComponent(en))
+function autoTr(text,srcLang,applyFn){
+  const targetLang=curLang;
+  if(targetLang===srcLang){applyFn(text||'');return;}
+  if(!text){applyFn('');return;}
+  const key=srcLang+'|'+targetLang+'|'+text;
+  if(window._trCache[key]){applyFn(window._trCache[key]);return;}
+  fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl='+srcLang+'&tl='+targetLang+'&dt=t&q='+encodeURIComponent(text))
     .then(r=>r.json())
     .then(j=>{
-      const tr=(j&&j[0])?j[0].map(seg=>seg[0]).join(''):en;
-      window._trCache[en]=tr;
-      if(curLang==='ko')applyFn(tr);
+      const tr=(j&&j[0])?j[0].map(seg=>seg[0]).join(''):text;
+      window._trCache[key]=tr;
+      if(curLang===targetLang)applyFn(tr);
     }).catch(()=>{});
 }
-function trSpan(en){
+function trSpan(text,srcLang){
   const id='tr'+(trSeq++);
-  autoTr(en,v=>{const el=document.getElementById(id);if(el)el.textContent=v;});
-  return '<span id="'+id+'">'+(en||'')+'</span>';
+  autoTr(text,srcLang,v=>{const el=document.getElementById(id);if(el)el.textContent=v;});
+  return '<span id="'+id+'">'+(text||'')+'</span>';
 }
-function trCached(en){return (curLang==='ko'&&window._trCache[en])?window._trCache[en]:(en||'');}
+function trCached(text,srcLang){
+  if(curLang===srcLang)return text||'';
+  const key=srcLang+'|'+curLang+'|'+text;
+  return window._trCache[key]||text||'';
+}
+
+// 고정 UI 문구 (한글 원본 → 영어 직접 지정, API 호출 없이 즉시/안정적으로 전환)
+const UI_EN={
+  notice:'📋 Select the items and quantity you need to see an estimated quote right away. The actual on-site quote may vary depending on the condition of the site.',
+  barBtn:'View Quote',
+  barCntEmpty:'No items selected',
+  qTtl:'Estimated Quote',
+  qTotalLbl:'Estimated Total',
+  disclaimer:'⚠️ This is an estimated reference amount only, and may vary depending on actual site conditions (contamination level, accessibility, materials needed, etc). An accurate quote will be provided after an on-site visit.',
+  waLabel:'💬 WhatsApp Inquiry',
+  kakaoLabel:'📋 Copy for KakaoTalk',
+  closeLabel:'Close',
+  emptyMsg:'No items registered in this category'
+};
+const UI_KO={
+  notice:'📋 원하시는 서비스 품목과 수량을 선택하시면, 참고용 예상 견적을 바로 확인하실 수 있어요. 정확한 방문 견적은 현장 상태에 따라 달라질 수 있습니다.',
+  barBtn:'견적서 보기',
+  barCntEmpty:'선택된 품목 없음',
+  qTtl:'예상 견적서',
+  qTotalLbl:'예상 총액',
+  disclaimer:'⚠️ 본 견적은 참고용 예상 금액이며, 실제 현장 상태(오염도·접근성·자재 필요 여부 등)에 따라 변동될 수 있습니다. 정확한 견적은 방문 확인 후 안내드립니다.',
+  waLabel:'💬 WhatsApp 문의',
+  kakaoLabel:'📋 카카오 복사',
+  closeLabel:'닫기',
+  emptyMsg:'이 카테고리엔 등록된 품목이 없습니다'
+};
+function ui(key){return curLang==='en'?UI_EN[key]:UI_KO[key];}
+
+function applyStaticUI(){
+  const notice=document.getElementById('notice-txt');if(notice)notice.textContent=ui('notice');
+  const barBtn=document.getElementById('bar-btn');if(barBtn)barBtn.textContent=ui('barBtn');
+  const qTtl=document.getElementById('q-ttl-txt');if(qTtl)qTtl.textContent=ui('qTtl');
+  const qTotalLbl=document.getElementById('q-total-lbl');if(qTotalLbl)qTotalLbl.textContent=ui('qTotalLbl');
+  const disc=document.getElementById('q-disclaimer-txt');if(disc)disc.textContent=ui('disclaimer');
+  const wa=document.getElementById('q-btn-wa-txt');if(wa)wa.textContent=ui('waLabel');
+  const kakao=document.getElementById('q-btn-kakao-txt');if(kakao)kakao.textContent=ui('kakaoLabel');
+  const close=document.getElementById('q-btn-reset-txt');if(close)close.textContent=ui('closeLabel');
+  renderBar();
+}
 
 window.setLang=function(lang){
   curLang=lang;
   document.getElementById('lang-ko-btn').style.cssText='padding:5px 11px;border-radius:16px;border:none;font-size:11px;cursor:pointer;font-family:inherit;'+(lang==='ko'?'font-weight:700;background:#0BB5A4;color:#fff':'font-weight:500;background:transparent;color:rgba(255,255,255,.5)');
   document.getElementById('lang-en-btn').style.cssText='padding:5px 11px;border-radius:16px;border:none;font-size:11px;cursor:pointer;font-family:inherit;'+(lang==='en'?'font-weight:700;background:#0BB5A4;color:#fff':'font-weight:500;background:transparent;color:rgba(255,255,255,.5)');
+  applyStaticUI();
   renderBody();
 };
 
@@ -181,7 +224,7 @@ function fmt(n){return 'RM '+Number(n||0).toLocaleString('en-US',{minimumFractio
 
 function renderBody(){
   const body=document.getElementById('cat-body');
-  const items=services.filter(s=>s.cat==='청소').sort((a,b)=>(a.order||0)-(b.order||0));
+  const items=services.filter(s=>s.cat==='청소'&&s.subcat!=='에어컨(매장용)').sort((a,b)=>(a.order||0)-(b.order||0));
   const bySubcat={};
   items.forEach(s=>{
     const key=s.subcat||'기타';
@@ -189,18 +232,20 @@ function renderBody(){
     bySubcat[key].push(s);
   });
   const subKeys=Object.keys(bySubcat).sort((a,b)=>{
-    if(a==='기타제품')return 1;
-    if(b==='기타제품')return -1;
+    const aMisc=a.indexOf('기타')>-1;
+    const bMisc=b.indexOf('기타')>-1;
+    if(aMisc&&!bMisc)return 1;
+    if(bMisc&&!aMisc)return -1;
     return 0;
   });
   let html='';
   subKeys.forEach(sub=>{
-    html+=`<div class="subcat-hdr">${trSpan(sub)}</div>`;
+    html+=`<div class="subcat-hdr">${trSpan(sub,'ko')}</div>`;
     bySubcat[sub].forEach(s=>{
       const q=quote[s.id]?quote[s.id].qty:0;
       html+=`<div class="item-row">
         <div style="flex:1">
-          <div class="item-name">${trSpan(s.name)}</div>
+          <div class="item-name">${trSpan(s.name,'en')}</div>
           <div class="item-price">${fmt(s.price)} / ${s.unit||'건'}</div>
         </div>
         <div class="qty-box">
@@ -211,7 +256,7 @@ function renderBody(){
       </div>`;
     });
   });
-  body.innerHTML=html||'<div class="empty-q">이 카테고리엔 등록된 품목이 없습니다</div>';
+  body.innerHTML=html||'<div class="empty-q">'+ui('emptyMsg')+'</div>';
 }
 
 window.changeQty=function(id,delta){
@@ -229,7 +274,7 @@ function renderBar(){
   const items=Object.values(quote);
   const cnt=items.reduce((s,i)=>s+i.qty,0);
   const total=items.reduce((s,i)=>s+i.price*i.qty,0);
-  document.getElementById('bar-cnt').textContent=cnt?`선택된 품목 ${cnt}개`:'선택된 품목 없음';
+  document.getElementById('bar-cnt').textContent=cnt?(curLang==='en'?`${cnt} item(s) selected`:`선택된 품목 ${cnt}개`):ui('barCntEmpty');
   document.getElementById('bar-total').textContent=fmt(total);
   document.getElementById('bar-btn').disabled=cnt===0;
 }
@@ -243,7 +288,7 @@ window.openQuote=function(){
     const amt=i.price*i.qty;
     return `<div class="q-line">
       <div>
-        <div class="q-line-name">${trSpan(i.name)}</div>
+        <div class="q-line-name">${trSpan(i.name,'en')}</div>
         <div class="q-line-sub">${fmt(i.price)} × ${i.qty}${i.unit||''}</div>
       </div>
       <div class="q-line-amt">${fmt(amt)}</div>
@@ -259,7 +304,7 @@ function buildMsg(){
   const items=Object.values(quote);
   const now=new Date();
   let lines=['[HHC 예상 견적서]',now.toLocaleDateString('ko-KR'),''];
-  items.forEach(i=>{lines.push(`• ${trCached(i.name)} ${fmt(i.price)} × ${i.qty}${i.unit||''} = ${fmt(i.price*i.qty)}`);});
+  items.forEach(i=>{lines.push(`• ${trCached(i.name,'en')} ${fmt(i.price)} × ${i.qty}${i.unit||''} = ${fmt(i.price*i.qty)}`);});
   const total=items.reduce((s,i)=>s+i.price*i.qty,0);
   lines.push('');
   lines.push(`예상 총액: ${fmt(total)}`);
@@ -279,7 +324,7 @@ window.shareKakao=function(){
   }).catch(()=>prompt('복사:',buildMsg()));
 };
 
-renderBody();renderBar();
+applyStaticUI();renderBody();renderBar();
 
 try{
   const app=initializeApp(FIREBASE_CFG);
