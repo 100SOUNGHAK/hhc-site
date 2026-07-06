@@ -238,6 +238,7 @@ textarea{resize:none;line-height:1.5}
       </div>
       <div class="f"><label class="lb">주소</label><textarea id="c-addr" rows="2" placeholder="주소" oninput="App.upPrev()"></textarea></div>
       <div class="f"><label class="lb">사업자등록번호</label><input id="c-biz" placeholder="선택사항" oninput="App.upPrev()"></div>
+      <div class="f"><label class="lb">회원정보</label><select id="c-member" onchange="App.upPrev()"></select></div>
     </div>
     <div class="card cp"><div class="f"><label class="lb">메모</label><textarea id="inv-notes" rows="2" placeholder="고객에게 표시될 메모" oninput="App.upPrev()"></textarea></div></div>
   </div>
@@ -255,7 +256,8 @@ textarea{resize:none;line-height:1.5}
       <div class="cr-row"><span class="cr-label">주차비용</span><input type="number" id="parking-fee" value="0" min="0" step="0.5" class="cr-inp" oninput="App.upPrev()"><span style="font-size:12px;color:var(--gray);flex-shrink:0;padding:0 4px">+금액</span></div>
       <div class="cr-row"><span class="cr-label">최소청구</span><input type="number" id="min-charge" value="0" min="0" step="0.5" class="cr-inp" oninput="App.upPrev()"><span style="font-size:12px;color:var(--gray);flex-shrink:0;padding:0 4px">금액</span></div>
       <div class="cr-row"><span class="cr-label">추가비용</span><input type="number" id="extra-fee" value="0" min="0" step="0.5" class="cr-inp" oninput="App.upPrev()"><span style="font-size:12px;color:var(--gray);flex-shrink:0;padding:0 4px">+금액</span></div>
-      <div class="cr-row"><span class="cr-label" style="color:var(--red)">적립잔액</span><input type="number" id="credit-use" value="0" min="0" step="0.5" class="cr-inp" style="border-color:rgba(239,68,68,.3)" oninput="App.upPrev()"><span style="font-size:12px;color:var(--red);flex-shrink:0;padding:0 4px">-차감</span></div>
+      <div class="cr-row"><span class="cr-label" style="color:var(--red)">회원적립잔액</span><input type="number" id="credit-use" value="0" min="0" step="0.5" class="cr-inp" style="border-color:rgba(239,68,68,.3)" oninput="App.upPrev()"><span style="font-size:12px;color:var(--red);flex-shrink:0;padding:0 4px">-차감</span></div>
+      <div class="cr-row"><span class="cr-label" style="color:var(--red)">직접입력</span><input type="number" id="credit-manual" value="0" min="0" step="0.5" class="cr-inp" style="border-color:rgba(239,68,68,.3)" oninput="App.upPrev()"><span style="font-size:12px;color:var(--red);flex-shrink:0;padding:0 4px">-차감</span></div>
     </div>
     <div class="tbox">
       <div class="tr"><span>서비스 소계</span><span id="sub-d">RM 0.00</span></div>
@@ -344,6 +346,7 @@ textarea{resize:none;line-height:1.5}
     <button class="sob" id="sort-num" onclick="setSort('num')">번호순</button>
     <button class="sob" id="sort-alpha" onclick="setSort('alpha')">가나다순</button>
   </div>
+  <div style="padding:0 16px 10px"><select id="inv-member-filter" style="width:100%"></select></div>
   <div id="stats-bar"></div>
   <div class="card" style="margin:0 16px" id="inv-list"></div>
 </div>
@@ -359,6 +362,7 @@ textarea{resize:none;line-height:1.5}
 <div class="screen" id="screen-customers">
   <div class="sh"><span class="sht">고객 (<span id="cust-count">0</span>명)</span><button class="btn bp bsm" onclick="openCustModal(null)">+ 신규 등록</button></div>
   <div class="sw" style="padding-top:0"><svg class="si" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="cust-search" placeholder="고객명 검색..."></div>
+  <div style="padding:0 16px 10px"><select id="cust-member-filter" style="width:100%"></select></div>
   <div class="card" style="margin:0 16px" id="customers-list"></div>
 </div>
 
@@ -446,6 +450,7 @@ textarea{resize:none;line-height:1.5}
     </div>
     <div class="f" style="margin-top:10px"><label class="lb">주소</label><textarea id="cm-addr" rows="2" placeholder="주소"></textarea></div>
     <div class="f" style="margin-top:10px"><label class="lb">사업자등록번호</label><input id="cm-biz" placeholder="선택사항"></div>
+    <div class="f" style="margin-top:10px"><label class="lb">회원정보</label><select id="cm-member"></select></div>
     <div class="fr c2" style="margin-top:16px">
       <button class="btn bgh bfu" onclick="document.getElementById('cust-modal').classList.add('hidden')">취소</button>
       <button class="btn bg bfu" onclick="saveCust()">✓ 저장</button>
@@ -522,6 +527,12 @@ var FB_CFG={apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",authDomain:"happywo
 var DB=null;
 var ST=null; // Firebase Storage
 var invoices=[],services=[],banks=[],customers=[],lineItems=[];
+var MEMBER_TIERS=['패키지 - 티타늄회원','패키지 - 다이아회원','패키지 - 골드회원','패키지 - 로얄회원','패키지(사업) - 티타늄회원','패키지(사업) - 다이아회원','패키지(사업) - 골드회원','패키지(사업) - 로얄회원'];
+function fillMemberSelect(id,includeAll){
+  var el=document.getElementById(id);if(!el)return;
+  var opts=(includeAll?'<option value="">전체</option>':'<option value="">선택 안 함</option>')+MEMBER_TIERS.map(function(m){return '<option value="'+m+'">'+m+'</option>';}).join('');
+  el.innerHTML=opts;
+}
 var currentFilter='all',currentSort='date',selYear=new Date().getFullYear();
 var viewingId=null,statusEditId=null,currentNav='list';
 var issuer={name:'Happy Works Services Sdn. Bhd.',email:'admin@happyhomecare.com.my',phone:'+60 12-000 0000',addr:'Kuala Lumpur, Malaysia',biz:''};
@@ -708,9 +719,9 @@ App.resetForm=function(){
   var t=today();
   setVal('inv-date',t);setVal('inv-num',genId(t));setVal('inv-due',addDays(t,3));
   setVal('inv-status','billing');setVal('inv-currency','MYR');
-  ['c-name','c-phone','c-email','c-addr','c-biz','inv-notes','inv-terms'].forEach(function(id){setVal(id,'');});
+  ['c-name','c-phone','c-email','c-addr','c-biz','c-member','inv-notes','inv-terms'].forEach(function(id){setVal(id,'');});
   setVal('tax-rate','0');setVal('disc-val','0');setVal('disc-type','pct');
-  setVal('parking-fee','0');setVal('min-charge','0');setVal('extra-fee','0');setVal('credit-use','0');
+  setVal('parking-fee','0');setVal('min-charge','0');setVal('extra-fee','0');setVal('credit-use','0');setVal('credit-manual','0');
   setVal('send-email','');
   var _tmpInv=getInvData();
   var _status=_tmpInv.status||'billing';
@@ -753,9 +764,10 @@ function loadInvToForm(inv){
   setVal('c-email',inv.customer&&inv.customer.email||'');
   setVal('c-addr',inv.customer&&inv.customer.addr||'');
   setVal('c-biz',inv.customer&&inv.customer.biz||'');
+  setVal('c-member',inv.customer&&inv.customer.member||'');
   setVal('tax-rate',inv.taxRate||0);setVal('disc-val',inv.discVal||0);setVal('disc-type',inv.discType||'pct');
   setVal('parking-fee',inv.parkingFee||0);setVal('min-charge',inv.minCharge||0);
-  setVal('extra-fee',inv.extraFee||0);setVal('credit-use',inv.creditUse||0);
+  setVal('extra-fee',inv.extraFee||0);setVal('credit-use',inv.creditUse||0);setVal('credit-manual',inv.creditManual||0);
   setVal('inv-notes',inv.notes||'');setVal('inv-terms',inv.terms||'');
   setVal('send-email',inv.customer&&inv.customer.email||'');
   setVal('wa-num',inv.customer&&inv.customer.phone||'');
@@ -821,6 +833,15 @@ function toggleInvNumEdit(){
 }
 window.toggleInvNumEdit=toggleInvNumEdit;
 function rmLI(id){lineItems=lineItems.filter(function(l){return l.id!==id;});renderLI();App.upPrev();}
+function moveLI(id,dir){
+  var idx=lineItems.findIndex(function(l){return l.id===id;});
+  if(idx<0)return;
+  var newIdx=idx+dir;
+  if(newIdx<0||newIdx>=lineItems.length)return;
+  var tmp=lineItems[idx];lineItems[idx]=lineItems[newIdx];lineItems[newIdx]=tmp;
+  renderLI();App.upPrev();
+}
+window.moveLI=moveLI;
 window.rmLI=rmLI;
 
 function onTopCat(id,cat){
@@ -902,6 +923,10 @@ function renderLI(){
           '<select onchange="onSvcSel(\''+li.id+'\',this.value)" style="font-size:13px"'+(canPickSvc?'':' disabled')+'>'+svcOpts+'</select>'+
           (canPickSvc&&!li.svcId?'<input placeholder="서비스명 직접 입력" value="'+(li.name||'')+'" oninput="onName(\''+li.id+'\',this.value)" style="font-size:13px">':'')+
         '</div>'+
+        '<div style="display:flex;flex-direction:column;gap:2px">'+
+          '<button class="ld" onclick="moveLI(\''+li.id+'\',-1)" style="font-size:11px;padding:2px 6px" title="위로">▲</button>'+
+          '<button class="ld" onclick="moveLI(\''+li.id+'\',1)" style="font-size:11px;padding:2px 6px" title="아래로">▼</button>'+
+        '</div>'+
         '<button class="ld" onclick="rmLI(\''+li.id+'\')">×</button>'+
       '</div>'+
       '<div class="lin">'+
@@ -948,11 +973,12 @@ function calcTotals(inv){
   var minC=parseFloat(inv?inv.minCharge:val('min-charge'))||0;
   var extra=parseFloat(inv?inv.extraFee:val('extra-fee'))||0;
   var credit=parseFloat(inv?inv.creditUse:val('credit-use'))||0;
+  var creditManual=parseFloat(inv?inv.creditManual:val('credit-manual'))||0;
   var tax=taxRate/100*sub;
   var disc=discType==='pct'?discVal/100*sub:discVal;
-  var grand=sub+tax-disc+park+extra-credit;
+  var grand=sub+tax-disc+park+extra-credit-creditManual;
   if(minC>0&&grand<minC)grand=minC;
-  var t={sub:sub,tax:tax,taxRate:taxRate,disc:disc,discVal:discVal,discType:discType,park:park,minC:minC,extra:extra,credit:credit,grand:grand};
+  var t={sub:sub,tax:tax,taxRate:taxRate,disc:disc,discVal:discVal,discType:discType,park:park,minC:minC,extra:extra,credit:credit,creditManual:creditManual,grand:grand};
   if(!inv){
     function sr(id,lbl,dispId,show,label,display){var r=$(id);if(r)r.style.display=show?'flex':'none';if(show){var l=$(lbl);if(l)l.textContent=label;var d=$(dispId);if(d)d.textContent=display;}}
     var sd=$('sub-d');if(sd)sd.textContent=fmtAmt(sub);
@@ -961,7 +987,7 @@ function calcTotals(inv){
     sr('disc-row','disc-lbl','disc-d',discVal>0,'할인'+(discType==='pct'?' '+discVal+'%':''),'-'+fmtAmt(disc));
     sr('park-row',null,'park-d',park>0,null,'+'+fmtAmt(park));
     sr('extra-row',null,'extra-d',extra>0,null,'+'+fmtAmt(extra));
-    sr('credit-row',null,'credit-d',credit>0,null,'-'+fmtAmt(credit));
+    sr('credit-row',null,'credit-d',(credit+creditManual)>0,null,'-'+fmtAmt(credit+creditManual));
     sr('min-row',null,'min-d',minC>0,null,'최소 '+fmtAmt(minC));
   }
   return t;
@@ -975,11 +1001,11 @@ function getInvData(){
   var bankId=val('bank-select');
   var bank=banks.find(function(b){return b.id===bankId;})||null;
   return{id:val('inv-num'),date:val('inv-date'),due:val('inv-due'),status:val('inv-status'),currency:val('inv-currency'),
-    customer:{name:val('c-name'),phone:val('c-phone'),email:val('c-email'),addr:val('c-addr'),biz:val('c-biz')},
+    customer:{name:val('c-name'),phone:val('c-phone'),email:val('c-email'),addr:val('c-addr'),biz:val('c-biz'),member:val('c-member')},
     issuer:JSON.parse(JSON.stringify(issuer)),
     items:JSON.parse(JSON.stringify(lineItems)),
     taxRate:t.taxRate,discVal:t.discVal,discType:t.discType,
-    parkingFee:t.park,minCharge:t.minC,extraFee:t.extra,creditUse:t.credit,
+    parkingFee:t.park,minCharge:t.minC,extraFee:t.extra,creditUse:t.credit,creditManual:t.creditManual,
     notes:val('inv-notes'),terms:val('inv-terms'),bankId:bankId,bankInfo:bank,total:t.grand,_t:t};
 }
 
@@ -1008,6 +1034,7 @@ function buildInvHTML(inv){
   if(t.park>0)chargeRows+='<div class="idtrow"><span>Parking</span><span>+'+fa(t.park)+'</span></div>';
   if(t.extra>0)chargeRows+='<div class="idtrow"><span>Extra</span><span>+'+fa(t.extra)+'</span></div>';
   if(t.credit>0)chargeRows+='<div class="idtrow" style="color:var(--red)"><span>Credit Used</span><span>-'+fa(t.credit)+'</span></div>';
+  if(t.creditManual>0)chargeRows+='<div class="idtrow" style="color:var(--red)"><span>Additional Credit</span><span>-'+fa(t.creditManual)+'</span></div>';
   var bankSec='';
   if(inv.bankInfo){
     var qrHtml=inv.bankInfo.qr?'<img src="'+inv.bankInfo.qr+'" style="width:80px;height:80px;object-fit:contain;display:block;margin-top:8px">':'';
@@ -1049,7 +1076,7 @@ function updateTabBadges(){
   if(bit){var n=lineItems.length;bit.textContent=n;bit.classList.toggle('zero',n===0);}
   var bc=$('badge-charges');
   if(bc){
-    var hasAdj=(parseFloat(val('tax-rate'))||0)>0||(parseFloat(val('disc-val'))||0)>0||(parseFloat(val('parking-fee'))||0)>0||(parseFloat(val('extra-fee'))||0)>0||(parseFloat(val('credit-use'))||0)>0;
+    var hasAdj=(parseFloat(val('tax-rate'))||0)>0||(parseFloat(val('disc-val'))||0)>0||(parseFloat(val('parking-fee'))||0)>0||(parseFloat(val('extra-fee'))||0)>0||(parseFloat(val('credit-use'))||0)>0||(parseFloat(val('credit-manual'))||0)>0;
     bc.textContent=hasAdj?'✓':'–';bc.classList.toggle('zero',!hasAdj);
   }
 }
@@ -1083,7 +1110,7 @@ async function saveInv(){
 function autoSaveCust(c){
   if(!c||!c.name||!DB)return;
   var ex=customers.find(function(x){return x.name===c.name&&x.phone===c.phone;});
-  if(!ex)DB.collection('customers').add({id:'c'+Date.now(),name:c.name,phone:c.phone||'',email:c.email||'',addr:c.addr||'',biz:c.biz||''}).catch(function(){});
+  if(!ex)DB.collection('customers').add({id:'c'+Date.now(),name:c.name,phone:c.phone||'',email:c.email||'',addr:c.addr||'',biz:c.biz||'',member:c.member||''}).catch(function(){});
 }
 
 async function saveAndShare(){
@@ -1253,9 +1280,11 @@ window.setFilter=setFilter;window.setSort=setSort;
 
 function renderList(){
   var q=(val('search-input')||'').toLowerCase();
+  var mf=val('inv-member-filter')||'';
   var filtered=invoices.filter(function(i){
     var mq=!q||(i.id||'').toLowerCase().includes(q)||(i.customer&&i.customer.name||'').toLowerCase().includes(q);
-    return mq&&(currentFilter==='all'||i.status===currentFilter);
+    var mm=!mf||(i.customer&&i.customer.member)===mf;
+    return mq&&mm&&(currentFilter==='all'||i.status===currentFilter);
   });
   filtered.sort(function(a,b){
     if(currentSort==='date')return(b.date||'').localeCompare(a.date||'');
@@ -1278,10 +1307,11 @@ function renderList(){
     var st=inv.status||'billing';
     var stColor={billing:'var(--amber)',paid:'var(--green)',overdue:'var(--red)'};
     var stBg={billing:'#fef3c7',paid:'#d1fae5',overdue:'#fee2e2'};
+    var memberBadge=(inv.customer&&inv.customer.member)?'<div style="display:inline-block;margin-top:2px;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:600;background:var(--il);color:var(--indigo)">'+inv.customer.member+'</div>':'';
     return '<div class="ir" onclick="openInvView(\''+eid+'\')">'+
       '<div class="iic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>'+
       '<div class="ii"><div class="iname">'+(inv.customer&&inv.customer.name||'(이름 없음)')+'</div>'+
-      '<div class="isub"><span style="font-family:monospace;font-size:10px">'+(inv.id||'')+'</span> · '+fmtDate(inv.date)+'</div></div>'+
+      '<div class="isub"><span style="font-family:monospace;font-size:10px">'+(inv.id||'')+'</span> · '+fmtDate(inv.date)+'</div>'+memberBadge+'</div>'+
       '<div class="irt">'+
         '<div class="iamt">'+fmtAmt(inv.total||0,inv.currency)+'</div>'+
         '<select onclick="event.stopPropagation()" onchange="quickStatusChange(\''+eid+'\',this.value)" style="font-size:11px;padding:3px 6px;border-radius:12px;border:1px solid '+(stColor[st]||'#ccc')+';background:'+(stBg[st]||'#f9f9f9')+';color:'+(stColor[st]||'#333')+';font-weight:600;cursor:pointer">'+
@@ -1409,6 +1439,7 @@ function openCustModal(c){
   setVal('cm-id',isNew?'c'+Date.now():c.id);
   setVal('cm-name',isNew?'':c.name||'');setVal('cm-phone',isNew?'':c.phone||'');
   setVal('cm-email',isNew?'':c.email||'');setVal('cm-addr',isNew?'':c.addr||'');setVal('cm-biz',isNew?'':c.biz||'');
+  setVal('cm-member',isNew?'':c.member||'');
   $('cust-modal').classList.remove('hidden');
   // Focus name field after modal opens
   setTimeout(function(){var n=$('cm-name');if(n)n.focus();},100);
@@ -1417,14 +1448,14 @@ window.openCustModal=openCustModal;
 
 async function saveCust(){
   var id=val('cm-id');
-  var data={id:id,name:val('cm-name'),phone:val('cm-phone'),email:val('cm-email'),addr:val('cm-addr'),biz:val('cm-biz')};
+  var data={id:id,name:val('cm-name'),phone:val('cm-phone'),email:val('cm-email'),addr:val('cm-addr'),biz:val('cm-biz'),member:val('cm-member')};
   if(!data.name){showToast('이름을 입력해주세요.');return;}
   showLoad('저장 중...');
   try{
     var ex=customers.find(function(c){return c.id===id;});
     if(DB){
       if(ex&&ex._docId){
-        var upd={name:data.name,phone:data.phone,email:data.email,addr:data.addr,biz:data.biz};
+        var upd={name:data.name,phone:data.phone,email:data.email,addr:data.addr,biz:data.biz,member:data.member};
         await DB.collection('customers').doc(ex._docId).update(upd);
       }else{
         var ref=await DB.collection('customers').add(data);
@@ -1473,13 +1504,15 @@ function renderCusts(){
   var el=$('customers-list');if(!el)return;
   var cnt=$('cust-count');if(cnt)cnt.textContent=customers.length;
   var q=(val('cust-search')||'').toLowerCase();
-  var f=customers.filter(function(c){return !q||(c.name||'').toLowerCase().includes(q);});
+  var mf=val('cust-member-filter')||'';
+  var f=customers.filter(function(c){return(!q||(c.name||'').toLowerCase().includes(q))&&(!mf||c.member===mf);});
   f.sort(function(a,b){return(a.name||'').localeCompare(b.name||'');});
   if(!f.length){el.innerHTML='<div class="empty"><div class="et">고객 없음</div></div>';return;}
   el.innerHTML=f.map(function(c){
+    var memberBadge=c.member?'<div style="display:inline-block;margin-top:3px;padding:1px 8px;border-radius:20px;font-size:10.5px;font-weight:600;background:var(--il);color:var(--indigo)">'+c.member+'</div>':'';
     return '<div class="cr">'+
       '<div class="cav">'+(c.name||'?').slice(0,2).toUpperCase()+'</div>'+
-      '<div class="ci"><div class="cn">'+(c.name||'')+'</div><div class="cs">'+(c.phone||'')+(c.email?' · '+c.email:'')+'</div>'+(c.addr?'<div class="cs">'+c.addr+'</div>':'')+'</div>'+
+      '<div class="ci"><div class="cn">'+(c.name||'')+'</div><div class="cs">'+(c.phone||'')+(c.email?' · '+c.email:'')+'</div>'+(c.addr?'<div class="cs">'+c.addr+'</div>':'')+memberBadge+'</div>'+
       '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'+
         '<button class="btn bxs bp" onclick="newInvFromCust(\''+c.id+'\')">인보이스</button>'+
         '<button class="btn bxs bgh" onclick="openCustModal(customers.find(function(x){return x.id===\''+c.id+'\';}))">수정</button>'+
@@ -1490,7 +1523,7 @@ function renderCusts(){
 }
 function newInvFromCust(id){
   var c=customers.find(function(x){return x.id===id;});if(!c)return;
-  App.resetForm();setVal('c-name',c.name||'');setVal('c-phone',c.phone||'');setVal('c-email',c.email||'');setVal('c-addr',c.addr||'');setVal('c-biz',c.biz||'');
+  App.resetForm();setVal('c-name',c.name||'');setVal('c-phone',c.phone||'');setVal('c-email',c.email||'');setVal('c-addr',c.addr||'');setVal('c-biz',c.biz||'');setVal('c-member',c.member||'');
   Nav('new');showToast('고객 정보 불러옴 ✓');
 }
 async function delCust(id){
@@ -2029,7 +2062,9 @@ function bindAll(){
   $('csv-btn').addEventListener('click',expCSV);
   $('add-bank-btn').addEventListener('click',addBank);
   $('search-input').addEventListener('input',renderList);
+  $('inv-member-filter').addEventListener('change',renderList);
   $('cust-search').addEventListener('input',renderCusts);
+  $('cust-member-filter').addEventListener('change',renderCusts);
   $('cp-search').addEventListener('input',function(){renderCustPicker(this.value);});
   var sas=$('sas-btn');if(sas)sas.addEventListener('click',saveAndShare);
   var pdfBtn=$('pdf-save-btn');
@@ -2053,8 +2088,8 @@ function bindAll(){
     if(inv){loadInvToForm(inv);$('inv-view-modal').classList.add('hidden');}
   });
   // Live preview inputs
-  ['inv-date','inv-due','inv-status','inv-currency','c-name','c-phone','c-email','c-addr','c-biz',
-   'inv-notes','inv-terms','tax-rate','disc-val','disc-type','parking-fee','min-charge','extra-fee','credit-use'].forEach(function(id){
+  ['inv-date','inv-due','inv-status','inv-currency','c-name','c-phone','c-email','c-addr','c-biz','c-member',
+   'inv-notes','inv-terms','tax-rate','disc-val','disc-type','parking-fee','min-charge','extra-fee','credit-use','credit-manual'].forEach(function(id){
     var el=$(id);if(el)el.addEventListener('input',App.upPrev);
   });
 }
@@ -2077,6 +2112,7 @@ async function init(){
   // 이미지 데이터 로드
   loadImgData();
   // 즉시 렌더링
+  fillMemberSelect('c-member',false);fillMemberSelect('cm-member',false);fillMemberSelect('cust-member-filter',true);fillMemberSelect('inv-member-filter',true);
   renderIssView();App.resetForm();renderSvcs();renderBanks();renderBankSel();renderCusts();renderList();renderYearTabs();
 
   // Firebase 연결
