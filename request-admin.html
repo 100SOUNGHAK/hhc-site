@@ -84,7 +84,7 @@ input,select,textarea,button{font-family:inherit;font-size:14px}
 .app-body.active{display:block}
 
 /* STATS */
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
 .stat{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;text-align:center}
 .stat-val{font-family:'Syne',sans-serif;font-size:24px;font-weight:700;color:var(--navy);line-height:1}
 .stat-val.amber{color:var(--amber)}
@@ -105,6 +105,8 @@ input,select,textarea,button{font-family:inherit;font-size:14px}
 .req-card:hover{border-color:var(--teal);box-shadow:0 2px 12px rgba(13,148,136,.08)}
 .req-card.pending{border-left:3px solid var(--amber)}
 .req-card.completed{border-left:3px solid var(--green);opacity:.85}
+.req-card.urgent{border-left:3px solid var(--red);background:#FFFBFA}
+.rc-urgent-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;background:var(--red-bg);color:var(--red);margin-left:6px}
 .rc-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;gap:8px}
 .rc-info{}
 .rc-name{font-size:14px;font-weight:700;color:var(--text)}
@@ -157,7 +159,7 @@ input,select,textarea,button{font-family:inherit;font-size:14px}
 .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 18px;border-radius:var(--radius);font-size:13px;font-weight:500;z-index:9999;box-shadow:var(--shadow-lg);display:none}
 
 @media(max-width:600px){
-  .stats{grid-template-columns:repeat(3,1fr)}
+  .stats{grid-template-columns:repeat(2,1fr)}
   .stat-val{font-size:18px}
   .rc-actions{gap:4px}
   .btn-sm{padding:5px 8px;font-size:11px}
@@ -223,6 +225,7 @@ input,select,textarea,button{font-family:inherit;font-size:14px}
     <div class="stat"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">전체 의뢰</div></div>
     <div class="stat"><div class="stat-val amber" id="stat-pending">0</div><div class="stat-lbl">대기중</div></div>
     <div class="stat"><div class="stat-val green" id="stat-done">0</div><div class="stat-lbl">접수완료</div></div>
+    <div class="stat"><div class="stat-val" id="stat-urgent" style="color:var(--red)">0</div><div class="stat-lbl">24h 경과</div></div>
   </div>
 
   <!-- CONTROLS -->
@@ -341,8 +344,7 @@ document.getElementById('btn-logout').addEventListener('click',()=>{setAuth(fals
 
 // ── AUTO LOGIN ──
 (async()=>{
-  if(checkAuth()){showLoading(true);const ok=await connectFirebase();showLoading(false);if(ok){showScreen('app');}else{setAuth(false);showScreen('login');}}
-  else{showScreen('login');}
+  showLoading(true);const ok=await connectFirebase();showLoading(false);if(ok){setAuth(true);showScreen('app');}else{showScreen('login');}
 })();
 
 // ── STATS ──
@@ -350,6 +352,7 @@ function updateStats(){
   document.getElementById('stat-total').textContent=allRequests.length;
   document.getElementById('stat-pending').textContent=allRequests.filter(r=>r.status==='pending').length;
   document.getElementById('stat-done').textContent=allRequests.filter(r=>r.status==='completed').length;
+  document.getElementById('stat-urgent').textContent=allRequests.filter(r=>r.status==='pending'&&r.submitted_at&&(Date.now()-new Date(r.submitted_at).getTime())/36e5>24).length;
 }
 
 // ── RENDER LIST ──
@@ -383,16 +386,20 @@ function renderList(){
     const statusCls=isPending?'pending':'completed';
     const langBadge=r.lang==='en'?'<span class="rc-lang">EN</span>':'<span class="rc-lang">KO</span>';
     const date=r.submitted_at?new Date(r.submitted_at).toLocaleString('ko-KR'):'—';
+    const hoursAgo=r.submitted_at?(Date.now()-new Date(r.submitted_at).getTime())/36e5:0;
+    const isUrgent=isPending&&hoursAgo>24;
+    const cardCls=isUrgent?'urgent':statusCls;
+    const urgentBadge=isUrgent?'<span class="rc-urgent-badge">⚠️ 24시간 경과</span>':'';
 
     const itemsHtml=items.map(it=>{
       const svc=it.svc?` · ${it.svc}`:'';
       return `<div class="rc-item-row"><span class="rc-item-dot">•</span><span>${it.cat}${svc} × ${it.qty}</span></div>`;
     }).join('');
 
-    return `<div class="req-card ${statusCls}" data-id="${r.__id}">
+    return `<div class="req-card ${cardCls}" data-id="${r.__id}">
       <div class="rc-top">
         <div class="rc-info">
-          <div class="rc-name">${r.condo_name||r.condo||'—'}${langBadge}</div>
+          <div class="rc-name">${r.condo_name||r.condo||'—'}${langBadge}${urgentBadge}</div>
           ${r.condo_unit?`<div class="rc-unit">🏠 ${r.condo_unit}</div>`:''}
           <div class="rc-phone">📞 ${r.phone||'—'}</div>
         </div>
