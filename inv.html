@@ -51,6 +51,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .total-grand{display:flex;justify-content:space-between;align-items:center;background:#0F1729;border-radius:8px;padding:13px 15px;margin-top:8px}
 .total-grand span:first-child{font-size:12px;color:rgba(255,255,255,.6)}
 .total-grand span:last-child{font-size:19px;font-weight:700;color:#fff}
+.total-balance{display:flex;justify-content:space-between;align-items:center;background:#FEF3C7;border-radius:8px;padding:13px 15px;margin-top:8px}
+.total-balance span:first-child{font-size:12px;color:#92600A}
+.total-balance span:last-child{font-size:19px;font-weight:700;color:#92600A}
 .footer-cols{display:flex;gap:20px;padding-top:20px;border-top:0.5px solid #e2e8f0}
 .footer-col{flex:1}
 .footer-col.r{text-align:right}
@@ -144,13 +147,14 @@ function calcTotals(inv){
   var minChg=parseFloat(inv.minCharge)||0;
   var extraFee=parseFloat(inv.extraFee)||0;
   var creditUse=parseFloat(inv.creditUse)||0;
-  var creditManual=parseFloat(inv.creditManual)||0;
+  var paidAmount=parseFloat(inv.paidAmount)||0;
   var tax=taxRate/100*sub;
   var disc=discType==='pct'?discVal/100*sub:discVal;
-  var grand=sub+tax-disc+parkFee+extraFee-creditUse-creditManual;
+  var grand=sub+tax-disc+parkFee+extraFee-creditUse;
   if(minChg>0&&grand<minChg)grand=minChg;
+  var balance=grand-paidAmount;
   return{sub:sub,tax:tax,taxRate:taxRate,disc:disc,discVal:discVal,discType:discType,
-    parkFee:parkFee,minChg:minChg,extraFee:extraFee,creditUse:creditUse,creditManual:creditManual,grand:grand};
+    parkFee:parkFee,minChg:minChg,extraFee:extraFee,creditUse:creditUse,paidAmount:paidAmount,balance:balance,grand:grand};
 }
 
 function renderInvoice(inv){
@@ -201,8 +205,6 @@ function renderInvoice(inv){
     chargeRows+='<div class="total-row add"><span>Additional Fee</span><span>+'+fa(t.extraFee)+'</span></div>';
   if(t.creditUse>0)
     chargeRows+='<div class="total-row deduct"><span>Member Credit</span><span>− '+fa(t.creditUse)+'</span></div>';
-  if(t.creditManual>0)
-    chargeRows+='<div class="total-row deduct"><span>Additional Credit</span><span>− '+fa(t.creditManual)+'</span></div>';
 
   // Bank / payment section
   var bankSec='';
@@ -279,6 +281,7 @@ function renderInvoice(inv){
         '<div class="total-row"><span>Subtotal</span><span>'+fa(t.sub)+'</span></div>'+
         chargeRows+
         '<div class="total-grand"><span>Total ('+cur+')</span><span>'+fa(t.grand)+'</span></div>'+
+        (t.paidAmount>0?'<div class="total-row" style="color:#16a34a"><span>Paid (Partial)</span><span>− '+fa(t.paidAmount)+'</span></div><div class="total-balance"><span>Balance Remaining</span><span>'+fa(t.balance)+'</span></div>':'')+
       '</div></div>'+
       '<div class="footer-cols">'+bankSec+footerSec+'</div>'+
       signSec+
