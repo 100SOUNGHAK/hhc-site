@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<title>HHC 세탁기/건조기 점검보고서</title>
+<style>
+
+:root{
+  --page:#EDF0F6; --ink:#0E1B34; --ink-soft:#4A5573; --ink-mute:#8792A8;
+  --navy:#0F1E3D; --navy-2:#16294D; --teal:#0FB5A4; --teal-d:#0D9488;
+  --line:#E4E9F2; --line-2:#EEF2F8; --card:#FFFFFF; --soft:#F5F7FC;
+  --ok:#0F9D6E; --ok-bg:#E8F6EF; --ok-bd:#BFE9D5;
+  --warn:#C9820C; --warn-bg:#FBF2DE; --warn-bd:#F2DCA6;
+  --bad:#D64545; --bad-bg:#FBE9E9; --bad-bd:#F3C9C9;
+  --blue:#2C5BD6; --blue-bg:#EAF0FE; --blue-bd:#CBDBFB;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--page);color:var(--ink);-webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+@media print{
+  body{background:#fff}
+  .top-bar,.btn-pdf{display:none!important}
+  .sec,.card,.cover,.rpt-footer{break-inside:avoid;box-shadow:none!important}
+  .ptbl tr,.diag-block{break-inside:avoid}
+  @page{margin:12mm;size:A4}
+}
+
+.top-bar{background:rgba(255,255,255,.85);backdrop-filter:saturate(1.2) blur(8px);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;padding:9px 16px;position:sticky;top:0;z-index:100;justify-content:flex-end}
+.lang-btn{padding:5px 13px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink-mute);transition:all .15s}
+.lang-btn.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+
+.page{max-width:720px;margin:0 auto;padding:16px 16px 40px}
+
+/* 커버 */
+.cover{background:radial-gradient(120% 120% at 85% -10%,#1B3363 0%,var(--navy) 55%);border-radius:20px;overflow:hidden;margin:16px auto 14px;max-width:720px;position:relative;box-shadow:0 20px 50px -22px rgba(15,30,61,.55)}
+.cover::before{content:'';position:absolute;top:-70px;right:-60px;width:240px;height:240px;border-radius:50%;border:44px solid rgba(15,181,164,.10)}
+.cover::after{content:'';position:absolute;bottom:40px;left:-50px;width:150px;height:150px;border-radius:50%;border:28px solid rgba(255,255,255,.035)}
+.cv-top{padding:30px 28px 26px;position:relative;z-index:1}
+.cv-brand{display:flex;align-items:center;gap:11px;margin-bottom:34px}
+.cover-logo-icon{width:38px;height:38px;background:linear-gradient(160deg,var(--teal),var(--teal-d));border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;box-shadow:0 6px 16px -6px rgba(15,181,164,.7)}
+.cover-logo-name{font-size:10px;color:rgba(255,255,255,.55);line-height:1.55;font-weight:600}
+.cover-logo-name span{color:rgba(255,255,255,.32);font-weight:500;font-size:9px}
+.cover-tag{font-size:10px;color:var(--teal);letter-spacing:.22em;text-transform:uppercase;font-weight:700;margin-bottom:14px;display:block}
+.cover-h1{font-size:32px;font-weight:700;color:#fff;line-height:1.2;letter-spacing:-.02em}
+.cv-divider{display:flex;align-items:center;gap:10px;margin:18px 0 16px}
+.cv-div-dot{width:7px;height:7px;border-radius:50%;background:var(--teal);flex-shrink:0}
+.cv-div-line{flex:1;height:1px;background:linear-gradient(90deg,rgba(15,181,164,.5),rgba(15,181,164,0))}
+.cover-desc{font-size:11.5px;color:rgba(255,255,255,.5);line-height:1.85;margin-bottom:24px}
+.cover-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cover-cell{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:11px 14px}
+.cover-cell-wide{grid-column:span 2}
+.cc-label{font-size:8.5px;color:rgba(255,255,255,.4);letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px;font-weight:600}
+.cc-val{font-size:13.5px;font-weight:600;color:#fff}
+.cv-footer{background:rgba(0,0,0,.22);padding:13px 28px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(255,255,255,.06);position:relative;z-index:1}
+.cv-brand-name{font-size:11px;font-weight:700;color:rgba(255,255,255,.85);letter-spacing:.08em}
+.cv-stamp{font-size:9px;color:rgba(255,255,255,.3);letter-spacing:.18em;font-weight:600}
+
+/* 카드/섹션 */
+.card,.sec{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:13px;box-shadow:0 1px 2px rgba(16,30,60,.03),0 10px 26px -20px rgba(16,30,60,.22)}
+.sec-hdr{display:flex;align-items:center;gap:11px;padding:15px 18px;border-bottom:1px solid var(--line-2)}
+.sec-num{width:28px;height:28px;border-radius:9px;background:var(--navy);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--teal);flex-shrink:0}
+.sec-title{font-size:14px;font-weight:700;color:var(--ink);flex:1;letter-spacing:-.01em}
+.sec-body{padding:16px 18px}
+
+.ov-desc{font-size:12.5px;color:var(--ink-soft);line-height:1.9;margin-bottom:14px}
+.ov-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ov-cell{background:var(--soft);border:1px solid var(--line-2);border-radius:10px;padding:11px 13px}
+.ov-label{font-size:9px;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;font-weight:600}
+.ov-val{font-size:12px;font-weight:600;color:var(--ink)}
+
+/* 체크리스트 */
+.check-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--line-2)}
+.check-row:last-child{border-bottom:none}
+.check-label{font-size:13px;color:var(--ink);font-weight:500}
+.check-tag{display:inline-flex;align-items:center;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700}
+.check-ok{background:var(--ok-bg);color:var(--ok)}
+.check-bad{background:var(--bad-bg);color:var(--bad)}
+
+/* 고장진단 */
+.diag-block{margin-bottom:14px}
+.diag-block:last-child{margin-bottom:0}
+.diag-num{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:6px;background:var(--soft);color:var(--teal-d);font-size:10px;font-weight:800;margin-right:7px}
+.diag-lbl{font-size:11.5px;font-weight:700;color:var(--navy);display:flex;align-items:center;margin-bottom:7px}
+.diag-txt{font-size:12.5px;color:var(--ink-soft);line-height:1.85;background:var(--soft);border-radius:10px;padding:12px 14px;border-left:3px solid var(--teal)}
+
+/* 사진 */
+.photo-record-sec{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:13px;box-shadow:0 1px 2px rgba(16,30,60,.03),0 10px 26px -20px rgba(16,30,60,.22)}
+.photo-box{background:var(--soft);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.photo-box img{width:100%;object-fit:cover;display:block}
+.photo-section-hdr{display:flex;align-items:center;gap:9px;padding:12px 16px 10px;border-bottom:1px solid var(--line-2)}
+.psn{width:22px;height:22px;border-radius:6px;background:var(--navy);color:var(--teal);font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pst{font-size:12.5px;font-weight:600;color:var(--navy)}
+.clean-col-hdr{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--line-2)}
+.clean-col-lbl{padding:8px 14px;font-size:10.5px;font-weight:700;display:flex;align-items:center;gap:6px}
+.clean-col-lbl.before{color:var(--bad);border-right:1px solid var(--line-2)}
+.clean-col-lbl.after{color:var(--ok)}
+.empty-note{padding:16px;text-align:center;color:var(--ink-mute);font-size:11.5px}
+
+/* 푸터 */
+.rpt-footer{background:var(--navy);border-radius:16px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}
+.footer-co{font-size:10px;color:rgba(255,255,255,.5);line-height:1.7}
+
+.btn-pdf{position:fixed;bottom:22px;right:18px;padding:12px 20px;background:var(--navy);color:#fff;border:none;border-radius:30px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 10px 26px -8px rgba(15,30,61,.5);z-index:200;display:flex;align-items:center;gap:6px}
+.btn-pdf:hover{background:var(--navy-2)}
+
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <button class="lang-btn on" id="lang-ko" onclick="setLang('ko')">한국어</button>
+  <button class="lang-btn" id="lang-en" onclick="setLang('en')">English</button>
+</div>
+
+<div class="page">
+
+  <!-- 표지 -->
+  <div class="cover">
+    <div class="cv-top">
+      <div class="cv-brand">
+        <div class="cover-logo-icon">H</div>
+        <div class="cover-logo-name">해피홈케어<br><span>HAPPY WORKS SERVICES SDN. BHD.</span></div>
+      </div>
+      <div class="cover-tag" id="cover-tag">세탁기/건조기 점검보고서</div>
+      <div class="cover-h1" id="cover-h1">세탁기/건조기<br>점검보고서</div>
+      <div class="cv-divider"><span class="cv-div-dot"></span><span class="cv-div-line"></span></div>
+      <div class="cover-desc" id="cover-desc">제품 점검 체크리스트 및 고장 진단 결과를 정리한<br>기술 보고서입니다.</div>
+      <div class="cover-grid">
+        <div class="cover-cell"><div class="cc-label" id="lbl-report-num">보고서 번호</div><div class="cc-val" id="r-num">—</div></div>
+        <div class="cover-cell"><div class="cc-label" id="lbl-date">점검일자</div><div class="cc-val" id="r-date">—</div></div>
+        <div class="cover-cell"><div class="cc-label" id="lbl-client">고객명</div><div class="cc-val" id="r-client">—</div></div>
+        <div class="cover-cell"><div class="cc-label" id="lbl-ptype">제품 유형</div><div class="cc-val" id="r-ptype">—</div></div>
+        <div class="cover-cell cover-cell-wide"><div class="cc-label" id="lbl-model">모델명</div><div class="cc-val" id="r-model">—</div></div>
+      </div>
+    </div>
+    <div class="cv-footer">
+      <div class="cv-brand-name">HAPPY HOME CARE</div>
+      <div class="cv-stamp">WASHER / DRYER REPORT</div>
+    </div>
+  </div>
+
+  <!-- 01 점검 개요 -->
+  <div class="sec">
+    <div class="sec-hdr"><div class="sec-num">01</div><div class="sec-title" id="sec-overview">점검 개요</div></div>
+    <div class="sec-body">
+      <div class="ov-desc" id="r-overview-desc">본 보고서는 세탁기/건조기 제품에 대한 작동 점검 및 고장 진단 결과를 정리한 내용입니다.</div>
+      <div class="ov-grid">
+        <div class="ov-cell"><div class="ov-label" id="lbl-addr">점검 장소</div><div class="ov-val" id="r-addr">—</div></div>
+        <div class="ov-cell"><div class="ov-label" id="lbl-std">적용 기준</div><div class="ov-val" id="r-std">제조사 정비기준</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 02 점검 체크리스트 -->
+  <div class="sec">
+    <div class="sec-hdr"><div class="sec-num">02</div><div class="sec-title" id="sec-checklist">점검 체크리스트</div></div>
+    <div class="sec-body" id="checklist-body"></div>
+  </div>
+
+  <!-- 03 고장 진단 -->
+  <div class="sec">
+    <div class="sec-hdr"><div class="sec-num">03</div><div class="sec-title" id="sec-diag">고장 진단</div></div>
+    <div class="sec-body">
+      <div class="diag-block">
+        <div class="diag-lbl"><span class="diag-num">1</span><span id="lbl-diag1">점검 결과</span></div>
+        <div class="diag-txt" id="r-diag1">—</div>
+      </div>
+      <div class="diag-block">
+        <div class="diag-lbl"><span class="diag-num">2</span><span id="lbl-diag2">원인 분석 (분해점검)</span></div>
+        <div class="diag-txt" id="r-diag2">—</div>
+      </div>
+      <div class="diag-block">
+        <div class="diag-lbl"><span class="diag-num">3</span><span id="lbl-diag3">조치 결과 및 권장사항</span></div>
+        <div class="diag-txt" id="r-diag3">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 푸터 -->
+  <div class="rpt-footer">
+    <div class="footer-co">HAPPY WORKS SERVICES SDN.BHD. (1278908-M)<br>📞 +60172472774</div>
+  </div>
+
+  <!-- 사진 기록 -->
+  <div class="sec photo-record-sec" id="photo-record-sec" style="margin-top:12px">
+    <div class="sec-hdr">
+      <div class="sec-num" style="font-size:9px;background:#1e40af;color:#fff">사진</div>
+      <div class="sec-title" id="photo-record-title">점검 사진 기록</div>
+    </div>
+
+    <!-- 문제 사진 -->
+    <div id="problem-photo-wrap" style="display:none">
+      <div class="photo-section-hdr"><div class="psn">1</div><div class="pst" id="photo-problem-title">문제 사진 · Problem Photos</div></div>
+      <div style="padding:10px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px" id="problem-photos-grid"></div>
+    </div>
+
+    <!-- 세척 전/후 -->
+    <div id="before-after-wrap" style="display:none">
+      <div style="height:0.5px;background:#f0f0f0"></div>
+      <div class="photo-section-hdr"><div class="psn">2</div><div class="pst" id="photo-ba-title">세척 전 / 후 사진 · Before / After</div></div>
+      <div class="clean-col-hdr">
+        <div class="clean-col-lbl before"><span style="width:3px;height:13px;background:#DC2626;border-radius:2px;flex-shrink:0;display:inline-block"></span><span id="lbl-before">세척 전 · Before</span></div>
+        <div class="clean-col-lbl after"><span style="width:3px;height:13px;background:#059669;border-radius:2px;flex-shrink:0;display:inline-block"></span><span id="lbl-after">세척 후 · After</span></div>
+      </div>
+      <div id="ba-photos-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:0"></div>
+    </div>
+
+    <!-- 기타 사진 -->
+    <div id="etc-photo-wrap" style="display:none">
+      <div style="height:0.5px;background:#f0f0f0"></div>
+      <div class="photo-section-hdr"><div class="psn">3</div><div class="pst" id="photo-etc-title">기타 사진 · Other Photos</div></div>
+      <div style="padding:10px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px" id="etc-photos-grid"></div>
+    </div>
+  </div>
+
+</div><!-- /.page -->
+
+<button class="btn-pdf" onclick="window.print()" id="btn-pdf">⬇️ PDF 저장</button>
+
+<script>
+var currentLang='ko';
+var PTYPE_LBL={ko:{top:'통돌이',front:'드럼',dryer:'건조기'},en:{top:'Top Load',front:'Front Load',dryer:'Dryer'}};
+var T={
+  ko:{
+    'cover-tag':'세탁기/건조기 점검보고서','cover-h1':'세탁기/건조기<br>점검보고서',
+    'cover-desc':'제품 점검 체크리스트 및 고장 진단 결과를 정리한<br>기술 보고서입니다.',
+    'lbl-report-num':'보고서 번호','lbl-date':'점검일자','lbl-client':'고객명','lbl-ptype':'제품 유형','lbl-model':'모델명',
+    'sec-overview':'점검 개요','lbl-addr':'점검 장소','lbl-std':'적용 기준','r-std':'제조사 정비기준',
+    'r-overview-desc':'본 보고서는 세탁기/건조기 제품에 대한 작동 점검 및 고장 진단 결과를 정리한 내용입니다.',
+    'sec-checklist':'점검 체크리스트',
+    'sec-diag':'고장 진단','lbl-diag1':'점검 결과','lbl-diag2':'원인 분석 (분해점검)','lbl-diag3':'조치 결과 및 권장사항',
+    'photo-record-title':'점검 사진 기록','photo-problem-title':'문제 사진 · Problem Photos',
+    'photo-ba-title':'세척 전 / 후 사진 · Before / After','lbl-before':'세척 전 · Before','lbl-after':'세척 후 · After',
+    'photo-etc-title':'기타 사진 · Other Photos',
+    checkOk:'정상',checkBad:'이상'
+  },
+  en:{
+    'cover-tag':'Washer / Dryer Inspection Report','cover-h1':'Washer / Dryer<br>Inspection Report',
+    'cover-desc':'A technical report summarizing the inspection checklist<br>and failure diagnosis results.',
+    'lbl-report-num':'Report No.','lbl-date':'Inspection Date','lbl-client':'Client','lbl-ptype':'Product Type','lbl-model':'Model',
+    'sec-overview':'Inspection Overview','lbl-addr':'Location','lbl-std':'Standard','r-std':'Manufacturer maintenance guidelines',
+    'r-overview-desc':'This report summarizes the operational check and failure diagnosis results for the washer/dryer unit.',
+    'sec-checklist':'Inspection Checklist',
+    'sec-diag':'Failure Diagnosis','lbl-diag1':'Inspection Result','lbl-diag2':'Root Cause Analysis (Disassembly)','lbl-diag3':'Action Taken & Recommendation',
+    'photo-record-title':'Inspection Photo Records','photo-problem-title':'Problem Photos',
+    'photo-ba-title':'Before / After Photos','lbl-before':'Before','lbl-after':'After',
+    'photo-etc-title':'Other Photos',
+    checkOk:'Normal',checkBad:'Fault'
+  }
+};
+var CHECK_LBL_EN={
+  power:'Power & Operation',cycle:'Running an individual cycle',
+  vibration:'Vibration intensity',noise:'Noise intensity',other:'Other abnormal conditions'
+};
+
+function setLang(lang){
+  currentLang=lang;
+  document.getElementById('lang-ko').className='lang-btn'+(lang==='ko'?' on':'');
+  document.getElementById('lang-en').className='lang-btn'+(lang==='en'?' on':'');
+  var t=T[lang];
+  Object.keys(t).forEach(function(k){
+    if(typeof t[k]==='object')return;
+    var el=document.getElementById(k);
+    if(el){
+      if(el.tagName==='DIV'||el.tagName==='SPAN'){el.innerHTML=t[k];}
+      else{el.textContent=t[k];}
+    }
+  });
+  if(window._reportData)renderReport(window._reportData);
+}
+window.setLang=setLang;
+
+window.renderReport=function renderReport(data){
+  if(!data)return;
+  window._reportData=data;
+  var isEn=currentLang==='en';
+  var t=T[currentLang];
+  window._trCache=window._trCache||{};
+  function autoTr(ko,en,applyFn){
+    if(!isEn){applyFn(ko||'');return;}
+    if(en){applyFn(en);return;}
+    if(!ko){applyFn('');return;}
+    if(window._trCache[ko]){applyFn(window._trCache[ko]);return;}
+    applyFn(ko);
+    fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q='+encodeURIComponent(ko))
+      .then(function(r){return r.json();})
+      .then(function(j){
+        var tr=(j&&j[0])?j[0].map(function(seg){return seg[0];}).join(''):ko;
+        window._trCache[ko]=tr;
+        if(currentLang==='en')applyFn(tr);
+      }).catch(function(){});
+  }
+
+  // 표지
+  var dateStr=(data.date||'').replace(/-/g,'.');
+  document.getElementById('r-num').textContent='HHC-WSH-'+dateStr.replace(/\./g,'').slice(2)+'-001';
+  document.getElementById('r-date').textContent=dateStr||'—';
+  document.getElementById('r-client').textContent=data.client||'—';
+  document.getElementById('r-ptype').textContent=PTYPE_LBL[currentLang][data.productType||'top']||'—';
+  document.getElementById('r-model').textContent=data.model||'—';
+  document.getElementById('r-addr').textContent=(data.addr&&data.addr.trim())?data.addr:'—';
+
+  // 체크리스트
+  var cbody=document.getElementById('checklist-body');
+  var list=data.checklist||[];
+  cbody.innerHTML=list.length?list.map(function(c){
+    var label=isEn?(CHECK_LBL_EN[c.key]||c.label):c.label;
+    var bad=c.result==='bad';
+    return '<div class="check-row"><span class="check-label">'+label+'</span><span class="check-tag '+(bad?'check-bad':'check-ok')+'">'+(bad?t.checkBad:t.checkOk)+'</span></div>';
+  }).join(''):'<div class="empty-note">'+(isEn?'No checklist records':'체크리스트 기록 없음')+'</div>';
+
+  // 고장진단
+  autoTr(data.diag1,data.diag1_en,function(v){document.getElementById('r-diag1').textContent=v||'—';});
+  autoTr(data.diag2,data.diag2_en,function(v){document.getElementById('r-diag2').textContent=v||'—';});
+  autoTr(data.diag3,data.diag3_en,function(v){document.getElementById('r-diag3').textContent=v||'—';});
+
+  // 사진: 문제 사진
+  var problemPhotos=data.wProblemPhotos||[];
+  var pWrap=document.getElementById('problem-photo-wrap');
+  if(problemPhotos.length){
+    pWrap.style.display='block';
+    document.getElementById('problem-photos-grid').innerHTML=problemPhotos.map(function(u){return '<div class="photo-box"><img src="'+u+'"></div>';}).join('');
+  }else{pWrap.style.display='none';}
+
+  // 사진: 세척 전/후
+  var before=data.wBeforePhotos||[],after=data.wAfterPhotos||[];
+  var baWrap=document.getElementById('before-after-wrap');
+  if(before.length||after.length){
+    baWrap.style.display='block';
+    var maxLen=Math.max(before.length,after.length,1);
+    var baHtml='';
+    for(var i=0;i<maxLen;i++){
+      baHtml+='<div class="photo-box" style="border-radius:0;border-right:0.5px solid var(--line-2)">'+(before[i]?'<img src="'+before[i]+'">':'<div class="empty-note" style="padding:30px 10px">—</div>')+'</div>';
+      baHtml+='<div class="photo-box" style="border-radius:0">'+(after[i]?'<img src="'+after[i]+'">':'<div class="empty-note" style="padding:30px 10px">—</div>')+'</div>';
+    }
+    document.getElementById('ba-photos-grid').innerHTML=baHtml;
+  }else{baWrap.style.display='none';}
+
+  // 사진: 기타
+  var etcPhotos=data.wEtcPhotos||[];
+  var eWrap=document.getElementById('etc-photo-wrap');
+  if(etcPhotos.length){
+    eWrap.style.display='block';
+    document.getElementById('etc-photos-grid').innerHTML=etcPhotos.map(function(u){return '<div class="photo-box"><img src="'+u+'"></div>';}).join('');
+  }else{eWrap.style.display='none';}
+};
+
+window.getSampleData=function(){
+  return {
+    client:'홍길동',date:'2026-07-06',addr:'서울 강남구 테헤란로',productType:'top',model:'삼성 WA10T',
+    checklist:[
+      {key:'power',label:'전원 및 작동',result:'ok'},
+      {key:'cycle',label:'개별 사이클 실행',result:'ok'},
+      {key:'vibration',label:'진동 강도',result:'bad'},
+      {key:'noise',label:'소음 강도',result:'bad'},
+      {key:'other',label:'기타 이상 유무',result:'ok'}
+    ],
+    diag1:'기능 테스트 진행중 미세한 진동, 소음 확인됨.',
+    diag2:'분해 후 점검 결과, 댐퍼 및 베어링 노후화로 인한 불량 상태 확인됨.',
+    diag3:'사후 시운전 결과 현재 미세한 소음/진동 확인되나 즉각적인 사용상 문제는 없는 상태로 판단되며 향후 진동 또는 소음 증가시 해당 부품 교체 추천함.',
+    wProblemPhotos:[],wBeforePhotos:[],wAfterPhotos:[],wEtcPhotos:[]
+  };
+};
+</script>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+var FB_CFG={
+  apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
+  authDomain:"happywork-packageplan.firebaseapp.com",
+  projectId:"happywork-packageplan",
+  storageBucket:"happywork-packageplan.firebasestorage.app",
+  messagingSenderId:"101289103022",
+  appId:"1:101289103022:web:d81aca7f3747dd26df673f"
+};
+var app=initializeApp(FB_CFG);
+var DB=getFirestore(app);
+var params=new URLSearchParams(location.search);
+var rid=params.get('id');
+var initLang=params.get('lang')||'ko';
+currentLang=initLang;
+setTimeout(function(){if(window.setLang)window.setLang(initLang);},200);
+if(rid){
+  var lov=document.createElement('div');
+  lov.style='position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:-apple-system,sans-serif;color:#0F1C3F;font-size:14px;gap:10px';
+  lov.innerHTML='<div style="width:20px;height:20px;border:2px solid #0D9488;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></div>보고서 불러오는 중...';
+  document.body.appendChild(lov);
+  getDoc(doc(DB,'inspections',rid)).then(function(snap){
+    lov.remove();
+    if(snap.exists()){window.renderReport(snap.data());}
+    else{
+      lov.style.color='#c0392b';lov.innerHTML='보고서를 찾을 수 없습니다.';
+      document.body.appendChild(lov);
+    }
+  }).catch(function(e){lov.remove();window.renderReport(window.getSampleData());});
+}else{
+  window.addEventListener('load',function(){window.renderReport(window.getSampleData());});
+}
+</script>
+</body>
+</html>
