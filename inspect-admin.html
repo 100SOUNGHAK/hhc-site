@@ -174,10 +174,37 @@ textarea{resize:vertical;line-height:1.6}
 
 <div style="display:flex;gap:8px;margin-bottom:14px">
   <button class="rtype-btn on" id="rtype-inspect" onclick="switchReportType('inspect')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #4F6EF7;background:#eef1ff;color:#1d3fd6;font-weight:700;font-size:13px;cursor:pointer">📋 점검보고서</button>
+  <button class="rtype-btn" id="rtype-dispatch" onclick="switchReportType('dispatch')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer">🚐 출장점검보고서</button>
   <button class="rtype-btn" id="rtype-install" onclick="switchReportType('install')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer">🔧 설치보고서</button>
 </div>
 
 <div id="inspect-form-body">
+
+<!-- 출동 정보 (출장점검보고서 전용) -->
+<div class="card" id="dispatch-info-card" style="display:none">
+  <div class="card-hdr"><div class="card-icon">🚐</div><div class="card-title">출동 정보</div></div>
+  <div class="card-body">
+    <div class="fgrid f2">
+      <div><div class="fl">출동일시</div><input id="d-datetime" type="text" placeholder="예: 2026-07-06 14:00"></div>
+      <div><div class="fl">담당기사</div><input id="d-tech" type="text" placeholder="예: 김기사"></div>
+    </div>
+    <div class="fgrid f2" style="margin-top:8px">
+      <div><div class="fl">출동 사유</div><input id="d-reason" type="text" placeholder="예: 냉방 안됨 신고 접수"></div>
+      <div><div class="fl">재방문 예정일</div><input id="d-revisit-date" type="text" placeholder="필요 시 입력"></div>
+    </div>
+    <div style="margin-top:8px">
+      <div class="fl">처리 내용</div>
+      <textarea id="d-work" rows="3" placeholder="현장에서 조치한 내용을 입력하세요"></textarea>
+    </div>
+    <div style="margin-top:8px">
+      <div class="fl">처리 결과</div>
+      <div class="leak-res-row">
+        <button type="button" class="leak-btn leak-ok" id="d-result-done" onclick="setDispatchResult(true)">✅ 완료</button>
+        <button type="button" class="leak-btn" id="d-result-revisit" onclick="setDispatchResult(false)">⏳ 재방문 필요</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- 기본 정보 -->
 <div class="card">
@@ -548,6 +575,7 @@ var photoData={};
 var evalVal='';
 var currentEditId=null;
 var reportType='inspect';
+var dispatchDone=true;
 var testResults={power:true,noise:true};
 var installProductCount=0,materialCount=0,installLeakCount=0,coolTestCount=0,refrigTestCount=0;
 var shortUrls={ko:'',en:''};
@@ -1098,16 +1126,25 @@ function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl){
 // ═══════════════════════════════════════════
 window.switchReportType=function(t){
   reportType=t;
-  document.getElementById('inspect-form-body').style.display=t==='inspect'?'block':'none';
+  var showInspect=(t==='inspect'||t==='dispatch');
+  document.getElementById('inspect-form-body').style.display=showInspect?'block':'none';
   document.getElementById('install-form-body').style.display=t==='install'?'block':'none';
-  document.getElementById('rtype-inspect').style.cssText=t==='inspect'
-    ?'flex:1;padding:11px;border-radius:10px;border:1.5px solid #4F6EF7;background:#eef1ff;color:#1d3fd6;font-weight:700;font-size:13px;cursor:pointer'
-    :'flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer';
-  document.getElementById('rtype-install').style.cssText=t==='install'
-    ?'flex:1;padding:11px;border-radius:10px;border:1.5px solid #4F6EF7;background:#eef1ff;color:#1d3fd6;font-weight:700;font-size:13px;cursor:pointer'
-    :'flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer';
+  document.getElementById('dispatch-info-card').style.display=t==='dispatch'?'block':'none';
+  var onCss='flex:1;padding:11px;border-radius:10px;border:1.5px solid #4F6EF7;background:#eef1ff;color:#1d3fd6;font-weight:700;font-size:13px;cursor:pointer';
+  var offCss='flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer';
+  document.getElementById('rtype-inspect').style.cssText=t==='inspect'?onCss:offCss;
+  document.getElementById('rtype-dispatch').style.cssText=t==='dispatch'?onCss:offCss;
+  document.getElementById('rtype-install').style.cssText=t==='install'?onCss:offCss;
   var btn=document.getElementById('btn-save');
-  if(btn)btn.textContent=t==='install'?'💾 설치보고서 저장하고 고객 링크 생성':'💾 저장하고 고객 링크 생성';
+  if(btn)btn.textContent=t==='install'?'💾 설치보고서 저장하고 고객 링크 생성':(t==='dispatch'?'💾 출장점검보고서 저장하고 고객 링크 생성':'💾 저장하고 고객 링크 생성');
+};
+
+window.setDispatchResult=function(done){
+  dispatchDone=done;
+  var okBtn=document.getElementById('d-result-done');
+  var revBtn=document.getElementById('d-result-revisit');
+  okBtn.className='leak-btn'+(done?' leak-ok':'');
+  revBtn.className='leak-btn'+(done?'':' leak-bad');
 };
 
 function addInstallProduct(loc,model,cap,qty){
@@ -1713,8 +1750,11 @@ function renderList(items){
   el.innerHTML=items.map(function(r){
     var id=r._id;
     var isInstall=r.type==='install';
+    var isDispatch=r.type==='dispatch';
     var typeBadge=isInstall
       ?'<span style="display:inline-block;margin-bottom:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#fef3c7;color:#b45309">🔧 설치</span>'
+      :isDispatch
+      ?'<span style="display:inline-block;margin-bottom:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#ede9fe;color:#6d28d9">🚐 출장점검</span>'
       :'<span style="display:inline-block;margin-bottom:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#e0f2fe;color:#0369a1">📋 점검</span>';
     return '<div class="lcard">'+
       '<div class="lcard-body">'+
@@ -1867,11 +1907,14 @@ function collectData(){
   });
 
   return {
+    type:reportType==='dispatch'?'dispatch':'inspect',
     client:gv('f-client'),date:gv('f-date'),addr:gv('f-addr'),units:gv('f-units'),scope:gv('f-scope'),
     eval:evalVal,verdict:gv('f-verdict'),opinion:gv('f-opinion'),
     statTotal:gv('stat-total'),statOk:gv('stat-ok'),statWarn:gv('stat-warn'),statBad:gv('stat-bad'),
     equipments:equipments,results:results,coolUnits:coolUnits,measurements:measurements,
     leakUnits:leakUnits,defects:defects,recommendations:recommendations,problemPhotos:problemPhotos,outdoorSets:outdoorSets,
+    dispatchDatetime:gv('d-datetime'),dispatchTech:gv('d-tech'),dispatchReason:gv('d-reason'),
+    dispatchWork:gv('d-work'),dispatchResult:dispatchDone?'done':'revisit',dispatchRevisitDate:gv('d-revisit-date'),
     createdAt:new Date().toISOString()
   };
 }
@@ -1882,6 +1925,7 @@ async function translateData(data){
   var tasks=[];
   function pt(k,s){tasks.push({key:k,src:s||''});}
   pt('verdict_en',data.verdict);pt('opinion_en',data.opinion);
+  pt('dispatchReason_en',data.dispatchReason);pt('dispatchWork_en',data.dispatchWork);
   (data.results||[]).forEach(function(r,i){pt('r_'+i+'_cat',r.cat);pt('r_'+i+'_name',r.name);pt('r_'+i+'_note',r.note);});
   (data.equipments||[]).forEach(function(e,i){pt('e_'+i+'_type',e.type);pt('e_'+i+'_loc',e.loc);});
   (data.coolUnits||[]).forEach(function(u,i){pt('c_'+i+'_loc',u.loc);});
@@ -1891,6 +1935,7 @@ async function translateData(data){
   var translated=await Promise.all(tasks.map(function(t){return t.src?tr(t.src):Promise.resolve('');}));
   var map={};tasks.forEach(function(t,i){map[t.key]=translated[i]||t.src;});
   data.verdict_en=map.verdict_en||'';data.opinion_en=map.opinion_en||'';
+  data.dispatchReason_en=map.dispatchReason_en||'';data.dispatchWork_en=map.dispatchWork_en||'';
   (data.results||[]).forEach(function(r,i){r.cat_en=map['r_'+i+'_cat']||r.cat;r.name_en=map['r_'+i+'_name']||r.name;r.note_en=map['r_'+i+'_note']||r.note;});
   (data.equipments||[]).forEach(function(e,i){e.type_en=map['e_'+i+'_type']||e.type;e.loc_en=map['e_'+i+'_loc']||e.loc;});
   (data.coolUnits||[]).forEach(function(u,i){u.loc_en=map['c_'+i+'_loc']||u.loc;});
@@ -2012,7 +2057,7 @@ window.sendFromList=async function(id){
   var isInstall=r&&r.type==='install';
   var pageFile=isInstall?'install.html':'inspect.html';
   var url=await shorten('https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=ko');
-  var msg='안녕하세요 😊\n\nHappy Home Care 에어컨 '+(isInstall?'설치':'기술점검')+'보고서를 확인해 주세요.\n\n📋 '+url+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
+  var msg='안녕하세요 😊\n\nHappy Home Care 에어컨 '+(isInstall?'설치':(r&&r.type==='dispatch'?'출장점검':'기술점검'))+'보고서를 확인해 주세요.\n\n📋 '+url+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
   window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
 };
 window.kakaoFromList=async function(id){
@@ -2020,7 +2065,7 @@ window.kakaoFromList=async function(id){
   var isInstall=r&&r.type==='install';
   var pageFile=isInstall?'install.html':'inspect.html';
   var url=await shorten('https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=ko');
-  var msg='안녕하세요 😊\n\nHappy Home Care 에어컨 '+(isInstall?'설치':'기술점검')+'보고서를 확인해 주세요.\n\n📋 '+url+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
+  var msg='안녕하세요 😊\n\nHappy Home Care 에어컨 '+(isInstall?'설치':(r&&r.type==='dispatch'?'출장점검':'기술점검'))+'보고서를 확인해 주세요.\n\n📋 '+url+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
   navigator.clipboard.writeText(msg).then(function(){toast('✓ 카카오 메시지 복사됨');});
 };
 window.editReport=async function(id){
@@ -2033,6 +2078,9 @@ window.editReport=async function(id){
     if(data.type==='install'){
       switchReportType('install');
       setTimeout(function(){loadIntoInstallForm(data);},150);
+    }else if(data.type==='dispatch'){
+      switchReportType('dispatch');
+      setTimeout(function(){loadIntoForm(data);},150);
     }else{
       switchReportType('inspect');
       setTimeout(function(){loadIntoForm(data);},150);
@@ -2051,6 +2099,10 @@ window.loadIntoForm=function(data){
   gv2('f-client',data.client);gv2('f-date',data.date);gv2('f-addr',data.addr);
   gv2('f-units',data.units);gv2('f-scope',data.scope);
   gv2('f-verdict',data.verdict);gv2('f-opinion',data.opinion);
+  // 출동 정보
+  gv2('d-datetime',data.dispatchDatetime);gv2('d-tech',data.dispatchTech);gv2('d-reason',data.dispatchReason);
+  gv2('d-work',data.dispatchWork);gv2('d-revisit-date',data.dispatchRevisitDate);
+  setDispatchResult(data.dispatchResult!=='revisit');
   // 종합평가
   if(data.eval){var eb=document.querySelector('.ev-btn[data-val="'+data.eval+'"]');if(eb)setEval(eb);}
   // 설비
