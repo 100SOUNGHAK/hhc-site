@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<title>HHC 에어컨 설치 기술보고서</title>
+<style>
+
+:root{
+  --page:#EDF0F6; --ink:#0E1B34; --ink-soft:#4A5573; --ink-mute:#8792A8;
+  --navy:#0F1E3D; --navy-2:#16294D; --teal:#0FB5A4; --teal-d:#0D9488;
+  --line:#E4E9F2; --line-2:#EEF2F8; --card:#FFFFFF; --soft:#F5F7FC;
+  --ok:#0F9D6E; --ok-bg:#E8F6EF; --ok-bd:#BFE9D5;
+  --warn:#C9820C; --warn-bg:#FBF2DE; --warn-bd:#F2DCA6;
+  --bad:#D64545; --bad-bg:#FBE9E9; --bad-bd:#F3C9C9;
+  --blue:#2C5BD6; --blue-bg:#EAF0FE; --blue-bd:#CBDBFB;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;background:var(--page);color:var(--ink);-webkit-font-smoothing:antialiased;letter-spacing:-.01em}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+@media print{
+  body{background:#fff}
+  .top-bar,.btn-pdf{display:none!important}
+  .sec,.card,.cover,.rpt-footer{break-inside:avoid;box-shadow:none!important}
+  .ptbl tr,.mtbl tr,.rec-item{break-inside:avoid}
+  @page{margin:12mm;size:A4}
+}
+
+.top-bar{background:rgba(255,255,255,.85);backdrop-filter:saturate(1.2) blur(8px);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:6px;padding:9px 16px;position:sticky;top:0;z-index:100;justify-content:flex-end}
+.lang-btn{padding:5px 13px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink-mute);transition:all .15s}
+.lang-btn.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+
+.page{max-width:720px;margin:0 auto;padding:16px 16px 40px}
+
+/* 커버 */
+.cover{background:radial-gradient(120% 120% at 85% -10%,#1B3363 0%,var(--navy) 55%);border-radius:20px;overflow:hidden;margin:16px auto 14px;max-width:720px;position:relative;box-shadow:0 20px 50px -22px rgba(15,30,61,.55)}
+.cover::before{content:'';position:absolute;top:-70px;right:-60px;width:240px;height:240px;border-radius:50%;border:44px solid rgba(15,181,164,.10)}
+.cover::after{content:'';position:absolute;bottom:40px;left:-50px;width:150px;height:150px;border-radius:50%;border:28px solid rgba(255,255,255,.035)}
+.cv-top{padding:30px 28px 26px;position:relative;z-index:1}
+.cv-brand{display:flex;align-items:center;gap:11px;margin-bottom:34px}
+.cover-logo-icon{width:38px;height:38px;background:linear-gradient(160deg,var(--teal),var(--teal-d));border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;box-shadow:0 6px 16px -6px rgba(15,181,164,.7)}
+.cover-logo-name{font-size:10px;color:rgba(255,255,255,.55);line-height:1.55;font-weight:600}
+.cover-logo-name span{color:rgba(255,255,255,.32);font-weight:500;font-size:9px}
+.cover-tag{font-size:10px;color:var(--teal);letter-spacing:.22em;text-transform:uppercase;font-weight:700;margin-bottom:14px;display:block}
+.cover-h1{font-size:32px;font-weight:700;color:#fff;line-height:1.2;letter-spacing:-.02em}
+.cv-divider{display:flex;align-items:center;gap:10px;margin:18px 0 16px}
+.cv-div-dot{width:7px;height:7px;border-radius:50%;background:var(--teal);flex-shrink:0}
+.cv-div-line{flex:1;height:1px;background:linear-gradient(90deg,rgba(15,181,164,.5),rgba(15,181,164,0))}
+.cover-desc{font-size:11.5px;color:rgba(255,255,255,.5);line-height:1.85;margin-bottom:24px}
+.cover-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cover-cell{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:11px 14px}
+.cover-cell-wide{grid-column:span 2}
+.cc-label{font-size:8.5px;color:rgba(255,255,255,.4);letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px;font-weight:600}
+.cc-val{font-size:13.5px;font-weight:600;color:#fff}
+.cv-footer{background:rgba(0,0,0,.22);padding:13px 28px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid rgba(255,255,255,.06);position:relative;z-index:1}
+.cv-brand-name{font-size:11px;font-weight:700;color:rgba(255,255,255,.85);letter-spacing:.08em}
+.cv-stamp{font-size:9px;color:rgba(255,255,255,.3);letter-spacing:.18em;font-weight:600}
+
+/* 카드/섹션 */
+.card,.sec{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:13px;box-shadow:0 1px 2px rgba(16,30,60,.03),0 10px 26px -20px rgba(16,30,60,.22)}
+.sec-hdr{display:flex;align-items:center;gap:11px;padding:15px 18px;border-bottom:1px solid var(--line-2)}
+.sec-num{width:28px;height:28px;border-radius:9px;background:var(--navy);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--teal);flex-shrink:0}
+.sec-title{font-size:14px;font-weight:700;color:var(--ink);flex:1;letter-spacing:-.01em}
+.sec-body{padding:16px 18px}
+
+.ov-desc{font-size:12.5px;color:var(--ink-soft);line-height:1.9;margin-bottom:14px}
+.ov-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ov-cell{background:var(--soft);border:1px solid var(--line-2);border-radius:10px;padding:11px 13px}
+.ov-label{font-size:9px;color:var(--ink-mute);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;font-weight:600}
+.ov-val{font-size:12px;font-weight:600;color:var(--ink)}
+
+.ptbl{width:100%;border-collapse:collapse;font-size:12px}
+.ptbl th{background:var(--soft);padding:10px 12px;text-align:left;font-size:9.5px;font-weight:700;color:var(--ink-mute);letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--line)}
+.ptbl td{padding:11px 12px;border-bottom:1px solid var(--line-2);color:var(--ink)}
+.ptbl tr:last-child td{border-bottom:none}
+.ptbl tbody tr:hover td{background:#FAFCFF}
+
+/* 테스트 결과 */
+.stats-row{display:grid;grid-template-columns:repeat(2,1fr);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:12px}
+.stat-cell{padding:15px 6px;text-align:center;border-right:1px solid var(--line-2);background:var(--card)}
+.stat-cell:last-child{border-right:none}
+.stat-tag{font-size:16px;font-weight:800;margin-bottom:4px}
+.stat-label{font-size:10px;color:var(--ink-mute);font-weight:600}
+.n-ok{color:var(--ok)}.n-bad{color:var(--bad)}
+
+/* 누설검사 */
+.leak-card{border:1px solid var(--line);border-radius:11px;padding:12px 14px;display:flex;align-items:center;gap:11px;background:var(--card)}
+.leak-card.bad{border-color:var(--bad-bd);background:var(--bad-bg)}
+.leak-ico{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;background:var(--ok-bg)}
+.leak-ico.bad{background:#fff}
+.leak-unit{font-size:12.5px;font-weight:600;color:var(--ink);margin-bottom:2px}
+.leak-loc{font-size:10px;color:var(--ink-mute)}
+.tag{display:inline-flex;align-items:center;padding:3px 11px;border-radius:20px;font-size:10.5px;font-weight:600;white-space:nowrap}
+.lb-ok{background:var(--ok-bg);color:var(--ok)}
+.lb-bad{background:var(--bad-bg);color:var(--bad)}
+
+/* 사진 */
+.photo-record-sec{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:13px;box-shadow:0 1px 2px rgba(16,30,60,.03),0 10px 26px -20px rgba(16,30,60,.22)}
+.photo-box{background:var(--soft);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.photo-box img{width:100%;object-fit:cover;display:block}
+.photo-section-hdr{display:flex;align-items:center;gap:9px;padding:12px 16px 10px;border-bottom:1px solid var(--line-2)}
+.psn{width:22px;height:22px;border-radius:6px;background:var(--navy);color:var(--teal);font-size:9px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.pst{font-size:12.5px;font-weight:600;color:var(--navy)}
+.clean-col-hdr{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--line-2)}
+.clean-col-lbl{padding:8px 14px;font-size:10.5px;font-weight:700;display:flex;align-items:center;gap:6px}
+.clean-col-lbl.before{color:var(--bad);border-right:1px solid var(--line-2)}
+.clean-col-lbl.after{color:var(--ok)}
+.empty-note{padding:16px;text-align:center;color:var(--ink-mute);font-size:11.5px}
+
+/* 최종의견/비고 */
+.opinion-wrap{background:var(--soft);border-radius:12px;padding:15px;border-left:3px solid var(--teal)}
+.opinion-lbl{font-size:10px;color:var(--teal-d);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
+
+/* 푸터 */
+.rpt-footer{background:var(--navy);border-radius:16px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}
+.footer-co{font-size:10px;color:rgba(255,255,255,.5);line-height:1.7}
+
+.btn-pdf{position:fixed;bottom:22px;right:18px;padding:12px 20px;background:var(--navy);color:#fff;border:none;border-radius:30px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 10px 26px -8px rgba(15,30,61,.5);z-index:200;display:flex;align-items:center;gap:6px}
+.btn-pdf:hover{background:var(--navy-2)}
+
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <button class="lang-btn on" id="lang-ko" onclick="setLang('ko')">한국어</button>
+  <button class="lang-btn" id="lang-en" onclick="setLang('en')">English</button>
+</div>
+
+<div class="page">
+
+  <!-- 표지 -->
+  <div class="cover">
+    <div class="cv-top">
+      <div class="cv-brand">
+        <div class="cover-logo-icon">H</div>
+        <div class="cover-logo-name">해피홈케어<br><span>HAPPY WORKS SERVICES SDN. BHD.</span></div>
+      </div>
+      <div class="cover-tag" id="cover-tag">에어컨 설치 기술보고서</div>
+      <div class="cover-h1" id="cover-h1">에어컨 설치<br>기술보고서</div>
+      <div class="cv-divider"><span class="cv-div-dot"></span><span class="cv-div-line"></span></div>
+      <div class="cover-desc" id="cover-desc">신규 설치 위치, 사용 자재, 테스트 결과 및 누설검사에 대한<br>설치 완료 기술 보고서입니다.</div>
+      <div class="cover-grid">
+        <div class="cover-cell"><div class="cc-label" id="lbl-report-num">보고서 번호</div><div class="cc-val" id="r-num">—</div></div>
+        <div class="cover-cell"><div class="cc-label" id="lbl-date">설치일자</div><div class="cc-val" id="r-date">—</div></div>
+        <div class="cover-cell"><div class="cc-label" id="lbl-client">고객명</div><div class="cc-val" id="r-client">—</div></div>
+        <div class="cover-cell"><div class="cc-label" id="lbl-units">설치 대수</div><div class="cc-val" id="r-units">—</div></div>
+        <div class="cover-cell cover-cell-wide"><div class="cc-label" id="lbl-addr">설치 장소</div><div class="cc-val" id="r-addr">—</div></div>
+      </div>
+    </div>
+    <div class="cv-footer">
+      <div class="cv-brand-name">HAPPY HOME CARE</div>
+      <div class="cv-stamp">INSTALLATION REPORT</div>
+    </div>
+  </div>
+
+  <!-- 01 설치 개요 -->
+  <div class="sec">
+    <div class="sec-hdr"><div class="sec-num">01</div><div class="sec-title" id="sec-overview">설치 개요</div></div>
+    <div class="sec-body">
+      <div class="ov-desc" id="r-overview-desc">본 보고서는 신규 에어컨 설치 작업 완료 후, 설치 위치·자재·테스트 결과를 종합 정리한 내용입니다.</div>
+      <div class="ov-grid">
+        <div class="ov-cell"><div class="ov-label" id="lbl-scope">설치 범위</div><div class="ov-val" id="r-scope">제품 설치 · 배관 시공 · 진공작업 · 누설검사 · 시운전</div></div>
+        <div class="ov-cell"><div class="ov-label" id="lbl-std">적용 기준</div><div class="ov-val" id="r-std">제조사 설치기준 및 KS C 9306</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 02 설치 위치/제품 정보 -->
+  <div class="sec" id="products-sec">
+    <div class="sec-hdr"><div class="sec-num">02</div><div class="sec-title" id="sec-products">설치 위치 / 제품 정보</div></div>
+    <div style="overflow-x:auto">
+      <table class="ptbl">
+        <thead><tr>
+          <th id="th-p-loc">설치 위치</th><th id="th-p-model">모델명</th>
+          <th id="th-p-cap">용량</th><th id="th-p-qty">수량</th>
+        </tr></thead>
+        <tbody id="products-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 03 사용 자재 목록 -->
+  <div class="sec" id="materials-sec">
+    <div class="sec-hdr"><div class="sec-num">03</div><div class="sec-title" id="sec-materials">사용 자재 목록</div></div>
+    <div style="overflow-x:auto">
+      <table class="ptbl">
+        <thead><tr><th id="th-m-name">자재명</th><th id="th-m-qty">수량</th></tr></thead>
+        <tbody id="materials-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 04 테스트 결과 -->
+  <div class="sec">
+    <div class="sec-hdr"><div class="sec-num">04</div><div class="sec-title" id="sec-test">테스트 결과</div></div>
+    <div class="sec-body">
+      <div class="stats-row">
+        <div class="stat-cell"><div class="stat-tag" id="test-power">—</div><div class="stat-label" id="lbl-test-power">가동 확인</div></div>
+        <div class="stat-cell"><div class="stat-tag" id="test-noise">—</div><div class="stat-label" id="lbl-test-noise">소음 테스트</div></div>
+      </div>
+      <div class="ov-grid">
+        <div class="ov-cell"><div class="ov-label" id="lbl-cool-temp">냉방 테스트 (토출 온도)</div><div class="ov-val" id="r-cool-temp">—</div></div>
+        <div class="ov-cell"><div class="ov-label" id="lbl-test-note">비고</div><div class="ov-val" id="r-test-note">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 05 누설검사 -->
+  <div class="sec" id="leak-sec">
+    <div class="sec-hdr"><div class="sec-num">05</div><div class="sec-title" id="sec-leak">누설검사</div></div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;padding:12px 16px" id="leak-results"></div>
+  </div>
+
+  <!-- 푸터 -->
+  <div class="rpt-footer">
+    <div class="footer-co">HAPPY WORKS SERVICES SDN.BHD. (1278908-M)<br>📞 +60172472774</div>
+    <div class="footer-co" id="r-eng-footer" style="text-align:right"></div>
+  </div>
+
+  <!-- 사진 기록 -->
+  <div class="sec photo-record-sec" id="photo-record-sec" style="margin-top:12px">
+    <div class="sec-hdr">
+      <div class="sec-num" style="font-size:9px;background:#1e40af;color:#fff">사진</div>
+      <div class="sec-title" id="photo-record-title">설치 사진 기록</div>
+    </div>
+
+    <!-- 설치 전/후 -->
+    <div id="before-after-wrap">
+      <div class="photo-section-hdr"><div class="psn">1</div><div class="pst" id="photo-ba-title">설치 전 / 후 사진 · Before / After</div></div>
+      <div class="clean-col-hdr">
+        <div class="clean-col-lbl before"><span style="width:3px;height:13px;background:#DC2626;border-radius:2px;flex-shrink:0;display:inline-block"></span><span id="lbl-before">설치 전 · Before</span></div>
+        <div class="clean-col-lbl after"><span style="width:3px;height:13px;background:#059669;border-radius:2px;flex-shrink:0;display:inline-block"></span><span id="lbl-after">설치 후 · After</span></div>
+      </div>
+      <div id="ba-photos-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:0"></div>
+    </div>
+
+    <!-- 누설검사 사진 -->
+    <div id="leak-photo-wrap" style="display:none">
+      <div style="height:0.5px;background:#f0f0f0"></div>
+      <div class="photo-section-hdr"><div class="psn">2</div><div class="pst" id="photo-leak-title">누설검사 사진 · Leak Test Photos</div></div>
+      <div style="padding:10px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px" id="leak-photos-grid"></div>
+    </div>
+
+    <!-- 진공작업 사진 -->
+    <div id="vacuum-photo-wrap" style="display:none">
+      <div style="height:0.5px;background:#f0f0f0"></div>
+      <div class="photo-section-hdr"><div class="psn">3</div><div class="pst" id="photo-vacuum-title">진공작업 사진 · Vacuum Test Photos</div></div>
+      <div style="padding:10px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px" id="vacuum-photos-grid"></div>
+    </div>
+  </div>
+
+</div><!-- /.page -->
+
+<button class="btn-pdf" onclick="window.print()" id="btn-pdf">⬇️ PDF 저장</button>
+
+<script>
+var currentLang='ko';
+var T={
+  ko:{
+    'cover-tag':'에어컨 설치 기술보고서','cover-h1':'에어컨 설치<br>기술보고서',
+    'cover-desc':'신규 설치 위치, 사용 자재, 테스트 결과 및 누설검사에 대한<br>설치 완료 기술 보고서입니다.',
+    'lbl-report-num':'보고서 번호','lbl-date':'설치일자','lbl-client':'고객명',
+    'lbl-addr':'설치 장소','lbl-units':'설치 대수',
+    'sec-overview':'설치 개요','lbl-scope':'설치 범위','lbl-std':'적용 기준',
+    'r-scope':'제품 설치 · 배관 시공 · 진공작업 · 누설검사 · 시운전',
+    'r-std':'제조사 설치기준 및 KS C 9306',
+    'r-overview-desc':'본 보고서는 신규 에어컨 설치 작업 완료 후, 설치 위치·자재·테스트 결과를 종합 정리한 내용입니다.',
+    'sec-products':'설치 위치 / 제품 정보','th-p-loc':'설치 위치','th-p-model':'모델명','th-p-cap':'용량','th-p-qty':'수량',
+    'sec-materials':'사용 자재 목록','th-m-name':'자재명','th-m-qty':'수량',
+    'sec-test':'테스트 결과','lbl-test-power':'가동 확인','lbl-test-noise':'소음 테스트',
+    'lbl-cool-temp':'냉방 테스트 (토출 온도)','lbl-test-note':'비고',
+    'sec-leak':'누설검사',
+    'photo-record-title':'설치 사진 기록','photo-ba-title':'설치 전 / 후 사진 · Before / After',
+    'lbl-before':'설치 전 · Before','lbl-after':'설치 후 · After',
+    'photo-leak-title':'누설검사 사진 · Leak Test Photos','photo-vacuum-title':'진공작업 사진 · Vacuum Test Photos',
+    'btn-pdf':'⬇️ PDF 저장',
+    testOk:'✅ 정상',testBad:'❌ 이상',leakOk:'이상없음',leakBad:'누설감지'
+  },
+  en:{
+    'cover-tag':'AC Installation Technical Report','cover-h1':'AC Installation<br>Technical Report',
+    'cover-desc':'A technical report summarizing the installation location, materials used,<br>test results, and leak test after installation completion.',
+    'lbl-report-num':'Report No.','lbl-date':'Install Date','lbl-client':'Client',
+    'lbl-addr':'Location','lbl-units':'Units',
+    'sec-overview':'Installation Overview','lbl-scope':'Scope','lbl-std':'Standard',
+    'r-scope':'Product installation · Piping · Vacuum test · Leak test · Test run',
+    'r-std':'Manufacturer installation guidelines & KS C 9306',
+    'r-overview-desc':'This report summarizes the installation location, materials used, and test results following completion of new AC installation work.',
+    'sec-products':'Installation Location / Product Info','th-p-loc':'Location','th-p-model':'Model','th-p-cap':'Capacity','th-p-qty':'Qty',
+    'sec-materials':'Materials Used','th-m-name':'Material','th-m-qty':'Qty',
+    'sec-test':'Test Results','lbl-test-power':'Power-on Check','lbl-test-noise':'Noise Test',
+    'lbl-cool-temp':'Cooling Test (Discharge Temp)','lbl-test-note':'Note',
+    'sec-leak':'Leak Test',
+    'photo-record-title':'Installation Photo Records','photo-ba-title':'Before / After Photos',
+    'lbl-before':'Before','lbl-after':'After',
+    'photo-leak-title':'Leak Test Photos','photo-vacuum-title':'Vacuum Test Photos',
+    'btn-pdf':'⬇️ Save PDF',
+    testOk:'✅ Normal',testBad:'❌ Fault',leakOk:'No Leakage',leakBad:'Leakage Detected'
+  }
+};
+
+function setLang(lang){
+  currentLang=lang;
+  document.getElementById('lang-ko').className='lang-btn'+(lang==='ko'?' on':'');
+  document.getElementById('lang-en').className='lang-btn'+(lang==='en'?' on':'');
+  var t=T[lang];
+  Object.keys(t).forEach(function(k){
+    if(typeof t[k]==='object')return;
+    var el=document.getElementById(k);
+    if(el){
+      if(el.tagName==='DIV'||el.tagName==='SPAN'||el.tagName==='TH'){el.innerHTML=t[k];}
+      else{el.textContent=t[k];}
+    }
+  });
+  if(window._reportData)renderReport(window._reportData);
+}
+window.setLang=setLang;
+
+window.renderReport=function renderReport(data){
+  if(!data)return;
+  window._reportData=data;
+  var isEn=currentLang==='en';
+  var t=T[currentLang];
+  window._trCache=window._trCache||{};
+  var trSeq=0;
+  function autoTr(ko,applyFn){
+    if(!isEn){applyFn(ko||'');return;}
+    if(!ko){applyFn('');return;}
+    if(window._trCache[ko]){applyFn(window._trCache[ko]);return;}
+    applyFn(ko);
+    fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q='+encodeURIComponent(ko))
+      .then(function(r){return r.json();})
+      .then(function(j){
+        var tr=(j&&j[0])?j[0].map(function(seg){return seg[0];}).join(''):ko;
+        window._trCache[ko]=tr;
+        if(currentLang==='en')applyFn(tr);
+      }).catch(function(){});
+  }
+  function trSpan(ko){
+    var id='tr'+(trSeq++);
+    autoTr(ko,function(v){var el=document.getElementById(id);if(el)el.textContent=v;});
+    return '<span id="'+id+'">'+(ko||'')+'</span>';
+  }
+
+  // 표지
+  var dateStr=(data.date||'').replace(/-/g,'.');
+  document.getElementById('r-num').textContent='HHC-INST-'+dateStr.replace(/\./g,'').slice(2)+'-001';
+  document.getElementById('r-date').textContent=dateStr||'—';
+  document.getElementById('r-client').textContent=data.client||'—';
+  document.getElementById('r-addr').textContent=(data.addr&&data.addr.trim())?data.addr:'—';
+  document.getElementById('r-units').textContent=data.units||'—';
+
+  // 제품 정보
+  var pbody=document.getElementById('products-body');
+  var products=data.products||[];
+  pbody.innerHTML=products.length?products.map(function(p){
+    return '<tr><td>'+trSpan(p.loc||'—')+'</td><td>'+(p.model||'—')+'</td><td>'+(p.cap||'—')+'</td><td>'+(p.qty||'—')+'</td></tr>';
+  }).join(''):'<tr><td colspan="4" class="empty-note">'+(isEn?'No products registered':'등록된 제품 없음')+'</td></tr>';
+
+  // 자재 목록
+  var mbody=document.getElementById('materials-body');
+  var materials=data.materials||[];
+  mbody.innerHTML=materials.length?materials.map(function(m){
+    return '<tr><td>'+trSpan(m.name||'—')+'</td><td>'+(m.qty||'—')+'</td></tr>';
+  }).join(''):'<tr><td colspan="2" class="empty-note">'+(isEn?'No materials registered':'등록된 자재 없음')+'</td></tr>';
+
+  // 테스트 결과
+  var pw=document.getElementById('test-power');
+  pw.textContent=data.testPower==='bad'?t.testBad:t.testOk;
+  pw.className='stat-tag '+(data.testPower==='bad'?'n-bad':'n-ok');
+  var ns=document.getElementById('test-noise');
+  ns.textContent=data.testNoise==='bad'?t.testBad:t.testOk;
+  ns.className='stat-tag '+(data.testNoise==='bad'?'n-bad':'n-ok');
+  document.getElementById('r-cool-temp').textContent=data.coolTemp||'—';
+  autoTr(data.testNote,function(v){document.getElementById('r-test-note').textContent=v||'—';});
+
+  // 누설검사
+  var lwrap=document.getElementById('leak-results');
+  var leaks=data.installLeaks||[];
+  lwrap.innerHTML=leaks.length?leaks.map(function(l){
+    var bad=l.status==='bad';
+    return '<div class="leak-card'+(bad?' bad':'')+'">'+
+      '<div class="leak-ico'+(bad?' bad':'')+'">'+(bad?'⚠️':'✅')+'</div>'+
+      '<div><div class="leak-unit">'+(l.label||'—')+'</div><div class="leak-loc">'+(l.loc||'')+'</div></div>'+
+      '<div style="margin-left:auto"><span class="tag '+(bad?'lb-bad':'lb-ok')+'">'+(bad?t.leakBad:t.leakOk)+'</span></div>'+
+    '</div>';
+  }).join(''):'<div class="empty-note">'+(isEn?'No leak test records':'누설검사 기록 없음')+'</div>';
+
+  // 사진: 설치 전/후
+  var baGrid=document.getElementById('ba-photos-grid');
+  var before=data.beforePhotos||[],after=data.afterPhotos||[];
+  var maxLen=Math.max(before.length,after.length,1);
+  var baHtml='';
+  for(var i=0;i<maxLen;i++){
+    baHtml+='<div class="photo-box" style="border-radius:0;border-right:0.5px solid var(--line-2)">'+(before[i]?'<img src="'+before[i]+'">':'<div class="empty-note" style="padding:30px 10px">—</div>')+'</div>';
+    baHtml+='<div class="photo-box" style="border-radius:0">'+(after[i]?'<img src="'+after[i]+'">':'<div class="empty-note" style="padding:30px 10px">—</div>')+'</div>';
+  }
+  baGrid.innerHTML=baHtml;
+
+  // 사진: 누설검사
+  var leakPhotos=data.installLeakPhotos||[];
+  var leakWrap=document.getElementById('leak-photo-wrap');
+  if(leakPhotos.length){
+    leakWrap.style.display='block';
+    document.getElementById('leak-photos-grid').innerHTML=leakPhotos.map(function(u){return '<div class="photo-box"><img src="'+u+'"></div>';}).join('');
+  }else{leakWrap.style.display='none';}
+
+  // 사진: 진공작업
+  var vacPhotos=data.vacuumPhotos||[];
+  var vacWrap=document.getElementById('vacuum-photo-wrap');
+  if(vacPhotos.length){
+    vacWrap.style.display='block';
+    document.getElementById('vacuum-photos-grid').innerHTML=vacPhotos.map(function(u){return '<div class="photo-box"><img src="'+u+'"></div>';}).join('');
+  }else{vacWrap.style.display='none';}
+};
+
+window.getSampleData=function(){
+  return {
+    client:'홍길동 / 그린오피스타워',date:'2026-07-06',addr:'서울 강남구 테헤란로',units:'2대',
+    products:[
+      {loc:'거실',model:'LG PW-Q1802R2S',cap:'18평형 / 2.5마력',qty:'1대'},
+      {loc:'안방',model:'삼성 AF10T5312',cap:'10평형 / 1.5마력',qty:'1대'}
+    ],
+    materials:[{name:'냉매배관 (2분 5리)',qty:'8m'},{name:'전선 (2.5SQ)',qty:'6m'},{name:'벽걸이 브라켓',qty:'2개'}],
+    testPower:'ok',testNoise:'ok',coolTemp:'18.5℃',testNote:'설치 후 이상 없음 확인',
+    installLeaks:[{label:'거실 실내기',loc:'배관 연결부',status:'ok'},{label:'안방 실내기',loc:'배관 연결부',status:'ok'}],
+    beforePhotos:[],afterPhotos:[],installLeakPhotos:[],vacuumPhotos:[]
+  };
+};
+</script>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+var FB_CFG={
+  apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
+  authDomain:"happywork-packageplan.firebaseapp.com",
+  projectId:"happywork-packageplan",
+  storageBucket:"happywork-packageplan.firebasestorage.app",
+  messagingSenderId:"101289103022",
+  appId:"1:101289103022:web:d81aca7f3747dd26df673f"
+};
+var app=initializeApp(FB_CFG);
+var DB=getFirestore(app);
+var params=new URLSearchParams(location.search);
+var rid=params.get('id');
+var initLang=params.get('lang')||'ko';
+currentLang=initLang;
+setTimeout(function(){if(window.setLang)window.setLang(initLang);},200);
+if(rid){
+  var lov=document.createElement('div');
+  lov.style='position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:-apple-system,sans-serif;color:#0F1C3F;font-size:14px;gap:10px';
+  lov.innerHTML='<div style="width:20px;height:20px;border:2px solid #0D9488;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></div>보고서 불러오는 중...';
+  document.body.appendChild(lov);
+  getDoc(doc(DB,'inspections',rid)).then(function(snap){
+    lov.remove();
+    if(snap.exists()){window.renderReport(snap.data());}
+    else{
+      lov.style.color='#c0392b';lov.innerHTML='보고서를 찾을 수 없습니다.';
+      document.body.appendChild(lov);
+    }
+  }).catch(function(e){lov.remove();window.renderReport(window.getSampleData());});
+}else{
+  window.addEventListener('load',function(){window.renderReport(window.getSampleData());});
+}
+</script>
+</body>
+</html>
