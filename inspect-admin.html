@@ -448,8 +448,19 @@ textarea{resize:vertical;line-height:1.6}
       </div>
     </div>
     <div class="fgrid f2" style="margin-top:8px">
-      <div><div class="fl">냉방 테스트 (토출 온도)</div><input id="if-cool-temp" type="text" placeholder="예: 18.5℃"></div>
       <div><div class="fl">비고</div><input id="if-test-note" type="text" placeholder="특이사항"></div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div class="fl" style="margin-bottom:6px">냉방테스트 (토출 온도)</div>
+      <div id="cooltest-rows"></div>
+      <button class="btn-add" onclick="addCoolTestRow()">+ 냉방테스트 항목 추가</button>
+    </div>
+
+    <div style="margin-top:14px">
+      <div class="fl" style="margin-bottom:6px">냉매순환계통 테스트 (냉매압력, 정격전류)</div>
+      <div id="refrigtest-rows"></div>
+      <button class="btn-add" onclick="addRefrigTestRow()">+ 냉매순환계통 항목 추가</button>
     </div>
   </div>
 </div>
@@ -528,7 +539,7 @@ var evalVal='';
 var currentEditId=null;
 var reportType='inspect';
 var testResults={power:true,noise:true};
-var installProductCount=0,materialCount=0,installLeakCount=0;
+var installProductCount=0,materialCount=0,installLeakCount=0,coolTestCount=0,refrigTestCount=0;
 var shortUrls={ko:'',en:''};
 var allReports=[];
 var coolCount=0, msrCount=0, leakCount=0, defectCount=0, recCount=0, outdoorCount=0, problemCount=0;
@@ -1177,6 +1188,81 @@ function addInstallLeakRow(label,loc,status){
 }
 window.addInstallLeakRow=addInstallLeakRow;
 
+function addCoolTestRow(loc,a,b){
+  coolTestCount++;
+  var id='ct'+coolTestCount;
+  var wrap=document.createElement('div');wrap.className='unit-item';
+  var hdr=document.createElement('div');hdr.className='unit-item-hdr';
+  var num=document.createElement('div');num.className='unit-num';num.textContent=coolTestCount;
+  var del=document.createElement('button');del.className='btn-del';del.textContent='×';del.onclick=function(){wrap.remove();};
+  hdr.appendChild(num);hdr.appendChild(del);wrap.appendChild(hdr);
+
+  var grid=document.createElement('div');grid.className='fgrid f2';
+  function field(lbl,val,ph){
+    var d=document.createElement('div');
+    var l=document.createElement('div');l.className='fl';l.textContent=lbl;
+    var i=document.createElement('input');i.type='text';i.value=val||'';i.placeholder=ph||'';
+    d.appendChild(l);d.appendChild(i);return {div:d,inp:i};
+  }
+  var fLoc=field('호기/위치',loc,'예: 거실');
+  var fA=field('흡입온도 A (°C)',a,'예: 27.0');
+  var fB=field('토출온도 B (°C)',b,'예: 12.5');
+  grid.appendChild(fLoc.div);grid.appendChild(fA.div);grid.appendChild(fB.div);
+  wrap.appendChild(grid);
+
+  var phLbl=document.createElement('div');phLbl.className='fl';phLbl.style='margin-top:8px;margin-bottom:6px';phLbl.textContent='측정 사진';
+  wrap.appendChild(phLbl);
+  var phRow=document.createElement('div');phRow.className='photo-row';phRow.id='cooltest-photos-'+id;
+  var phAdd=document.createElement('div');phAdd.className='ph-add';phAdd.innerHTML='📷<span>추가</span>';
+  var phInp=document.createElement('input');phInp.type='file';phInp.accept='image/*';phInp.multiple=true;phInp.dataset.container='cooltest-photos-'+id;
+  phAdd.appendChild(phInp);phRow.appendChild(phAdd);wrap.appendChild(phRow);
+
+  wrap._getCoolTestData=function(){
+    return {loc:fLoc.inp.value,a:fA.inp.value,b:fB.inp.value,photoKeyPrefix:'cooltest-photos-'+id};
+  };
+  document.getElementById('cooltest-rows').appendChild(wrap);
+}
+window.addCoolTestRow=addCoolTestRow;
+
+function addRefrigTestRow(loc,hp,lp,current,insulation){
+  refrigTestCount++;
+  var id='rt'+refrigTestCount;
+  var wrap=document.createElement('div');wrap.className='unit-item';
+  var hdr=document.createElement('div');hdr.className='unit-item-hdr';
+  var num=document.createElement('div');num.className='unit-num';num.textContent=refrigTestCount;
+  var del=document.createElement('button');del.className='btn-del';del.textContent='×';del.onclick=function(){wrap.remove();};
+  hdr.appendChild(num);hdr.appendChild(del);wrap.appendChild(hdr);
+
+  var grid=document.createElement('div');grid.className='fgrid f2';
+  function field(lbl,val,ph){
+    var d=document.createElement('div');
+    var l=document.createElement('div');l.className='fl';l.textContent=lbl;
+    var i=document.createElement('input');i.type='text';i.value=val||'';i.placeholder=ph||'';
+    d.appendChild(l);d.appendChild(i);return {div:d,inp:i};
+  }
+  var fLoc=field('호기/위치',loc,'예: 거실');
+  var fHp=field('고압 (PSI)',hp,'예: 28.5');
+  var fLp=field('저압 (PSI)',lp,'예: 9.2');
+  var fCur=field('운전전류 (A)',current,'예: 3.1 / 3.6');
+  var fIns=field('절연저항 (MΩ)',insulation,'예: 380');
+  grid.appendChild(fLoc.div);grid.appendChild(fHp.div);grid.appendChild(fLp.div);grid.appendChild(fCur.div);grid.appendChild(fIns.div);
+  wrap.appendChild(grid);
+
+  var phLbl=document.createElement('div');phLbl.className='fl';phLbl.style='margin-top:8px;margin-bottom:6px';phLbl.textContent='측정 사진';
+  wrap.appendChild(phLbl);
+  var phRow=document.createElement('div');phRow.className='photo-row';phRow.id='refrigtest-photos-'+id;
+  var phAdd=document.createElement('div');phAdd.className='ph-add';phAdd.innerHTML='📷<span>추가</span>';
+  var phInp=document.createElement('input');phInp.type='file';phInp.accept='image/*';phInp.multiple=true;phInp.dataset.container='refrigtest-photos-'+id;
+  phAdd.appendChild(phInp);phRow.appendChild(phAdd);wrap.appendChild(phRow);
+
+  wrap._getRefrigTestData=function(){
+    return {loc:fLoc.inp.value,hp:fHp.inp.value,lp:fLp.inp.value,current:fCur.inp.value,insulation:fIns.inp.value,photoKeyPrefix:'refrigtest-photos-'+id};
+  };
+  document.getElementById('refrigtest-rows').appendChild(wrap);
+}
+window.addRefrigTestRow=addRefrigTestRow;
+
+
 window.setTestBtn=function(kind,isGood){
   testResults[kind]=isGood;
   var okBtn=document.getElementById('if-'+kind+'-ok');
@@ -1198,12 +1284,21 @@ function collectInstallData(){
   document.getElementById('install-leak-rows').querySelectorAll('.unit-item').forEach(function(w){
     if(w._getInstallLeakData){var d=w._getInstallLeakData();if(d.label||d.loc)installLeaks.push(d);}
   });
+  var coolTests=[];
+  document.getElementById('cooltest-rows').querySelectorAll('.unit-item').forEach(function(w){
+    if(w._getCoolTestData){var d=w._getCoolTestData();if(d.loc||d.a||d.b)coolTests.push(d);}
+  });
+  var refrigTests=[];
+  document.getElementById('refrigtest-rows').querySelectorAll('.unit-item').forEach(function(w){
+    if(w._getRefrigTestData){var d=w._getRefrigTestData();if(d.loc||d.hp||d.lp)refrigTests.push(d);}
+  });
   return {
     type:'install',
     client:gv('if-client'),date:gv('if-date'),addr:gv('if-addr'),units:gv('if-units'),
     products:products,materials:materials,
     testPower:testResults.power?'ok':'bad',testNoise:testResults.noise?'ok':'bad',
-    coolTemp:gv('if-cool-temp'),testNote:gv('if-test-note'),
+    testNote:gv('if-test-note'),
+    coolTests:coolTests,refrigTests:refrigTests,
     installLeaks:installLeaks,
     createdAt:new Date().toISOString()
   };
@@ -1213,7 +1308,9 @@ function resetInstallForm(){
   document.getElementById('install-product-rows').innerHTML='';installProductCount=0;
   document.getElementById('material-rows').innerHTML='';materialCount=0;
   document.getElementById('install-leak-rows').innerHTML='';installLeakCount=0;
-  ['if-client','if-addr','if-units','if-cool-temp','if-test-note'].forEach(function(id){document.getElementById(id).value='';});
+  document.getElementById('cooltest-rows').innerHTML='';coolTestCount=0;
+  document.getElementById('refrigtest-rows').innerHTML='';refrigTestCount=0;
+  ['if-client','if-addr','if-units','if-test-note'].forEach(function(id){document.getElementById(id).value='';});
   document.getElementById('if-date').value=new Date().toISOString().split('T')[0];
   testResults={power:true,noise:true};
   setTestBtn('power',true);setTestBtn('noise',true);
@@ -1830,6 +1927,18 @@ window.saveReport=async function(){
       else if(key.startsWith('install-after-photos')){data.afterPhotos=(data.afterPhotos||[]).concat(url2);}
       else if(key.startsWith('install-leak-photos')){data.installLeakPhotos=(data.installLeakPhotos||[]).concat(url2);}
       else if(key.startsWith('vacuum-photos')){data.vacuumPhotos=(data.vacuumPhotos||[]).concat(url2);}
+      else if(key.startsWith('cooltest-photos-')){
+        data.coolTests=(data.coolTests||[]).map(function(c){
+          if(c.photoKeyPrefix&&key.startsWith(c.photoKeyPrefix)){c.photos=(c.photos||[]).concat(url2);}
+          return c;
+        });
+      }
+      else if(key.startsWith('refrigtest-photos-')){
+        data.refrigTests=(data.refrigTests||[]).map(function(r){
+          if(r.photoKeyPrefix&&key.startsWith(r.photoKeyPrefix)){r.photos=(r.photos||[]).concat(url2);}
+          return r;
+        });
+      }
       else if(key.startsWith('work-photos')){data.workPhotos=(data.workPhotos||[]).concat(url2);}
       else if(key.startsWith('clean-before-photos')){data.cleanBefore=(data.cleanBefore||[]).concat(url2);}
       else if(key.startsWith('clean-after-photos')){data.cleanAfter=(data.cleanAfter||[]).concat(url2);}
@@ -2091,7 +2200,7 @@ window.loadIntoInstallForm=function(data){
   var gv2=function(id,val){var el=document.getElementById(id);if(el)el.value=val||'';};
   resetInstallForm();
   gv2('if-client',data.client);gv2('if-date',data.date);gv2('if-addr',data.addr);gv2('if-units',data.units);
-  gv2('if-cool-temp',data.coolTemp);gv2('if-test-note',data.testNote);
+  gv2('if-test-note',data.testNote);
 
   testResults={power:data.testPower!=='bad',noise:data.testNoise!=='bad'};
   setTestBtn('power',testResults.power);setTestBtn('noise',testResults.noise);
@@ -2103,6 +2212,7 @@ window.loadIntoInstallForm=function(data){
   // 사진 복원 (기존 저장된 URL을 photoData에 즉시 등록해 저장 시 유실 방지)
   function restorePhotos(list,containerId,keyPrefix){
     var row=document.getElementById(containerId);
+    if(!row)return;
     (list||[]).forEach(function(url,i){
       var key=keyPrefix+'-'+i;
       photoData[key]=url;
@@ -2119,6 +2229,19 @@ window.loadIntoInstallForm=function(data){
   restorePhotos(data.afterPhotos,'install-after-photos','install-after-photos');
   restorePhotos(data.installLeakPhotos,'install-leak-photos','install-leak-photos');
   restorePhotos(data.vacuumPhotos,'vacuum-photos','vacuum-photos');
+
+  (data.coolTests||[]).forEach(function(c){
+    addCoolTestRow(c.loc,c.a,c.b);
+    var lastRow=document.getElementById('cooltest-rows').lastElementChild;
+    var containerId=lastRow?lastRow.querySelector('.photo-row').id:null;
+    if(containerId)restorePhotos(c.photos,containerId,containerId);
+  });
+  (data.refrigTests||[]).forEach(function(r){
+    addRefrigTestRow(r.loc,r.hp,r.lp,r.current,r.insulation);
+    var lastRow=document.getElementById('refrigtest-rows').lastElementChild;
+    var containerId=lastRow?lastRow.querySelector('.photo-row').id:null;
+    if(containerId)restorePhotos(r.photos,containerId,containerId);
+  });
 
   currentEditId=data._id;
   var btn2=document.getElementById('btn-save');

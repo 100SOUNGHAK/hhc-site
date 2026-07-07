@@ -77,6 +77,9 @@ body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;back
 .ptbl td{padding:11px 12px;border-bottom:1px solid var(--line-2);color:var(--ink)}
 .ptbl tr:last-child td{border-bottom:none}
 .ptbl tbody tr:hover td{background:#FAFCFF}
+.val-ok{color:var(--ok);font-weight:700}
+.val-warn{color:var(--warn);font-weight:700}
+.val-bad{color:var(--bad);font-weight:700}
 
 /* 테스트 결과 */
 .stats-row{display:grid;grid-template-columns:repeat(2,1fr);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:12px}
@@ -203,9 +206,34 @@ body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;back
         <div class="stat-cell"><div class="stat-tag" id="test-noise">—</div><div class="stat-label" id="lbl-test-noise">소음 테스트</div></div>
       </div>
       <div class="ov-grid">
-        <div class="ov-cell"><div class="ov-label" id="lbl-cool-temp">냉방 테스트 (토출 온도)</div><div class="ov-val" id="r-cool-temp">—</div></div>
-        <div class="ov-cell"><div class="ov-label" id="lbl-test-note">비고</div><div class="ov-val" id="r-test-note">—</div></div>
+        <div class="ov-cell" style="grid-column:span 2"><div class="ov-label" id="lbl-test-note">비고</div><div class="ov-val" id="r-test-note">—</div></div>
       </div>
+    </div>
+    <div style="padding:0 18px 16px" id="cooltest-wrap">
+      <div class="pst" style="margin-bottom:8px" id="lbl-cooltest">냉방테스트 (토출 온도)</div>
+      <div style="overflow-x:auto">
+        <table class="ptbl">
+          <thead><tr>
+            <th id="th-ct-loc">호기/위치</th><th id="th-ct-a">흡입온도 A</th>
+            <th id="th-ct-b">토출온도 B</th><th id="th-ct-dt">온도차 ΔT</th><th id="th-ct-jdg">판정</th>
+          </tr></thead>
+          <tbody id="cooltest-body"></tbody>
+        </table>
+      </div>
+      <div id="cooltest-photos-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"></div>
+    </div>
+    <div style="padding:0 18px 18px" id="refrigtest-wrap">
+      <div class="pst" style="margin-bottom:8px" id="lbl-refrigtest">냉매순환계통 테스트 (냉매압력, 정격전류)</div>
+      <div style="overflow-x:auto">
+        <table class="ptbl">
+          <thead><tr>
+            <th id="th-rt-loc">호기/위치</th><th id="th-rt-hp">고압</th><th id="th-rt-lp">저압</th>
+            <th id="th-rt-cur">운전전류</th><th id="th-rt-ins">절연저항</th>
+          </tr></thead>
+          <tbody id="refrigtest-body"></tbody>
+        </table>
+      </div>
+      <div id="refrigtest-photos-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px"></div>
     </div>
   </div>
 
@@ -272,7 +300,9 @@ var T={
     'sec-products':'설치 위치 / 제품 정보','th-p-loc':'설치 위치','th-p-model':'모델명','th-p-cap':'용량','th-p-qty':'수량',
     'sec-materials':'사용 자재 목록','th-m-name':'자재명','th-m-qty':'수량',
     'sec-test':'테스트 결과','lbl-test-power':'가동 확인','lbl-test-noise':'소음 테스트',
-    'lbl-cool-temp':'냉방 테스트 (토출 온도)','lbl-test-note':'비고',
+    'lbl-test-note':'비고',
+    'lbl-cooltest':'냉방테스트 (토출 온도)','th-ct-loc':'호기/위치','th-ct-a':'흡입온도 A','th-ct-b':'토출온도 B','th-ct-dt':'온도차 ΔT','th-ct-jdg':'판정',
+    'lbl-refrigtest':'냉매순환계통 테스트 (냉매압력, 정격전류)','th-rt-loc':'호기/위치','th-rt-hp':'고압','th-rt-lp':'저압','th-rt-cur':'운전전류','th-rt-ins':'절연저항',
     'sec-leak':'누설검사',
     'photo-record-title':'설치 사진 기록','photo-ba-title':'설치 전 / 후 사진 · Before / After',
     'lbl-before':'설치 전 · Before','lbl-after':'설치 후 · After',
@@ -292,7 +322,9 @@ var T={
     'sec-products':'Installation Location / Product Info','th-p-loc':'Location','th-p-model':'Model','th-p-cap':'Capacity','th-p-qty':'Qty',
     'sec-materials':'Materials Used','th-m-name':'Material','th-m-qty':'Qty',
     'sec-test':'Test Results','lbl-test-power':'Power-on Check','lbl-test-noise':'Noise Test',
-    'lbl-cool-temp':'Cooling Test (Discharge Temp)','lbl-test-note':'Note',
+    'lbl-test-note':'Note',
+    'lbl-cooltest':'Cooling Test (Discharge Temp)','th-ct-loc':'Unit / Location','th-ct-a':'Inlet A','th-ct-b':'Discharge B','th-ct-dt':'ΔT','th-ct-jdg':'Judgment',
+    'lbl-refrigtest':'Refrigerant Circuit Test (Pressure, Current)','th-rt-loc':'Unit / Location','th-rt-hp':'High Press.','th-rt-lp':'Low Press.','th-rt-cur':'Current','th-rt-ins':'Insulation',
     'sec-leak':'Leak Test',
     'photo-record-title':'Installation Photo Records','photo-ba-title':'Before / After Photos',
     'lbl-before':'Before','lbl-after':'After',
@@ -374,8 +406,34 @@ window.renderReport=function renderReport(data){
   var ns=document.getElementById('test-noise');
   ns.textContent=data.testNoise==='bad'?t.testBad:t.testOk;
   ns.className='stat-tag '+(data.testNoise==='bad'?'n-bad':'n-ok');
-  document.getElementById('r-cool-temp').textContent=data.coolTemp||'—';
   autoTr(data.testNote,function(v){document.getElementById('r-test-note').textContent=v||'—';});
+
+  // 냉방테스트 표
+  var ctBody=document.getElementById('cooltest-body');
+  var coolTests=data.coolTests||[];
+  ctBody.innerHTML=coolTests.length?coolTests.map(function(c){
+    var a=parseFloat(c.a),b=parseFloat(c.b);
+    var dt=(!isNaN(a)&&!isNaN(b))?(a-b).toFixed(1):null;
+    var jdgTxt='—',jdgCls='';
+    if(dt!==null){
+      var dtn=parseFloat(dt);
+      if(dtn>=15){jdgTxt=isEn?'Good':'양호';jdgCls='val-ok';}
+      else if(dtn>=12){jdgTxt=isEn?'Normal':'정상범위';jdgCls='val-warn';}
+      else{jdgTxt=isEn?'Degraded':'저하';jdgCls='val-bad';}
+    }
+    return '<tr><td>'+trSpan(c.loc||'—')+'</td><td>'+(c.a||'—')+'</td><td>'+(c.b||'—')+'</td><td>'+(dt!==null?dt:'—')+'</td><td class="'+jdgCls+'">'+jdgTxt+'</td></tr>';
+  }).join(''):'<tr><td colspan="5" class="empty-note">'+(isEn?'No records':'기록 없음')+'</td></tr>';
+  var ctPhotos=[];coolTests.forEach(function(c){(c.photos||[]).forEach(function(u){ctPhotos.push(u);});});
+  document.getElementById('cooltest-photos-grid').innerHTML=ctPhotos.map(function(u){return '<div class="photo-box"><img src="'+u+'"></div>';}).join('');
+
+  // 냉매순환계통 테스트 표
+  var rtBody=document.getElementById('refrigtest-body');
+  var refrigTests=data.refrigTests||[];
+  rtBody.innerHTML=refrigTests.length?refrigTests.map(function(r){
+    return '<tr><td>'+trSpan(r.loc||'—')+'</td><td>'+(r.hp||'—')+'</td><td>'+(r.lp||'—')+'</td><td>'+(r.current||'—')+'</td><td>'+(r.insulation||'—')+'</td></tr>';
+  }).join(''):'<tr><td colspan="5" class="empty-note">'+(isEn?'No records':'기록 없음')+'</td></tr>';
+  var rtPhotos=[];refrigTests.forEach(function(r){(r.photos||[]).forEach(function(u){rtPhotos.push(u);});});
+  document.getElementById('refrigtest-photos-grid').innerHTML=rtPhotos.map(function(u){return '<div class="photo-box"><img src="'+u+'"></div>';}).join('');
 
   // 누설검사
   var lwrap=document.getElementById('leak-results');
@@ -425,7 +483,9 @@ window.getSampleData=function(){
       {loc:'안방',model:'삼성 AF10T5312',cap:'10평형 / 1.5마력',qty:'1대'}
     ],
     materials:[{name:'냉매배관 (2분 5리)',qty:'8m'},{name:'전선 (2.5SQ)',qty:'6m'},{name:'벽걸이 브라켓',qty:'2개'}],
-    testPower:'ok',testNoise:'ok',coolTemp:'18.5℃',testNote:'설치 후 이상 없음 확인',
+    testPower:'ok',testNoise:'ok',testNote:'설치 후 이상 없음 확인',
+    coolTests:[{loc:'거실',a:'27.0',b:'12.5',photos:[]},{loc:'안방',a:'26.5',b:'13.0',photos:[]}],
+    refrigTests:[{loc:'거실',hp:'28.5',lp:'9.2',current:'3.1 / 3.6',insulation:'380',photos:[]},{loc:'안방',hp:'27.8',lp:'9.0',current:'2.4 / 2.8',insulation:'410',photos:[]}],
     installLeaks:[{label:'거실 실내기',loc:'배관 연결부',status:'ok'},{label:'안방 실내기',loc:'배관 연결부',status:'ok'}],
     beforePhotos:[],afterPhotos:[],installLeakPhotos:[],vacuumPhotos:[]
   };
