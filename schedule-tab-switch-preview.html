@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>일정 확인 탭 전환 미리보기</title>
+<style>
+  :root{
+    --navy:#0B1E3D; --navy-deep:#081530; --teal:#0D9488; --teal-lt:#E6FAF8;
+    --gold:#C9A227; --ink:#1C2333; --muted:#6B7488; --line:#E3E7F0; --bg:#F5F7FB;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Segoe UI',Pretendard,-apple-system,sans-serif;background:var(--bg);color:var(--ink);}
+  .phone{max-width:420px;margin:24px auto;background:#fff;min-height:100vh;box-shadow:0 0 40px rgba(11,30,61,.12);position:relative;overflow:hidden;}
+  .topbar{background:linear-gradient(135deg,var(--navy),var(--navy-deep));color:#fff;padding:16px 18px 0;}
+  .topbar h1{margin:0 0 12px;font-size:17px;font-weight:700;}
+  .nav-tabs{display:flex;gap:0;border-bottom:2px solid rgba(255,255,255,.15);}
+  .nav-tab{flex:1;text-align:center;padding:10px 4px;font-size:12.5px;font-weight:600;color:rgba(255,255,255,.55);border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;}
+  .nav-tab.active{color:#fff;border-bottom-color:var(--gold);}
+  .view{display:none;padding:16px 18px 90px;}
+  .view.active{display:block;}
+  .banner{background:var(--teal-lt);color:var(--teal);font-size:12px;font-weight:600;padding:8px 18px;display:flex;gap:6px;align-items:center;}
+  .field-group{margin-bottom:14px;}
+  label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;}
+  .field{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:9px;font-size:14px;background:#fbfcfe;}
+  .field[readonly]{background:#F0F2F7;}
+  .check-btn{width:100%;padding:11px;border-radius:9px;border:1.5px solid var(--teal);background:var(--teal-lt);color:#085048;font-size:12.5px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;margin:4px 0 16px;}
+  .mini-cal{border:1px solid var(--line);border-radius:12px;padding:10px;background:#fbfcfe;}
+  .mini-cal-hdr{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:8px;padding:0 2px;}
+  .mini-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-size:10.5px;text-align:center;color:var(--muted);}
+  .mini-grid div.day{padding:6px 0;border-radius:6px;color:var(--ink);}
+  .mini-grid div.day.today{background:var(--navy);color:#fff;font-weight:700;}
+  .sched-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+  .back-btn{padding:6px 10px;border-radius:8px;border:1.5px solid var(--line);background:#fff;color:var(--muted);font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px;cursor:pointer;}
+  .cal-card{border:1px solid var(--line);border-radius:12px;overflow:hidden;}
+  .cal-card-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#fbfcfe;border-bottom:1px solid var(--line);}
+  .cal-card-title{font-size:13px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:6px;}
+  .full-grid{display:grid;grid-template-columns:repeat(7,1fr);}
+  .full-grid .dname{font-size:10px;color:var(--muted);text-align:center;padding:8px 0;font-weight:600;}
+  .full-grid .day{min-height:52px;border-top:1px solid var(--line);border-right:1px solid var(--line);padding:4px;font-size:10.5px;position:relative;}
+  .full-grid .day:nth-child(7n){border-right:none;}
+  .full-grid .dn{font-size:10.5px;color:var(--muted);}
+  .full-grid .today .dn{color:var(--navy);font-weight:800;}
+  .chip{margin-top:2px;font-size:8.5px;padding:1px 3px;border-radius:3px;background:#CCF2EE;color:#085048;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chip.manual{background:#EDE9FE;color:#5B21B6;}
+  .legend{display:flex;gap:10px;padding:8px 12px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);}
+  .legend span{display:inline-flex;align-items:center;gap:3px;}
+  .dot{width:7px;height:7px;border-radius:2px;}
+  .caption{text-align:center;font-size:11.5px;color:var(--muted);margin-top:14px;line-height:1.6;}
+  .footer{position:absolute;left:0;right:0;bottom:0;padding:12px 18px calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--line);display:flex;gap:10px;}
+  .btn-cancel{flex:1;padding:12px;border-radius:9px;border:1.5px solid var(--line);background:#fff;color:var(--muted);font-weight:600;font-size:13px;}
+  .btn-save{flex:2;padding:12px;border-radius:9px;border:none;background:var(--navy);color:#fff;font-weight:700;font-size:13px;}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <h1>예약 관리</h1>
+    <div class="nav-tabs">
+      <div class="nav-tab active" data-view="new">새 예약 등록</div>
+      <div class="nav-tab" data-view="list">예약 목록</div>
+      <div class="nav-tab" data-view="schedule">📅 일정</div>
+    </div>
+  </div>
+
+  <!-- NEW BOOKING VIEW -->
+  <div class="view active" id="view-new">
+    <div class="banner">📥 의뢰관리에서 예약전환된 정보입니다</div>
+    <div style="padding:14px 0 0">
+      <div class="field-group">
+        <label>콘도명/동호수(상호)</label>
+        <input class="field" readonly value="퍼시픽 팰리스 콘도 203호">
+      </div>
+      <div class="field-group">
+        <label>연락처</label>
+        <input class="field" readonly value="010-3456-7890">
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 8px">날짜 선택</div>
+
+      <button class="check-btn" onclick="goSchedule()">📅 전체 일정 확인하기</button>
+
+      <div class="mini-cal">
+        <div class="mini-cal-hdr"><span>‹</span><span>2026년 7월</span><span>›</span></div>
+        <div class="mini-grid">
+          <div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div>
+          <div></div><div></div><div></div><div class="day">1</div><div class="day">2</div><div class="day">3</div><div class="day">4</div>
+          <div class="day">5</div><div class="day">6</div><div class="day">7</div><div class="day">8</div><div class="day">9</div><div class="day">10</div><div class="day">11</div>
+          <div class="day">12</div><div class="day">13</div><div class="day today">14</div><div class="day">15</div><div class="day">16</div><div class="day">17</div><div class="day">18</div>
+        </div>
+      </div>
+      <div class="caption">버튼을 누르면 폼 내용은 그대로 유지된 채<br>"📅 일정" 탭으로 화면만 전환됩니다.</div>
+    </div>
+  </div>
+
+  <!-- LIST VIEW (placeholder) -->
+  <div class="view" id="view-list">
+    <div style="padding:40px 0;text-align:center;color:var(--muted);font-size:13px;">예약 목록 화면 (미리보기 생략)</div>
+  </div>
+
+  <!-- SCHEDULE VIEW -->
+  <div class="view" id="view-schedule">
+    <div style="padding:14px 0 0">
+      <div class="sched-hdr">
+        <div style="font-size:14px;font-weight:700;color:var(--navy)">📅 일정 캘린더</div>
+        <div class="back-btn" onclick="goNew()">← 예약 작성으로</div>
+      </div>
+      <div class="cal-card">
+        <div class="cal-card-hdr">
+          <div class="cal-card-title">‹ 2026년 7월 ›</div>
+        </div>
+        <div class="full-grid">
+          <div class="dname">일</div><div class="dname">월</div><div class="dname">화</div><div class="dname">수</div><div class="dname">목</div><div class="dname">금</div><div class="dname">토</div>
+          <div class="day"><div class="dn">12</div></div>
+          <div class="day"><div class="dn">13</div></div>
+          <div class="day today"><div class="dn">14</div><div class="chip">10:00 김민준</div></div>
+          <div class="day"><div class="dn">15</div><div class="chip">14:00 이서연</div><div class="chip manual">휴무</div></div>
+          <div class="day"><div class="dn">16</div></div>
+          <div class="day"><div class="dn">17</div><div class="chip">09:30 박지훈</div></div>
+          <div class="day"><div class="dn">18</div></div>
+        </div>
+        <div class="legend">
+          <span><span class="dot" style="background:#CCF2EE"></span>예약확정</span>
+          <span><span class="dot" style="background:#EDE9FE"></span>직접입력</span>
+        </div>
+      </div>
+      <div class="caption">여기서 날짜별 예약 현황을 확인한 뒤<br>"예약 작성으로" 버튼을 누르면 입력하던 폼으로 그대로 복귀합니다.</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <button class="btn-cancel">취소</button>
+    <button class="btn-save">예약 저장</button>
+  </div>
+</div>
+
+<script>
+function setActive(view){
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active', v.id==='view-'+view));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.toggle('active', t.dataset.view===view));
+}
+function goSchedule(){ setActive('schedule'); }
+function goNew(){ setActive('new'); }
+document.querySelectorAll('.nav-tab').forEach(t=>{
+  t.addEventListener('click', ()=>setActive(t.dataset.view));
+});
+</script>
+</body>
+</html>
