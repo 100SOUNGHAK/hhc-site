@@ -120,9 +120,14 @@ input[name="svc"]{display:none}
 
 /* BENEFITS */
 .ben-grid{display:grid;gap:5px}
-.ben-item{display:flex;align-items:flex-start;gap:9px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:all .15s}
+.ben-item{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);transition:all .15s}
 .ben-item:hover{border-color:var(--lavender)}
 .ben-item.on{border-color:rgba(112,145,230,.4);background:rgba(112,145,230,.04)}
+.ben-label{display:flex;align-items:flex-start;gap:9px;cursor:pointer;flex:1;min-width:0}
+.ben-order-btns{display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+.ben-order-btn{width:22px;height:17px;border:1px solid var(--border-dark);background:#fff;border-radius:4px;font-size:8px;line-height:1;color:var(--text2);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.ben-order-btn:hover{background:var(--surface2)}
+.ben-order-btn:disabled{opacity:.25;cursor:default}
 .ben-box{width:17px;height:17px;border:1.5px solid var(--border-dark);border-radius:4px;flex-shrink:0;margin-top:1px;display:flex;align-items:center;justify-content:center;transition:all .15s}
 .ben-item.on .ben-box{background:var(--violet);border-color:var(--violet)}
 .ben-item.on .ben-box::after{content:'';width:9px;height:6px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:rotate(-45deg) translateY(-2px)}
@@ -1129,7 +1134,7 @@ input[data-benefit]{display:none}
 <!-- FIREBASE SDK -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, where, getDocs, limit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, where, getDocs, limit, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
 // ── DATA ──
@@ -1157,6 +1162,10 @@ const BENEFITS=[
   {key:"repair",ko:"수리 인건비 10% 할인",en:"10% Off Repair Labor",dko:"에어컨 수리·설치 인건비 10% 할인 (골드 이상)",den:"10% off labor for AC repair & install (Gold+ only)"},
   {key:"prop",ko:"지정 주택 이용가능",en:"Designated Property Usage",dko:"지정 주택 에어컨 세척서비스에 한해 적립금 사용 (골드 이상)",den:"Credit usable for AC cleaning at designated properties (Gold+ only)"},
   {key:"regular",ko:"정기방문점검 서비스 50% 할인",en:"50% Off Regular Inspection",dko:"정기방문점검 서비스 50% 할인",den:"50% discount on regular on-site inspection"},
+  {key:"repair20",ko:"수리 인건비 20% 할인",en:"20% Off Repair Labor",dko:"에어컨 수리·설치 인건비 20% 할인",den:"20% off labor for AC repair & install"},
+  {key:"ceilingSpecial",ko:"실링팬청소서비스 무상제공",en:"Free Ceiling Fan Cleaning",dko:"스페셜해피홈: 무제한 (단, 1회 청소 시마다 최대 10대까지만 제공)",den:"Special Happy Home: unlimited (max 10 units per visit)"},
+  {key:"bulbSpecial",ko:"전등 교체 서비스 무상제공",en:"Free Light Bulb Replacement",dko:"무제한 (단, 1회 5대 이내) [ 전등 사전구비 시]",den:"Unlimited (up to 5 per visit) [if bulbs provided]"},
+  {key:"regularVisit",ko:"전담 정기 점검 방문 서비스 무상 제공",en:"Free Dedicated Regular Inspection Visit",dko:"3~6개월 주기 선택 가능",den:"Choose a 3–6 month visit cycle"},
 ];
 const SERVICES=[
   "에어컨 및 전 품목 세척서비스 (당사 취급하는), 설치 & 수리 서비스 (인건비; 기계·부품·자재비 별도)\nAir-conditioning & all cleaning services, installation & repair services (labour only; machinery, parts & materials charged separately)",
@@ -1276,7 +1285,8 @@ document.getElementById('btn-reconfig').addEventListener('click',()=>{localStora
 document.getElementById('btn-logout').addEventListener('click',()=>{setAuth(false);if(unsub)unsub();showScreen('login');});
 
 // ── INIT ──
-function initApp(){
+async function initApp(){
+  await loadBenefitsOrder();
   initBenefits();
   document.getElementById('f-date').value=today();
   document.getElementById('u-date').value=today();
@@ -1287,13 +1297,52 @@ function initApp(){
 function initBenefits(){
   const c=document.getElementById('benefits-container');
   c.innerHTML='';
-  BENEFITS.forEach(b=>{
-    const el=document.createElement('label');
+  BENEFITS.forEach((b,idx)=>{
+    const el=document.createElement('div');
     el.className='ben-item on';
-    el.innerHTML=`<input type="checkbox" checked data-benefit="${b.key}"><div class="ben-box"></div><div><div class="ben-ko">${b.ko}</div><div class="ben-en">${b.en}</div><div class="ben-desc">${b.dko}</div></div>`;
+    el.innerHTML=`<label class="ben-label"><input type="checkbox" checked data-benefit="${b.key}"><div class="ben-box"></div><div><div class="ben-ko">${b.ko}</div><div class="ben-en">${b.en}</div><div class="ben-desc">${b.dko}</div></div></label><div class="ben-order-btns"><button type="button" class="ben-order-btn" data-move="up" data-key="${b.key}" ${idx===0?'disabled':''}>▲</button><button type="button" class="ben-order-btn" data-move="down" data-key="${b.key}" ${idx===BENEFITS.length-1?'disabled':''}>▼</button></div>`;
     el.querySelector('input').addEventListener('change',function(){el.classList.toggle('on',this.checked);});
+    el.querySelectorAll('.ben-order-btn').forEach(btn=>{
+      btn.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();moveBenefit(btn.dataset.key,btn.dataset.move);});
+    });
     c.appendChild(el);
   });
+}
+
+function moveBenefit(key,dir){
+  const idx=BENEFITS.findIndex(b=>b.key===key);
+  const swap=dir==='up'?idx-1:idx+1;
+  if(idx<0||swap<0||swap>=BENEFITS.length)return;
+  const checkedMap={};
+  document.querySelectorAll('[data-benefit]').forEach(cb=>{checkedMap[cb.dataset.benefit]=cb.checked;});
+  [BENEFITS[idx],BENEFITS[swap]]=[BENEFITS[swap],BENEFITS[idx]];
+  initBenefits();
+  document.querySelectorAll('[data-benefit]').forEach(cb=>{
+    const v=checkedMap[cb.dataset.benefit];
+    if(v!==undefined){cb.checked=v;cb.closest('.ben-item').classList.toggle('on',v);}
+  });
+  if(typeof updateProgress==='function')updateProgress();
+  saveBenefitsOrder();
+}
+
+async function saveBenefitsOrder(){
+  try{ await setDoc(doc(db,'settings','benefitsOrder'),{order:BENEFITS.map(b=>b.key)}); }
+  catch(e){ console.error('혜택 순서 저장 오류:',e); }
+}
+
+async function loadBenefitsOrder(){
+  try{
+    const snap=await getDoc(doc(db,'settings','benefitsOrder'));
+    if(snap.exists()){
+      const order=(snap.data().order)||[];
+      const map={};
+      BENEFITS.forEach(b=>map[b.key]=b);
+      const reordered=order.map(k=>map[k]).filter(Boolean);
+      const remaining=BENEFITS.filter(b=>!order.includes(b.key));
+      BENEFITS.length=0;
+      BENEFITS.push(...reordered,...remaining);
+    }
+  }catch(e){ console.error('혜택 순서 불러오기 오류:',e); }
 }
 
 // ── AUTO-LOAD ──
