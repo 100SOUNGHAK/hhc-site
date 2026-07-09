@@ -674,6 +674,7 @@ var washerChecklistResult={};
 var testResults={power:true,noise:true};
 var installProductCount=0,materialCount=0,installLeakCount=0,coolTestCount=0,refrigTestCount=0;
 var shortUrls={ko:'',en:''};
+var sendTypeKo='에어컨 기술점검',sendTypeEn='AC Inspection';
 var allReports=[];
 var coolCount=0, msrCount=0, leakCount=0, defectCount=0, recCount=0, outdoorCount=0, problemCount=0;
 
@@ -1942,8 +1943,8 @@ function updateSendMsg(){
   var lang=l?l.value:'ko';
   var link=lang==='en'?(shortUrls.en||shortUrls.ko):shortUrls.ko;
   gid('sm-link').textContent=link;
-  var ko='안녕하세요 😊\n\nHappy Home Care 에어컨 기술점검보고서를 확인해 주세요.\n\n📋 '+link+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
-  var en='Hello 😊\n\nPlease check your Happy Home Care AC Inspection Report.\n\n📋 '+link+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
+  var ko='안녕하세요 😊\n\nHappy Home Care '+sendTypeKo+'보고서를 확인해 주세요.\n\n📋 '+link+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
+  var en='Hello 😊\n\nPlease check your Happy Home Care '+sendTypeEn+' Report.\n\n📋 '+link+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
   gid('sm-msg').value=lang==='en'?en:ko;
 }
 function openPreview(){var l=gid('sm-link').textContent;if(l)window.open(l,'_blank');}
@@ -1968,7 +1969,7 @@ window.onload=function(){
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, addDoc, setDoc, getDocs, deleteDoc, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
 try{
@@ -2211,6 +2212,8 @@ window.saveReport=async function(){
     toast(wasEdit?'✓ 수정 저장 완료':'✓ 저장 완료');
     currentEditId=null;
     document.getElementById('sm-link').textContent=shortUrls.ko;
+    sendTypeKo=isInstall?'에어컨 설치':(isWasher?'세탁기/건조기 점검':(reportType==='dispatch'?'에어컨 출장점검':'에어컨 기술점검'));
+    sendTypeEn=isInstall?'AC Installation':(isWasher?'Washer/Dryer Inspection':(reportType==='dispatch'?'AC On-site Inspection':'AC Inspection'));
     updateSendMsg();
     document.getElementById('send-modal').style.display='flex';
   }catch(e){console.error(e);alert('저장 실패: '+e.message);btn.disabled=false;btn.textContent=btnLabel;}
@@ -2228,28 +2231,33 @@ window.loadList=async function(){
 
 // ── 목록 액션
 window.sendFromList=async function(id){
-  var r=allReports.find(function(x){return x._id===id;});
-  var isInstall=r&&r.type==='install';
-  var isWasher=r&&r.type==='washer';
-  var pageFile=isInstall?'install.html':(isWasher?'washer.html':'inspect.html');
-  var url=await shorten('https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=ko');
-  var msg='안녕하세요 😊\n\nHappy Home Care '+(isInstall?'에어컨 설치':(isWasher?'세탁기/건조기 점검':(r&&r.type==='dispatch'?'에어컨 출장점검':'에어컨 기술점검')))+'보고서를 확인해 주세요.\n\n📋 '+url+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
-  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+  await openSendModalForList(id);
 };
 window.kakaoFromList=async function(id){
+  await openSendModalForList(id);
+};
+window.openSendModalForList=async function(id){
   var r=allReports.find(function(x){return x._id===id;});
-  var isInstall=r&&r.type==='install';
-  var isWasher=r&&r.type==='washer';
+  if(!r){toast('보고서를 찾을 수 없습니다.');return;}
+  var isInstall=r.type==='install';
+  var isWasher=r.type==='washer';
+  var isDispatch=r.type==='dispatch';
   var pageFile=isInstall?'install.html':(isWasher?'washer.html':'inspect.html');
-  var url=await shorten('https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=ko');
-  var msg='안녕하세요 😊\n\nHappy Home Care '+(isInstall?'에어컨 설치':(isWasher?'세탁기/건조기 점검':(r&&r.type==='dispatch'?'에어컨 출장점검':'에어컨 기술점검')))+'보고서를 확인해 주세요.\n\n📋 '+url+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
-  navigator.clipboard.writeText(msg).then(function(){toast('✓ 카카오 메시지 복사됨');});
+  toast('링크 생성 중...');
+  shortUrls.ko=await shorten('https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=ko');
+  shortUrls.en=await shorten('https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=en');
+  sendTypeKo=isInstall?'에어컨 설치':(isWasher?'세탁기/건조기 점검':(isDispatch?'에어컨 출장점검':'에어컨 기술점검'));
+  sendTypeEn=isInstall?'AC Installation':(isWasher?'Washer/Dryer Inspection':(isDispatch?'AC On-site Inspection':'AC Inspection'));
+  var koRadio=document.querySelector('input[name="slang"][value="ko"]');
+  if(koRadio)koRadio.checked=true;
+  updateSendMsg();
+  document.getElementById('send-modal').style.display='flex';
 };
 window.editReport=async function(id){
   if(!DB)return;
   try{
-    var snap2=await getDocs(query(collection(DB,'inspections'),limit(100)));
-    var data=null;snap2.docs.forEach(function(d){if(d.id===id)data=Object.assign({_id:id},d.data());});
+    var snap2=await getDoc(doc(DB,'inspections',id));
+    var data=snap2.exists()?Object.assign({_id:id},snap2.data()):null;
     if(!data){toast('보고서를 찾을 수 없습니다.');return;}
     switchView('form');
     if(data.type==='install'){
