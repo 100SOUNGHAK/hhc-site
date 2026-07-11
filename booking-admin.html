@@ -955,7 +955,7 @@ function renderCalendar(){
         updateDateForTimeSelect();
       });
     }
-    if(schedules[dateStr]&&schedules[dateStr].length){
+    if(getDayBusyItems(dateStr).length){
       const dot=document.createElement('span');
       dot.title='이미 등록된 일정 보기';
       dot.style.cssText='position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);width:30px;height:26px;display:flex;align-items:center;justify-content:center;z-index:2;cursor:pointer';
@@ -967,15 +967,26 @@ function renderCalendar(){
   }
 }
 
+function getDayBusyItems(dateStr){
+  const daySchedules=schedules[dateStr]||[];
+  const mirroredBookingIds=daySchedules.map(s=>s.booking_id).filter(Boolean);
+  const fromSchedules=daySchedules.map(s=>({
+    time:s.time_s?(s.time_e?`${s.time_s}-${s.time_e}`:s.time_s):'시간 미정',
+    label:s.title||'—',
+    sub:s.memo?s.memo.split('\n')[0]:''
+  }));
+  const fromBookings=allBookings.filter(b=>b.booking_date===dateStr&&!mirroredBookingIds.includes(b.__id)).map(b=>({
+    time:b.booking_time||'시간 미정',
+    label:(b.customer_name||'—')+(b.status==='confirmed'?' (확정)':b.status==='booked'?' (신청완료)':' (대기중)'),
+    sub:''
+  }));
+  return [...fromSchedules,...fromBookings];
+}
+
 function showDayScheduleInfo(dateStr){
-  const list=schedules[dateStr]||[];
+  const list=getDayBusyItems(dateStr);
   if(!list.length)return;
-  const lines=list.map(s=>{
-    const time=s.time_s?(s.time_e?`${s.time_s}-${s.time_e}`:s.time_s):'시간 미정';
-    const who=s.title||'—';
-    const memo=s.memo?`  (${s.memo.split('\n')[0]})`:'';
-    return `• ${time}  ${who}${memo}`;
-  }).join('\n');
+  const lines=list.map(s=>`• ${s.time}  ${s.label}${s.sub?'  ('+s.sub+')':''}`).join('\n');
   showModal(`${dateStr} 등록된 일정 (${list.length}건)`,lines,false);
 }
 
