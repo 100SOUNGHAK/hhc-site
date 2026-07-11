@@ -566,7 +566,7 @@ var DB=null;
 var ST=null; // Firebase Storage
 var invoices=[],services=[],banks=[],customers=[],lineItems=[];
 var expandedLI={};
-var MEMBER_TIERS=['패키지 - 티타늄회원','패키지 - 다이아회원','패키지 - 골드회원','패키지 - 로얄회원','패키지(사업) - 티타늄회원','패키지(사업) - 다이아회원','패키지(사업) - 골드회원','패키지(사업) - 로얄회원'];
+var MEMBER_TIERS=['패키지 - 실버회원','패키지 - 티타늄회원','패키지 - 다이아회원','패키지 - 골드회원','패키지 - 로얄회원','패키지(사업) - 티타늄회원','패키지(사업) - 다이아회원','패키지(사업) - 골드회원','패키지(사업) - 로얄회원'];
 function fillMemberSelect(id,includeAll){
   var el=document.getElementById(id);if(!el)return;
   var opts=(includeAll?'<option value="">전체</option>':'<option value="">선택 안 함</option>')+MEMBER_TIERS.map(function(m){return '<option value="'+m+'">'+m+'</option>';}).join('');
@@ -758,7 +758,8 @@ App.resetForm=function(){
   var t=today();
   setVal('inv-date',t);setVal('inv-num',genId(t));setVal('inv-due',addDays(t,3));
   setVal('inv-status','billing');setVal('inv-currency','MYR');
-  ['c-name','c-phone','c-email','c-addr','c-biz','c-member','inv-notes','inv-terms'].forEach(function(id){setVal(id,'');});
+  ['c-name','c-email','c-addr','c-biz','c-member','inv-notes','inv-terms'].forEach(function(id){setVal(id,'');});
+  setVal('c-phone','+60');
   setVal('tax-rate','0');setVal('disc-val','0');setVal('disc-type','pct');
   setVal('parking-fee','0');setVal('min-charge','0');setVal('extra-fee','0');setVal('credit-use','0');setVal('paid-amount','0');
   setVal('send-email','');
@@ -799,7 +800,7 @@ function loadInvToForm(inv){
   setVal('inv-num',inv.id||'');setVal('inv-date',inv.date||'');setVal('inv-due',inv.due||'');
   setVal('inv-status',inv.status||'billing');setVal('inv-currency',inv.currency||'MYR');
   setVal('c-name',inv.customer&&inv.customer.name||'');
-  setVal('c-phone',inv.customer&&inv.customer.phone||'');
+  setVal('c-phone',(inv.customer&&inv.customer.phone)||'+60');
   setVal('c-email',inv.customer&&inv.customer.email||'');
   setVal('c-addr',inv.customer&&inv.customer.addr||'');
   setVal('c-biz',inv.customer&&inv.customer.biz||'');
@@ -1075,10 +1076,11 @@ function calcTotals(inv){
   var paidAmount=parseFloat(inv?inv.paidAmount:val('paid-amount'))||0;
   var tax=taxRate/100*sub;
   var disc=discType==='pct'?discVal/100*sub:discVal;
-  var grand=sub+tax-disc+park+extra-credit;
+  var rawGrand=sub+tax-disc+park+extra-credit;
+  var grand=rawGrand;
   if(minC>0&&grand<minC)grand=minC;
   var balance=grand-paidAmount;
-  var t={sub:sub,tax:tax,taxRate:taxRate,disc:disc,discVal:discVal,discType:discType,park:park,minC:minC,extra:extra,credit:credit,paidAmount:paidAmount,balance:balance,grand:grand};
+  var t={sub:sub,tax:tax,taxRate:taxRate,disc:disc,discVal:discVal,discType:discType,park:park,minC:minC,extra:extra,credit:credit,paidAmount:paidAmount,balance:balance,grand:grand,rawGrand:rawGrand};
   if(!inv){
     function sr(id,lbl,dispId,show,label,display){var r=$(id);if(r)r.style.display=show?'flex':'none';if(show){var l=$(lbl);if(l)l.textContent=label;var d=$(dispId);if(d)d.textContent=display;}}
     var sd=$('sub-d');if(sd)sd.textContent=fmtAmt(sub);
@@ -1137,6 +1139,7 @@ function buildInvHTML(inv){
   if(t.park>0)chargeRows+='<div class="idtrow"><span>Parking</span><span>+'+fa(t.park)+'</span></div>';
   if(t.extra>0)chargeRows+='<div class="idtrow"><span>Extra</span><span>+'+fa(t.extra)+'</span></div>';
   if(t.credit>0)chargeRows+='<div class="idtrow" style="color:var(--red)"><span>Member Credit</span><span>-'+fa(t.credit)+'</span></div>';
+  if(t.minC>0&&t.grand>t.rawGrand)chargeRows+='<div class="idtrow" style="color:#2563eb"><span>Minimum Charge Adjustment</span><span>+'+fa(t.grand-t.rawGrand)+'</span></div>';
   var bankSec='';
   if(inv.bankInfo){
     var qrHtml=inv.bankInfo.qr?'<img src="'+inv.bankInfo.qr+'" style="width:64px;height:64px;object-fit:contain;border-radius:4px;border:1px solid var(--bdr)">':'';
@@ -1619,7 +1622,7 @@ window.onCNameInput=onCNameInput;
 window.selectCNameSuggest=function(id){
   var c=customers.find(function(x){return x.id===id;});
   if(!c)return;
-  setVal('c-name',c.name||'');setVal('c-phone',c.phone||'');setVal('c-email',c.email||'');
+  setVal('c-name',c.name||'');setVal('c-phone',c.phone||'+60');setVal('c-email',c.email||'');
   setVal('c-addr',c.addr||'');setVal('c-biz',c.biz||'');setVal('c-member',c.member||'');
   var box=$('c-name-suggest');if(box){box.style.display='none';box.innerHTML='';}
   showToast(c.member?'✓ 고객정보 + 회원정보("'+c.member+'") 반영됨':'✓ 고객정보 반영됨');
@@ -1642,7 +1645,7 @@ function renderRecentCustChips(){
 }
 window.selectRecentCust=function(i){
   var cu=(window._recentCustList||[])[i];if(!cu)return;
-  setVal('c-name',cu.name||'');setVal('c-phone',cu.phone||'');setVal('c-email',cu.email||'');
+  setVal('c-name',cu.name||'');setVal('c-phone',cu.phone||'+60');setVal('c-email',cu.email||'');
   setVal('c-addr',cu.addr||'');setVal('c-biz',cu.biz||'');setVal('c-member',cu.member||'');
   showToast('✓ "'+cu.name+'" 고객정보 반영됨');
   App.upPrev();
@@ -1668,7 +1671,7 @@ function renderCustPicker(q){
 }
 function pickCust(id){
   var c=customers.find(function(x){return x.id===id;});if(!c)return;
-  setVal('c-name',c.name||'');setVal('c-phone',c.phone||'');setVal('c-email',c.email||'');setVal('c-addr',c.addr||'');setVal('c-biz',c.biz||'');
+  setVal('c-name',c.name||'');setVal('c-phone',c.phone||'+60');setVal('c-email',c.email||'');setVal('c-addr',c.addr||'');setVal('c-biz',c.biz||'');
   $('cust-picker').classList.add('hidden');showToast('고객 정보 불러옴 ✓');App.upPrev();
 }
 window.openCustPicker=openCustPicker;window.pickCust=pickCust;
@@ -1696,7 +1699,7 @@ function renderCusts(){
 }
 function newInvFromCust(id){
   var c=customers.find(function(x){return x.id===id;});if(!c)return;
-  App.resetForm();setVal('c-name',c.name||'');setVal('c-phone',c.phone||'');setVal('c-email',c.email||'');setVal('c-addr',c.addr||'');setVal('c-biz',c.biz||'');setVal('c-member',c.member||'');
+  App.resetForm();setVal('c-name',c.name||'');setVal('c-phone',c.phone||'+60');setVal('c-email',c.email||'');setVal('c-addr',c.addr||'');setVal('c-biz',c.biz||'');setVal('c-member',c.member||'');
   Nav('new');showToast('고객 정보 불러옴 ✓');
 }
 async function delCust(id){
