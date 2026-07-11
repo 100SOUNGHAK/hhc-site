@@ -298,6 +298,29 @@ const ADMIN_PW='hhc_req_admin_pw';
 const ADMIN_AUTH='hhc_req_admin_auth';
 
 let db=null,unsub=null,allRequests=[];
+let editingReqId=null;
+function escAttr(s){return (s||'').toString().replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+window.addEditItemRow=function(id){
+  const wrap=document.getElementById('edit-items-'+id);
+  const idx=wrap.querySelectorAll('.edit-item-cat').length;
+  const div=document.createElement('div');
+  div.innerHTML=`
+    <div class="fg c2" style="margin-bottom:6px;align-items:flex-end">
+      <div class="f"><label class="lb" style="font-size:10px">분류</label><input class="edit-item-cat" data-idx="${idx}" value="" style="font-size:12px;padding:6px 8px"></div>
+      <div class="f"><label class="lb" style="font-size:10px">세부내용</label><input class="edit-item-svc" data-idx="${idx}" value="" style="font-size:12px;padding:6px 8px"></div>
+    </div>
+    <div class="fg" style="margin-bottom:8px;gap:6px">
+      <div class="f" style="max-width:80px"><label class="lb" style="font-size:10px">수량</label><input type="number" class="edit-item-qty" data-idx="${idx}" value="1" min="1" style="font-size:12px;padding:6px 8px"></div>
+      <button type="button" class="btn-sm btn-del" style="align-self:flex-end" onclick="removeEditItemRow(this)">🗑️</button>
+    </div>`;
+  while(div.firstChild)wrap.appendChild(div.firstChild);
+};
+window.removeEditItemRow=function(btn){
+  const row1=btn.closest('.fg');
+  const row0=row1.previousElementSibling;
+  if(row0)row0.remove();
+  row1.remove();
+};
 
 // ── AUTH ──
 function checkAuth(){return localStorage.getItem(ADMIN_AUTH)==='1';}
@@ -396,11 +419,40 @@ function renderList(){
       return `<div class="rc-item-row"><span class="rc-item-dot">•</span><span>${it.cat}${svc} × ${it.qty}</span></div>`;
     }).join('');
 
+    if(editingReqId===r.__id){
+      const itemRows=items.map((it,idx)=>`
+        <div class="fg c2" style="margin-bottom:6px;align-items:flex-end">
+          <div class="f"><label class="lb" style="font-size:10px">분류</label><input class="edit-item-cat" data-idx="${idx}" value="${escAttr(it.cat||'')}" style="font-size:12px;padding:6px 8px"></div>
+          <div class="f"><label class="lb" style="font-size:10px">세부내용</label><input class="edit-item-svc" data-idx="${idx}" value="${escAttr(it.svc||'')}" style="font-size:12px;padding:6px 8px"></div>
+        </div>
+        <div class="fg" style="margin-bottom:8px;gap:6px">
+          <div class="f" style="max-width:80px"><label class="lb" style="font-size:10px">수량</label><input type="number" class="edit-item-qty" data-idx="${idx}" value="${it.qty||1}" min="1" style="font-size:12px;padding:6px 8px"></div>
+          <button type="button" class="btn-sm btn-del" style="align-self:flex-end" onclick="removeEditItemRow(this)">🗑️</button>
+        </div>`).join('');
+
+      return `<div class="req-card" data-id="${r.__id}" style="border-color:var(--teal);box-shadow:0 2px 12px rgba(13,148,136,.12)">
+        <div class="fg c2" style="margin-bottom:8px">
+          <div class="f"><label class="lb">콘도명</label><input id="edit-condo-${r.__id}" value="${escAttr(r.condo_name||r.condo||'')}"></div>
+          <div class="f"><label class="lb">동호수</label><input id="edit-unit-${r.__id}" value="${escAttr(r.condo_unit||'')}"></div>
+        </div>
+        <div class="f" style="margin-bottom:8px"><label class="lb">연락처</label><input id="edit-phone-${r.__id}" value="${escAttr(r.phone||'')}"></div>
+        <div style="margin-bottom:8px">
+          <label class="lb">의뢰 품목</label>
+          <div id="edit-items-${r.__id}">${itemRows||''}</div>
+          <button type="button" class="btn-sm" style="width:100%;background:var(--il);color:var(--indigo);border:1px dashed var(--indigo)" onclick="addEditItemRow('${r.__id}')">+ 품목 추가</button>
+        </div>
+        <div class="f" style="margin-bottom:10px"><label class="lb">요청사항</label><textarea id="edit-remarks-${r.__id}" rows="2">${r.remarks||''}</textarea></div>
+        <div class="fg c2">
+          <button class="btn-sm" style="background:var(--green-bg);color:var(--green);border:1px solid var(--green)" data-savereq="${r.__id}">✓ 저장</button>
+          <button class="btn-sm" data-canceledit="${r.__id}">취소</button>
+        </div>
+      </div>`;
+    }
+
     return `<div class="req-card ${cardCls}" data-id="${r.__id}">
       <div class="rc-top">
         <div class="rc-info">
-          <div class="rc-name">${r.condo_name||r.condo||'—'}${langBadge}${urgentBadge}</div>
-          ${r.condo_unit?`<div class="rc-unit">🏠 ${r.condo_unit}</div>`:''}
+          <div class="rc-name">${r.condo_name||r.condo||'—'}${r.condo_unit?' '+r.condo_unit:''}${langBadge}${urgentBadge}</div>
           <div class="rc-phone">📞 ${r.phone||'—'}</div>
         </div>
         <span class="rc-status ${statusCls}">${statusLabel}</span>
@@ -411,7 +463,8 @@ function renderList(){
       <div class="rc-actions" style="display:flex;flex-direction:column;gap:6px">
         ${isPending?`<button class="btn-sm btn-complete" data-complete="${r.__id}" style="width:100%">✓ 접수완료</button>`:''}
         <button class="btn-sm" style="width:100%;background:#0D9488;color:#fff;border:none" data-tobooking="${r.__id}">📅 예약전환</button>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+          <button class="btn-sm" style="background:var(--il);color:var(--indigo);border:1px solid var(--indigo)" data-edit="${r.__id}" title="수정">✏️</button>
           <button class="btn-sm btn-wa" data-wa="${r.__id}" title="WhatsApp">💬</button>
           <button class="btn-sm btn-kakao" data-kakao="${r.__id}" title="카카오">📋</button>
           <button class="btn-sm btn-del" data-del="${r.__id}" title="삭제">🗑️</button>
@@ -493,6 +546,38 @@ document.getElementById('req-list').addEventListener('click',async e=>{
   // 예약전환
   const toBookingBtn=e.target.closest('[data-tobooking]');
   if(toBookingBtn){const r=allRequests.find(x=>x.__id===toBookingBtn.dataset.tobooking);if(r)transferToBooking(r);return;}
+
+  // 수정 시작
+  const editBtn=e.target.closest('[data-edit]');
+  if(editBtn){editingReqId=editBtn.dataset.edit;renderList();return;}
+
+  // 수정 취소
+  const cancelBtn=e.target.closest('[data-canceledit]');
+  if(cancelBtn){editingReqId=null;renderList();return;}
+
+  // 수정 저장
+  const saveBtn=e.target.closest('[data-savereq]');
+  if(saveBtn){
+    const id=saveBtn.dataset.savereq;
+    const condo=document.getElementById('edit-condo-'+id).value.trim();
+    const unit=document.getElementById('edit-unit-'+id).value.trim();
+    const phone=document.getElementById('edit-phone-'+id).value.trim();
+    const remarks=document.getElementById('edit-remarks-'+id).value.trim();
+    const cats=[...document.querySelectorAll('#edit-items-'+id+' .edit-item-cat')];
+    const svcs=[...document.querySelectorAll('#edit-items-'+id+' .edit-item-svc')];
+    const qtys=[...document.querySelectorAll('#edit-items-'+id+' .edit-item-qty')];
+    const items=cats.map((c,i)=>({cat:c.value.trim(),svc:svcs[i].value.trim(),qty:parseInt(qtys[i].value)||1})).filter(it=>it.cat);
+    if(!condo){showToast('콘도명을 입력해주세요');return;}
+    showLoading(true);
+    try{
+      await updateDoc(doc(db,'requests',id),{condo_name:condo,condo:condo,condo_unit:unit,phone:phone,remarks:remarks,items:JSON.stringify(items)});
+      showToast('✓ 수정되었습니다');
+      editingReqId=null;
+    }catch(err){console.error(err);showToast('저장 실패');}
+    showLoading(false);
+    return;
+  }
+
   // 접수완료
   const completeBtn=e.target.closest('[data-complete]');
   if(completeBtn){
