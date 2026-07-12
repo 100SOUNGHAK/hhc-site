@@ -1611,7 +1611,7 @@ function schRenderDay(ds){
           <div class="sch-ttl">${s.title}</div>
           ${s.memo?`<div class="sch-sub">${s.memo}</div>`:''}
         </div>
-        ${s.type==='booking'&&s.booking_id?`<button class="sch-del-btn" style="color:#085048" onclick="sendVisitReminder('${s.booking_id}')" title="방문 안내 메시지 발송">💬</button>`:''}
+        ${s.type==='booking'?`<button class="sch-del-btn" style="color:#085048" onclick="sendVisitReminder('${s._id}')" title="방문 안내 메시지 발송">💬</button>`:''}
         <button class="sch-del-btn" onclick="schDeleteItem('${s._id}')">×</button>
       </div>`;
     }).join('');
@@ -1794,13 +1794,34 @@ function getVisitReminderMsg(name,dateStr,lang){
   return `안녕하세요, ${name}님.\n예약하신 ${md} 방문 서비스 일정 안내드립니다.\n예정된 일정에 맞춰 방문드릴 예정이오니 확인 부탁드립니다.\n원활한 방문 진행을 위해 작업 방문 등록(Work permit) 상태도 다시 한번 확인 부탁드립니다.\n해당 일자에 뵙겠습니다.\n감사합니다.`;
 }
 
-window.sendVisitReminder=function(bookingId){
-  const b=allBookings.find(x=>x.__id===bookingId);
-  if(!b){showToast('예약 정보를 찾을 수 없습니다');return;}
-  const lang=b.customer_lang||'ko';
-  const msg=getVisitReminderMsg(b.customer_name||'고객',b.booking_date||'',lang);
+window.sendVisitReminder=function(scheduleItemId){
+  // 스케줄 항목 찾기
+  let schItem=null;
+  for(const dt in schedules){
+    const found=(schedules[dt]||[]).find(s=>s._id===scheduleItemId);
+    if(found){schItem=found;break;}
+  }
+  let name='고객',dateStr='',lang='ko';
+  if(schItem&&schItem.booking_id){
+    const b=allBookings.find(x=>x.__id===schItem.booking_id);
+    if(b){
+      name=b.customer_name||name;
+      dateStr=b.booking_date||schItem.date||'';
+      lang=b.customer_lang||'ko';
+    }
+  }
+  if(!dateStr&&schItem){
+    // 연결된 예약 데이터가 없으면 스케줄 항목 자체에서 정보 추출
+    dateStr=schItem.date||'';
+    if(schItem.title){
+      const parts=schItem.title.split(' — ');
+      if(parts[0])name=parts[0].trim();
+    }
+  }
+  if(!dateStr){showToast('예약 정보를 찾을 수 없습니다');return;}
+  const msg=getVisitReminderMsg(name,dateStr,lang);
   const title=lang==='en'?'💬 Visit Reminder Message':'💬 방문 안내 메시지';
-  const subtitle=lang==='en'?`Please send the message below to ${b.customer_name||'customer'}`:`${b.customer_name||'고객'}님께 아래 메시지를 전송해 주세요`;
+  const subtitle=lang==='en'?`Please send the message below to ${name}`:`${name}님께 아래 메시지를 전송해 주세요`;
   const closeLabel=lang==='en'?'Close':'닫기';
   const waLabel=lang==='en'?'Send via WhatsApp':'WhatsApp 전송';
   const kakaoLabel=lang==='en'?'Copy for KakaoTalk':'카카오톡 복사';
