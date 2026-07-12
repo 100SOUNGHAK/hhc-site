@@ -353,13 +353,17 @@ async function initApp(){
         bookings[b.booking_date].push({
           _id:'bk_'+b._id,source:'booking',
           date:b.booking_date,
-          title:b.customer_name||b.customer_address||(curLang==='en'?'Booking':'예약'),
+          title:b.customer_address||b.customer_name||(curLang==='en'?'Booking':'예약'),
           time_s:b.booking_time?b.booking_time.replace(/[^0-9:]/g,'').slice(0,5):'',
           time_e:'',type:'booking',
           memo:[
             b.booking_items?'🔧 '+b.booking_items:'',
             b.booking_memo?'📝 '+b.booking_memo:''
           ].filter(Boolean).join('\n'),
+          real_booking_id:b._id,
+          customer_name:b.customer_name||'',
+          customer_lang:b.customer_lang||'ko',
+          booking_date:b.booking_date
         });
       });
       sortAll(bookings);
@@ -667,6 +671,7 @@ async function renderDay(ds){
         ${isAuto?`<div class="sch-auto">📋 ${curLang==='en'?'Auto from booking':'예약시스템 자동반영'}</div>`:''}
       </div>
       ${!isAuto?`<button class="sch-edit" onclick="editItem('${s._id}')">✏️</button><button class="sch-del" onclick="deleteItem('${s._id}')">×</button>`:''}
+      ${s.type==='booking'?`<button class="sch-edit" style="color:#085048" onclick="sendVisitReminder('${s._id}')" title="방문 안내 메시지 발송">💬</button>`:''}
     </div>`;
   });
   html+='</div>';
@@ -689,6 +694,78 @@ async function renderDay(ds){
   </div>`;
   content.innerHTML=html;
 }
+
+function getVisitReminderMsg(name,dateStr,lang){
+  lang=lang||'ko';
+  var md='',mdEn='';
+  if(dateStr){
+    var p=dateStr.split('-');
+    if(p.length===3){
+      md=parseInt(p[1])+'월'+parseInt(p[2])+'일';
+      var monEn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(p[1])-1];
+      mdEn=monEn+' '+parseInt(p[2]);
+    }
+  }
+  if(lang==='en'){
+    return `Hello, ${name}.\nThis is a visit schedule notice for your booked service on ${mdEn}.\nWe will visit as scheduled, so please kindly confirm.\nFor a smooth visit, please also re-confirm the status of your Work Permit registration.\nWe look forward to seeing you on that date.\nThank you.`;
+  }
+  return `안녕하세요, ${name}님.\n예약하신 ${md} 방문 서비스 일정 안내드립니다.\n예정된 일정에 맞춰 방문드릴 예정이오니 확인 부탁드립니다.\n원활한 방문 진행을 위해 작업 방문 등록(Work permit) 상태도 다시 한번 확인 부탁드립니다.\n해당 일자에 뵙겠습니다.\n감사합니다.`;
+}
+
+window.sendVisitReminder=function(itemId){
+  // bookings/schedules 양쪽에서 해당 항목 찾기
+  let item=null;
+  for(const dt in bookings){const f=(bookings[dt]||[]).find(s=>s._id===itemId);if(f){item=f;break;}}
+  if(!item)for(const dt in schedules){const f=(schedules[dt]||[]).find(s=>s._id===itemId);if(f){item=f;break;}}
+  if(!item){alert('일정 정보를 찾을 수 없습니다');return;}
+
+  let name=item.customer_name||'고객';
+  let dateStr=item.booking_date||item.date||'';
+  let lang=item.customer_lang||'ko';
+  if(!item.customer_name&&item.title){
+    const parts=item.title.split(' — ');
+    if(parts[0])name=parts[0].trim();
+  }
+  if(!dateStr){alert('예약 날짜를 찾을 수 없습니다');return;}
+
+  const msg=getVisitReminderMsg(name,dateStr,lang);
+  const title=lang==='en'?'💬 Visit Reminder Message':'💬 방문 안내 메시지';
+  const subtitle=lang==='en'?`Please send the message below to ${name}`:`${name}님께 아래 메시지를 전송해 주세요`;
+  const closeLabel=lang==='en'?'Close':'닫기';
+  const waLabel=lang==='en'?'Send via WhatsApp':'WhatsApp 전송';
+  const kakaoLabel=lang==='en'?'Copy for KakaoTalk':'카카오톡 복사';
+  const copiedLabel=lang==='en'?'✓ Copied! Paste in KakaoTalk':'✓ 복사됨! 카카오톡에 붙여넣기 하세요';
+
+  const existing=document.getElementById('visit-msg-modal');
+  if(existing)existing.remove();
+  const modal=document.createElement('div');
+  modal.id='visit-msg-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML=`
+    <div style="background:#fff;border-radius:20px;padding:24px;max-width:420px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.14)">
+      <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:4px">${title}</div>
+      <div style="font-size:12px;color:#8a8f9a;margin-bottom:12px">${subtitle}</div>
+      <div style="background:#f5f6f8;border:1px solid #e5e7eb;border-radius:10px;padding:12px;font-size:12px;color:#333;line-height:1.8;white-space:pre-wrap;max-height:280px;overflow-y:auto;margin-bottom:12px">${msg}</div>
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px">
+        <button id="visit-wa-btn" style="flex:1;padding:10px;border:none;border-radius:8px;background:#25D366;color:#fff;font-size:13px;font-weight:600;cursor:pointer">${waLabel}</button>
+        <button id="visit-kakao-btn" style="flex:1;padding:10px;border:none;border-radius:8px;background:#FEE500;color:#3A1D1D;font-size:13px;font-weight:600;cursor:pointer">${kakaoLabel}</button>
+      </div>
+      <div id="visit-kakao-ok" style="display:none;text-align:center;padding:8px;background:#E0F9F5;color:#085048;border-radius:6px;font-size:12px;font-weight:600;margin-bottom:8px">${copiedLabel}</div>
+      <button id="visit-close-btn" style="width:100%;padding:9px;border:1px solid #e5e7eb;border-radius:8px;background:transparent;color:#333;font-size:13px;font-weight:500;cursor:pointer">${closeLabel}</button>
+    </div>`;
+  document.body.appendChild(modal);
+  document.getElementById('visit-wa-btn').addEventListener('click',()=>{
+    window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+  });
+  document.getElementById('visit-kakao-btn').addEventListener('click',()=>{
+    navigator.clipboard.writeText(msg).then(()=>{
+      const ok=document.getElementById('visit-kakao-ok');
+      ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
+    }).catch(()=>prompt('복사 후 붙여넣기:',msg));
+  });
+  document.getElementById('visit-close-btn').addEventListener('click',()=>modal.remove());
+  modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+};
 
 function buildMsg(ds,list,dateStr){
   const lines=['📅 '+dateStr+' '+(curLang==='en'?'Schedule':'일정')+'\n'];
