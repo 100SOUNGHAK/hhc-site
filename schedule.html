@@ -75,9 +75,13 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:var(--g);col
 .dot-h{background:#DC2626}
 .dot-gg{background:#4285F4}
 .day-cnt{font-size:8px;font-weight:700;color:var(--tx3)}
-.legend-bar{display:flex;gap:12px;flex-wrap:wrap;padding:6px 14px;border-top:0.5px solid var(--ln);font-size:10px;color:var(--tx2)}
-.leg{display:flex;align-items:center;gap:4px}
-.leg-dot{width:8px;height:8px;border-radius:2px}
+.today-summary{background:var(--navy);margin:8px 14px;border-radius:12px;padding:12px 15px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.today-summary-date{font-size:10.5px;color:rgba(255,255,255,.5)}
+.today-summary-txt{font-size:13.5px;font-weight:600;color:#fff;margin-top:2px}
+.day-count-badge{margin-top:2px;font-size:8px;font-weight:700;border-radius:6px;padding:1px 4px;line-height:1.4}
+.legend-bar{display:flex;gap:14px;flex-wrap:wrap;padding:9px 14px;border-top:0.5px solid var(--ln);font-size:11.5px;color:var(--tx2)}
+.leg{display:flex;align-items:center;gap:5px}
+.leg-dot{width:9px;height:9px;border-radius:3px}
 
 /* 일정 패널 (슬라이드 업) */
 .day-panel{flex:1;padding-bottom:calc(80px + var(--safe-bot))}
@@ -210,6 +214,15 @@ body{font-family:-apple-system,'Noto Sans KR',sans-serif;background:var(--g);col
       <button class="today-btn" id="today-btn" onclick="goToday()">오늘</button>
     </div>
     <button class="nav-btn" onclick="nextPeriod()">›</button>
+  </div>
+
+  <!-- 오늘 일정 요약 -->
+  <div class="today-summary" id="today-summary">
+    <div>
+      <div class="today-summary-date" id="today-summary-date">오늘</div>
+      <div class="today-summary-txt" id="today-summary-txt">일정 없음</div>
+    </div>
+    <span style="font-size:20px">📋</span>
   </div>
 
   <!-- 월 뷰 -->
@@ -384,8 +397,32 @@ function getWeekStart(d){const day=d.getDay();const s=new Date(d);s.setDate(d.ge
 
 function refresh(){
   renderNav();
+  renderTodaySummary();
   if(curView==='month'){renderCal();if(selDate)renderDay(selDate);}
   else{renderWeek();}
+}
+
+function renderTodaySummary(){
+  const el=document.getElementById('today-summary-txt');
+  const dateEl=document.getElementById('today-summary-date');
+  if(!el||!dateEl)return;
+  const now=new Date();
+  const ds=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const months=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  const wdays=['일','월','화','수','목','금','토'];
+  dateEl.textContent=`오늘 · ${months[now.getMonth()]} ${now.getDate()}일 (${wdays[now.getDay()]})`;
+  const list=getMerged(ds);
+  if(!list.length){el.textContent='일정 없음';return;}
+  const bCnt=list.filter(s=>s.type==='booking').length;
+  const gCnt=list.filter(s=>s.type==='google').length;
+  const hCnt=list.filter(s=>s.type==='holiday').length;
+  const mCnt=list.filter(s=>s.type!=='booking'&&s.type!=='holiday'&&s.type!=='google').length;
+  const parts=[];
+  if(bCnt)parts.push(`예약확정 ${bCnt}건`);
+  if(mCnt)parts.push(`직접입력 ${mCnt}건`);
+  if(gCnt)parts.push(`구글 캘린더 ${gCnt}건`);
+  if(hCnt)parts.push(`휴일/기타 ${hCnt}건`);
+  el.textContent=parts.join(' · ');
 }
 
 // ── 뷰 전환
@@ -464,15 +501,19 @@ function renderCal(){
     const dn=document.createElement('div');dn.className='day-num';dn.textContent=d2;cell.appendChild(dn);
     const list=getMerged(ds);
     if(list.length){
-      const dots=document.createElement('div');dots.className='day-dots';
-      list.slice(0,8).forEach(s=>{
-        const dot=document.createElement('span');
-        dot.className='day-dot dot-'+(s.type==='booking'?'b':s.type==='holiday'?'h':s.type==='google'?'gg':'m');
-        dots.appendChild(dot);
-      });
-      cell.appendChild(dots);
-      const cnt=document.createElement('div');cnt.className='day-cnt';
-      cnt.textContent=curLang==='en'?list.length+(list.length>1?' items':' item'):list.length+'건';
+      const bCnt=list.filter(s=>s.type==='booking').length;
+      const hCnt=list.filter(s=>s.type==='holiday').length;
+      const gCnt=list.filter(s=>s.type==='google').length;
+      const mCnt=list.length-bCnt-hCnt-gCnt;
+      let bg='#CCF2EE',fg='#085048'; // 기본: 예약확정 색상
+      const maxCnt=Math.max(bCnt,hCnt,gCnt,mCnt);
+      if(maxCnt===hCnt&&hCnt>0){bg='#FFE4E6';fg='#9F1239';}
+      else if(maxCnt===gCnt&&gCnt>0){bg='#E8F0FE';fg='#1A56DB';}
+      else if(maxCnt===mCnt&&mCnt>0&&bCnt===0){bg='#EDE9FE';fg='#5B21B6';}
+      const cnt=document.createElement('div');
+      cnt.className='day-count-badge';
+      cnt.style.background=bg;cnt.style.color=fg;
+      cnt.textContent=(curLang==='en'?list.length+(list.length>1?' items':' item'):list.length+'건');
       cell.appendChild(cnt);
     }
     grid.appendChild(cell);
