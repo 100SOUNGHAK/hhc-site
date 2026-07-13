@@ -534,6 +534,15 @@ textarea{resize:none;line-height:1.5}
   </div>
 </div>
 
+<!-- CUSTOMER INVOICE HISTORY MODAL -->
+<div class="pm hidden" id="cust-hist-modal">
+  <div class="pms">
+    <div class="pmh"></div>
+    <div class="pmt"><span style="font-weight:600;font-size:15px" id="cust-hist-title">인보이스 이력</span><button onclick="document.getElementById('cust-hist-modal').classList.add('hidden')" style="background:none;border:none;font-size:24px;color:var(--gray);cursor:pointer">&times;</button></div>
+    <div class="pmb" id="cust-hist-body"></div>
+  </div>
+</div>
+
 <!-- PREVIEW MODAL -->
 <div class="pm hidden" id="prev-modal">
   <div class="pms">
@@ -1716,9 +1725,11 @@ function renderCusts(){
   if(!f.length){el.innerHTML='<div class="empty"><div class="et">고객 없음</div></div>';return;}
   el.innerHTML=f.map(function(c){
     var memberBadge=c.member?'<div style="display:inline-block;margin-top:3px;padding:1px 8px;border-radius:20px;font-size:10.5px;font-weight:600;background:var(--il);color:var(--indigo)">'+c.member+'</div>':'';
+    var custInvCount=invoices.filter(function(i){return i.customer&&i.customer.name===c.name;}).length;
+    var invBadge=custInvCount>0?'<span style="font-size:10px;background:var(--il);color:var(--indigo);padding:1px 7px;border-radius:20px;margin-left:6px;font-weight:600">인보이스 '+custInvCount+'건</span>':'';
     return '<div class="cr">'+
       '<div class="cav">'+(c.name||'?').slice(0,2).toUpperCase()+'</div>'+
-      '<div class="ci"><div class="cn">'+(c.name||'')+'</div><div class="cs">'+(c.phone||'')+(c.email?' · '+c.email:'')+'</div>'+(c.addr?'<div class="cs">'+c.addr+'</div>':'')+memberBadge+'</div>'+
+      '<div class="ci"><div class="cn" onclick="showCustInvoiceHistory(\''+c.id+'\')" style="cursor:pointer;color:var(--indigo);text-decoration:underline;text-underline-offset:2px;display:inline-flex;align-items:center;flex-wrap:wrap">'+(c.name||'')+invBadge+'</div><div class="cs">'+(c.phone||'')+(c.email?' · '+c.email:'')+'</div>'+(c.addr?'<div class="cs">'+c.addr+'</div>':'')+memberBadge+'</div>'+
       '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'+
         '<button class="btn bxs bp" onclick="newInvFromCust(\''+c.id+'\')">인보이스</button>'+
         '<button class="btn bxs bgh" onclick="openCustModal(customers.find(function(x){return x.id===\''+c.id+'\';}))">수정</button>'+
@@ -1727,6 +1738,36 @@ function renderCusts(){
     '</div>';
   }).join('');
 }
+window.showCustInvoiceHistory=function(custId){
+  var c=customers.find(function(x){return x.id===custId;});
+  if(!c)return;
+  var list=invoices.filter(function(i){return i.customer&&i.customer.name===c.name;});
+  list.sort(function(a,b){return(b.date||'').localeCompare(a.date||'');});
+  var title=$('cust-hist-title');
+  if(title)title.textContent=(c.name||'고객')+'님 인보이스 이력';
+  var body=$('cust-hist-body');
+  if(!body)return;
+  if(!list.length){
+    body.innerHTML='<div class="empty"><div class="et">인보이스 이력 없음</div></div>';
+  }else{
+    var total=list.reduce(function(s,i){return s+calcTotals(i).grand;},0);
+    var statusLbl={billing:'청구중',paid:'결제완료',overdue:'연체'};
+    var statusBg={billing:'#fef3c7',paid:'#d1fae5',overdue:'#fee2e2'};
+    var statusFg={billing:'#d97706',paid:'#059669',overdue:'#dc2626'};
+    body.innerHTML='<div style="font-size:12px;color:var(--gray);margin-bottom:12px">총 '+list.length+'건 · 누적 '+fmtAmt(total)+'</div>'+
+      list.map(function(inv){
+        var t=calcTotals(inv);
+        var st=inv.status||'billing';
+        return '<div onclick="document.getElementById(\'cust-hist-modal\').classList.add(\'hidden\');openInvView(\''+inv.id+'\')" style="cursor:pointer;background:#f8f9fc;border-radius:8px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">'+
+          '<div><div style="font-size:12.5px;font-weight:600;color:var(--txt)">'+(inv.id||'')+'</div><div style="font-size:11px;color:var(--gray);margin-top:1px">'+(inv.date||'')+'</div></div>'+
+          '<div style="text-align:right"><div style="font-size:13px;font-weight:600;color:var(--txt)">'+fmtAmt(t.grand)+'</div><span style="font-size:10px;background:'+(statusBg[st]||'#f1f3f8')+';color:'+(statusFg[st]||'#6b7280')+';padding:1px 8px;border-radius:20px">'+(statusLbl[st]||st)+'</span></div>'+
+        '</div>';
+      }).join('')+
+      '<div style="font-size:11px;color:var(--gray);text-align:center;margin-top:6px">항목을 누르면 해당 인보이스가 열려요</div>';
+  }
+  $('cust-hist-modal').classList.remove('hidden');
+};
+
 function newInvFromCust(id){
   var c=customers.find(function(x){return x.id===id;});if(!c)return;
   App.resetForm();setVal('c-name',c.name||'');setVal('c-phone',c.phone||'+60');setVal('c-email',c.email||'');setVal('c-addr',c.addr||'');setVal('c-biz',c.biz||'');setVal('c-member',c.member||'');
