@@ -161,7 +161,7 @@ textarea{resize:none;line-height:1.5}
 .acs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:16px 16px 8px}
 .acc{background:var(--sf);border-radius:10px;border:1px solid var(--bdr);padding:12px;text-align:center}
 .acv{font-size:15px;font-weight:700;color:var(--navy)} .acl{font-size:10px;color:var(--gray);margin-top:3px}
-.ps{display:flex;gap:8px;padding:0 16px 12px;overflow-x:auto;scrollbar-width:none} .ps::-webkit-scrollbar{display:none}
+.ps{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 12px}
 .pb{padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;border:1.5px solid var(--bdr);background:var(--sf);color:var(--gray);cursor:pointer;white-space:nowrap;flex-shrink:0;font-family:inherit}
 .pb.active{background:var(--indigo);color:#fff;border-color:var(--indigo)}
 /* ISSUER */
@@ -380,8 +380,8 @@ textarea{resize:none;line-height:1.5}
   </div>
   <div class="sor">
     <span class="sol">정렬:</span>
-    <button class="sob active" id="sort-date" onclick="setSort('date')">발행일</button>
-    <button class="sob" id="sort-num" onclick="setSort('num')">번호순</button>
+    <button class="sob active" id="sort-date" onclick="setSort('date')">발행일 <span id="sort-date-arrow">▼</span></button>
+    <button class="sob" id="sort-num" onclick="setSort('num')">번호순 <span id="sort-num-arrow">▼</span></button>
     <button class="sob" id="sort-alpha" onclick="setSort('alpha')">가나다순</button>
   </div>
   <div style="padding:0 16px 10px"><select id="inv-member-filter" style="width:100%"></select></div>
@@ -400,6 +400,7 @@ textarea{resize:none;line-height:1.5}
 <div class="screen" id="screen-customers">
   <div class="sh"><span class="sht">고객 (<span id="cust-count">0</span>명)</span><button class="btn bp bsm" onclick="openCustModal(null)">+ 신규 등록</button></div>
   <div class="sw" style="padding-top:0"><svg class="si" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="cust-search" placeholder="고객명 검색..."></div>
+  <div id="cust-dup-box" style="display:none;margin:0 16px 10px;padding:9px 12px;background:#FEF3C7;border:1px solid #F2DCA6;border-radius:8px;font-size:12px;color:#92600A"></div>
   <div style="padding:0 16px 10px"><select id="cust-member-filter" style="width:100%"></select></div>
   <div class="card" style="margin:0 16px" id="customers-list"></div>
 </div>
@@ -567,12 +568,14 @@ var ST=null; // Firebase Storage
 var invoices=[],services=[],banks=[],customers=[],lineItems=[];
 var expandedLI={};
 var MEMBER_TIERS=['패키지 - 실버회원','패키지 - 티타늄회원','패키지 - 다이아회원','패키지 - 골드회원','패키지 - 로얄회원','패키지(사업) - 티타늄회원','패키지(사업) - 다이아회원','패키지(사업) - 골드회원','패키지(사업) - 로얄회원'];
-function fillMemberSelect(id,includeAll){
+function fillMemberSelect(id,includeAll,includeNonMember){
   var el=document.getElementById(id);if(!el)return;
-  var opts=(includeAll?'<option value="">전체</option>':'<option value="">선택 안 함</option>')+MEMBER_TIERS.map(function(m){return '<option value="'+m+'">'+m+'</option>';}).join('');
+  var opts=(includeAll?'<option value="">전체</option>':'<option value="">선택 안 함</option>');
+  if(includeNonMember)opts+='<option value="__none__">비회원</option>';
+  opts+=MEMBER_TIERS.map(function(m){return '<option value="'+m+'">'+m+'</option>';}).join('');
   el.innerHTML=opts;
 }
-var currentFilter='all',currentSort='date',selYear=new Date().getFullYear();
+var currentFilter='all',currentSort='date',sortDir=1,selYear=new Date().getFullYear();
 var viewingId=null,statusEditId=null,currentNav='list';
 var issuer={name:'Happy Works Services Sdn. Bhd.',email:'admin@happyhomecare.com.my',phone:'+60 12-000 0000',addr:'Kuala Lumpur, Malaysia',biz:''};
 
@@ -1393,7 +1396,15 @@ window.shareWa=shareWa;window.shareKakao=shareKakao;window.quickEmail=quickEmail
 // LIST
 // ═══════════════════════════════════════════════════════════
 function setFilter(f){currentFilter=f;['all','billing','paid','overdue'].forEach(function(n){var c=$('chip-'+n);if(c)c.classList.toggle('active',n===f);});renderList();}
-function setSort(s){currentSort=s;['date','num','alpha'].forEach(function(n){var b=$('sort-'+n);if(b)b.classList.toggle('active',n===s);});renderList();}
+function setSort(s){
+  if(s===currentSort&&(s==='date'||s==='num')){sortDir=-sortDir;}
+  else{sortDir=1;}
+  currentSort=s;
+  ['date','num','alpha'].forEach(function(n){var b=$('sort-'+n);if(b)b.classList.toggle('active',n===s);});
+  var da=$('sort-date-arrow');if(da)da.textContent=(currentSort==='date'&&sortDir===-1)?'▲':'▼';
+  var na=$('sort-num-arrow');if(na)na.textContent=(currentSort==='num'&&sortDir===-1)?'▲':'▼';
+  renderList();
+}
 window.setFilter=setFilter;window.setSort=setSort;
 
 function renderList(){
@@ -1405,8 +1416,8 @@ function renderList(){
     return mq&&mm&&(currentFilter==='all'||i.status===currentFilter);
   });
   filtered.sort(function(a,b){
-    if(currentSort==='date')return(b.date||'').localeCompare(a.date||'');
-    if(currentSort==='num')return(b.id||'').localeCompare(a.id||'');
+    if(currentSort==='date')return sortDir*(b.date||'').localeCompare(a.date||'');
+    if(currentSort==='num')return sortDir*(b.id||'').localeCompare(a.id||'');
     if(currentSort==='alpha')return(a.customer&&a.customer.name||'').localeCompare(b.customer&&b.customer.name||'');
     return 0;
   });
@@ -1681,7 +1692,26 @@ function renderCusts(){
   var cnt=$('cust-count');if(cnt)cnt.textContent=customers.length;
   var q=(val('cust-search')||'').toLowerCase();
   var mf=val('cust-member-filter')||'';
-  var f=customers.filter(function(c){return(!q||(c.name||'').toLowerCase().includes(q))&&(!mf||c.member===mf);});
+  var dupBox=$('cust-dup-box');
+  if(dupBox){
+    if(q.trim().length>=1){
+      var matches=customers.filter(function(c){return(c.name||'').toLowerCase().includes(q);});
+      if(matches.length>0){
+        dupBox.style.display='block';
+        dupBox.textContent='⚠️ 일치하는 고객 '+matches.length+'건: '+matches.slice(0,4).map(function(c){return c.name;}).join(', ')+(matches.length>4?' 외 '+(matches.length-4)+'건':'');
+      }else{
+        dupBox.style.display='block';
+        dupBox.textContent='새로운 고객명입니다 (일치하는 기존 고객 없음)';
+      }
+    }else{
+      dupBox.style.display='none';
+    }
+  }
+  var f=customers.filter(function(c){
+    var matchQ=!q||(c.name||'').toLowerCase().includes(q);
+    var matchM=!mf||(mf==='__none__'?!c.member:c.member===mf);
+    return matchQ&&matchM;
+  });
   f.sort(function(a,b){return(a.name||'').localeCompare(b.name||'');});
   if(!f.length){el.innerHTML='<div class="empty"><div class="et">고객 없음</div></div>';return;}
   el.innerHTML=f.map(function(c){
@@ -2288,7 +2318,7 @@ async function init(){
   // 이미지 데이터 로드
   loadImgData();
   // 즉시 렌더링
-  fillMemberSelect('c-member',false);fillMemberSelect('cm-member',false);fillMemberSelect('cust-member-filter',true);fillMemberSelect('inv-member-filter',true);
+  fillMemberSelect('c-member',false);fillMemberSelect('cm-member',false);fillMemberSelect('cust-member-filter',true,true);fillMemberSelect('inv-member-filter',true);
   renderIssView();App.resetForm();renderSvcs();renderBanks();renderBankSel();renderCusts();renderList();renderYearTabs();
 
   // Firebase 연결
