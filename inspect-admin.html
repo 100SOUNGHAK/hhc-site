@@ -181,6 +181,16 @@ textarea{resize:vertical;line-height:1.6}
 
 <div id="inspect-form-body">
 
+<div style="background:#f8f9fc;border:1px solid var(--bdr);border-radius:10px;padding:10px 14px;margin-bottom:12px">
+  <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+    <span style="font-size:12px;font-weight:600;color:var(--txt)">점검보고서 작성 진행률</span>
+    <span style="font-size:12px;font-weight:600;color:#4F6EF7" id="insp-progress-val">0/5</span>
+  </div>
+  <div style="height:5px;background:var(--bdr);border-radius:3px;overflow:hidden">
+    <div style="width:0%;height:100%;background:#4F6EF7;transition:width .2s" id="insp-progress-fill"></div>
+  </div>
+</div>
+
 <!-- 출동 정보 (출장점검보고서 전용) -->
 <div class="card" id="dispatch-info-card" style="display:none">
   <div class="card-hdr"><div class="card-icon">🚐</div><div class="card-title">출동 정보</div></div>
@@ -214,7 +224,7 @@ textarea{resize:vertical;line-height:1.6}
     <div class="fgrid f2">
       <div>
         <div class="fl">고객명 / 상호</div>
-        <input id="f-client" type="text" placeholder="홍길동 / 그린오피스타워" oninput="checkDup(this.value)">
+        <input id="f-client" type="text" placeholder="홍길동 / 그린오피스타워" oninput="checkDup(this.value);updateInspProgress()">
         <div class="dup-box" id="dup-box"></div>
       </div>
       <div><div class="fl">점검일</div><input id="f-date" type="date"></div>
@@ -279,7 +289,10 @@ textarea{resize:vertical;line-height:1.6}
       기준: 흡입(A) − 토출(B) ≥15°C 양호 · 12~15°C 정상범위 · &lt;12°C 저하
     </div>
     <div id="cool-units"></div>
-    <button class="btn-add" onclick="addCoolUnit()">+ 유닛 추가</button>
+    <div class="row-fg" style="display:flex;gap:8px;margin-top:2px">
+      <button class="btn-add" onclick="addCoolUnit()" style="flex:1">+ 유닛 추가</button>
+      <button onclick="bulkSetCoolOk()" style="flex:1;border:1.5px solid #10b981;background:#e8f8f0;color:#0a7a4a;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">✓ 전체 양호 일괄적용</button>
+    </div>
   </div>
 </div>
 
@@ -304,7 +317,10 @@ textarea{resize:vertical;line-height:1.6}
   <div class="card-hdr"><div class="card-icon">🔍</div><div class="card-title">누설검사</div></div>
   <div class="card-body">
     <div id="leak-rows"></div>
-    <button class="btn-add" onclick="addLeakRow()">+ 유닛 추가</button>
+    <div class="row-fg" style="display:flex;gap:8px;margin-top:2px">
+      <button class="btn-add" onclick="addLeakRow()" style="flex:1">+ 유닛 추가</button>
+      <button onclick="bulkSetLeakOk()" style="flex:1;border:1.5px solid #10b981;background:#e8f8f0;color:#0a7a4a;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">✓ 전체 이상없음 일괄적용</button>
+    </div>
     <div style="margin-top:12px">
       <div class="fl" style="margin-bottom:6px">누설검사 사진</div>
       <div class="photo-row" id="leak-photos">
@@ -394,7 +410,7 @@ textarea{resize:vertical;line-height:1.6}
 <div class="card">
   <div class="card-hdr"><div class="card-icon">📑</div><div class="card-title">최종 의견</div></div>
   <div class="card-body">
-    <textarea id="f-opinion" rows="4" placeholder="전반적인 상태 및 권장 사항을 입력하세요..."></textarea>
+    <textarea id="f-opinion" rows="4" placeholder="전반적인 상태 및 권장 사항을 입력하세요..." oninput="updateInspProgress()"></textarea>
   </div>
 </div>
 
@@ -674,7 +690,6 @@ var washerChecklistResult={};
 var testResults={power:true,noise:true};
 var installProductCount=0,materialCount=0,installLeakCount=0,coolTestCount=0,refrigTestCount=0;
 var shortUrls={ko:'',en:''};
-var sendTypeKo='에어컨 기술점검',sendTypeEn='AC Inspection';
 var allReports=[];
 var coolCount=0, msrCount=0, leakCount=0, defectCount=0, recCount=0, outdoorCount=0, problemCount=0;
 
@@ -705,6 +720,19 @@ var DEFAULT_RESULTS=[
 
 function gid(id){return document.getElementById(id);}
 function gv(id){var el=gid(id);return el?el.value:'';}
+function updateInspProgress(){
+  var pv=gid('insp-progress-val'),pf=gid('insp-progress-fill');
+  if(!pv||!pf)return;
+  var c1=!!(gid('f-client')&&gid('f-client').value.trim());
+  var c2=gid('equip-rows')&&gid('equip-rows').children.length>0;
+  var c3=!!evalVal;
+  var c4=(gid('cool-units')&&gid('cool-units').children.length>0)||(gid('outdoor-sets')&&gid('outdoor-sets').children.length>0);
+  var c5=!!(gid('f-opinion')&&gid('f-opinion').value.trim());
+  var n=[c1,c2,c3,c4,c5].filter(Boolean).length;
+  pv.textContent=n+'/5';
+  pf.style.width=(n/5*100)+'%';
+}
+
 function toast(msg,ms){var t=gid('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},ms||2500);}
 
 // ═══════════════════════════════════════════
@@ -818,6 +846,7 @@ function addEquip(unit,type,loc,model,cap){
   };
   wrap.appendChild(hdr);wrap.appendChild(grid);
   gid('equip-rows').appendChild(wrap);
+  updateInspProgress();
 }
 
 // ═══════════════════════════════════════════
@@ -962,12 +991,13 @@ function addCoolUnit(label,a,b,loc,result){
   var div=document.createElement('div');div.className='cu-item';div.id='cu-wrap-'+id;
 
   // 헤더
-  var hdr=document.createElement('div');hdr.className='cu-hdr';
+  var hdr=document.createElement('div');hdr.className='cu-hdr';hdr.style.cursor='pointer';
   var num=document.createElement('div');num.className='cu-num';num.textContent=lbl;num.id='cu-num-'+id;
   var tit=document.createElement('div');tit.style='flex:1;font-size:13px;font-weight:500';tit.textContent='에어컨 '+lbl+' 유닛';
   var badge=document.createElement('span');badge.style='font-size:10px;padding:2px 8px;border-radius:10px;background:#f0f0f0;color:#8a8a9a';badge.textContent='미측정';badge.id='cu-badge-'+id;
-  var del=document.createElement('button');del.className='btn-del';del.style='margin-left:6px';del.textContent='×';del.onclick=function(){div.remove();};
-  hdr.appendChild(num);hdr.appendChild(tit);hdr.appendChild(badge);hdr.appendChild(del);
+  var chev=document.createElement('span');chev.style='font-size:12px;color:#8a8a9a;margin-left:4px';chev.textContent='▼';
+  var del=document.createElement('button');del.className='btn-del';del.style='margin-left:6px';del.textContent='×';del.onclick=function(e){e.stopPropagation();div.remove();};
+  hdr.appendChild(num);hdr.appendChild(tit);hdr.appendChild(badge);hdr.appendChild(chev);hdr.appendChild(del);
 
   // 바디
   var body=document.createElement('div');body.className='cu-body';
@@ -992,10 +1022,10 @@ function addCoolUnit(label,a,b,loc,result){
 
   // 결과 버튼
   var rselRow=document.createElement('div');rselRow.className='rsel-row';
-  var okBtn=document.createElement('div');okBtn.className='rsel-btn'+(result==='ok'?' ok':'');okBtn.textContent='✅ 양호';
-  var warnBtn=document.createElement('div');warnBtn.className='rsel-btn'+(result==='warn'?' warn':'');warnBtn.textContent='⚠️ 저하';
-  okBtn.onclick=function(){okBtn.className='rsel-btn ok';warnBtn.className='rsel-btn';locBox.style.display='none';badge.style.cssText='font-size:10px;padding:2px 8px;border-radius:10px;background:#e8f8f0;color:#0a7a4a';badge.textContent='양호';num.className='cu-num';};
-  warnBtn.onclick=function(){warnBtn.className='rsel-btn warn';okBtn.className='rsel-btn';locBox.style.display='flex';badge.style.cssText='font-size:10px;padding:2px 8px;border-radius:10px;background:#fff4e0;color:#b36000';badge.textContent='저하';num.className='cu-num warn';};
+  var okBtn=document.createElement('div');okBtn.className='rsel-btn rsel-ok-btn'+(result==='ok'?' ok':'');okBtn.textContent='✅ 양호';
+  var warnBtn=document.createElement('div');warnBtn.className='rsel-btn rsel-warn-btn'+(result==='warn'?' warn':'');warnBtn.textContent='⚠️ 저하';
+  okBtn.onclick=function(){okBtn.className='rsel-btn rsel-ok-btn ok';warnBtn.className='rsel-btn rsel-warn-btn';locBox.style.display='none';badge.style.cssText='font-size:10px;padding:2px 8px;border-radius:10px;background:#e8f8f0;color:#0a7a4a';badge.textContent='양호';num.className='cu-num';};
+  warnBtn.onclick=function(){warnBtn.className='rsel-btn rsel-warn-btn warn';okBtn.className='rsel-btn rsel-ok-btn';locBox.style.display='flex';badge.style.cssText='font-size:10px;padding:2px 8px;border-radius:10px;background:#fff4e0;color:#b36000';badge.textContent='저하';num.className='cu-num warn';};
   rselRow.appendChild(okBtn);rselRow.appendChild(warnBtn);
   body.appendChild(rselRow);
 
@@ -1021,12 +1051,24 @@ function addCoolUnit(label,a,b,loc,result){
 
   div.appendChild(hdr);div.appendChild(body);
 
+  // 접기/펼치기 (기존 저장된 데이터 로딩 시엔 접힌 상태로 시작)
+  var startCollapsed=!!result;
+  body.style.display=startCollapsed?'none':'block';
+  chev.textContent=startCollapsed?'▶':'▼';
+  hdr.addEventListener('click',function(e){
+    if(e.target===del)return;
+    var open=body.style.display!=='none';
+    body.style.display=open?'none':'block';
+    chev.textContent=open?'▶':'▼';
+  });
+
   // 온도 자동계산 이벤트
   div.querySelectorAll('.cu-ta,.cu-tb').forEach(function(inp2){
     inp2.addEventListener('input',function(){calcCuDiff(id);});
   });
 
   gid('cool-units').appendChild(div);
+  updateInspProgress();
 
   // 저장용 getter
   div._getCuData=function(){
@@ -1522,6 +1564,15 @@ function resetInstallForm(){
   photoData={};
 }
 
+window.bulkSetCoolOk=function(){
+  document.querySelectorAll('#cool-units .rsel-ok-btn').forEach(function(b){b.click();});
+  toast('✓ 전체 냉방검사 유닛에 "양호" 적용됨');
+};
+window.bulkSetLeakOk=function(){
+  document.querySelectorAll('#leak-rows [data-role="ok"]').forEach(function(b){b.click();});
+  toast('✓ 전체 누설검사 유닛에 "이상없음" 적용됨');
+};
+
 function addLeakRow(label,loc,status){
   leakCount++;
   var id='lk'+leakCount;
@@ -1548,8 +1599,8 @@ function addLeakRow(label,loc,status){
   var resLbl=document.createElement('div');resLbl.className='fl';resLbl.style='margin-bottom:6px';resLbl.textContent='결과';
   wrap.appendChild(resLbl);
   var resRow=document.createElement('div');resRow.className='leak-res-row';
-  var okBtn=document.createElement('button');okBtn.className='leak-btn'+(status!=='bad'?' leak-ok':'');okBtn.textContent='✅ 이상없음';
-  var badBtn=document.createElement('button');badBtn.className='leak-btn'+(status==='bad'?' leak-bad':'');badBtn.textContent='❌ 누설감지';
+  var okBtn=document.createElement('button');okBtn.className='leak-btn'+(status!=='bad'?' leak-ok':'');okBtn.dataset.role='ok';okBtn.textContent='✅ 이상없음';
+  var badBtn=document.createElement('button');badBtn.className='leak-btn'+(status==='bad'?' leak-bad':'');badBtn.dataset.role='bad';badBtn.textContent='❌ 누설감지';
   okBtn.onclick=function(){okBtn.className='leak-btn leak-ok';badBtn.className='leak-btn';};
   badBtn.onclick=function(){badBtn.className='leak-btn leak-bad';okBtn.className='leak-btn';};
   resRow.appendChild(okBtn);resRow.appendChild(badBtn);
@@ -1808,6 +1859,7 @@ function addOutdoorSet(unitLabel,photos){
   };
 
   gid('outdoor-sets').appendChild(wrap);
+  updateInspProgress();
 }
 
 // ═══════════════════════════════════════════
@@ -1856,6 +1908,7 @@ function setEval(btn){
   document.querySelectorAll('.ev-btn').forEach(function(b){b.classList.remove('sel');});
   btn.classList.add('sel');
   evalVal=btn.dataset.val;
+  updateInspProgress();
 }
 
 // ═══════════════════════════════════════════
@@ -1943,8 +1996,8 @@ function updateSendMsg(){
   var lang=l?l.value:'ko';
   var link=lang==='en'?(shortUrls.en||shortUrls.ko):shortUrls.ko;
   gid('sm-link').textContent=link;
-  var ko='안녕하세요 😊\n\nHappy Home Care '+sendTypeKo+'보고서를 확인해 주세요.\n\n📋 '+link+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
-  var en='Hello 😊\n\nPlease check your Happy Home Care '+sendTypeEn+' Report.\n\n📋 '+link+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
+  var ko='안녕하세요 😊\n\nHappy Home Care 에어컨 기술점검보고서를 확인해 주세요.\n\n📋 '+link+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
+  var en='Hello 😊\n\nPlease check your Happy Home Care AC Inspection Report.\n\n📋 '+link+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
   gid('sm-msg').value=lang==='en'?en:ko;
 }
 function openPreview(){var l=gid('sm-link').textContent;if(l)window.open(l,'_blank');}
@@ -1969,7 +2022,7 @@ window.onload=function(){
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, addDoc, setDoc, getDocs, deleteDoc, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
 try{
@@ -2212,8 +2265,6 @@ window.saveReport=async function(){
     toast(wasEdit?'✓ 수정 저장 완료':'✓ 저장 완료');
     currentEditId=null;
     document.getElementById('sm-link').textContent=shortUrls.ko;
-    sendTypeKo=isInstall?'에어컨 설치':(isWasher?'세탁기/건조기 점검':(reportType==='dispatch'?'에어컨 출장점검':'에어컨 기술점검'));
-    sendTypeEn=isInstall?'AC Installation':(isWasher?'Washer/Dryer Inspection':(reportType==='dispatch'?'AC On-site Inspection':'AC Inspection'));
     updateSendMsg();
     document.getElementById('send-modal').style.display='flex';
   }catch(e){console.error(e);alert('저장 실패: '+e.message);btn.disabled=false;btn.textContent=btnLabel;}
@@ -2231,33 +2282,28 @@ window.loadList=async function(){
 
 // ── 목록 액션
 window.sendFromList=async function(id){
-  await openSendModalForList(id);
+  var r=allReports.find(function(x){return x._id===id;});
+  var isInstall=r&&r.type==='install';
+  var isWasher=r&&r.type==='washer';
+  var pageFile=isInstall?'install.html':(isWasher?'washer.html':'inspect.html');
+  var url=await shorten('https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=ko');
+  var msg='안녕하세요 😊\n\nHappy Home Care '+(isInstall?'에어컨 설치':(isWasher?'세탁기/건조기 점검':(r&&r.type==='dispatch'?'에어컨 출장점검':'에어컨 기술점검')))+'보고서를 확인해 주세요.\n\n📋 '+url+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
 };
 window.kakaoFromList=async function(id){
-  await openSendModalForList(id);
-};
-window.openSendModalForList=async function(id){
   var r=allReports.find(function(x){return x._id===id;});
-  if(!r){toast('보고서를 찾을 수 없습니다.');return;}
-  var isInstall=r.type==='install';
-  var isWasher=r.type==='washer';
-  var isDispatch=r.type==='dispatch';
+  var isInstall=r&&r.type==='install';
+  var isWasher=r&&r.type==='washer';
   var pageFile=isInstall?'install.html':(isWasher?'washer.html':'inspect.html');
-  toast('링크 생성 중...');
-  shortUrls.ko=await shorten('https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=ko');
-  shortUrls.en=await shorten('https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=en');
-  sendTypeKo=isInstall?'에어컨 설치':(isWasher?'세탁기/건조기 점검':(isDispatch?'에어컨 출장점검':'에어컨 기술점검'));
-  sendTypeEn=isInstall?'AC Installation':(isWasher?'Washer/Dryer Inspection':(isDispatch?'AC On-site Inspection':'AC Inspection'));
-  var koRadio=document.querySelector('input[name="slang"][value="ko"]');
-  if(koRadio)koRadio.checked=true;
-  updateSendMsg();
-  document.getElementById('send-modal').style.display='flex';
+  var url=await shorten('https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=ko');
+  var msg='안녕하세요 😊\n\nHappy Home Care '+(isInstall?'에어컨 설치':(isWasher?'세탁기/건조기 점검':(r&&r.type==='dispatch'?'에어컨 출장점검':'에어컨 기술점검')))+'보고서를 확인해 주세요.\n\n📋 '+url+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
+  navigator.clipboard.writeText(msg).then(function(){toast('✓ 카카오 메시지 복사됨');});
 };
 window.editReport=async function(id){
   if(!DB)return;
   try{
-    var snap2=await getDoc(doc(DB,'inspections',id));
-    var data=snap2.exists()?Object.assign({_id:id},snap2.data()):null;
+    var snap2=await getDocs(query(collection(DB,'inspections'),limit(100)));
+    var data=null;snap2.docs.forEach(function(d){if(d.id===id)data=Object.assign({_id:id},d.data());});
     if(!data){toast('보고서를 찾을 수 없습니다.');return;}
     switchView('form');
     if(data.type==='install'){
@@ -2444,6 +2490,7 @@ window.loadIntoForm=function(data){
   var btn=document.getElementById('btn-save');
   if(btn){btn.textContent='💾 수정 저장';btn.style.background='#1e40af';}
   toast('보고서 불러왔습니다. 수정 후 저장하세요.');
+  updateInspProgress();
 };
 
 // ── 설치보고서 수정 모드 로딩
