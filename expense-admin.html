@@ -132,6 +132,27 @@ button{font-family:inherit;cursor:pointer}
 
 <div class="toast" id="toast"></div>
 
+<!-- 보기 모달 -->
+<div id="view-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:flex-end;justify-content:center">
+  <div style="background:#fff;width:100%;max-width:640px;max-height:92vh;border-radius:16px 16px 0 0;overflow-y:auto;padding:0">
+    <div style="position:sticky;top:0;background:#fff;padding:14px 16px;border-bottom:0.5px solid var(--bdr);display:flex;justify-content:space-between;align-items:center;z-index:2">
+      <span style="font-weight:700;font-size:15px">청구서 보기</span>
+      <button onclick="document.getElementById('view-modal').classList.add('hidden')" style="background:none;border:none;font-size:22px;color:var(--gray)">&times;</button>
+    </div>
+    <div id="view-body" style="padding:18px"></div>
+    <div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px;border-top:0.5px solid var(--bdr)">
+      <div class="row-fg">
+        <button class="btn bgh bfu" onclick="printClaim(currentViewId)">🖨️ 인쇄</button>
+        <button class="btn bfu" style="background:#25D366;color:#fff" onclick="sendWA(currentViewId)">💬 왓츠앱</button>
+      </div>
+      <div class="row-fg">
+        <button class="btn bgh bfu" onclick="downloadImage(currentViewId)">🖼️ 이미지 저장</button>
+        <button class="btn bgh bfu" onclick="downloadPDF(currentViewId)">📄 PDF 저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
@@ -145,7 +166,17 @@ var curLang='ko';
 var items=[];
 var claims=[];
 var currentEditId=null;
+var currentViewId=null;
 var selYear=new Date().getFullYear();
+
+function getClaimData(id){
+  if(id){
+    var c=claims.find(function(x){return x._id===id;});
+    if(!c)return null;
+    return {title:c.title||'',periodStart:c.periodStart||'',periodEnd:c.periodEnd||'',claimDate:c.claimDate||'',items:c.items||[],total:c.total||0};
+  }
+  return {title:val('e-title')||'',periodStart:val('e-period-start'),periodEnd:val('e-period-end'),claimDate:val('e-claim-date'),items:items,total:updateTotal()};
+}
 
 function $(id){return document.getElementById(id);}
 function val(id){var e=$(id);return e?e.value:'';}
@@ -237,63 +268,136 @@ function tr(text){
   });
 }
 
-async function buildClaimText(){
-  var title=val('e-title')||'(제목 없음)';
-  var pStart=val('e-period-start'),pEnd=val('e-period-end');
-  var claimDate=val('e-claim-date');
-  var total=updateTotal();
+async function buildClaimText(id){
+  var d=getClaimData(id);
+  if(!d)return'';
   var isEn=curLang==='en';
-  if(isEn){
-    title=await tr(title);
-  }
+  var title=d.title||(isEn?'(No title)':'(제목 없음)');
+  if(isEn)title=await tr(title);
   var lines=[];
   lines.push((isEn?'📋 Expense Claim: ':'📋 비용청구서: ')+title);
-  if(pStart&&pEnd)lines.push((isEn?'Claim Period: ':'청구대상기간: ')+pStart+' ~ '+pEnd);
-  lines.push((isEn?'Claim Date: ':'청구일자: ')+(claimDate||'—'));
+  if(d.periodStart&&d.periodEnd)lines.push((isEn?'Claim Period: ':'청구대상기간: ')+d.periodStart+' ~ '+d.periodEnd);
+  lines.push((isEn?'Claim Date: ':'청구일자: ')+(d.claimDate||'—'));
   lines.push('');
-  for(var i=0;i<items.length;i++){
-    var it=items[i];
+  for(var i=0;i<d.items.length;i++){
+    var it=d.items[i];
     var cat=isEn?(CATS_EN[it.cat]||it.cat):it.cat;
     var note=it.note?await tr(it.note):'';
     lines.push('• '+mdFromDate(it.date)+' '+cat+' — '+fmtAmt(it.amount)+(note?' ('+note+')':''));
   }
   lines.push('');
-  lines.push((isEn?'Total Claimed: ':'총 청구금액: ')+fmtAmt(total));
+  lines.push((isEn?'Total Claimed: ':'총 청구금액: ')+fmtAmt(d.total));
   return lines.join('\n');
 }
 
-async function sendWA(){
-  var msg=await buildClaimText();
+async function sendWA(id){
+  var msg=await buildClaimText(id);
+  if(!msg)return;
   window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
 }
 window.sendWA=sendWA;
 
-async function printClaim(){
+async function buildClaimBodyHTML(id){
+  var d=getClaimData(id);
+  if(!d)return'';
   var isEn=curLang==='en';
-  var title=val('e-title')||'(제목 없음)';
+  var title=d.title||(isEn?'(No title)':'(제목 없음)');
   if(isEn)title=await tr(title);
-  var pStart=val('e-period-start'),pEnd=val('e-period-end');
-  var claimDate=val('e-claim-date');
-  var total=updateTotal();
   var rows=[];
-  for(var i=0;i<items.length;i++){
-    var it=items[i];
+  for(var i=0;i<d.items.length;i++){
+    var it=d.items[i];
     var cat=isEn?(CATS_EN[it.cat]||it.cat):it.cat;
     var note=it.note?await tr(it.note):'';
     rows.push('<tr><td>'+mdFromDate(it.date)+'</td><td>'+cat+'</td><td style="text-align:right">'+fmtAmt(it.amount)+'</td><td>'+note+'</td></tr>');
   }
-  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+title+'</title><style>'+
-    'body{font-family:-apple-system,sans-serif;padding:32px;color:#0f172a;max-width:700px;margin:0 auto}'+
-    'h1{font-size:20px;margin-bottom:4px}.meta{font-size:12px;color:#6b7280;margin-bottom:20px;line-height:1.8}'+
-    'table{width:100%;border-collapse:collapse;margin-bottom:16px}th{background:#0F1729;color:#fff;padding:8px 10px;font-size:11px;text-align:left}'+
-    'td{padding:8px 10px;font-size:12px;border-bottom:1px solid #e2e8f0}'+
-    '.total{display:flex;justify-content:flex-end;font-size:16px;font-weight:700;color:#0F1729;border-top:2px solid #0F1729;padding-top:10px}'+
-    '</style></head><body>'+
-    '<h1>'+(isEn?'Expense Claim':'비용청구서')+': '+title+'</h1>'+
-    '<div class="meta">'+(pStart&&pEnd?(isEn?'Claim Period: ':'청구대상기간: ')+pStart+' ~ '+pEnd+'<br>':'')+(isEn?'Claim Date: ':'청구일자: ')+(claimDate||'—')+'</div>'+
-    '<table><thead><tr><th>'+(isEn?'Date':'일자')+'</th><th>'+(isEn?'Category':'품목')+'</th><th style="text-align:right">'+(isEn?'Amount':'금액')+'</th><th>'+(isEn?'Note':'비고')+'</th></tr></thead><tbody>'+rows.join('')+'</tbody></table>'+
-    '<div class="total">'+(isEn?'Total: ':'총 청구금액: ')+fmtAmt(total)+'</div>'+
-    '</body></html>';
+  return '<div style="font-family:-apple-system,sans-serif;color:#0f172a;background:#fff;padding:8px">'+
+    '<h2 style="font-size:18px;margin-bottom:4px">'+(isEn?'Expense Claim':'비용청구서')+': '+title+'</h2>'+
+    '<div style="font-size:12px;color:#6b7280;margin-bottom:16px;line-height:1.8">'+
+      (d.periodStart&&d.periodEnd?(isEn?'Claim Period: ':'청구대상기간: ')+d.periodStart+' ~ '+d.periodEnd+'<br>':'')+
+      (isEn?'Claim Date: ':'청구일자: ')+(d.claimDate||'—')+
+    '</div>'+
+    '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'+
+      '<thead><tr><th style="background:#0F1729;color:#fff;padding:7px 9px;font-size:10px;text-align:left">'+(isEn?'Date':'일자')+'</th>'+
+      '<th style="background:#0F1729;color:#fff;padding:7px 9px;font-size:10px;text-align:left">'+(isEn?'Category':'품목')+'</th>'+
+      '<th style="background:#0F1729;color:#fff;padding:7px 9px;font-size:10px;text-align:right">'+(isEn?'Amount':'금액')+'</th>'+
+      '<th style="background:#0F1729;color:#fff;padding:7px 9px;font-size:10px;text-align:left">'+(isEn?'Note':'비고')+'</th></tr></thead>'+
+      '<tbody>'+rows.join('')+'</tbody></table>'+
+    '<div style="display:flex;justify-content:flex-end;font-size:15px;font-weight:700;color:#0F1729;border-top:2px solid #0F1729;padding-top:9px">'+
+      (isEn?'Total: ':'총 청구금액: ')+fmtAmt(d.total)+
+    '</div>'+
+  '</div>';
+}
+
+window.viewClaim=async function(id){
+  currentViewId=id;
+  var body=$('view-body');
+  body.innerHTML='<div style="text-align:center;padding:30px;color:var(--gray)">불러오는 중...</div>';
+  document.getElementById('view-modal').classList.remove('hidden');
+  body.innerHTML=await buildClaimBodyHTML(id);
+};
+
+async function loadImgLibs(){
+  if(!window.html2canvas){
+    await new Promise(function(res,rej){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+  }
+  if(!window.jspdf){
+    await new Promise(function(res,rej){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+  }
+}
+
+async function renderClaimCanvas(id){
+  await loadImgLibs();
+  var html=await buildClaimBodyHTML(id);
+  var container=document.createElement('div');
+  container.style.cssText='position:fixed;left:-9999px;top:0;width:700px;background:#fff;padding:24px;z-index:-1';
+  container.innerHTML=html;
+  document.body.appendChild(container);
+  var canvas=await window.html2canvas(container,{scale:2,useCORS:true,backgroundColor:'#ffffff',width:700,logging:false});
+  document.body.removeChild(container);
+  return canvas;
+}
+
+window.downloadImage=async function(id){
+  showToast('이미지 생성 중...');
+  try{
+    var canvas=await renderClaimCanvas(id);
+    var d=getClaimData(id);
+    var a=document.createElement('a');
+    a.href=canvas.toDataURL('image/png');
+    a.download='비용청구서_'+(d.title||'claim').replace(/[^\w가-힣]/g,'_')+'.png';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    showToast('✓ 이미지 저장 완료');
+    if(navigator.share&&canvas.toBlob){
+      canvas.toBlob(function(blob){
+        var file=new File([blob],'expense_claim.png',{type:'image/png'});
+        if(navigator.canShare&&navigator.canShare({files:[file]})){
+          navigator.share({files:[file],title:'비용청구서'}).catch(function(){});
+        }
+      });
+    }
+  }catch(e){console.error(e);showToast('이미지 생성 실패');}
+};
+
+window.downloadPDF=async function(id){
+  showToast('PDF 생성 중...');
+  try{
+    var canvas=await renderClaimCanvas(id);
+    var jsPDF=window.jspdf.jsPDF;
+    var pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    var imgData=canvas.toDataURL('image/jpeg',0.92);
+    var pdfW=pdf.internal.pageSize.getWidth();
+    var pdfH=(canvas.height*pdfW)/canvas.width;
+    pdf.addImage(imgData,'JPEG',0,0,pdfW,pdfH);
+    var d=getClaimData(id);
+    pdf.save('비용청구서_'+(d.title||'claim').replace(/[^\w가-힣]/g,'_')+'.pdf');
+    showToast('✓ PDF 저장 완료');
+  }catch(e){console.error(e);showToast('PDF 생성 실패');}
+};
+
+async function printClaim(id){
+  var isEn=curLang==='en';
+  var bodyHtml=await buildClaimBodyHTML(id);
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Expense Claim</title><style>body{padding:32px;max-width:700px;margin:0 auto}table{width:100%}td,th{padding:8px 10px;font-size:12px;border-bottom:1px solid #e2e8f0}</style></head><body>'+bodyHtml+'</body></html>';
   var w=window.open('','_blank');
   w.document.write(html);
   w.document.close();
@@ -328,13 +432,18 @@ async function saveClaim(){
   };
   var btn=$('btn-save');btn.disabled=true;btn.textContent='저장 중...';
   try{
+    var savedId=currentEditId;
     if(currentEditId){
       await DB.collection('expense_claims').doc(currentEditId).set(data);
     }else{
-      await DB.collection('expense_claims').add(data);
+      var ref=await DB.collection('expense_claims').add(data);
+      savedId=ref.id;
     }
     showToast('✓ 저장 완료');
+    claims=claims.filter(function(c){return c._id!==savedId;});
+    claims.unshift(Object.assign({_id:savedId},data));
     resetForm();
+    viewClaim(savedId);
   }catch(e){
     console.error(e);showToast('저장 실패: '+e.message);
   }
@@ -380,11 +489,12 @@ function renderClaimList(){
   if(!yc.length){el.innerHTML='<div class="empty">'+selYear+'년 청구서 없음</div>';return;}
   el.innerHTML=yc.map(function(c){
     var period=(c.periodStart||'')&&(c.periodEnd||'')?mdFromDate(c.periodStart)+' ~ '+mdFromDate(c.periodEnd):'';
-    return '<div class="list-card">'+
+    return '<div class="list-card" onclick="viewClaim(\''+c._id+'\')">'+
       '<div class="list-title">'+(c.title||'(제목 없음)')+'</div>'+
       '<div class="list-sub">'+(period?'대상기간 '+period+' · ':'')+'청구일 '+(c.claimDate||'—')+' · '+(c.items||[]).length+'건</div>'+
       '<div class="list-amt">'+fmtAmt(c.total)+'</div>'+
-      '<div class="list-actions">'+
+      '<div class="list-actions" onclick="event.stopPropagation()">'+
+        '<button style="background:var(--gbg);color:var(--green)" onclick="viewClaim(\''+c._id+'\')">👁️ 보기</button>'+
         '<button class="bp" style="background:var(--il);color:var(--indigo)" onclick="editClaim(\''+c._id+'\')">✏️ 수정</button>'+
         '<button class="br" onclick="delClaim(\''+c._id+'\')">🗑️ 삭제</button>'+
       '</div>'+
