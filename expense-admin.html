@@ -90,6 +90,10 @@ button{font-family:inherit;cursor:pointer}
     <div class="card">
       <div class="card-hdr"><span>청구 내역</span><span id="item-count" style="font-size:11px;color:var(--gray);font-weight:600">0건</span></div>
       <div class="card-body">
+        <div class="row-fg" style="margin-bottom:10px">
+          <button class="yt active" id="srt-date" onclick="sortItems('date')" style="flex:1">일자순</button>
+          <button class="yt" id="srt-cat" onclick="sortItems('cat')" style="flex:1">품목순</button>
+        </div>
         <div id="item-rows"></div>
         <button class="btn-add" onclick="addItem()">+ 항목 추가</button>
       </div>
@@ -100,9 +104,18 @@ button{font-family:inherit;cursor:pointer}
       <span class="total-val" id="total-val">RM 0.00</span>
     </div>
 
+    <div class="row-fg" style="margin-bottom:10px">
+      <button class="yt active" id="lang-ko" onclick="setLang('ko')" style="flex:1">한국어</button>
+      <button class="yt" id="lang-en" onclick="setLang('en')" style="flex:1">English</button>
+    </div>
+
     <div class="row-fg" style="margin-bottom:20px">
       <button class="btn bp bfu" onclick="saveClaim()" id="btn-save">💾 저장</button>
       <button class="btn bgh" onclick="resetForm()">새로 작성</button>
+    </div>
+    <div class="row-fg" style="margin-bottom:20px">
+      <button class="btn bgh bfu" onclick="printClaim()">🖨️ 인쇄</button>
+      <button class="btn bfu" style="background:#25D366;color:#fff" onclick="sendWA()">💬 왓츠앱 발송</button>
     </div>
   </div>
 
@@ -127,6 +140,8 @@ firebase.initializeApp(FB_CFG);
 var DB=firebase.firestore();
 
 var CATS=['유류비','교통비','식대','자재비','기타'];
+var CATS_EN={'유류비':'Fuel','교통비':'Transport','식대':'Meals','자재비':'Materials','기타':'Others'};
+var curLang='ko';
 var items=[];
 var claims=[];
 var currentEditId=null;
@@ -191,6 +206,100 @@ function updateTotal(){
   $('total-val').textContent=fmtAmt(total);
   return total;
 }
+
+function sortItems(mode){
+  if(mode==='date')items.sort(function(a,b){return(a.date||'').localeCompare(b.date||'');});
+  else items.sort(function(a,b){return CATS.indexOf(a.cat)-CATS.indexOf(b.cat)||(a.date||'').localeCompare(b.date||'');});
+  $('srt-date').classList.toggle('active',mode==='date');
+  $('srt-cat').classList.toggle('active',mode==='cat');
+  renderItems();
+}
+window.sortItems=sortItems;
+
+window.setLang=function(l){
+  curLang=l;
+  $('lang-ko').classList.toggle('active',l==='ko');
+  $('lang-en').classList.toggle('active',l==='en');
+};
+
+var _trCache={};
+function tr(text){
+  return new Promise(function(resolve){
+    if(!text){resolve('');return;}
+    if(curLang!=='en'){resolve(text);return;}
+    if(_trCache[text]){resolve(_trCache[text]);return;}
+    fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q='+encodeURIComponent(text))
+      .then(function(r){return r.json();})
+      .then(function(j){
+        var out=(j&&j[0])?j[0].map(function(seg){return seg[0];}).join(''):text;
+        _trCache[text]=out;resolve(out);
+      }).catch(function(){resolve(text);});
+  });
+}
+
+async function buildClaimText(){
+  var title=val('e-title')||'(제목 없음)';
+  var pStart=val('e-period-start'),pEnd=val('e-period-end');
+  var claimDate=val('e-claim-date');
+  var total=updateTotal();
+  var isEn=curLang==='en';
+  if(isEn){
+    title=await tr(title);
+  }
+  var lines=[];
+  lines.push((isEn?'📋 Expense Claim: ':'📋 비용청구서: ')+title);
+  if(pStart&&pEnd)lines.push((isEn?'Claim Period: ':'청구대상기간: ')+pStart+' ~ '+pEnd);
+  lines.push((isEn?'Claim Date: ':'청구일자: ')+(claimDate||'—'));
+  lines.push('');
+  for(var i=0;i<items.length;i++){
+    var it=items[i];
+    var cat=isEn?(CATS_EN[it.cat]||it.cat):it.cat;
+    var note=it.note?await tr(it.note):'';
+    lines.push('• '+mdFromDate(it.date)+' '+cat+' — '+fmtAmt(it.amount)+(note?' ('+note+')':''));
+  }
+  lines.push('');
+  lines.push((isEn?'Total Claimed: ':'총 청구금액: ')+fmtAmt(total));
+  return lines.join('\n');
+}
+
+async function sendWA(){
+  var msg=await buildClaimText();
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+window.sendWA=sendWA;
+
+async function printClaim(){
+  var isEn=curLang==='en';
+  var title=val('e-title')||'(제목 없음)';
+  if(isEn)title=await tr(title);
+  var pStart=val('e-period-start'),pEnd=val('e-period-end');
+  var claimDate=val('e-claim-date');
+  var total=updateTotal();
+  var rows=[];
+  for(var i=0;i<items.length;i++){
+    var it=items[i];
+    var cat=isEn?(CATS_EN[it.cat]||it.cat):it.cat;
+    var note=it.note?await tr(it.note):'';
+    rows.push('<tr><td>'+mdFromDate(it.date)+'</td><td>'+cat+'</td><td style="text-align:right">'+fmtAmt(it.amount)+'</td><td>'+note+'</td></tr>');
+  }
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>'+title+'</title><style>'+
+    'body{font-family:-apple-system,sans-serif;padding:32px;color:#0f172a;max-width:700px;margin:0 auto}'+
+    'h1{font-size:20px;margin-bottom:4px}.meta{font-size:12px;color:#6b7280;margin-bottom:20px;line-height:1.8}'+
+    'table{width:100%;border-collapse:collapse;margin-bottom:16px}th{background:#0F1729;color:#fff;padding:8px 10px;font-size:11px;text-align:left}'+
+    'td{padding:8px 10px;font-size:12px;border-bottom:1px solid #e2e8f0}'+
+    '.total{display:flex;justify-content:flex-end;font-size:16px;font-weight:700;color:#0F1729;border-top:2px solid #0F1729;padding-top:10px}'+
+    '</style></head><body>'+
+    '<h1>'+(isEn?'Expense Claim':'비용청구서')+': '+title+'</h1>'+
+    '<div class="meta">'+(pStart&&pEnd?(isEn?'Claim Period: ':'청구대상기간: ')+pStart+' ~ '+pEnd+'<br>':'')+(isEn?'Claim Date: ':'청구일자: ')+(claimDate||'—')+'</div>'+
+    '<table><thead><tr><th>'+(isEn?'Date':'일자')+'</th><th>'+(isEn?'Category':'품목')+'</th><th style="text-align:right">'+(isEn?'Amount':'금액')+'</th><th>'+(isEn?'Note':'비고')+'</th></tr></thead><tbody>'+rows.join('')+'</tbody></table>'+
+    '<div class="total">'+(isEn?'Total: ':'총 청구금액: ')+fmtAmt(total)+'</div>'+
+    '</body></html>';
+  var w=window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(function(){w.print();},400);
+}
+window.printClaim=printClaim;
 
 function resetForm(){
   currentEditId=null;
