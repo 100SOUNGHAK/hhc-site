@@ -19,7 +19,7 @@ button{font-family:inherit;cursor:pointer}
 .hd-logo{width:30px;height:30px;background:linear-gradient(160deg,#0BB5A4,#0D9488);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800}
 .hd-title{font-size:14px;font-weight:700}
 .tabs{display:flex;background:#fff;border-bottom:0.5px solid var(--bdr);position:sticky;top:56px;z-index:40}
-.tab{flex:1;text-align:center;padding:12px 4px;border:none;background:none;font-size:13px;font-weight:600;color:var(--gray);border-bottom:2.5px solid transparent}
+.tab{flex:1;text-align:center;padding:12px 4px;border:none;background:none;font-size:12.5px;font-weight:600;color:var(--gray);border-bottom:2.5px solid transparent}
 .tab.active{color:var(--indigo);border-bottom-color:var(--indigo)}
 .wrap{max-width:640px;margin:0 auto;padding:16px}
 .card{background:var(--sf);border:0.5px solid var(--bdr);border-radius:var(--r);margin-bottom:14px;overflow:hidden;box-shadow:0 1px 2px rgba(16,30,60,.03)}
@@ -30,9 +30,6 @@ button{font-family:inherit;cursor:pointer}
 .lb{font-size:11px;color:var(--gray);font-weight:600;margin-bottom:4px;display:block}
 .fg{display:flex;gap:8px}
 .fg.c2>.f{flex:1}
-.item-row{background:#f8f9fc;border-radius:9px;padding:11px;margin-bottom:8px;position:relative}
-.item-row .fg{margin-bottom:6px}
-.btn-del-item{position:absolute;top:8px;right:8px;background:none;border:none;font-size:15px;color:var(--red);cursor:pointer;padding:2px 6px}
 .btn-add{width:100%;padding:10px;border:1.5px dashed var(--indigo);background:var(--il);color:var(--indigo);border-radius:9px;font-size:13px;font-weight:700}
 .total-box{background:var(--navy);border-radius:var(--r);padding:14px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
 .total-lbl{font-size:12px;color:rgba(255,255,255,.6)}
@@ -57,6 +54,12 @@ button{font-family:inherit;cursor:pointer}
 .yt{padding:6px 14px;border-radius:20px;border:0.5px solid var(--bdr);background:#fff;font-size:12px;font-weight:600;color:var(--gray)}
 .yt.active{background:var(--navy);color:#fff;border-color:var(--navy)}
 .hidden{display:none!important}
+.pending-item{background:#f8f9fc;border-radius:9px;padding:10px 12px;margin-bottom:7px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.pending-item.sel{background:var(--il);border:1.5px solid var(--indigo)}
+.pi-info{flex:1;min-width:0}
+.pi-date{font-size:11px;color:var(--gray)}
+.pi-cat{font-size:12.5px;font-weight:600;color:var(--txt);margin-top:1px}
+.pi-amt{font-size:13px;font-weight:700;color:var(--navy);flex-shrink:0}
 </style>
 </head>
 <body>
@@ -67,63 +70,89 @@ button{font-family:inherit;cursor:pointer}
 </div>
 
 <div class="tabs">
-  <button class="tab active" id="tb-write" onclick="Tab('write')">작성</button>
-  <button class="tab" id="tb-list" onclick="Tab('list')">목록</button>
+  <button class="tab active" id="tb-entry" onclick="Tab('entry')">항목 등록</button>
+  <button class="tab" id="tb-gen" onclick="Tab('gen')">청구서 생성</button>
+  <button class="tab" id="tb-list" onclick="Tab('list')">청구 이력</button>
 </div>
 
 <div class="wrap">
 
-  <!-- 작성 화면 -->
-  <div id="tab-write">
+  <div id="tab-entry">
     <div class="card">
-      <div class="card-hdr">기본 정보</div>
+      <div class="card-hdr">항목 등록</div>
       <div class="card-body">
-        <div class="f"><label class="lb">제목</label><input id="e-title" placeholder="예: 7월 현장 경비 청구"></div>
         <div class="fg c2">
-          <div class="f"><label class="lb">청구대상기간 시작</label><input id="e-period-start" type="date"></div>
-          <div class="f"><label class="lb">청구대상기간 종료</label><input id="e-period-end" type="date"></div>
+          <div class="f"><label class="lb">일자</label><input id="qi-date" type="date"></div>
+          <div class="f"><label class="lb">품목</label><select id="qi-cat"></select></div>
         </div>
-        <div class="f"><label class="lb">청구일자</label><input id="e-claim-date" type="date"></div>
+        <div class="fg c2">
+          <div class="f"><label class="lb">금액</label><input id="qi-amount" type="number" min="0" step="0.5" placeholder="0"></div>
+          <div class="f"><label class="lb">비고</label><input id="qi-note" type="text" placeholder="선택 입력"></div>
+        </div>
+        <button class="btn-add" onclick="quickAddItem()">+ 항목 등록</button>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-hdr"><span>청구 내역</span><span id="item-count" style="font-size:11px;color:var(--gray);font-weight:600">0건</span></div>
+      <div class="card-hdr"><span>미청구 항목</span><span id="pending-count" style="font-size:11px;color:var(--gray);font-weight:600">0건</span></div>
       <div class="card-body">
-        <div class="row-fg" style="margin-bottom:10px">
-          <button class="yt active" id="srt-date" onclick="sortItems('date')" style="flex:1">일자순</button>
-          <button class="yt" id="srt-cat" onclick="sortItems('cat')" style="flex:1">품목순</button>
-        </div>
-        <div id="item-rows"></div>
-        <button class="btn-add" onclick="addItem()">+ 항목 추가</button>
+        <div id="pending-list"></div>
       </div>
-    </div>
-
-    <div class="total-box">
-      <span class="total-lbl">총 청구금액</span>
-      <span class="total-val" id="total-val">RM 0.00</span>
-    </div>
-
-    <div class="row-fg" style="margin-bottom:10px">
-      <button class="yt active" id="lang-ko" onclick="setLang('ko')" style="flex:1">한국어</button>
-      <button class="yt" id="lang-en" onclick="setLang('en')" style="flex:1">English</button>
-    </div>
-
-    <div class="row-fg" style="margin-bottom:20px">
-      <button class="btn bp bfu" onclick="saveClaim()" id="btn-save">💾 저장</button>
-      <button class="btn bgh" onclick="resetForm()">새로 작성</button>
-    </div>
-    <div class="row-fg" style="margin-bottom:20px">
-      <button class="btn bgh bfu" onclick="printClaim()">🖨️ 인쇄</button>
-      <button class="btn bfu" style="background:#25D366;color:#fff" onclick="sendWA()">💬 왓츠앱 발송</button>
     </div>
   </div>
 
-  <!-- 목록 화면 -->
+  <div id="tab-gen" class="hidden">
+    <div class="card">
+      <div class="card-hdr">청구대상기간 선택</div>
+      <div class="card-body">
+        <div class="fg c2">
+          <div class="f"><label class="lb">시작일</label><input id="gen-period-start" type="date"></div>
+          <div class="f"><label class="lb">종료일</label><input id="gen-period-end" type="date"></div>
+        </div>
+        <button class="btn-add" onclick="generatePreview()">해당 기간 항목 불러오기</button>
+      </div>
+    </div>
+
+    <div id="gen-preview-wrap" class="hidden">
+      <div class="card">
+        <div class="card-hdr"><span>포함될 항목</span><span id="gen-item-count" style="font-size:11px;color:var(--gray);font-weight:600">0건</span></div>
+        <div class="card-body">
+          <div id="gen-item-list"></div>
+        </div>
+      </div>
+
+      <div class="total-box">
+        <span class="total-lbl">총 청구금액</span>
+        <span class="total-val" id="gen-total-val">RM 0.00</span>
+      </div>
+
+      <div class="card">
+        <div class="card-hdr">청구서 정보</div>
+        <div class="card-body">
+          <div class="f"><label class="lb">제목</label><input id="gen-title" placeholder="예: 7월 현장 경비 청구"></div>
+          <div class="f"><label class="lb">청구일자</label><input id="gen-claim-date" type="date"></div>
+        </div>
+      </div>
+
+      <div class="row-fg" style="margin-bottom:10px">
+        <button class="yt active" id="lang-ko" onclick="setLang('ko')" style="flex:1">한국어</button>
+        <button class="yt" id="lang-en" onclick="setLang('en')" style="flex:1">English</button>
+      </div>
+
+      <div class="row-fg" style="margin-bottom:10px">
+        <button class="btn bgh bfu" onclick="printClaim(null)">인쇄 미리보기</button>
+        <button class="btn bfu" style="background:#25D366;color:#fff" onclick="sendWA(null)">왓츠앱 미리보기</button>
+      </div>
+      <div class="row-fg" style="margin-bottom:20px">
+        <button class="btn bp bfu" onclick="createClaim()" id="btn-create">청구서 생성 (항목 청구완료 처리)</button>
+      </div>
+    </div>
+  </div>
+
   <div id="tab-list" class="hidden">
     <div class="year-tabs" id="year-tabs"></div>
     <div class="row-fg" style="margin-bottom:14px">
-      <button class="btn bgh bfu" onclick="exportCSV()">⬇️ CSV 내보내기 (선택 연도 전체)</button>
+      <button class="btn bgh bfu" onclick="exportCSV()">CSV 내보내기 (선택 연도 전체)</button>
     </div>
     <div id="claim-list"></div>
   </div>
@@ -132,7 +161,6 @@ button{font-family:inherit;cursor:pointer}
 
 <div class="toast" id="toast"></div>
 
-<!-- 보기 모달 -->
 <div id="view-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:flex;align-items:flex-end;justify-content:center">
   <div style="background:#fff;width:100%;max-width:640px;max-height:92vh;border-radius:16px 16px 0 0;overflow-y:auto;padding:0">
     <div style="position:sticky;top:0;background:#fff;padding:14px 16px;border-bottom:0.5px solid var(--bdr);display:flex;justify-content:space-between;align-items:center;z-index:2">
@@ -142,12 +170,12 @@ button{font-family:inherit;cursor:pointer}
     <div id="view-body" style="padding:18px"></div>
     <div style="padding:14px 16px;display:flex;flex-direction:column;gap:8px;border-top:0.5px solid var(--bdr)">
       <div class="row-fg">
-        <button class="btn bgh bfu" onclick="printClaim(currentViewId)">🖨️ 인쇄</button>
-        <button class="btn bfu" style="background:#25D366;color:#fff" onclick="sendWA(currentViewId)">💬 왓츠앱</button>
+        <button class="btn bgh bfu" onclick="printClaim(currentViewId)">인쇄</button>
+        <button class="btn bfu" style="background:#25D366;color:#fff" onclick="sendWA(currentViewId)">왓츠앱</button>
       </div>
       <div class="row-fg">
-        <button class="btn bgh bfu" onclick="downloadImage(currentViewId)">🖼️ 이미지 저장</button>
-        <button class="btn bgh bfu" onclick="downloadPDF(currentViewId)">📄 PDF 저장</button>
+        <button class="btn bgh bfu" onclick="downloadImage(currentViewId)">이미지 저장</button>
+        <button class="btn bgh bfu" onclick="downloadPDF(currentViewId)">PDF 저장</button>
       </div>
     </div>
   </div>
@@ -163,20 +191,11 @@ var DB=firebase.firestore();
 var CATS=['유류비','교통비','식대','자재비','전기료','수도료','임대료(29 Kepong)','임대료(139 Nadia)','직원급여','기타'];
 var CATS_EN={'유류비':'Fuel','교통비':'Transport','식대':'Meals','자재비':'Materials','전기료':'Electricity','수도료':'Water','임대료(29 Kepong)':'Rent (29 Kepong)','임대료(139 Nadia)':'Rent (139 Nadia)','직원급여':'Staff Salary','기타':'Others'};
 var curLang='ko';
-var items=[];
+var allItems=[];
 var claims=[];
-var currentEditId=null;
+var genItems=[];
 var currentViewId=null;
 var selYear=new Date().getFullYear();
-
-function getClaimData(id){
-  if(id){
-    var c=claims.find(function(x){return x._id===id;});
-    if(!c)return null;
-    return {title:c.title||'',periodStart:c.periodStart||'',periodEnd:c.periodEnd||'',claimDate:c.claimDate||'',items:c.items||[],total:c.total||0};
-  }
-  return {title:val('e-title')||'',periodStart:val('e-period-start'),periodEnd:val('e-period-end'),claimDate:val('e-claim-date'),items:items,total:updateTotal()};
-}
 
 function $(id){return document.getElementById(id);}
 function val(id){var e=$(id);return e?e.value:'';}
@@ -185,72 +204,143 @@ function showToast(msg){var t=$('toast');t.textContent=msg;t.classList.add('show
 function fmtAmt(n){return 'RM '+Number(n||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
 function todayStr(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function mdFromDate(ds){if(!ds)return'';var p=ds.split('-');return p.length===3?p[1]+'/'+p[2]:ds;}
+function fillCatSelect(id){var el=$(id);if(!el)return;el.innerHTML=CATS.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');}
 
 window.Tab=function(t){
-  $('tab-write').classList.toggle('hidden',t!=='write');
+  $('tab-entry').classList.toggle('hidden',t!=='entry');
+  $('tab-gen').classList.toggle('hidden',t!=='gen');
   $('tab-list').classList.toggle('hidden',t!=='list');
-  $('tb-write').classList.toggle('active',t==='write');
+  $('tb-entry').classList.toggle('active',t==='entry');
+  $('tb-gen').classList.toggle('active',t==='gen');
   $('tb-list').classList.toggle('active',t==='list');
+  if(t==='entry')renderPendingList();
   if(t==='list'){renderYearTabs();renderClaimList();}
 };
 
-function addItem(dateVal,cat,amt,note){
-  items.push({id:'it'+Date.now()+Math.random().toString(36).slice(2,6),date:dateVal||todayStr(),cat:cat||CATS[0],amount:amt||0,note:note||''});
-  renderItems();
+async function quickAddItem(){
+  var date=val('qi-date')||todayStr();
+  var cat=val('qi-cat')||CATS[0];
+  var amount=parseFloat(val('qi-amount'))||0;
+  var note=val('qi-note').trim();
+  if(amount<=0){showToast('금액을 입력해 주세요');return;}
+  try{
+    await DB.collection('expense_items').add({date:date,cat:cat,amount:amount,note:note,claimed:false,claimId:null,createdAt:new Date().toISOString()});
+    setVal('qi-amount','');setVal('qi-note','');
+    setVal('qi-date',todayStr());
+    showToast('항목 등록됨');
+  }catch(e){console.error(e);showToast('등록 실패: '+e.message);}
 }
-window.addItem=addItem;
+window.quickAddItem=quickAddItem;
 
-function rmItem(id){items=items.filter(function(i){return i.id!==id;});renderItems();}
-window.rmItem=rmItem;
-
-function onItemField(id,field,v){
-  var it=items.find(function(i){return i.id===id;});
-  if(!it)return;
-  if(field==='amount')it.amount=parseFloat(v)||0;
-  else it[field]=v;
-  updateTotal();
+async function deletePendingItem(id){
+  if(!confirm('이 항목을 삭제할까요?'))return;
+  try{await DB.collection('expense_items').doc(id).delete();showToast('삭제됨');}
+  catch(e){showToast('삭제 실패');}
 }
-window.onItemField=onItemField;
+window.deletePendingItem=deletePendingItem;
 
-function renderItems(){
-  var c=$('item-rows');
-  $('item-count').textContent=items.length+'건';
-  if(!items.length){c.innerHTML='<div style="text-align:center;padding:16px;color:var(--gray);font-size:12.5px">항목을 추가하세요</div>';updateTotal();return;}
-  c.innerHTML=items.map(function(it){
-    return '<div class="item-row" data-iid="'+it.id+'">'+
-      '<button class="btn-del-item" onclick="rmItem(\''+it.id+'\')">×</button>'+
-      '<div class="fg c2">'+
-        '<div class="f"><label class="lb">일자</label><input type="date" value="'+(it.date||'')+'" onchange="onItemField(\''+it.id+'\',\'date\',this.value)"></div>'+
-        '<div class="f"><label class="lb">품목</label><select onchange="onItemField(\''+it.id+'\',\'cat\',this.value)">'+CATS.map(function(c){return '<option value="'+c+'"'+(c===it.cat?' selected':'')+'>'+c+'</option>';}).join('')+'</select></div>'+
+function renderPendingList(){
+  var el=$('pending-list');if(!el)return;
+  var pending=allItems.filter(function(i){return !i.claimed;});
+  pending.sort(function(a,b){return(b.date||'').localeCompare(a.date||'');});
+  $('pending-count').textContent=pending.length+'건';
+  if(!pending.length){el.innerHTML='<div class="empty">등록된 미청구 항목이 없습니다</div>';return;}
+  el.innerHTML=pending.map(function(it){
+    return '<div class="pending-item">'+
+      '<div class="pi-info">'+
+        '<div class="pi-cat">'+it.cat+'</div>'+
+        '<div class="pi-date">'+mdFromDate(it.date)+(it.note?' · '+it.note:'')+'</div>'+
       '</div>'+
-      '<div class="fg c2">'+
-        '<div class="f"><label class="lb">금액</label><input type="number" min="0" step="0.5" value="'+(it.amount||0)+'" onchange="onItemField(\''+it.id+'\',\'amount\',this.value)"></div>'+
-        '<div class="f"><label class="lb">비고</label><input type="text" value="'+(it.note||'').replace(/"/g,'&quot;')+'" onchange="onItemField(\''+it.id+'\',\'note\',this.value)"></div>'+
-      '</div>'+
+      '<div class="pi-amt">'+fmtAmt(it.amount)+'</div>'+
+      '<button onclick="deletePendingItem(\''+it._id+'\')" style="background:none;border:none;color:var(--red);font-size:15px;padding:2px 4px">×</button>'+
     '</div>';
   }).join('');
-  updateTotal();
 }
 
-function updateTotal(){
-  var total=items.reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
-  $('total-val').textContent=fmtAmt(total);
-  return total;
+function generatePreview(){
+  var start=val('gen-period-start'),end=val('gen-period-end');
+  if(!start||!end){showToast('시작일과 종료일을 선택해 주세요');return;}
+  genItems=allItems.filter(function(i){return !i.claimed&&i.date>=start&&i.date<=end;});
+  genItems.sort(function(a,b){return(a.date||'').localeCompare(b.date||'');});
+  renderGenPreview();
+  $('gen-preview-wrap').classList.toggle('hidden',false);
+  if(!genItems.length)showToast('해당 기간에 미청구 항목이 없습니다');
+}
+window.generatePreview=generatePreview;
+
+function renderGenPreview(){
+  var el=$('gen-item-list');
+  $('gen-item-count').textContent=genItems.length+'건';
+  if(!genItems.length){
+    el.innerHTML='<div class="empty">해당 기간에 항목이 없습니다</div>';
+    $('gen-total-val').textContent=fmtAmt(0);
+    return;
+  }
+  el.innerHTML=genItems.map(function(it){
+    return '<div class="pending-item sel">'+
+      '<div class="pi-info">'+
+        '<div class="pi-cat">'+it.cat+'</div>'+
+        '<div class="pi-date">'+mdFromDate(it.date)+(it.note?' · '+it.note:'')+'</div>'+
+      '</div>'+
+      '<div class="pi-amt">'+fmtAmt(it.amount)+'</div>'+
+    '</div>';
+  }).join('');
+  var total=genItems.reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
+  $('gen-total-val').textContent=fmtAmt(total);
 }
 
-function sortItems(mode){
-  if(mode==='date')items.sort(function(a,b){return(a.date||'').localeCompare(b.date||'');});
-  else items.sort(function(a,b){return CATS.indexOf(a.cat)-CATS.indexOf(b.cat)||(a.date||'').localeCompare(b.date||'');});
-  $('srt-date').classList.toggle('active',mode==='date');
-  $('srt-cat').classList.toggle('active',mode==='cat');
-  renderItems();
+async function createClaim(){
+  if(!genItems.length){showToast('포함할 항목이 없습니다');return;}
+  var title=val('gen-title').trim();
+  if(!title){showToast('제목을 입력해 주세요');return;}
+  var total=genItems.reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
+  var data={
+    title:title,
+    periodStart:val('gen-period-start'),
+    periodEnd:val('gen-period-end'),
+    claimDate:val('gen-claim-date')||todayStr(),
+    items:genItems.map(function(i){return{date:i.date,cat:i.cat,amount:i.amount,note:i.note};}),
+    itemIds:genItems.map(function(i){return i._id;}),
+    total:total,
+    createdAt:new Date().toISOString()
+  };
+  var btn=$('btn-create');btn.disabled=true;btn.textContent='생성 중...';
+  try{
+    var ref=await DB.collection('expense_claims').add(data);
+    var savedId=ref.id;
+    var batch=DB.batch();
+    genItems.forEach(function(i){
+      batch.update(DB.collection('expense_items').doc(i._id),{claimed:true,claimId:savedId});
+    });
+    await batch.commit();
+    showToast('청구서 생성 완료');
+    claims.unshift(Object.assign({_id:savedId},data));
+    genItems=[];
+    setVal('gen-period-start','');setVal('gen-period-end','');setVal('gen-title','');
+    $('gen-preview-wrap').classList.add('hidden');
+    viewClaim(savedId);
+  }catch(e){
+    console.error(e);showToast('생성 실패: '+e.message);
+  }
+  btn.disabled=false;btn.textContent='청구서 생성 (항목 청구완료 처리)';
 }
-window.sortItems=sortItems;
+window.createClaim=createClaim;
+
+function getClaimData(id){
+  if(id){
+    var c=claims.find(function(x){return x._id===id;});
+    if(!c)return null;
+    return {title:c.title||'',periodStart:c.periodStart||'',periodEnd:c.periodEnd||'',claimDate:c.claimDate||'',items:c.items||[],total:c.total||0};
+  }
+  var total=genItems.reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
+  return {title:val('gen-title')||'',periodStart:val('gen-period-start'),periodEnd:val('gen-period-end'),claimDate:val('gen-claim-date')||todayStr(),items:genItems,total:total};
+}
 
 window.setLang=function(l){
   curLang=l;
-  $('lang-ko').classList.toggle('active',l==='ko');
-  $('lang-en').classList.toggle('active',l==='en');
+  var ko=$('lang-ko'),en=$('lang-en');
+  if(ko)ko.classList.toggle('active',l==='ko');
+  if(en)en.classList.toggle('active',l==='en');
 };
 
 var _trCache={};
@@ -275,7 +365,7 @@ async function buildClaimText(id){
   var title=d.title||(isEn?'(No title)':'(제목 없음)');
   if(isEn)title=await tr(title);
   var lines=[];
-  lines.push((isEn?'📋 Expense Claim: ':'📋 비용청구서: ')+title);
+  lines.push((isEn?'Expense Claim: ':'비용청구서: ')+title);
   if(d.periodStart&&d.periodEnd)lines.push((isEn?'Claim Period: ':'청구대상기간: ')+d.periodStart+' ~ '+d.periodEnd);
   lines.push((isEn?'Claim Date: ':'청구일자: ')+(d.claimDate||'—'));
   lines.push('');
@@ -283,7 +373,7 @@ async function buildClaimText(id){
     var it=d.items[i];
     var cat=isEn?(CATS_EN[it.cat]||it.cat):it.cat;
     var note=it.note?await tr(it.note):'';
-    lines.push('• '+mdFromDate(it.date)+' '+cat+' — '+fmtAmt(it.amount)+(note?' ('+note+')':''));
+    lines.push('- '+mdFromDate(it.date)+' '+cat+' - '+fmtAmt(it.amount)+(note?' ('+note+')':''));
   }
   lines.push('');
   lines.push((isEn?'Total Claimed: ':'총 청구금액: ')+fmtAmt(d.total));
@@ -366,7 +456,7 @@ window.downloadImage=async function(id){
     a.href=canvas.toDataURL('image/png');
     a.download='비용청구서_'+(d.title||'claim').replace(/[^\w가-힣]/g,'_')+'.png';
     document.body.appendChild(a);a.click();document.body.removeChild(a);
-    showToast('✓ 이미지 저장 완료');
+    showToast('이미지 저장 완료');
     if(navigator.share&&canvas.toBlob){
       canvas.toBlob(function(blob){
         var file=new File([blob],'expense_claim.png',{type:'image/png'});
@@ -390,12 +480,11 @@ window.downloadPDF=async function(id){
     pdf.addImage(imgData,'JPEG',0,0,pdfW,pdfH);
     var d=getClaimData(id);
     pdf.save('비용청구서_'+(d.title||'claim').replace(/[^\w가-힣]/g,'_')+'.pdf');
-    showToast('✓ PDF 저장 완료');
+    showToast('PDF 저장 완료');
   }catch(e){console.error(e);showToast('PDF 생성 실패');}
 };
 
 async function printClaim(id){
-  var isEn=curLang==='en';
   var bodyHtml=await buildClaimBodyHTML(id);
   var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Expense Claim</title><style>body{padding:32px;max-width:700px;margin:0 auto}table{width:100%}td,th{padding:8px 10px;font-size:12px;border-bottom:1px solid #e2e8f0}</style></head><body>'+bodyHtml+'</body></html>';
   var w=window.open('','_blank');
@@ -405,72 +494,20 @@ async function printClaim(id){
 }
 window.printClaim=printClaim;
 
-function resetForm(){
-  currentEditId=null;
-  setVal('e-title','');setVal('e-period-start','');setVal('e-period-end','');
-  setVal('e-claim-date',todayStr());
-  items=[];
-  addItem();
-  var btn=$('btn-save');if(btn)btn.textContent='💾 저장';
-  Tab('write');
-}
-
-async function saveClaim(){
-  var title=val('e-title').trim();
-  if(!title){showToast('제목을 입력해 주세요');return;}
-  var realItems=items.filter(function(i){return i.amount>0||i.note||i.cat!==CATS[0];});
-  if(!realItems.length){showToast('청구 내역을 1건 이상 입력해 주세요');return;}
-  var total=updateTotal();
-  var data={
-    title:title,
-    periodStart:val('e-period-start'),
-    periodEnd:val('e-period-end'),
-    claimDate:val('e-claim-date')||todayStr(),
-    items:realItems.map(function(i){return{date:i.date,cat:i.cat,amount:i.amount,note:i.note};}),
-    total:total,
-    createdAt:new Date().toISOString()
-  };
-  var btn=$('btn-save');btn.disabled=true;btn.textContent='저장 중...';
-  try{
-    var savedId=currentEditId;
-    if(currentEditId){
-      await DB.collection('expense_claims').doc(currentEditId).set(data);
-    }else{
-      var ref=await DB.collection('expense_claims').add(data);
-      savedId=ref.id;
-    }
-    showToast('✓ 저장 완료');
-    claims=claims.filter(function(c){return c._id!==savedId;});
-    claims.unshift(Object.assign({_id:savedId},data));
-    resetForm();
-    viewClaim(savedId);
-  }catch(e){
-    console.error(e);showToast('저장 실패: '+e.message);
-  }
-  btn.disabled=false;
-}
-window.saveClaim=saveClaim;
-
-function editClaim(id){
-  var c=claims.find(function(x){return x._id===id;});
-  if(!c)return;
-  currentEditId=id;
-  setVal('e-title',c.title||'');
-  setVal('e-period-start',c.periodStart||'');
-  setVal('e-period-end',c.periodEnd||'');
-  setVal('e-claim-date',c.claimDate||'');
-  items=(c.items||[]).map(function(it,idx){return Object.assign({id:'it'+idx+Date.now()},it);});
-  if(!items.length)addItem();
-  renderItems();
-  var btn=$('btn-save');if(btn)btn.textContent='💾 수정 저장';
-  Tab('write');
-}
-window.editClaim=editClaim;
-
 async function delClaim(id){
-  if(!confirm('이 청구서를 삭제할까요?'))return;
-  try{await DB.collection('expense_claims').doc(id).delete();showToast('삭제되었습니다');}
-  catch(e){showToast('삭제 실패');}
+  if(!confirm('이 청구서를 삭제할까요? (포함된 항목은 다시 미청구 상태로 돌아갑니다)'))return;
+  try{
+    var c=claims.find(function(x){return x._id===id;});
+    if(c&&c.itemIds&&c.itemIds.length){
+      var batch=DB.batch();
+      c.itemIds.forEach(function(iid){
+        batch.update(DB.collection('expense_items').doc(iid),{claimed:false,claimId:null});
+      });
+      await batch.commit();
+    }
+    await DB.collection('expense_claims').doc(id).delete();
+    showToast('삭제되었습니다 (항목은 미청구로 복원됨)');
+  }catch(e){showToast('삭제 실패');}
 }
 window.delClaim=delClaim;
 
@@ -494,9 +531,8 @@ function renderClaimList(){
       '<div class="list-sub">'+(period?'대상기간 '+period+' · ':'')+'청구일 '+(c.claimDate||'—')+' · '+(c.items||[]).length+'건</div>'+
       '<div class="list-amt">'+fmtAmt(c.total)+'</div>'+
       '<div class="list-actions" onclick="event.stopPropagation()">'+
-        '<button style="background:var(--gbg);color:var(--green)" onclick="viewClaim(\''+c._id+'\')">👁️ 보기</button>'+
-        '<button class="bp" style="background:var(--il);color:var(--indigo)" onclick="editClaim(\''+c._id+'\')">✏️ 수정</button>'+
-        '<button class="br" onclick="delClaim(\''+c._id+'\')">🗑️ 삭제</button>'+
+        '<button style="background:var(--gbg);color:var(--green)" onclick="viewClaim(\''+c._id+'\')">보기</button>'+
+        '<button class="br" onclick="delClaim(\''+c._id+'\')">삭제</button>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -524,17 +560,24 @@ function exportCSV(){
   a.href=url;a.download='비용청구서_'+selYear+'.csv';
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  showToast('✓ CSV 다운로드 완료');
+  showToast('CSV 다운로드 완료');
 }
 window.exportCSV=exportCSV;
 
-// ── INIT
-resetForm();
+fillCatSelect('qi-cat');
+setVal('qi-date',todayStr());
+setVal('gen-claim-date',todayStr());
+
+DB.collection('expense_items').orderBy('createdAt','desc').onSnapshot(function(snap){
+  allItems=snap.docs.map(function(d){return Object.assign({},d.data(),{_id:d.id});});
+  $('fb-status').textContent='연결됨';
+  if(!$('tab-entry').classList.contains('hidden'))renderPendingList();
+},function(e){$('fb-status').textContent='연결 실패';console.warn(e.code);});
+
 DB.collection('expense_claims').orderBy('createdAt','desc').onSnapshot(function(snap){
   claims=snap.docs.map(function(d){return Object.assign({},d.data(),{_id:d.id});});
-  $('fb-status').textContent='연결됨';
   if(!$('tab-list').classList.contains('hidden')){renderYearTabs();renderClaimList();}
-},function(e){$('fb-status').textContent='연결 실패';console.warn(e.code);});
+},function(e){console.warn(e.code);});
 </script>
 </body>
 </html>
