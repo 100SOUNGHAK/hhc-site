@@ -131,6 +131,16 @@ button{font-family:inherit;cursor:pointer}
         <div class="card-body">
           <div class="f"><label class="lb">제목</label><input id="gen-title" placeholder="예: 7월 현장 경비 청구"></div>
           <div class="f"><label class="lb">청구일자</label><input id="gen-claim-date" type="date"></div>
+          <div class="f">
+            <label class="lb">입금계좌</label>
+            <select id="gen-bank-select" onchange="onBankSelectChange()"></select>
+          </div>
+          <div id="new-bank-form" class="hidden" style="background:#f8f9fc;border-radius:9px;padding:11px;margin-top:8px">
+            <div class="f"><label class="lb">은행명</label><input id="nb-bank" placeholder="예: Maybank"></div>
+            <div class="f"><label class="lb">계좌번호</label><input id="nb-num" placeholder="예: 1234567890"></div>
+            <div class="f"><label class="lb">예금주</label><input id="nb-name" placeholder="예: HAPPY WORKS SERVICES SDN.BHD."></div>
+            <button class="btn-add" onclick="saveNewBankAccount()">계좌 저장</button>
+          </div>
         </div>
       </div>
 
@@ -188,12 +198,13 @@ var FB_CFG={apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",authDomain:"happywo
 firebase.initializeApp(FB_CFG);
 var DB=firebase.firestore();
 
-var CATS=['유류비','교통비','식대','자재비','전기료','수도료','임대료(29 Kepong)','임대료(139 Nadia)','직원급여','기타'];
-var CATS_EN={'유류비':'Fuel','교통비':'Transport','식대':'Meals','자재비':'Materials','전기료':'Electricity','수도료':'Water','임대료(29 Kepong)':'Rent (29 Kepong)','임대료(139 Nadia)':'Rent (139 Nadia)','직원급여':'Staff Salary','기타':'Others'};
+var CATS=['유류비','차량관리비','교통비','식대','자재비','전기료','수도료','임대료(29 Kepong)','임대료(139 Nadia)','직원급여','기타'];
+var CATS_EN={'유류비':'Fuel','차량관리비':'Vehicle Maintenance','교통비':'Transport','식대':'Meals','자재비':'Materials','전기료':'Electricity','수도료':'Water','임대료(29 Kepong)':'Rent (29 Kepong)','임대료(139 Nadia)':'Rent (139 Nadia)','직원급여':'Staff Salary','기타':'Others'};
 var curLang='ko';
 var allItems=[];
 var claims=[];
 var genItems=[];
+var bankAccounts=[];
 var currentViewId=null;
 var selYear=new Date().getFullYear();
 
@@ -289,6 +300,45 @@ function renderGenPreview(){
   $('gen-total-val').textContent=fmtAmt(total);
 }
 
+function renderBankSelect(){
+  var el=$('gen-bank-select');if(!el)return;
+  var opts='<option value="">선택 안 함</option>';
+  opts+=bankAccounts.map(function(b){return '<option value="'+b._id+'">'+b.bankName+' · '+b.accountNum+' ('+b.accountName+')</option>';}).join('');
+  opts+='<option value="__new__">+ 새 계좌 등록</option>';
+  var prevVal=el.value;
+  el.innerHTML=opts;
+  if(prevVal&&prevVal!=='__new__')el.value=prevVal;
+}
+
+window.onBankSelectChange=function(){
+  var v=val('gen-bank-select');
+  $('new-bank-form').classList.toggle('hidden',v!=='__new__');
+};
+
+async function saveNewBankAccount(){
+  var bankName=val('nb-bank').trim();
+  var accountNum=val('nb-num').trim();
+  var accountName=val('nb-name').trim();
+  if(!bankName||!accountNum||!accountName){showToast('은행명, 계좌번호, 예금주를 모두 입력해 주세요');return;}
+  try{
+    var ref=await DB.collection('expense_bank_accounts').add({bankName:bankName,accountNum:accountNum,accountName:accountName,createdAt:new Date().toISOString()});
+    bankAccounts.push({_id:ref.id,bankName:bankName,accountNum:accountNum,accountName:accountName});
+    renderBankSelect();
+    $('gen-bank-select').value=ref.id;
+    $('new-bank-form').classList.add('hidden');
+    setVal('nb-bank','');setVal('nb-num','');setVal('nb-name','');
+    showToast('계좌가 저장되었습니다');
+  }catch(e){console.error(e);showToast('계좌 저장 실패');}
+}
+window.saveNewBankAccount=saveNewBankAccount;
+
+function getSelectedBankInfo(){
+  var v=val('gen-bank-select');
+  if(!v||v==='__new__')return null;
+  var b=bankAccounts.find(function(x){return x._id===v;});
+  return b?{bankName:b.bankName,accountNum:b.accountNum,accountName:b.accountName}:null;
+}
+
 async function createClaim(){
   if(!genItems.length){showToast('포함할 항목이 없습니다');return;}
   var title=val('gen-title').trim();
@@ -301,6 +351,7 @@ async function createClaim(){
     claimDate:val('gen-claim-date')||todayStr(),
     items:genItems.map(function(i){return{date:i.date,cat:i.cat,amount:i.amount,note:i.note};}),
     itemIds:genItems.map(function(i){return i._id;}),
+    bankInfo:getSelectedBankInfo(),
     total:total,
     createdAt:new Date().toISOString()
   };
@@ -317,6 +368,7 @@ async function createClaim(){
     claims.unshift(Object.assign({_id:savedId},data));
     genItems=[];
     setVal('gen-period-start','');setVal('gen-period-end','');setVal('gen-title','');
+    setVal('gen-bank-select','');$('new-bank-form').classList.add('hidden');
     $('gen-preview-wrap').classList.add('hidden');
     viewClaim(savedId);
   }catch(e){
@@ -330,10 +382,10 @@ function getClaimData(id){
   if(id){
     var c=claims.find(function(x){return x._id===id;});
     if(!c)return null;
-    return {title:c.title||'',periodStart:c.periodStart||'',periodEnd:c.periodEnd||'',claimDate:c.claimDate||'',items:c.items||[],total:c.total||0};
+    return {title:c.title||'',periodStart:c.periodStart||'',periodEnd:c.periodEnd||'',claimDate:c.claimDate||'',items:c.items||[],bankInfo:c.bankInfo||null,total:c.total||0};
   }
   var total=genItems.reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
-  return {title:val('gen-title')||'',periodStart:val('gen-period-start'),periodEnd:val('gen-period-end'),claimDate:val('gen-claim-date')||todayStr(),items:genItems,total:total};
+  return {title:val('gen-title')||'',periodStart:val('gen-period-start'),periodEnd:val('gen-period-end'),claimDate:val('gen-claim-date')||todayStr(),items:genItems,bankInfo:getSelectedBankInfo(),total:total};
 }
 
 window.setLang=function(l){
@@ -377,6 +429,10 @@ async function buildClaimText(id){
   }
   lines.push('');
   lines.push((isEn?'Total Claimed: ':'총 청구금액: ')+fmtAmt(d.total));
+  if(d.bankInfo){
+    lines.push('');
+    lines.push((isEn?'Deposit Account: ':'입금계좌: ')+d.bankInfo.bankName+' '+d.bankInfo.accountNum+' ('+d.bankInfo.accountName+')');
+  }
   return lines.join('\n');
 }
 
@@ -412,9 +468,10 @@ async function buildClaimBodyHTML(id){
       '<th style="background:#0F1729;color:#fff;padding:7px 9px;font-size:10px;text-align:right">'+(isEn?'Amount':'금액')+'</th>'+
       '<th style="background:#0F1729;color:#fff;padding:7px 9px;font-size:10px;text-align:left">'+(isEn?'Note':'비고')+'</th></tr></thead>'+
       '<tbody>'+rows.join('')+'</tbody></table>'+
-    '<div style="display:flex;justify-content:flex-end;font-size:15px;font-weight:700;color:#0F1729;border-top:2px solid #0F1729;padding-top:9px">'+
+    '<div style="display:flex;justify-content:flex-end;font-size:15px;font-weight:700;color:#0F1729;border-top:2px solid #0F1729;padding-top:9px;margin-bottom:'+(d.bankInfo?'10px':'0')+'">'+
       (isEn?'Total: ':'총 청구금액: ')+fmtAmt(d.total)+
     '</div>'+
+    (d.bankInfo?'<div style="background:#f8f9fc;border-radius:8px;padding:10px 12px;font-size:12px;color:#475569;line-height:1.7"><b style="color:#0f172a">'+(isEn?'Deposit Account':'입금계좌')+'</b><br>'+d.bankInfo.bankName+' · '+d.bankInfo.accountNum+'<br>'+d.bankInfo.accountName+'</div>':'')+
   '</div>';
 }
 
@@ -567,6 +624,11 @@ window.exportCSV=exportCSV;
 fillCatSelect('qi-cat');
 setVal('qi-date',todayStr());
 setVal('gen-claim-date',todayStr());
+
+DB.collection('expense_bank_accounts').orderBy('createdAt','desc').onSnapshot(function(snap){
+  bankAccounts=snap.docs.map(function(d){return Object.assign({},d.data(),{_id:d.id});});
+  renderBankSelect();
+},function(e){console.warn(e.code);});
 
 DB.collection('expense_items').orderBy('createdAt','desc').onSnapshot(function(snap){
   allItems=snap.docs.map(function(d){return Object.assign({},d.data(),{_id:d.id});});
