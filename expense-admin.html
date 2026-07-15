@@ -73,6 +73,7 @@ button{font-family:inherit;cursor:pointer}
   <button class="tab active" id="tb-entry" onclick="Tab('entry')">항목 등록</button>
   <button class="tab" id="tb-gen" onclick="Tab('gen')">청구서 생성</button>
   <button class="tab" id="tb-list" onclick="Tab('list')">청구 이력</button>
+  <button class="tab" id="tb-acc" onclick="Tab('acc')">회계 정리</button>
 </div>
 
 <div class="wrap">
@@ -96,6 +97,11 @@ button{font-family:inherit;cursor:pointer}
     <div class="card">
       <div class="card-hdr"><span>미청구 항목</span><span id="pending-count" style="font-size:11px;color:var(--gray);font-weight:600">0건</span></div>
       <div class="card-body">
+        <div class="row-fg" style="margin-bottom:10px">
+          <button class="yt active" id="pend-srt-desc" onclick="sortPending('date_desc')" style="flex:1">최신순</button>
+          <button class="yt" id="pend-srt-asc" onclick="sortPending('date_asc')" style="flex:1">과거순</button>
+          <button class="yt" id="pend-srt-cat" onclick="sortPending('cat')" style="flex:1">품목별</button>
+        </div>
         <div id="pending-list"></div>
       </div>
     </div>
@@ -117,6 +123,11 @@ button{font-family:inherit;cursor:pointer}
       <div class="card">
         <div class="card-hdr"><span>포함될 항목</span><span id="gen-item-count" style="font-size:11px;color:var(--gray);font-weight:600">0건</span></div>
         <div class="card-body">
+          <div class="row-fg" style="margin-bottom:10px">
+            <button class="yt active" id="gen-srt-desc" onclick="sortGenCandidates('date_desc')" style="flex:1">최근순</button>
+            <button class="yt" id="gen-srt-asc" onclick="sortGenCandidates('date_asc')" style="flex:1">과거순</button>
+            <button class="yt" id="gen-srt-cat" onclick="sortGenCandidates('cat')" style="flex:1">품목별</button>
+          </div>
           <div id="gen-item-list"></div>
         </div>
       </div>
@@ -167,6 +178,22 @@ button{font-family:inherit;cursor:pointer}
     <div id="claim-list"></div>
   </div>
 
+  <div id="tab-acc" class="hidden">
+    <div class="year-tabs" id="acc-year-tabs"></div>
+    <div class="total-box">
+      <span class="total-lbl">선택 연도 총 청구금액</span>
+      <span class="total-val" id="acc-year-total">RM 0.00</span>
+    </div>
+    <div class="card">
+      <div class="card-hdr">월별 청구 현황</div>
+      <div class="card-body" id="acc-month-body"></div>
+    </div>
+    <div class="card">
+      <div class="card-hdr">품목별 합계</div>
+      <div class="card-body" id="acc-cat-body"></div>
+    </div>
+  </div>
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -204,6 +231,9 @@ var curLang='ko';
 var allItems=[];
 var claims=[];
 var genItems=[];
+var genCandidates=[];
+var genSelectedIds={};
+var genSortMode='date_desc';
 var bankAccounts=[];
 var currentViewId=null;
 var selYear=new Date().getFullYear();
@@ -221,11 +251,14 @@ window.Tab=function(t){
   $('tab-entry').classList.toggle('hidden',t!=='entry');
   $('tab-gen').classList.toggle('hidden',t!=='gen');
   $('tab-list').classList.toggle('hidden',t!=='list');
+  $('tab-acc').classList.toggle('hidden',t!=='acc');
   $('tb-entry').classList.toggle('active',t==='entry');
   $('tb-gen').classList.toggle('active',t==='gen');
   $('tb-list').classList.toggle('active',t==='list');
+  $('tb-acc').classList.toggle('active',t==='acc');
   if(t==='entry')renderPendingList();
   if(t==='list'){renderYearTabs();renderClaimList();}
+  if(t==='acc'){renderAccYearTabs();renderAccounting();}
 };
 
 async function quickAddItem(){
@@ -250,10 +283,21 @@ async function deletePendingItem(id){
 }
 window.deletePendingItem=deletePendingItem;
 
+var pendingSortMode='date_desc';
+window.sortPending=function(mode){
+  pendingSortMode=mode;
+  ['pend-srt-desc','pend-srt-asc','pend-srt-cat'].forEach(function(id){var b=$(id);if(b)b.classList.remove('active');});
+  var activeId=mode==='date_desc'?'pend-srt-desc':mode==='date_asc'?'pend-srt-asc':'pend-srt-cat';
+  var ab=$(activeId);if(ab)ab.classList.add('active');
+  renderPendingList();
+};
+
 function renderPendingList(){
   var el=$('pending-list');if(!el)return;
   var pending=allItems.filter(function(i){return !i.claimed;});
-  pending.sort(function(a,b){return(b.date||'').localeCompare(a.date||'');});
+  if(pendingSortMode==='date_desc')pending.sort(function(a,b){return(b.date||'').localeCompare(a.date||'');});
+  else if(pendingSortMode==='date_asc')pending.sort(function(a,b){return(a.date||'').localeCompare(b.date||'');});
+  else pending.sort(function(a,b){return CATS.indexOf(a.cat)-CATS.indexOf(b.cat)||(b.date||'').localeCompare(a.date||'');});
   $('pending-count').textContent=pending.length+'건';
   if(!pending.length){el.innerHTML='<div class="empty">등록된 미청구 항목이 없습니다</div>';return;}
   el.innerHTML=pending.map(function(it){
@@ -271,24 +315,45 @@ function renderPendingList(){
 function generatePreview(){
   var start=val('gen-period-start'),end=val('gen-period-end');
   if(!start||!end){showToast('시작일과 종료일을 선택해 주세요');return;}
-  genItems=allItems.filter(function(i){return !i.claimed&&i.date>=start&&i.date<=end;});
-  genItems.sort(function(a,b){return(a.date||'').localeCompare(b.date||'');});
-  renderGenPreview();
+  genCandidates=allItems.filter(function(i){return !i.claimed&&i.date>=start&&i.date<=end;});
+  genSelectedIds={};
+  genCandidates.forEach(function(i){genSelectedIds[i._id]=true;});
+  sortGenCandidates('date_desc');
   $('gen-preview-wrap').classList.toggle('hidden',false);
-  if(!genItems.length)showToast('해당 기간에 미청구 항목이 없습니다');
+  if(!genCandidates.length)showToast('해당 기간에 미청구 항목이 없습니다');
 }
 window.generatePreview=generatePreview;
 
+function sortGenCandidates(mode){
+  genSortMode=mode;
+  if(mode==='date_desc')genCandidates.sort(function(a,b){return(b.date||'').localeCompare(a.date||'');});
+  else if(mode==='date_asc')genCandidates.sort(function(a,b){return(a.date||'').localeCompare(b.date||'');});
+  else genCandidates.sort(function(a,b){return CATS.indexOf(a.cat)-CATS.indexOf(b.cat)||(b.date||'').localeCompare(a.date||'');});
+  ['gen-srt-desc','gen-srt-asc','gen-srt-cat'].forEach(function(id){var b=$(id);if(b)b.classList.remove('active');});
+  var activeId=mode==='date_desc'?'gen-srt-desc':mode==='date_asc'?'gen-srt-asc':'gen-srt-cat';
+  var ab=$(activeId);if(ab)ab.classList.add('active');
+  renderGenPreview();
+}
+window.sortGenCandidates=sortGenCandidates;
+
+window.toggleGenItem=function(id){
+  genSelectedIds[id]=!genSelectedIds[id];
+  renderGenPreview();
+};
+
 function renderGenPreview(){
   var el=$('gen-item-list');
-  $('gen-item-count').textContent=genItems.length+'건';
-  if(!genItems.length){
+  var selCount=genCandidates.filter(function(i){return genSelectedIds[i._id];}).length;
+  $('gen-item-count').textContent=selCount+' / '+genCandidates.length+'건 선택';
+  if(!genCandidates.length){
     el.innerHTML='<div class="empty">해당 기간에 항목이 없습니다</div>';
     $('gen-total-val').textContent=fmtAmt(0);
     return;
   }
-  el.innerHTML=genItems.map(function(it){
-    return '<div class="pending-item sel">'+
+  el.innerHTML=genCandidates.map(function(it){
+    var sel=!!genSelectedIds[it._id];
+    return '<div class="pending-item'+(sel?' sel':'')+'" onclick="toggleGenItem(\''+it._id+'\')" style="cursor:pointer">'+
+      '<input type="checkbox" '+(sel?'checked':'')+' onclick="event.stopPropagation();toggleGenItem(\''+it._id+'\')" style="width:auto;flex-shrink:0">'+
       '<div class="pi-info">'+
         '<div class="pi-cat">'+it.cat+'</div>'+
         '<div class="pi-date">'+mdFromDate(it.date)+(it.note?' · '+it.note:'')+'</div>'+
@@ -296,7 +361,7 @@ function renderGenPreview(){
       '<div class="pi-amt">'+fmtAmt(it.amount)+'</div>'+
     '</div>';
   }).join('');
-  var total=genItems.reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
+  var total=genCandidates.filter(function(i){return genSelectedIds[i._id];}).reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
   $('gen-total-val').textContent=fmtAmt(total);
 }
 
@@ -339,18 +404,23 @@ function getSelectedBankInfo(){
   return b?{bankName:b.bankName,accountNum:b.accountNum,accountName:b.accountName}:null;
 }
 
+function getSelectedGenItems(){
+  return genCandidates.filter(function(i){return genSelectedIds[i._id];});
+}
+
 async function createClaim(){
-  if(!genItems.length){showToast('포함할 항목이 없습니다');return;}
+  var selected=getSelectedGenItems();
+  if(!selected.length){showToast('포함할 항목을 1건 이상 선택해 주세요');return;}
   var title=val('gen-title').trim();
   if(!title){showToast('제목을 입력해 주세요');return;}
-  var total=genItems.reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
+  var total=selected.reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
   var data={
     title:title,
     periodStart:val('gen-period-start'),
     periodEnd:val('gen-period-end'),
     claimDate:val('gen-claim-date')||todayStr(),
-    items:genItems.map(function(i){return{date:i.date,cat:i.cat,amount:i.amount,note:i.note};}),
-    itemIds:genItems.map(function(i){return i._id;}),
+    items:selected.map(function(i){return{date:i.date,cat:i.cat,amount:i.amount,note:i.note};}),
+    itemIds:selected.map(function(i){return i._id;}),
     bankInfo:getSelectedBankInfo(),
     total:total,
     createdAt:new Date().toISOString()
@@ -360,13 +430,13 @@ async function createClaim(){
     var ref=await DB.collection('expense_claims').add(data);
     var savedId=ref.id;
     var batch=DB.batch();
-    genItems.forEach(function(i){
+    selected.forEach(function(i){
       batch.update(DB.collection('expense_items').doc(i._id),{claimed:true,claimId:savedId});
     });
     await batch.commit();
     showToast('청구서 생성 완료');
     claims.unshift(Object.assign({_id:savedId},data));
-    genItems=[];
+    genCandidates=[];genSelectedIds={};
     setVal('gen-period-start','');setVal('gen-period-end','');setVal('gen-title','');
     setVal('gen-bank-select','');$('new-bank-form').classList.add('hidden');
     $('gen-preview-wrap').classList.add('hidden');
@@ -384,8 +454,9 @@ function getClaimData(id){
     if(!c)return null;
     return {title:c.title||'',periodStart:c.periodStart||'',periodEnd:c.periodEnd||'',claimDate:c.claimDate||'',items:c.items||[],bankInfo:c.bankInfo||null,total:c.total||0};
   }
-  var total=genItems.reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
-  return {title:val('gen-title')||'',periodStart:val('gen-period-start'),periodEnd:val('gen-period-end'),claimDate:val('gen-claim-date')||todayStr(),items:genItems,bankInfo:getSelectedBankInfo(),total:total};
+  var selItems=getSelectedGenItems();
+  var total=selItems.reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
+  return {title:val('gen-title')||'',periodStart:val('gen-period-start'),periodEnd:val('gen-period-end'),claimDate:val('gen-claim-date')||todayStr(),items:selItems,bankInfo:getSelectedBankInfo(),total:total};
 }
 
 window.setLang=function(l){
@@ -576,6 +647,58 @@ function renderYearTabs(){
 }
 window.setYear=function(y){selYear=parseInt(y);renderYearTabs();renderClaimList();};
 
+var accSelYear=new Date().getFullYear();
+function renderAccYearTabs(){
+  var years=Array.from(new Set(claims.map(function(c){return(c.claimDate||'').slice(0,4);}).filter(Boolean))).sort(function(a,b){return b-a;});
+  if(!years.length)years=[String(new Date().getFullYear())];
+  if(years.indexOf(String(accSelYear))<0)accSelYear=parseInt(years[0]);
+  $('acc-year-tabs').innerHTML=years.map(function(y){return '<button class="yt'+(parseInt(y)===accSelYear?' active':'')+'" onclick="setAccYear('+y+')">'+y+'년</button>';}).join('');
+}
+window.setAccYear=function(y){accSelYear=parseInt(y);renderAccYearTabs();renderAccounting();};
+
+function renderAccounting(){
+  var yc=claims.filter(function(c){return(c.claimDate||'').startsWith(String(accSelYear));});
+  var yearTotal=yc.reduce(function(s,c){return s+(c.total||0);},0);
+  $('acc-year-total').textContent=fmtAmt(yearTotal);
+
+  // 월별 청구 현황
+  var monthNames=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  var monthTotals={};
+  yc.forEach(function(c){
+    var m=(c.claimDate||'').slice(5,7);
+    if(!m)return;
+    if(!monthTotals[m])monthTotals[m]={total:0,count:0};
+    monthTotals[m].total+=(c.total||0);
+    monthTotals[m].count+=1;
+  });
+  var monthKeys=Object.keys(monthTotals).sort(function(a,b){return b-a;});
+  var mb=$('acc-month-body');
+  if(!monthKeys.length){mb.innerHTML='<div class="empty">데이터 없음</div>';}
+  else{
+    mb.innerHTML=monthKeys.map(function(mk){
+      var mi=parseInt(mk)-1;
+      return '<div class="pending-item"><div class="pi-info"><div class="pi-cat">'+monthNames[mi]+'</div><div class="pi-date">청구서 '+monthTotals[mk].count+'건</div></div><div class="pi-amt">'+fmtAmt(monthTotals[mk].total)+'</div></div>';
+    }).join('');
+  }
+
+  // 품목별 합계
+  var catTotals={};
+  yc.forEach(function(c){
+    (c.items||[]).forEach(function(it){
+      var cat=it.cat||'기타';
+      catTotals[cat]=(catTotals[cat]||0)+(parseFloat(it.amount)||0);
+    });
+  });
+  var catKeys=Object.keys(catTotals).sort(function(a,b){return catTotals[b]-catTotals[a];});
+  var cb=$('acc-cat-body');
+  if(!catKeys.length){cb.innerHTML='<div class="empty">데이터 없음</div>';}
+  else{
+    cb.innerHTML=catKeys.map(function(cat){
+      return '<div class="pending-item"><div class="pi-info"><div class="pi-cat">'+cat+'</div></div><div class="pi-amt">'+fmtAmt(catTotals[cat])+'</div></div>';
+    }).join('');
+  }
+}
+
 function renderClaimList(){
   var el=$('claim-list');
   var yc=claims.filter(function(c){return(c.claimDate||'').startsWith(String(selYear));});
@@ -639,6 +762,7 @@ DB.collection('expense_items').orderBy('createdAt','desc').onSnapshot(function(s
 DB.collection('expense_claims').orderBy('createdAt','desc').onSnapshot(function(snap){
   claims=snap.docs.map(function(d){return Object.assign({},d.data(),{_id:d.id});});
   if(!$('tab-list').classList.contains('hidden')){renderYearTabs();renderClaimList();}
+  if(!$('tab-acc').classList.contains('hidden')){renderAccYearTabs();renderAccounting();}
 },function(e){console.warn(e.code);});
 </script>
 </body>
