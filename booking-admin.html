@@ -187,6 +187,7 @@ select.field-input{cursor:pointer}
 .ci-status.pending{background:var(--amber-bg);color:var(--amber)}
 .ci-status.booked{background:var(--green-bg);color:var(--green)}
 .ci-status.confirmed{background:rgba(61,82,160,.1);color:var(--indigo)}
+.ci-status.done{background:#e5e7eb;color:#4b5563}
 .ci-dates{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
 .ci-date-tag{padding:2px 8px;background:var(--teal-lt);border-radius:20px;font-size:11px;color:var(--teal);font-weight:500}
 .ci-booking{background:var(--surface);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:8px;border-left:3px solid var(--teal)}
@@ -627,6 +628,7 @@ select.field-input{cursor:pointer}
     <button type="button" class="lf-tab on" data-f="all" onclick="setListFilter('all')">전체</button>
     <button type="button" class="lf-tab" data-f="waiting" onclick="setListFilter('waiting')">대기중</button>
     <button type="button" class="lf-tab" data-f="confirmed" onclick="setListFilter('confirmed')">확정완료</button>
+    <button type="button" class="lf-tab" data-f="done" onclick="setListFilter('done')">작업완료</button>
   </div>
   <div class="customer-list" id="customer-list">
     <div class="empty-st"><div class="empty-title">예약 내역이 없습니다</div><div class="empty-desc">새 예약 등록 탭에서 고객을 등록하세요</div></div>
@@ -1303,7 +1305,9 @@ function renderList(){
   const q=(document.getElementById('list-search')?.value||'').toLowerCase();
   const filtered=allBookings.filter(b=>{
     const mq=!q||(b.customer_name||'').toLowerCase().includes(q)||(b.customer_phone||'').toLowerCase().includes(q);
-    const mf=listFilter==='all'||(listFilter==='waiting'&&b.status!=='confirmed')||(listFilter==='confirmed'&&b.status==='confirmed');
+    const today0f=new Date().toISOString().split('T')[0];
+    const isDoneF=b.status==='confirmed'&&b.booking_date&&b.booking_date<today0f;
+    const mf=listFilter==='all'||(listFilter==='waiting'&&b.status!=='confirmed')||(listFilter==='confirmed'&&b.status==='confirmed'&&!isDoneF)||(listFilter==='done'&&isDoneF);
     return mq&&mf;
   });
   if(!filtered.length){
@@ -1312,8 +1316,10 @@ function renderList(){
   }
   el.innerHTML=filtered.map(b=>{
     const dates=b.schedule_dates?JSON.parse(b.schedule_dates):[];
-    const statusLabel={'waiting':'대기중','booked':'신청완료','confirmed':'확정완료'}[b.status]||b.status;
-    const statusCls={'waiting':'pending','booked':'pending','confirmed':'confirmed'}[b.status]||'pending';
+    const today0=new Date().toISOString().split('T')[0];
+    const isPastDone=b.status==='confirmed'&&b.booking_date&&b.booking_date<today0;
+    const statusLabel=isPastDone?'작업완료':({'waiting':'대기중','booked':'신청완료','confirmed':'확정완료'}[b.status]||b.status);
+    const statusCls=isPastDone?'done':({'waiting':'pending','booked':'pending','confirmed':'confirmed'}[b.status]||'pending');
     const lang=b.customer_lang||'ko';
     const langBadge=lang==='en'?'<span style="padding:2px 7px;background:#DBEAFE;color:#1D4ED8;border-radius:20px;font-size:10px;font-weight:600;margin-left:5px">EN</span>':'<span style="padding:2px 7px;background:#EDE8F5;color:#3D52A0;border-radius:20px;font-size:10px;font-weight:600;margin-left:5px">KO</span>';
     const dateTags=dates.map(d=>`<span class="ci-date-tag">${d}</span>`).join('');
