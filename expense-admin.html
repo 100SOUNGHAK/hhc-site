@@ -848,7 +848,7 @@ window.setYear=function(y){selYear=parseInt(y);renderYearTabs();renderClaimList(
 
 var accSelYear=new Date().getFullYear();
 function renderAccYearTabs(){
-  var years=Array.from(new Set(claims.map(function(c){return(c.claimDate||'').slice(0,4);}).filter(Boolean))).sort(function(a,b){return b-a;});
+  var years=Array.from(new Set(claims.map(function(c){return accDateKeyOf(c).slice(0,4);}).filter(Boolean))).sort(function(a,b){return b-a;});
   if(!years.length)years=[String(new Date().getFullYear())];
   if(years.indexOf(String(accSelYear))<0)accSelYear=parseInt(years[0]);
   var suf=curLang==='en'?'':'년';
@@ -856,16 +856,20 @@ function renderAccYearTabs(){
 }
 window.setAccYear=function(y){accSelYear=parseInt(y);renderAccYearTabs();renderAccounting();};
 
+function accDateKeyOf(c){
+  return (c.periodStart||c.claimDate||'');
+}
+
 function renderAccounting(){
   var isEn=curLang==='en';
-  var yc=claims.filter(function(c){return(c.claimDate||'').startsWith(String(accSelYear));});
+  var yc=claims.filter(function(c){return accDateKeyOf(c).startsWith(String(accSelYear));});
   var yearTotal=yc.reduce(function(s,c){return s+(c.total||0);},0);
   $('acc-year-total').textContent=fmtAmt(yearTotal);
 
   var monthNames=isEn?['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']:['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
   var monthTotals={};
   yc.forEach(function(c){
-    var m=(c.claimDate||'').slice(5,7);
+    var m=accDateKeyOf(c).slice(5,7);
     if(!m)return;
     if(!monthTotals[m])monthTotals[m]={total:0,count:0};
     monthTotals[m].total+=(c.total||0);
@@ -926,7 +930,7 @@ window.toggleAccMonthDetail=function(mk){
   el.dataset.filled='';
   if(opening){
     var isEn=curLang==='en';
-    var yc=(window._accMonthClaims||[]).filter(function(c){return(c.claimDate||'').slice(5,7)===mk;});
+    var yc=(window._accMonthClaims||[]).filter(function(c){return accDateKeyOf(c).slice(5,7)===mk;});
     el.innerHTML=yc.map(function(c){
       return '<div style="padding:6px 0;font-size:12px;color:var(--txt2);cursor:pointer" onclick="viewClaim(\''+c._id+'\')">'+c.title+' — '+fmtAmt(c.total)+' <span style="color:var(--gray);font-size:10.5px">('+(c.claimDate||'')+')</span></div>';
     }).join('')||'<div class="empty" style="padding:10px 0">'+(isEn?'No records':'내역 없음')+'</div>';
@@ -971,13 +975,13 @@ function renderClaimList(){
 }
 
 function exportAccCSV(){
-  var yc=claims.filter(function(c){return(c.claimDate||'').startsWith(String(accSelYear));});
+  var yc=claims.filter(function(c){return accDateKeyOf(c).startsWith(String(accSelYear));});
   if(!yc.length){showToast('내보낼 데이터가 없습니다');return;}
   var monthNames=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
   var monthTotals={};
   var catTotals={};
   yc.forEach(function(c){
-    var m=(c.claimDate||'').slice(5,7);
+    var m=accDateKeyOf(c).slice(5,7);
     if(m){if(!monthTotals[m])monthTotals[m]={total:0,count:0};monthTotals[m].total+=(c.total||0);monthTotals[m].count+=1;}
     (c.items||[]).forEach(function(it){
       var cat=it.cat||'기타';
