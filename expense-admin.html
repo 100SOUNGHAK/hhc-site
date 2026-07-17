@@ -194,6 +194,9 @@ button{font-family:inherit;cursor:pointer}
 
   <div id="tab-acc" class="hidden">
     <div class="year-tabs" id="acc-year-tabs"></div>
+    <div class="row-fg" style="margin-bottom:14px">
+      <button class="btn bgh bfu" onclick="exportAccCSV()" id="acc-csv-btn-lbl">CSV 내보내기 (선택 연도 전체)</button>
+    </div>
     <div class="total-box">
       <span class="total-lbl" id="acc-total-lbl">선택 연도 총 청구금액</span>
       <span class="total-val" id="acc-year-total">RM 0.00</span>
@@ -269,8 +272,8 @@ var FB_CFG={apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",authDomain:"happywo
 firebase.initializeApp(FB_CFG);
 var DB=firebase.firestore();
 
-var CATS=['유류비','차량관리비','교통비','식대','자재비','전기료','수도료','임대료(29 Kepong)','임대료(139 Nadia)','직원급여','기타'];
-var CATS_EN={'유류비':'Fuel','차량관리비':'Vehicle Maintenance','교통비':'Transport','식대':'Meals','자재비':'Materials','전기료':'Electricity','수도료':'Water','임대료(29 Kepong)':'Rent (29 Kepong)','임대료(139 Nadia)':'Rent (139 Nadia)','직원급여':'Staff Salary','기타':'Others'};
+var CATS=['유류비','차량관리비','교통비','식대','자재비','커튼세탁비','비품 및 장비','통신비','전기료','수도료','임대료(29 Kepong)','임대료(139 Nadia)','직원급여','기타'];
+var CATS_EN={'유류비':'Fuel','차량관리비':'Vehicle Maintenance','교통비':'Transport','식대':'Meals','자재비':'Materials','커튼세탁비':'Curtain Cleaning','비품 및 장비':'Supplies & Equipment','통신비':'Communication','전기료':'Electricity','수도료':'Water','임대료(29 Kepong)':'Rent (29 Kepong)','임대료(139 Nadia)':'Rent (139 Nadia)','직원급여':'Staff Salary','기타':'Others'};
 var curLang='ko';
 var allItems=[];
 var claims=[];
@@ -424,9 +427,20 @@ function renderGenPreview(){
     $('gen-total-val').textContent=fmtAmt(0);
     return;
   }
-  el.innerHTML=genCandidates.map(function(it){
+  var html='';
+  var lastCat=null;
+  genCandidates.forEach(function(it){
+    if(genSortMode==='cat'&&it.cat!==lastCat){
+      lastCat=it.cat;
+      var safeId=it.cat.replace(/[^\w가-힣]/g,'_');
+      var groupSel=genCandidates.filter(function(i){return i.cat===it.cat;}).every(function(i){return genSelectedIds[i._id];});
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 2px 4px">'+
+        '<span style="font-size:11.5px;font-weight:700;color:var(--gray)">'+it.cat+'</span>'+
+        '<button onclick="toggleGenCategoryGroup(\''+safeId+'\')" style="background:var(--il);color:var(--indigo);border:none;padding:4px 10px;border-radius:14px;font-size:11px;font-weight:600;cursor:pointer">'+(groupSel?'전체 해제':'전체 선택')+'</button>'+
+      '</div>';
+    }
     var sel=!!genSelectedIds[it._id];
-    return '<div class="pending-item'+(sel?' sel':'')+'" onclick="toggleGenItem(\''+it._id+'\')" style="cursor:pointer">'+
+    html+='<div class="pending-item'+(sel?' sel':'')+'" onclick="toggleGenItem(\''+it._id+'\')" style="cursor:pointer">'+
       '<input type="checkbox" '+(sel?'checked':'')+' onclick="event.stopPropagation();toggleGenItem(\''+it._id+'\')" style="width:auto;flex-shrink:0">'+
       '<div class="pi-info">'+
         '<div class="pi-cat">'+it.cat+'</div>'+
@@ -434,10 +448,19 @@ function renderGenPreview(){
       '</div>'+
       '<div class="pi-amt">'+fmtAmt(it.amount)+'</div>'+
     '</div>';
-  }).join('');
+  });
+  el.innerHTML=html;
   var total=genCandidates.filter(function(i){return genSelectedIds[i._id];}).reduce(function(s,i){return s+(parseFloat(i.amount)||0);},0);
   $('gen-total-val').textContent=fmtAmt(total);
 }
+window.toggleGenCategoryGroup=function(safeId){
+  var cat=Array.from(new Set(genCandidates.map(function(i){return i.cat;}))).find(function(c){return c.replace(/[^\w가-힣]/g,'_')===safeId;});
+  if(!cat)return;
+  var groupItems=genCandidates.filter(function(i){return i.cat===cat;});
+  var allSel=groupItems.every(function(i){return genSelectedIds[i._id];});
+  groupItems.forEach(function(i){genSelectedIds[i._id]=!allSel;});
+  renderGenPreview();
+};
 
 function renderBankSelect(){
   var el=$('gen-bank-select');if(!el)return;
@@ -534,8 +557,8 @@ function getClaimData(id){
 }
 
 var UI_T={
-  ko:{'hd-title-lbl':'비용청구서','csv-btn-lbl':'CSV 내보내기 (선택 연도 전체)','acc-total-lbl':'선택 연도 총 청구금액','acc-month-hdr':'월별 청구 현황','acc-cat-hdr':'품목별 합계'},
-  en:{'hd-title-lbl':'Expense Claims','csv-btn-lbl':'Export CSV (Selected Year)','acc-total-lbl':'Total Claimed (Selected Year)','acc-month-hdr':'Monthly Claims','acc-cat-hdr':'Totals by Category'}
+  ko:{'hd-title-lbl':'비용청구서','csv-btn-lbl':'CSV 내보내기 (선택 연도 전체)','acc-csv-btn-lbl':'CSV 내보내기 (선택 연도 전체)','acc-total-lbl':'선택 연도 총 청구금액','acc-month-hdr':'월별 청구 현황','acc-cat-hdr':'품목별 합계'},
+  en:{'hd-title-lbl':'Expense Claims','csv-btn-lbl':'Export CSV (Selected Year)','acc-csv-btn-lbl':'Export CSV (Selected Year)','acc-total-lbl':'Total Claimed (Selected Year)','acc-month-hdr':'Monthly Claims','acc-cat-hdr':'Totals by Category'}
 };
 window.setUILang=function(l){
   curLang=l;
@@ -946,6 +969,55 @@ function renderClaimList(){
     '</div>';
   }).join('');
 }
+
+function exportAccCSV(){
+  var yc=claims.filter(function(c){return(c.claimDate||'').startsWith(String(accSelYear));});
+  if(!yc.length){showToast('내보낼 데이터가 없습니다');return;}
+  var monthNames=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  var monthTotals={};
+  var catTotals={};
+  yc.forEach(function(c){
+    var m=(c.claimDate||'').slice(5,7);
+    if(m){if(!monthTotals[m])monthTotals[m]={total:0,count:0};monthTotals[m].total+=(c.total||0);monthTotals[m].count+=1;}
+    (c.items||[]).forEach(function(it){
+      var cat=it.cat||'기타';
+      catTotals[cat]=(catTotals[cat]||0)+(parseFloat(it.amount)||0);
+    });
+  });
+  var rows=[['== 월별 청구 현황 =='],['월','청구서 건수','합계']];
+  Object.keys(monthTotals).sort().forEach(function(mk){
+    rows.push([monthNames[parseInt(mk)-1],monthTotals[mk].count,monthTotals[mk].total]);
+  });
+  rows.push([]);
+  rows.push(['== 품목별 합계 ==']);
+  rows.push(['품목','합계']);
+  Object.keys(catTotals).sort(function(a,b){return catTotals[b]-catTotals[a];}).forEach(function(cat){
+    rows.push([cat,catTotals[cat]]);
+  });
+  rows.push([]);
+  rows.push(['== 청구 상세 내역 ==']);
+  rows.push(['청구서 제목','청구일자','청구대상기간','일자','품목','금액','비고']);
+  yc.forEach(function(c){
+    var period=(c.periodStart||'')&&(c.periodEnd||'')?c.periodStart+' ~ '+c.periodEnd:'';
+    (c.items||[]).forEach(function(it){
+      rows.push([c.title||'',c.claimDate||'',period,mdFromDate(it.date),it.cat||'',it.amount||0,it.note||'']);
+    });
+  });
+  var csv=rows.map(function(r){
+    return r.map(function(v){
+      var s=String(v==null?'':v);
+      return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+    }).join(',');
+  }).join('\n');
+  var blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;a.download='회계정리_'+accSelYear+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('CSV 다운로드 완료');
+}
+window.exportAccCSV=exportAccCSV;
 
 function exportCSV(){
   var yc=claims.filter(function(c){return(c.claimDate||'').startsWith(String(selYear));});
