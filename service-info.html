@@ -482,6 +482,37 @@
   .rv.in{opacity:1;transform:none;}
   @media (prefers-reduced-motion: reduce){.rv{opacity:1;transform:none;transition:none;}}
 
+
+  /* ═══ 게이지 모바일 개선: %위치 라벨 칩 + 탭 강조·스크롤 ═══ */
+  .gauge-label{cursor:pointer;transition:color .2s;}
+  .gauge-label:hover{color:#fff;}
+  .gauge-label.on{color:var(--gold-300);font-weight:700;}
+  .gauge-label::before{content:"";position:absolute;inset:-12px -10px;} /* 터치 영역 확장 */
+  @media(max-width:900px){
+    /* 바 위 %위치 라벨을 모바일에서도 표시 — 2단 스태거로 겹침 방지 */
+    .gauge-track{margin-top:84px;}
+    .gauge-service-labels-overlay{display:flex;top:auto;height:auto;}
+    .gauge-label{
+      position:absolute;top:-40px;transform:translateX(-50%);
+      background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);
+      border-radius:100px;padding:6px 11px;font-size:11px;color:#c9d6e5;font-weight:600;
+      line-height:1;white-space:nowrap;z-index:2;
+    }
+    .gauge-label:nth-child(2),.gauge-label:nth-child(4){top:-76px;}
+    .gauge-label::after{content:"";position:absolute;left:50%;top:100%;width:1px;height:16px;background:rgba(255,255,255,.28);}
+    .gauge-label:nth-child(2)::after,.gauge-label:nth-child(4)::after{height:52px;}
+    .gauge-label:last-child{transform:translateX(-86%);}
+    .gauge-label:last-child::after{left:86%;}
+    .gauge-label:first-child{transform:translateX(-30%);}
+    .gauge-label:first-child::after{left:30%;}
+    .gauge-label.on{background:rgba(201,164,76,.2);border-color:var(--gold-500);color:var(--gold-300);box-shadow:0 6px 16px -6px rgba(201,164,76,.55);}
+    .gauge-label.on::after{background:var(--gold-500);width:2px;}
+    /* 기존 하단 평문 라벨 목록은 제거 (바 위 칩으로 대체) */
+    .gauge-service-labels{display:none !important;}
+    /* 바 터치 영역 확대 */
+    .gauge-track{height:12px;}
+  }
+
 </style>
 </head>
 <body>
@@ -1487,6 +1518,47 @@
         ents.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}});
       },{threshold:.12,rootMargin:'0px 0px -6% 0px'});
       els.forEach(function(el){io.observe(el);});
+    }catch(e){}
+  })();
+</script>
+<script>
+  // 게이지 라벨 클릭/탭 → 해당 카드 강조 + (모바일) 카드로 스크롤
+  (function(){
+    var track=document.querySelector('.gauge-section .gauge-track');
+    var container=document.querySelector('.gauge-section .clean-cards');
+    if(!track||!container)return;
+    var cards=Array.prototype.slice.call(container.querySelectorAll('.clean-card'));
+    var labels=Array.prototype.slice.call(track.querySelectorAll('.gauge-label'));
+    function isMobile(){return window.matchMedia('(max-width:900px)').matches;}
+    function activate(idx,scroll){
+      container.classList.add('gauge-hovering');
+      cards.forEach(function(c,i){c.classList.toggle('gauge-active',i===idx);});
+      labels.forEach(function(l,i){l.classList.toggle('on',i===idx);});
+      if(scroll&&cards[idx]){
+        setTimeout(function(){cards[idx].scrollIntoView({behavior:'smooth',block:'center'});},80);
+      }
+    }
+    labels.forEach(function(l,i){
+      l.addEventListener('click',function(e){
+        e.stopPropagation();
+        activate(i,isMobile());
+      });
+    });
+    // 모바일: 바 탭 시 가장 가까운 단계 활성 + 해당 카드로 스크롤
+    track.addEventListener('pointerup',function(e){
+      if(e.pointerType!=='touch')return;
+      var rect=track.getBoundingClientRect();
+      var pct=((e.clientX-rect.left)/rect.width)*100;
+      var best=0,dist=1e9;
+      cards.forEach(function(c,i){var d=Math.abs(parseFloat(c.dataset.pct)-pct);if(d<dist){dist=d;best=i;}});
+      activate(best,true);
+    });
+    // 기존 마우스 호버 하이라이트와 라벨 칩 상태 동기화
+    try{
+      var mo=new MutationObserver(function(){
+        cards.forEach(function(c,i){if(labels[i])labels[i].classList.toggle('on',c.classList.contains('gauge-active'));});
+      });
+      cards.forEach(function(c){mo.observe(c,{attributes:true,attributeFilter:['class']});});
     }catch(e){}
   })();
 </script>
