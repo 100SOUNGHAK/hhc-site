@@ -622,12 +622,11 @@ input[data-benefit]{display:none}
 .nc .svc-box{background:var(--soft);border-left:4px solid var(--indigo);border-radius:0 12px 12px 0;padding:14px 16px;font-size:13.5px;color:var(--ink-2);line-height:1.8}
 .nc .clause{font-size:13.5px;color:var(--ink-2);line-height:1.85}
 .nc .terms-box{background:#FFFBEB;border:1px solid #F3E4B8;border-radius:12px;padding:14px 16px;font-size:13.5px;color:#6B4E12;line-height:1.75;white-space:pre-wrap}
-.nc /* 혜택 */
-.ben-item{display:flex;gap:12px;padding:13px 0;border-bottom:1px solid var(--line-2)}
+.nc .ben-item{display:block!important;justify-content:flex-start!important;gap:0!important;padding:12px 0;border-bottom:1px solid var(--line-2);text-align:left}
 .nc .ben-item:last-child{border-bottom:none}
-.nc .ben-chk{width:26px;height:26px;border-radius:8px;background:var(--ok-bg);color:var(--ok);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:800}
-.nc .ben-title{font-size:14px;font-weight:700;color:var(--ink);line-height:1.4}
-.nc .ben-desc{font-size:12.5px;color:var(--ink-3);line-height:1.6;margin-top:3px}
+.nc .ben-title{font-size:14px;font-weight:700;color:var(--ink);line-height:1.45;text-align:left;padding-left:14px;position:relative}
+.nc .ben-title::before{content:'';position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:50%;background:var(--ok)}
+.nc .ben-desc{font-size:12.5px;color:var(--ink-3);line-height:1.6;margin-top:3px;text-align:left;padding-left:14px}
 .nc /* 이용내역 타임라인 */
 .tl-hdr{display:grid;grid-template-columns:84px 1fr 96px 100px;gap:8px;padding:11px 16px;background:var(--soft);border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em}
 .nc .tl-hdr .r{text-align:right}
@@ -1487,7 +1486,12 @@ async function runCustomerView(id,mode,lang){
   // 인쇄 시 상·하단 바 숨김
   if(!document.getElementById('cv-print-style')){
     const st=document.createElement('style');st.id='cv-print-style';
-    st.textContent='@media print{#cv-topbar,.cv-actionbar{display:none!important}body{background:#fff!important}}';
+    st.textContent='@media print{@page{margin:11mm}#cv-topbar,.cv-actionbar{display:none!important}body{background:#fff!important}'
+      +'.nc{padding-top:0!important}'
+      +'.nc .cover,.nc .hero-bal,.nc .sec,.nc .rpt-footer,.nc .note-box{break-inside:avoid;page-break-inside:avoid}'
+      +'.nc .ben-item,.nc .tl-item,.nc .amt-c,.nc .info-item{break-inside:avoid;page-break-inside:avoid}'
+      +'.nc .sec-hdr{break-after:avoid;page-break-after:avoid}'
+      +'*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}';
     document.head.appendChild(st);
   }
   let host=document.getElementById('cust-standalone');
@@ -2046,7 +2050,7 @@ function buildCustomerHTML(c,L,mode){
     const bens=typeof c.benefits==='string'?JSON.parse(c.benefits||'{}'):(c.benefits||{});
     const benList=BENEFITS.filter(x=>bens[x.key]);
     n++;
-    const benHtml=benList.length?benList.map(x=>'<div class="ben-item"><div class="ben-chk">✓</div><div><div class="ben-title">'+ncEsc(isEn?x.en:x.ko)+'</div><div class="ben-desc">'+ncEsc(isEn?x.den:x.dko)+'</div></div></div>').join(''):'<div style="color:var(--ink-3);font-size:13px;padding:6px 0">'+T.ben_none+'</div>';
+    const benHtml=benList.length?benList.map(x=>'<div class="ben-item"><div class="ben-title">'+ncEsc(isEn?x.en:x.ko)+'</div><div class="ben-desc">'+ncEsc(isEn?x.den:x.dko)+'</div></div>').join(''):'<div style="color:var(--ink-3);font-size:13px;padding:6px 0">'+T.ben_none+'</div>';
     html+='<div class="sec"><div class="sec-hdr"><div class="sec-num">'+n+'</div><div class="sec-title">'+T.sec_ben+'</div></div><div class="sec-body">'+benHtml+'</div></div>';
   }
   if(showUsage){
@@ -2870,22 +2874,13 @@ window.generateContractPDF=async function generateContractPDF(shareType){
     const c=allContracts.find(x=>x.__id===contractId);
     if(!c){alert('계약서 데이터를 찾을 수 없습니다. 고객을 다시 선택해주세요.');document.body.removeChild(loadDiv);return;}
 
-    // customer 탭에서 해당 계약서 렌더링
-    currentViewId=contractId;
-    renderCustomerView();
-
-    // 렌더링 완료 대기
-    await new Promise(r=>setTimeout(r,500));
-
-    // .contract-doc 요소 캡처 (실제 계약서 영역)
-    const contractDoc=document.querySelector('.contract-doc');
-    if(!contractDoc){alert('계약서 화면을 찾을 수 없습니다.');document.body.removeChild(loadDiv);return;}
-
-    // 스타일 포함하여 캡처용 컨테이너 생성
+    // 현재 발송 모드(mode)에 맞춰 캡처 — 이용내역만/계약서만/전체
     const container=document.createElement('div');
-    container.style.cssText='position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:0;z-index:-1;font-family:sans-serif';
-    container.innerHTML=contractDoc.outerHTML;
+    container.className='nc';
+    container.style.cssText='position:fixed;left:-9999px;top:0;width:760px;background:#fff;padding:16px;z-index:-1';
+    container.innerHTML=buildCustomerHTML(c,currentSendLang,currentSendMode);
     document.body.appendChild(container);
+    await new Promise(r=>setTimeout(r,300));
     const canvas=await window.html2canvas(container,{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false});
     document.body.removeChild(container);
     const {jsPDF}=window.jspdf;
@@ -2924,7 +2919,7 @@ window.generateContractPDF=async function generateContractPDF(shareType){
 
     // 3. 모든 링크 TinyURL 단축
     loadDiv.querySelector('span').textContent='링크 단축 중...';
-    const webURL=`${ncSelfBase()}?view=${contractId}&mode=contract`;
+    const webURL=`${ncSelfBase()}?view=${contractId}&mode=${currentSendMode}`;
     const urlsToShorten=[webURL,downloadURL];
     if(driveURL)urlsToShorten.push(driveURL);
     const shortened=await shortenAll(urlsToShorten);
@@ -3093,12 +3088,11 @@ const NC_PRINT_CSS=`.nc{font-family:'Noto Sans KR','Inter',sans-serif;color:var(
 .nc .svc-box{background:var(--soft);border-left:4px solid var(--indigo);border-radius:0 12px 12px 0;padding:14px 16px;font-size:13.5px;color:var(--ink-2);line-height:1.8}
 .nc .clause{font-size:13.5px;color:var(--ink-2);line-height:1.85}
 .nc .terms-box{background:#FFFBEB;border:1px solid #F3E4B8;border-radius:12px;padding:14px 16px;font-size:13.5px;color:#6B4E12;line-height:1.75;white-space:pre-wrap}
-.nc /* 혜택 */
-.ben-item{display:flex;gap:12px;padding:13px 0;border-bottom:1px solid var(--line-2)}
+.nc .ben-item{display:block!important;justify-content:flex-start!important;gap:0!important;padding:12px 0;border-bottom:1px solid var(--line-2);text-align:left}
 .nc .ben-item:last-child{border-bottom:none}
-.nc .ben-chk{width:26px;height:26px;border-radius:8px;background:var(--ok-bg);color:var(--ok);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;font-weight:800}
-.nc .ben-title{font-size:14px;font-weight:700;color:var(--ink);line-height:1.4}
-.nc .ben-desc{font-size:12.5px;color:var(--ink-3);line-height:1.6;margin-top:3px}
+.nc .ben-title{font-size:14px;font-weight:700;color:var(--ink);line-height:1.45;text-align:left;padding-left:14px;position:relative}
+.nc .ben-title::before{content:'';position:absolute;left:0;top:8px;width:6px;height:6px;border-radius:50%;background:var(--ok)}
+.nc .ben-desc{font-size:12.5px;color:var(--ink-3);line-height:1.6;margin-top:3px;text-align:left;padding-left:14px}
 .nc /* 이용내역 타임라인 */
 .tl-hdr{display:grid;grid-template-columns:84px 1fr 96px 100px;gap:8px;padding:11px 16px;background:var(--soft);border-bottom:1px solid var(--line);font-size:10.5px;font-weight:700;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em}
 .nc .tl-hdr .r{text-align:right}
