@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <title>HHC Invoice</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet">
 <style>
 :root{--navy:#0F1729;--indigo:#4F6EF7;--il:#eef1fe;--gold:#E8A838;--green:#10b981;--gbg:#d1fae5;--red:#ef4444;--rbg:#fee2e2;--abg:#fef3c7;--amber:#d97706;--gray:#6b7280;--bdr:rgba(0,0,0,.09);--sf:#fff;--bg:#f4f6fb;--txt:#0f172a;--txt2:#475569;--r:12px;--bb:64px}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -215,7 +217,7 @@ textarea{resize:none;line-height:1.5}
 <div class="topbar"><div class="tbi">
   <div class="brand"><div class="bdot"></div>HHC Invoice</div>
   <div style="display:flex;gap:6px;align-items:center">
-    <button class="ib" onclick="Nav('new');App.resetForm()" style="font-size:22px;font-weight:300">+</button>
+    <button class="ib" onclick="Nav('new');App.resetFormConfirm()" style="font-size:22px;font-weight:300">+</button>
     <div style="position:relative"><button class="ib" onclick="App.manualSync()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 013.51 15"/></svg></button><div class="sd" id="sync-dot"></div></div>
   </div>
 </div></div>
@@ -361,7 +363,7 @@ textarea{resize:none;line-height:1.5}
   </div>
 
   <div style="display:flex;gap:8px;margin-top:16px">
-    <button class="btn bgh" onclick="App.resetForm()" style="padding:12px 14px" title="초기화">↺</button>
+    <button class="btn bgh" onclick="App.resetFormConfirm()" style="padding:12px 14px" title="초기화">↺</button>
     <button class="btn bgh" id="prev-btn" style="padding:12px 14px" title="미리보기">👁</button>
     <button class="btn bg bfu" id="save-btn" style="flex:1;padding:12px;font-size:14px">💾 저장하기</button>
   </div>
@@ -661,7 +663,7 @@ function showLoad(msg){$('loading').style.display='flex';$('loading-text').textC
 function hideLoad(){$('loading').style.display='none';}
 function cpTxt(t){if(navigator.clipboard){navigator.clipboard.writeText(t).then(function(){showToast('복사됨 ✓');});}else{var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();document.execCommand('copy');document.body.removeChild(a);showToast('복사됨 ✓');}}
 function setSS(s){var d=$('sync-dot'),sd=$('sdd'),st=$('sdt');if(d)d.className='sd'+(s==='on'?' on':s==='sy'?' sy':'');if(sd)sd.style.background=s==='on'?'var(--green)':s==='sy'?'var(--gold)':'var(--red)';if(st)st.textContent=s==='on'?'Firebase 연결됨':s==='sy'?'동기화 중...':'연결 끊김';}
-function getLnk(id){return BASE_URL+'/inv.html?id='+encodeURIComponent(id)+'&lang=en';}
+function getLnk(id){var base=(location.protocol==='file:')?(BASE_URL+'/hhcinvoice.html'):location.href.split('#')[0].split('?')[0];return base+'?view='+encodeURIComponent(id)+'&lang=en';}
 function normSvc(s){if(!s.cat)s.cat='기타';if(!s.subcat)s.subcat='기타';return s;}
 
 // ═══════════════════════════════════════════════════════════
@@ -1124,64 +1126,169 @@ function getInvData(){
     notes:val('inv-notes'),terms:val('inv-terms'),bankId:bankId,bankInfo:bank,total:t.grand,_t:t};
 }
 
+// ═══════════════════════════════════════════════════════════
+// 프리미엄 인보이스 디자인 (단일 소스: 미리보기·인쇄·PDF·고객뷰 공용)
+// ═══════════════════════════════════════════════════════════
+var IVX_CSS=`
+.ivx{--nv:#0F1C3F;--nv2:#22396E;--gd:#C9A227;--gdl:#F7EFD8;--gdb:#E5D9AE;--ink:#101A33;--ink2:#44506F;--ink3:#8792A8;--ln:#E3E7F0;--ln2:#EEF1F7;--soft:#F6F8FC;--ok:#0E9E6E;--okbg:#E7F7EF;--red:#D6433F;--amber:#B07B0C;--ambg:#FBF1DC;
+  font-family:'Noto Sans KR','Inter',-apple-system,sans-serif;color:var(--ink);line-height:1.6;letter-spacing:-.01em}
+.ivx *{box-sizing:border-box;margin:0;padding:0}
+.ivx .doc{background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 2px 4px rgba(16,26,51,.04),0 26px 60px -30px rgba(16,26,51,.35);border:1px solid var(--ln);position:relative}
+.ivx .hd{background:radial-gradient(130% 130% at 88% -20%,var(--nv2) 0%,var(--nv) 55%);padding:32px 34px 28px;position:relative;overflow:hidden}
+.ivx .hd::before{content:'';position:absolute;top:-80px;right:-60px;width:260px;height:260px;border-radius:50%;border:48px solid rgba(201,162,39,.10)}
+.ivx .hd::after{content:'';position:absolute;bottom:-70px;left:-40px;width:190px;height:190px;border-radius:50%;border:34px solid rgba(255,255,255,.04)}
+.ivx .hd-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;position:relative;z-index:1}
+.ivx .brand{display:flex;align-items:center;gap:12px}
+.ivx .logo{width:46px;height:46px;background:linear-gradient(160deg,#D8B747,var(--gd));border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;font-family:'Inter',sans-serif;box-shadow:0 8px 18px -8px rgba(201,162,39,.8);flex-shrink:0}
+.ivx .brand-name{font-size:15px;font-weight:700;color:#fff;line-height:1.4}
+.ivx .brand-sub{font-size:9.5px;color:rgba(255,255,255,.45);letter-spacing:.05em}
+.ivx .word{text-align:right}
+.ivx .word-main{font-family:'Cormorant Garamond','Inter',serif;font-size:42px;font-weight:700;color:#fff;line-height:1;letter-spacing:.09em}
+.ivx .word-sub{font-size:10px;color:var(--gd);letter-spacing:.3em;text-transform:uppercase;font-weight:700;margin-top:7px}
+.ivx .hd-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:26px;position:relative;z-index:1}
+.ivx .hd-cell{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 13px}
+.ivx .hd-lbl{font-size:9px;color:rgba(255,255,255,.48);letter-spacing:.1em;text-transform:uppercase;font-weight:600;margin-bottom:4px}
+.ivx .hd-val{font-size:12.5px;font-weight:700;color:#fff}
+.ivx .goldline{height:3px;background:linear-gradient(90deg,var(--gd) 0%,#E8D48A 45%,rgba(201,162,39,.15) 100%)}
+.ivx .stamp{position:absolute;top:104px;right:30px;z-index:2;transform:rotate(-9deg);border:3px solid;border-radius:10px;padding:5px 16px;font-family:'Inter',sans-serif;font-weight:800;font-size:18px;letter-spacing:.14em;opacity:.93}
+.ivx .stamp.paid{color:#2FCF85;border-color:#2FCF85;background:rgba(47,207,133,.08)}
+.ivx .stamp.overdue{color:#FF8F8C;border-color:#FF8F8C;background:rgba(255,143,140,.07)}
+.ivx .parties{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--ln2)}
+.ivx .party{padding:20px 34px}
+.ivx .party:first-child{border-right:1px solid var(--ln2)}
+.ivx .party-lbl{font-size:10px;font-weight:700;color:var(--gd);letter-spacing:.18em;text-transform:uppercase;margin-bottom:8px}
+.ivx .party-name{font-size:16.5px;font-weight:800;color:var(--ink);margin-bottom:3px}
+.ivx .party-line{font-size:12px;color:var(--ink2);line-height:1.7}
+.ivx .member-chip{display:inline-block;margin-top:6px;background:var(--gdl);border:1px solid var(--gdb);color:#8A6D12;font-size:10.5px;font-weight:700;border-radius:20px;padding:3px 10px}
+.ivx .items{padding:6px 34px 0}
+.ivx table{width:100%;border-collapse:collapse}
+.ivx th{padding:13px 8px;font-size:10px;font-weight:700;color:var(--ink3);letter-spacing:.08em;text-transform:uppercase;border-bottom:2px solid var(--nv);text-align:left}
+.ivx th.r,.ivx td.r{text-align:right}
+.ivx th.c,.ivx td.c{text-align:center}
+.ivx td{padding:13px 8px;border-bottom:1px solid var(--ln2);font-size:13.5px;vertical-align:top}
+.ivx .inm{font-weight:600;color:var(--ink);line-height:1.5}
+.ivx .isb{font-size:11.5px;color:var(--ink3);margin-top:2px}
+.ivx .num{font-variant-numeric:tabular-nums;font-family:'Inter','Noto Sans KR',sans-serif}
+.ivx .rowamt{font-weight:700}
+.ivx .dtxt{color:var(--ok);font-weight:600}
+.ivx .sumwrap{display:flex;justify-content:flex-end;padding:14px 34px 4px}
+.ivx .sums{width:320px;max-width:100%}
+.ivx .sumrow{display:flex;justify-content:space-between;padding:7px 2px;font-size:13px;color:var(--ink2)}
+.ivx .sumrow .num{font-weight:600;color:var(--ink)}
+.ivx .sumrow.minus .num{color:var(--ok)}
+.ivx .total{margin-top:8px;background:var(--nv);border-radius:14px;padding:15px 17px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 14px 28px -16px rgba(15,28,63,.55)}
+.ivx .total-lbl{font-size:11.5px;color:rgba(255,255,255,.65);font-weight:600;letter-spacing:.04em}
+.ivx .total-val{font-size:23px;font-weight:800;color:#fff;font-family:'Inter',sans-serif}
+.ivx .total-val small{font-size:12.5px;color:var(--gd);margin-right:5px;font-weight:700}
+.ivx .balrow{margin-top:8px;background:var(--ambg);border:1px solid var(--gdb);border-radius:12px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+.ivx .balrow span:first-child{font-size:11.5px;color:var(--amber);font-weight:700}
+.ivx .balrow span:last-child{font-size:17px;font-weight:800;color:var(--amber);font-family:'Inter',sans-serif}
+.ivx .notes{display:grid;grid-template-columns:1.15fr .85fr;gap:13px;padding:18px 34px 24px}
+.ivx .nbox{background:var(--soft);border:1px solid var(--ln2);border-radius:13px;padding:14px 16px}
+.ivx .nbox.gold{background:var(--gdl);border-color:var(--gdb)}
+.ivx .nttl{font-size:10px;font-weight:700;color:var(--ink3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:7px}
+.ivx .nbox.gold .nttl{color:#8A6D12}
+.ivx .nbody{font-size:12px;color:var(--ink2);line-height:1.8;white-space:pre-wrap}
+.ivx .nbox.gold .nbody{color:#5E4B0E}
+.ivx .payrow{display:flex;gap:12px;align-items:flex-start}
+.ivx .qr{width:74px;height:74px;object-fit:contain;border-radius:8px;border:1px solid var(--gdb);background:#fff;flex-shrink:0}
+.ivx .sign{margin:0 34px 20px;padding-top:14px;border-top:1px solid var(--ln2)}
+.ivx .sign img{max-height:52px;max-width:130px;object-fit:contain}
+.ivx .sign-lbl{font-size:10px;color:var(--ink3);margin-bottom:4px}
+.ivx .ft{background:var(--nv);padding:17px 34px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.ivx .ft-co{font-size:10.5px;color:rgba(255,255,255,.6);line-height:1.75}
+.ivx .ft-thanks{font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--gd);letter-spacing:.06em}
+@media(max-width:620px){
+  .ivx .hd{padding:24px 18px 22px}
+  .ivx .word-main{font-size:30px}
+  .ivx .hd-grid{grid-template-columns:1fr 1fr}
+  .ivx .parties{grid-template-columns:1fr}
+  .ivx .party{padding:16px 18px}
+  .ivx .party:first-child{border-right:none;border-bottom:1px solid var(--ln2)}
+  .ivx .items,.ivx .sumwrap,.ivx .notes{padding-left:14px;padding-right:14px}
+  .ivx .sign{margin:0 14px 18px}
+  .ivx .ft{padding:15px 18px}
+  .ivx .notes{grid-template-columns:1fr}
+  .ivx .stamp{top:92px;right:12px;font-size:14px;padding:4px 11px}
+}
+@media print{
+  .ivx .doc{box-shadow:none;border:none;border-radius:0}
+  .ivx .doc,.ivx .hd,.ivx .total,.ivx .nbox,.ivx .balrow{break-inside:avoid;page-break-inside:avoid}
+  .ivx tr{break-inside:avoid;page-break-inside:avoid}
+  .ivx *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+}`;
+var IVX_FONTS='<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet">';
+function ensureIvxStyle(){
+  if(!document.getElementById('ivx-style')){
+    var st=document.createElement('style');st.id='ivx-style';st.textContent=IVX_CSS;document.head.appendChild(st);
+    var l=document.createElement('div');l.innerHTML=IVX_FONTS;document.head.appendChild(l.firstChild);
+  }
+}
+function ivxEsc(s){return String(s==null?'':s).replace(/[&<>]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[m];});}
+
 function buildInvHTML(inv){
+  ensureIvxStyle();
   var t=inv._t||calcTotals(inv);
   var cur=inv.currency||'MYR';
   function fa(n){return fmtAmt(n,cur);}
-  var sl={billing:'Billing',paid:'Paid',overdue:'Overdue'};
-  var sc={billing:'db',paid:'dp',overdue:'do'};
   var cust=inv.customer||{};var iss=inv.issuer||issuer;
   var items=inv.items||[];
   var hasDisc=items.some(function(li){return (li.discVal||li.disc||0)>0;});
+  var stMap={billing:'청구 · Billing',paid:'결제완료 · Paid',overdue:'기한초과 · Overdue'};
   var rows=items.length?items.map(function(li){
     var la=(li.price||0)*(li.qty||1);
     var da=li.discType==='pct'?la*((li.discVal||0)/100):(li.discVal||li.disc||0);
     var lineAmt=la-da;
     var discDisplay=li.discType==='pct'?((li.discVal||0)+'%'):fa(da);
-    var discCell=hasDisc?'<td style="text-align:right;color:#16a34a">'+(da>0?'- '+discDisplay:'—')+'</td>':'';
-    return '<tr><td>'+(li.name||'—')+'</td><td style="text-align:center">'+li.qty+'</td><td style="text-align:right">'+fa(li.price)+'</td>'+discCell+'<td style="text-align:right">'+fa(lineAmt)+'</td></tr>';
-  }).join(''):('<tr><td colspan="'+(hasDisc?5:4)+'" style="text-align:center;padding:12px;color:var(--gray)">No items</td></tr>');
-  var ci=[cust.phone,cust.addr].filter(Boolean).join('<br>');
-  var issInfo=[iss.phone,iss.addr].filter(Boolean).join('<br>');
-  var regNo=iss.biz?'Reg. No. '+iss.biz:'';
+    var discCell=hasDisc?'<td class="r dtxt num">'+(da>0?'- '+discDisplay:'—')+'</td>':'';
+    var sub=[li.cat,li.subcat,li.sub2].filter(Boolean).filter(function(x,i,a){return a.indexOf(x)===i;}).join(' · ');
+    return '<tr><td><div class="inm">'+ivxEsc(li.name||'—')+'</div>'+(sub?'<div class="isb">'+ivxEsc(sub)+'</div>':'')+'</td>'+
+      '<td class="c num">'+(li.qty||1)+'</td><td class="r num">'+fa(li.price)+'</td>'+discCell+
+      '<td class="r num rowamt">'+fa(lineAmt)+'</td></tr>';
+  }).join(''):('<tr><td colspan="'+(hasDisc?5:4)+'" style="text-align:center;padding:18px;color:#8792A8">No items</td></tr>');
   var chargeRows='';
-  if(t.taxRate>0)chargeRows+='<div class="idtrow"><span>Tax '+t.taxRate+'%</span><span>'+fa(t.tax)+'</span></div>';
-  if(t.discVal>0)chargeRows+='<div class="idtrow"><span>Discount'+(t.discType==='pct'?' '+t.discVal+'%':'')+'</span><span>-'+fa(t.disc)+'</span></div>';
-  if(t.park>0)chargeRows+='<div class="idtrow"><span>Parking</span><span>+'+fa(t.park)+'</span></div>';
-  if(t.extra>0)chargeRows+='<div class="idtrow"><span>Extra</span><span>+'+fa(t.extra)+'</span></div>';
-  if(t.credit>0)chargeRows+='<div class="idtrow" style="color:var(--red)"><span>Member Credit</span><span>-'+fa(t.credit)+'</span></div>';
-  if(t.minC>0)chargeRows+='<div class="idtrow"><span>Minimum Service Charge</span><span>+'+fa(t.minC)+'</span></div>';
-  var bankSec='';
+  if(t.taxRate>0)chargeRows+='<div class="sumrow"><span>세금 · Tax '+t.taxRate+'%</span><span class="num">'+fa(t.tax)+'</span></div>';
+  if(t.discVal>0)chargeRows+='<div class="sumrow minus"><span>할인 · Discount'+(t.discType==='pct'?' '+t.discVal+'%':'')+'</span><span class="num">- '+fa(t.disc)+'</span></div>';
+  if(t.park>0)chargeRows+='<div class="sumrow"><span>주차 · Parking</span><span class="num">+ '+fa(t.park)+'</span></div>';
+  if(t.extra>0)chargeRows+='<div class="sumrow"><span>추가 · Extra</span><span class="num">+ '+fa(t.extra)+'</span></div>';
+  if(t.credit>0)chargeRows+='<div class="sumrow minus"><span>회원 적립금 · Member Credit</span><span class="num">- '+fa(t.credit)+'</span></div>';
+  if(t.minC>0)chargeRows+='<div class="sumrow"><span>최소 청구 · Min. Charge</span><span class="num">+ '+fa(t.minC)+'</span></div>';
+  var payHtml='';
   if(inv.bankInfo){
-    var qrHtml=inv.bankInfo.qr?'<img src="'+inv.bankInfo.qr+'" style="width:64px;height:64px;object-fit:contain;border-radius:4px;border:1px solid var(--bdr)">':'';
-    bankSec='<div class="idfootcol"><div class="idfootl">PAYMENT</div><div class="idfooti">'+inv.bankInfo.bankName+' · '+inv.bankInfo.accNum+'<br>'+inv.bankInfo.accName+'</div></div>'+
-      (qrHtml?'<div style="flex-shrink:0">'+qrHtml+'</div>':'');
+    var qrHtml=inv.bankInfo.qr?'<img class="qr" src="'+inv.bankInfo.qr+'">':'';
+    payHtml='<div class="nbox gold"><div class="nttl">Payment · 결제 안내</div><div class="payrow"><div class="nbody">'+ivxEsc(inv.bankInfo.bankName||'')+(inv.bankInfo.accNum?'\n'+ivxEsc(inv.bankInfo.accNum):'')+(inv.bankInfo.accName?'\n'+ivxEsc(inv.bankInfo.accName):'')+'</div>'+qrHtml+'</div></div>';
+  }else{
+    payHtml='<div class="nbox gold"><div class="nttl">Payment · 결제 안내</div><div class="nbody">문의: '+ivxEsc(iss.phone||'')+'</div></div>';
   }
-  var termsSec=(inv.notes||inv.terms)?'<div class="idfootcol r"><div class="idfootl">TERMS</div><div class="idfooti">'+(inv.notes?inv.notes+'<br>':'')+(inv.terms||'')+'</div></div>':'<div class="idfootcol r"><div class="idfooti" style="font-style:italic">Thank you for choosing Happy Home Care.</div></div>';
-  return '<div class="idoc">'+
-    '<div class="idhead">'+
-      '<div>'+(imgData&&imgData.logo?'<img src="'+imgData.logo+'" style="max-height:32px;max-width:120px;object-fit:contain;margin-bottom:6px;display:block;filter:brightness(0) invert(1)">':'')+
-        '<div class="idhead-co">'+iss.name+'</div><div class="idhead-sub">Happy Works Services Sdn. Bhd.</div></div>'+
-      '<div><div class="idhead-invlbl">INVOICE</div><div class="idhead-num">'+(inv.id||'—')+'</div></div>'+
+  var noteHtml='<div class="nbox"><div class="nttl">Notes · Terms</div><div class="nbody">'+((inv.notes||inv.terms)?ivxEsc((inv.notes?inv.notes+'\n':'')+(inv.terms||'')):'Thank you for choosing Happy Home Care.')+'</div></div>';
+  var stamp=inv.status==='paid'?'<div class="stamp paid">PAID</div>':inv.status==='overdue'?'<div class="stamp overdue">OVERDUE</div>':'';
+  var logoHtml=(typeof imgData!=='undefined'&&imgData&&imgData.logo)?'<img src="'+imgData.logo+'" style="width:46px;height:46px;object-fit:contain;border-radius:13px;background:#fff;padding:4px;flex-shrink:0">':'<div class="logo">HHC</div>';
+  var signHtml=(typeof imgData!=='undefined'&&imgData&&imgData.sign)?'<div class="sign"><div class="sign-lbl">담당자 서명 · Authorized Signature</div><img src="'+imgData.sign+'"></div>':'';
+  return '<div class="ivx"><div class="doc">'+stamp+
+    '<div class="hd"><div class="hd-top">'+
+      '<div class="brand">'+logoHtml+'<div><div class="brand-name">Happy Home Care</div><div class="brand-sub">'+ivxEsc(iss.name||'HAPPY WORKS SERVICES SDN. BHD.')+'</div></div></div>'+
+      '<div class="word"><div class="word-main">INVOICE</div><div class="word-sub">'+(inv.status==='paid'?'Receipt · 영수증':'청구서')+'</div></div>'+
     '</div>'+
-    '<div class="idbody">'+
-    (inv.status==='paid'?'<div style="text-align:center;margin-bottom:16px"><span class="idstamp">PAID ✓</span></div>':inv.status==='overdue'?'<div style="text-align:center;margin-bottom:16px"><span class="idstamp" style="border-color:#dc2626;color:#dc2626">OVERDUE</span></div>':'')+
-    '<div class="idtop"><span class="bdg '+(sc[inv.status]||'db')+'">'+(sl[inv.status]||'청구')+'</span><span style="font-size:11px;color:var(--gray)">'+regNo+'</span></div>'+
-    '<div class="idp"><div><div class="idpl">BILL TO</div><div class="idpn">'+(cust.name||'—')+'</div><div class="idpi">'+ci+'</div></div>'+
-    '<div><div class="idpl">FROM</div><div class="idpn">'+iss.name+'</div><div class="idpi">'+issInfo+'</div></div></div>'+
-    '<div class="iddates"><div><div class="iddl">ISSUED</div><div class="iddv">'+fmtDate(inv.date)+'</div></div>'+
-    '<div><div class="iddl">DUE</div><div class="iddv">'+fmtDate(inv.due)+'</div></div></div>'+
-    '<table class="itbl"><thead><tr><th>Description</th><th>Qty</th><th>Unit Price</th>'+(hasDisc?'<th>Discount</th>':'')+'<th>Amount</th></tr></thead><tbody>'+rows+'</tbody></table>'+
-    '<div style="display:flex;justify-content:flex-end;margin-bottom:6px"><div class="idtotals">'+
-      '<div class="idtrow"><span>Subtotal</span><span>'+fa(t.sub)+'</span></div>'+
-      chargeRows+
-      '<div class="idgrand"><span>Total ('+cur+')</span><span>'+fa(t.grand)+'</span></div>'+
-      (t.paidAmount>0?'<div class="idtrow" style="color:#16a34a"><span>Paid (Partial)</span><span>- '+fa(t.paidAmount)+'</span></div><div class="idbalance"><span>Balance Remaining</span><span>'+fa(t.balance)+'</span></div>':'')+
+    '<div class="hd-grid">'+
+      '<div class="hd-cell"><div class="hd-lbl">Invoice No.</div><div class="hd-val">'+ivxEsc(inv.id||'—')+'</div></div>'+
+      '<div class="hd-cell"><div class="hd-lbl">발행일 · Issued</div><div class="hd-val">'+ivxEsc(inv.date||'—')+'</div></div>'+
+      '<div class="hd-cell"><div class="hd-lbl">기한 · Due</div><div class="hd-val">'+ivxEsc(inv.due||'—')+'</div></div>'+
+      '<div class="hd-cell"><div class="hd-lbl">상태 · Status</div><div class="hd-val">'+(stMap[inv.status]||'—')+'</div></div>'+
     '</div></div>'+
-    '<div class="idfoot">'+bankSec+termsSec+'</div>'+
-    (imgData&&imgData.sign?'<div style="margin-top:16px;padding-top:12px;border-top:0.5px solid var(--bdr)"><div style="font-size:10px;color:var(--gray);margin-bottom:4px">담당자 서명</div><img src="'+imgData.sign+'" style="max-height:50px;max-width:120px;object-fit:contain"></div>':'')+
+    '<div class="goldline"></div>'+
+    '<div class="parties">'+
+      '<div class="party"><div class="party-lbl">Bill To · 고객</div><div class="party-name">'+ivxEsc(cust.name||'—')+'</div><div class="party-line">'+[ivxEsc(cust.phone||''),ivxEsc(cust.addr||'')].filter(Boolean).join('<br>')+'</div>'+(cust.member?'<span class="member-chip">👑 '+ivxEsc(cust.member)+'</span>':'')+'</div>'+
+      '<div class="party"><div class="party-lbl">From · 발행</div><div class="party-name">'+ivxEsc(iss.name||'')+'</div><div class="party-line">'+[ivxEsc(iss.phone||''),ivxEsc(iss.addr||''),(iss.biz?'Reg. No. '+ivxEsc(iss.biz):'')].filter(Boolean).join('<br>')+'</div></div>'+
     '</div>'+
-  '</div>';
+    '<div class="items"><table><thead><tr><th>항목 · Description</th><th class="c">수량</th><th class="r">단가</th>'+(hasDisc?'<th class="r">할인</th>':'')+'<th class="r">금액</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<div class="sumwrap"><div class="sums">'+
+      '<div class="sumrow"><span>소계 · Subtotal</span><span class="num">'+fa(t.sub)+'</span></div>'+chargeRows+
+      '<div class="total"><span class="total-lbl">청구 합계 · TOTAL ('+cur+')</span><span class="total-val">'+fa(t.grand)+'</span></div>'+
+      (t.paidAmount>0?'<div class="sumrow minus" style="margin-top:6px"><span>기결제 · Paid</span><span class="num">- '+fa(t.paidAmount)+'</span></div><div class="balrow"><span>잔여 결제금액 · BALANCE DUE</span><span>'+fa(t.balance)+'</span></div>':'')+
+    '</div></div>'+
+    '<div class="notes">'+payHtml+noteHtml+'</div>'+signHtml+
+    '<div class="ft"><div class="ft-co">'+ivxEsc(iss.name||'HAPPY WORKS SERVICES SDN.BHD.')+(iss.biz?' ('+ivxEsc(iss.biz)+')':'')+'<br>📞 '+ivxEsc(iss.phone||'')+'</div><div class="ft-thanks">Thank you for your business</div></div>'+
+  '</div></div>';
 }
 
 App.upPrev=function(){
@@ -1214,8 +1321,8 @@ function printInv(inv){
   inv._t=calcTotals(inv);
   var html=buildInvHTML(inv);
   var w=window.open('','_blank');
-  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Invoice '+inv.id+'</title><style>body{font-family:-apple-system,sans-serif;padding:0;color:#0f172a;max-width:700px;margin:32px auto}.idoc{font-size:13px;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0}.idhead{background:#0F1729;padding:24px 28px;display:flex;justify-content:space-between;align-items:flex-start}.idhead-co{font-size:16px;font-weight:700;color:#fff}.idhead-sub{font-size:10.5px;color:rgba(255,255,255,.5);margin-top:3px}.idhead-invlbl{font-size:10px;letter-spacing:.12em;color:rgba(255,255,255,.5);text-align:right}.idhead-num{font-size:15px;font-weight:700;color:#fff;text-align:right;margin-top:3px}.idbody{padding:24px 28px}.idtop{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}.idp{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid #e2e8f0}.idpl{font-size:9.5px;font-weight:700;color:#6b7280;letter-spacing:.08em;margin-bottom:5px}.idpn{font-weight:700;font-size:13px;color:#0f172a}.idpi{font-size:11px;color:#6b7280;line-height:1.7;margin-top:3px}.iddates{display:flex;justify-content:space-between;margin-bottom:18px}.iddates>div:last-child{text-align:right}.iddl{font-size:9.5px;color:#6b7280;letter-spacing:.06em;margin-bottom:2px}.iddv{font-size:12.5px;color:#0f172a;font-weight:600}.itbl{width:100%;border-collapse:collapse;margin-bottom:8px}.itbl th{border-bottom:1.5px solid #0f172a;padding:0 0 8px;font-size:9.5px;font-weight:700;letter-spacing:.06em;color:#6b7280;text-align:left}.itbl th:nth-child(2),.itbl td:nth-child(2){text-align:center}.itbl th:last-child,.itbl td:last-child{text-align:right}.itbl td{padding:10px 0;font-size:12.5px;border-bottom:0.5px solid #e2e8f0;color:#0f172a}.itbl td:last-child{font-weight:700}.idtotals{margin-left:auto;min-width:210px}.idtrow{display:flex;justify-content:space-between;font-size:11.5px;padding:5px 0;color:#6b7280}.idgrand{display:flex;justify-content:space-between;align-items:center;background:#0F1729;border-radius:8px;padding:12px 14px;margin-top:8px}.idgrand span:first-child{font-size:11.5px;color:rgba(255,255,255,.6)}.idgrand span:last-child{font-size:18px;font-weight:700;color:#fff}.idbalance{display:flex;justify-content:space-between;align-items:center;background:#FEF3C7;border-radius:8px;padding:12px 14px;margin-top:8px}.idbalance span:first-child{font-size:11.5px;color:#92600A}.idbalance span:last-child{font-size:18px;font-weight:700;color:#92600A}.idfoot{display:flex;gap:20px;padding-top:18px;border-top:0.5px solid #e2e8f0;margin-top:6px}.idfootcol{flex:1}.idfootcol.r{text-align:right}.idfootl{font-size:9.5px;font-weight:700;color:#6b7280;letter-spacing:.08em;margin-bottom:5px}.idfooti{font-size:11px;color:#6b7280;line-height:1.7}.idfn{margin-top:14px;padding-top:12px;border-top:0.5px solid #e2e8f0;font-size:10px;color:#6b7280;line-height:1.6}.bdg{display:inline-block;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:600}.dp{background:#d1fae5;color:#065f46}.db{background:#fef3c7;color:#d97706}.do{background:#fee2e2;color:#991b1b}.idstamp{border:3px solid #065f46;color:#065f46;font-size:16px;font-weight:800;padding:4px 10px;border-radius:4px;opacity:.5;display:inline-block;transform:rotate(-12deg)}</style></head><body>'+html+'</body></html>');
-  w.document.close();setTimeout(function(){w.print();},400);
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Invoice '+inv.id+'</title>'+IVX_FONTS+'<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#fff;padding:18px;max-width:790px;margin:0 auto}@page{size:A4 portrait;margin:10mm}@media print{body{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}}'+IVX_CSS+'</style></head><body>'+html+'</body></html>');
+  w.document.close();setTimeout(function(){w.print();},450);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1224,12 +1331,16 @@ function printInv(inv){
 async function saveInv(){
   if(!DB){showToast('Firebase 연결 중... 잠시 후 다시 시도해주세요.');return null;}
   var inv=getInvData();inv.createdAt=new Date().toISOString();
+  // 입력 검증
+  if(!(inv.customer.name||'').trim()){showToast('⚠ 고객명을 입력해주세요');Tab('info');var ce=$('c-name');if(ce){ce.focus();ce.style.borderColor='#ef4444';ce.addEventListener('input',function h2(){ce.style.borderColor='';ce.removeEventListener('input',h2);});}return null;}
+  if(!inv.items.length||!inv.items.some(function(i2){return (i2.name||'').trim();})){showToast('⚠ 품목을 1개 이상 추가해주세요');Tab('items');return null;}
   showLoad('저장 중...');
   try{
     var ex=invoices.find(function(i){return i.id===inv.id;});
     if(ex&&ex._docId)await DB.collection('invoices').doc(ex._docId).set(inv);
     else{var ref=await DB.collection('invoices').add(inv);inv._docId=ref.id;}
     autoSaveCust(inv.customer);
+    clearInvDraft();
     showToast('✓ 저장 완료');
     return inv;
   }catch(e){showToast('저장 실패: '+e.message);return null;}
@@ -2374,6 +2485,9 @@ function bindAll(){
 // INIT
 // ═══════════════════════════════════════════════════════════
 async function init(){
+  var _vp=new URLSearchParams(location.search);
+  var _vid=_vp.get('view');
+  if(_vid){runInvoiceView(_vid,_vp.get('lang')||'en');return;}
   // SW 제거
   if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(r){r.forEach(function(x){x.unregister();});});}
 
@@ -2458,7 +2572,106 @@ async function init(){
 
   bindAll();
   bindImgEvents();
+  setTimeout(showInvDraftBanner,600);
 }
+
+
+// ═══════════════════════════════════════════════════════════
+// 고객 조회 모드 (?view=<invoiceNo>) — 배포 없이 파일 하나로
+// ═══════════════════════════════════════════════════════════
+async function runInvoiceView(vid,lang){
+  document.title='Invoice '+vid+' · Happy Home Care';
+  document.body.style.cssText='display:block;overflow:auto;height:auto;min-height:100vh;background:#EEF0F6';
+  document.body.innerHTML=
+    '<div style="position:sticky;top:0;z-index:60;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid #E3E7F0;display:flex;align-items:center;justify-content:space-between;padding:11px 16px">'+
+      '<div style="display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:700;color:#0F1C3F"><div style="width:28px;height:28px;background:linear-gradient(160deg,#D8B747,#C9A227);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff">HHC</div>Happy Home Care</div>'+
+      '<div style="font-size:11px;color:#8792A8;font-weight:600" id="ivx-no"></div></div>'+
+    '<div style="max-width:790px;margin:0 auto;padding:16px 14px 92px" id="ivx-host">'+
+      '<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:70px 0;color:#0F1C3F;font-size:15px"><div style="width:22px;height:22px;border:2px solid #C9A227;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></div>인보이스 불러오는 중...</div></div>'+
+    '<div id="ivx-bar" style="position:fixed;bottom:0;left:0;right:0;max-width:790px;margin:0 auto;background:#fff;border-top:1px solid #E3E7F0;padding:11px 14px calc(11px + env(safe-area-inset-bottom));display:flex;gap:9px;z-index:60;box-shadow:0 -4px 16px rgba(15,28,63,.08)">'+
+      '<button onclick="window.print()" style="flex:1;padding:13px;border-radius:12px;border:none;background:#F6F8FC;color:#0F1C3F;font-size:14.5px;font-weight:700;cursor:pointer;font-family:inherit">🖨️ 인쇄 · Print</button>'+
+      '<button onclick="window.print()" style="flex:1;padding:13px;border-radius:12px;border:none;background:#0F1C3F;color:#fff;font-size:14.5px;font-weight:700;cursor:pointer;font-family:inherit">⬇️ PDF 저장</button></div>';
+  ensureIvxStyle();
+  if(!document.getElementById('ivx-view-print')){
+    var ps=document.createElement('style');ps.id='ivx-view-print';
+    ps.textContent='@media print{#ivx-bar,body>div:first-child{display:none!important}body{background:#fff!important}#ivx-host{padding:0!important;max-width:none!important}}@page{margin:10mm;size:A4}';
+    document.head.appendChild(ps);
+  }
+  var host=document.getElementById('ivx-host');
+  try{
+    var fbApp;try{fbApp=firebase.app();}catch(e){fbApp=firebase.initializeApp(FB_CFG);}
+    var db=firebase.firestore(fbApp);
+    // 로고/서명 이미지
+    try{var imgDoc=await db.collection('settings').doc('images').get();if(imgDoc.exists)imgData=Object.assign({logo:'',sign:''},imgDoc.data());}catch(e){}
+    try{var issDoc=await db.collection('settings').doc('issuer').get();if(issDoc.exists)issuer=Object.assign({},issuer,issDoc.data());}catch(e){}
+    var inv=null;
+    var snap=await db.collection('invoices').where('id','==',vid).limit(1).get();
+    if(!snap.empty)inv=snap.docs[0].data();
+    if(!inv){try{var d2=await db.collection('invoices').doc(vid).get();if(d2.exists)inv=d2.data();}catch(e){}}
+    if(!inv){host.innerHTML='<div style="padding:70px 20px;text-align:center;color:#D6433F;font-size:15px">인보이스를 찾을 수 없습니다.<br>Invoice not found.</div>';return;}
+    inv._t=calcTotals(inv);
+    var noEl=document.getElementById('ivx-no');if(noEl)noEl.textContent=inv.id||'';
+    host.innerHTML=buildInvHTML(inv);
+  }catch(e){
+    console.error(e);
+    host.innerHTML='<div style="padding:70px 20px;text-align:center;color:#D6433F;font-size:14px">불러오기 실패: '+ivxEsc(e.message||'')+'</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// 자동 임시저장 (작성 중 데이터 보호)
+// ═══════════════════════════════════════════════════════════
+var INV_DRAFT='hhc_inv_draft1';
+var _invDraftTimer=null;
+function saveInvDraft(){
+  try{
+    var d=getInvData();
+    var has=(d.customer.name||'').trim()||d.items.length||(d.notes||'').trim();
+    if(!has)return;
+    localStorage.setItem(INV_DRAFT,JSON.stringify({data:d,t:Date.now()}));
+    var ind=$('inv-autosave-ind');
+    if(ind)ind.textContent='✓ 임시저장 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){}
+}
+function scheduleInvDraft(){clearTimeout(_invDraftTimer);_invDraftTimer=setTimeout(saveInvDraft,1500);}
+function clearInvDraft(){try{localStorage.removeItem(INV_DRAFT);}catch(e){}var ind=$('inv-autosave-ind');if(ind)ind.textContent='';var b=$('inv-draft-banner');if(b)b.remove();}
+function loadInvDraft(d){
+  setVal('inv-num',d.id);setVal('inv-date',d.date);setVal('inv-due',d.due);setVal('inv-status',d.status||'billing');setVal('inv-currency',d.currency||'MYR');
+  var c=d.customer||{};
+  setVal('c-name',c.name);setVal('c-phone',c.phone||'+60');setVal('c-email',c.email);setVal('c-addr',c.addr);setVal('c-biz',c.biz);setVal('c-member',c.member);
+  setVal('tax-rate',d.taxRate||'0');setVal('disc-val',d.discVal||'0');setVal('disc-type',d.discType||'pct');
+  setVal('parking-fee',d.parkingFee||'0');setVal('min-charge',d.minCharge||'0');setVal('extra-fee',d.extraFee||'0');setVal('credit-use',d.creditUse||'0');setVal('paid-amount',d.paidAmount||'0');
+  setVal('inv-notes',d.notes);setVal('inv-terms',d.terms);setVal('bank-select',d.bankId||'');
+  lineItems=(d.items||[]).map(function(x){return Object.assign({},x);});
+  renderLI();App.upPrev();Nav('new');Tab('info');
+}
+function showInvDraftBanner(){
+  var raw;try{raw=localStorage.getItem(INV_DRAFT);}catch(e){return;}
+  if(!raw)return;
+  var p;try{p=JSON.parse(raw);}catch(e){return;}
+  if(!p||!p.data)return;
+  if(document.getElementById('inv-draft-banner'))return;
+  var d=p.data;var when=new Date(p.t||Date.now());
+  var b=document.createElement('div');b.id='inv-draft-banner';
+  b.style.cssText='position:fixed;left:0;right:0;bottom:calc(var(--bb) + 4px);z-index:400;background:#0F1C3F;color:#fff;padding:11px 14px;box-shadow:0 -4px 20px rgba(0,0,0,.25)';
+  b.innerHTML='<div style="max-width:720px;margin:0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
+    '<div style="flex:1;min-width:160px;font-size:12px;line-height:1.5">💾 저장하지 않은 인보이스가 있습니다 — <b style="color:#E8D48A">'+ivxEsc((d.customer&&d.customer.name)||d.id||'무제')+'</b> · '+when.toLocaleString('ko-KR')+'</div>'+
+    '<button id="inv-draft-cont" style="padding:8px 13px;border-radius:8px;border:none;background:#C9A227;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">이어서 작성</button>'+
+    '<button id="inv-draft-new" style="padding:8px 13px;border-radius:8px;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">삭제</button></div>';
+  document.body.appendChild(b);
+  document.getElementById('inv-draft-cont').onclick=function(){loadInvDraft(d);b.remove();showToast('임시저장 내용을 복구했습니다');};
+  document.getElementById('inv-draft-new').onclick=function(){clearInvDraft();};
+}
+document.addEventListener('input',function(e){if(e.target.closest&&e.target.closest('#screen-new'))scheduleInvDraft();});
+document.addEventListener('change',function(e){if(e.target.closest&&e.target.closest('#screen-new'))scheduleInvDraft();});
+setInterval(saveInvDraft,20000);
+
+App.resetFormConfirm=function(){
+  var has=(val('c-name')||'').trim()||lineItems.length;
+  if(has&&!confirm('작성 중인 내용을 지우고 새로 시작할까요?\n(저장하지 않은 내용은 사라집니다)'))return;
+  clearInvDraft();
+  App.resetForm();
+};
 
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
 </script>
