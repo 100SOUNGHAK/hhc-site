@@ -1174,6 +1174,7 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
         booking_id:docId,
         created_at:new Date().toISOString()
       };
+      await removeBookingMirror(docId);
       await addDoc(collection(db,'schedules'),schData);
     }
 
@@ -1758,14 +1759,23 @@ window.editBooking=function(id){
   window.scrollTo({top:0,behavior:'smooth'});
 };
 
+// 특정 예약의 기존 자동 미러 일정 삭제 (중복 방지)
+async function removeBookingMirror(bookingId){
+  try{
+    const snap=await getDocs(query(collection(db,'schedules'),where('booking_id','==',bookingId)));
+    await Promise.all(snap.docs.map(d=>deleteDoc(doc(db,'schedules',d.id))));
+  }catch(e){console.warn('미러 일정 정리 실패:',e&&e.message);}
+}
+
 window.confirmBooking=async function(id){
   const b=allBookings.find(x=>x.__id===id);
   if(!b)return;
   showLoading(true);
   try{
     await updateDoc(doc(db,'bookings',id),{...b,status:'confirmed'});
-    // schedules 컬렉션에 자동 등록
+    // schedules 컬렉션에 자동 등록 (기존 미러 제거 후 1건만 유지)
     if(b.booking_date){
+      await removeBookingMirror(id);
       const schData={
         date:b.booking_date,
         title:(b.customer_name||'고객')+(b.booking_items?' — '+b.booking_items:''),

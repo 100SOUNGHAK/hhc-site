@@ -1297,6 +1297,7 @@ const SERVICES=[
 let db=null, unsub=null;
 let allContracts=[];
 let currentEditId=null;
+let _isSaving=false; // 저장 진행 중 중복 실행 방지 (double-submit guard)
 let currentUsageHistory=[];
 let currentViewId=null;
 let currentLang='ko';
@@ -1774,6 +1775,8 @@ async function saveContract(){
   const data=getFormData();
   if(!data.name||!data.package_id){showModal('입력 오류','계약자명과 패키지를 입력해주세요.',false);return;}
   if(!db){showModal('오류','Firebase가 연결되지 않았습니다. 새로고침 후 다시 시도해주세요.',false);return;}
+  if(_isSaving)return; // 이미 저장 중이면 무시 (중복 저장 방지)
+  _isSaving=true;
   showLoading(true);
   try{
     if(currentEditId){
@@ -1791,6 +1794,8 @@ async function saveContract(){
     showLoading(false);
     console.error('Save error:',e);
     showModal('저장 실패',`오류: ${e.code||e.message||'알 수 없는 오류'}`,false);
+  }finally{
+    _isSaving=false;
   }
   clearContractDraft();
 }

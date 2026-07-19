@@ -1521,18 +1521,13 @@ function autoUpdateInvoiceStatus(){
     var inv=invoices[i];
     if(!inv.due)continue;
     if(inv.status==='paid')continue;
-    if(inv.due<today&&inv.status==='billing'){
+    // 만기일이 지난 미결제 인보이스는 상태값과 무관하게 연체로 승격 (빈 상태 포함).
+    // 데모션(연체→청구중) 로직은 제거 → 수동으로 연체 지정 시 스냅샷마다 되돌려지던 문제 해결.
+    if(inv.due<today&&inv.status!=='overdue'){
       inv.status='overdue';
       updated=true;
       if(inv._docId&&DB){
         DB.collection('invoices').doc(inv._docId).update({status:'overdue'}).catch(function(e){console.warn('상태 업데이트 실패:',inv.id,e);});
-      }
-    }
-    else if(inv.due>=today&&inv.status==='overdue'){
-      inv.status='billing';
-      updated=true;
-      if(inv._docId&&DB){
-        DB.collection('invoices').doc(inv._docId).update({status:'billing'}).catch(function(e){console.warn('상태 업데이트 실패:',inv.id,e);});
       }
     }
   }
