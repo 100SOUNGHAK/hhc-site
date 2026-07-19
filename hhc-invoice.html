@@ -686,7 +686,7 @@ function Nav(name){currentNav=name;
     if(bn)bn.classList.toggle('active',n===name);
     if(si)si.classList.toggle('active',n===name);
   });
-  if(name==='list')renderList();
+  if(name==='list'){autoUpdateInvoiceStatus();renderList();}
   if(name==='accounting'){renderYearTabs();renderAcc();}
   if(name==='customers')renderCusts();
   if(name==='settings'){renderSvcs();renderBanks();renderIssView();}
@@ -1401,9 +1401,37 @@ function quickEmail(id){
 window.shareWa=shareWa;window.shareKakao=shareKakao;window.quickEmail=quickEmail;
 
 // ═══════════════════════════════════════════════════════════
+// AUTO-UPDATE INVOICE STATUS (만기일 기반 상태 자동 변경)
+// ═══════════════════════════════════════════════════════════
+function autoUpdateInvoiceStatus(){
+  var today=new Date().toISOString().slice(0,10);
+  var updated=false;
+  for(var i=0;i<invoices.length;i++){
+    var inv=invoices[i];
+    if(!inv.due)continue;
+    if(inv.status==='paid')continue;
+    if(inv.due<today&&inv.status==='billing'){
+      inv.status='overdue';
+      updated=true;
+      if(inv._docId&&DB){
+        DB.collection('invoices').doc(inv._docId).update({status:'overdue'}).catch(function(e){console.warn('상태 업데이트 실패:',inv.id,e);});
+      }
+    }
+    else if(inv.due>=today&&inv.status==='overdue'){
+      inv.status='billing';
+      updated=true;
+      if(inv._docId&&DB){
+        DB.collection('invoices').doc(inv._docId).update({status:'billing'}).catch(function(e){console.warn('상태 업데이트 실패:',inv.id,e);});
+      }
+    }
+  }
+  if(updated){localStorage.setItem(LINV,JSON.stringify(invoices));}
+}
+
+// ═══════════════════════════════════════════════════════════
 // LIST
 // ═══════════════════════════════════════════════════════════
-function setFilter(f){currentFilter=f;['all','billing','paid','overdue'].forEach(function(n){var c=$('chip-'+n);if(c)c.classList.toggle('active',n===f);});renderList();}
+function setFilter(f){currentFilter=f;['all','billing','paid','overdue'].forEach(function(n){var c=$('chip-'+n);if(c)c.classList.toggle('active',n===f);});autoUpdateInvoiceStatus();renderList();}
 function setSort(s){
   if(s===currentSort&&(s==='date'||s==='num')){sortDir=-sortDir;}
   else{sortDir=1;}
@@ -2386,6 +2414,7 @@ async function init(){
     DB.collection('invoices').orderBy('createdAt','desc').onSnapshot(function(snap){
       invoices=snap.docs.map(function(d){return Object.assign({},d.data(),{_docId:d.id});});
       localStorage.setItem(LINV,JSON.stringify(invoices));
+      autoUpdateInvoiceStatus();
       renderList();renderAcc();renderYearTabs();setSS('on');
       computeFreqItems();renderRecentCustChips();
     },function(e){setSS('');console.warn(e.code);});
