@@ -852,6 +852,7 @@ input[data-benefit]{display:none}
         </div>
       </div>
 
+      <div id="autosave-ind" style="text-align:center;font-size:11px;color:var(--green);font-weight:600;min-height:14px;margin-bottom:6px"></div>
       <button class="btn-save" id="btn-save">
         <svg viewBox="0 0 15 15"><path d="M12 13H3a1 1 0 0 1-1-1V2.5L4.5 1h8a.5.5 0 0 1 .5.5V12a1 1 0 0 1-1 1z"/><path d="M5 1v4h5V1M5 9h5"/></svg>
         계약 저장 / Save Contract
@@ -908,6 +909,7 @@ input[data-benefit]{display:none}
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><line x1="7" y1="1" x2="7" y2="13"/><line x1="1" y1="7" x2="13" y2="7"/></svg>
           새 이용내역 추가
         </button>
+        <button type="button" onclick="gotoUsageSend()" style="width:100%;margin-top:6px;padding:9px;background:var(--navy);color:#fff;border:none;border-radius:var(--radius-sm);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">📤 이용내역만 고객에게 발송</button>
         <div id="usage-form-panel" style="display:none">
         <div class="uform">
           <div class="uform-title">이용내역 추가 / Add Usage</div>
@@ -1299,6 +1301,7 @@ async function initApp(){
   document.getElementById('u-date').value=today();
   updateTotal();
   renderUsage();
+  setTimeout(restoreContractDraftBanner,500);
 }
 
 function initBenefits(){
@@ -1583,7 +1586,8 @@ function showUsageEditModal(idx){
     };
     modal.remove();
     renderUsage();
-    showModal('수정 완료','이용내역이 수정되었습니다. 계약 저장 버튼을 눌러 최종 저장하세요.',false);
+    if(currentEditId){persistUsage();}
+    else{showModal('수정 완료','이용내역이 수정되었습니다. 계약 저장 버튼을 눌러 최종 저장하세요.',false);}
   });
 
   // 취소 버튼
@@ -1622,6 +1626,66 @@ async function saveContract(){
     console.error('Save error:',e);
     showModal('저장 실패',`오류: ${e.code||e.message||'알 수 없는 오류'}`,false);
   }
+  clearContractDraft();
+}
+
+// ── 이용내역 즉시 저장 (서비스마다 추가 후 바로 반영) ──
+async function persistUsage(silent){
+  if(!currentEditId||!db)return false;
+  try{
+    await updateDoc(doc(db,'contracts',currentEditId),{usage_history:JSON.stringify(currentUsageHistory),updated_at:new Date().toISOString()});
+    const c=allContracts.find(x=>x.__id===currentEditId);
+    if(c)c.usage_history=JSON.stringify(currentUsageHistory);
+    if(!silent){
+      const t=document.getElementById('save-toast');
+      if(t){t.textContent='✓ 이용내역이 저장되었습니다 / Usage saved';t.style.display='block';setTimeout(()=>{t.style.display='none';t.textContent='✓ 저장되었습니다 / Saved!';},2400);}
+    }
+    return true;
+  }catch(e){console.error('persistUsage',e);return false;}
+}
+window.persistUsage=persistUsage;
+
+// 이용내역만 발송 탭으로 (단독 발송)
+window.gotoUsageSend=function(){
+  if(!currentEditId){showModal('먼저 저장하세요','계약을 먼저 저장한 뒤 이용내역을 발송할 수 있습니다.',false);return;}
+  currentSendMode='usage';
+  const ss=document.getElementById('send-select');
+  if(ss)ss.value=currentEditId;
+  switchTab('send');
+};
+
+// ── 계약서 자동 임시저장 (localStorage) ──
+const LS_DRAFT='hhc_contract_draft_v1';
+let _draftTimer=null;
+function saveContractDraft(){
+  if(currentEditId)return; // 기존 계약 수정 중엔 임시저장 안 함
+  try{
+    const d=getFormData();
+    if(!(d.name||'').trim() && !(d.amount_paid&&d.amount_paid!=='0') && !currentUsageHistory.length)return;
+    localStorage.setItem(LS_DRAFT,JSON.stringify({data:d,t:Date.now()}));
+    const ind=document.getElementById('autosave-ind');
+    if(ind)ind.textContent='✓ 임시저장 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  }catch(e){}
+}
+window.scheduleContractDraft=function(){clearTimeout(_draftTimer);_draftTimer=setTimeout(saveContractDraft,1500);};
+function clearContractDraft(){try{localStorage.removeItem(LS_DRAFT);}catch(e){}const ind=document.getElementById('autosave-ind');if(ind)ind.textContent='';}
+window.clearContractDraft=clearContractDraft;
+function restoreContractDraftBanner(){
+  let raw;try{raw=localStorage.getItem(LS_DRAFT);}catch(e){return;}
+  if(!raw)return;
+  let parsed;try{parsed=JSON.parse(raw);}catch(e){return;}
+  if(!parsed||!parsed.data)return;
+  if(document.getElementById('draft-banner'))return;
+  const d=parsed.data;const when=new Date(parsed.t||Date.now());
+  const banner=document.createElement('div');banner.id='draft-banner';
+  banner.style.cssText='position:fixed;left:0;right:0;bottom:0;z-index:900;background:#0F1C3F;color:#fff;padding:12px 16px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -4px 20px rgba(0,0,0,.25)';
+  banner.innerHTML='<div style="max-width:900px;margin:0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap">'+
+    '<div style="flex:1;min-width:180px;font-size:12.5px;line-height:1.5">💾 저장하지 않은 계약서 작성 내용이 있습니다 — <b style="color:#8AA6FF">'+((d.name||'무제'))+'</b> · '+when.toLocaleString('ko-KR')+'</div>'+
+    '<button id="draft-cont" style="padding:8px 14px;border-radius:8px;border:none;background:#3D52A0;color:#fff;font-size:12px;font-weight:700;cursor:pointer">이어서 작성</button>'+
+    '<button id="draft-new" style="padding:8px 14px;border-radius:8px;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:12px;font-weight:700;cursor:pointer">새로 시작</button></div>';
+  document.body.appendChild(banner);
+  document.getElementById('draft-cont').onclick=function(){currentEditId=null;loadFormData(d);banner.remove();};
+  document.getElementById('draft-new').onclick=function(){clearContractDraft();banner.remove();};
 }
 
 // ── LIST ──
@@ -1959,6 +2023,8 @@ document.getElementById('f-package').addEventListener('change',e=>{
 });
 ['f-paid','f-bonus','f-special-bonus'].forEach(id=>document.getElementById(id).addEventListener('input',updateTotal));
 document.getElementById('btn-save').addEventListener('click',saveContract);
+// 계약서 폼 자동 임시저장 트리거
+document.getElementById('tab-admin').addEventListener('input',()=>{if(window.scheduleContractDraft)window.scheduleContractDraft();});
 
 document.getElementById('svc-opts').addEventListener('click',e=>{
   const o=e.target.closest('.svc-opt');
@@ -2378,11 +2444,12 @@ document.getElementById('btn-add-usage').addEventListener('click',()=>{
   renderItemRows();
   renderUsage();
   document.getElementById('usage-form-panel').style.display='none';
+  persistUsage(); // 추가 즉시 Firestore 반영 (계약 저장된 경우)
 });
 
 document.getElementById('usage-tbody').addEventListener('click',e=>{
   const b=e.target.closest('[data-di]');
-  if(b){currentUsageHistory.splice(parseInt(b.dataset.di),1);renderUsage();}
+  if(b){currentUsageHistory.splice(parseInt(b.dataset.di),1);renderUsage();persistUsage();}
   const ed=e.target.closest('[data-ei]');
   if(ed){showUsageEditModal(parseInt(ed.dataset.ei));}
 });
