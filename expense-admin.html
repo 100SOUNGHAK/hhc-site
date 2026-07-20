@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <title>Happy Home Care 비용청구서</title>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&display=swap" rel="stylesheet">
 <style>
 :root{
   --navy:#0F1729;--indigo:#4F6EF7;--il:#eef1fe;--gold:#E8A838;--green:#10b981;--gbg:#d1fae5;--red:#ef4444;--rbg:#fee2e2;--abg:#fef3c7;--amber:#d97706;--gray:#6b7280;--bdr:rgba(0,0,0,.09);--sf:#fff;--bg:#f4f6fb;--txt:#0f172a;--txt2:#475569;--r:12px;--bb:64px;
@@ -60,6 +62,41 @@ button{font-family:inherit;cursor:pointer}
 .pi-date{font-size:11px;color:var(--gray)}
 .pi-cat{font-size:12.5px;font-weight:600;color:var(--txt);margin-top:1px}
 .pi-amt{font-size:13px;font-weight:700;color:var(--navy);flex-shrink:0}
+
+/* ═══ 프리미엄 리파인 (네이비·골드) ═══ */
+:root{--pnavy:#0B1633;--pnavy2:#16234A;--pgold:#c9a44c;--pgold-lt:#e3c98a;--pteal:#0FB5A4;}
+*{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif}
+body{letter-spacing:-.01em}
+.hd{background:linear-gradient(120deg,var(--pnavy),var(--pnavy2));box-shadow:0 4px 18px -6px rgba(11,22,51,.45)}
+.hd-logo{background:var(--pteal);box-shadow:0 4px 12px -2px rgba(15,181,164,.5)}
+.hd-title{font-size:15px}
+.tab{font-size:13px;padding:13px 4px}
+.tab.active{color:var(--pnavy);border-bottom-color:var(--pgold);font-weight:800}
+.card{border-radius:15px;border:1px solid #E3E8F2;box-shadow:0 1px 2px rgba(16,30,60,.04),0 10px 26px -22px rgba(16,30,60,.25)}
+.card-hdr{font-size:14.5px;background:#F7F9FC}
+input,select,textarea{border-radius:10px;padding:11px 13px;font-size:15px;border:1.5px solid #DDE3EF}
+input:focus,select:focus,textarea:focus{border-color:var(--pteal);box-shadow:0 0 0 3px rgba(15,181,164,.12)}
+.btn-add{border-radius:11px;padding:12px;font-size:14px;border:1.5px dashed var(--pteal);background:#E4FBF6;color:#0A6B60}
+.btn{border-radius:11px;padding:12px 16px;font-size:14px}
+.bp{background:linear-gradient(120deg,var(--pnavy),var(--pnavy2))}
+.total-box{background:linear-gradient(120deg,var(--pnavy),var(--pnavy2));border-radius:15px;border:1px solid rgba(201,164,76,.5);position:relative;overflow:hidden}
+.total-box::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--pgold),var(--pgold-lt),transparent)}
+.total-val{font-family:'Noto Serif KR',serif;color:var(--pgold-lt);font-size:22px}
+.yt.active{background:var(--pnavy);border-color:var(--pnavy)}
+.pending-item{border-radius:11px;padding:11px 13px}
+.pending-item.sel{border:1.5px solid var(--pteal);background:#E4FBF6}
+.pi-amt{font-variant-numeric:tabular-nums}
+.list-card{border-radius:14px;border:1px solid #E3E8F2}
+.list-amt{font-variant-numeric:tabular-nums}
+/* 품목 빠른선택 칩 */
+.cat-chips{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 10px}
+.cat-chip{padding:7px 13px;border-radius:20px;border:1px solid #DDE3EF;background:#fff;font-size:12.5px;font-weight:600;color:#475569;cursor:pointer}
+.cat-chip.on{background:var(--pnavy);color:#fff;border-color:var(--pnavy)}
+/* 기간 프리셋 */
+.period-chips{display:flex;gap:6px;margin-bottom:10px}
+.period-chips button{flex:1;padding:9px 6px;border-radius:20px;border:1px solid #DDE3EF;background:#fff;font-size:12.5px;font-weight:700;color:#475569;cursor:pointer}
+.period-chips button:active{background:#E4FBF6;border-color:var(--pteal);color:#0A6B60}
+
 </style>
 </head>
 <body>
@@ -93,6 +130,7 @@ button{font-family:inherit;cursor:pointer}
         <div id="qi-cat-custom-wrap" class="hidden f">
           <label class="lb">직접 입력한 품목명</label><input id="qi-cat-custom" placeholder="품목명 입력">
         </div>
+        <div class="cat-chips" id="qi-cat-chips"></div>
         <div class="fg c2">
           <div class="f"><label class="lb">금액</label><input id="qi-amount" type="number" min="0" step="0.5" placeholder="0"></div>
           <div class="f"><label class="lb">비고</label><input id="qi-note" type="text" placeholder="선택 입력"></div>
@@ -125,6 +163,12 @@ button{font-family:inherit;cursor:pointer}
     <div class="card">
       <div class="card-hdr">청구대상기간 선택</div>
       <div class="card-body">
+        <div class="period-chips">
+          <button onclick="setGenPeriod('this')">이번 달</button>
+          <button onclick="setGenPeriod('last')">지난 달</button>
+          <button onclick="setGenPeriod('30')">최근 30일</button>
+          <button onclick="setGenPeriod('all')">미청구 전체</button>
+        </div>
         <div class="fg c2">
           <div class="f"><label class="lb">시작일</label><input id="gen-period-start" type="date"></div>
           <div class="f"><label class="lb">종료일</label><input id="gen-period-end" type="date"></div>
@@ -293,9 +337,42 @@ function fmtAmt(n){return 'RM '+Number(n||0).toFixed(2).replace(/\B(?=(\d{3})+(?
 function todayStr(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function mdFromDate(ds){if(!ds)return'';var p=ds.split('-');return p.length===3?p[1]+'/'+p[2]:ds;}
 function fillCatSelect(id){var el=$(id);if(!el)return;el.innerHTML=CATS.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('')+'<option value="__custom__">+ 직접입력</option>';}
+// 품목 빠른선택 칩
+function renderQiCatChips(){
+  var el=$('qi-cat-chips');if(!el)return;
+  var cur=val('qi-cat');
+  el.innerHTML=CATS.map(function(c){
+    return '<button type="button" class="cat-chip'+(c===cur?' on':'')+'" onclick="pickQiCat(\''+c.replace(/'/g,"\\'")+'\')">'+c+'</button>';
+  }).join('');
+}
+window.pickQiCat=function(c){
+  setVal('qi-cat',c);
+  $('qi-cat-custom-wrap').classList.add('hidden');
+  renderQiCatChips();
+  var a=$('qi-amount');if(a)a.focus();
+};
+// 청구 기간 프리셋
+window.setGenPeriod=function(mode){
+  var now=new Date();
+  function f(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  var s1,e1;
+  if(mode==='this'){s1=new Date(now.getFullYear(),now.getMonth(),1);e1=new Date(now.getFullYear(),now.getMonth()+1,0);}
+  else if(mode==='last'){s1=new Date(now.getFullYear(),now.getMonth()-1,1);e1=new Date(now.getFullYear(),now.getMonth(),0);}
+  else if(mode==='30'){e1=now;s1=new Date(now.getTime()-29*86400000);}
+  else{ // 미청구 전체
+    var pend=allItems.filter(function(i){return !i.claimed&&i.date;});
+    if(!pend.length){showToast('미청구 항목이 없습니다');return;}
+    var ds=pend.map(function(i){return i.date;}).sort();
+    setVal('gen-period-start',ds[0]);setVal('gen-period-end',ds[ds.length-1]);
+    generatePreview();return;
+  }
+  setVal('gen-period-start',f(s1));setVal('gen-period-end',f(e1));
+  generatePreview();
+};
 window.onQiCatChange=function(){
   var v=val('qi-cat');
   $('qi-cat-custom-wrap').classList.toggle('hidden',v!=='__custom__');
+  renderQiCatChips();
 };
 function getQiCatValue(){
   var v=val('qi-cat');
@@ -633,30 +710,51 @@ async function buildClaimBodyHTML(id){
   var isEn=curLang==='en';
   var title=d.title||(isEn?'(No title)':'(제목 없음)');
   if(isEn)title=await tr(title);
+  var esc=function(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');};
   var rows=[];
   for(var i=0;i<d.items.length;i++){
     var it=d.items[i];
     var cat=isEn?(CATS_EN[it.cat]||it.cat):it.cat;
     var note=it.note?await tr(it.note):'';
-    rows.push('<tr><td>'+mdFromDate(it.date)+'</td><td>'+cat+'</td><td style="text-align:right">'+fmtAmt(it.amount)+'</td><td>'+note+'</td></tr>');
+    rows.push('<tr'+(i%2?'':' style="background:rgba(243,237,224,.4)"')+'>'
+      +'<td style="padding:10px 10px;font-size:12.5px;color:#48546F;border-bottom:1px solid #EEF1F7;white-space:nowrap">'+esc(mdFromDate(it.date))+'</td>'
+      +'<td style="padding:10px 10px;font-size:13px;font-weight:700;color:#101B33;border-bottom:1px solid #EEF1F7">'+esc(cat)+'</td>'
+      +'<td style="padding:10px 10px;font-size:13.5px;font-weight:800;color:#0B1633;border-bottom:1px solid #EEF1F7;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap">'+fmtAmt(it.amount)+'</td>'
+      +'<td style="padding:10px 10px;font-size:12px;color:#6E7994;border-bottom:1px solid #EEF1F7">'+esc(note)+'</td></tr>');
   }
-  return '<div style="font-family:-apple-system,sans-serif;color:#0f172a;background:#fff;padding:8px">'+
-    '<h2 style="font-size:18px;margin-bottom:4px">'+(isEn?'Expense Claim':'비용청구서')+': '+title+'</h2>'+
-    '<div style="font-size:12px;color:#6b7280;margin-bottom:16px;line-height:1.8">'+
-      (d.periodStart&&d.periodEnd?(isEn?'Claim Period: ':'청구대상기간: ')+d.periodStart+' ~ '+d.periodEnd+'<br>':'')+
-      (isEn?'Claim Date: ':'청구일자: ')+(d.claimDate||'—')+
-    '</div>'+
-    '<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'+
-      '<thead><tr><th style="background:#0F1729;color:#fff;padding:7px 9px;font-size:10px;text-align:left">'+(isEn?'Date':'일자')+'</th>'+
-      '<th style="background:#0F1729;color:#fff;padding:7px 9px;font-size:10px;text-align:left">'+(isEn?'Category':'품목')+'</th>'+
-      '<th style="background:#0F1729;color:#fff;padding:7px 9px;font-size:10px;text-align:right">'+(isEn?'Amount':'금액')+'</th>'+
-      '<th style="background:#0F1729;color:#fff;padding:7px 9px;font-size:10px;text-align:left">'+(isEn?'Note':'비고')+'</th></tr></thead>'+
-      '<tbody>'+rows.join('')+'</tbody></table>'+
-    '<div style="display:flex;justify-content:flex-end;font-size:15px;font-weight:700;color:#0F1729;border-top:2px solid #0F1729;padding-top:9px;margin-bottom:'+(d.bankInfo?'10px':'0')+'">'+
-      (isEn?'Total: ':'총 청구금액: ')+fmtAmt(d.total)+
-    '</div>'+
-    (d.bankInfo?'<div style="background:#f8f9fc;border-radius:8px;padding:10px 12px;font-size:12px;color:#475569;line-height:1.7"><b style="color:#0f172a">'+(isEn?'Deposit Account':'입금계좌')+'</b><br>'+d.bankInfo.bankName+' · '+d.bankInfo.accountNum+'<br>'+d.bankInfo.accountName+'</div>':'')+
-  '</div>';
+  var period=(d.periodStart&&d.periodEnd)?(d.periodStart+' ~ '+d.periodEnd):'—';
+  var metaCell=function(lb,v){return '<td style="border:1px solid #D9E0EC;padding:9px 12px"><div style="font-size:9px;font-weight:800;color:#8390AC;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">'+lb+'</div><div style="font-size:13px;font-weight:800;color:#0B1633">'+v+'</div></td>';};
+  var bank=d.bankInfo?'<div style="margin-top:14px;background:#FDF6E5;border:1px solid #E5D9AE;border-left:4px solid #c9a44c;border-radius:0 10px 10px 0;padding:12px 16px">'
+      +'<div style="font-size:10px;font-weight:800;color:#8A6D12;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">'+(isEn?'Deposit Account':'입금계좌')+'</div>'
+      +'<div style="font-size:14px;font-weight:800;color:#0B1633">'+esc(d.bankInfo.bankName)+' · '+esc(d.bankInfo.accountNum)+'</div>'
+      +'<div style="font-size:12px;color:#48546F;margin-top:1px">'+esc(d.bankInfo.accountName)+'</div></div>':'';
+  return '<div class="xcl" style="font-family:\'Pretendard\',-apple-system,sans-serif;color:#101B33;background:#fff;letter-spacing:-.01em">'
+    +'<div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2.5px solid #0B1633;padding-bottom:12px;margin-bottom:14px">'
+      +'<div><div style="display:flex;align-items:center;gap:9px;margin-bottom:6px">'
+        +'<div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(145deg,#16234A,#0f766e);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff">HHC</div>'
+        +'<div><div style="font-size:16px;font-weight:800;color:#0B1633">Happy Home Care</div><div style="font-size:9.5px;color:#8390AC">HAPPY WORKS SERVICES SDN. BHD. (1278908-M)</div></div></div></div>'
+      +'<div style="text-align:right"><div style="font-family:\'Noto Serif KR\',serif;font-size:21px;font-weight:700;color:#0B1633;letter-spacing:.02em">'+(isEn?'EXPENSE CLAIM':'비용청구서')+'</div>'
+      +'<div style="font-size:10px;color:#8390AC;margin-top:1px">'+(isEn?'Expense Claim Statement':'Expense Claim')+'</div></div></div>'
+    +'<table style="width:100%;border-collapse:collapse;margin-bottom:14px"><tr>'
+      +metaCell(isEn?'Title':'제목',esc(title))
+      +metaCell(isEn?'Claim Period':'청구대상기간',esc(period))
+      +metaCell(isEn?'Claim Date':'청구일자',esc(d.claimDate||'—'))
+    +'</tr></table>'
+    +'<table style="width:100%;border-collapse:collapse;margin-bottom:2px">'
+      +'<thead><tr>'
+      +'<th style="border-bottom:2px solid #0B1633;padding:8px 10px;font-size:10px;font-weight:800;color:#48546F;text-align:left;text-transform:uppercase;letter-spacing:.06em">'+(isEn?'Date':'일자')+'</th>'
+      +'<th style="border-bottom:2px solid #0B1633;padding:8px 10px;font-size:10px;font-weight:800;color:#48546F;text-align:left;text-transform:uppercase;letter-spacing:.06em">'+(isEn?'Category':'품목')+'</th>'
+      +'<th style="border-bottom:2px solid #0B1633;padding:8px 10px;font-size:10px;font-weight:800;color:#48546F;text-align:right;text-transform:uppercase;letter-spacing:.06em">'+(isEn?'Amount':'금액')+'</th>'
+      +'<th style="border-bottom:2px solid #0B1633;padding:8px 10px;font-size:10px;font-weight:800;color:#48546F;text-align:left;text-transform:uppercase;letter-spacing:.06em">'+(isEn?'Note':'비고')+'</th>'
+      +'</tr></thead><tbody>'+rows.join('')+'</tbody></table>'
+    +'<div style="display:flex;justify-content:flex-end;margin-top:10px"><div style="min-width:58%;background:linear-gradient(120deg,#0B1633,#16234A);border-radius:12px;padding:13px 18px;display:flex;justify-content:space-between;align-items:center;position:relative;overflow:hidden">'
+      +'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#c9a44c,#e3c98a,transparent)"></div>'
+      +'<span style="font-size:12px;font-weight:700;color:rgba(255,255,255,.75);letter-spacing:.03em">'+(isEn?'TOTAL CLAIMED':'총 청구금액')+'</span>'
+      +'<span style="font-family:\'Noto Serif KR\',serif;font-size:20px;font-weight:700;color:#e3c98a;font-variant-numeric:tabular-nums">'+fmtAmt(d.total)+'</span></div></div>'
+    +bank
+    +'<div style="margin-top:16px;border-top:1px solid #D9E0EC;padding-top:8px;display:flex;justify-content:space-between;font-size:9.5px;color:#8390AC">'
+      +'<span>HAPPY WORKS SERVICES SDN. BHD. · +60 17-247 2774</span><span>'+(isEn?'Thank you':'Happy Home Care')+'</span></div>'
+  +'</div>';
 }
 
 window.viewClaim=async function(id){
@@ -680,10 +778,11 @@ async function renderClaimCanvas(id){
   await loadImgLibs();
   var html=await buildClaimBodyHTML(id);
   var container=document.createElement('div');
-  container.style.cssText='position:fixed;left:-9999px;top:0;width:700px;background:#fff;padding:24px;z-index:-1';
+  container.style.cssText='position:fixed;left:-9999px;top:0;width:740px;background:#fff;padding:26px;z-index:-1';
   container.innerHTML=html;
   document.body.appendChild(container);
-  var canvas=await window.html2canvas(container,{scale:2,useCORS:true,backgroundColor:'#ffffff',width:700,logging:false});
+  try{if(document.fonts&&document.fonts.ready)await document.fonts.ready;}catch(e){}
+  var canvas=await window.html2canvas(container,{scale:2,useCORS:true,backgroundColor:'#ffffff',width:740,logging:false});
   document.body.removeChild(container);
   return canvas;
 }
@@ -727,11 +826,15 @@ window.downloadPDF=async function(id){
 
 async function printClaim(id){
   var bodyHtml=await buildClaimBodyHTML(id);
-  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Expense Claim</title><style>body{padding:32px;max-width:700px;margin:0 auto}table{width:100%}td,th{padding:8px 10px;font-size:12px;border-bottom:1px solid #e2e8f0}</style></head><body>'+bodyHtml+'</body></html>';
-  var w=window.open('','_blank');
+  var fitJs='<scr'+'ipt>window.onload=function(){setTimeout(function(){try{var el=document.getElementById("pgroot");if(el){el.style.zoom="";var usable=(297-24)*96/25.4*0.96;var h=el.getBoundingClientRect().height;if(h>usable){el.style.zoom=String(usable/h);}}}catch(e){}setTimeout(function(){window.print();},80);},350);};window.onafterprint=function(){window.close();};<\/scr'+'ipt>';
+  var html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Expense Claim</title>'
+    +'<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">'
+    +'<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;700&display=swap" rel="stylesheet">'
+    +'<style>*{box-sizing:border-box;margin:0;padding:0}body{background:#fff;padding:20px}#pgroot{max-width:740px;margin:0 auto}@page{size:A4 portrait;margin:12mm}@media print{body{padding:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}.xcl table,.xcl tr{break-inside:avoid}}</style>'
+    +'</head><body><div id="pgroot">'+bodyHtml+'</div>'+fitJs+'</body></html>';
+  var w=window.open('','_blank','width=820,height=1000');
   w.document.write(html);
   w.document.close();
-  setTimeout(function(){w.print();},400);
 }
 window.printClaim=printClaim;
 
@@ -1051,6 +1154,7 @@ function exportCSV(){
 window.exportCSV=exportCSV;
 
 fillCatSelect('qi-cat');
+renderQiCatChips();
 setVal('qi-date',todayStr());
 setVal('gen-claim-date',todayStr());
 

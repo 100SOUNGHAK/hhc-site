@@ -579,6 +579,7 @@ var FB_CFG={apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",authDomain:"happywo
 var DB=null;
 var ST=null; // Firebase Storage
 var invoices=[],services=[],banks=[],customers=[],lineItems=[];
+var expenseClaims=[]; // 비용청구서 (expense_claims) — 순이익 산출용
 var expandedLI={};
 var MEMBER_TIERS=['패키지 - 실버회원','패키지 - 티타늄회원','패키지 - 다이아회원','패키지 - 골드회원','패키지 - 로얄회원','패키지(사업) - 티타늄회원','패키지(사업) - 다이아회원','패키지(사업) - 골드회원','패키지(사업) - 로얄회원'];
 function fillMemberSelect(id,includeAll,includeNonMember){
@@ -1749,8 +1750,12 @@ window.openStatusModal=openStatusModal;window.applyStatus=applyStatus;
 // ═══════════════════════════════════════════════════════════
 // ACCOUNTING
 // ═══════════════════════════════════════════════════════════
+function expDateKey(c){return (c.periodStart||c.claimDate||'');}
 function renderYearTabs(){
-  var years=[...new Set(invoices.map(function(i){return i.date&&i.date.slice(0,4);}).filter(Boolean))];
+  var years=[...new Set(
+    invoices.map(function(i){return i.date&&i.date.slice(0,4);})
+    .concat(expenseClaims.map(function(c){return expDateKey(c).slice(0,4);}))
+    .filter(Boolean))];
   var cy=String(new Date().getFullYear());if(!years.includes(cy))years.unshift(cy);
   years.sort(function(a,b){return b-a;});
   var el=$('year-tabs');if(!el)return;
@@ -1770,7 +1775,26 @@ function renderAcc(){
   yi.forEach(function(inv){var m=inv.date&&inv.date.slice(0,7);if(!m)return;if(!mo[m])mo[m]={invoices:[],total:0,paid:0};mo[m].invoices.push(inv);mo[m].total+=(inv.total||0);if(inv.status==='paid')mo[m].paid+=(inv.total||0);});
   var mn=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
   var sl={billing:'Billing',paid:'Paid',overdue:'Overdue'},sb={billing:'db',paid:'dp',overdue:'do'};
-  var html='<div class="acs"><div class="acc"><div class="acv">'+yi.length+'</div><div class="acl">총 건수</div></div><div class="acc"><div class="acv" style="color:var(--green)">'+fmtAmt(pr)+'</div><div class="acl">수금</div></div><div class="acc"><div class="acv" style="color:var(--red)">'+fmtAmt(pa)+'</div><div class="acl">미수금</div></div></div><div style="padding:0 16px 8px;font-size:12px;font-weight:700;color:var(--navy)">'+selYear+'년 총 매출: '+fmtAmt(tr)+'</div>';
+  // ── 비용청구서 연동: 연도·월별 비용 집계 ──
+  var ye=expenseClaims.filter(function(c){return expDateKey(c).startsWith(String(selYear));});
+  var expTotal=ye.reduce(function(s2,c){return s2+(c.total||0);},0);
+  var expMo={};
+  ye.forEach(function(c){var m=expDateKey(c).slice(0,7);if(!m)return;expMo[m]=(expMo[m]||0)+(c.total||0);});
+  var profit=tr-expTotal;
+  var html='<div class="acs"><div class="acc"><div class="acv">'+yi.length+'</div><div class="acl">총 건수</div></div><div class="acc"><div class="acv" style="color:var(--green)">'+fmtAmt(pr)+'</div><div class="acl">수금</div></div><div class="acc"><div class="acv" style="color:var(--red)">'+fmtAmt(pa)+'</div><div class="acl">미수금</div></div></div>'
+  // 순이익 요약 카드 (매출 − 비용)
+  +'<div style="margin:4px 16px 10px;background:linear-gradient(120deg,#0B1633,#16234A);border:1px solid rgba(201,164,76,.5);border-radius:14px;padding:14px 16px;position:relative;overflow:hidden">'
+    +'<div style="position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#c9a44c,#e3c98a,transparent)"></div>'
+    +'<div style="display:flex;justify-content:space-between;gap:8px;text-align:center">'
+      +'<div style="flex:1"><div style="font-size:10px;color:rgba(255,255,255,.55);font-weight:700;letter-spacing:.04em">매출액</div><div style="font-size:14px;font-weight:800;color:#fff;margin-top:2px">'+fmtAmt(tr)+'</div></div>'
+      +'<div style="align-self:center;color:rgba(255,255,255,.4);font-weight:800">−</div>'
+      +'<div style="flex:1"><div style="font-size:10px;color:rgba(255,255,255,.55);font-weight:700;letter-spacing:.04em">비용</div><div style="font-size:14px;font-weight:800;color:#FCA5A5;margin-top:2px">'+fmtAmt(expTotal)+'</div></div>'
+      +'<div style="align-self:center;color:rgba(255,255,255,.4);font-weight:800">=</div>'
+      +'<div style="flex:1"><div style="font-size:10px;color:#e3c98a;font-weight:800;letter-spacing:.04em">순이익</div><div style="font-size:15px;font-weight:800;color:'+(profit>=0?'#7DEEE0':'#FCA5A5')+';margin-top:2px">'+fmtAmt(profit)+'</div></div>'
+    +'</div>'
+    +'<div style="font-size:9.5px;color:rgba(255,255,255,.45);margin-top:8px;text-align:center">비용은 비용청구서(expense) 시스템의 '+selYear+'년 청구서 합계와 자동 연동됩니다</div>'
+  +'</div>';
+  Object.keys(expMo).forEach(function(m2){if(!mo[m2])mo[m2]={invoices:[],total:0,paid:0};});
   var sorted=Object.keys(mo).sort(function(a,b){return b.localeCompare(a);});
   if(!sorted.length){html+='<div class="empty"><div class="et">'+selYear+'년 데이터 없음</div></div>';}
   else{html+=sorted.map(function(m){var mi=parseInt(m.split('-')[1])-1,md=mo[m],pct=md.total?Math.round(md.paid/md.total*100):0;
@@ -1787,7 +1811,12 @@ function renderAcc(){
       '<span class="bdg '+(sb[inv.status]||'db')+'" style="font-size:10px">'+(sl[inv.status]||inv.status)+'</span>'+
     '</div>'+
   '</div>';
-}).join('')+'<div style="padding:8px 14px;background:var(--bg);display:flex;justify-content:space-between;font-size:11px;font-weight:600;color:var(--navy)"><span>월 합계</span><span>'+fmtAmt(md.total)+'</span></div></div></div>';}).join('');}
+}).join('')+(function(){
+  var mExp=expMo[m]||0;var mProfit=md.total-mExp;
+  return '<div style="padding:8px 14px;background:var(--bg);display:flex;justify-content:space-between;font-size:11px;font-weight:600;color:var(--navy)"><span>월 매출</span><span>'+fmtAmt(md.total)+'</span></div>'
+  +'<div style="padding:6px 14px;background:var(--bg);display:flex;justify-content:space-between;font-size:11px;font-weight:600;color:var(--red);border-top:1px solid rgba(0,0,0,.05)"><span>월 비용</span><span>- '+fmtAmt(mExp)+'</span></div>'
+  +'<div style="padding:7px 14px;background:#0B1633;display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;color:'+(mProfit>=0?'#7DEEE0':'#FCA5A5')+'"><span style="color:#e3c98a">월 순이익</span><span>'+fmtAmt(mProfit)+'</span></div>';
+})()+'</div></div>';}).join('');}
   el.innerHTML=html;
 }
 function expCSV(){
@@ -2627,6 +2656,12 @@ async function init(){
       renderList();renderAcc();renderYearTabs();setSS('on');
       computeFreqItems();renderRecentCustChips();
     },function(e){setSS('');console.warn(e.code);});
+
+    // 비용청구서(expense_claims) 연동 — 회계 탭 순이익 산출용
+    DB.collection('expense_claims').onSnapshot(function(snap){
+      expenseClaims=snap.docs.map(function(d){return Object.assign({},d.data(),{_docId:d.id});});
+      renderAcc();renderYearTabs();
+    },function(e){console.warn('expense_claims:',e&&e.code);});
 
     DB.collection('settings').doc('issuer').onSnapshot(function(doc){
       if(doc.exists){issuer=Object.assign({},issuer,doc.data());localStorage.setItem(LISS,JSON.stringify(issuer));renderIssView();}
