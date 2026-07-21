@@ -538,6 +538,9 @@
   .review-photos{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;}
   .review-photos img{width:64px;height:64px;object-fit:cover;border-radius:9px;cursor:pointer;border:1px solid var(--line);transition:transform .18s;}
   .review-photos img:hover{transform:scale(1.05);}
+  .review-reply-box{background:var(--cream-100);border-left:3px solid var(--gold-500);border-radius:0 10px 10px 0;padding:11px 14px;margin-bottom:14px;}
+  .review-reply-head{font-size:11.5px;font-weight:700;color:var(--navy-900);margin-bottom:4px;}
+  .review-reply-text{font-size:13px;color:var(--ink-600);line-height:1.6;white-space:pre-line;word-break:break-word;}
   .review-card-foot{margin-top:auto;display:flex;align-items:center;justify-content:flex-end;padding-top:10px;border-top:1px solid var(--line);}
   .review-like-btn{display:inline-flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:var(--ink-400);padding:4px 6px;border-radius:8px;transition:color .15s;}
   .review-like-btn:hover{color:#e0245e;}
@@ -1917,9 +1920,16 @@ function renderReviews(){
   }else{
     grid.innerHTML=allReviews.map(function(r){
       var isLiked=liked.has(r.__id);
-      var photosHtml=(r.photos&&r.photos.length)?('<div class="review-photos">'+r.photos.map(function(url){
+      var photosHtml=(r.photos&&r.photos.length)?('<div class="review-photos">'+r.photos.map(function(p){
+        var url=(p&&typeof p==='object')?p.url:p;
         return '<img src="'+esc(url)+'" alt="review photo" onclick="event.stopPropagation();window.openLightbox(\''+esc(url)+'\')">';
       }).join('')+'</div>'):'';
+      var replyHtml=r.admin_reply?(
+        '<div class="review-reply-box">'+
+          '<div class="review-reply-head">🏠 '+(isEn()?'Owner reply':'사장님 답글')+(r.admin_reply_at?' · '+fmtDate(r.admin_reply_at):'')+'</div>'+
+          '<div class="review-reply-text">'+esc(r.admin_reply)+'</div>'+
+        '</div>'
+      ):'';
       return '<div class="review-card">'+
         '<div class="review-card-top">'+
           '<div class="review-avatar">'+esc(initials(r.name))+'</div>'+
@@ -1928,6 +1938,7 @@ function renderReviews(){
         '<div class="review-stars">'+starStr(r.rating)+'</div>'+
         '<p class="review-text">'+esc(r.text||'')+'</p>'+
         photosHtml+
+        replyHtml+
         '<div class="review-card-foot">'+
           '<button type="button" class="review-like-btn'+(isLiked?' liked':'')+'" data-id="'+r.__id+'" onclick="window.toggleReviewLike(\''+r.__id+'\',this)">'+
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 8.6c0 4.6-8.8 10.1-8.8 10.1S3.2 13.2 3.2 8.6a4.8 4.8 0 0 1 8.8-2.6 4.8 4.8 0 0 1 8.8 2.6z"/></svg>'+
@@ -2103,7 +2114,7 @@ window.submitReview=async function(){
       var sref=ref(storage,fname);
       var snap=await uploadBytes(sref,rvPhotos[i].blob,{contentType:'image/jpeg'});
       var url=await getDownloadURL(snap.ref);
-      photoUrls.push(url);
+      photoUrls.push({url:url,path:fname});
     }
     btn.textContent=en?'Submitting…':'등록 중...';
     await addDoc(collection(db,'reviews'),{
