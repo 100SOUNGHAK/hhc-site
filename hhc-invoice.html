@@ -333,7 +333,7 @@ textarea{resize:none;line-height:1.5}
           📄+💬 WhatsApp 전송
         </button>
         <button class="btn bk bfu" onclick="generateAndSharePDF('kakao')" style="font-size:13px;color:#3A1D1D">
-          📄+💬 카카오 복사
+          📄+💬 카카오 전송
         </button>
       </div>
       <button class="btn bp bfu" onclick="generateAndSharePDF('email')" style="margin-bottom:8px;font-size:13px">
@@ -343,8 +343,8 @@ textarea{resize:none;line-height:1.5}
         📄 PDF 로컬 저장 (다운로드)
       </button>
       <div style="font-size:11px;color:var(--gray);margin-top:8px;line-height:1.6;background:var(--il);border-radius:8px;padding:8px">
-        💡 WhatsApp/카카오: 메시지 + PDF 다운로드 링크 함께 전송<br>
-        💡 저장된 PDF는 카카오톡에서 파일로 직접 첨부 가능
+        💡 모바일(휴대폰)에서 "카카오 전송"을 누르면 공유 시트가 열리고 카카오톡을 선택하면 PDF 파일 + 안내메시지가 함께 전달됩니다<br>
+        💡 PC(데스크톱)에서는 파일 공유가 지원되지 않아 메시지가 자동 복사되며, 카카오톡에 붙여넣은 뒤 PDF는 "PDF 로컬 저장"으로 받아 첨부해주세요
       </div>
     </div>
     <div class="card cp" style="margin-bottom:12px">
@@ -2566,7 +2566,24 @@ async function generateAndSharePDF(shareType){
       if(num){window.open('https://wa.me/'+num+'?text='+encodeURIComponent(pdfMsg),'_blank');}
       else{cpTxt(pdfMsg);showToast('번호 없음 — 메시지 복사됨');}
     }else if(shareType==='kakao'){
-      cpTxt(pdfMsg);showToast('✓ 카카오톡 메시지 복사됨 (PDF 링크 포함)',3000);
+      // 모바일: OS 공유시트를 통해 PDF 파일을 카카오톡으로 직접 전송 (파일+메시지 한번에)
+      var pdfFile=null;
+      try{pdfFile=new File([pdfBlob],fileName,{type:'application/pdf'});}catch(e){}
+      if(pdfFile&&navigator.canShare&&navigator.canShare({files:[pdfFile]})){
+        try{
+          await navigator.share({files:[pdfFile],text:pdfMsg,title:'Invoice '+inv.id});
+          showToast('✓ 공유 시트로 전송됨 (카카오톡 선택)',3000);
+        }catch(shareErr){
+          if(shareErr&&shareErr.name==='AbortError'){
+            // 사용자가 공유 취소 — 아무 동작 안 함
+          }else{
+            cpTxt(pdfMsg);showToast('✓ 카카오톡 메시지 복사됨 (PDF 링크 포함)',3000);
+          }
+        }
+      }else{
+        // 데스크톱 등 파일 공유 미지원 브라우저 — 기존 방식(메시지 복사)으로 대체
+        cpTxt(pdfMsg);showToast('✓ 카카오톡 메시지 복사됨 (PDF 링크 포함) — PC에서는 카카오톡에 붙여넣기 해주세요',4000);
+      }
     }else if(shareType==='email'){
       var to=val('send-email');if(!to){showToast('이메일 주소를 입력해주세요.');return;}
       var sub=((emailSubjects[status]||emailSubjects.billing)[msgLang]||(emailSubjects[status]||emailSubjects.billing).ko);
