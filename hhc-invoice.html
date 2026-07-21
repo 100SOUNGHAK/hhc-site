@@ -530,6 +530,7 @@ textarea{resize:none;line-height:1.5}
     <div class="pma">
       <button class="btn bgh" id="ivm-print">🖨 인쇄</button>
       <button class="btn bgh" id="ivm-print-lite" style="color:#0F6B3A;border-color:#0F6B3A">🖨 간결</button>
+      <button class="btn bgh" id="ivm-status" style="color:var(--indigo);border-color:var(--indigo)" onclick="openStatusModal(viewingId)">🔄 상태변경</button>
       <button class="btn bw" id="ivm-wa">WhatsApp</button>
       <button class="btn bk" id="ivm-kakao">카카오</button>
       <button class="btn bg" id="ivm-edit">수정하기</button>
@@ -1749,7 +1750,15 @@ async function applyStatus(status){
   if(!statusEditId||!DB)return;
   var inv=invoices.find(function(i){return i.id===statusEditId;});if(!inv)return;
   showLoad('상태 변경 중...');
-  try{var upd2={status:status};if(status==='paid'){upd2.paidDate=today();inv.paidDate=upd2.paidDate;}if(inv._docId)await DB.collection('invoices').doc(inv._docId).update(upd2);inv.status=status;showToast('상태 변경 완료 ✓');$('status-modal').classList.add('hidden');renderList();}
+  try{
+    var upd2={status:status};if(status==='paid'){upd2.paidDate=today();inv.paidDate=upd2.paidDate;}
+    if(inv._docId)await DB.collection('invoices').doc(inv._docId).update(upd2);
+    inv.status=status;showToast('상태 변경 완료 ✓');$('status-modal').classList.add('hidden');renderList();
+    if(viewingId===statusEditId&&!$('inv-view-modal').classList.contains('hidden')){
+      inv._t=calcTotals(inv);
+      var body=$('inv-view-body');if(body)body.innerHTML=buildInvHTML(inv);
+    }
+  }
   catch(e){showToast('실패: '+e.message);}finally{hideLoad();}
 }
 window.openStatusModal=openStatusModal;window.applyStatus=applyStatus;
