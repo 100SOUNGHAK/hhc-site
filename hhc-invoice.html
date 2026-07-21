@@ -1251,7 +1251,7 @@ function ensureIvxStyle(){
 }
 function ivxEsc(s){return String(s==null?'':s).replace(/[&<>]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[m];});}
 
-function buildInvHTML(inv){
+function buildInvHTML(inv,custView){
   ensureIvxStyle();
   var t=inv._t||calcTotals(inv);
   var cur=inv.currency||'MYR';
@@ -1304,7 +1304,7 @@ function buildInvHTML(inv){
     '</div></div>'+
     '<div class="goldline"></div>'+
     '<div class="parties">'+
-      '<div class="party"><div class="party-lbl">Bill To · 고객</div><div class="party-name">'+ivxEsc(cust.name||'—')+'</div><div class="party-line">'+[ivxEsc(cust.phone||''),ivxEsc(cust.addr||'')].filter(Boolean).join(' · ')+'</div>'+(cust.member?'<span class="member-chip">👑 '+ivxEsc(cust.member)+'</span>':'')+'</div>'+
+      '<div class="party"><div class="party-lbl">Bill To · 고객</div><div class="party-name">'+ivxEsc(cust.name||'—')+'</div><div class="party-line">'+[ivxEsc((custView&&cust.phone)?'****':(cust.phone||'')),ivxEsc(cust.addr||'')].filter(Boolean).join(' · ')+'</div>'+(cust.member?'<span class="member-chip">👑 '+ivxEsc(cust.member)+'</span>':'')+'</div>'+
       '<div class="party"><div class="party-lbl">From · 발행</div><div class="party-name">'+ivxEsc(iss.name||'')+'</div><div class="party-line">'+[ivxEsc(iss.phone||''),ivxEsc(iss.addr||''),(iss.biz?'Reg. No. '+ivxEsc(iss.biz):'')].filter(Boolean).join(' · ')+'</div></div>'+
     '</div>'+
     '<div class="items"><table><thead><tr><th>항목 · Description</th><th class="c">수량 · Qty</th><th class="r">단가 · Unit Price</th>'+(hasDisc?'<th class="r">할인 · Discount</th>':'')+'<th class="r">금액 · Amount</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
@@ -1382,7 +1382,7 @@ var INV_LITE_CSS='\
 ';
 
 // ── 관리자 전용 · 간결 인보이스 HTML (흑백 1페이지) ──
-function buildInvLiteHTML(inv){
+function buildInvLiteHTML(inv,custView){
   var t=inv._t||calcTotals(inv);
   var cur=inv.currency||'MYR';
   function fa(n){return fmtAmt(n,cur);}
@@ -1410,7 +1410,7 @@ function buildInvLiteHTML(inv){
   if(t.minC>0)charge+='<div class="l-srow"><span>최소 청구 · Min.</span><span>+ '+fa(t.minC)+'</span></div>';
   var payText=inv.bankInfo?[inv.bankInfo.bankName,inv.bankInfo.accNum,inv.bankInfo.accName].filter(Boolean).join('\n'):('문의 · Contact: '+(iss.phone||''));
   var noteText=(inv.notes||inv.terms)?((inv.notes?inv.notes+'\n':'')+(inv.terms||'')):'30일내 무상점검 (회원 무제한) · Free inspection within 30 days';
-  var cInfo=[cust.phone,cust.addr].filter(Boolean).map(function(x){return ivxEsc(x);}).join('<br>')+(cust.member?'<br>👑 '+ivxEsc(cust.member):'');
+  var cInfo=[(custView&&cust.phone)?'****':cust.phone,cust.addr].filter(Boolean).map(function(x){return ivxEsc(x);}).join('<br>')+(cust.member?'<br>👑 '+ivxEsc(cust.member):'');
   var iInfo=[iss.phone,iss.addr,(iss.biz?'Reg. '+iss.biz:'')].filter(Boolean).map(function(x){return ivxEsc(x);}).join('<br>');
   var html='<div class="l-head"><div><div class="l-co">Happy Home Care</div><div class="l-sub">'+ivxEsc(iss.name||'HAPPY WORKS SERVICES SDN. BHD.')+'</div></div>'+
     '<div><div class="l-word">INVOICE</div><div class="l-word-sub">'+(inv.status==='paid'?'Receipt · 영수증':'청구서')+'</div></div></div>';
@@ -1435,7 +1435,7 @@ function buildInvLiteHTML(inv){
 
 function printInv(inv,lite){
   inv._t=calcTotals(inv);
-  var html=lite?buildInvLiteHTML(inv):buildInvHTML(inv);
+  var html=lite?buildInvLiteHTML(inv,true):buildInvHTML(inv,true);
   var styleCss=lite?INV_LITE_CSS:IVX_CSS;
   var wrapClass=lite?'ivl':'';
   var w=window.open('','_blank','width=820,height=1000');
@@ -2538,7 +2538,7 @@ async function generateAndSharePDF(shareType){
     // 렌더링
     var container=document.createElement('div');
     container.style.cssText='position:fixed;left:-9999px;top:0;width:794px;background:#fff;padding:40px;font-family:-apple-system,sans-serif;font-size:12px;color:#0f172a;z-index:-1';
-    container.innerHTML=buildInvHTML(inv);
+    container.innerHTML=buildInvHTML(inv,true);
     document.body.appendChild(container);
     var canvas=await window.html2canvas(container,{scale:2,useCORS:true,backgroundColor:'#ffffff',width:794,logging:false});
     document.body.removeChild(container);
@@ -2838,7 +2838,7 @@ async function runInvoiceView(vid,lang){
     if(!inv){host.innerHTML='<div style="padding:70px 20px;text-align:center;color:#D6433F;font-size:15px">인보이스를 찾을 수 없습니다.<br>Invoice not found.</div>';return;}
     inv._t=calcTotals(inv);
     var noEl=document.getElementById('ivx-no');if(noEl)noEl.textContent=inv.id||'';
-    host.innerHTML=buildInvHTML(inv);
+    host.innerHTML=buildInvHTML(inv,true);
   }catch(e){
     console.error(e);
     host.innerHTML='<div style="padding:70px 20px;text-align:center;color:#D6433F;font-size:14px">불러오기 실패: '+ivxEsc(e.message||'')+'</div>';
