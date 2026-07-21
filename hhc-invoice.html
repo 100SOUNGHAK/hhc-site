@@ -2598,23 +2598,28 @@ async function generateAndSharePDF(shareType){
       if(num){window.open('https://wa.me/'+num+'?text='+encodeURIComponent(pdfMsg),'_blank');}
       else{cpTxt(pdfMsg);showToast('번호 없음 — 메시지 복사됨');}
     }else if(shareType==='kakao'){
-      // 모바일: OS 공유시트를 통해 PDF 파일을 카카오톡으로 직접 전송 (파일+메시지 한번에)
+      // 카카오톡은 OS 공유시트로 파일+텍스트를 함께 보내도 텍스트를 무시하고 파일만 받는 경우가 많음
+      // (카카오톡 자체 한계 — devtalk.kakao.com 개발자 포럼에서도 동일하게 확인됨).
+      // 그래서 안내 메시지는 공유 시도 전에 미리 클립보드에 복사해두고, 파일은 공유 시트로 보낸다.
+      // 카카오톡에서 PDF 전송 후 붙여넣기만 하면 안내 메시지도 이어서 보낼 수 있다.
+      cpTxt(pdfMsg);
       var pdfFile=null;
       try{pdfFile=new File([pdfBlob],fileName,{type:'application/pdf'});}catch(e){}
       if(pdfFile&&navigator.canShare&&navigator.canShare({files:[pdfFile]})){
         try{
           await navigator.share({files:[pdfFile],text:pdfMsg,title:'Invoice '+inv.id});
-          showToast('✓ 공유 시트로 전송됨 (카카오톡 선택)',3000);
+          showToast('✓ PDF 전송됨 — 안내 메시지도 복사되어 있으니 대화창에 붙여넣기 해주세요',4500);
         }catch(shareErr){
           if(shareErr&&shareErr.name==='AbortError'){
-            // 사용자가 공유 취소 — 아무 동작 안 함
+            // 사용자가 공유 취소 — 메시지는 이미 복사되어 있음
+            showToast('✓ 안내 메시지는 복사되어 있습니다',3000);
           }else{
-            cpTxt(pdfMsg);showToast('✓ 카카오톡 메시지 복사됨 (PDF 링크 포함)',3000);
+            showToast('✓ 카카오톡 메시지 복사됨 (PDF 링크 포함)',3000);
           }
         }
       }else{
         // 데스크톱 등 파일 공유 미지원 브라우저 — 기존 방식(메시지 복사)으로 대체
-        cpTxt(pdfMsg);showToast('✓ 카카오톡 메시지 복사됨 (PDF 링크 포함) — PC에서는 카카오톡에 붙여넣기 해주세요',4000);
+        showToast('✓ 카카오톡 메시지 복사됨 (PDF 링크 포함) — PC에서는 카카오톡에 붙여넣기 해주세요',4000);
       }
     }else if(shareType==='email'){
       var to=val('send-email');if(!to){showToast('이메일 주소를 입력해주세요.');return;}
