@@ -1464,7 +1464,7 @@ window.saveEditList=async function(id){
   if(!name||!phone){showToast('콘도명과 연락처는 필수입니다');return;}
   showLoading(true);
   try{
-    await updateDoc(doc(db,'bookings',id),{
+    const updated={
       customer_name:name,
       customer_phone:phone,
       customer_address:addr,
@@ -1474,7 +1474,14 @@ window.saveEditList=async function(id){
       booking_time:btime,
       booking_items:bitems,
       booking_memo:bmemo
-    });
+    };
+    await updateDoc(doc(db,'bookings',id),updated);
+    // 이미 확정된 예약이면 일정 미러도 함께 갱신 — 그렇지 않으면 예약일 변경 시
+    // 캘린더(새 예약 등록/일정 탭)에 변경 전 날짜의 일정이 그대로 남아 중복 표시된다.
+    const existing=allBookings.find(x=>x.__id===id);
+    if(existing&&existing.status==='confirmed'){
+      await syncBookingMirror(id,updated);
+    }
     editingListId=null;
     showLoading(false);
     showToast('✓ 저장됨');
@@ -1824,6 +1831,32 @@ async function removeBookingMirror(bookingId){
   }catch(e){console.warn('미러 일정 정리 실패:',e&&e.message);}
 }
 
+// 확정된 예약의 일정 미러(schedules 컬렉션)를 최신 예약일/시간/품목 기준으로 재생성.
+// 예약일이 변경된 경우 기존(변경 전) 날짜에 남아있던 미러를 지우고 새 날짜에 다시 만들어,
+// 캘린더에 수정 전·후 일정이 동시에 남지 않도록 한다.
+async function syncBookingMirror(id,b){
+  await removeBookingMirror(id);
+  if(!b.booking_date)return;
+  const schData={
+    date:b.booking_date,
+    title:(b.customer_name||'고객')+(b.booking_items?' — '+b.booking_items:''),
+    time_s:b.booking_time?b.booking_time.replace(/[^0-9:]/g,'').slice(0,5):'',
+    time_e:'',
+    type:'booking',
+    customer_name:b.customer_name||'',
+    items:b.booking_items||'',
+    memo:[
+      b.customer_address?'📍 '+b.customer_address:'',
+      b.customer_phone?'📞 '+b.customer_phone:'',
+      b.booking_items?'🔧 '+b.booking_items:'',
+      b.booking_memo?'📝 '+b.booking_memo:''
+    ].filter(Boolean).join(' · '),
+    booking_id:id,
+    created_at:new Date().toISOString()
+  };
+  await addDoc(collection(db,'schedules'),schData);
+}
+
 window.confirmBooking=async function(id){
   const b=allBookings.find(x=>x.__id===id);
   if(!b)return;
@@ -1831,27 +1864,7 @@ window.confirmBooking=async function(id){
   try{
     await updateDoc(doc(db,'bookings',id),{...b,status:'confirmed'});
     // schedules 컬렉션에 자동 등록 (기존 미러 제거 후 1건만 유지)
-    if(b.booking_date){
-      await removeBookingMirror(id);
-      const schData={
-        date:b.booking_date,
-        title:(b.customer_name||'고객')+(b.booking_items?' — '+b.booking_items:''),
-        time_s:b.booking_time?b.booking_time.replace(/[^0-9:]/g,'').slice(0,5):'',
-        time_e:'',
-        type:'booking',
-        customer_name:b.customer_name||'',
-        items:b.booking_items||'',
-        memo:[
-          b.customer_address?'📍 '+b.customer_address:'',
-          b.customer_phone?'📞 '+b.customer_phone:'',
-          b.booking_items?'🔧 '+b.booking_items:'',
-          b.booking_memo?'📝 '+b.booking_memo:''
-        ].filter(Boolean).join(' · '),
-        booking_id:id,
-        created_at:new Date().toISOString()
-      };
-      await addDoc(collection(db,'schedules'),schData);
-    }
+    await syncBookingMirror(id,b);
     showLoading(false);
     showToast('✓ 예약 확정 완료');
     setTimeout(()=>showConfirmMsgModal(b),600);
