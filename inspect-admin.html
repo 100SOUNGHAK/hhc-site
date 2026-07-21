@@ -2171,13 +2171,24 @@ function renderList(items){
 // ═══════════════════════════════════════════
 // 발송
 // ═══════════════════════════════════════════
+window.REPORT_TYPE_LABEL={
+  install:{ko:'에어컨 설치보고서',en:'AC Installation Report'},
+  washer:{ko:'세탁기/건조기 점검보고서',en:'Washer/Dryer Inspection Report'},
+  dispatch:{ko:'에어컨 출장점검보고서',en:'AC On-site Inspection Report'},
+  inspect:{ko:'에어컨 기술점검보고서',en:'AC Technical Inspection Report'}
+};
+var REPORT_TYPE_LABEL=window.REPORT_TYPE_LABEL;
 function updateSendMsg(){
   var l=document.querySelector('input[name="slang"]:checked');
   var lang=l?l.value:'ko';
   var link=lang==='en'?(shortUrls.en||shortUrls.ko):shortUrls.ko;
   gid('sm-link').textContent=link;
-  var ko='안녕하세요 😊\n\nHappy Home Care 에어컨 기술점검보고서를 확인해 주세요.\n\n📋 '+link+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
-  var en='Hello 😊\n\nPlease check your Happy Home Care AC Inspection Report.\n\n📋 '+link+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
+  var ctx=window._sendCtx||{};
+  var name=ctx.client||(lang==='en'?'Customer':'고객');
+  var typeLbl=(REPORT_TYPE_LABEL[ctx.type]||REPORT_TYPE_LABEL.inspect)[lang];
+  var div='────────────────';
+  var ko='안녕하세요, '+name+'님 😊\n\n📋 '+typeLbl+'가 준비되었습니다 ✅\n'+div+'\n아래 링크에서 사진과 점검 내용을 확인하실 수 있습니다.\n'+div+'\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n🔗 보고서 확인:\n'+link;
+  var en='Dear '+name+' 😊\n\n📋 Your '+typeLbl+' is ready ✅\n'+div+'\nYou can view the photos and inspection details via the link below.\n'+div+'\n\nThank you 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n🔗 View Report:\n'+link;
   gid('sm-msg').value=lang==='en'?en:ko;
 }
 function openPreview(){var l=gid('sm-link').textContent;if(l)window.open(l,'_blank');}
@@ -2524,6 +2535,7 @@ window.saveReport=async function(){
     toast(wasEdit?'✓ 수정 저장 완료':'✓ 저장 완료');
     currentEditId=null;
     document.getElementById('sm-link').textContent=shortUrls.ko;
+    window._sendCtx={client:data.client||'',type:(isInstall?'install':(isWasher?'washer':(reportType==='dispatch'?'dispatch':'inspect')))};
     updateSendMsg();
     document.getElementById('send-modal').style.display='flex';
   }catch(e){console.error(e);hideSaveProg();alert('저장 실패: '+e.message);btn.disabled=false;btn.textContent=btnLabel;}
@@ -2540,22 +2552,26 @@ window.loadList=async function(){
 };
 
 // ── 목록 액션
+function buildListSendMsg(r,url){
+  var type=(r&&r.type==='install')?'install':((r&&r.type==='washer')?'washer':((r&&r.type==='dispatch')?'dispatch':'inspect'));
+  var RTL=window.REPORT_TYPE_LABEL||{};
+  var typeLbl=(RTL[type]||RTL.inspect||{ko:'점검보고서'}).ko;
+  var name=(r&&r.client)||'고객';
+  var div='────────────────';
+  return '안녕하세요, '+name+'님 😊\n\n📋 '+typeLbl+'가 준비되었습니다 ✅\n'+div+'\n아래 링크에서 사진과 점검 내용을 확인하실 수 있습니다.\n'+div+'\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n🔗 보고서 확인:\n'+url;
+}
 window.sendFromList=async function(id){
   var r=allReports.find(function(x){return x._id===id;});
-  var isInstall=r&&r.type==='install';
-  var isWasher=r&&r.type==='washer';
-  var pageFile=isInstall?'install.html':(isWasher?'washer.html':'inspect.html');
+  var pageFile=(r&&r.type==='install')?'install.html':((r&&r.type==='washer')?'washer.html':'inspect.html');
   var url=await shorten('https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=ko');
-  var msg='안녕하세요 😊\n\nHappy Home Care '+(isInstall?'에어컨 설치':(isWasher?'세탁기/건조기 점검':(r&&r.type==='dispatch'?'에어컨 출장점검':'에어컨 기술점검')))+'보고서를 확인해 주세요.\n\n📋 '+url+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
+  var msg=buildListSendMsg(r,url);
   window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
 };
 window.kakaoFromList=async function(id){
   var r=allReports.find(function(x){return x._id===id;});
-  var isInstall=r&&r.type==='install';
-  var isWasher=r&&r.type==='washer';
-  var pageFile=isInstall?'install.html':(isWasher?'washer.html':'inspect.html');
+  var pageFile=(r&&r.type==='install')?'install.html':((r&&r.type==='washer')?'washer.html':'inspect.html');
   var url=await shorten('https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=ko');
-  var msg='안녕하세요 😊\n\nHappy Home Care '+(isInstall?'에어컨 설치':(isWasher?'세탁기/건조기 점검':(r&&r.type==='dispatch'?'에어컨 출장점검':'에어컨 기술점검')))+'보고서를 확인해 주세요.\n\n📋 '+url+'\n\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774';
+  var msg=buildListSendMsg(r,url);
   navigator.clipboard.writeText(msg).then(function(){toast('✓ 카카오 메시지 복사됨');});
 };
 window.editReport=async function(id){
