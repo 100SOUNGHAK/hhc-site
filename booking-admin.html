@@ -193,6 +193,7 @@ select.field-input{cursor:pointer}
 .ci-status.pending{background:var(--amber-bg);color:var(--amber)}
 .ci-status.booked{background:var(--green-bg);color:var(--green)}
 .ci-status.confirmed{background:var(--il);color:var(--indigo)}
+.ci-status.done{background:var(--surface2);color:var(--text2)}
 .ci-dates{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:9px}
 .ci-date-tag{padding:3px 9px;background:var(--teal-lt);border-radius:20px;font-size:11px;color:var(--teal-dk);font-weight:700}
 .ci-booking{background:var(--surface);border-radius:var(--radius-sm);padding:11px 13px;font-size:12.5px;color:var(--text2);line-height:1.75;margin-bottom:9px;border-left:3px solid var(--teal)}
@@ -607,10 +608,11 @@ select.field-input{cursor:pointer}
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3)"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     <input id="list-search" placeholder="콘도명, 연락처 검색..." oninput="renderList()" style="width:100%;padding:9px 12px 9px 34px;border:1px solid var(--border);border-radius:10px;font-size:12.5px;font-family:inherit">
   </div>
-  <div style="display:flex;gap:6px;margin-bottom:10px" id="list-filter-tabs">
+  <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap" id="list-filter-tabs">
     <button type="button" class="lf-tab on" data-f="all" onclick="setListFilter('all')">전체</button>
     <button type="button" class="lf-tab" data-f="waiting" onclick="setListFilter('waiting')">대기중</button>
     <button type="button" class="lf-tab" data-f="confirmed" onclick="setListFilter('confirmed')">확정완료</button>
+    <button type="button" class="lf-tab" data-f="done" onclick="setListFilter('done')">✓ 작업완료</button>
   </div>
   <div class="customer-list" id="customer-list">
     <div class="empty-st"><div class="empty-title">예약 내역이 없습니다</div><div class="empty-desc">새 예약 등록 탭에서 고객을 등록하세요</div></div>
@@ -833,6 +835,8 @@ function applyTransferData(){
     if(d.lang==='en'&&langEn){langEn.checked=true;if(langKo)langKo.checked=false;}
     window._transferFromRequestId=d.fromRequest||null;
     localStorage.removeItem('hhc_transfer_booking');
+    // 새 예약 등록 화면으로 바로 이동
+    switchTab('new');
     // 안내 토스트
     setTimeout(function(){
       const t=document.createElement('div');
@@ -1283,13 +1287,16 @@ window.setListFilter=function(f){
   renderList();
 };
 
+// 확정완료 건 중 예약일이 오늘보다 과거면 "작업완료"로 구분
+function isDoneBooking(b){return b.status==='confirmed'&&!!b.booking_date&&b.booking_date<today();}
 window.renderList=renderList;
 function renderList(){
   const el=document.getElementById('customer-list');
   const q=(document.getElementById('list-search')?.value||'').toLowerCase();
   const filtered=allBookings.filter(b=>{
     const mq=!q||(b.customer_name||'').toLowerCase().includes(q)||(b.customer_phone||'').toLowerCase().includes(q);
-    const mf=listFilter==='all'||(listFilter==='waiting'&&b.status!=='confirmed')||(listFilter==='confirmed'&&b.status==='confirmed');
+    const done=isDoneBooking(b);
+    const mf=listFilter==='all'||(listFilter==='waiting'&&b.status!=='confirmed')||(listFilter==='confirmed'&&b.status==='confirmed'&&!done)||(listFilter==='done'&&done);
     return mq&&mf;
   });
   if(!filtered.length){
@@ -1298,8 +1305,9 @@ function renderList(){
   }
   el.innerHTML=filtered.map(b=>{
     const dates=b.schedule_dates?JSON.parse(b.schedule_dates):[];
-    const statusLabel={'waiting':'대기중','booked':'신청완료','confirmed':'확정완료'}[b.status]||b.status;
-    const statusCls={'waiting':'pending','booked':'pending','confirmed':'confirmed'}[b.status]||'pending';
+    const done=isDoneBooking(b);
+    const statusLabel=done?'작업완료':({'waiting':'대기중','booked':'신청완료','confirmed':'확정완료'}[b.status]||b.status);
+    const statusCls=done?'done':({'waiting':'pending','booked':'pending','confirmed':'confirmed'}[b.status]||'pending');
     const lang=b.customer_lang||'ko';
     const langBadge=lang==='en'?'<span style="padding:2px 7px;background:#DBEAFE;color:#1D4ED8;border-radius:20px;font-size:10px;font-weight:600;margin-left:5px">EN</span>':'<span style="padding:2px 7px;background:#EDE8F5;color:#3D52A0;border-radius:20px;font-size:10px;font-weight:600;margin-left:5px">KO</span>';
     const dateTags=dates.map(d=>`<span class="ci-date-tag">${d}</span>`).join('');
