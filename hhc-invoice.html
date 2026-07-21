@@ -2559,9 +2559,34 @@ async function generateAndSharePDF(shareType){
       pdf.addImage(imgData,'JPEG',xOff,0,fitW,fitH);
     }
     var fileName='Invoice_'+inv.id+'.pdf';
+    var pdfBlob=pdf.output('blob');
+
+    // ── 카카오톡 공유는 여기서 즉시 시도한다 ──
+    // navigator.share()는 브라우저마다 "버튼 클릭 후 짧은 시간(user activation)" 안에만 허용되는 경우가 많다.
+    // Storage/Drive 업로드, 링크 단축처럼 오래 걸리는 작업 이후에 호출하면 이 시간이 만료되어
+    // 공유 시트가 뜨지 않고 실패 처리(= 메시지만 복사됨)되는 경우가 자주 발생했다.
+    // 그래서 PDF 파일이 만들어지자마자(가장 빠른 시점) 파일 공유부터 먼저 시도하고,
+    // 안내 메시지(링크 포함)는 뒤이어 준비되는 대로 별도로 클립보드에 복사해 붙여넣기로 보완한다.
+    // (카카오톡은 파일+텍스트를 함께 보내도 텍스트를 무시하는 경우가 많아 어차피 분리 전달이 필요함)
+    var kakaoShared=false;
+    if(shareType==='kakao'){
+      var pdfFileEarly=null;
+      try{pdfFileEarly=new File([pdfBlob],fileName,{type:'application/pdf'});}catch(e){}
+      if(pdfFileEarly&&navigator.canShare&&navigator.canShare({files:[pdfFileEarly]})){
+        try{
+          await navigator.share({files:[pdfFileEarly],title:'Invoice '+inv.id});
+          kakaoShared=true;
+        }catch(shareErr){
+          if(!(shareErr&&shareErr.name==='AbortError')){
+            console.warn('카카오 공유 실패:',shareErr);
+          }
+          // 실패/취소 — 아래에서 메시지 복사로 안내 (PDF는 링크로 대체 전달)
+        }
+      }
+    }
+
     // Storage 업로드
     showLoad('업로드 중...');
-    var pdfBlob=pdf.output('blob');
     var storageRef=ST.ref('invoices/'+fileName);
     var snapshot=await storageRef.put(pdfBlob,{contentType:'application/pdf'});
     var downloadURL=await snapshot.ref.getDownloadURL();
@@ -2598,28 +2623,12 @@ async function generateAndSharePDF(shareType){
       if(num){window.open('https://wa.me/'+num+'?text='+encodeURIComponent(pdfMsg),'_blank');}
       else{cpTxt(pdfMsg);showToast('번호 없음 — 메시지 복사됨');}
     }else if(shareType==='kakao'){
-      // 카카오톡은 OS 공유시트로 파일+텍스트를 함께 보내도 텍스트를 무시하고 파일만 받는 경우가 많음
-      // (카카오톡 자체 한계 — devtalk.kakao.com 개발자 포럼에서도 동일하게 확인됨).
-      // 그래서 안내 메시지는 공유 시도 전에 미리 클립보드에 복사해두고, 파일은 공유 시트로 보낸다.
-      // 카카오톡에서 PDF 전송 후 붙여넣기만 하면 안내 메시지도 이어서 보낼 수 있다.
+      // PDF 파일은 위에서 이미 공유 시도를 마쳤으므로, 여기서는 안내 메시지를 클립보드에 복사만 한다.
       cpTxt(pdfMsg);
-      var pdfFile=null;
-      try{pdfFile=new File([pdfBlob],fileName,{type:'application/pdf'});}catch(e){}
-      if(pdfFile&&navigator.canShare&&navigator.canShare({files:[pdfFile]})){
-        try{
-          await navigator.share({files:[pdfFile],text:pdfMsg,title:'Invoice '+inv.id});
-          showToast('✓ PDF 전송됨 — 안내 메시지도 복사되어 있으니 대화창에 붙여넣기 해주세요',4500);
-        }catch(shareErr){
-          if(shareErr&&shareErr.name==='AbortError'){
-            // 사용자가 공유 취소 — 메시지는 이미 복사되어 있음
-            showToast('✓ 안내 메시지는 복사되어 있습니다',3000);
-          }else{
-            showToast('✓ 카카오톡 메시지 복사됨 (PDF 링크 포함)',3000);
-          }
-        }
+      if(kakaoShared){
+        showToast('✓ PDF 전송됨 — 안내 메시지도 복사되어 있으니 대화창에 붙여넣기 해주세요',4500);
       }else{
-        // 데스크톱 등 파일 공유 미지원 브라우저 — 기존 방식(메시지 복사)으로 대체
-        showToast('✓ 카카오톡 메시지 복사됨 (PDF 링크 포함) — PC에서는 카카오톡에 붙여넣기 해주세요',4000);
+        showToast('✓ 카카오톡 메시지 복사됨 (PDF 링크 포함) — 대화창에 붙여넣기 해주세요',4000);
       }
     }else if(shareType==='email'){
       var to=val('send-email');if(!to){showToast('이메일 주소를 입력해주세요.');return;}
