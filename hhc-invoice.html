@@ -1467,7 +1467,7 @@ var msgTemplates={
     ko:function(inv,lnk){
       var name=inv.customer&&inv.customer.name||'고객';
       var bankLineKo=inv.bankInfo&&inv.bankInfo.accNum?'\n🏦 결제계좌: '+inv.bankInfo.bankName+' '+inv.bankInfo.accNum+'\n    '+inv.bankInfo.accName:(inv.bankInfo&&!inv.bankInfo.accNum?'\n💵 결제방법: 현금 결제':'');
-      return '안녕하세요, '+name+'님 👋\n\nHappy Home Care 인보이스입니다.\n\n📋 인보이스번호: '+inv.id+'\n💰 청구금액: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 만기일: '+fmtDate(inv.due)+bankLineKo+'\n\n🔗 인보이스 확인:\n'+lnk+'\n\n감사합니다 🙏\nHappy Home Care';
+      return '안녕하세요, '+name+' 님 👋\n\nHappy Home Care 인보이스입니다.\n\n📋 인보이스번호: '+inv.id+'\n💰 청구금액: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 만기일: '+fmtDate(inv.due)+bankLineKo+'\n\n🔗 인보이스 확인:\n'+lnk+'\n\n감사합니다 🙏\nHappy Home Care';
     },
     en:function(inv,lnk){
       var name=inv.customer&&inv.customer.name||'Customer';
@@ -1484,22 +1484,22 @@ var msgTemplates={
   paid:{
     ko:function(inv,lnk){
       var name=inv.customer&&inv.customer.name||'고객';
-      return '안녕하세요, '+name+'님 👋\n\n결제가 확인되었습니다. 감사합니다! ✅\n\n📋 인보이스번호: '+inv.id+'\n💰 결제금액: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 결제일: '+fmtDate(inv.date)+'\n\n🔗 인보이스 확인:\n'+lnk+'\n\n항상 이용해 주셔서 감사합니다 🙏\nHappy Home Care';
+      return '안녕하세요, '+name+' 님 👋\n\n결제가 확인되었습니다. 감사합니다! ✅\n\n📋 인보이스번호: '+inv.id+'\n💰 결제금액: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 결제일: '+fmtDate(inv.paidDate||inv.date||today())+'\n\n항상 이용해 주셔서 감사합니다 🙏\nHappy Home Care\n\n🔗 인보이스 확인:\n'+lnk;
     },
     en:function(inv,lnk){
       var name=inv.customer&&inv.customer.name||'Customer';
-      return 'Dear '+name+' 👋\n\nYour payment has been received. Thank you! ✅\n\n📋 Invoice No: '+inv.id+'\n💰 Amount Paid: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Payment Date: '+inv.date+'\n\n🔗 View Invoice:\n'+lnk+'\n\nThank you for choosing Happy Home Care 🙏';
+      return 'Dear '+name+' 👋\n\nYour payment has been received. Thank you! ✅\n\n📋 Invoice No: '+inv.id+'\n💰 Amount Paid: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Payment Date: '+(inv.paidDate||inv.date||today())+'\n\nThank you for choosing Happy Home Care 🙏\n\n🔗 View Invoice:\n'+lnk;
     },
     ms:function(inv,lnk){
       var name=inv.customer&&inv.customer.name||'Pelanggan';
-      return 'Salam '+name+' 👋\n\nPembayaran anda telah diterima. Terima kasih! ✅\n\n📋 No. Invois: '+inv.id+'\n💰 Jumlah Dibayar: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Tarikh Bayaran: '+inv.date+'\n\n🔗 Lihat Invois:\n'+lnk+'\n\nTerima kasih kerana memilih Happy Home Care 🙏';
+      return 'Salam '+name+' 👋\n\nPembayaran anda telah diterima. Terima kasih! ✅\n\n📋 No. Invois: '+inv.id+'\n💰 Jumlah Dibayar: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Tarikh Bayaran: '+(inv.paidDate||inv.date||today())+'\n\nTerima kasih kerana memilih Happy Home Care 🙏\n\n🔗 Lihat Invois:\n'+lnk;
     }
   },
   // ── 연체 (overdue) ──
   overdue:{
     ko:function(inv,lnk){
       var name=inv.customer&&inv.customer.name||'고객';
-      return '안녕하세요, '+name+'님 👋\n\n인보이스 만기일이 지났습니다. 확인 부탁드립니다. ⚠️\n\n📋 인보이스번호: '+inv.id+'\n💰 미결제금액: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 만기일: '+fmtDate(inv.due)+'\n\n🔗 인보이스 확인:\n'+lnk+'\n\n문의사항은 언제든지 연락주세요 🙏\nHappy Home Care';
+      return '안녕하세요, '+name+' 님 👋\n\n인보이스 만기일이 지났습니다. 확인 부탁드립니다. ⚠️\n\n📋 인보이스번호: '+inv.id+'\n💰 미결제금액: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 만기일: '+fmtDate(inv.due)+'\n\n🔗 인보이스 확인:\n'+lnk+'\n\n문의사항은 언제든지 연락주세요 🙏\nHappy Home Care';
     },
     en:function(inv,lnk){
       var name=inv.customer&&inv.customer.name||'Customer';
@@ -1559,7 +1559,12 @@ async function buildMsgAsync(inv){
   var status=inv.status||val('inv-status')||'billing';
   var statusTpls=msgTemplates[status]||msgTemplates.billing;
   var tpl=statusTpls[msgLang]||statusTpls.ko;
-  return tpl(inv,shortLnk);
+  var msg=tpl(inv,shortLnk);
+  // 결제완료 + 저장된 PDF가 있으면 다운로드 링크 자동 포함
+  if(status==='paid'&&inv.pdfUrl){
+    try{var pdfShort=await shorten(inv.pdfUrl);msg+='\n\n📥 PDF 다운로드:\n'+pdfShort;}catch(e){}
+  }
+  return msg;
 }
 function buildMsg(inv){
   // 동기 버전 (캐시된 경우 단축 URL 사용)
@@ -1721,7 +1726,9 @@ async function quickStatusChange(id, newStatus){
   var inv=invoices.find(function(i){return i.id===id;});
   if(!inv||!inv._docId||!DB)return;
   try{
-    await DB.collection('invoices').doc(inv._docId).update({status:newStatus});
+    var upd={status:newStatus};
+    if(newStatus==='paid'){upd.paidDate=today();inv.paidDate=upd.paidDate;}
+    await DB.collection('invoices').doc(inv._docId).update(upd);
     inv.status=newStatus;
     renderList();
     showToast('✓ 상태 변경: '+(newStatus==='paid'?'결제완료':newStatus==='overdue'?'연체':'청구중'));
@@ -1742,7 +1749,7 @@ async function applyStatus(status){
   if(!statusEditId||!DB)return;
   var inv=invoices.find(function(i){return i.id===statusEditId;});if(!inv)return;
   showLoad('상태 변경 중...');
-  try{if(inv._docId)await DB.collection('invoices').doc(inv._docId).update({status:status});inv.status=status;showToast('상태 변경 완료 ✓');$('status-modal').classList.add('hidden');renderList();}
+  try{var upd2={status:status};if(status==='paid'){upd2.paidDate=today();inv.paidDate=upd2.paidDate;}if(inv._docId)await DB.collection('invoices').doc(inv._docId).update(upd2);inv.status=status;showToast('상태 변경 완료 ✓');$('status-modal').classList.add('hidden');renderList();}
   catch(e){showToast('실패: '+e.message);}finally{hideLoad();}
 }
 window.openStatusModal=openStatusModal;window.applyStatus=applyStatus;
@@ -2535,7 +2542,7 @@ async function generateAndSharePDF(shareType){
     var baseMsg=tpl(inv,shortWeb);
     // Firebase 링크 + Google Drive 링크 둘 다 포함
     var pdfMsg=baseMsg+
-      (shortDrive?'\n\n📄 PDF 보기 (카카오톡):\n'+shortDrive:'')+
+      (shortDrive?'\n\n📄 PDF 미리보기 :\n'+shortDrive:'')+
       '\n\n📥 PDF 다운로드:\n'+shortDL;
 
     if(shareType==='wa'){
