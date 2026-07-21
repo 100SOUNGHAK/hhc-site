@@ -224,6 +224,14 @@ select.field-input{cursor:pointer}
 .modal-box{background:var(--white);border-radius:var(--radius-xl);padding:26px;max-width:360px;width:100%;box-shadow:var(--shadow-lg)}
 .modal-title{font-size:17px;font-weight:800;color:var(--text);margin-bottom:6px;letter-spacing:-.02em}
 .modal-msg{font-size:13.5px;color:var(--text2);line-height:1.6;margin-bottom:20px;white-space:pre-line}
+.dsi-list{display:flex;flex-direction:column;gap:2px;max-height:52vh;overflow-y:auto;margin:-4px -4px 16px;padding:4px}
+.dsi-card{padding:12px 6px;border-bottom:1px solid var(--border)}
+.dsi-card:last-child{border-bottom:none}
+.dsi-top{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.dsi-time{font-size:17px;font-weight:800;color:var(--teal-dk);letter-spacing:-.01em}
+.dsi-name{font-size:16px;font-weight:700;color:var(--text)}
+.dsi-status{font-size:11px;font-weight:600;color:var(--text3);background:var(--surface2);padding:2px 7px;border-radius:20px;vertical-align:middle}
+.dsi-items{margin-top:5px;font-size:12.5px;color:var(--text2);line-height:1.5}
 .modal-btns{display:flex;gap:8px;justify-content:flex-end}
 .modal-cancel{padding:10px 17px;border:1.5px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--text2);font-size:13.5px;font-weight:600;cursor:pointer}
 .modal-ok{padding:10px 17px;border:none;border-radius:var(--radius-sm);background:var(--navy);color:#fff;font-size:13.5px;font-weight:700;cursor:pointer}
@@ -972,18 +980,27 @@ function renderCalendar(){
   }
 }
 
+// "09:00 전후|Around 09:00" 형태(한/영 병기 저장값)에서 한글 표기만 추출. 이미 단일 표기면 그대로 반환.
+function cleanTime(t){
+  if(!t)return'';
+  const s=String(t);
+  return s.indexOf('|')!==-1?(s.split('|')[0]||s):s;
+}
+
 function getDayBusyItems(dateStr){
   const daySchedules=schedules[dateStr]||[];
   const mirroredBookingIds=daySchedules.map(s=>s.booking_id).filter(Boolean);
   const fromSchedules=daySchedules.map(s=>({
-    time:s.time_s?(s.time_e?`${s.time_s}-${s.time_e}`:s.time_s):'시간 미정',
-    label:s.title||'—',
-    sub:s.memo?s.memo.split('\n')[0]:''
+    time:cleanTime(s.time_s?(s.time_e?`${s.time_s}-${s.time_e}`:s.time_s):'')||'시간 미정',
+    name:(s.customer_name!=null&&s.customer_name!==''?s.customer_name:(s.title||'—')),
+    items:s.items||'',
+    status:''
   }));
   const fromBookings=allBookings.filter(b=>b.booking_date===dateStr&&!mirroredBookingIds.includes(b.__id)).map(b=>({
-    time:b.booking_time||'시간 미정',
-    label:(b.customer_name||'—')+(b.status==='confirmed'?' (확정)':b.status==='booked'?' (신청완료)':' (대기중)'),
-    sub:b.booking_items?('🔧 '+b.booking_items):''
+    time:cleanTime(b.booking_time)||'시간 미정',
+    name:b.customer_name||'—',
+    items:b.booking_items||'',
+    status:({'waiting':'대기중','booked':'신청완료','confirmed':'확정'}[b.status]||'')
   }));
   return [...fromSchedules,...fromBookings];
 }
@@ -997,8 +1014,15 @@ function timeSortKey(t){
 function showDayScheduleInfo(dateStr){
   const list=getDayBusyItems(dateStr).slice().sort((a,b)=>timeSortKey(a.time)-timeSortKey(b.time));
   if(!list.length)return;
-  const lines=list.map(s=>`• ${s.time}  ${s.label}${s.sub?'\n   '+s.sub:''}`).join('\n');
-  showModal(`${dateStr} 등록된 일정 (${list.length}건)`,lines,false);
+  const cards=list.map(s=>{
+    const nameLine=escHtml(s.name)+(s.status?` <span class="dsi-status">${escHtml(s.status)}</span>`:'');
+    return `<div class="dsi-card">
+      <div class="dsi-top"><span class="dsi-time">${escHtml(s.time)}</span><span class="dsi-name">${nameLine}</span></div>
+      ${s.items?`<div class="dsi-items">🔧 ${escHtml(s.items)}</div>`:''}
+    </div>`;
+  }).join('');
+  showModal(`${dateStr} 등록된 일정 (${list.length}건)`,' ',false);
+  document.getElementById('modal-msg').innerHTML=`<div class="dsi-list">${cards}</div>`;
 }
 
 // ── 직접 입력 시간 추가 ──
@@ -1814,6 +1838,8 @@ window.confirmBooking=async function(id){
         time_s:b.booking_time?b.booking_time.replace(/[^0-9:]/g,'').slice(0,5):'',
         time_e:'',
         type:'booking',
+        customer_name:b.customer_name||'',
+        items:b.booking_items||'',
         memo:[
           b.customer_address?'📍 '+b.customer_address:'',
           b.customer_phone?'📞 '+b.customer_phone:'',
