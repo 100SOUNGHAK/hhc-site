@@ -214,6 +214,7 @@ input.ocr-filled{background:#fff8e0!important;border-color:#f0c040!important}
 .recent-chip{font-size:9.5px;background:#f0f2f8;color:#4b5563;padding:2px 8px;border-radius:10px;cursor:pointer;border:0.5px solid #e5e8f0}
 .recent-chip:hover{background:#e8ecf7}
 </style>
+<script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
 </head>
 <body>
 
@@ -1238,51 +1239,25 @@ function handleCuPhotos(input,id,lbl){
 }
 
 // ── 냉방검사 사진 자동인식(OCR): 계측기 사진에서 흡입/토출 온도 자동 채움 ──
-var OCR_CDN_URLS=[
-  'https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js',
-  'https://unpkg.com/tesseract.js@4/dist/tesseract.min.js'
-];
-function _loadScript(src){
-  return new Promise(function(resolve,reject){
-    var s=document.createElement('script');
-    s.src=src;
-    s.onload=function(){resolve();};
-    s.onerror=function(){reject(new Error('스크립트 로드 실패: '+src));};
-    document.head.appendChild(s);
-  });
-}
-var _tesseractLoadPromise=null;
+// Tesseract.js는 <head>에 <script defer>로 정적으로 로드되어 있음(동적 주입 시
+// 내부 자동경로 인식이 깨지는 문제가 있어 정적 로드 방식으로 전환함).
 function loadTesseractLib(){
   if(window.Tesseract)return Promise.resolve();
-  if(_tesseractLoadPromise)return _tesseractLoadPromise;
-  var attempt=function(idx){
-    if(idx>=OCR_CDN_URLS.length)return Promise.reject(new Error('OCR 라이브러리 로드 실패 — 네트워크 연결을 확인해주세요'));
-    console.log('[OCR] CDN 시도',idx+1,'/',OCR_CDN_URLS.length,OCR_CDN_URLS[idx]);
-    return _loadScript(OCR_CDN_URLS[idx]).catch(function(){
-      console.warn('[OCR] CDN 실패, 다음 시도:',OCR_CDN_URLS[idx]);
-      return attempt(idx+1);
-    });
-  };
-  _tesseractLoadPromise=attempt(0).then(function(){
-    console.log('[OCR] 라이브러리 로드 완료');
-  }).catch(function(e){
-    _tesseractLoadPromise=null;
-    throw e;
+  return new Promise(function(resolve,reject){
+    var waited=0;
+    var iv=setInterval(function(){
+      if(window.Tesseract){clearInterval(iv);resolve();return;}
+      waited+=200;
+      if(waited>=15000){clearInterval(iv);reject(new Error('OCR 라이브러리 로드 실패 — 네트워크 연결을 확인해주세요'));}
+    },200);
   });
-  return _tesseractLoadPromise;
 }
 var _ocrWorkerPromise=null;
 function getOcrWorker(){
   if(_ocrWorkerPromise)return _ocrWorkerPromise;
   _ocrWorkerPromise=loadTesseractLib().then(function(){
     console.log('[OCR] worker 생성 중...');
-    // 스크립트를 동적으로 로드했기 때문에 document.currentScript 기반 자동경로 인식이
-    // 실패할 수 있어, worker/core/언어데이터 경로를 명시적으로 지정한다.
-    return Tesseract.createWorker('eng',1,{
-      workerPath:'https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/worker.min.js',
-      corePath:'https://cdn.jsdelivr.net/npm/tesseract.js-core@4/tesseract-core.wasm.js',
-      langPath:'https://tessdata.projectnaptha.com/4.0.0'
-    });
+    return Tesseract.createWorker('eng');
   }).then(function(w){
     return w.setParameters({tessedit_char_whitelist:'0123456789.'}).then(function(){console.log('[OCR] worker 준비 완료');return w;});
   }).catch(function(e){
