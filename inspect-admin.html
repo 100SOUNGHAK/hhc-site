@@ -1238,16 +1238,36 @@ function handleCuPhotos(input,id,lbl){
 }
 
 // ── 냉방검사 사진 자동인식(OCR): 계측기 사진에서 흡입/토출 온도 자동 채움 ──
+var OCR_CDN_URLS=[
+  'https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js',
+  'https://unpkg.com/tesseract.js@4/dist/tesseract.min.js'
+];
+function _loadScript(src){
+  return new Promise(function(resolve,reject){
+    var s=document.createElement('script');
+    s.src=src;
+    s.onload=function(){resolve();};
+    s.onerror=function(){reject(new Error('스크립트 로드 실패: '+src));};
+    document.head.appendChild(s);
+  });
+}
 var _tesseractLoadPromise=null;
 function loadTesseractLib(){
   if(window.Tesseract)return Promise.resolve();
   if(_tesseractLoadPromise)return _tesseractLoadPromise;
-  _tesseractLoadPromise=new Promise(function(resolve,reject){
-    var s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/tesseract.js@4.1.4/dist/tesseract.min.js';
-    s.onload=function(){console.log('[OCR] 라이브러리 로드 완료');resolve();};
-    s.onerror=function(){console.warn('[OCR] 라이브러리 로드 실패(네트워크/CDN 접속 문제)');_tesseractLoadPromise=null;reject(new Error('OCR 라이브러리 로드 실패 — 네트워크 연결을 확인해주세요'));};
-    document.head.appendChild(s);
+  var attempt=function(idx){
+    if(idx>=OCR_CDN_URLS.length)return Promise.reject(new Error('OCR 라이브러리 로드 실패 — 네트워크 연결을 확인해주세요'));
+    console.log('[OCR] CDN 시도',idx+1,'/',OCR_CDN_URLS.length,OCR_CDN_URLS[idx]);
+    return _loadScript(OCR_CDN_URLS[idx]).catch(function(){
+      console.warn('[OCR] CDN 실패, 다음 시도:',OCR_CDN_URLS[idx]);
+      return attempt(idx+1);
+    });
+  };
+  _tesseractLoadPromise=attempt(0).then(function(){
+    console.log('[OCR] 라이브러리 로드 완료');
+  }).catch(function(e){
+    _tesseractLoadPromise=null;
+    throw e;
   });
   return _tesseractLoadPromise;
 }
@@ -1301,7 +1321,7 @@ function tryOcrFillCoolUnit(id,dataUrl){
   ocrReadTempPair(dataUrl).then(function(pair){
     if(!pair||pair.error){
       var msg=(pair&&pair.error)?pair.error:'사진에서 숫자를 2개 이상 찾지 못했습니다';
-      if(statusEl){statusEl.className='ocr-status on';statusEl.style.color='#b36000';statusEl.textContent='⚠ 자동인식 실패 — 직접 입력해주세요';}
+      if(statusEl){statusEl.className='ocr-status on';statusEl.style.color='#b36000';statusEl.textContent='⚠ 자동인식 실패('+msg+') — 직접 입력해주세요';}
       console.warn('[OCR] 최종 실패:',msg);
       toast('⚠ 온도 자동인식 실패 — 직접 입력해주세요 ('+msg+')');
       return;
