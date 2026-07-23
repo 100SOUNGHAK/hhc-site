@@ -2220,15 +2220,8 @@ function renderList(items,targetId){
 // ═══════════════════════════════════════════
 var currentCustName=null;
 function normName(s){return(s||'').trim().replace(/\s+/g,' ').toLowerCase();}
-window.loadCustomers=async function(){
-  if(DB){
-    try{
-      var snap=await getDocs(query(collection(DB,'inspections'),orderBy('createdAt','desc'),limit(50)));
-      allReports=snap.docs.map(function(d){return Object.assign({_id:d.id},d.data());});
-    }catch(e){gid('cust-list-container').innerHTML='<div style="text-align:center;padding:30px;color:#c0392b">로딩 실패: '+e.message+'</div>';return;}
-  }
-  filterCustomers();
-};
+// 실제 Firestore 조회(getDocs 등)는 module 스크립트(아래쪽, import가 있는 블록)에 정의된
+// window.loadCustomers 에서 처리한다 — 이 스크립트는 module이 아니라서 import된 getDocs를 쓸 수 없음.
 function groupCustomers(){
   var map={};
   allReports.forEach(function(r){
@@ -2680,6 +2673,21 @@ window.loadList=async function(){
     allReports=snap.docs.map(function(d){return Object.assign({_id:d.id},d.data());});
     filterList();
   }catch(e){document.getElementById('list-container').innerHTML='<div style="text-align:center;padding:30px;color:#c0392b">로딩 실패: '+e.message+'</div>';}
+};
+
+// ── 고객관리 목록 로딩 (getDocs 등 Firestore import가 필요해 이 module 스크립트에 위치)
+window.loadCustomers=async function(){
+  if(DB){
+    try{
+      var snap=await getDocs(query(collection(DB,'inspections'),orderBy('createdAt','desc'),limit(50)));
+      allReports=snap.docs.map(function(d){return Object.assign({_id:d.id},d.data());});
+    }catch(e){
+      var el=document.getElementById('cust-list-container');
+      if(el)el.innerHTML='<div style="text-align:center;padding:30px;color:#c0392b">로딩 실패: '+e.message+'</div>';
+      return;
+    }
+  }
+  filterCustomers();
 };
 
 // ── 목록 액션
