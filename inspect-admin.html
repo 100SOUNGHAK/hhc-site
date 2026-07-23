@@ -1233,14 +1233,25 @@ function handleCuPhotos(input,id,lbl){
     var addBtn=container.querySelector('.photo-add-group');
     container.insertBefore(item,addBtn);
     updatePhotoBadges();if(window.__scheduleDraft)window.__scheduleDraft();
-    // 저장되는 사진(photoData[k])은 원본 그대로 유지하고, OCR 인식률을 높이기 위해
-    // 화면 영역만 잘라내는 크롭 단계를 별도로 거친다 (온도값이 이미 있으면 건너뜀).
+    // 저장되는 사진(photoData[k])은 원본 그대로 유지하고, 인식 정확도를 위해
+    // 숫자 하나씩 두 번 크롭한다: ① 흡입온도(위쪽 °C 숫자) ② 토출온도(아래 큰 숫자).
+    // 각 크롭에는 숫자 하나만 들어가므로 7세그먼트 전용 판독기가 정확히 읽을 수 있다.
     var wrap=document.getElementById('cu-wrap-'+id);
     var taInp=wrap&&wrap.querySelector('.cu-ta');
     var tbInp=wrap&&wrap.querySelector('.cu-tb');
     if(taInp&&tbInp&&!taInp.value&&!tbInp.value){
-      showCropModal(dataUrl,function(croppedUrl){
-        tryOcrFillCoolUnit(id,croppedUrl);
+      showCropModal(dataUrl,{
+        title:'1/2 · <b style="color:#f0c040">흡입온도</b> 숫자만 박스로 딱 맞게 지정해주세요<br><span style="font-weight:400;font-size:11px;color:#ccc">위쪽 °C 숫자 (예: 29.2) — 아이콘·°C 글자는 빼고 숫자만</span>',
+        storageKey:'insp_ocr_crop_rect_a'
+      },function(cropA){
+        showCropModal(dataUrl,{
+          title:'2/2 · <b style="color:#6ec6ff">토출온도</b> 숫자만 박스로 딱 맞게 지정해주세요<br><span style="font-weight:400;font-size:11px;color:#ccc">제일 아래 큰 숫자 (예: 9.6)</span>',
+          storageKey:'insp_ocr_crop_rect_b'
+        },function(cropB){
+          tryOcrFillCoolUnitPair(id,cropA,cropB);
+        },function(){
+          tryOcrFillCoolUnitPair(id,cropA,null); // 토출은 건너뜀 → 흡입만 인식
+        });
       });
     }
   });
@@ -1251,7 +1262,9 @@ function handleCuPhotos(input,id,lbl){
 // OCR 인식률을 크게 높인다. 마지막으로 사용한 영역(비율)은 localStorage에 저장해
 // 다음 사진에서도 비슷한 위치를 기본값으로 보여준다(계측기를 매번 비슷한 구도로
 // 촬영하는 경우가 많으므로 확인만 하고 바로 넘어갈 수 있게 하기 위함). ──
-function showCropModal(dataUrl,onConfirm,onCancel){
+function showCropModal(dataUrl,opts,onConfirm,onCancel){
+  opts=opts||{};
+  var storageKey=opts.storageKey||'insp_ocr_crop_rect';
   function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
   var overlay=document.createElement('div');
   overlay.id='crop-overlay';
@@ -1259,7 +1272,7 @@ function showCropModal(dataUrl,onConfirm,onCancel){
 
   var title=document.createElement('div');
   title.style.cssText='color:#fff;font-size:13px;font-weight:600;margin-bottom:10px;text-align:center;line-height:1.5';
-  title.innerHTML='📐 계측기 <b style="color:#f0c040">LCD 화면 숫자</b> 부분만 손가락으로 드래그해서 지정해주세요';
+  title.innerHTML=opts.title||'📐 계측기 <b style="color:#f0c040">LCD 화면 숫자</b> 부분만 손가락으로 드래그해서 지정해주세요';
 
   var stage=document.createElement('div');
   stage.style.cssText='position:relative;max-width:92vw;max-height:58vh;line-height:0;touch-action:none;background:#000';
@@ -1287,23 +1300,20 @@ function showCropModal(dataUrl,onConfirm,onCancel){
   var btnRow=document.createElement('div');
   btnRow.style.cssText='display:flex;gap:8px;margin-top:14px;width:100%;max-width:400px';
   var cancelBtn=document.createElement('button');
-  cancelBtn.type='button';cancelBtn.textContent='자동인식 건너뛰기';
+  cancelBtn.type='button';cancelBtn.textContent='건너뛰기 (직접 입력)';
   cancelBtn.style.cssText='flex:1;padding:12px 6px;border-radius:8px;border:1px solid #555;background:transparent;color:#ccc;font-size:12px';
-  var skipBtn=document.createElement('button');
-  skipBtn.type='button';skipBtn.textContent='전체 사진 사용';
-  skipBtn.style.cssText='flex:1;padding:12px 6px;border-radius:8px;border:1px solid #555;background:transparent;color:#ccc;font-size:12px';
   var okBtn=document.createElement('button');
   okBtn.type='button';okBtn.textContent='✓ 이 영역으로 인식';
   okBtn.style.cssText='flex:1.5;padding:12px 6px;border-radius:8px;border:none;background:#f0c040;color:#1c1c22;font-weight:700;font-size:12.5px';
-  btnRow.appendChild(cancelBtn);btnRow.appendChild(skipBtn);btnRow.appendChild(okBtn);
+  btnRow.appendChild(cancelBtn);btnRow.appendChild(okBtn);
 
   overlay.appendChild(title);overlay.appendChild(stage);overlay.appendChild(hint);overlay.appendChild(btnRow);
   document.body.appendChild(overlay);
 
-  var rect={x:0.25,y:0.35,w:0.5,h:0.22};
+  var rect={x:0.3,y:0.4,w:0.4,h:0.12};
   try{
-    var saved=JSON.parse(localStorage.getItem('insp_ocr_crop_rect')||'null');
-    if(saved&&saved.w>0.04&&saved.h>0.04)rect=saved;
+    var saved=JSON.parse(localStorage.getItem(storageKey)||'null');
+    if(saved&&saved.w>0.02&&saved.h>0.02)rect=saved;
   }catch(e){}
 
   function applyRectStyle(){
@@ -1400,7 +1410,7 @@ function showCropModal(dataUrl,onConfirm,onCancel){
   }
 
   okBtn.onclick=function(){
-    try{localStorage.setItem('insp_ocr_crop_rect',JSON.stringify(rect));}catch(e){}
+    try{localStorage.setItem(storageKey,JSON.stringify(rect));}catch(e){}
     var nw=img.naturalWidth,nh=img.naturalHeight;
     var sx=rect.x*nw,sy=rect.y*nh,sw=rect.w*nw,sh=rect.h*nh;
     var cnv=document.createElement('canvas');
@@ -1411,7 +1421,6 @@ function showCropModal(dataUrl,onConfirm,onCancel){
     cleanup();
     onConfirm(croppedUrl);
   };
-  skipBtn.onclick=function(){cleanup();onConfirm(dataUrl);};
   cancelBtn.onclick=function(){cleanup();if(onCancel)onCancel();};
 }
 
@@ -1480,95 +1489,237 @@ function preprocessForOcr(dataUrl){
     img.src=dataUrl;
   });
 }
-// 이미지에서 숫자 토큰을 찾아 세로 위치(위→아래) 순으로 정렬, 제일 위/아래 값을 반환
-// (방사율 표시 ε=0.95 같은 0.x대 설정값은 실측 온도가 아니므로 제외)
-// createWorker+setParameters 조합이 일부 환경에서 "Cannot read properties of null
-// (reading 'SetVariable')" 오류를 내는 문제가 있어, worker를 직접 관리하지 않는
-// 단발성 API(Tesseract.recognize)로 전환함. 문자 화이트리스트 없이 인식한 뒤
-// 아래 정규식으로 숫자만 걸러낸다.
-function ocrReadTempPair(dataUrl){
+// ── 7세그먼트 전용 판독기 ──────────────────────────────────────────
+// 크롭된 "숫자 하나" 이미지를 이진화한 뒤, 세그먼트(가로3+세로4) 점등 패턴을
+// 기하학적으로 직접 판독한다. 일반 문서용 OCR(Tesseract)은 계측기 LCD의
+// 7세그먼트 숫자를 거의 못 읽지만, 이 방식은 해당 글꼴 전용이라 정확도가 높다.
+// 판독 실패 시에만 Tesseract로 폴백한다.
+function sevenSegDecode(dataUrl){
+  return new Promise(function(resolve){
+    var img=new Image();
+    img.onload=function(){
+      try{
+        // 계측기 숫자는 기울어진(이탤릭) 경우가 많다. 기울기가 어긋나면 세그먼트가
+        // 옆 칸으로 빠져 다른 숫자로 오판될 수 있다(예: 기울어진 6→5).
+        // 올바른 보정 각도에서는 세로 획들이 일직선으로 정렬되어 세로 투영
+        // 히스토그램이 가장 날카로워지므로(투영 에너지 최대), 여러 각도 중
+        // 에너지가 최대인 각도의 판독 결과를 채택한다.
+        var shears=[-0.10,-0.05,0,0.05,0.10,0.15,0.20,0.25];
+        var best=null;
+        for(var si=0;si<shears.length;si++){
+          var r=_sevenSegFromImage(img,shears[si]);
+          if(!r)continue;
+          if(!best||r.energy>best.energy||(r.energy===best.energy&&r.margin>best.margin)){best=r;}
+        }
+        if(best)console.log('[7SEG] 최종 채택:',best.val,'(shear',best.shear,')');
+        resolve(best?best.val:null);
+      }
+      catch(e){console.warn('[7SEG] 판독 오류:',e);resolve(null);}
+    };
+    img.onerror=function(){resolve(null);};
+    img.src=dataUrl;
+  });
+}
+function _sevenSegFromImage(img,shear){
+  shear=shear||0;
+  var H=140;
+  var scale=H/Math.max(1,img.height);
+  var w0=Math.max(1,Math.round(img.width*scale)),h=H;
+  var extra=Math.ceil(Math.abs(shear)*h);
+  var w=w0+extra;
+  var cnv=document.createElement('canvas');cnv.width=w;cnv.height=h;
+  var ctx=cnv.getContext('2d');
+  ctx.imageSmoothingEnabled=true;
+  // 전단 변환 시 모서리에 빈 삼각형이 생기므로, 이미지 가장자리 평균색으로
+  // 캔버스를 먼저 채워 빈 영역이 전경으로 오인되는 것을 방지
+  ctx.drawImage(img,0,0,w0,h);
+  var edge=ctx.getImageData(0,0,w0,h).data;
+  var er=0,eg2=0,eb=0,ec=0;
+  for(var ex=0;ex<w0;ex++){
+    var pTop=ex*4,pBot=((h-1)*w0+ex)*4;
+    er+=edge[pTop]+edge[pBot];eg2+=edge[pTop+1]+edge[pBot+1];eb+=edge[pTop+2]+edge[pBot+2];ec+=2;
+  }
+  for(var ey=0;ey<h;ey++){
+    var pL=(ey*w0)*4,pR=(ey*w0+w0-1)*4;
+    er+=edge[pL]+edge[pR];eg2+=edge[pL+1]+edge[pR+1];eb+=edge[pL+2]+edge[pR+2];ec+=2;
+  }
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle='rgb('+Math.round(er/ec)+','+Math.round(eg2/ec)+','+Math.round(eb/ec)+')';
+  ctx.fillRect(0,0,w,h);
+  // x' = x + shear*y 전단 변환으로 기울기 보정
+  ctx.setTransform(1,0,shear,1,shear<0?extra:0,0);
+  ctx.drawImage(img,0,0,w0,h);
+  ctx.setTransform(1,0,0,1,0,0);
+  var d=ctx.getImageData(0,0,w,h).data;
+  // 채널 최대값 그레이스케일 + Otsu 이진화
+  var g=new Uint8Array(w*h),hist=new Array(256);
+  for(var hi=0;hi<256;hi++)hist[hi]=0;
+  for(var i=0;i<w*h;i++){
+    var p=i*4;var v=Math.max(d[p],d[p+1],d[p+2]);
+    g[i]=v;hist[v]++;
+  }
+  var total=w*h,sum=0;for(var t=0;t<256;t++)sum+=t*hist[t];
+  var sumB=0,wB=0,maxVar=0,thr=127;
+  for(var t2=0;t2<256;t2++){
+    wB+=hist[t2];if(!wB)continue;
+    var wF=total-wB;if(!wF)break;
+    sumB+=t2*hist[t2];
+    var mB=sumB/wB,mF=(sum-sumB)/wF;
+    var vv=wB*wF*(mB-mF)*(mB-mF);
+    if(vv>maxVar){maxVar=vv;thr=t2;}
+  }
+  // 숫자(전경)는 보통 소수 픽셀: 밝은 픽셀이 적으면 밝은 쪽이 숫자
+  var brightCnt=0;for(var b1=0;b1<w*h;b1++)if(g[b1]>thr)brightCnt++;
+  var fgBright=brightCnt<=total*0.55;
+  var fg=new Uint8Array(w*h);
+  for(var f1=0;f1<w*h;f1++)fg[f1]=((g[f1]>thr)===fgBright)?1:0;
+  // 전경 바운딩 박스
+  var minX=w,maxX=-1,minY=h,maxY=-1;
+  for(var y=0;y<h;y++)for(var x=0;x<w;x++)if(fg[y*w+x]){if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;}
+  if(maxX<0)return null;
+  var bw=maxX-minX+1,bh=maxY-minY+1;
+  if(bh<12||bw<3)return null;
+  // 세로 투영으로 글리프(숫자/소수점) 분리
+  var colCnt=new Array(bw);
+  var energy=0,fgTot=0;
+  for(var cx=0;cx<bw;cx++){var cc=0;for(var cy=0;cy<bh;cy++)if(fg[(minY+cy)*w+(minX+cx)])cc++;colCnt[cx]=cc;energy+=cc*cc;fgTot+=cc;}
+  // 스케일 불변 투영 에너지: 세로 획이 곧게 정렬될수록(올바른 기울기 보정) 커짐
+  energy=fgTot>0?energy/fgTot:0;
+  var thC=Math.max(1,Math.round(bh*0.02));
+  var runs=[],inRun=false,rs=0;
+  for(var rx=0;rx<bw;rx++){
+    var on=colCnt[rx]>thC;
+    if(on&&!inRun){inRun=true;rs=rx;}
+    else if(!on&&inRun){inRun=false;runs.push([rs,rx-1]);}
+  }
+  if(inRun)runs.push([rs,bw-1]);
+  var merged=[];var gapTh=Math.max(1,Math.round(bh*0.03));
+  runs.forEach(function(r){
+    if(merged.length&&r[0]-merged[merged.length-1][1]<=gapTh)merged[merged.length-1][1]=r[1];
+    else merged.push([r[0],r[1]]);
+  });
+  if(!merged.length||merged.length>6)return null;
+  var SEG={
+    '1111110':'0','0110000':'1','1101101':'2','1111001':'3','0110011':'4',
+    '1011011':'5','1011111':'6','1110000':'7','1111111':'8','1111011':'9'
+  };
+  var zones=[            // [x0,x1,y0,y1] 글리프 내 비율 좌표
+    [0.20,0.80,0.00,0.15],   // A 상단 가로
+    [0.78,1.00,0.12,0.46],   // B 우상 세로
+    [0.78,1.00,0.54,0.88],   // C 우하 세로
+    [0.20,0.80,0.85,1.00],   // D 하단 가로
+    [0.00,0.22,0.54,0.88],   // E 좌하 세로
+    [0.00,0.22,0.12,0.46],   // F 좌상 세로
+    [0.20,0.80,0.42,0.58]    // G 중앙 가로
+  ];
+  var out='',exact=0,approx=0,marginSum=0,marginN=0;
+  for(var mi=0;mi<merged.length;mi++){
+    var gx0=merged[mi][0],gx1=merged[mi][1];
+    var gy0=bh,gy1=-1;
+    for(var yy=0;yy<bh;yy++){
+      for(var xx=gx0;xx<=gx1;xx++){
+        if(fg[(minY+yy)*w+(minX+xx)]){if(yy<gy0)gy0=yy;if(yy>gy1)gy1=yy;break;}
+      }
+    }
+    if(gy1<0)continue;
+    var gw=gx1-gx0+1,gh=gy1-gy0+1;
+    if(gh<=bh*0.30&&gy0>=bh*0.55){out+='.';continue;}  // 소수점(작고 아래쪽)
+    if(gh<=bh*0.30)continue;                            // 마이너스·° 등 작은 기호 무시
+    if(gw/gh<0.40){out+='1';exact++;marginSum+=0.5;marginN++;continue;} // 폭이 매우 좁으면 1
+    var bits='',gMargin=1;
+    for(var zi=0;zi<7;zi++){
+      var z=zones[zi];
+      var zx0=gx0+Math.floor(z[0]*gw),zx1=gx0+Math.ceil(z[1]*gw)-1;
+      var zy0=gy0+Math.floor(z[2]*gh),zy1=gy0+Math.ceil(z[3]*gh)-1;
+      var cnt=0,tot=0;
+      for(var zy=zy0;zy<=zy1;zy++)for(var zx=zx0;zx<=zx1;zx++){
+        if(zx<0||zx>=bw||zy<0||zy>=bh)continue;
+        tot++;if(fg[(minY+zy)*w+(minX+zx)])cnt++;
+      }
+      var ratio=tot>0?cnt/tot:0;
+      bits+=(ratio>=0.32)?'1':'0';
+      // 판정 여유(threshold와의 거리): 애매하게 걸친 세그먼트가 있으면 낮아짐
+      var mgn=Math.min(1,Math.abs(ratio-0.32)/0.32);
+      if(mgn<gMargin)gMargin=mgn;
+    }
+    marginSum+=gMargin;marginN++;
+    var ch=SEG[bits];
+    if(ch===undefined){
+      var best=null,bestD=2;                             // 해밍거리 1까지 근사 매칭
+      for(var key in SEG){
+        var dd=0;for(var kb=0;kb<7;kb++)if(key[kb]!==bits[kb])dd++;
+        if(dd<bestD){bestD=dd;best=SEG[key];}
+      }
+      if(best===null){console.warn('[7SEG] 매칭 실패 패턴:',bits,'(shear',shear,')');return null;}
+      ch=best;approx++;
+    }else{exact++;}
+    out+=ch;
+  }
+  if(!out||!/\d/.test(out))return null;
+  var num=parseFloat(out);
+  if(isNaN(num))return null;
+  if(out.indexOf('.')===-1){                             // 소수점 누락 복원: 292→29.2
+    if(num>60&&num/10>=1&&num/10<=60)num=num/10;
+    else if(num>60&&num/100>=1&&num/100<=60)num=num/100;
+  }
+  if(num<1||num>60)return null;                          // 에어컨 온도 현실 범위
+  var margin=marginN>0?marginSum/marginN:0;
+  console.log('[7SEG] 판독:',out,'→',num,'(shear',shear,'/ 정확',exact,'근사',approx,'여유',margin.toFixed(2),'에너지',energy.toFixed(1),')');
+  return {val:String(Math.round(num*10)/10),exact:exact,approx:approx,margin:margin,energy:energy,shear:shear};
+}
+// Tesseract 폴백: 크롭 안에 숫자가 하나뿐이라는 전제로 가장 그럴듯한 값 하나 추출
+function tesseractReadNumber(dataUrl){
   var recognizePromise=loadTesseractLib().then(function(){
     return preprocessForOcr(dataUrl);
   }).then(function(prepUrl){
-    console.log('[OCR] 이미지 인식 중...(전처리 후 단발성 API)');
+    console.log('[OCR] Tesseract 폴백 인식 중...');
     return Tesseract.recognize(prepUrl,'eng');
   });
-  return Promise.race([recognizePromise,_ocrTimeout(25000)]).then(function(res){
-    var words=(res&&res.data&&res.data.words)||[];
-    var rawTexts=words.map(function(w){return w.text;});
-    console.log('[OCR] 인식된 단어:',rawTexts);
-    var nums=[];
-    words.forEach(function(w){
-      if(!w.bbox)return;
-      var raw=(w.text||'');
-      if(raw.indexOf('%')!==-1)return; // 습도(예: 56%) 줄은 제외
-      var txt=raw.replace(/,/g,'.');
-      var hasC=/\d\s*[°ºo]?\s*[cC]|℃/.test(txt); // °C 표기가 붙은 온도 줄인지
-      var v=null,shown=null;
-      // 소수 형태 숫자를 우선 추출 (예: "29.2°C" → 29.2)
-      var m=txt.match(/\d{1,3}\.\d{1,2}/);
-      if(m){
-        v=parseFloat(m[0]);shown=m[0];
-        if(v<1)return; // 방사율(ε=0.95 등 0.x대 설정값) 제외
-      }else{
-        // 7세그먼트 특성상 소수점을 놓치는 경우 복원: "292"→29.2, "96"→9.6
-        var m2=txt.match(/\d{2,4}/);
-        if(!m2)return;
-        var vi=parseInt(m2[0],10);
-        if(vi>=1&&vi<=60){v=vi;}
-        else if(vi/10>=1&&vi/10<=60){v=vi/10;}
-        else if(vi/100>=1&&vi/100<=60){v=vi/100;}
-        else return;
-        shown=String(v);
-      }
-      if(v===null||isNaN(v)||v<1||v>60)return; // 에어컨 흡입/토출 현실 범위(1~60°C)만
-      nums.push({val:shown,num:v,y:w.bbox.y0,hasC:hasC});
-    });
-    if(nums.length<2){
-      var sample=rawTexts.filter(function(t){return t&&t.trim();}).slice(0,12).join(' / ')||'(인식된 텍스트 없음)';
-      console.warn('[OCR] 유효 숫자 부족(찾은 개수:'+nums.length+') 원문:',sample);
-      return {error:'숫자 2개 미확인 [인식됨: '+sample+']'};
+  return Promise.race([recognizePromise,_ocrTimeout(20000)]).then(function(res){
+    var text=(res&&res.data&&res.data.text)||'';
+    console.log('[OCR] 폴백 인식 원문:',text);
+    var txt=text.replace(/,/g,'.');
+    var m=txt.match(/\d{1,3}\.\d{1,2}/);                 // 소수 우선
+    if(m){var v=parseFloat(m[0]);if(v>=1&&v<=60)return String(v);}
+    var m2=txt.match(/\d{2,4}/);                          // 소수점 누락 복원
+    if(m2){
+      var vi=parseInt(m2[0],10);
+      if(vi>=1&&vi<=60)return String(vi);
+      if(vi/10>=1&&vi/10<=60)return String(vi/10);
+      if(vi/100>=1&&vi/100<=60)return String(vi/100);
     }
-    nums.sort(function(a,b){return a.y-b.y;});
-    // 흡입온도: °C 표기가 있는 줄을 우선(계측기 상단 온도 줄), 없으면 가장 위의 숫자
-    var topPick=null;
-    for(var ni=0;ni<nums.length;ni++){if(nums[ni].hasC){topPick=nums[ni];break;}}
-    if(!topPick)topPick=nums[0];
-    // 토출온도: 가장 아래(하단 큰 숫자) — 흡입과 같은 줄이면 실패 처리
-    var bottomPick=nums[nums.length-1];
-    if(bottomPick===topPick&&nums.length>=2)bottomPick=nums[nums.length-2]===topPick?null:nums[nums.length-2];
-    if(!bottomPick||bottomPick===topPick){
-      return {error:'흡입/토출 두 값을 구분하지 못했습니다'};
-    }
-    return {top:topPick.val,bottom:bottomPick.val};
-  }).catch(function(e){
-    var m=(e&&e.message)?e.message:(e?String(e):'알 수 없는 오류');
-    console.warn('[OCR] 인식 실패:',e);
-    return {error:m};
-  });
+    return null;
+  }).catch(function(e){console.warn('[OCR] 폴백 실패:',e);return null;});
 }
-function tryOcrFillCoolUnit(id,dataUrl){
+// 크롭 하나 → 값 하나: 7세그먼트 판독 우선, 실패 시 Tesseract 폴백
+function readNumberFromCrop(dataUrl){
+  return sevenSegDecode(dataUrl).then(function(v){
+    if(v!==null)return v;
+    return tesseractReadNumber(dataUrl);
+  }).catch(function(e){console.warn('[OCR] 숫자 판독 실패:',e);return null;});
+}
+function tryOcrFillCoolUnitPair(id,urlA,urlB){
   var wrap=document.getElementById('cu-wrap-'+id);if(!wrap)return;
   var taInp=wrap.querySelector('.cu-ta');var tbInp=wrap.querySelector('.cu-tb');
   var statusEl=document.getElementById('ocr-status-'+id);
   if(!taInp||!tbInp)return;
-  if(taInp.value||tbInp.value)return; // 이미 값이 있으면 자동인식으로 덮어쓰지 않음
-  if(statusEl){statusEl.className='ocr-status on busy';statusEl.textContent='🔍 사진에서 온도 자동인식 중... (몇 초 걸릴 수 있어요)';}
-  ocrReadTempPair(dataUrl).then(function(pair){
-    if(!pair||pair.error){
-      var msg=(pair&&pair.error)?pair.error:'사진에서 숫자를 2개 이상 찾지 못했습니다';
-      if(statusEl){statusEl.className='ocr-status on';statusEl.style.color='#b36000';statusEl.textContent='⚠ 자동인식 실패('+msg+') — 직접 입력해주세요';}
-      console.warn('[OCR] 최종 실패:',msg);
-      toast('⚠ 온도 자동인식 실패 — 직접 입력해주세요 ('+msg+')');
-      return;
+  if(statusEl){statusEl.className='ocr-status on busy';statusEl.textContent='🔍 지정한 영역에서 숫자 판독 중...';}
+  var pa=urlA?readNumberFromCrop(urlA):Promise.resolve(null);
+  var pb=urlB?readNumberFromCrop(urlB):Promise.resolve(null);
+  Promise.all([pa,pb]).then(function(r){
+    var a=r[0],b=r[1];var msgs=[];
+    if(a&&!taInp.value){taInp.value=a;taInp.classList.add('ocr-filled');msgs.push('흡입 '+a+'°C');}
+    if(b&&!tbInp.value){tbInp.value=b;tbInp.classList.add('ocr-filled');msgs.push('토출 '+b+'°C');}
+    if(msgs.length){
+      calcCuDiff(id);
+      if(window.__scheduleDraft)window.__scheduleDraft();
+      var partial=(urlA&&!a)?' (흡입은 직접 입력해주세요)':((urlB&&!b)?' (토출은 직접 입력해주세요)':'');
+      if(statusEl){statusEl.className='ocr-status on';statusEl.style.color=partial?'#b36000':'';statusEl.textContent='✓ 자동인식: '+msgs.join(' / ')+' — 값을 꼭 확인해주세요'+partial;}
+      toast('🔍 '+msgs.join(' / ')+' 자동인식 — 확인해주세요'+partial);
+    }else{
+      if(statusEl){statusEl.className='ocr-status on';statusEl.style.color='#b36000';statusEl.textContent='⚠ 숫자 판독 실패 — 직접 입력해주세요';}
+      toast('⚠ 숫자 자동인식 실패 — 직접 입력해주세요');
     }
-    if(!taInp.value)taInp.value=pair.top;
-    if(!tbInp.value)tbInp.value=pair.bottom;
-    taInp.classList.add('ocr-filled');tbInp.classList.add('ocr-filled');
-    calcCuDiff(id);
-    if(window.__scheduleDraft)window.__scheduleDraft();
-    if(statusEl){statusEl.className='ocr-status on';statusEl.style.color='';statusEl.textContent='✓ 사진에서 자동인식됨 — 값을 확인해주세요';}
-    toast('🔍 온도 자동인식: 흡입 '+pair.top+'°C / 토출 '+pair.bottom+'°C — 확인해주세요');
   });
 }
 
