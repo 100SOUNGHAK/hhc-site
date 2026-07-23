@@ -1233,9 +1233,186 @@ function handleCuPhotos(input,id,lbl){
     var addBtn=container.querySelector('.photo-add-group');
     container.insertBefore(item,addBtn);
     updatePhotoBadges();if(window.__scheduleDraft)window.__scheduleDraft();
-    tryOcrFillCoolUnit(id,dataUrl);
+    // 저장되는 사진(photoData[k])은 원본 그대로 유지하고, OCR 인식률을 높이기 위해
+    // 화면 영역만 잘라내는 크롭 단계를 별도로 거친다 (온도값이 이미 있으면 건너뜀).
+    var wrap=document.getElementById('cu-wrap-'+id);
+    var taInp=wrap&&wrap.querySelector('.cu-ta');
+    var tbInp=wrap&&wrap.querySelector('.cu-tb');
+    if(taInp&&tbInp&&!taInp.value&&!tbInp.value){
+      showCropModal(dataUrl,function(croppedUrl){
+        tryOcrFillCoolUnit(id,croppedUrl);
+      });
+    }
   });
   input.value='';
+}
+
+// ── 계측기 화면 영역 크롭 모달: 사진 전체가 아닌 LCD 화면 부분만 잘라내어
+// OCR 인식률을 크게 높인다. 마지막으로 사용한 영역(비율)은 localStorage에 저장해
+// 다음 사진에서도 비슷한 위치를 기본값으로 보여준다(계측기를 매번 비슷한 구도로
+// 촬영하는 경우가 많으므로 확인만 하고 바로 넘어갈 수 있게 하기 위함). ──
+function showCropModal(dataUrl,onConfirm,onCancel){
+  function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v));}
+  var overlay=document.createElement('div');
+  overlay.id='crop-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(10,10,14,.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;touch-action:none';
+
+  var title=document.createElement('div');
+  title.style.cssText='color:#fff;font-size:13px;font-weight:600;margin-bottom:10px;text-align:center;line-height:1.5';
+  title.innerHTML='📐 계측기 <b style="color:#f0c040">LCD 화면 숫자</b> 부분만 손가락으로 드래그해서 지정해주세요';
+
+  var stage=document.createElement('div');
+  stage.style.cssText='position:relative;max-width:92vw;max-height:58vh;line-height:0;touch-action:none;background:#000';
+
+  var img=document.createElement('img');
+  img.src=dataUrl;img.draggable=false;
+  img.style.cssText='display:block;max-width:92vw;max-height:58vh;width:auto;height:auto;user-select:none;-webkit-user-drag:none';
+
+  var selBox=document.createElement('div');
+  selBox.id='crop-selbox';
+  selBox.style.cssText='position:absolute;border:2px solid #f0c040;background:rgba(240,192,64,.14);box-shadow:0 0 0 2000px rgba(0,0,0,.55);pointer-events:none';
+  var corners=['nw','ne','sw','se'].map(function(c){
+    var d=document.createElement('div');
+    d.style.cssText='position:absolute;width:14px;height:14px;border-radius:50%;background:#f0c040;border:2px solid #1c1c22;'+
+      (c[0]==='n'?'top:-8px;':'bottom:-8px;')+(c[1]==='w'?'left:-8px;':'right:-8px;');
+    selBox.appendChild(d);return d;
+  });
+
+  stage.appendChild(img);stage.appendChild(selBox);
+
+  var hint=document.createElement('div');
+  hint.style.cssText='color:#aaa;font-size:10.5px;margin-top:8px;text-align:center';
+  hint.textContent='박스 안쪽을 드래그하면 이동, 노란 점을 드래그하면 크기 조절';
+
+  var btnRow=document.createElement('div');
+  btnRow.style.cssText='display:flex;gap:8px;margin-top:14px;width:100%;max-width:400px';
+  var cancelBtn=document.createElement('button');
+  cancelBtn.type='button';cancelBtn.textContent='자동인식 건너뛰기';
+  cancelBtn.style.cssText='flex:1;padding:12px 6px;border-radius:8px;border:1px solid #555;background:transparent;color:#ccc;font-size:12px';
+  var skipBtn=document.createElement('button');
+  skipBtn.type='button';skipBtn.textContent='전체 사진 사용';
+  skipBtn.style.cssText='flex:1;padding:12px 6px;border-radius:8px;border:1px solid #555;background:transparent;color:#ccc;font-size:12px';
+  var okBtn=document.createElement('button');
+  okBtn.type='button';okBtn.textContent='✓ 이 영역으로 인식';
+  okBtn.style.cssText='flex:1.5;padding:12px 6px;border-radius:8px;border:none;background:#f0c040;color:#1c1c22;font-weight:700;font-size:12.5px';
+  btnRow.appendChild(cancelBtn);btnRow.appendChild(skipBtn);btnRow.appendChild(okBtn);
+
+  overlay.appendChild(title);overlay.appendChild(stage);overlay.appendChild(hint);overlay.appendChild(btnRow);
+  document.body.appendChild(overlay);
+
+  var rect={x:0.25,y:0.35,w:0.5,h:0.22};
+  try{
+    var saved=JSON.parse(localStorage.getItem('insp_ocr_crop_rect')||'null');
+    if(saved&&saved.w>0.04&&saved.h>0.04)rect=saved;
+  }catch(e){}
+
+  function applyRectStyle(){
+    var iw=img.clientWidth,ih=img.clientHeight;
+    if(!iw||!ih)return;
+    selBox.style.left=(rect.x*iw)+'px';
+    selBox.style.top=(rect.y*ih)+'px';
+    selBox.style.width=(rect.w*iw)+'px';
+    selBox.style.height=(rect.h*ih)+'px';
+  }
+  if(img.complete&&img.naturalWidth)applyRectStyle();
+  img.addEventListener('load',applyRectStyle);
+  window.addEventListener('resize',applyRectStyle);
+
+  var mode=null,startPt=null,startRect=null,HANDLE=20;
+  function getPt(e){
+    var t=(e.touches&&e.touches[0])||(e.changedTouches&&e.changedTouches[0])||e;
+    var r=stage.getBoundingClientRect();
+    return {x:t.clientX-r.left,y:t.clientY-r.top};
+  }
+  function hitTest(p){
+    var iw=img.clientWidth,ih=img.clientHeight;
+    var bx=rect.x*iw,by=rect.y*ih,bw=rect.w*iw,bh=rect.h*ih;
+    var near=function(px,py){return Math.abs(p.x-px)<HANDLE&&Math.abs(p.y-py)<HANDLE;};
+    if(near(bx,by))return 'nw';
+    if(near(bx+bw,by))return 'ne';
+    if(near(bx,by+bh))return 'sw';
+    if(near(bx+bw,by+bh))return 'se';
+    if(p.x>bx&&p.x<bx+bw&&p.y>by&&p.y<by+bh)return 'move';
+    return 'new';
+  }
+  function onDown(e){
+    if(e.cancelable)e.preventDefault();
+    var p=getPt(e);
+    var iw=img.clientWidth,ih=img.clientHeight;
+    if(!iw||!ih)return;
+    mode=hitTest(p);
+    startPt=p;
+    startRect={x:rect.x,y:rect.y,w:rect.w,h:rect.h};
+    if(mode==='new'){
+      rect={x:clamp(p.x/iw,0,1),y:clamp(p.y/ih,0,1),w:0.001,h:0.001};
+      mode='se-new';
+    }
+  }
+  function onMove(e){
+    if(!mode)return;
+    if(e.cancelable)e.preventDefault();
+    var p=getPt(e);
+    var iw=img.clientWidth,ih=img.clientHeight;
+    if(!iw||!ih)return;
+    var dx=(p.x-startPt.x)/iw,dy=(p.y-startPt.y)/ih;
+    if(mode==='move'){
+      rect.x=clamp(startRect.x+dx,0,1-startRect.w);
+      rect.y=clamp(startRect.y+dy,0,1-startRect.h);
+    }else if(mode==='se-new'){
+      rect.w=clamp(p.x/iw-rect.x,0.02,1-rect.x);
+      rect.h=clamp(p.y/ih-rect.y,0.02,1-rect.y);
+    }else if(mode==='se'){
+      rect.w=clamp(startRect.w+dx,0.04,1-rect.x);
+      rect.h=clamp(startRect.h+dy,0.04,1-rect.y);
+    }else if(mode==='nw'){
+      var nx=clamp(startRect.x+dx,0,startRect.x+startRect.w-0.04);
+      var ny=clamp(startRect.y+dy,0,startRect.y+startRect.h-0.04);
+      rect.w=startRect.x+startRect.w-nx;rect.h=startRect.y+startRect.h-ny;
+      rect.x=nx;rect.y=ny;
+    }else if(mode==='ne'){
+      var ny2=clamp(startRect.y+dy,0,startRect.y+startRect.h-0.04);
+      rect.w=clamp(startRect.w+dx,0.04,1-rect.x);
+      rect.h=startRect.y+startRect.h-ny2;
+      rect.y=ny2;
+    }else if(mode==='sw'){
+      var nx2=clamp(startRect.x+dx,0,startRect.x+startRect.w-0.04);
+      rect.w=startRect.x+startRect.w-nx2;rect.x=nx2;
+      rect.h=clamp(startRect.h+dy,0.04,1-rect.y);
+    }
+    applyRectStyle();
+  }
+  function onUp(){mode=null;}
+
+  stage.addEventListener('mousedown',onDown);
+  stage.addEventListener('touchstart',onDown,{passive:false});
+  window.addEventListener('mousemove',onMove);
+  window.addEventListener('touchmove',onMove,{passive:false});
+  window.addEventListener('mouseup',onUp);
+  window.addEventListener('touchend',onUp);
+
+  function cleanup(){
+    window.removeEventListener('mousemove',onMove);
+    window.removeEventListener('touchmove',onMove);
+    window.removeEventListener('mouseup',onUp);
+    window.removeEventListener('touchend',onUp);
+    window.removeEventListener('resize',applyRectStyle);
+    overlay.remove();
+  }
+
+  okBtn.onclick=function(){
+    try{localStorage.setItem('insp_ocr_crop_rect',JSON.stringify(rect));}catch(e){}
+    var nw=img.naturalWidth,nh=img.naturalHeight;
+    var sx=rect.x*nw,sy=rect.y*nh,sw=rect.w*nw,sh=rect.h*nh;
+    var cnv=document.createElement('canvas');
+    cnv.width=Math.max(1,Math.round(sw));cnv.height=Math.max(1,Math.round(sh));
+    var ctx=cnv.getContext('2d');
+    ctx.drawImage(img,sx,sy,sw,sh,0,0,cnv.width,cnv.height);
+    var croppedUrl=cnv.toDataURL('image/jpeg',0.92);
+    cleanup();
+    onConfirm(croppedUrl);
+  };
+  skipBtn.onclick=function(){cleanup();onConfirm(dataUrl);};
+  cancelBtn.onclick=function(){cleanup();if(onCancel)onCancel();};
 }
 
 // ── 냉방검사 사진 자동인식(OCR): 계측기 사진에서 흡입/토출 온도 자동 채움 ──
