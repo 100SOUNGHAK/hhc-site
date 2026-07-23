@@ -948,7 +948,18 @@ input[data-benefit]{display:none}
         </div>
         <div class="card-collapse-body" id="body-terms">
         <div style="padding:16px 18px">
+          <div class="field-label" style="display:flex;align-items:center;justify-content:space-between">
+            특약사항 (한글)
+          </div>
           <textarea id="f-terms" class="field-input sm" placeholder="특약사항 입력..."></textarea>
+          <div class="field-label" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+            특약사항 (영문) <span style="font-size:10px;color:var(--text3);font-weight:400">자동번역 또는 직접입력</span>
+            <button type="button" id="terms-translate-btn" style="font-size:10px;background:var(--violet);color:#fff;border:none;border-radius:4px;padding:2px 7px;cursor:pointer;font-weight:600">🤖 번역</button>
+          </div>
+          <div style="position:relative">
+            <textarea id="f-terms-en" class="field-input sm" placeholder="Auto-translate or enter manually"></textarea>
+            <div id="terms-translate-loading" style="display:none;position:absolute;right:8px;top:8px;width:14px;height:14px;border:2px solid var(--lavender);border-top-color:var(--violet);border-radius:50%;animation:spin .7s linear infinite"></div>
+          </div>
         </div>
         </div>
       </div>
@@ -1095,6 +1106,9 @@ input[data-benefit]{display:none}
           </div>
         </div>
 
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+          <button type="button" id="btn-translate-all-usage" style="font-size:11px;background:var(--violet);color:#fff;border:none;border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px">🤖 영문 미번역 항목 전체 번역</button>
+        </div>
         <div class="usage-list" id="usage-tbody"><div class="usage-empty">이용내역이 없습니다</div></div>
       </div>
     </div>
@@ -1293,8 +1307,6 @@ const BENEFITS=[
   {key:"deposit",ko:"예약보증금 면제",en:"Reservation Deposit Waiver",dko:"티타늄, 다이아몬드, 골드 회원 해당 (로얄 제외)",den:"Applicable to Titanium, Diamond, Gold members (Royal excluded)"},
   {key:"minbill",ko:"최저청구금액 면제",en:"Minimum Billing Waiver",dko:"실 서비스 이용금액만 청구 (최저청구금액 규정 무관)",den:"Charged only for actual service used"},
   {key:"inspect",ko:"점검출장서비스 무상제공",en:"Free Inspection Service",dko:"에어컨 문제 발생 시 방문 점검 무상 (잔액 500RM 이하 제외)",den:"Free on-site inspection (excluded if balance ≤RM500)"},
-  {key:"ceiling",ko:"실링팬청소서비스 무상제공",en:"Free Ceiling Fan Cleaning",dko:"로얄: 5대 / 골드~티타늄: 10대까지 무상",den:"Royal: up to 5 / Gold~Titanium: up to 10 units free"},
-  {key:"bulb",ko:"전등 교체 서비스 무상제공",en:"Free Light Bulb Replacement",dko:"5대까지 무상교체 (골드~티타늄 / 전등 사전구비 시)",den:"Up to 5 bulbs free (Gold~Titanium, if bulbs provided)"},
   {key:"ceilingDetail",ko:"실링팬청소서비스 무상제공",en:"Free Ceiling Fan Cleaning",dko:"로얄: 5대 / 골드: 10대까지 무상/ 다이아몬드:15대까지 무상/ 티타늄:무제한(단,1회청소시마다 최대 5대까지만 제공)",den:"Royal: up to 5 / Gold: up to 10 / Diamond: up to 15 / Titanium: unlimited (max 5 units per visit)"},
   {key:"bulbDetail",ko:"전등 교체 서비스 무상제공",en:"Free Light Bulb Replacement",dko:"5대까지 무상교체(골드)/10대까지(다이아,티타늄) [ 전등 사전구비 시]",den:"Up to 5 bulbs free (Gold) / up to 10 (Diamond, Titanium) [if bulbs provided]"},
   {key:"repair",ko:"수리 인건비 10% 할인",en:"10% Off Repair Labor",dko:"에어컨 수리·설치 인건비 10% 할인 (골드 이상)",den:"10% off labor for AC repair & install (Gold+ only)"},
@@ -1304,6 +1316,8 @@ const BENEFITS=[
   {key:"ceilingSpecial",ko:"실링팬청소서비스 무상제공",en:"Free Ceiling Fan Cleaning",dko:"스페셜해피홈: 무제한 (단, 1회 청소 시마다 최대 10대까지만 제공)",den:"Special Happy Home: unlimited (max 10 units per visit)"},
   {key:"bulbSpecial",ko:"전등 교체 서비스 무상제공",en:"Free Light Bulb Replacement",dko:"무제한 (단, 1회 5대 이내) [ 전등 사전구비 시]",den:"Unlimited (up to 5 per visit) [if bulbs provided]"},
   {key:"regularVisit",ko:"전담 정기 점검 방문 서비스 무상 제공",en:"Free Dedicated Regular Inspection Visit",dko:"3~6개월 주기 선택 가능",den:"Choose a 3–6 month visit cycle"},
+  {key:"ceiling",ko:"실링팬청소서비스 무상제공",en:"Free Ceiling Fan Cleaning",dko:"로얄: 5대 / 골드~티타늄: 10대까지 무상",den:"Royal: up to 5 / Gold~Titanium: up to 10 units free"},
+  {key:"bulb",ko:"전등 교체 서비스 무상제공",en:"Free Light Bulb Replacement",dko:"5대까지 무상교체 (골드~티타늄 / 전등 사전구비 시)",den:"Up to 5 bulbs free (Gold~Titanium, if bulbs provided)"},
 ];
 const SERVICES=[
   "에어컨 및 전 품목 세척서비스 (당사 취급하는), 설치 & 수리 서비스 (인건비; 기계·부품·자재비 별도)\nAir-conditioning & all cleaning services, installation & repair services (labour only; machinery, parts & materials charged separately)",
@@ -1592,6 +1606,7 @@ function getFormData(){
     special_bonus_credit:document.getElementById('f-special-bonus').value||'0',
     service_type:parseInt(document.querySelector('input[name="svc"]:checked')?.value||'0'),
     special_terms:document.getElementById('f-terms').value,
+    special_terms_en:document.getElementById('f-terms-en').value,
     benefits:JSON.stringify(benefits),
     usage_history:JSON.stringify(currentUsageHistory),
     contract_type:currentContractType,
@@ -1608,6 +1623,7 @@ function loadFormData(r){
   document.getElementById('f-bonus').value=r.bonus_credit||'';
   document.getElementById('f-special-bonus').value=r.special_bonus_credit||'0';
   document.getElementById('f-terms').value=r.special_terms||'';
+  document.getElementById('f-terms-en').value=r.special_terms_en||'';
   const st=r.service_type||0;
   document.querySelectorAll('input[name="svc"]').forEach(x=>{x.checked=parseInt(x.value)===st;});
   document.querySelectorAll('.svc-opt').forEach((o,i)=>o.classList.toggle('sel',i===st));
@@ -1630,7 +1646,7 @@ function loadFormData(r){
 function resetForm(){
   currentEditId=null;currentUsageHistory=[];
   document.getElementById('f-date').value=today();
-  ['f-name','f-phone','f-terms'].forEach(id=>document.getElementById(id).value='');
+  ['f-name','f-phone','f-terms','f-terms-en'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-package').value='';
   document.getElementById('f-paid').value='';
   document.getElementById('f-bonus').value='';
@@ -2086,7 +2102,7 @@ function buildCustomerHTML(c,L,mode){
     n++;html+='<div class="sec"><div class="sec-hdr"><div class="sec-num">'+n+'</div><div class="sec-title">'+T.sec_how+'</div></div><div class="sec-body"><div class="clause">'+T.how+'</div></div></div>';
     n++;html+='<div class="sec"><div class="sec-hdr"><div class="sec-num">'+n+'</div><div class="sec-title">'+T.sec_valid+'</div></div><div class="sec-body"><div class="clause">'+T.valid+'</div></div></div>';
     n++;html+='<div class="sec"><div class="sec-hdr"><div class="sec-num">'+n+'</div><div class="sec-title">'+T.sec_effect+'</div></div><div class="sec-body"><div class="clause">'+T.effect+'</div></div></div>';
-    if(c.special_terms&&c.special_terms.trim()){n++;html+='<div class="sec"><div class="sec-hdr"><div class="sec-num">'+n+'</div><div class="sec-title">'+T.sec_terms+'</div></div><div class="sec-body"><div class="terms-box">'+ncEsc(c.special_terms)+'</div></div></div>';}
+    if(c.special_terms&&c.special_terms.trim()){const termsTxt=(isEn&&c.special_terms_en&&c.special_terms_en.trim())?c.special_terms_en:c.special_terms;n++;html+='<div class="sec"><div class="sec-hdr"><div class="sec-num">'+n+'</div><div class="sec-title">'+T.sec_terms+'</div></div><div class="sec-body"><div class="terms-box">'+ncEsc(termsTxt)+'</div></div></div>';}
     const bens=typeof c.benefits==='string'?JSON.parse(c.benefits||'{}'):(c.benefits||{});
     const benList=BENEFITS.filter(x=>bens[x.key]);
     n++;
@@ -2111,7 +2127,7 @@ function buildCustomerHTML(c,L,mode){
   return html;
 }
 
-function renderCustomerView(){
+async function renderCustomerView(){
   const cs=document.getElementById('customer-select');
   cs.style.display=allContracts.length>1?'block':'none';
   let c=null;
@@ -2119,6 +2135,7 @@ function renderCustomerView(){
   if(!c&&currentEditId)c=allContracts.find(x=>x.__id===currentEditId);
   if(!c&&allContracts.length>0)c=allContracts[0];
   if(!c)c=getFormData();
+  if(currentLang==='en')await ensureContractEnglish(c);
 
   const pkg=PACKAGES.find(p=>p.id===c.package_id);
   const paid=parseFloat(c.amount_paid)||0,bonus=parseFloat(c.bonus_credit)||0,spec=parseFloat(c.special_bonus_credit)||0;
@@ -2146,7 +2163,7 @@ function renderCustomerView(){
 // ── SEND TAB ──
 let currentSendMode='contract';
 
-function renderSendTab(){
+async function renderSendTab(){
   const sel=document.getElementById('send-select');
   const c=allContracts.find(x=>x.__id===sel.value);
   const empty=document.getElementById('send-empty');
@@ -2160,6 +2177,8 @@ function renderSendTab(){
     modeBar.style.display='none';
     return;
   }
+
+  if(L==='en')await ensureContractEnglish(c);
 
   empty.style.display='none';
   content.style.display='block';
@@ -2199,7 +2218,7 @@ function renderSendTab(){
     <div class="send-row"><span class="send-row-lbl">${L==='en'?'Bonus':'적립금'}</span><span class="send-row-val">RM ${fmt(bonus)}</span></div>
     ${spec>0?`<div class="send-row"><span class="send-row-lbl">${L==='en'?'Special':'특별'}</span><span class="send-row-val">RM ${fmt(spec)}</span></div>`:''}
     ${bensHTML?`<div class="send-sh">${L==='en'?'Benefits':'혜택'}</div>${bensHTML}`:''}
-    ${c.special_terms?`<div class="send-sh">${L==='en'?'Special Terms':'특약사항'}</div><div style="background:var(--blue-bg);padding:9px 11px;border-radius:6px;font-size:12px">${c.special_terms}</div>`:''}
+    ${c.special_terms?`<div class="send-sh">${L==='en'?'Special Terms':'특약사항'}</div><div style="background:var(--blue-bg);padding:9px 11px;border-radius:6px;font-size:12px">${(L==='en'&&c.special_terms_en&&c.special_terms_en.trim())?c.special_terms_en:c.special_terms}</div>`:''}
     ${balBlock()}
     <div style="margin-top:10px;padding:10px 12px;background:var(--surface);border-radius:var(--radius-sm);border:1px solid var(--border)">
       <div style="font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.06em;margin-bottom:4px">${L==='en'?'CONTRACT LINK':'계약서 확인 링크'}</div>
@@ -2697,6 +2716,51 @@ document.getElementById('btn-gen-desc').addEventListener('click',()=>{
 // 초기 렌더링
 renderItemRows();
 
+// ── 공용 한→영 번역 헬퍼 ──
+async function gTranslateKoToEn(text){
+  const url=`https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q=${encodeURIComponent(text)}`;
+  const res=await fetch(url);
+  const data=await res.json();
+  return data[0]?.map(x=>x[0]).join('')||'';
+}
+
+// ── "계약서 보기" / "발송·공유" 상단의 한국어/English 버튼을 English로 전환할 때,
+//    특약사항·이용내역 중 아직 영문 번역이 안 된 내용을 자동으로 번역해서 채워준다.
+//    (저장된 계약이면 Firestore에도 반영해서 다음부터는 다시 번역할 필요가 없도록 캐싱)
+async function ensureContractEnglish(c){
+  if(!c)return false;
+  let changed=false;
+  const jobs=[];
+  if((c.special_terms||'').trim() && !((c.special_terms_en||'').trim())){
+    jobs.push(gTranslateKoToEn(c.special_terms).then(t=>{if(t){c.special_terms_en=t;changed=true;}}).catch(()=>{}));
+  }
+  const hist=typeof c.usage_history==='string'?JSON.parse(c.usage_history||'[]'):(c.usage_history||[]);
+  const missing=hist.filter(u=>(u.desc||'').trim() && !((u.desc_en||'').trim()));
+  if(missing.length){
+    jobs.push((async()=>{
+      for(const u of missing){
+        try{const t=await gTranslateKoToEn(u.desc);if(t){u.desc_en=t;changed=true;}}catch(e){}
+      }
+    })());
+  }
+  if(!jobs.length)return false;
+  showLoading(true);
+  try{await Promise.all(jobs);}finally{showLoading(false);}
+  if(missing.length)c.usage_history=JSON.stringify(hist);
+  if(changed&&c.__id&&db){
+    try{
+      await updateDoc(doc(db,'contracts',c.__id),{special_terms_en:c.special_terms_en||'',usage_history:c.usage_history});
+    }catch(e){console.warn('영문 자동번역 저장 실패:',e);}
+    if(currentEditId===c.__id){
+      const fte=document.getElementById('f-terms-en');
+      if(fte&&c.special_terms_en)fte.value=c.special_terms_en;
+      currentUsageHistory=hist;
+      renderUsage();
+    }
+  }
+  return changed;
+}
+
 // ── 번역 버튼 ──
 document.getElementById('btn-translate').addEventListener('click',async()=>{
   const desc=document.getElementById('u-desc').value.trim();
@@ -2754,6 +2818,44 @@ document.getElementById('usage-tbody').addEventListener('click',e=>{
   if(b){currentUsageHistory.splice(parseInt(b.dataset.di),1);renderUsage();persistUsage();}
   const ed=e.target.closest('[data-ei]');
   if(ed){showUsageEditModal(parseInt(ed.dataset.ei));}
+});
+
+// ── 특약사항 번역 버튼 ──
+document.getElementById('terms-translate-btn').addEventListener('click',async()=>{
+  const ko=document.getElementById('f-terms').value.trim();
+  if(!ko){showModal('알림','특약사항(한글)을 먼저 입력해주세요.',false);return;}
+  const loading=document.getElementById('terms-translate-loading');
+  const btn=document.getElementById('terms-translate-btn');
+  loading.style.display='block';btn.disabled=true;btn.textContent='번역중...';
+  try{
+    const translated=await gTranslateKoToEn(ko);
+    if(translated)document.getElementById('f-terms-en').value=translated;
+    else showModal('번역 실패','다시 시도해주세요.',false);
+  }catch(e){showModal('번역 오류','다시 시도해주세요: '+e.message,false);}
+  finally{loading.style.display='none';btn.disabled=false;btn.textContent='🤖 번역';}
+});
+
+// ── 이용내역 전체 일괄 번역 (영문 미번역 항목만) ──
+document.getElementById('btn-translate-all-usage').addEventListener('click',async()=>{
+  const targets=currentUsageHistory.filter(u=>(u.desc||'').trim()&&!(u.desc_en||'').trim());
+  if(!targets.length){showModal('알림','번역이 필요한 항목이 없습니다. (이미 모두 번역됨)',false);return;}
+  const btn=document.getElementById('btn-translate-all-usage');
+  const orig=btn.textContent;
+  btn.disabled=true;
+  try{
+    for(let i=0;i<targets.length;i++){
+      btn.textContent=`번역 중... (${i+1}/${targets.length})`;
+      try{
+        const translated=await gTranslateKoToEn(targets[i].desc);
+        if(translated)targets[i].desc_en=translated;
+      }catch(e){console.warn('번역 실패:',targets[i].desc,e);}
+    }
+    renderUsage();
+    if(currentEditId)await persistUsage();
+    showModal('완료',`${targets.length}건의 이용내역을 영문으로 번역했습니다.`+(currentEditId?'':' 계약을 저장하면 반영됩니다.'),false);
+  }finally{
+    btn.disabled=false;btn.textContent=orig;
+  }
 });
 
 document.getElementById('customer-select').addEventListener('change',e=>{currentViewId=e.target.value||null;renderCustomerView();});
@@ -2909,6 +3011,7 @@ window.generateContractPDF=async function generateContractPDF(shareType){
     // 먼저 계약서 뷰 탭으로 이동하여 계약서 렌더링
     const c=allContracts.find(x=>x.__id===contractId);
     if(!c){alert('계약서 데이터를 찾을 수 없습니다. 고객을 다시 선택해주세요.');document.body.removeChild(loadDiv);return;}
+    if(currentSendLang==='en')await ensureContractEnglish(c);
 
     // 현재 발송 모드(mode)에 맞춰 캡처 — 이용내역만/계약서만/전체
     const container=document.createElement('div');
@@ -3234,7 +3337,8 @@ function buildContractLiteHTML(c,L){
   html+='<div class="l-row"><span class="l-k">'+T.sec_svc+'</span><span class="l-v">'+ncEsc(svcLine)+'</span></div>';
   html+='<div class="l-row"><span class="l-k">'+T.sec_ben+'</span><span class="l-v">'+benText+'</span></div>';
   if(c.special_terms&&c.special_terms.trim()){
-    html+='<div class="l-row"><span class="l-k">'+T.sec_terms+'</span><span class="l-v">'+ncEsc(c.special_terms)+'</span></div>';
+    var termsTxt2=(isEn&&c.special_terms_en&&c.special_terms_en.trim())?c.special_terms_en:c.special_terms;
+    html+='<div class="l-row"><span class="l-k">'+T.sec_terms+'</span><span class="l-v">'+ncEsc(termsTxt2)+'</span></div>';
   }
   html+='<div class="l-clauses"><div><b>'+T.sec_how+'.</b> '+ncEsc(T.how)+'</div>'
     +'<div><b>'+T.sec_valid+'.</b> '+ncEsc(T.valid)+'</div>'
@@ -3281,12 +3385,13 @@ function buildUsageLiteHTML(c,L){
   return html;
 }
 
-function openPrintWithMode(mode){
+async function openPrintWithMode(mode){
   let c=null;
   if(currentViewId)c=allContracts.find(x=>x.__id===currentViewId);
   if(!c&&currentEditId)c=allContracts.find(x=>x.__id===currentEditId);
   if(!c&&allContracts.length>0)c=allContracts[0];
   if(!c)c=getFormData();
+  if(currentLang==='en')await ensureContractEnglish(c);
   const isLite=(mode==='lite'||mode==='lite_usage');
   const inner=mode==='lite'?buildContractLiteHTML(c,currentLang):(mode==='lite_usage'?buildUsageLiteHTML(c,currentLang):buildCustomerHTML(c,currentLang,mode));
   const styleBody=isLite?LITE_CSS:NC_PRINT_CSS;
