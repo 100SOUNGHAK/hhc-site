@@ -1233,26 +1233,31 @@ function handleCuPhotos(input,id,lbl){
     var addBtn=container.querySelector('.photo-add-group');
     container.insertBefore(item,addBtn);
     updatePhotoBadges();if(window.__scheduleDraft)window.__scheduleDraft();
-    // 저장되는 사진(photoData[k])은 원본 그대로 유지하고, 인식 정확도를 위해
+    // 저장되는 사진(photoData[k])은 압축본 그대로 유지하고, 인식 정확도를 위해
     // 숫자 하나씩 두 번 크롭한다: ① 흡입온도(위쪽 °C 숫자) ② 토출온도(아래 큰 숫자).
-    // 각 크롭에는 숫자 하나만 들어가므로 7세그먼트 전용 판독기가 정확히 읽을 수 있다.
+    // 크롭은 압축본(1600px)이 아니라 카메라 원본 파일에서 추출한다 — 멀리서
+    // 찍은 사진도 원본 해상도에서는 숫자가 충분히 크게 잘려 판독 정확도가 높다.
     var wrap=document.getElementById('cu-wrap-'+id);
     var taInp=wrap&&wrap.querySelector('.cu-ta');
     var tbInp=wrap&&wrap.querySelector('.cu-tb');
     if(taInp&&tbInp&&!taInp.value&&!tbInp.value){
-      showCropModal(dataUrl,{
+      var origUrl=URL.createObjectURL(f);
+      var releaseOrig=function(){try{URL.revokeObjectURL(origUrl);}catch(e){}};
+      showCropModal(origUrl,{
         title:'1/2 · <b style="color:#f0c040">흡입온도</b> 숫자만 박스로 딱 맞게 지정해주세요<br><span style="font-weight:400;font-size:11px;color:#ccc">위쪽 °C 숫자 (예: 29.2) — 아이콘·°C 글자는 빼고 숫자만</span>',
         storageKey:'insp_ocr_crop_rect_a'
       },function(cropA){
-        showCropModal(dataUrl,{
+        showCropModal(origUrl,{
           title:'2/2 · <b style="color:#6ec6ff">토출온도</b> 숫자만 박스로 딱 맞게 지정해주세요<br><span style="font-weight:400;font-size:11px;color:#ccc">제일 아래 큰 숫자 (예: 9.6)</span>',
           storageKey:'insp_ocr_crop_rect_b'
         },function(cropB){
+          releaseOrig();
           tryOcrFillCoolUnitPair(id,cropA,cropB);
         },function(){
+          releaseOrig();
           tryOcrFillCoolUnitPair(id,cropA,null); // 토출은 건너뜀 → 흡입만 인식
         });
-      });
+      },function(){releaseOrig();});
     }
   });
   input.value='';
@@ -1413,8 +1418,10 @@ function showCropModal(dataUrl,opts,onConfirm,onCancel){
     try{localStorage.setItem(storageKey,JSON.stringify(rect));}catch(e){}
     var nw=img.naturalWidth,nh=img.naturalHeight;
     var sx=rect.x*nw,sy=rect.y*nh,sw=rect.w*nw,sh=rect.h*nh;
+    // 원본 해상도 크롭이 지나치게 크면 판독에 불필요하므로 1200px로 제한
+    var outScale=sw>1200?1200/sw:1;
     var cnv=document.createElement('canvas');
-    cnv.width=Math.max(1,Math.round(sw));cnv.height=Math.max(1,Math.round(sh));
+    cnv.width=Math.max(1,Math.round(sw*outScale));cnv.height=Math.max(1,Math.round(sh*outScale));
     var ctx=cnv.getContext('2d');
     ctx.drawImage(img,sx,sy,sw,sh,0,0,cnv.width,cnv.height);
     var croppedUrl=cnv.toDataURL('image/jpeg',0.92);
@@ -1512,7 +1519,10 @@ function sevenSegDecode(dataUrl){
           for(var si=0;si<shears.length;si++){
             var r=_sevenSegFromImage(img,shears[si],modes[mi2]);
             if(!r)continue;
-            if(!bestM||r.energy>bestM.energy||(r.energy===bestM.energy&&r.margin>bestM.margin)){bestM=r;}
+            // 모드 내 순위: 정확일치多·근사少 우선 → 판정여유 → 투영에너지
+            var sr=r.exact-2*r.approx;
+            var sb=bestM?(bestM.exact-2*bestM.approx):-999;
+            if(!bestM||sr>sb||(sr===sb&&r.margin>bestM.margin)||(sr===sb&&r.margin===bestM.margin&&r.energy>bestM.energy)){bestM=r;}
           }
           if(bestM){bestM.mode=modes[mi2];cands.push(bestM);}
         }
@@ -1520,20 +1530,20 @@ function sevenSegDecode(dataUrl){
         // 선택 규칙: bright/adaptive는 둘 다 '밝기' 기반이라 흰 반사광(글레어)에
         // 같은 방향으로 속는다(상관 오류). chroma(채도)는 흰 빛에 영향을 받지
         // 않는 독립 신호이므로, 컬러 LCD에서는 chroma가 낀 일치를 우선한다.
-        var valOf=function(m){var c0=null;cands.forEach(function(x){if(x.mode===m)c0=x;});return c0?c0.val:null;};
-        var pickVal=function(v){var c0=null;cands.forEach(function(x){if(!c0&&x.val===v)c0=x;});return c0;};
-        var vb=valOf('bright'),vc=valOf('chroma'),va=valOf('adaptive');
+        // 원칙: 정확히 판독한 글자 수(exact)가 가장 많은 모드가 이미지 구조를
+        // 가장 잘 포착한 것 → 최다 exact 그룹(tops) 안에서만 우선순위 판단.
+        // 동급 다툼에서는 흰 반사광에 강한 chroma를 우선한다.
+        var maxExact=0;cands.forEach(function(x){if(x.exact>maxExact)maxExact=x.exact;});
+        var tops=cands.filter(function(x){return x.exact===maxExact;});
+        var topOf=function(m){var c0=null;tops.forEach(function(x){if(x.mode===m)c0=x;});return c0;};
+        var tb2=topOf('bright'),tc2=topOf('chroma'),ta2=topOf('adaptive');
         var final_=null;
-        if(vc&&(vc===vb||vc===va)){final_=pickVal(vc);}                       // chroma 포함 일치
+        if(tc2&&((tb2&&tb2.val===tc2.val)||(ta2&&ta2.val===tc2.val)))final_=tc2;      // ① chroma 포함 일치
+        else if(tc2&&tc2.approx===0&&tc2.margin>=0.25&&tops.length>1)final_=tc2;      // ② 동급 다툼 → 확신 있는 chroma(글레어 대응)
+        else if(tb2&&ta2&&tb2.val===ta2.val)final_=tb2;                               // ③ 밝기 계열 일치
         else{
-          var cCand=null;
-          cands.forEach(function(x){if(!cCand&&x.mode==='chroma'&&x.approx===0&&x.margin>=0.25)cCand=x;});
-          if(cCand)final_=cCand;                                              // 단독이라도 확신 있는 chroma
-          else if(vb&&vb===va)final_=pickVal(vb);                             // 밝기 계열 일치
-          else{
-            cands.sort(function(a,b){return (a.approx-b.approx)||(b.margin-a.margin);});
-            final_=cands[0];
-          }
+          tops.sort(function(a,b){return (a.approx-b.approx)||(b.margin-a.margin);});
+          final_=tops[0];
         }
         console.log('[7SEG] 최종 채택:',final_.val,'(mode',final_.mode,'shear',final_.shear,') 후보:',cands.map(function(c){return c.mode+'='+c.val;}).join(', '));
         resolve(final_.val);
@@ -1575,12 +1585,52 @@ function _sevenSegFromImage(img,shear,mode){
   ctx.drawImage(img,0,0,w0,h);
   ctx.setTransform(1,0,0,1,0,0);
   var d=ctx.getImageData(0,0,w,h).data;
+  // ── 지배 색상 필터: LCD 숫자는 한 가지 색이다. 크롭에 섞여 들어온 다른
+  // 색의 유채색 물체(빨간 기기 테두리, 손 등)는 배경으로 지워버린다. ──
+  var hueOf=function(r,g2,b){
+    var mx=Math.max(r,g2,b),mn=Math.min(r,g2,b),c=mx-mn;
+    if(c===0)return -1;
+    var hh2;
+    if(mx===r)hh2=((g2-b)/c+6)%6;else if(mx===g2)hh2=(b-r)/c+2;else hh2=(r-g2)/c+4;
+    return hh2*60;
+  };
+  var hueHist=new Array(36);for(var hb=0;hb<36;hb++)hueHist[hb]=0;
+  var chromArr=new Uint8Array(w*h),hueArr=new Int16Array(w*h);
+  var chromaticCnt=0;
+  for(var hp=0;hp<w*h;hp++){
+    var p0=hp*4;
+    var mx0=Math.max(d[p0],d[p0+1],d[p0+2]),mn0=Math.min(d[p0],d[p0+1],d[p0+2]);
+    var cr=mx0-mn0;
+    chromArr[hp]=cr;
+    if(cr>40){
+      var hu=hueOf(d[p0],d[p0+1],d[p0+2]);
+      hueArr[hp]=Math.round(hu);
+      hueHist[Math.min(35,Math.floor(hu/10))]+=cr*mx0/255; // 채도×밝기 가중
+      chromaticCnt++;
+    }else hueArr[hp]=-1;
+  }
+  var domBin=-1,domW=0,hueTotW=0;
+  for(var db=0;db<36;db++){
+    hueTotW+=hueHist[db];
+    // 원형 스무딩(±1빈)
+    var wsum=hueHist[db]+hueHist[(db+35)%36]*0.5+hueHist[(db+1)%36]*0.5;
+    if(wsum>domW){domW=wsum;domBin=db;}
+  }
+  var domHue=domBin*10+5;
+  // 지배 색상 ±50° 대역이 유채색 질량의 55% 이상일 때만 필터 작동
+  // (색이 노이즈처럼 사방으로 흩어져 있으면 지배 색상이라는 개념이 무의미)
+  var bandW=0;
+  if(domBin>=0){for(var db2=0;db2<36;db2++){var dd2=Math.abs(db2-domBin);if(Math.min(dd2,36-dd2)<=5)bandW+=hueHist[db2];}}
+  var hueFilterOn=chromaticCnt>=w*h*0.08&&domBin>=0&&bandW>=hueTotW*0.55;
+  var hueDist=function(a,b){var dd=Math.abs(a-b)%360;return dd>180?360-dd:dd;};
   // 그레이스케일: bright=밝기(max채널), chroma=채도(max-min: 컬러 숫자만 남음)
   var g=new Uint8Array(w*h),hist=new Array(256);
   for(var hi=0;hi<256;hi++)hist[hi]=0;
   for(var i=0;i<w*h;i++){
     var p=i*4;var mx=Math.max(d[p],d[p+1],d[p+2]);
-    var v=(mode==='chroma')?(mx-Math.min(d[p],d[p+1],d[p+2])):mx;
+    var v=(mode==='chroma')?chromArr[i]:mx;
+    // 지배 색상에서 50° 이상 벗어난 유채색 픽셀은 배경(0) 처리
+    if(hueFilterOn&&hueArr[i]>=0&&hueDist(hueArr[i],domHue)>50)v=0;
     g[i]=v;hist[v]++;
   }
   var total=w*h;
@@ -1685,9 +1735,24 @@ function _sevenSegFromImage(img,shear,mode){
     }
     if(gy1<0)continue;
     var gw=gx1-gx0+1,gh=gy1-gy0+1;
-    if(gh<=bh*0.30&&gy0>=bh*0.55){out+='.';continue;}  // 소수점(작고 아래쪽)
+    if(gw<Math.max(2,Math.round(bh*0.04)))continue;     // 극세 조각(노이즈 줄기) 무시
+    // 글리프 채움 비율: 진짜 숫자 획은 조밀하고, 노이즈 뭉치는 성기다
+    var fillCnt=0;
+    for(var fy=gy0;fy<=gy1;fy++)for(var fx=gx0;fx<=gx1;fx++)if(fg[(minY+fy)*w+(minX+fx)])fillCnt++;
+    var fillFrac=fillCnt/(gw*gh);
+    if(gh<=bh*0.30&&gy0>=bh*0.55){if(fillFrac>=0.40)out+='.';continue;} // 소수점(작고 아래쪽·조밀)
     if(gh<=bh*0.30)continue;                            // 마이너스·° 등 작은 기호 무시
-    if(gw/gh<0.40){out+='1';exact++;marginSum+=0.5;marginN++;continue;} // 폭이 매우 좁으면 1
+    // 크롭 경계에 딱 붙은 좁은 세로 띠는 잘려 들어온 주변 물체(기기 테두리·
+    // 반사광 줄기)다 — 진짜 숫자는 사용자가 여백을 두고 크롭하므로 경계에 안 닿음
+    var gx0Abs=minX+gx0,gx1Abs=minX+gx1,gy0Abs=minY+gy0,gy1Abs=minY+gy1;
+    var touchesSide=(gx0Abs<=1||gx1Abs>=w-2);
+    var touchesTB=(gy0Abs<=1&&gy1Abs>=h-2);
+    if((gw/gh<0.40&&touchesSide)||touchesTB){out+='?';continue;}
+    if(gw/gh<0.40){                                     // 폭이 매우 좁으면 1 (단, 조밀해야)
+      if(fillFrac>=0.45){out+='1';exact++;marginSum+=0.5;marginN++;}
+      else out+='?';
+      continue;
+    }
     var bits='',gMargin=1;
     for(var zi=0;zi<7;zi++){
       var z=zones[zi];
