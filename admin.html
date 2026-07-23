@@ -1858,8 +1858,13 @@ window.gotoUsageSend=function(){
 // ── 계약서 자동 임시저장 (localStorage) ──
 const LS_DRAFT='hhc_contract_draft_v1';
 let _draftTimer=null;
+// _draftDirty: 사용자가 "실제로" 입력/변경했는지 여부. false면 자동저장을 하지 않는다.
+// (저장 직후에도 화면 폼에는 값이 그대로 남아있으므로, 방어적으로 "실제 변경 없이는
+//  다시 임시저장을 만들지 않음"을 명시적으로 보장 — 계약서/인보이스/점검보고서 공통 패턴)
+let _draftDirty=false;
 function saveContractDraft(){
   if(currentEditId)return; // 기존 계약 수정 중엔 임시저장 안 함
+  if(!_draftDirty)return; // 방금 저장/초기화되어 실제 변경이 없으면 다시 만들지 않음
   try{
     const d=getFormData();
     if(!(d.name||'').trim() && !(d.amount_paid&&d.amount_paid!=='0') && !currentUsageHistory.length)return;
@@ -1868,8 +1873,8 @@ function saveContractDraft(){
     if(ind)ind.textContent='✓ 임시저장 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   }catch(e){}
 }
-window.scheduleContractDraft=function(){clearTimeout(_draftTimer);_draftTimer=setTimeout(saveContractDraft,1500);};
-function clearContractDraft(){try{localStorage.removeItem(LS_DRAFT);}catch(e){}const ind=document.getElementById('autosave-ind');if(ind)ind.textContent='';}
+window.scheduleContractDraft=function(){_draftDirty=true;clearTimeout(_draftTimer);_draftTimer=setTimeout(saveContractDraft,1500);};
+function clearContractDraft(){_draftDirty=false;try{localStorage.removeItem(LS_DRAFT);}catch(e){}const ind=document.getElementById('autosave-ind');if(ind)ind.textContent='';}
 window.clearContractDraft=clearContractDraft;
 function restoreContractDraftBanner(){
   let raw;try{raw=localStorage.getItem(LS_DRAFT);}catch(e){return;}

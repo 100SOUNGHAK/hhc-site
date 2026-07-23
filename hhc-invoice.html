@@ -2850,7 +2850,13 @@ async function runInvoiceView(vid,lang){
 // ═══════════════════════════════════════════════════════════
 var INV_DRAFT='hhc_inv_draft1';
 var _invDraftTimer=null;
+// _invDraftDirty: 사용자가 "실제로" 입력/변경했는지 여부. false면 자동저장을 하지 않는다.
+// (저장 완료 직후에는 화면 필드가 그대로 남아있어도 이미 정식 저장된 상태이므로,
+//  20초 주기 자동저장이 이를 "임시저장 초안"으로 다시 만들어버리는 것을 막기 위함 — 이게
+//  "저장하지 않은 인보이스" 안내가 저장 후에도 계속 뜨던 원인이었음)
+var _invDraftDirty=false;
 function saveInvDraft(){
+  if(!_invDraftDirty)return;
   try{
     var d=getInvData();
     var has=(d.customer.name||'').trim()||d.items.length||(d.notes||'').trim();
@@ -2860,8 +2866,8 @@ function saveInvDraft(){
     if(ind)ind.textContent='✓ 임시저장 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   }catch(e){}
 }
-function scheduleInvDraft(){clearTimeout(_invDraftTimer);_invDraftTimer=setTimeout(saveInvDraft,1500);}
-function clearInvDraft(){try{localStorage.removeItem(INV_DRAFT);}catch(e){}var ind=$('inv-autosave-ind');if(ind)ind.textContent='';var b=$('inv-draft-banner');if(b)b.remove();}
+function scheduleInvDraft(){_invDraftDirty=true;clearTimeout(_invDraftTimer);_invDraftTimer=setTimeout(saveInvDraft,1500);}
+function clearInvDraft(){_invDraftDirty=false;try{localStorage.removeItem(INV_DRAFT);}catch(e){}var ind=$('inv-autosave-ind');if(ind)ind.textContent='';var b=$('inv-draft-banner');if(b)b.remove();}
 function loadInvDraft(d){
   setVal('inv-num',d.id);setVal('inv-date',d.date);setVal('inv-due',d.due);setVal('inv-status',d.status||'billing');setVal('inv-currency',d.currency||'MYR');
   var c=d.customer||{};

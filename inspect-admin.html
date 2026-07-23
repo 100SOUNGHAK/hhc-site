@@ -2901,9 +2901,15 @@ function hideSaveProg(){var b=document.getElementById('save-prog');if(b)b.classL
 // ═══════════════════════════════════════════
 var DRAFT_KEY='hhc_admin_draft_v1';
 var draftTimer=null;
+// _draftDirty: 사용자가 "실제로" 입력/변경했는지 여부. false면 자동저장을 하지 않는다.
+// (저장 성공 후 currentEditId가 다시 null로 초기화되는데, 화면 폼은 그대로 남아있어서
+//  15초 주기 자동저장이 이미 저장된 내용을 "임시저장 초안"으로 다시 만들어버리는 문제가 있었음
+//  — 이게 저장 후에도 "저장하지 않은 보고서" 안내가 계속 뜨던 원인)
+var _draftDirty=false;
 function collectByType(){return reportType==='install'?collectInstallData():(reportType==='washer'?collectWasherData():collectData());}
 function saveDraft(){
   if(currentEditId)return; // 기존 보고서 수정 중엔 미저장
+  if(!_draftDirty)return; // 방금 저장/초기화되어 실제 변경이 없으면 다시 만들지 않음
   try{
     var d=collectByType();
     var hasContent=(d.client||'').trim()||(d.opinion||'').trim()||(d.diag1||'').trim()||(d.defects&&d.defects.length)||(d.measurements&&d.measurements.length)||(d.products&&d.products.length);
@@ -2913,8 +2919,8 @@ function saveDraft(){
     var tag=document.getElementById('autosave-ind');if(tag)tag.textContent='✓ 임시저장 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   }catch(e){/* 용량초과 등 무시 */}
 }
-window.__scheduleDraft=function(){clearTimeout(draftTimer);draftTimer=setTimeout(saveDraft,1500);};
-window.__clearDraft=function(){try{localStorage.removeItem(DRAFT_KEY);}catch(e){}var tag=document.getElementById('autosave-ind');if(tag)tag.textContent='';};
+window.__scheduleDraft=function(){_draftDirty=true;clearTimeout(draftTimer);draftTimer=setTimeout(saveDraft,1500);};
+window.__clearDraft=function(){_draftDirty=false;try{localStorage.removeItem(DRAFT_KEY);}catch(e){}var tag=document.getElementById('autosave-ind');if(tag)tag.textContent='';};
 document.addEventListener('input',function(e){if(e.target.closest&&e.target.closest('#view-form'))window.__scheduleDraft();});
 document.addEventListener('change',function(e){if(e.target.closest&&e.target.closest('#view-form'))window.__scheduleDraft();});
 setInterval(function(){if(!currentEditId)saveDraft();},15000);
