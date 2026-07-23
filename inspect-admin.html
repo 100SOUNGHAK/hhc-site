@@ -144,6 +144,27 @@ textarea{resize:vertical;line-height:1.6}
 .lcard-eval{font-size:12px;font-weight:500}
 .lcard-actions{display:flex;gap:6px;padding:10px 12px;flex-wrap:wrap}
 .la-btn{flex:1;padding:7px;border-radius:6px;border:none;font-size:11px;font-weight:500;cursor:pointer;text-align:center;min-width:50px}
+/* 고객관리 */
+.cust-card{background:#fff;border:0.5px solid #e0e0e8;border-radius:10px;padding:12px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.cust-avatar{width:38px;height:38px;border-radius:50%;background:#eef1ff;color:#1d3fd6;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0}
+.cust-info{flex:1;min-width:0}
+.cust-name{font-size:14px;font-weight:700;color:#0F1C3F;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.cust-sub{font-size:11.5px;color:#6b7280;margin-top:2px}
+.cust-badge{font-size:10px;font-weight:700;background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.type-mini{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap}
+.type-chip{font-size:9.5px;font-weight:700;padding:1px 6px;border-radius:10px;display:inline-block}
+.tc-inspect{background:#e0f2fe;color:#0369a1}
+.tc-dispatch{background:#ede9fe;color:#6d28d9}
+.tc-install{background:#fef3c7;color:#b45309}
+.tc-washer{background:#e0f7fa;color:#00767b}
+.cust-back-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.cust-back-btn{font-size:12px;color:#1d3fd6;font-weight:600;cursor:pointer}
+.cust-detail-name{font-size:16px;font-weight:800;color:#0F1C3F}
+.cust-detail-stats{display:flex;gap:8px;margin:10px 0 14px}
+.cust-stat-box{flex:1;background:#f8f9fc;border-radius:8px;padding:8px;text-align:center}
+.cust-stat-val{font-size:14px;font-weight:800;color:#1d3fd6}
+.cust-stat-lbl{font-size:9.5px;color:#8a8a9a;margin-top:2px}
+.cust-section-label{font-size:10.5px;font-weight:700;color:#8a8a9a;letter-spacing:.04em;text-transform:uppercase;margin:14px 0 8px}
 /* 토스트 */
 .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#0F1C3F;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1}
@@ -192,6 +213,7 @@ textarea{resize:vertical;line-height:1.6}
   <div class="view-tabs">
     <div class="view-tab on" onclick="switchView('form')">✏️ 작성</div>
     <div class="view-tab" onclick="switchView('list')">📋 목록</div>
+    <div class="view-tab" onclick="switchView('customers')">👥 고객</div>
   </div>
 </div>
 
@@ -672,6 +694,26 @@ textarea{resize:vertical;line-height:1.6}
     <button class="sort-btn" onclick="sortList('name-asc',this)">🔤 이름순</button>
   </div>
   <div id="list-container"><div style="text-align:center;padding:40px;color:#8a8a9a">불러오는 중...</div></div>
+</div>
+
+<!-- ════ 고객관리 화면 ════ -->
+<div id="view-customers" style="display:none" class="main">
+  <div id="cust-list-panel">
+    <input class="list-search" id="cust-search" placeholder="고객명 검색..." oninput="filterCustomers()">
+    <div id="cust-list-container"><div style="text-align:center;padding:40px;color:#8a8a9a">불러오는 중...</div></div>
+  </div>
+  <div id="cust-detail-panel" style="display:none">
+    <div class="cust-back-row"><span class="cust-back-btn" onclick="backToCustomerList()">‹ 고객 목록으로</span></div>
+    <div class="cust-detail-name" id="cust-detail-name"></div>
+    <div class="cust-sub" id="cust-detail-addr"></div>
+    <div class="cust-detail-stats">
+      <div class="cust-stat-box"><div class="cust-stat-val" id="cust-stat-total">0</div><div class="cust-stat-lbl">총 보고서</div></div>
+      <div class="cust-stat-box"><div class="cust-stat-val" id="cust-stat-recent">—</div><div class="cust-stat-lbl">최근 방문</div></div>
+      <div class="cust-stat-box"><div class="cust-stat-val" id="cust-stat-first">—</div><div class="cust-stat-lbl">최초 방문</div></div>
+    </div>
+    <div class="cust-section-label">보고서 목록 (최신순)</div>
+    <div id="cust-detail-reports"></div>
+  </div>
 </div>
 
 <!-- 발송 모달 -->
@@ -2112,9 +2154,11 @@ function checkDup(val){
 function switchView(v){
   gid('view-form').style.display=v==='form'?'block':'none';
   gid('view-list').style.display=v==='list'?'block':'none';
-  gid('hdr-title').textContent=v==='form'?'에어컨 점검보고서 작성':'보고서 목록';
-  document.querySelectorAll('.view-tab').forEach(function(t,i){t.classList.toggle('on',(i===0&&v==='form')||(i===1&&v==='list'));});
+  gid('view-customers').style.display=v==='customers'?'block':'none';
+  gid('hdr-title').textContent=v==='form'?'에어컨 점검보고서 작성':(v==='list'?'보고서 목록':'고객관리');
+  document.querySelectorAll('.view-tab').forEach(function(t,i){t.classList.toggle('on',(i===0&&v==='form')||(i===1&&v==='list')||(i===2&&v==='customers'));});
   if(v==='list')loadList();
+  if(v==='customers'){gid('cust-list-panel').style.display='block';gid('cust-detail-panel').style.display='none';currentCustName=null;loadCustomers();}
 }
 
 // ═══════════════════════════════════════════
@@ -2136,8 +2180,8 @@ function filterList(){
   renderList(items);
 }
 var EVAL_LBL={normal:'🟢 정상',preventive:'🟡 예방정비 권장',repair:'🟠 수리 권장',urgent:'🔴 즉시수리 필요'};
-function renderList(items){
-  var el=gid('list-container');
+function renderList(items,targetId){
+  var el=gid(targetId||'list-container');
   if(!items.length){el.innerHTML='<div style="text-align:center;padding:40px;color:#8a8a9a">보고서 없음</div>';return;}
   el.innerHTML=items.map(function(r){
     var id=r._id;
@@ -2167,6 +2211,92 @@ function renderList(items){
       '</div>'+
     '</div>';
   }).join('');
+}
+
+// ═══════════════════════════════════════════
+// 고객관리 (보고서를 고객명 기준으로 그룹핑)
+// 참고: allReports는 loadList/loadCustomers 호출 시마다 최근 50건으로 갱신되므로,
+// 고객별 집계도 "최근 50건" 범위 내에서만 이루어진다 (기존 목록 탭과 동일한 제약).
+// ═══════════════════════════════════════════
+var currentCustName=null;
+function normName(s){return(s||'').trim().replace(/\s+/g,' ').toLowerCase();}
+window.loadCustomers=async function(){
+  if(DB){
+    try{
+      var snap=await getDocs(query(collection(DB,'inspections'),orderBy('createdAt','desc'),limit(50)));
+      allReports=snap.docs.map(function(d){return Object.assign({_id:d.id},d.data());});
+    }catch(e){gid('cust-list-container').innerHTML='<div style="text-align:center;padding:30px;color:#c0392b">로딩 실패: '+e.message+'</div>';return;}
+  }
+  filterCustomers();
+};
+function groupCustomers(){
+  var map={};
+  allReports.forEach(function(r){
+    var key=normName(r.client);
+    if(!key)return;
+    if(!map[key])map[key]={name:r.client,addr:r.addr||'',reports:[],lastDate:'',firstDate:''};
+    map[key].reports.push(r);
+    if(!map[key].lastDate||(r.date||'')>map[key].lastDate){map[key].lastDate=r.date||'';if(r.addr)map[key].addr=r.addr;}
+    if(!map[key].firstDate||(r.date||'')<map[key].firstDate)map[key].firstDate=r.date||'';
+  });
+  var list=Object.keys(map).map(function(k){return map[k];});
+  list.forEach(function(c){c.reports.sort(function(a,b){return(b.date||'').localeCompare(a.date||'');});});
+  return list;
+}
+function filterCustomers(){
+  var el=gid('cust-search');
+  var q=(el&&el.value||'').toLowerCase();
+  var list=groupCustomers().filter(function(c){return!q||(c.name||'').toLowerCase().includes(q);});
+  list.sort(function(a,b){return(b.lastDate||'').localeCompare(a.lastDate||'');});
+  renderCustomerList(list);
+}
+var TYPE_CHIP_LBL={inspect:{cls:'tc-inspect',lbl:'📋 점검'},dispatch:{cls:'tc-dispatch',lbl:'🚐 출장'},install:{cls:'tc-install',lbl:'🔧 설치'},washer:{cls:'tc-washer',lbl:'🌀 세탁기'}};
+function renderCustomerList(list){
+  var el=gid('cust-list-container');
+  if(!list.length){el.innerHTML='<div style="text-align:center;padding:40px;color:#8a8a9a">고객 없음</div>';return;}
+  el.innerHTML=list.map(function(c){
+    var typeCounts={};
+    c.reports.forEach(function(r){var t=r.type||'inspect';typeCounts[t]=(typeCounts[t]||0)+1;});
+    var chips=Object.keys(typeCounts).map(function(t){var m=TYPE_CHIP_LBL[t]||TYPE_CHIP_LBL.inspect;return '<span class="type-chip '+m.cls+'">'+m.lbl+' '+typeCounts[t]+'</span>';}).join('');
+    var initials=(c.name||'?').replace(/\s+/g,'').slice(0,2);
+    return '<div class="cust-card" onclick="openCustomerDetail(\''+encodeURIComponent(c.name)+'\')">'+
+      '<div class="cust-avatar">'+initials+'</div>'+
+      '<div class="cust-info">'+
+        '<div class="cust-name">'+(c.name||'(이름없음)')+'<span class="cust-badge">'+c.reports.length+'건</span></div>'+
+        '<div class="cust-sub">최근 방문 '+(c.lastDate||'—')+(c.addr?' · '+c.addr:'')+'</div>'+
+        '<div class="type-mini">'+chips+'</div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+window.openCustomerDetail=function(encName){
+  var name=decodeURIComponent(encName);
+  var c=groupCustomers().find(function(x){return normName(x.name)===normName(name);});
+  if(!c)return;
+  currentCustName=c.name;
+  gid('cust-list-panel').style.display='none';
+  gid('cust-detail-panel').style.display='block';
+  gid('cust-detail-name').textContent=c.name||'(이름없음)';
+  gid('cust-detail-addr').textContent=c.addr||'';
+  gid('cust-stat-total').textContent=c.reports.length;
+  gid('cust-stat-recent').textContent=c.lastDate||'—';
+  gid('cust-stat-first').textContent=c.firstDate||'—';
+  renderList(c.reports,'cust-detail-reports');
+};
+window.backToCustomerList=function(){
+  currentCustName=null;
+  gid('cust-detail-panel').style.display='none';
+  gid('cust-list-panel').style.display='block';
+  filterCustomers();
+};
+function refreshCustomerDetailIfOpen(){
+  if(!currentCustName)return;
+  var c=groupCustomers().find(function(x){return normName(x.name)===normName(currentCustName);});
+  if(!c){backToCustomerList();return;}
+  gid('cust-stat-total').textContent=c.reports.length;
+  gid('cust-stat-recent').textContent=c.lastDate||'—';
+  gid('cust-stat-first').textContent=c.firstDate||'—';
+  renderList(c.reports,'cust-detail-reports');
 }
 
 // ═══════════════════════════════════════════
@@ -2600,7 +2730,7 @@ window.editReport=async function(id){
 };
 window.delReport=async function(id){
   if(!confirm('삭제하시겠습니까?'))return;
-  try{await deleteDoc(doc(DB,'inspections',id));allReports=allReports.filter(function(r){return r._id!==id;});filterList();toast('✓ 삭제됨');}
+  try{await deleteDoc(doc(DB,'inspections',id));allReports=allReports.filter(function(r){return r._id!==id;});filterList();refreshCustomerDetailIfOpen();toast('✓ 삭제됨');}
   catch(e){toast('삭제 실패: '+e.message);}
 };
 
