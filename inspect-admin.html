@@ -3568,28 +3568,30 @@ window.loadCustomers=async function(){
 };
 
 // ── 목록 액션
-function buildListSendMsg(r,url){
-  var type=(r&&r.type==='install')?'install':((r&&r.type==='washer')?'washer':((r&&r.type==='dispatch')?'dispatch':'inspect'));
-  var RTL=window.REPORT_TYPE_LABEL||{};
-  var typeLbl=(RTL[type]||RTL.inspect||{ko:'점검보고서'}).ko;
-  var name=(r&&r.client)||'고객';
-  var div='────────────────';
-  return '안녕하세요, '+name+'님 😊\n\n📋 '+typeLbl+'가 준비되었습니다 ✅\n'+div+'\n아래 링크에서 사진과 점검 내용을 확인하실 수 있습니다.\n'+div+'\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n🔗 보고서 확인:\n'+url;
-}
-window.sendFromList=async function(id){
+// WA/카카오 발송 모두 언어 선택(한국어/English)이 가능한 발송 모달을 연다.
+// 모달에서 언어를 바꾸면 메시지와 링크(?lang=)가 함께 전환된다.
+window.openSendModalFor=async function(id){
   var r=allReports.find(function(x){return x._id===id;});
-  var pageFile=(r&&r.type==='install')?'install.html':((r&&r.type==='washer')?'washer.html':'inspect.html');
-  var url=await shorten('https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=ko');
-  var msg=buildListSendMsg(r,url);
-  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+  if(!r){toast('보고서를 찾을 수 없습니다.');return;}
+  var pageFile=(r.type==='install')?'install.html':((r.type==='washer')?'washer.html':'inspect.html');
+  toast('링크 생성 중...');
+  var koUrl='https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=ko';
+  var enUrl='https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=en';
+  try{
+    shortUrls.ko=await shorten(koUrl);
+    shortUrls.en=await shorten(enUrl);
+  }catch(e){shortUrls.ko=koUrl;shortUrls.en=enUrl;}
+  window._sendCtx={
+    client:r.client||'',
+    type:(r.type==='install')?'install':((r.type==='washer')?'washer':((r.type==='dispatch')?'dispatch':'inspect'))
+  };
+  var koRadio=document.querySelector('input[name="slang"][value="ko"]');
+  if(koRadio)koRadio.checked=true;
+  updateSendMsg();
+  document.getElementById('send-modal').style.display='flex';
 };
-window.kakaoFromList=async function(id){
-  var r=allReports.find(function(x){return x._id===id;});
-  var pageFile=(r&&r.type==='install')?'install.html':((r&&r.type==='washer')?'washer.html':'inspect.html');
-  var url=await shorten('https://hhc-3p8.pages.dev/'+pageFile+'?id='+id+'&lang=ko');
-  var msg=buildListSendMsg(r,url);
-  navigator.clipboard.writeText(msg).then(function(){toast('✓ 카카오 메시지 복사됨');});
-};
+window.sendFromList=function(id){window.openSendModalFor(id);};
+window.kakaoFromList=function(id){window.openSendModalFor(id);};
 window.editReport=async function(id){
   if(!DB)return;
   try{

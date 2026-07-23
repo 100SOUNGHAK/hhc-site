@@ -416,20 +416,55 @@ if(!bookingId){
     onSnapshot(doc(db,'bookings',bookingId),(snap)=>{
       if(!snap.exists()){showError('예약 정보를 찾을 수 없습니다','링크가 만료되었거나 잘못되었습니다. 관리자에게 문의해주세요.');return;}
       bookingData={...snap.data(),__id:snap.id};
+      // URL의 ?lang= 파라미터가 있으면 우선 적용(발송 시 선택한 언어로 열림),
+      // 이후 고객이 직접 전환한 언어(_userLang)가 있으면 그것을 최우선
+      const urlLang=params.get('lang');
+      if(window._userLang==='en'||window._userLang==='ko')bookingData.customer_lang=window._userLang;
+      else if(urlLang==='en'||urlLang==='ko')bookingData.customer_lang=urlLang;
       availableDates=bookingData.schedule_dates?JSON.parse(bookingData.schedule_dates):[];
       scheduleMap=bookingData.schedule_times?JSON.parse(bookingData.schedule_times):{};
       document.getElementById('state-loading').style.display='none';
 
-      if(bookingData.status==='booked'||bookingData.status==='confirmed'){
-        showAlreadyBooked();
-      }else{
-        document.getElementById('main-content').style.display='block';
-        initBookingForm();
-      }
+      renderByStatus();
+      ensureLangToggle();
     },(err)=>showError('데이터 로드 실패',err.message));
   }catch(e){showError('연결 실패',e.message);}
 }
 
+function renderByStatus(){
+  if(!bookingData)return;
+  if(bookingData.status==='booked'||bookingData.status==='confirmed'){
+    showAlreadyBooked();
+  }else{
+    document.getElementById('main-content').style.display='block';
+    initBookingForm();
+  }
+}
+// 우측 상단 고정 언어 전환 버튼(한국어/EN) — 언제든 언어 전환 가능
+function ensureLangToggle(){
+  if(document.getElementById('lang-toggle'))return _syncLangToggle();
+  const bar=document.createElement('div');
+  bar.id='lang-toggle';
+  bar.style.cssText='position:fixed;top:10px;right:10px;z-index:1000;display:flex;gap:0;border:1px solid #DDE1EE;border-radius:20px;overflow:hidden;background:#fff;box-shadow:0 2px 10px rgba(15,28,63,.12)';
+  bar.innerHTML='<button id="lt-ko" style="padding:7px 13px;font-size:12px;font-weight:700;border:none;cursor:pointer;background:transparent">한국어</button>'
+    +'<button id="lt-en" style="padding:7px 13px;font-size:12px;font-weight:700;border:none;cursor:pointer;background:transparent">EN</button>';
+  document.body.appendChild(bar);
+  document.getElementById('lt-ko').onclick=()=>_setUserLang('ko');
+  document.getElementById('lt-en').onclick=()=>_setUserLang('en');
+  _syncLangToggle();
+}
+function _setUserLang(lang){
+  window._userLang=lang;
+  if(bookingData)bookingData.customer_lang=lang;
+  _syncLangToggle();
+  renderByStatus();
+}
+function _syncLangToggle(){
+  const cur=(bookingData&&bookingData.customer_lang)==='en'?'en':'ko';
+  const ko=document.getElementById('lt-ko'),en=document.getElementById('lt-en');
+  if(ko){ko.style.background=cur==='ko'?'#0FB5A4':'transparent';ko.style.color=cur==='ko'?'#fff':'#8693B5';}
+  if(en){en.style.background=cur==='en'?'#0FB5A4':'transparent';en.style.color=cur==='en'?'#fff':'#8693B5';}
+}
 function showAlreadyBooked(){
   const lang=bookingData.customer_lang||'ko';
   const isEn=lang==='en';

@@ -1809,9 +1809,15 @@ function showUsageEditModal(idx){
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
 }
 
+// 고객 링크에 언어 파라미터를 반영/교체 — 발송 언어로 열리게 하고,
+// 고객은 페이지 상단의 한국어/EN 버튼으로 언제든 전환 가능
+function withLang(url,lang){
+  lang=(lang==='en')?'en':'ko';
+  return url.replace(/[&?]lang=\w+/,'')+(url.indexOf('?')>=0?'&':'?')+'lang='+lang;
+}
 function updateCustomerLink(id,mode){
   mode=mode||'all';
-  const url=`${ncSelfBase()}?view=${id}&mode=${mode}`;
+  const url=withLang(`${ncSelfBase()}?view=${id}&mode=${mode}`,currentSendLang);
   document.getElementById('clink-url').textContent=url;
   document.getElementById('clink-box').style.display='block';
 }
@@ -2303,13 +2309,15 @@ async function renderSendTab(){
   const msg=makeMsg(currentSendMode);
 
   document.getElementById('btn-wa-send').addEventListener('click',async()=>{
-    const lnk=document.getElementById('clink-url')?document.getElementById('clink-url').textContent:'';
+    let lnk=document.getElementById('clink-url')?document.getElementById('clink-url').textContent:'';
+    if(lnk)lnk=withLang(lnk,currentSendLang);
     const shortLnk=lnk?await shorten(lnk):'';
     const shortMsg=lnk?msg.replace(lnk,shortLnk):msg;
     window.open(`https://wa.me/?text=${encodeURIComponent(shortMsg)}`,'_blank');
   });
   document.getElementById('btn-kakao-send').addEventListener('click',async()=>{
-    const lnk=document.getElementById('clink-url')?document.getElementById('clink-url').textContent:'';
+    let lnk=document.getElementById('clink-url')?document.getElementById('clink-url').textContent:'';
+    if(lnk)lnk=withLang(lnk,currentSendLang);
     const shortLnk=lnk?await shorten(lnk):'';
     const shortMsg=lnk?msg.replace(lnk,shortLnk):msg;
     navigator.clipboard.writeText(shortMsg).then(()=>{
@@ -3058,7 +3066,7 @@ window.generateContractPDF=async function generateContractPDF(shareType){
 
     // 3. 모든 링크 TinyURL 단축
     loadDiv.querySelector('span').textContent='링크 단축 중...';
-    const webURL=`${ncSelfBase()}?view=${contractId}&mode=${currentSendMode}`;
+    const webURL=withLang(`${ncSelfBase()}?view=${contractId}&mode=${currentSendMode}`,currentSendLang);
     const urlsToShorten=[webURL,downloadURL];
     if(driveURL)urlsToShorten.push(driveURL);
     const shortened=await shortenAll(urlsToShorten);
@@ -3102,7 +3110,7 @@ function buildContractMsg(c, webURL, pdfViewURL, pdfDlURL, lang, mode){
   const carryT=h.reduce((s,u)=>s+(parseFloat(u.carryover)||0),0);
   const remain=total-usedT+discT+carryT;
   const name=c.name||'고객';
-  const url=webURL||`${ncSelfBase()}?view=${c.__id}&mode=${mode}`;
+  const url=withLang(webURL||`${ncSelfBase()}?view=${c.__id}&mode=${mode}`,lang);
   // PDF 보기와 다운로드가 같으면 하나만 표시
   let pdfLines='';
   if(pdfViewURL&&pdfDlURL&&pdfViewURL===pdfDlURL){
@@ -3143,14 +3151,14 @@ function getPanelMsg(){
 document.getElementById('btn-wa-link').addEventListener('click',async()=>{
   const msg=getPanelMsg();
   const lnk=document.getElementById('clink-url').textContent;
-  const shortLnk=await shorten(lnk);
+  const shortLnk=await shorten(withLang(lnk,currentSendLang));
   const shortMsg=msg.replace(lnk,shortLnk);
   window.open(`https://wa.me/?text=${encodeURIComponent(shortMsg)}`,'_blank');
 });
 document.getElementById('btn-kakao-link').addEventListener('click',async()=>{
   const msg=getPanelMsg();
   const lnk=document.getElementById('clink-url').textContent;
-  const shortLnk=await shorten(lnk);
+  const shortLnk=await shorten(withLang(lnk,currentSendLang));
   const shortMsg=msg.replace(lnk,shortLnk);
   navigator.clipboard.writeText(shortMsg).then(()=>{
     const ok=document.getElementById('kakao-ok');ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
