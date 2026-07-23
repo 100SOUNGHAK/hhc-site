@@ -165,6 +165,7 @@ textarea{resize:vertical;line-height:1.6}
 .cust-stat-val{font-size:14px;font-weight:800;color:#1d3fd6}
 .cust-stat-lbl{font-size:9.5px;color:#8a8a9a;margin-top:2px}
 .cust-section-label{font-size:10.5px;font-weight:700;color:#8a8a9a;letter-spacing:.04em;text-transform:uppercase;margin:14px 0 8px}
+.cust-revisit-btn{width:100%;margin-top:12px;padding:11px;background:linear-gradient(135deg,#0F1C3F,#1d3fd6);color:#fff;border:none;border-radius:10px;font-size:12.5px;font-weight:700;cursor:pointer}
 /* 토스트 */
 .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#0F1C3F;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1}
@@ -198,6 +199,15 @@ textarea{resize:vertical;line-height:1.6}
 .sp-bar{height:6px;background:#eef1ff;border-radius:3px;overflow:hidden;margin-top:12px}
 .sp-fill{height:100%;background:#0D9488;width:0%;transition:width .2s}
 .autosave-tag{font-size:10px;color:#0a7a4a;font-weight:600}
+/* 섹션 이동 네비게이션 */
+.section-nav{position:sticky;top:0;background:#f0f2f8;display:flex;gap:6px;overflow-x:auto;padding:8px 2px;margin-bottom:10px;z-index:20;-webkit-overflow-scrolling:touch}
+.section-nav::-webkit-scrollbar{display:none}
+.section-nav-pill{flex-shrink:0;padding:6px 12px;border-radius:14px;background:#fff;border:0.5px solid #dde1ee;color:#4b5563;font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer}
+.section-nav-pill.on{background:#4F6EF7;color:#fff;border-color:#4F6EF7}
+/* 최근값 자동완성 칩 */
+.recent-chip-row{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.recent-chip{font-size:9.5px;background:#f0f2f8;color:#4b5563;padding:2px 8px;border-radius:10px;cursor:pointer;border:0.5px solid #e5e8f0}
+.recent-chip:hover{background:#e8ecf7}
 </style>
 </head>
 <body>
@@ -226,6 +236,8 @@ textarea{resize:vertical;line-height:1.6}
   <button class="rtype-btn" id="rtype-install" onclick="switchReportType('install')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer">🔧 설치보고서</button>
   <button class="rtype-btn" id="rtype-washer" onclick="switchReportType('washer')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer">🌀 세탁기/건조기</button>
 </div>
+
+<div id="section-nav" class="section-nav"></div>
 
 <div id="inspect-form-body">
 
@@ -711,6 +723,7 @@ textarea{resize:vertical;line-height:1.6}
       <div class="cust-stat-box"><div class="cust-stat-val" id="cust-stat-recent">—</div><div class="cust-stat-lbl">최근 방문</div></div>
       <div class="cust-stat-box"><div class="cust-stat-val" id="cust-stat-first">—</div><div class="cust-stat-lbl">최초 방문</div></div>
     </div>
+    <button type="button" class="cust-revisit-btn" id="cust-revisit-btn" onclick="startRevisitReport()">🔁 최근 보고서로 재방문 작성 시작</button>
     <div class="cust-section-label">보고서 목록 (최신순)</div>
     <div id="cust-detail-reports"></div>
   </div>
@@ -908,6 +921,7 @@ function addEquip(unit,type,loc,model,cap){
   mdiv.innerHTML='<div class="fl">모델</div>';
   var minp=document.createElement('input');minp.type='text';minp.placeholder='예: AP-145C';if(model)minp.value=model;
   mdiv.appendChild(minp);
+  if(window.attachRecentChips)window.attachRecentChips(minp,'insp_recent_equip_model');
 
   // 냉방능력 span:2
   var ddCap=makeDd(CAP_OPTS,cap||'','냉방능력 선택');
@@ -1274,6 +1288,7 @@ function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl){
   if(memo)memoInp.value=memo;
   if(window.attachMic)window.attachMic(memoInp);
   wrap.appendChild(memoInp);
+  if(window.attachRecentChips)window.attachRecentChips(memoInp,'insp_recent_msr_memo');
 
   // 유닛별 사진 — 최대 3장 슬롯
   var phLbl=document.createElement('div');phLbl.className='fl';phLbl.style='margin-bottom:6px';phLbl.textContent='측정 사진 (최대 3장)';
@@ -1367,6 +1382,7 @@ window.switchReportType=function(t){
   var btn=document.getElementById('btn-save');
   if(btn)btn.textContent=t==='install'?'💾 설치보고서 저장하고 고객 링크 생성':(t==='dispatch'?'💾 출장점검보고서 저장하고 고객 링크 생성':(t==='washer'?'💾 세탁기/건조기 점검보고서 저장하고 고객 링크 생성':'💾 저장하고 고객 링크 생성'));
   if(t==='washer'&&!document.getElementById('w-checklist').children.length)renderWasherChecklist();
+  if(window.buildSectionNav)window.buildSectionNav();
 };
 
 window.setDispatchResult=function(done){
@@ -1398,6 +1414,7 @@ function addInstallProduct(loc,model,cap,qty){
   var fQty=field('수량',qty,'예: 1대');
   grid.appendChild(fLoc.div);grid.appendChild(fModel.div);grid.appendChild(fCap.div);grid.appendChild(fQty.div);
   wrap.appendChild(grid);
+  if(window.attachRecentChips){window.attachRecentChips(fLoc.inp,'insp_recent_install_loc');window.attachRecentChips(fModel.inp,'insp_recent_install_model');}
 
   wrap._getInstallProductData=function(){
     return {loc:fLoc.inp.value,model:fModel.inp.value,cap:fCap.inp.value,qty:fQty.inp.value};
@@ -1418,6 +1435,7 @@ function addMaterial(name,qty){
   var d1=document.createElement('div');var l1=document.createElement('div');l1.className='fl';l1.textContent='자재명';
   var i1=document.createElement('input');i1.type='text';i1.value=name||'';i1.placeholder='예: 배관, 전선, 브라켓';
   d1.appendChild(l1);d1.appendChild(i1);
+  if(window.attachRecentChips)window.attachRecentChips(i1,'insp_recent_material_name');
   var d2=document.createElement('div');var l2=document.createElement('div');l2.className='fl';l2.textContent='수량';
   var i2=document.createElement('input');i2.type='text';i2.value=qty||'';i2.placeholder='예: 5m, 2개';
   d2.appendChild(l2);d2.appendChild(i2);
@@ -1486,6 +1504,7 @@ function addCoolTestRow(loc,a,b){
   var fB=field('토출온도 B (°C)',b,'예: 12.5');
   grid.appendChild(fLoc.div);grid.appendChild(fA.div);grid.appendChild(fB.div);
   wrap.appendChild(grid);
+  if(window.attachRecentChips)window.attachRecentChips(fLoc.inp,'insp_recent_cooltest_loc');
 
   var phLbl=document.createElement('div');phLbl.className='fl';phLbl.style='margin-top:8px;margin-bottom:6px';phLbl.textContent='측정 사진';
   wrap.appendChild(phLbl);
@@ -1523,6 +1542,7 @@ function addRefrigTestRow(loc,hp,lp,current,insulation){
   var fIns=field('절연저항 (MΩ)',insulation,'예: 380');
   grid.appendChild(fLoc.div);grid.appendChild(fHp.div);grid.appendChild(fLp.div);grid.appendChild(fCur.div);grid.appendChild(fIns.div);
   wrap.appendChild(grid);
+  if(window.attachRecentChips)window.attachRecentChips(fLoc.inp,'insp_recent_refrigtest_loc');
 
   var phLbl=document.createElement('div');phLbl.className='fl';phLbl.style='margin-top:8px;margin-bottom:6px';phLbl.textContent='측정 사진';
   wrap.appendChild(phLbl);
@@ -2276,6 +2296,13 @@ window.openCustomerDetail=function(encName){
   gid('cust-stat-first').textContent=c.firstDate||'—';
   renderList(c.reports,'cust-detail-reports');
 };
+window.startRevisitReport=function(){
+  if(!currentCustName)return;
+  var c=groupCustomers().find(function(x){return normName(x.name)===normName(currentCustName);});
+  if(!c||!c.reports||!c.reports.length){toast('보고서를 찾을 수 없습니다');return;}
+  var mostRecentId=c.reports[0]._id;
+  if(window.__cloneReport)window.__cloneReport(mostRecentId);
+};
 window.backToCustomerList=function(){
   currentCustName=null;
   gid('cust-detail-panel').style.display='none';
@@ -2355,6 +2382,7 @@ window.attachMic=function(el){
 
 function _qaBtn(label,cls,fn){var b=document.createElement('button');b.type='button';b.className='qa-btn'+(cls?' '+cls:'');b.textContent=label;b.onclick=fn;return b;}
 function _findAddBtn(txt){return Array.from(document.querySelectorAll('.btn-add')).find(function(b){return b.textContent.indexOf(txt)>=0;});}
+function _findBtnByOnclick(onclickStr){return document.querySelector('[onclick="'+onclickStr+'"]');}
 function _insertAfter(node,ref){if(ref&&ref.parentNode)ref.parentNode.insertBefore(node,ref.nextSibling);}
 function _qaBar(){var d=document.createElement('div');d.style='display:flex;gap:6px;flex-wrap:wrap;margin-top:8px';return d;}
 
@@ -2380,12 +2408,118 @@ function injectQuickButtons(){
   if(dBtn&&!dBtn._qaDone){dBtn._qaDone=true;var bar4=_qaBar();
     bar4.appendChild(_qaBtn('⧉ 마지막 결함 복제','dup',function(){var ws=document.querySelectorAll('#defect-rows .unit-item');var l=ws[ws.length-1];if(!l||!l._getDefectData){addDefectRow();return;}var d=l._getDefectData();addDefectRow('',d.loc,d.risk,'',d.status);toast('결함 복제됨');}));
     _insertAfter(bar4,dBtn);}
+  // 냉방검사: 마지막 유닛 복제 (위치만 유지, 측정값은 새로 입력)
+  var cuBtn=_findBtnByOnclick('addCoolUnit()');
+  if(cuBtn&&!cuBtn._qaDone){cuBtn._qaDone=true;var bar5=_qaBar();
+    bar5.appendChild(_qaBtn('⧉ 마지막 유닛 복제','dup',function(){var ws=document.querySelectorAll('#cool-units .cu-item');var l=ws[ws.length-1];if(!l||!l._getCuData){addCoolUnit();return;}var d=l._getCuData();addCoolUnit('','','',d.loc,'');toast('냉방검사 유닛 복제됨 — 측정값을 입력하세요');}));
+    _insertAfter(bar5,cuBtn.closest('.row-fg')||cuBtn);}
+  // 누설검사: 마지막 항목 복제
+  var lkBtn=_findBtnByOnclick('addLeakRow()');
+  if(lkBtn&&!lkBtn._qaDone){lkBtn._qaDone=true;var bar6=_qaBar();
+    bar6.appendChild(_qaBtn('⧉ 마지막 항목 복제','dup',function(){var ws=document.querySelectorAll('#leak-rows .unit-item');var l=ws[ws.length-1];if(!l||!l._getLeakData){addLeakRow();return;}var d=l._getLeakData();addLeakRow(d.label,d.loc,d.status);toast('누설검사 복제됨');}));
+    _insertAfter(bar6,lkBtn.closest('.row-fg')||lkBtn);}
+  // 설치 제품: 마지막 제품 복제
+  var ipBtn=_findAddBtn('제품 추가');
+  if(ipBtn&&!ipBtn._qaDone){ipBtn._qaDone=true;var bar7=_qaBar();
+    bar7.appendChild(_qaBtn('⧉ 마지막 제품 복제','dup',function(){var ws=document.querySelectorAll('#install-product-rows .unit-item');var l=ws[ws.length-1];if(!l||!l._getInstallProductData){addInstallProduct();return;}var d=l._getInstallProductData();addInstallProduct(d.loc,'',d.cap,d.qty);toast('제품 복제됨 — 모델명을 입력하세요');}));
+    _insertAfter(bar7,ipBtn);}
+  // 자재: 마지막 자재 복제
+  var maBtn=_findAddBtn('자재 추가');
+  if(maBtn&&!maBtn._qaDone){maBtn._qaDone=true;var bar8=_qaBar();
+    bar8.appendChild(_qaBtn('⧉ 마지막 자재 복제','dup',function(){var ws=document.querySelectorAll('#material-rows .unit-item');var l=ws[ws.length-1];if(!l||!l._getMaterialData){addMaterial();return;}var d=l._getMaterialData();addMaterial(d.name,d.qty);toast('자재 복제됨 — 수량을 확인하세요');}));
+    _insertAfter(bar8,maBtn);}
+  // 냉방테스트: 마지막 항목 복제
+  var ctBtn=_findAddBtn('냉방테스트 항목 추가');
+  if(ctBtn&&!ctBtn._qaDone){ctBtn._qaDone=true;var bar9=_qaBar();
+    bar9.appendChild(_qaBtn('⧉ 마지막 항목 복제','dup',function(){var ws=document.querySelectorAll('#cooltest-rows .unit-item');var l=ws[ws.length-1];if(!l||!l._getCoolTestData){addCoolTestRow();return;}var d=l._getCoolTestData();addCoolTestRow(d.loc,'','');toast('냉방테스트 복제됨 — 측정값을 입력하세요');}));
+    _insertAfter(bar9,ctBtn);}
+  // 냉매순환계통: 마지막 항목 복제
+  var rtBtn=_findAddBtn('냉매순환계통 항목 추가');
+  if(rtBtn&&!rtBtn._qaDone){rtBtn._qaDone=true;var bar10=_qaBar();
+    bar10.appendChild(_qaBtn('⧉ 마지막 항목 복제','dup',function(){var ws=document.querySelectorAll('#refrigtest-rows .unit-item');var l=ws[ws.length-1];if(!l||!l._getRefrigTestData){addRefrigTestRow();return;}var d=l._getRefrigTestData();addRefrigTestRow(d.loc,'','','','');toast('냉매순환계통 복제됨 — 측정값을 입력하세요');}));
+    _insertAfter(bar10,rtBtn);}
 }
 window.injectQuickButtons=injectQuickButtons;
+
+// ── 최근값 자동완성 칩 ──
+function attachRecentChips(inputEl,storageKey){
+  if(!inputEl||!storageKey)return;
+  var row=document.createElement('div');row.className='recent-chip-row';
+  if(inputEl.parentNode)inputEl.parentNode.insertBefore(row,inputEl.nextSibling);
+  function getList(){try{return JSON.parse(localStorage.getItem(storageKey)||'[]');}catch(e){return [];}}
+  function render(){
+    row.innerHTML='';
+    getList().filter(function(v){return v&&v!==inputEl.value;}).slice(0,6).forEach(function(v){
+      var chip=document.createElement('span');chip.className='recent-chip';chip.textContent=v;
+      chip.onclick=function(){inputEl.value=v;inputEl.dispatchEvent(new Event('input'));inputEl.dispatchEvent(new Event('change'));render();};
+      row.appendChild(chip);
+    });
+  }
+  function save(){
+    var v=(inputEl.value||'').trim();if(!v)return;
+    var list=getList().filter(function(x){return x!==v;});
+    list.unshift(v);if(list.length>10)list=list.slice(0,10);
+    try{localStorage.setItem(storageKey,JSON.stringify(list));}catch(e){}
+    render();
+  }
+  inputEl.addEventListener('change',save);
+  inputEl.addEventListener('blur',save);
+  render();
+}
+window.attachRecentChips=attachRecentChips;
+
+// ── 섹션 이동 네비게이션 ──
+var _sectionObserver=null;
+function buildSectionNav(){
+  var nav=document.getElementById('section-nav');
+  if(!nav)return;
+  nav.innerHTML='';
+  var bodyId=reportType==='install'?'install-form-body':(reportType==='washer'?'washer-form-body':'inspect-form-body');
+  var body=document.getElementById(bodyId);
+  if(!body)return;
+  var cards=Array.from(body.children).filter(function(el){return el.classList&&el.classList.contains('card')&&el.style.display!=='none';});
+  cards.forEach(function(card,i){
+    var titleEl=card.querySelector('.card-title');
+    if(!titleEl)return;
+    var label=titleEl.textContent.trim();
+    if(!card.id)card.id='sec-'+bodyId+'-'+i;
+    var pill=document.createElement('div');
+    pill.className='section-nav-pill';
+    pill.textContent=label.length>7?label.slice(0,7):label;
+    pill.title=label;
+    pill.dataset.target=card.id;
+    pill.onclick=function(){scrollToSection(card.id);};
+    nav.appendChild(pill);
+  });
+  _setupSectionObserver(cards);
+}
+window.buildSectionNav=buildSectionNav;
+function scrollToSection(id){
+  var el=document.getElementById(id);
+  if(!el)return;
+  var nav=document.getElementById('section-nav');
+  var navH=nav?nav.offsetHeight:0;
+  var y=el.getBoundingClientRect().top+window.pageYOffset-(navH+10);
+  window.scrollTo({top:y,behavior:'smooth'});
+}
+window.scrollToSection=scrollToSection;
+function _setupSectionObserver(cards){
+  if(_sectionObserver){_sectionObserver.disconnect();_sectionObserver=null;}
+  if(!cards||!cards.length||typeof IntersectionObserver==='undefined')return;
+  _sectionObserver=new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if(entry.isIntersecting){
+        document.querySelectorAll('.section-nav-pill').forEach(function(p){p.classList.toggle('on',p.dataset.target===entry.target.id);});
+      }
+    });
+  },{rootMargin:'-35% 0px -55% 0px',threshold:0});
+  cards.forEach(function(c){_sectionObserver.observe(c);});
+}
 
 function initEnhancements(){
   ['f-verdict','f-opinion','d-work','w-diag1','w-diag2','w-diag3'].forEach(function(id){var el=gid(id);if(el)window.attachMic(el);});
   injectQuickButtons();
+  buildSectionNav();
 }
 window.initEnhancements=initEnhancements;
 
