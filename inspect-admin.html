@@ -1432,6 +1432,54 @@ function loadTesseractLib(){
 function _ocrTimeout(ms){
   return new Promise(function(_,reject){setTimeout(function(){reject(new Error('OCR 처리 시간 초과 ('+(ms/1000)+'초) — 네트워크가 느리거나 사진이 너무 큽니다'));},ms);});
 }
+// ── OCR 전처리: 크롭된 LCD 화면 이미지를 확대 + 흑백 이진화하여 7세그먼트
+// 숫자 인식률을 높인다 (컬러 숫자/검은 배경 → 흰 배경/검은 숫자로 변환). ──
+function preprocessForOcr(dataUrl){
+  return new Promise(function(resolve){
+    var img=new Image();
+    img.onload=function(){
+      try{
+        var scale=Math.max(1,Math.min(6,800/Math.max(1,img.width)));
+        var w=Math.max(1,Math.round(img.width*scale)),h=Math.max(1,Math.round(img.height*scale));
+        var cnv=document.createElement('canvas');cnv.width=w;cnv.height=h;
+        var ctx=cnv.getContext('2d');
+        ctx.imageSmoothingEnabled=true;
+        ctx.drawImage(img,0,0,w,h);
+        var d=ctx.getImageData(0,0,w,h);var px=d.data;
+        // 채널 최대값 기반 그레이스케일(컬러 LCD 숫자의 밝기를 최대한 보존)
+        var hist=new Array(256);for(var hi=0;hi<256;hi++)hist[hi]=0;
+        for(var i=0;i<px.length;i+=4){
+          var g=Math.max(px[i],px[i+1],px[i+2]);
+          px[i]=px[i+1]=px[i+2]=g;hist[g]++;
+        }
+        // Otsu 자동 임계값
+        var total=w*h,sum=0;for(var t=0;t<256;t++)sum+=t*hist[t];
+        var sumB=0,wB=0,maxVar=0,thr=127;
+        for(var t2=0;t2<256;t2++){
+          wB+=hist[t2];if(!wB)continue;
+          var wF=total-wB;if(!wF)break;
+          sumB+=t2*hist[t2];
+          var mB=sumB/wB,mF=(sum-sumB)/wF;
+          var vv=wB*wF*(mB-mF)*(mB-mF);
+          if(vv>maxVar){maxVar=vv;thr=t2;}
+        }
+        // 밝은 픽셀이 적으면(=검은 배경에 밝은 숫자) 반전하여 흰 배경/검은 숫자로
+        var brightCnt=0;
+        for(var j=0;j<px.length;j+=4)if(px[j]>thr)brightCnt++;
+        var digitsAreBright=brightCnt<total/2;
+        for(var k2=0;k2<px.length;k2+=4){
+          var isB=px[k2]>thr;
+          var out=digitsAreBright?(isB?0:255):(isB?255:0);
+          px[k2]=px[k2+1]=px[k2+2]=out;
+        }
+        ctx.putImageData(d,0,0);
+        resolve(cnv.toDataURL('image/png'));
+      }catch(e){console.warn('[OCR] 전처리 실패, 원본 사용:',e);resolve(dataUrl);}
+    };
+    img.onerror=function(){resolve(dataUrl);};
+    img.src=dataUrl;
+  });
+}
 // 이미지에서 숫자 토큰을 찾아 세로 위치(위→아래) 순으로 정렬, 제일 위/아래 값을 반환
 // (방사율 표시 ε=0.95 같은 0.x대 설정값은 실측 온도가 아니므로 제외)
 // createWorker+setParameters 조합이 일부 환경에서 "Cannot read properties of null
@@ -1440,8 +1488,10 @@ function _ocrTimeout(ms){
 // 아래 정규식으로 숫자만 걸러낸다.
 function ocrReadTempPair(dataUrl){
   var recognizePromise=loadTesseractLib().then(function(){
-    console.log('[OCR] 이미지 인식 중...(단발성 API)');
-    return Tesseract.recognize(dataUrl,'eng');
+    return preprocessForOcr(dataUrl);
+  }).then(function(prepUrl){
+    console.log('[OCR] 이미지 인식 중...(전처리 후 단발성 API)');
+    return Tesseract.recognize(prepUrl,'eng');
   });
   return Promise.race([recognizePromise,_ocrTimeout(25000)]).then(function(res){
     var words=(res&&res.data&&res.data.words)||[];
@@ -1450,14 +1500,29 @@ function ocrReadTempPair(dataUrl){
     var nums=[];
     words.forEach(function(w){
       if(!w.bbox)return;
-      var txt=(w.text||'').replace(',','.');
-      // 단어 안에서 소수 형태 숫자를 우선 추출 (예: "30.0°C" → "30.0")
+      var raw=(w.text||'');
+      if(raw.indexOf('%')!==-1)return; // 습도(예: 56%) 줄은 제외
+      var txt=raw.replace(/,/g,'.');
+      var hasC=/\d\s*[°ºo]?\s*[cC]|℃/.test(txt); // °C 표기가 붙은 온도 줄인지
+      var v=null,shown=null;
+      // 소수 형태 숫자를 우선 추출 (예: "29.2°C" → 29.2)
       var m=txt.match(/\d{1,3}\.\d{1,2}/);
-      if(!m){var m2=txt.match(/^\s*\d{1,3}\s*$/);if(m2)m=[m2[0].trim()];} // 소수점을 놓친 순수 정수도 후보로
-      if(!m)return;
-      var v=parseFloat(m[0]);
-      if(isNaN(v)||v<1||v>=200)return; // 방사율(0.x대)/이상값 제외
-      nums.push({val:m[0],y:w.bbox.y0});
+      if(m){
+        v=parseFloat(m[0]);shown=m[0];
+        if(v<1)return; // 방사율(ε=0.95 등 0.x대 설정값) 제외
+      }else{
+        // 7세그먼트 특성상 소수점을 놓치는 경우 복원: "292"→29.2, "96"→9.6
+        var m2=txt.match(/\d{2,4}/);
+        if(!m2)return;
+        var vi=parseInt(m2[0],10);
+        if(vi>=1&&vi<=60){v=vi;}
+        else if(vi/10>=1&&vi/10<=60){v=vi/10;}
+        else if(vi/100>=1&&vi/100<=60){v=vi/100;}
+        else return;
+        shown=String(v);
+      }
+      if(v===null||isNaN(v)||v<1||v>60)return; // 에어컨 흡입/토출 현실 범위(1~60°C)만
+      nums.push({val:shown,num:v,y:w.bbox.y0,hasC:hasC});
     });
     if(nums.length<2){
       var sample=rawTexts.filter(function(t){return t&&t.trim();}).slice(0,12).join(' / ')||'(인식된 텍스트 없음)';
@@ -1465,7 +1530,17 @@ function ocrReadTempPair(dataUrl){
       return {error:'숫자 2개 미확인 [인식됨: '+sample+']'};
     }
     nums.sort(function(a,b){return a.y-b.y;});
-    return {top:nums[0].val,bottom:nums[nums.length-1].val};
+    // 흡입온도: °C 표기가 있는 줄을 우선(계측기 상단 온도 줄), 없으면 가장 위의 숫자
+    var topPick=null;
+    for(var ni=0;ni<nums.length;ni++){if(nums[ni].hasC){topPick=nums[ni];break;}}
+    if(!topPick)topPick=nums[0];
+    // 토출온도: 가장 아래(하단 큰 숫자) — 흡입과 같은 줄이면 실패 처리
+    var bottomPick=nums[nums.length-1];
+    if(bottomPick===topPick&&nums.length>=2)bottomPick=nums[nums.length-2]===topPick?null:nums[nums.length-2];
+    if(!bottomPick||bottomPick===topPick){
+      return {error:'흡입/토출 두 값을 구분하지 못했습니다'};
+    }
+    return {top:topPick.val,bottom:bottomPick.val};
   }).catch(function(e){
     var m=(e&&e.message)?e.message:(e?String(e):'알 수 없는 오류');
     console.warn('[OCR] 인식 실패:',e);
