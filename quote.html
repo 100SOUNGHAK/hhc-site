@@ -146,6 +146,7 @@ const GROUP_META={
 const T={
   ko:{quo:'견 적 서 · AC INSTALLATION/REPAIR',no:'QUOTATION NO.',issued:'발행일 · ISSUED',cust:'고객 · CUSTOMER',valid:'유효기한 · VALID',until:'까지',
     final:'최종 견적금액',base:'기본 견적',acAdd:'에어컨',acNone2:'에어컨 구입 없음',
+    subj:'대상 작업 · SUBJECT',brkLabor:'기본 견적 (인건비)',brkMat:'자재 비용',brkProd:'제품 구입비',
     acTitle:'에어컨 구입 — 모델을 선택해 주세요',wall:'벽걸이형',rec:'★ 추천',
     noneOpt:'에어컨 구입 없이 진행',noneSub:'설치 작업만 진행합니다',
     selMsg:'모델을 선택하시면 최종 금액이 자동 계산되며,<br>선택 내용은 업체에 자동 전달됩니다.',
@@ -159,6 +160,7 @@ const T={
     print:'🖨 인쇄',pdf:'📄 PDF 저장',qty:'수량'},
   en:{quo:'QUOTATION · AC INSTALLATION/REPAIR',no:'QUOTATION NO.',issued:'ISSUED',cust:'CUSTOMER',valid:'VALID UNTIL',until:'',
     final:'Final Quotation Amount',base:'Base quote',acAdd:'AC unit',acNone2:'No AC purchase',
+    subj:'SUBJECT',brkLabor:'Base Quote (Labor)',brkMat:'Materials',brkProd:'Product Purchase',
     acTitle:'AC Unit — Please select a model',wall:'Wall-mounted',rec:'★ Recommended',
     noneOpt:'Proceed without AC purchase',noneSub:'Installation work only',
     selMsg:'Select a model to see the final amount.<br>Your choice is sent to us automatically.',
@@ -342,27 +344,43 @@ function render(){
       '<button class="cb" id="confirm-btn"'+(allChosen()?'':' disabled')+'>'+t.confirm+'</button></div></div>';
   }
 
-  // 금액 내역: 기본 견적 + 에어컨 그룹별 줄 단위 표시
+  // 금액 내역: 기본견적(인건비) / 자재비용 / 제품구입비 3구분 + 에어컨 상세
   const circled2=['①','②','③','④','⑤','⑥','⑦','⑧','⑨'];
+  let laborSum=0,matSum=0,prodFixed=0;
+  (Q.items||[]).forEach(it=>{
+    const a=(it.amount!=null?it.amount:(it.qty*it.price))||0;
+    if(it.group==='material')matSum+=a;
+    else if(it.group==='product')prodFixed+=a;
+    else laborSum+=a;
+  });
+  const disc=Q.discount||0;
+  const prodTotal=prodFixed+acPrice;
   let brkHtml='';
-  if(acOn){
+  if(matSum>0||prodTotal>0||acOn||disc>0){
     brkHtml='<div class="brk">';
-    brkHtml+='<div class="brk-row"><div class="bl"><span class="bname">'+t.base+'</span></div><div class="bv">'+fmtN(Q.baseTotal)+'</div></div>';
-    acGroups.forEach((g,i)=>{
-      const s=groupSel(i);
-      const num=acGroups.length>1?(circled2[i]||(i+1)):'';
-      const gTag='❄️'+(num?' '+num:'')+' '+g.hp+'HP';
-      if(!selArr[i]){
-        brkHtml+='<div class="brk-row pend"><div class="bl"><span class="bnum">'+gTag+'</span><span class="bname">'+(isEn?'Select a model below':'아래에서 모델을 선택해 주세요')+'</span></div><div class="bv">—</div></div>';
-      }else if(selArr[i]==='__none__'){
-        brkHtml+='<div class="brk-row"><div class="bl"><span class="bnum">'+gTag+'</span><span class="bname">'+t.acNone2+'</span></div><div class="bv">—</div></div>';
-      }else{
-        brkHtml+='<div class="brk-row"><div class="bl"><span class="bnum">'+gTag+'</span><span class="bname">'+esc(s.label)+'</span>'+(s.qty>1?'<span class="bqty">'+fmtN(s.price)+' × '+s.qty+(isEn?' units':'대')+'</span>':'')+'</div><div class="bv">'+fmtN(s.amount)+'</div></div>';
-      }
-    });
+    brkHtml+='<div class="brk-row"><div class="bl"><span class="bname">🔩 '+t.brkLabor+'</span></div><div class="bv">'+fmtN(laborSum)+'</div></div>';
+    if(matSum>0)brkHtml+='<div class="brk-row"><div class="bl"><span class="bname">📦 '+t.brkMat+'</span></div><div class="bv">'+fmtN(matSum)+'</div></div>';
+    if(prodTotal>0||acOn){
+      brkHtml+='<div class="brk-row"><div class="bl"><span class="bname">❄️ '+t.brkProd+'</span></div><div class="bv">'+(acOn&&!allChosen()&&prodTotal===0?'—':fmtN(prodTotal))+'</div></div>';
+      // 제품구입비 상세 (들여쓰기): 고정 제품 + 에어컨 선택 그룹별
+      if(prodFixed>0)brkHtml+='<div class="brk-row" style="padding-left:16px"><div class="bl"><span class="bname" style="font-weight:500">'+(isEn?'Product items':'제품 항목')+'</span></div><div class="bv" style="font-weight:600">'+fmtN(prodFixed)+'</div></div>';
+      acGroups.forEach((g,i)=>{
+        const s=groupSel(i);
+        const num=acGroups.length>1?(circled2[i]||(i+1)):'';
+        const gTag=(num?num+' ':'')+g.hp+'HP';
+        if(!selArr[i]){
+          brkHtml+='<div class="brk-row pend" style="padding-left:16px"><div class="bl"><span class="bnum">'+gTag+'</span><span class="bname">'+(isEn?'Select a model below':'아래에서 모델을 선택해 주세요')+'</span></div><div class="bv">—</div></div>';
+        }else if(selArr[i]==='__none__'){
+          brkHtml+='<div class="brk-row" style="padding-left:16px"><div class="bl"><span class="bnum">'+gTag+'</span><span class="bname" style="font-weight:500">'+t.acNone2+'</span></div><div class="bv" style="font-weight:600">—</div></div>';
+        }else{
+          brkHtml+='<div class="brk-row" style="padding-left:16px"><div class="bl"><span class="bnum">'+gTag+'</span><span class="bname" style="font-weight:500">'+esc(s.label)+'</span>'+(s.qty>1?'<span class="bqty">'+fmtN(s.price)+' × '+s.qty+(isEn?' units':'대')+'</span>':'')+'</div><div class="bv" style="font-weight:600">'+fmtN(s.amount)+'</div></div>';
+        }
+      });
+    }
+    if(disc>0)brkHtml+='<div class="brk-row"><div class="bl"><span class="bname" style="color:#c0392b">'+t.discount+'</span></div><div class="bv" style="color:#c0392b">− '+fmtN(disc)+'</div></div>';
     brkHtml+='</div>';
   }
-  const amtSub=acOn?'':(Q.subject||'');
+  const amtSub='';
 
   document.getElementById('doc').innerHTML=
     '<div class="qhd">'+
@@ -376,6 +394,7 @@ function render(){
         '<div class="qcell"><div class="l">'+t.issued+'</div><div class="v">'+esc(Q.issueDate||'')+'</div></div>'+
         '<div class="qcell"><div class="l">'+t.cust+'</div><div class="v">'+esc(Q.client||'')+'</div></div>'+
         '<div class="qcell"><div class="l">'+t.valid+'</div><div class="v gold">'+esc(Q.validUntil||'')+' '+t.until+'</div></div>'+
+        (Q.subject?'<div class="qcell" style="grid-column:1/-1"><div class="l">'+t.subj+'</div><div class="v">'+esc(Q.subject)+'</div></div>':'')+
       '</div>'+
     '</div>'+
     '<div class="qbody">'+
