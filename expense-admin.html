@@ -654,8 +654,108 @@ window.setUILang=function(l){
   $('tb-acc').textContent=l==='en'?'Accounting':'회계 정리';
   if(!$('tab-list').classList.contains('hidden'))renderClaimList();
   if(!$('tab-acc').classList.contains('hidden'))renderAccounting();
+  applyI18n(l);
 };
 window.setLang=window.setUILang;
+
+// ═══════════════════════════════════════════
+// 전체 UI 번역 엔진: 사전 기반 텍스트 노드 치환 + 동적 콘텐츠 감시
+// (EN 선택 시 화면의 모든 한국어 라벨을 영어로, 다시 한국어로 복원 가능)
+// ═══════════════════════════════════════════
+var I18N_MAP={
+  '비용청구서':'Expense Claims','항목 등록':'Register Items','청구서 생성':'Generate Claim','청구 이력':'Claim History','회계 정리':'Accounting',
+  '일자':'Date','품목':'Category','금액':'Amount','비고':'Note','제목':'Title','합계':'Total',
+  '+ 직접입력':'+ Custom','직접 입력한 품목명':'Custom category name','+ 항목 등록':'+ Register Item',
+  '미청구 항목':'Unclaimed Items','청구완료 항목':'Claimed Items','청구대상기간 선택':'Select Claim Period','청구대상기간':'Claim Period',
+  '이번 달':'This Month','지난 달':'Last Month','최근 30일':'Last 30 Days','미청구 전체':'All Unclaimed',
+  '시작일':'Start Date','종료일':'End Date','해당 기간 항목 불러오기':'Load Items in Period','포함될 항목':'Items to Include',
+  '최신순':'Newest','과거순':'Oldest','품목별':'By Category','최근순':'Newest',
+  '총 청구금액':'Total Claimed','청구서 정보':'Claim Info','청구일자':'Claim Date','입금계좌':'Deposit Account',
+  '은행명':'Bank','계좌번호':'Account No.','예금주':'Account Holder','계좌 저장':'Save Account',
+  '한국어':'Korean','인쇄 미리보기':'Print Preview','왓츠앱 미리보기':'WhatsApp Preview',
+  '청구서 생성 (항목 청구완료 처리)':'Generate Claim (mark items claimed)',
+  '청구서 보기':'View Claim','인쇄':'Print','왓츠앱':'WhatsApp','이미지 저장':'Save Image','PDF 저장':'Save PDF',
+  '청구서 수정':'Edit Claim','포함된 항목':'Included Items','+ 새 항목 추가':'+ Add New Item','항목 추가':'Add Item',
+  '수정 후 총액':'New Total','수정 내용 저장':'Save Changes','청구서 제목':'Claim Title',
+  '보기':'View','수정':'Edit','삭제':'Delete','전체 선택':'Select All','전체 해제':'Clear All',
+  '연결 중...':'Connecting...','연결됨':'Connected','연결 실패':'Connection Failed',
+  '미청구 항목이 없습니다':'No unclaimed items','등록된 미청구 항목이 없습니다':'No unclaimed items registered',
+  '청구완료된 항목이 없습니다':'No claimed items','항목이 없습니다':'No items',
+  '해당 기간에 항목이 없습니다':'No items in this period','해당 기간에 미청구 항목이 없습니다':'No unclaimed items in this period',
+  '청구 상세 내역':'Claim Details','월별 청구 현황':'Monthly Claims','품목별 합계':'Totals by Category',
+  '선택 연도 총 청구금액':'Total Claimed (Selected Year)','청구서 건수':'Number of Claims',
+  '내역 없음':'No records','데이터 없음':'No data','선택 안 함':'None','+ 새 계좌 등록':'+ New Account',
+  '(제목 없음)':'(No title)','(청구서 정보 없음)':'(No claim info)','년 청구서 없음':'No claims this year',
+  'CSV 내보내기 (선택 연도 전체)':'Export CSV (Selected Year)',
+  '1월':'Jan','2월':'Feb','3월':'Mar','4월':'Apr','5월':'May','6월':'Jun','7월':'Jul','8월':'Aug','9월':'Sep','10월':'Oct','11월':'Nov','12월':'Dec'
+};
+// 품목명은 기존 영문 사전(CATS_EN) 재사용
+try{Object.keys(CATS_EN).forEach(function(k){I18N_MAP[k]=CATS_EN[k];});}catch(e){}
+var I18N_PH={
+  '금액':'Amount','비고 (선택)':'Note (optional)','선택 입력':'Optional','품목명 입력':'Enter category name',
+  '예: 1234567890':'e.g. 1234567890','예: 7월 현장 경비 청구':'e.g. July on-site expense claim','예: Maybank':'e.g. Maybank'
+};
+// 패턴형 문자열: "3건" "2건 선택" "2026년" 등
+function _i18nPattern(t){
+  var m=t.match(/^(\d+)건 선택$/);if(m)return m[1]+' selected';
+  m=t.match(/^(\d+)건$/);if(m)return m[1]+(m[1]==='1'?' item':' items');
+  m=t.match(/^(\d{4})년$/);if(m)return m[1];
+  return null;
+}
+function _i18nNode(n){
+  var raw=n.nodeValue;if(!raw)return;
+  var t=raw.trim();if(!t||!/[가-힣]/.test(t))return;
+  var en=I18N_MAP[t]||_i18nPattern(t);
+  if(en===null||en===undefined)return;
+  if(n._koOrig===undefined)n._koOrig=raw;
+  n.nodeValue=raw.replace(t,en);
+}
+function _i18nWalk(root){
+  if(!root)return;
+  var walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{acceptNode:function(nd){
+    var p=nd.parentNode;
+    if(p&&(p.nodeName==='SCRIPT'||p.nodeName==='STYLE'))return NodeFilter.FILTER_REJECT;
+    return NodeFilter.FILTER_ACCEPT;
+  }});
+  var nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
+  nodes.forEach(_i18nNode);
+}
+function _i18nRevert(){
+  var walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
+  while(walker.nextNode()){
+    var n=walker.currentNode;
+    if(n._koOrig!==undefined){n.nodeValue=n._koOrig;n._koOrig=undefined;}
+  }
+  document.querySelectorAll('[placeholder]').forEach(function(el){
+    if(el._koPh!==undefined){el.placeholder=el._koPh;el._koPh=undefined;}
+  });
+}
+var _i18nObs=null;
+function applyI18n(l){
+  if(l==='en'){
+    _i18nWalk(document.body);
+    document.querySelectorAll('[placeholder]').forEach(function(el){
+      var en=I18N_PH[el.placeholder];
+      if(en){if(el._koPh===undefined)el._koPh=el.placeholder;el.placeholder=en;}
+    });
+    if(!_i18nObs){
+      // 동적으로 렌더되는 내용(목록·토스트·미리보기)도 자동 번역
+      _i18nObs=new MutationObserver(function(muts){
+        if(curLang!=='en')return;
+        muts.forEach(function(mu){
+          if(mu.type==='characterData'){_i18nNode(mu.target);return;}
+          mu.addedNodes.forEach(function(nd){
+            if(nd.nodeType===3)_i18nNode(nd);
+            else if(nd.nodeType===1)_i18nWalk(nd);
+          });
+        });
+      });
+      _i18nObs.observe(document.body,{childList:true,subtree:true,characterData:true});
+    }
+  }else{
+    _i18nRevert();
+  }
+}
 
 var _trCache={};
 function tr(text){
