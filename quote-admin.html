@@ -38,6 +38,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--indigo)}
 .pitem .nm span{display:block;font-size:10px;color:var(--gray);font-weight:400;margin-top:1px}
 .pitem .pr{font-size:12.5px;font-weight:800;color:var(--indigo);white-space:nowrap}
 .pitem .addb{width:30px;height:30px;border-radius:9px;background:var(--il);color:var(--indigo);border:none;font-weight:800;font-size:17px;flex-shrink:0}
+.pitem .editb{width:26px;height:26px;border-radius:8px;background:#f0f2f8;color:var(--gray);border:none;font-size:12px;flex-shrink:0}
 .sel{display:flex;align-items:center;gap:6px;padding:8px 9px;background:#f8fafc;border-left:3px solid var(--indigo);border-radius:8px;margin-bottom:6px}
 .sel.g-material{border-left-color:#d97706}
 .sel.g-product{border-left-color:#0ea5e9}
@@ -46,7 +47,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--indigo)}
 .sel.g-repair{border-left-color:#ef4444}
 .sel.g-custom{border-left-color:#6b7280}
 .sel .nm{flex:1;font-size:12px;font-weight:600;min-width:0;word-break:keep-all}
-.sel input.q{width:52px;padding:5px 4px;font-size:12px;text-align:center;border-radius:7px}
+.sel input.q{width:48px;padding:5px 3px;font-size:12px;text-align:center;border-radius:7px}
+.sel input.pq{width:62px;padding:5px 3px;font-size:12px;text-align:right;border-radius:7px}
 .sel .un{font-size:10px;color:var(--gray);width:22px;text-align:center}
 .sel .amt{font-size:12px;font-weight:800;width:60px;text-align:right;white-space:nowrap}
 .sel .x{background:none;border:none;color:#d33;font-weight:800;font-size:15px;padding:2px 4px}
@@ -80,6 +82,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--indigo)}
 .acopt .tg.inv{background:#e0f2fe;color:#0369a1}
 .acopt .tg.non{background:#f0f2f8;color:#667}
 .acopt .pr{font-size:12.5px;font-weight:800;color:var(--indigo)}
+.acopt input.aprice{width:70px;padding:5px 5px;font-size:12.5px;font-weight:700;color:var(--indigo);text-align:right;border-radius:7px;border:1px solid var(--bdr)}
 .acopt .rec{font-size:10px;font-weight:700;color:#b58a1f;display:flex;align-items:center;gap:3px;white-space:nowrap}
 .acopt .rec input{width:15px;height:15px;accent-color:var(--gold)}
 /* 목록 */
@@ -148,19 +151,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--indigo)}
       <div><b>❄️ 에어컨 선택형 견적</b><br><span>고객이 견적서에서 직접 모델을 선택해 최종 금액 확인</span></div>
     </div>
     <div id="ac-config" style="display:none">
-      <div class="row2">
-        <div><span class="fl">마력(HP)</span>
-          <select id="ac-hp" onchange="renderAcOptions()">
-            <option value="1.0">1.0HP</option><option value="1.5">1.5HP</option>
-            <option value="2.0">2.0HP</option><option value="2.5">2.5HP</option>
-          </select>
-        </div>
-      </div>
-      <div id="ac-opts"></div>
-      <label style="display:flex;align-items:center;gap:7px;font-size:12px;margin-top:4px;cursor:pointer">
-        <input type="checkbox" id="ac-none" checked style="width:16px;height:16px;accent-color:var(--indigo)">
-        "에어컨 구입 없이 진행" 옵션 포함
-      </label>
+      <div style="font-size:10.5px;color:var(--gray);margin-bottom:8px">여러 대 설치 시 유닛 그룹을 추가하세요 — 예: ① 1.0HP×1대 ② 2.0HP×1대 ③ 2.5HP×2대. 고객이 그룹마다 모델을 선택합니다.</div>
+      <div id="ac-groups"></div>
+      <button onclick="addAcGroup()" style="width:100%;padding:10px;border:1.5px dashed var(--indigo);border-radius:10px;background:#f6f8ff;color:var(--indigo);font-size:12.5px;font-weight:700">＋ 유닛 그룹 추가</button>
     </div>
   </div>
 
@@ -327,14 +320,61 @@ var GROUP_META={
   custom:{ko:'기타 항목',en:'Other Items',icon:'📝',order:6}
 };
 // 제품(에어컨 본체) 가격표 — AC_PRICES에서 자동 생성 (제품 탭에서 고정 금액으로 추가)
-PRICE_DB.product=(function(){
+function rebuildProductList(){
   var out=[];
   AC_PRICES.forEach(function(a){
-    if(a.non)out.push({n:a.brand+' '+a.hp+'HP 일반형',en:a.brand+' '+a.hp+'HP Non-Inverter',p:a.non,note:'벽걸이형 · NON-INVERTER',noteEn:'Wall-mounted · Non-inverter'});
-    if(a.inv)out.push({n:a.brand+' '+a.hp+'HP 인버터',en:a.brand+' '+a.hp+'HP Inverter',p:a.inv,note:'벽걸이형 · INVERTER',noteEn:'Wall-mounted · Inverter'});
+    if(a.non)out.push({n:a.brand+' '+a.hp+'HP 일반형',en:a.brand+' '+a.hp+'HP Non-Inverter',p:a.non,note:'벽걸이형 · NON-INVERTER',noteEn:'Wall-mounted · Non-inverter',_ac:{brand:a.brand,hp:a.hp,tp:'non'}});
+    if(a.inv)out.push({n:a.brand+' '+a.hp+'HP 인버터',en:a.brand+' '+a.hp+'HP Inverter',p:a.inv,note:'벽걸이형 · INVERTER',noteEn:'Wall-mounted · Inverter',_ac:{brand:a.brand,hp:a.hp,tp:'inv'}});
   });
-  return out;
-})();
+  PRICE_DB.product=out;
+}
+rebuildProductList();
+// ── 단가 오버라이드: Firestore(settings/quote_prices)에 저장된 수정 단가 적용 ──
+// 키: '설치|철거 비용' 형태(카테고리|항목명), 에어컨은 'ac|DAIKIN|1.0|inv'
+window._priceOverrides={};
+function applyPriceOverrides(ov){
+  window._priceOverrides=ov||{};
+  ['install','repair','material','callout'].forEach(function(cat){
+    (PRICE_DB[cat]||[]).forEach(function(it){
+      var k=cat+'|'+it.n;
+      if(ov&&ov[k]!=null)it.p=parseFloat(ov[k]);
+    });
+  });
+  AC_PRICES.forEach(function(a){
+    ['non','inv'].forEach(function(t){
+      var k='ac|'+a.brand+'|'+a.hp+'|'+t;
+      if(ov&&ov[k]!=null)a[t]=parseFloat(ov[k]);
+    });
+  });
+  rebuildProductList();
+  renderPriceList();
+  // 열려있는 선택형 그룹 옵션도 새 단가로 갱신 (체크/추천 유지)
+  document.querySelectorAll('#ac-groups .acgroup').forEach(function(box){
+    renderAcGroupOptions(box,captureGroupState(box));
+  });
+}
+function captureGroupState(box){
+  var options=[];
+  box.querySelectorAll('.ag-opts input[type=checkbox]').forEach(function(c){
+    if(c.checked)options.push({key:c.dataset.key});
+  });
+  var rec=box.querySelector('input[name="ac-rec-'+box.dataset.g+'"]:checked');
+  return {options:options,recommended:rec?rec.value:''};
+}
+function editPriceItem(it,cat){
+  if(cat==='clean'){toast('청소 단가는 인보이스의 서비스 항목에서 수정하세요 (자동 연동됨)');return;}
+  var cur=it.p;
+  var v=prompt('"'+it.n+'" 새 단가 (RM)',cur);
+  if(v===null)return;
+  var p=parseFloat(v);
+  if(isNaN(p)||p<0){toast('올바른 금액을 입력해주세요');return;}
+  var key=it._ac?('ac|'+it._ac.brand+'|'+it._ac.hp+'|'+it._ac.tp):(cat+'|'+it.n);
+  if(window.__savePriceOverride)window.__savePriceOverride(key,p);
+  // 즉시 로컬 반영
+  var ov=window._priceOverrides||{};ov[key]=p;
+  applyPriceOverrides(ov);
+  toast('✓ 단가 수정됨: '+it.n+' → RM '+p.toLocaleString('en-US')+' (모든 새 견적에 적용)');
+}
 var NOTICE_TPL={
   install:['기본 설치 인건비에는 배관 진공 작업(VACUUMING) 및 냉매 추가 충전이 포함됩니다.','최종 청구 금액은 현장 조건 및 실제 사용 자재에 따라 다소 차이가 있을 수 있습니다.','에어컨 본체·자재 비용은 주문 확정 시 선결제, 잔금은 작업 완료 후 결제해 주시면 됩니다.'],
   repair:['출장점검 비용은 에어컨 1대 기준이며, 추가 점검 시 대당 RM50이 추가됩니다.','점검 결과에 따라 수리 또는 부품 교체가 필요한 경우 별도 견적이 제공됩니다.','정품 부품 가격은 별도 문의 바랍니다.'],
@@ -384,54 +424,95 @@ function refreshNotices(){
   gid('f-notices').value=lines.join('\n');
 }
 
-// ── AC 선택형
+// ── AC 선택형 (유닛 그룹: 여러 대·여러 마력 조합 지원)
+var acGroupSeq=0;
 function toggleAcSelect(){
   acEnabled=!acEnabled;
   gid('ac-switch').classList.toggle('on',acEnabled);
   gid('ac-config').style.display=acEnabled?'block':'none';
-  if(acEnabled)renderAcOptions();
+  if(acEnabled&&!document.querySelector('#ac-groups .acgroup'))addAcGroup();
   renderTotals();
 }
-function renderAcOptions(keep){
-  var hp=gid('ac-hp').value;
-  var prev=keep?getAcOptionsState():null;
-  var host=gid('ac-opts');host.innerHTML='';
+function addAcGroup(init){
+  init=init||{};
+  var gidx=++acGroupSeq;
+  var box=document.createElement('div');
+  box.className='acgroup';box.dataset.g=gidx;
+  box.style.cssText='border:1px solid var(--bdr);border-radius:12px;padding:10px;margin-bottom:9px;background:#fbfcff';
+  box.innerHTML=
+    '<div style="display:flex;gap:7px;align-items:flex-end;margin-bottom:8px">'+
+      '<div style="flex:1"><span class="fl">마력(HP)</span><select class="ag-hp">'+
+        ['1.0','1.5','2.0','2.5'].map(function(h){return '<option value="'+h+'"'+(init.hp===h?' selected':'')+'>'+h+'HP</option>';}).join('')+
+      '</select></div>'+
+      '<div style="width:82px"><span class="fl">수량(대)</span><input type="number" class="ag-qty" min="1" value="'+(init.qty||1)+'"></div>'+
+      '<button class="ag-del" style="padding:9px 12px;border-radius:9px;border:none;background:var(--rbg);color:#c0392b;font-size:12px;font-weight:700">삭제</button>'+
+    '</div>'+
+    '<div class="ag-opts"></div>'+
+    '<label style="display:flex;align-items:center;gap:7px;font-size:11.5px;margin-top:4px;cursor:pointer">'+
+      '<input type="checkbox" class="ag-none" '+(init.includeNone!==false?'checked':'')+' style="width:15px;height:15px;accent-color:var(--indigo)">'+
+      '이 그룹에 "구입 없음" 옵션 포함</label>';
+  gid('ac-groups').appendChild(box);
+  var hpSel=box.querySelector('.ag-hp');
+  hpSel.onchange=function(){renderAcGroupOptions(box);renderTotals();};
+  box.querySelector('.ag-qty').oninput=renderTotals;
+  box.querySelector('.ag-del').onclick=function(){
+    if(document.querySelectorAll('#ac-groups .acgroup').length<=1){toast('그룹은 최소 1개 필요합니다 (선택형을 끄려면 스위치를 사용)');return;}
+    box.remove();renderTotals();
+  };
+  renderAcGroupOptions(box,init);
+  return box;
+}
+function renderAcGroupOptions(box,init){
+  var hp=box.querySelector('.ag-hp').value;
+  var gidx=box.dataset.g;
+  var host=box.querySelector('.ag-opts');host.innerHTML='';
+  var initKeys=init&&init.options?init.options.map(function(o){return o.key||o.brand+'|'+o.type;}):null;
   AC_PRICES.filter(function(a){return a.hp===hp;}).forEach(function(a){
     ['non','inv'].forEach(function(t){
       var price=a[t];if(!price)return;
       var key=a.brand+'|'+t;
       var row=document.createElement('div');row.className='acopt';
-      var chk=document.createElement('input');chk.type='checkbox';chk.checked=prev?(prev.checked.indexOf(key)>=0):true;chk.dataset.key=key;chk.dataset.price=price;chk.dataset.brand=a.brand;chk.dataset.tp=t;
+      var chk=document.createElement('input');chk.type='checkbox';
+      chk.checked=initKeys?(initKeys.indexOf(key)>=0):true;
+      chk.dataset.key=key;chk.dataset.price=price;chk.dataset.brand=a.brand;chk.dataset.tp=t;
+      // 수정 로드/재렌더 시 저장된 단가 유지 (이 견적 전용 단가)
+      var initOpt=init&&init.options?init.options.find(function(o){return (o.key||o.brand+'|'+o.type)===key;}):null;
+      if(initOpt&&initOpt.price!=null)price=initOpt.price;
+      chk.dataset.price=price;
       var nm=document.createElement('div');nm.className='nm';
       nm.innerHTML=a.brand+'<span class="tg '+(t==='inv'?'inv':'non')+'">'+(t==='inv'?'INVERTER':'NON-INV')+'</span>';
-      var pr=document.createElement('div');pr.className='pr';pr.textContent=price.toLocaleString('en-US');
+      var pr=document.createElement('input');pr.className='aprice';pr.type='number';pr.min='0';pr.value=price;pr.title='단가 (이 견적만)';
+      pr.oninput=function(){chk.dataset.price=parseFloat(pr.value)||0;};
       var rec=document.createElement('label');rec.className='rec';
-      var rrad=document.createElement('input');rrad.type='radio';rrad.name='ac-rec';rrad.value=key;
-      if(prev&&prev.recommended===key)rrad.checked=true;
+      var rrad=document.createElement('input');rrad.type='radio';rrad.name='ac-rec-'+gidx;rrad.value=key;
+      if(init&&init.recommended===key)rrad.checked=true;
       rec.appendChild(rrad);rec.appendChild(document.createTextNode('추천'));
       row.appendChild(chk);row.appendChild(nm);row.appendChild(pr);row.appendChild(rec);
       host.appendChild(row);
     });
   });
 }
-function getAcOptionsState(){
-  var checked=[],recommended='';
-  document.querySelectorAll('#ac-opts input[type=checkbox]').forEach(function(c){if(c.checked)checked.push(c.dataset.key);});
-  var r=document.querySelector('#ac-opts input[name="ac-rec"]:checked');
-  if(r)recommended=r.value;
-  return {checked:checked,recommended:recommended};
-}
 function collectAcSelect(){
   if(!acEnabled)return null;
-  var hp=gid('ac-hp').value;
-  var st=getAcOptionsState();
-  var options=[];
-  document.querySelectorAll('#ac-opts input[type=checkbox]').forEach(function(c){
-    if(!c.checked)return;
-    options.push({key:c.dataset.key,brand:c.dataset.brand,type:c.dataset.tp,price:parseInt(c.dataset.price,10)});
+  var groups=[];
+  document.querySelectorAll('#ac-groups .acgroup').forEach(function(box){
+    var options=[];
+    box.querySelectorAll('.ag-opts input[type=checkbox]').forEach(function(c){
+      if(!c.checked)return;
+      options.push({key:c.dataset.key,brand:c.dataset.brand,type:c.dataset.tp,price:parseFloat(c.dataset.price)||0});
+    });
+    if(!options.length)return;
+    var rec=box.querySelector('input[name="ac-rec-'+box.dataset.g+'"]:checked');
+    groups.push({
+      hp:box.querySelector('.ag-hp').value,
+      qty:Math.max(1,parseInt(box.querySelector('.ag-qty').value,10)||1),
+      options:options,
+      recommended:rec?rec.value:'',
+      includeNone:box.querySelector('.ag-none').checked
+    });
   });
-  if(!options.length)return null;
-  return {hp:hp,options:options,recommended:st.recommended||'',includeNone:gid('ac-none').checked};
+  if(!groups.length)return null;
+  return {groups:groups};
 }
 
 // ── 가격표
@@ -453,9 +534,11 @@ function renderPriceList(){
     var nm=document.createElement('div');nm.className='nm';
     nm.innerHTML=escapeHtml(it.n)+(it.note?'<span>'+escapeHtml(it.note)+'</span>':'');
     var pr=document.createElement('div');pr.className='pr';pr.textContent=it.p.toLocaleString('en-US')+(it.unit?'/'+it.unit:'');
+    var eb=document.createElement('button');eb.className='editb';eb.textContent='✏️';eb.title='단가 수정';
+    eb.onclick=function(){editPriceItem(it,curCat);};
     var b=document.createElement('button');b.className='addb';b.textContent='＋';
     b.onclick=function(){addPriceItem(it,curCat);};
-    row.appendChild(nm);row.appendChild(pr);row.appendChild(b);
+    row.appendChild(nm);row.appendChild(pr);row.appendChild(eb);row.appendChild(b);
     host.appendChild(row);
   });
   if(!shown)host.innerHTML='<div class="empty" style="padding:14px">항목 없음</div>';
@@ -487,10 +570,12 @@ function renderSelList(){
     var q=document.createElement('input');q.className='q';q.type='number';q.min='0';q.value=s.qty;
     q.oninput=function(){s.qty=parseFloat(q.value)||0;renderTotals();amt.textContent=(s.qty*s.price).toLocaleString('en-US');};
     var un=document.createElement('div');un.className='un';un.textContent=s.unit||'×';
+    var pq=document.createElement('input');pq.className='pq';pq.type='number';pq.min='0';pq.value=s.price;pq.title='단가 (이 견적만)';
+    pq.oninput=function(){s.price=parseFloat(pq.value)||0;renderTotals();amt.textContent=(s.qty*s.price).toLocaleString('en-US');};
     var amt=document.createElement('div');amt.className='amt';amt.textContent=(s.qty*s.price).toLocaleString('en-US');
     var x=document.createElement('button');x.className='x';x.textContent='×';
     x.onclick=function(){selItems.splice(i,1);renderSelList();};
-    row.appendChild(nm);row.appendChild(q);row.appendChild(un);row.appendChild(amt);row.appendChild(x);
+    row.appendChild(nm);row.appendChild(q);row.appendChild(un);row.appendChild(pq);row.appendChild(amt);row.appendChild(x);
     host.appendChild(row);
   });
   renderTotals();
@@ -565,15 +650,12 @@ window.loadQuoteToForm=function(q,id){
   gid('f-discount').value=q.discount||0;
   selItems=(q.items||[]).map(function(it){return {name:it.name,nameEn:it.nameEn||it.name,qty:it.qty,unit:it.unit||'',price:it.price,group:it.group||'custom',note:it.note||'',noteEn:it.noteEn||''};});
   gid('f-notices').value=(q.notices||[]).join('\n');
-  if(q.acSelect&&!acEnabled)toggleAcSelect();
   if(q.acSelect){
-    gid('ac-hp').value=q.acSelect.hp||'1.0';
-    renderAcOptions();
-    var keys=(q.acSelect.options||[]).map(function(o){return o.key||o.brand+'|'+o.type;});
-    document.querySelectorAll('#ac-opts input[type=checkbox]').forEach(function(c){c.checked=keys.indexOf(c.dataset.key)>=0;});
-    var rec=document.querySelector('#ac-opts input[name="ac-rec"][value="'+(q.acSelect.recommended||'')+'"]');
-    if(rec)rec.checked=true;
-    gid('ac-none').checked=q.acSelect.includeNone!==false;
+    // 구 스키마(단일 그룹) → 신 스키마(groups) 호환
+    var groups=q.acSelect.groups||[{hp:q.acSelect.hp,qty:1,options:q.acSelect.options,recommended:q.acSelect.recommended,includeNone:q.acSelect.includeNone}];
+    if(!acEnabled)toggleAcSelect();
+    gid('ac-groups').innerHTML='';
+    groups.forEach(function(g){addAcGroup(g);});
   }
   renderSelList();
   gid('save-btn').textContent='수정 저장 & 발송';
@@ -667,6 +749,25 @@ async function shorten(url){
     return 'https://hhc-3p8.pages.dev/r.html?k='+key;
   }catch(e){return url;}
 }
+
+// 수정 단가(오버라이드) 로드 — settings/quote_prices 문서
+(async function loadPriceOverrides(){
+  if(!DB)return;
+  try{
+    const snap=await getDoc(doc(DB,'settings','quote_prices'));
+    if(snap.exists()&&snap.data().overrides){
+      applyPriceOverrides(snap.data().overrides);
+    }
+  }catch(e){console.warn('단가 오버라이드 로드 실패:',e);}
+})();
+// 수정 단가 저장 (병합 저장 — 다른 항목의 수정값 유지)
+window.__savePriceOverride=async function(key,price){
+  if(!DB)return;
+  try{
+    const o={};o[key]=price;
+    await setDoc(doc(DB,'settings','quote_prices'),{overrides:o},{merge:true});
+  }catch(e){console.warn('단가 저장 실패:',e);toast('⚠ 단가 저장 실패 — 네트워크 확인');}
+};
 
 // 인보이스 서비스 카탈로그(청소) 실시간 연동:
 // hhcinvoice.html이 관리하는 'services' 컬렉션에서 청소 항목을 불러온다.
