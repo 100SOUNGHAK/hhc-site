@@ -27,11 +27,21 @@ html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR'
 .qcell .v{font-size:12px;font-weight:600;word-break:break-all}
 .qcell .v.gold{color:var(--gold)}
 .qbody{padding:15px 15px 20px;display:flex;flex-direction:column;gap:13px}
-.amount{background:linear-gradient(135deg,#fdf6e8,#fbeecf);border:1px solid #f0d9a0;border-radius:14px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.amount{background:linear-gradient(135deg,#fdf6e8,#fbeecf);border:1px solid #f0d9a0;border-radius:14px;padding:14px 16px}
+.amount .arow{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .amount .l{font-size:12.5px;font-weight:700;color:#8a6d1f;min-width:0}
 .amount .l span{display:block;font-size:10px;font-weight:400;color:#b09346;margin-top:2px;word-break:keep-all}
 .amount .v{font-size:24px;font-weight:800;color:#9c6d00;white-space:nowrap}
 .amount .v i{font-style:normal;font-size:12px;margin-right:3px;color:#b09346}
+.amount .brk{margin-top:11px;border-top:1px dashed #e5cf9b;padding-top:9px}
+.brk-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:11.5px;color:#8a6d1f;margin-bottom:5px}
+.brk-row:last-child{margin-bottom:0}
+.brk-row .bl{min-width:0;display:flex;align-items:baseline;gap:6px}
+.brk-row .bl .bnum{font-size:9.5px;font-weight:800;color:#b09346;flex-shrink:0}
+.brk-row .bl .bname{font-weight:600;word-break:keep-all}
+.brk-row .bl .bqty{font-size:10px;color:#b09346;white-space:nowrap}
+.brk-row .bv{font-weight:800;white-space:nowrap;color:#9c6d00}
+.brk-row.pend .bname,.brk-row.pend .bv{color:#c4a25a;font-weight:500;font-style:italic}
 .qsec .sh{display:flex;align-items:center;gap:7px;margin-bottom:7px}
 .qsec .sh .ic{width:23px;height:23px;border-radius:7px;background:var(--il);display:flex;align-items:center;justify-content:center;font-size:11px}
 .qsec .sh b{font-size:13px}
@@ -298,11 +308,27 @@ function render(){
       '<button class="cb" id="confirm-btn"'+(allChosen()?'':' disabled')+'>'+t.confirm+'</button></div></div>';
   }
 
-  const summary=acSummary();
-  const allNone=acOn&&acGroups.every((g,i)=>selArr[i]==='__none__');
-  const amtSub=acOn?
-    (t.base+' '+fmtN(Q.baseTotal)+(acPrice>0?(' + '+t.acAdd+' '+fmtN(acPrice)+(summary?' ('+summary+')':'')):(allNone?' · '+t.acNone2:'')))
-    :(Q.subject||'');
+  // 금액 내역: 기본 견적 + 에어컨 그룹별 줄 단위 표시
+  const circled2=['①','②','③','④','⑤','⑥','⑦','⑧','⑨'];
+  let brkHtml='';
+  if(acOn){
+    brkHtml='<div class="brk">';
+    brkHtml+='<div class="brk-row"><div class="bl"><span class="bname">'+t.base+'</span></div><div class="bv">'+fmtN(Q.baseTotal)+'</div></div>';
+    acGroups.forEach((g,i)=>{
+      const s=groupSel(i);
+      const num=acGroups.length>1?(circled2[i]||(i+1)):'';
+      const gTag='❄️'+(num?' '+num:'')+' '+g.hp+'HP';
+      if(!selArr[i]){
+        brkHtml+='<div class="brk-row pend"><div class="bl"><span class="bnum">'+gTag+'</span><span class="bname">'+(isEn?'Select a model below':'아래에서 모델을 선택해 주세요')+'</span></div><div class="bv">—</div></div>';
+      }else if(selArr[i]==='__none__'){
+        brkHtml+='<div class="brk-row"><div class="bl"><span class="bnum">'+gTag+'</span><span class="bname">'+t.acNone2+'</span></div><div class="bv">—</div></div>';
+      }else{
+        brkHtml+='<div class="brk-row"><div class="bl"><span class="bnum">'+gTag+'</span><span class="bname">'+esc(s.label)+'</span>'+(s.qty>1?'<span class="bqty">'+fmtN(s.price)+' × '+s.qty+(isEn?' units':'대')+'</span>':'')+'</div><div class="bv">'+fmtN(s.amount)+'</div></div>';
+      }
+    });
+    brkHtml+='</div>';
+  }
+  const amtSub=acOn?'':(Q.subject||'');
 
   document.getElementById('doc').innerHTML=
     '<div class="qhd">'+
@@ -319,7 +345,7 @@ function render(){
       '</div>'+
     '</div>'+
     '<div class="qbody">'+
-      '<div class="amount"><div class="l">'+t.final+(amtSub?'<span id="amt-sub">'+esc(amtSub)+'</span>':'')+'</div><div class="v"><i>RM</i><span id="amt-v">'+fmtN(finalTotal)+'</span></div></div>'+
+      '<div class="amount"><div class="arow"><div class="l">'+t.final+(amtSub?'<span id="amt-sub">'+esc(amtSub)+'</span>':'')+'</div><div class="v"><i>RM</i><span id="amt-v">'+fmtN(finalTotal)+'</span></div></div>'+brkHtml+'</div>'+
       acHtml+
       secHtml+
       ((Q.notices||[]).length?('<div class="notice"><b>'+t.notice+'</b>'+(Q.notices||[]).map(n=>'<p>'+esc(isEn?(NOTICE_EN[n]||n):n)+'</p>').join('')+'</div>'):'')+
