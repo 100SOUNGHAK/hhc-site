@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Happy Home Care · Quotation</title>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>try{emailjs.init('O99J6X4SGYUPMfGQy');}catch(e){}</script>
 <style>
 :root{--navy:#0F1729;--indigo:#4F6EF7;--il:#eef1fe;--gold:#E8A838;--green:#10b981;--gray:#6b7280;--bdr:rgba(0,0,0,.09);--bg:#f0f2f8;--txt:#0f172a;--txt2:#475569}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -130,6 +132,7 @@ const quoteId=params.get('id');
 let lang=(params.get('lang')==='en')?'en':'ko';
 let Q=null,DB=null,selArr=[];   // selArr[i] = 그룹 i의 선택 key ('__none__' 포함)
 let acGroups=[];                // 정규화된 유닛 그룹 목록
+let acEditing=false;            // 확정 후 '선택 변경' 모드 여부
 
 const GROUP_META={
   product:{ko:'에어컨 구입비용',en:'AC Unit Purchase',icon:'❄️',order:0},
@@ -147,7 +150,9 @@ const T={
     noneOpt:'에어컨 구입 없이 진행',noneSub:'설치 작업만 진행합니다',
     selMsg:'모델을 선택하시면 최종 금액이 자동 계산되며,<br>선택 내용은 업체에 자동 전달됩니다.',
     confirm:'✓ 이 모델로 선택 확정',confirming:'전달 중...',
-    done:'✓ 선택이 전달되었습니다. 변경하려면 다른 모델을 선택 후 다시 확정해 주세요.',
+    done:'✓ 선택이 확정되어 업체에 전달되었습니다.',
+    change:'✏️ 선택 변경',
+    confirmedTag:'선택 확정',
     discount:'할인',notice:'📋 견적서 안내사항',
     validMsg:function(d,u){return '본 견적서는 발행일로부터 <b>'+d+'일간</b> 유효합니다 ('+u+' 까지)';},
     expMsg:'⚠ 본 견적서의 유효기간이 만료되었습니다. 최신 견적은 아래 연락처로 문의해 주세요.',
@@ -158,7 +163,9 @@ const T={
     noneOpt:'Proceed without AC purchase',noneSub:'Installation work only',
     selMsg:'Select a model to see the final amount.<br>Your choice is sent to us automatically.',
     confirm:'✓ Confirm this model',confirming:'Sending...',
-    done:'✓ Your selection has been sent. To change it, pick another model and confirm again.',
+    done:'✓ Your selection has been confirmed and sent to us.',
+    change:'✏️ Change selection',
+    confirmedTag:'Confirmed',
     discount:'Discount',notice:'📋 Quotation Notes',
     validMsg:function(d,u){return 'This quotation is valid for <b>'+d+' days</b> from the issue date (until '+u+')';},
     expMsg:'⚠ This quotation has expired. Please contact us for an updated quotation.',
@@ -273,8 +280,38 @@ function render(){
   if(Q.discount>0)secHtml+='<div class="disc"><span>'+t.discount+'</span><span>− '+fmtN(Q.discount)+'</span></div>';
 
   // AC 선택 블록 (유닛 그룹별)
+  // 확정 상태(저장된 선택 = 현재 선택)이고 변경 모드가 아니면 → 선택 항목만 표시
+  const savedKeys0=(Q.customerChoice&&Q.customerChoice.selections)?Q.customerChoice.selections.map(s=>s.key):null;
+  const isConfirmed=savedKeys0&&savedKeys0.length===selArr.length&&savedKeys0.every((k,i)=>k===selArr[i]);
+  const compact=isConfirmed&&!acEditing;
   let acHtml='';
-  if(acOn){
+  if(acOn&&compact){
+    const circled=['①','②','③','④','⑤','⑥','⑦','⑧','⑨'];
+    let groupsHtml='';
+    acGroups.forEach((g,i)=>{
+      const s=groupSel(i);
+      const qty=g.qty||1;
+      const num=acGroups.length>1?(circled[i]||(i+1))+' ':'';
+      const gLabel=num+g.hp+'HP'+(qty>1?' × '+qty+(isEn?' units':'대'):'');
+      let row;
+      if(selArr[i]==='__none__'){
+        row='<div class="opt on none"><div class="rad"></div><div class="oi"><div class="bn2">'+t.noneOpt+'</div><div class="sub2">'+t.noneSub+'</div></div><div class="op" style="color:#aab">—</div></div>';
+      }else{
+        const o=groupOpt(g,selArr[i])||{};
+        row='<div class="opt on"><div class="rad"></div><div class="oi"><div class="bn2">'+esc(o.brand||'')+
+          '<span class="tag '+(o.type==='inv'?'inv':'non')+'">'+(o.type==='inv'?'INVERTER':'NON-INV')+'</span>'+
+          '<span class="tag rec" style="background:#d9f7e8;color:#0a7a4a">✓ '+t.confirmedTag+'</span>'+
+          '</div><div class="sub2">'+esc(g.hp)+'HP · '+t.wall+(qty>1?' · '+fmtN(o.price||0)+' × '+qty:'')+'</div></div>'+
+          '<div class="op">'+fmtN(s.amount)+'</div></div>';
+      }
+      groupsHtml+='<div class="ahd2">❄️ <b>'+(isEn?'AC Unit ':'에어컨 ')+esc(gLabel)+'</b><span style="background:#d9f7e8;color:#0a7a4a">✓ '+t.confirmedTag+'</span></div>'+row;
+    });
+    acHtml='<div class="acsel" style="border-color:#10b981">'+groupsHtml+
+      '<div class="confirmbar done" id="confirm-bar">'+
+      '<div class="msg">'+t.done+'</div>'+
+      '<button class="cb" id="change-btn" style="background:#fff;color:#4356b0;border:1px solid #c6cbe0">'+t.change+'</button></div></div>';
+  }
+  else if(acOn){
     const circled=['①','②','③','④','⑤','⑥','⑦','⑧','⑨'];
     let groupsHtml='';
     acGroups.forEach((g,i)=>{
@@ -299,12 +336,9 @@ function render(){
       }
       groupsHtml+='<div class="ahd2">❄️ <b>'+(isEn?'AC Unit ':'에어컨 ')+esc(gLabel)+'</b><span>'+(isEn?'Select a model':'모델 선택')+'</span></div>'+opts;
     });
-    // 확정 상태: 저장된 선택과 현재 선택이 동일한가
-    const savedKeys=(Q.customerChoice&&Q.customerChoice.selections)?Q.customerChoice.selections.map(s=>s.key):null;
-    const chosen=savedKeys&&savedKeys.length===selArr.length&&savedKeys.every((k,i)=>k===selArr[i]);
     acHtml='<div class="acsel">'+groupsHtml+
-      '<div class="confirmbar'+(chosen?' done':'')+'" id="confirm-bar">'+
-      '<div class="msg" id="confirm-msg">'+(chosen?t.done:t.selMsg)+'</div>'+
+      '<div class="confirmbar" id="confirm-bar">'+
+      '<div class="msg" id="confirm-msg">'+t.selMsg+'</div>'+
       '<button class="cb" id="confirm-btn"'+(allChosen()?'':' disabled')+'>'+t.confirm+'</button></div></div>';
   }
 
@@ -360,6 +394,7 @@ function render(){
   document.getElementById('lk').onclick=()=>{lang='ko';render();};
   document.getElementById('le').onclick=()=>{lang='en';render();};
   document.querySelectorAll('.opt').forEach(o=>{
+    if(!o.dataset.k)return; // 컴팩트(확정 표시) 행은 클릭 불가
     o.addEventListener('click',()=>{
       selArr[parseInt(o.dataset.g,10)]=o.dataset.k;
       render();
@@ -367,6 +402,8 @@ function render(){
   });
   const cbtn=document.getElementById('confirm-btn');
   if(cbtn)cbtn.onclick=confirmChoice;
+  const chbtn=document.getElementById('change-btn');
+  if(chbtn)chbtn.onclick=()=>{acEditing=true;render();};
 }
 
 async function confirmChoice(){
@@ -384,7 +421,28 @@ async function confirmChoice(){
   try{
     await updateDoc(doc(DB,'quotes',quoteId),{customerChoice:choice});
     Q.customerChoice=choice;
+    acEditing=false;
     render();
+    // 관리자 이메일 알림 (의뢰/예약과 동일한 EmailJS 템플릿 재사용) — 실패해도 확정은 유지
+    try{
+      if(window.emailjs){
+        const circ=['①','②','③','④','⑤','⑥','⑦','⑧','⑨'];
+        const lines=selections.map((s,i)=>
+          (selections.length>1?(circ[i]||(i+1))+' ':'')+s.hp+'HP'+(s.qty>1?'×'+s.qty+'대':'')+' : '+s.label+(s.amount>0?' — RM '+s.amount.toLocaleString('en-US'):''));
+        const finalAmt=(Q.baseTotal||0)+acTotal();
+        await emailjs.send('service_wf4f4eg','template_mu63ahr',{
+          customer_name:Q.client||'—',
+          customer_phone:Q.phone||'—',
+          customer_address:Q.subject||'—',
+          booking_date:'[견적서 에어컨 선택 확정 / Quotation AC Confirmed]',
+          booking_time:'견적번호 '+(Q.qno||quoteId),
+          booking_items:lines.join('\n'),
+          booking_memo:'최종 견적금액: RM '+finalAmt.toLocaleString('en-US')+' (기본 '+(Q.baseTotal||0).toLocaleString('en-US')+' + 에어컨 '+acTotal().toLocaleString('en-US')+')',
+          submitted_at:new Date().toLocaleString('ko-KR')
+        },'O99J6X4SGYUPMfGQy');
+        console.log('관리자 알림 이메일 발송 완료');
+      }
+    }catch(mailErr){console.warn('알림 이메일 발송 실패 (확정은 저장됨):',mailErr);}
   }catch(e){
     btn.disabled=false;btn.textContent=t.confirm;
     alert((lang==='en'?'Failed to send selection: ':'선택 전달 실패: ')+e.message);
