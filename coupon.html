@@ -35,7 +35,7 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
 .g-type{display:flex;align-items:center;gap:10px;margin-bottom:14px}
 .g-type .ln{flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(201,164,76,.55))}
 .g-type .ln:last-child{background:linear-gradient(90deg,rgba(201,164,76,.55),transparent)}
-.g-type em{font-style:normal;font-size:13.5px;font-weight:900;letter-spacing:.16em;color:var(--gold2);white-space:nowrap}
+.g-type em{font-style:normal;font-size:clamp(13.5px,4.4vw,18px);font-weight:900;letter-spacing:.14em;color:var(--gold2);white-space:nowrap;text-shadow:0 0 16px rgba(232,207,138,.45)}
 .g-amt{font-family:'Noto Serif KR',serif;font-size:56px;font-weight:700;line-height:1.05;text-align:center;letter-spacing:-.02em;word-break:break-all;
   background:linear-gradient(104deg,#a5822f 0%,#e8cf8a 26%,#fff6dd 44%,#e8cf8a 62%,#a5822f 100%);
   background-size:260% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
@@ -160,6 +160,48 @@ var t=T[LANG];
 function gid(id){return document.getElementById(id);}
 function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 
+// ── 사용 조건 자동 번역 (한→영)
+function trCond(s){
+  if(!s)return '';
+  if(!/[가-힣]/.test(s))return s;
+  var t=s.trim();
+  var pats=[
+    [/^RM\s*([\d,]+)\s*이상\s*(서비스\s*)?(이용|사용|결제)\s*시?$/,'For services of RM$1 or more'],
+    [/^(\d+)\s*대\s*이상\s*(이용|예약|신청)?\s*시?$/,'For $1 units or more'],
+    [/^신규\s*고객(\s*전용|\s*만)?$/,'New customers only'],
+    [/^첫\s*(이용|방문)\s*고객?(\s*전용|\s*만)?$/,'First-time customers only'],
+    [/^패키지\s*회원(\s*전용|\s*만)?$/,'Package members only'],
+    [/^평일\s*(예약\s*)?(전용|만)?$/,'Weekdays only'],
+    [/^주말\s*(예약\s*)?(전용|만)?$/,'Weekends only']
+  ];
+  for(var i=0;i<pats.length;i++)if(pats[i][0].test(t))return t.replace(pats[i][0],pats[i][1]);
+  var dict=[
+    ['벽걸이형 에어컨','wall-mounted aircond'],['벽걸이 에어컨','wall-mounted aircond'],
+    ['매립천정형 에어컨','ceiling-ducted aircond'],['카세트형 에어컨','cassette aircond'],
+    ['천정형 에어컨','ceiling aircond'],['실외기','outdoor unit'],
+    ['전체분해세척','full-dismantle cleaning'],['전용약품세척','chemical cleaning'],
+    ['스팀살균세척','steam sterilization cleaning'],['스팀그릴세척','steam grille cleaning'],
+    ['기본세척','basic cleaning'],
+    ['에어컨','aircond'],['세탁기','washing machine'],['건조기','dryer'],
+    ['쇼파','sofa'],['소파','sofa'],['매트리스','mattress'],['커튼','curtain'],
+    ['출장점검','on-site inspection'],['점검','inspection'],['수리','repair'],
+    ['세척','cleaning'],['세탁','washing'],
+    ['패키지 회원','package members'],['멤버십 회원','membership members'],['회원','members'],
+    ['신규 고객','new customers'],['고객','customers'],
+    ['서비스','service'],['이상','or more'],['전용','only'],
+    ['평일','weekdays'],['주말','weekends'],['당일','same-day'],['1회','once']
+  ];
+  dict.forEach(function(d){t=t.split(d[0]).join(d[1]);});
+  t=t.replace(/(\d+)\s*대/g,'$1 units');
+  var m=t.match(/^(.*?)\s*(이용|사용)\s*시$/);
+  if(m)return ('For '+m[1].trim()).replace(/\s+/g,' ');
+  m=t.match(/^(.*?)\s*예약\s*시$/);
+  if(m)return ('When booking '+m[1].trim()).replace(/\s+/g,' ');
+  m=t.match(/^(.*?)\s*결제\s*시$/);
+  if(m)return ('For payments of '+m[1].trim()).replace(/\s+/g,' ');
+  return t.replace(/\s+/g,' ').trim();
+}
+
 window.__renderCoupon=function(c){
   gid('loading').style.display='none';
   if(!c){gid('err').style.display='block';return;}
@@ -174,7 +216,7 @@ window.__renderCoupon=function(c){
     if(p)return p[1]+'<small style="margin-right:0;margin-left:4px">%</small>';
     return v;
   })();
-  if(c.cond){gid('gDesc').style.display='table';gid('gDesc').textContent=c.cond;}
+  if(c.cond){gid('gDesc').style.display='table';gid('gDesc').textContent=LANG==='en'?trCond(c.cond):c.cond;}
   gid('gName').textContent=(c.name||'—')+t.nameSfx;
   if(c.expiry){gid('rowExp').style.display='flex';gid('gExp').textContent=c.expiry+t.until;}
   gid('gIss').textContent=c.issuedAt||'—';
