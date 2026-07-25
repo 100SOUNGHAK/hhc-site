@@ -761,21 +761,52 @@ async function renderDay(ds){
   content.innerHTML=html;
 }
 
-function getVisitReminderMsg(name,dateStr,lang){
-  lang=lang||'ko';
-  var md='',mdEn='';
+// ── 방문 안내 메시지 3종 템플릿 ──
+// tpl: 'pre'(사전 안내) | 'tomorrow'(전일 안내) | 'today'(당일 안내)
+function getVisitReminderMsg(name,dateStr,lang,tpl,timeS){
+  lang=lang||'ko';tpl=tpl||'pre';
+  var md='',mdEn='',wk='',wkEn='';
   if(dateStr){
     var p=dateStr.split('-');
     if(p.length===3){
       md=parseInt(p[1])+'월'+parseInt(p[2])+'일';
       var monEn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(p[1])-1];
       mdEn=monEn+' '+parseInt(p[2]);
+      var d=new Date(dateStr+'T00:00:00');
+      if(!isNaN(d)){
+        wk=['일','월','화','수','목','금','토'][d.getDay()];
+        wkEn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+      }
+    }
+  }
+  // 방문 시간대 문구: "09:00" → "오전09시전후" / "13:30" → "오후01시전후"
+  var tKo='',tEn='';
+  if(timeS){
+    var tm=String(timeS).match(/^(\d{1,2})/);
+    if(tm){
+      var h=parseInt(tm[1],10);
+      var ampmKo=h<12?'오전':'오후';
+      var h12=h%12;if(h12===0)h12=12;
+      tKo=ampmKo+String(h12).padStart(2,'0')+'시전후';
+      tEn='around '+h12+(h<12?' AM':' PM');
     }
   }
   if(lang==='en'){
-    return `Hello, ${name}.\nThis is a visit schedule notice for your booked service on ${mdEn}.\nWe will visit as scheduled, so please kindly confirm.\nFor a smooth visit, please also re-confirm the status of your Work Permit registration.\nWe look forward to seeing you on that date.\nThank you.`;
+    if(tpl==='tomorrow'){
+      return `Hello, ${name}.\nThis is a schedule notice for your booked visit service.\nWe will visit tomorrow, ${mdEn}${wkEn?' ('+wkEn+')':''}${tEn?' '+tEn:''}.\n\nFor a smooth visit, please also re-confirm the status of your Work Permit registration.\nThank you.`;
+    }
+    if(tpl==='today'){
+      return `Hello, ${name}.\n[Visit Service Schedule Notice]\nWe will visit today${tEn?' '+tEn:''}.\nFor a smooth visit, please also re-confirm the status of your Work Permit registration.\nThank you.`;
+    }
+    return `Hello, ${name}.\nThis is a visit schedule notice for your booked service on ${mdEn}.\nFor a smooth visit, please also re-confirm the status of your Work Permit registration.\nWe look forward to seeing you on that date.\nThank you.`;
   }
-  return `안녕하세요, ${name}님.\n예약하신 ${md} 방문 서비스 일정 안내드립니다.\n예정된 일정에 맞춰 방문드릴 예정이오니 확인 부탁드립니다.\n원활한 방문 진행을 위해 작업 방문 등록(Work permit) 상태도 다시 한번 확인 부탁드립니다.\n해당 일자에 뵙겠습니다.\n감사합니다.`;
+  if(tpl==='tomorrow'){
+    return `안녕하세요, ${name}님.\n예약하신 방문 서비스 일정 안내드립니다.\n내일 ${md}${wk?'('+wk+')':''}${tKo?' '+tKo:''} 방문드리겠습니다.\n\n원활한 방문 진행을 위해 작업 방문 등록(Work permit) 상태도 다시 한번 확인 부탁드립니다.\n감사합니다.`;
+  }
+  if(tpl==='today'){
+    return `안녕하세요, ${name}님.\n[예약 방문 서비스 일정 안내]\n금일${tKo?' '+tKo:''} 방문드릴 예정입니다.\n원활한 방문 진행을 위해 작업 방문 등록(Work permit) 상태도 다시 한번 확인 부탁드립니다.\n감사합니다.`;
+  }
+  return `안녕하세요, ${name}님.\n${md} 예약 방문 서비스 일정 안내드립니다.\n원활한 방문 진행을 위해 작업 방문 등록(Work permit) 상태도 다시 한번 확인 부탁드립니다.\n해당 일자에 뵙겠습니다.\n감사합니다.`;
 }
 
 window.sendVisitReminder=function(itemId){
@@ -794,24 +825,39 @@ window.sendVisitReminder=function(itemId){
   }
   if(!dateStr){alert('예약 날짜를 찾을 수 없습니다');return;}
 
-  const msg=getVisitReminderMsg(name,dateStr,lang);
+  const timeS=item.time_s||item.booking_time||'';
   const title=lang==='en'?'💬 Visit Reminder Message':'💬 방문 안내 메시지';
-  const subtitle=lang==='en'?`Please send the message below to ${name}`:`${name}님께 아래 메시지를 전송해 주세요`;
+  const subtitle=lang==='en'?`Choose a template and send to ${name}`:`템플릿 선택 후 ${name}님께 전송해 주세요`;
   const closeLabel=lang==='en'?'Close':'닫기';
   const waLabel=lang==='en'?'Send via WhatsApp':'WhatsApp 전송';
   const kakaoLabel=lang==='en'?'Copy for KakaoTalk':'카카오톡 복사';
   const copiedLabel=lang==='en'?'✓ Copied! Paste in KakaoTalk':'✓ 복사됨! 카카오톡에 붙여넣기 하세요';
+  const tplLabels=lang==='en'
+    ?[{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'}]
+    :[{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'}];
+  // 예약일 기준 기본 템플릿 자동 선택: 당일→'today', 내일→'tomorrow', 그 외→'pre'
+  let defTpl='pre';
+  try{
+    const today=new Date();today.setHours(0,0,0,0);
+    const bd=new Date(dateStr+'T00:00:00');
+    const diff=Math.round((bd-today)/86400000);
+    if(diff===0)defTpl='today';else if(diff===1)defTpl='tomorrow';
+  }catch(e){}
 
   const existing=document.getElementById('visit-msg-modal');
   if(existing)existing.remove();
   const modal=document.createElement('div');
   modal.id='visit-msg-modal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  const chipBase='flex:1;padding:9px 4px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid #e5e7eb;background:#fff;color:#6b7280;font-family:inherit;white-space:nowrap';
   modal.innerHTML=`
-    <div style="background:#fff;border-radius:20px;padding:24px;max-width:420px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.14)">
+    <div style="background:#fff;border-radius:20px;padding:22px;max-width:440px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.14)">
       <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:4px">${title}</div>
-      <div style="font-size:12px;color:#8a8f9a;margin-bottom:12px">${subtitle}</div>
-      <div style="background:#f5f6f8;border:1px solid #e5e7eb;border-radius:10px;padding:12px;font-size:12px;color:#333;line-height:1.8;white-space:pre-wrap;max-height:280px;overflow-y:auto;margin-bottom:12px">${msg}</div>
+      <div style="font-size:12px;color:#8a8f9a;margin-bottom:11px">${subtitle}</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px" id="visit-tpl-row">
+        ${tplLabels.map(t=>`<button data-tpl="${t.k}" style="${chipBase}">${t.l}</button>`).join('')}
+      </div>
+      <textarea id="visit-msg-box" rows="9" style="width:100%;box-sizing:border-box;background:#f5f6f8;border:1px solid #e5e7eb;border-radius:10px;padding:12px;font-size:12px;color:#333;line-height:1.8;resize:vertical;font-family:inherit;margin-bottom:11px"></textarea>
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px">
         <button id="visit-wa-btn" style="flex:1;padding:10px;border:none;border-radius:8px;background:#25D366;color:#fff;font-size:13px;font-weight:600;cursor:pointer">${waLabel}</button>
         <button id="visit-kakao-btn" style="flex:1;padding:10px;border:none;border-radius:8px;background:#FEE500;color:#3A1D1D;font-size:13px;font-weight:600;cursor:pointer">${kakaoLabel}</button>
@@ -820,14 +866,30 @@ window.sendVisitReminder=function(itemId){
       <button id="visit-close-btn" style="width:100%;padding:9px;border:1px solid #e5e7eb;border-radius:8px;background:transparent;color:#333;font-size:13px;font-weight:500;cursor:pointer">${closeLabel}</button>
     </div>`;
   document.body.appendChild(modal);
+
+  function setTpl(tpl){
+    document.querySelectorAll('#visit-tpl-row button').forEach(b=>{
+      const on=b.dataset.tpl===tpl;
+      b.style.background=on?'#0BB5A4':'#fff';
+      b.style.color=on?'#fff':'#6b7280';
+      b.style.borderColor=on?'#0BB5A4':'#e5e7eb';
+    });
+    document.getElementById('visit-msg-box').value=getVisitReminderMsg(name,dateStr,lang,tpl,timeS);
+  }
+  document.querySelectorAll('#visit-tpl-row button').forEach(b=>{
+    b.addEventListener('click',()=>setTpl(b.dataset.tpl));
+  });
+  setTpl(defTpl);
+
+  const getMsg=()=>document.getElementById('visit-msg-box').value;
   document.getElementById('visit-wa-btn').addEventListener('click',()=>{
-    window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+    window.open('https://wa.me/?text='+encodeURIComponent(getMsg()),'_blank');
   });
   document.getElementById('visit-kakao-btn').addEventListener('click',()=>{
-    navigator.clipboard.writeText(msg).then(()=>{
+    navigator.clipboard.writeText(getMsg()).then(()=>{
       const ok=document.getElementById('visit-kakao-ok');
       ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
-    }).catch(()=>prompt('복사 후 붙여넣기:',msg));
+    }).catch(()=>prompt('복사 후 붙여넣기:',getMsg()));
   });
   document.getElementById('visit-close-btn').addEventListener('click',()=>modal.remove());
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
