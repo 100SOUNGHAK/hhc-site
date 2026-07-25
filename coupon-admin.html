@@ -320,7 +320,7 @@ function unmarkUsed(c){
 
 // ── 발송
 function msgOf(c,lang){
-  var link=couponLink(c._id);
+  var link=couponLink(c._id)+(lang==='en'?'&lang=en':'');
   var tl=c.type==='discount'?(lang==='en'?'Discount Coupon':'할인권'):(lang==='en'?'Gift Voucher':'상품권');
   if(lang==='en'){
     return '🎁 [Happy Home Care] A '+tl+' has arrived!\n\n'+
@@ -366,7 +366,8 @@ function makeQrCanvas(text,size){
   document.body.removeChild(tmp);
   return out;
 }
-function drawCoupon(cpn){
+function drawCoupon(cpn,lang){
+  var en=lang==='en';
   var s=stOf(cpn);
   var W=680,P=40;
   var val=String(cpn.value||'');
@@ -411,7 +412,7 @@ function drawCoupon(cpn){
   x.beginPath();x.arc(P+27,80,27,0,7);x.stroke();
   x.fillStyle='#e8cf8a';x.font='700 24px Georgia,serif';x.textAlign='center';x.fillText('H',P+27,89);
   x.textAlign='left';
-  x.fillStyle='#ffffff';x.font='800 22px sans-serif';x.fillText('해피홈케어',P+70,74);
+  x.fillStyle='#ffffff';x.font='800 22px sans-serif';x.fillText(en?'Happy Home Care':'해피홈케어',P+70,74);
   x.fillStyle='#7f95b1';x.font='600 11px sans-serif';x.fillText('HAPPY WORKS SERVICES SDN. BHD.',P+70,95);
   x.textAlign='right';
   x.fillStyle='#7f95b1';x.font='700 11px sans-serif';x.fillText('N o .',W-P,66);
@@ -419,7 +420,9 @@ function drawCoupon(cpn){
   x.textAlign='left';
 
   // ── 종류 라인
-  var typeTxt=cpn.type==='discount'?'D I S C O U N T   C O U P O N  ·  할인권':'G I F T   V O U C H E R  ·  상품권';
+  var typeTxt=cpn.type==='discount'
+    ?(en?'D I S C O U N T   C O U P O N':'D I S C O U N T   C O U P O N  ·  할인권')
+    :(en?'G I F T   V O U C H E R':'G I F T   V O U C H E R  ·  상품권');
   x.font='900 14px sans-serif';x.textAlign='center';
   var tw=x.measureText(typeTxt).width;
   x.fillStyle='#e8cf8a';x.fillText(typeTxt,W/2,typeY);
@@ -461,7 +464,11 @@ function drawCoupon(cpn){
   // ── 정보 패널
   x.fillStyle='rgba(255,255,255,.05)';roundRect(x,P,panelY,W-P*2,panelH,18);x.fill();
   x.strokeStyle='rgba(255,255,255,.1)';x.lineWidth=1;roundRect(x,P,panelY,W-P*2,panelH,18);x.stroke();
-  var rows=[
+  var rows=en?[
+    ['T O',cpn.name||''],
+    ['V A L I D   U N T I L',cpn.expiry?cpn.expiry:'No limit'],
+    ['I S S U E D',cpn.issuedAt||'']
+  ]:[
     ['받 는  분',(cpn.name||'')+' 님'],
     ['유 효 기 간',cpn.expiry?cpn.expiry+' 까지':'제한 없음'],
     ['발 급 일',cpn.issuedAt||'']
@@ -494,10 +501,12 @@ function drawCoupon(cpn){
     x.beginPath();x.moveTo(c[0]+c[2]*bl,c[1]);x.lineTo(c[0],c[1]);x.lineTo(c[0],c[1]+c[3]*bl);x.stroke();
   });
   x.fillStyle='#5b6478';x.font='600 13px sans-serif';x.textAlign='center';
-  x.fillText('매장 제시용 QR · 직원이 스캔하면 확인 화면이 열립니다',W/2,qrY+qrBoxH-16);x.textAlign='left';
+  x.fillText(en?'Show this QR at service · staff scan opens verification':'매장 제시용 QR · 직원이 스캔하면 확인 화면이 열립니다',W/2,qrY+qrBoxH-16);x.textAlign='left';
 
   // ── 상태 밴드
-  var stTxt=s==='ok'?'✅ 사용 가능한 쿠폰입니다':(s==='used'?'이미 사용된 쿠폰입니다'+(cpn.usedAt?' ('+cpn.usedAt+')':''):'유효기간이 지난 쿠폰입니다');
+  var stTxt=en
+    ?(s==='ok'?'✅ This coupon is valid':(s==='used'?'Already used'+(cpn.usedAt?' ('+cpn.usedAt+')':''):'This coupon has expired'))
+    :(s==='ok'?'✅ 사용 가능한 쿠폰입니다':(s==='used'?'이미 사용된 쿠폰입니다'+(cpn.usedAt?' ('+cpn.usedAt+')':''):'유효기간이 지난 쿠폰입니다'));
   x.fillStyle=s==='ok'?'rgba(16,185,129,.18)':(s==='used'?'rgba(255,255,255,.07)':'rgba(231,76,60,.18)');
   roundRect(x,P,stY,W-P*2,stH,14);x.fill();
   x.strokeStyle=s==='ok'?'rgba(16,185,129,.34)':(s==='used'?'rgba(255,255,255,.14)':'rgba(231,76,60,.32)');
@@ -508,15 +517,15 @@ function drawCoupon(cpn){
   // ── 유의사항
   x.strokeStyle='rgba(255,255,255,.16)';x.setLineDash([6,6]);x.lineWidth=1;
   x.beginPath();x.moveTo(P,tmY-8);x.lineTo(W-P,tmY-8);x.stroke();x.setLineDash([]);
-  x.fillStyle='#c9a44c';x.font='900 13px sans-serif';x.fillText('유 의 사 항',P,tmY+18);
+  x.fillStyle='#c9a44c';x.font='900 13px sans-serif';x.fillText(en?'T E R M S':'유 의 사 항',P,tmY+18);
   x.fillStyle='#c9a44c';x.font='900 15px sans-serif';x.fillText('·',P,tmY+48);x.fillText('·',P,tmY+76);
   x.fillStyle='#93a6bd';x.font='500 15px sans-serif';
-  x.fillText('서비스당 1장 사용 가능합니다.',P+16,tmY+48);
-  x.fillText('본 쿠폰은 무단 양도가 불가합니다.',P+16,tmY+76);
+  x.fillText(en?'One coupon per service.':'서비스당 1장 사용 가능합니다.',P+16,tmY+48);
+  x.fillText(en?'This coupon is not transferable.':'본 쿠폰은 무단 양도가 불가합니다.',P+16,tmY+76);
 
   // ── 푸터
   x.fillStyle='#75899f';x.font='600 13px sans-serif';x.textAlign='center';
-  x.fillText('쿠폰 확인 hhc-3p8.pages.dev/coupon  ·  📞 +60 17-247 2774',W/2,ftY);
+  x.fillText(en?'Verify: hhc-3p8.pages.dev/coupon  ·  📞 +60 17-247 2774':'쿠폰 확인 hhc-3p8.pages.dev/coupon  ·  📞 +60 17-247 2774',W/2,ftY);
   x.textAlign='left';
 
   // ── 사용완료/만료 스탬프
@@ -526,7 +535,7 @@ function drawCoupon(cpn){
     x.strokeStyle='rgba(255,255,255,.92)';x.lineWidth=5;
     roundRect(x,-150,-52,300,104,16);x.stroke();
     x.fillStyle='#ffffff';x.font='700 54px Georgia,serif';x.textAlign='center';
-    x.fillText(s==='used'?'사용완료':'기간만료',0,20);
+    x.fillText(en?(s==='used'?'USED':'EXPIRED'):(s==='used'?'사용완료':'기간만료'),0,20);
     x.restore();x.textAlign='left';
   }
   return cv;
@@ -555,7 +564,7 @@ window.shareBoth=function(){
   // 안전망: 일부 앱(왓챕·카카오)이 이미지 공유 시 문구를 버리는 경우가 있어
   // 공유 직전에 메시지를 클립보드에 복사해 둔다 → 붙여넣기만 하면 됨
   copyText(msg);
-  drawCoupon(cpn).toBlob(function(blob){
+  drawCoupon(cpn,curLang()).toBlob(function(blob){
     var file=new File([blob],cpn.code+'.png',{type:'image/png'});
     if(navigator.canShare&&navigator.canShare({files:[file]})){
       navigator.share({files:[file],title:'해피홈케어 쿠폰 '+cpn.code,text:msg}).then(function(){
@@ -576,15 +585,20 @@ window.shareBoth=function(){
 };
 window.dlSendImg=function(){
   if(!_sendTarget)return;
-  var a=document.createElement('a');a.href=drawCoupon(_sendTarget).toDataURL('image/png');
+  var a=document.createElement('a');a.href=drawCoupon(_sendTarget,curLang()).toDataURL('image/png');
   a.download=_sendTarget.code+'.png';a.click();
   toast('이미지가 저장되었습니다 — 채팅창에 끌어다 놓으세요');
 };
 
-function openSend(c){_sendTarget=c;var ko=document.querySelector('input[name="slang"][value="ko"]');if(ko)ko.checked=true;renderSendMsg();try{gid('send-img').src=drawCoupon(c).toDataURL('image/png');}catch(e){}gid('sendBg').classList.add('show');}
+function openSend(c){_sendTarget=c;var ko=document.querySelector('input[name="slang"][value="ko"]');if(ko)ko.checked=true;renderSendMsg();gid('sendBg').classList.add('show');}
 function closeSend(){gid('sendBg').classList.remove('show');}
 function curLang(){var r=document.querySelector('input[name="slang"]:checked');return r?r.value:'ko';}
-window.renderSendMsg=function(){if(!_sendTarget)return;gid('send-msg').textContent=msgOf(_sendTarget,curLang());};
+window.renderSendMsg=function(){
+  if(!_sendTarget)return;
+  gid('send-msg').textContent=msgOf(_sendTarget,curLang());
+  // 언어 전환 시 쿠폰 이미지도 같은 언어로 다시 그림
+  try{gid('send-img').src=drawCoupon(_sendTarget,curLang()).toDataURL('image/png');}catch(e){}
+};
 window.sendWA=function(){if(!_sendTarget)return;window.open('https://wa.me/?text='+encodeURIComponent(msgOf(_sendTarget,curLang())),'_blank');};
 window.copyMsg=function(){if(!_sendTarget)return;copyText(msgOf(_sendTarget,curLang()));toast('메시지가 복사되었습니다 — 카카오톡에 붙여넣으세요');};
 window.copyLink=function(){if(!_sendTarget)return;copyText(couponLink(_sendTarget._id));toast('링크가 복사되었습니다');};
