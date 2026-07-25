@@ -2194,6 +2194,13 @@ function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl){
 // 설치보고서
 // ═══════════════════════════════════════════
 window.switchReportType=function(t){
+  // 유형 전환 = 새 문서 작성 시작으로 간주 (편집 로딩 시엔 로더가 다시 설정함)
+  currentEditId=null;
+  var _sb=document.getElementById('btn-save');
+  if(_sb){
+    _sb.style.background='';
+    _sb.textContent=t==='install'?'💾 설치보고서 저장하고 고객 링크 생성':(t==='dispatch'?'💾 출장점검보고서 저장하고 고객 링크 생성':(t==='washer'?'💾 세탁기/건조기 점검보고서 저장하고 고객 링크 생성':'💾 저장하고 고객 링크 생성'));
+  }
   reportType=t;
   var showInspect=(t==='inspect'||t==='dispatch');
   document.getElementById('inspect-form-body').style.display=showInspect?'block':'none';
@@ -3618,7 +3625,11 @@ window.saveReport=async function(){
     if(window.__clearDraft)window.__clearDraft(); // 저장 성공 → 임시저장 삭제
     var rbn=document.querySelector('.restore-banner');if(rbn)rbn.remove();
     toast(wasEdit?'✓ 수정 저장 완료':'✓ 저장 완료');
-    currentEditId=null;
+    // 저장 후에도 수정 모드 유지 — 같은 폼에서 다시 저장하면 같은 보고서를
+    // 덮어쓴다(목록 중복 생성 방지). 새 보고서는 유형 전환/복제/새로고침으로 시작.
+    currentEditId=rid;
+    var sbtn=document.getElementById('btn-save');
+    if(sbtn){sbtn.textContent='💾 수정 저장';sbtn.style.background='#1e40af';}
     document.getElementById('sm-link').textContent=shortUrls.ko;
     window._sendCtx={client:data.client||'',type:(isInstall?'install':(isWasher?'washer':(reportType==='dispatch'?'dispatch':'inspect')))};
     updateSendMsg();
