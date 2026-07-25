@@ -157,6 +157,12 @@ textarea{resize:vertical;line-height:1.6}
 .ocr-status.busy{color:#8a8a9a}
 input.ocr-filled{background:#fff8e0!important;border-color:#f0c040!important}
 .ph-del{position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#c0392b;color:#fff;border:none;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+/* 사진 순서 이동 버튼 + 순번 */
+.ph-mv{position:absolute;bottom:2px;width:24px;height:20px;border:none;border-radius:5px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;padding:0}
+.ph-mv:disabled{opacity:.25;cursor:default}
+.ph-mv-l{left:2px}
+.ph-mv-r{right:2px}
+.ph-num{position:absolute;top:2px;left:2px;background:rgba(0,0,0,.55);color:#fff;font-size:8.5px;font-weight:700;padding:1px 5px;border-radius:7px;pointer-events:none}
 /* 종합평가 버튼 */
 .ev-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
 .ev-btn{border-radius:8px;padding:10px 5px;text-align:center;border:1.5px solid #e8e8f0;cursor:pointer;font-size:10px;font-weight:500;line-height:1.5}
@@ -471,11 +477,11 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   </div>
 </div>
 
-<!-- 실외기 사진 세트 -->
-<div class="card">
+<!-- 실외기 사진 세트 — 신규 작성에선 제거됨. 기존 자료가 있는 보고서 수정 시에만 표시 -->
+<div class="card" id="outdoor-card" style="display:none">
   <div class="card-hdr"><div class="card-icon">📷</div><div class="card-title">실외기 사진 — 명판 · 냉매압력 · 정격전류</div></div>
   <div class="card-body">
-    <div style="font-size:11px;color:#6b7280;margin-bottom:10px">유닛별 3장 세트. 세트 추가로 A1, A2 등 추가 가능합니다.</div>
+    <div style="font-size:11px;color:#6b7280;margin-bottom:10px">이전 보고서에 저장된 기존 자료입니다. (신규 작성에서는 사용하지 않는 항목)</div>
     <div id="outdoor-sets"></div>
     <button class="btn-add" onclick="addOutdoorSet()">+ 세트 추가 (에어컨 A1, A2…)</button>
   </div>
@@ -3032,8 +3038,15 @@ function addPhotoThumb(container,key,dataUrl){
   item.draggable=true;
   var img=document.createElement('img');img.className='ph-img';img.src=dataUrl;
   var dBtn=document.createElement('button');dBtn.className='ph-del';dBtn.textContent='×';
-  dBtn.onclick=function(){delete photoData[key];item.remove();updatePhotoBadges();};
+  dBtn.onclick=function(){delete photoData[key];item.remove();updatePhotoBadges();renumberPhotos(container);};
   item.appendChild(img);item.appendChild(dBtn);
+  // 순번 배지 + ◀▶ 이동 버튼 (모바일 터치 지원)
+  var num=document.createElement('div');num.className='ph-num';item.appendChild(num);
+  var mvL=document.createElement('button');mvL.type='button';mvL.className='ph-mv ph-mv-l';mvL.textContent='◀';mvL.title='앞으로 이동';
+  mvL.onclick=function(e){e.stopPropagation();movePhotoItem(item,-1);};
+  var mvR=document.createElement('button');mvR.type='button';mvR.className='ph-mv ph-mv-r';mvR.textContent='▶';mvR.title='뒤로 이동';
+  mvR.onclick=function(e){e.stopPropagation();movePhotoItem(item,1);};
+  item.appendChild(mvL);item.appendChild(mvR);
   // 순서 바꾸기 (드래그)
   item.addEventListener('dragstart',function(e){window._phDrag=item;item.classList.add('dragging');try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','ph');}catch(_){}});
   item.addEventListener('dragend',function(){item.classList.remove('dragging');container.querySelectorAll('.ph-item').forEach(function(x){x.classList.remove('dropzone-over');});});
@@ -3047,11 +3060,38 @@ function addPhotoThumb(container,key,dataUrl){
     var items=Array.from(container.querySelectorAll('.ph-item'));
     if(items.indexOf(src)<items.indexOf(item))container.insertBefore(src,item.nextSibling);
     else container.insertBefore(src,item);
-    syncPhotoOrder(container);
+    syncPhotoOrder(container);renumberPhotos(container);
     if(window.__scheduleDraft)window.__scheduleDraft();
   });
   var addBtn=container.querySelector('.photo-add-group');
   container.insertBefore(item,addBtn);
+  renumberPhotos(container);
+}
+
+// ◀▶ 버튼으로 한 칸 이동
+function movePhotoItem(item,dir){
+  var container=item.parentElement;
+  if(!container)return;
+  if(dir<0){
+    var p=item.previousElementSibling;
+    if(p&&p.classList.contains('ph-item'))container.insertBefore(item,p);
+  }else{
+    var n=item.nextElementSibling;
+    if(n&&n.classList.contains('ph-item'))container.insertBefore(n,item);
+  }
+  syncPhotoOrder(container);renumberPhotos(container);
+  if(window.__scheduleDraft)window.__scheduleDraft();
+}
+
+// 컨테이너 내 순번 배지 갱신 + 끝단 버튼 비활성화
+function renumberPhotos(container){
+  if(!container)return;
+  var items=Array.from(container.querySelectorAll('.ph-item'));
+  items.forEach(function(it,i){
+    var num=it.querySelector('.ph-num');if(num)num.textContent=(i+1);
+    var l=it.querySelector('.ph-mv-l');if(l)l.disabled=(i===0);
+    var r=it.querySelector('.ph-mv-r');if(r)r.disabled=(i===items.length-1);
+  });
 }
 
 // 컨테이너 내 썸네일 DOM 순서에 맞춰 photoData 키 순서 재정렬
@@ -4001,24 +4041,21 @@ window.loadIntoForm=function(data){
   // 권장정비
   recCount=0;document.getElementById('rec-rows').innerHTML='';
   (data.recommendations||[]).forEach(function(r){addRecRow(r.type,r.title,r.desc);});
-  // 실외기 사진 세트 (photos URL 포함)
+  // 실외기 사진 세트 (photos URL 포함) — 기존 자료가 있을 때만 카드 표시
   outdoorCount=0;document.getElementById('outdoor-sets').innerHTML='';
+  var _ocard=document.getElementById('outdoor-card');
+  if(_ocard)_ocard.style.display=(data.outdoorSets&&data.outdoorSets.length)?'':'none';
   (data.outdoorSets||[]).forEach(function(s){addOutdoorSet(s.label,s.photos);});
+  if(window.buildSectionNav)setTimeout(function(){window.buildSectionNav();},150);
 
   // ── 기존 사진 복원 (Firebase Storage URL → 썸네일 표시)
   // addPhotoFromUrl: URL을 받아 썸네일 생성, photoData에는 URL 그대로 저장
   function restorePhoto(containerId, url, key){
     var container=document.getElementById(containerId);
     if(!container||!url)return;
-    // photoData에 URL 저장 (Storage URL이므로 재업로드 불필요)
+    // photoData에 URL 저장 (Storage URL이므로 재업로드 불필요) — 이동/드래그 지원 썸네일로 복원
     photoData[key]=url;
-    var item=document.createElement('div');item.className='ph-item';
-    var img=document.createElement('img');img.className='ph-img';img.src=url;
-    var dBtn=document.createElement('button');dBtn.className='ph-del';dBtn.textContent='×';
-    dBtn.onclick=function(){delete photoData[key];item.remove();updatePhotoBadges();};
-    item.appendChild(img);item.appendChild(dBtn);
-    var addBtn=container.querySelector('.photo-add-group');
-    container.insertBefore(item,addBtn);
+    addPhotoThumb(container,key,url);
   }
 
   // 작업과정 사진
