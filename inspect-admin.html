@@ -1726,7 +1726,7 @@ function sevenSegDecode(dataUrl){
         // 각 전략 안에서는 기울기 보정 각도들을 시도해 세로 투영 에너지가
         // 최대인 각도를 채택(올바른 각도에서 세로 획이 가장 날카롭게 정렬됨).
         var shears=[-0.10,-0.05,0,0.05,0.10,0.15,0.20,0.25];
-        var modes=['bright','chroma','adaptive'];
+        var modes=['bright','chroma','adaptive','sat'];
         // 전역 가중 투표: 모든 (이진화모드 × 기울기) 시도의 결과값에
         // 신뢰도(정확판독 수 + 판정여유) 가중치를 부여해 합산하고,
         // 표가 가장 많은 값을 채택한다. 개별 시도의 오판은 흩어지지만
@@ -1737,6 +1737,21 @@ function sevenSegDecode(dataUrl){
             var r=_sevenSegFromImage(img,shears[si],modes[mi2]);
             if(!r)continue;
             var wgt=Math.max(0.2,r.exact-r.approx*0.5)+r.margin;
+            // 구조 사전확률: 이 계측기 값은 항상 "소수점 있는 2~3자리"다.
+            // 소수점을 실제로 본 판독을 우대하고, 한 자리짜리(아이콘·조각 오인)와
+            // 소수점 없는 판독(자릿수 붕괴 가능)은 감점한다.
+            var nDig=(r.str.match(/\d/g)||[]).length;
+            var hasDot=r.str.indexOf('.')>=0;
+            if(nDig<2)wgt*=0.3;
+            if(hasDot&&nDig>=3)wgt*=2.2;                       // XX.X — 이 계측기의 정규 형태
+            else if(hasDot&&nDig===2)wgt*=1.5;                 // X.X — 큰 숫자줄 정규 형태
+            else if(!hasDot&&nDig===2){
+              // "95"→9.5처럼 소수점 복원이 일어난 판독은 정상 형태(점만 놓침) —
+              // 복원 없이 그대로 2자리인 판독("29","58")만 자릿수 붕괴로 강하게 감점
+              var restored=Math.abs(parseFloat(r.str)-parseFloat(r.val))>1e-9;
+              wgt*=restored?0.7:0.35;
+            }
+            else if(!hasDot)wgt*=0.7;
             votes[r.val]=(votes[r.val]||0)+wgt;
             if(!info[r.val])info[r.val]={mode:modes[mi2],shear:shears[si]};
           }
@@ -1791,7 +1806,9 @@ function _get7Tmpl(){
 }
 function _sevenSegFromImage(img,shear,mode){
   shear=shear||0;mode=mode||'bright';
-  var H=140;
+  // 판독 해상도: 축소는 글로우와 획을 뭉개 '5'의 구멍·숫자 간격을 지워버린다.
+  // 원본이 충분히 크면 최대 240px까지 원본 해상도를 유지 (저해상도는 140으로 확대)
+  var H=Math.max(140,Math.min(240,img.height));
   var scale=H/Math.max(1,img.height);
   var w0=Math.max(1,Math.round(img.width*scale)),h=H;
   var extra=Math.ceil(Math.abs(shear)*h);
@@ -1904,6 +1921,14 @@ function _sevenSegFromImage(img,shear,mode){
         fg[py*w+px2]=(darkDigits?(g[py*w+px2]<lm-C):(g[py*w+px2]>lm+C))?1:0;
       }
     }
+  }else if(mode==='sat'){
+    // 상위 10% 백분위 임계: 흰/청색 LCD의 강한 글로우(중간 밝기 후광)가 Otsu를
+    // 오염시켜 '5'의 구멍이 메워지고 숫자들이 붙는 문제를 피해, 획의 포화 코어만
+    // 남긴다. 글로우가 약한 사진에서는 다른 모드가 투표로 보완한다.
+    var acc=0,q=Math.max(1,Math.round(total*0.10)),thrS=250;
+    for(var t9=255;t9>=0;t9--){acc+=hist[t9];if(acc>=q){thrS=Math.min(t9,250);break;}}
+    for(var f9=0;f9<w*h;f9++)fg[f9]=g[f9]>=thrS?1:0;
+    digitsBright=true;
   }else{
     // 전역 Otsu 이진화
     var sum=0;for(var t=0;t<256;t++)sum+=t*hist[t];
@@ -1972,7 +1997,7 @@ function _sevenSegFromImage(img,shear,mode){
       var mxV=0;for(var vx=cur[0];vx<=cur[1];vx++)if(colCnt[vx]>mxV)mxV=colCnt[vx];
       var mnV=1e9,mnX=-1;
       for(var vx2=lo;vx2<=hi;vx2++)if(colCnt[vx2]<mnV){mnV=colCnt[vx2];mnX=vx2;}
-      if(mnX<0||mnV>mxV*0.55){splitRuns.push(cur);continue;} // 뚜렷한 골짜기 없음
+      if(mnX<0||mnV>mxV*0.65){splitRuns.push(cur);continue;} // 뚜렷한 골짜기 없음
       stack.push([cur[0],mnX-1],[mnX+1,cur[1]]);
     }
   });
@@ -2010,6 +2035,10 @@ function _sevenSegFromImage(img,shear,mode){
     var touchesTB=(gy0Abs<=1&&gy1Abs>=h-2);
     if((gw/gh<0.40&&touchesSide)||touchesTB){push('?',0,0,0);continue;}
     if(gw/gh<0.40){                                     // 폭이 매우 좁으면 1 (단, 조밀해야)
+      // 직전 글리프와의 간격이 거의 없으면(0.08bh 미만) 진짜 '1'이 아니라
+      // 이진화 임계로 오른쪽이 잘린 숫자의 파편이다 ('9.5'→'9'+'1' 오독 방지)
+      var gapPrev=(mi>0)?(gx0-merged[mi-1][1]):999;
+      if(gapPrev<bh*0.08){push('?',0,0,0);continue;}
       if(fillFrac>=0.45)push('1',1,0,0.5);
       else push('?',0,0,0);
       continue;
@@ -2043,7 +2072,7 @@ function _sevenSegFromImage(img,shear,mode){
       if(fg[(minY+gy0+ly)*w+(minX+gx0+lx)]){lfg[ly*gw+lx]=1;fgN++;}
     }
     var stampArr=new Int32Array(gw*gh);var stampId=0;
-    var bestCh=null,bestS=-1,secondS=-1;
+    var bestCh=null,bestS=-1,secondS=-1,secondCh=null;
     for(var dg=0;dg<10;dg++){
       var segsOn=DIGSEG[String(dg)];
       stampId++;
@@ -2058,10 +2087,83 @@ function _sevenSegFromImage(img,shear,mode){
         }
       }
       var dice=(fgN+tCnt)>0?(2*iCnt)/(fgN+tCnt):0;
-      if(dice>bestS){secondS=bestS;bestS=dice;bestCh=String(dg);}
-      else if(dice>secondS){secondS=dice;}
+      if(dice>bestS){secondS=bestS;secondCh=bestCh;bestS=dice;bestCh=String(dg);}
+      else if(dice>secondS){secondS=dice;secondCh=String(dg);}
+    }
+    // ── Dice 근소 차이(글로우로 오염된 경우) → 두 후보가 '다른' 세그먼트만
+    // 넓힌 구역으로 직접 샘플링해 재판정 (예: 9↔5는 우상단 B 하나로 갈린다).
+    // 결정적 차이(0.12)일 때만 뒤집어, 잘못된 전단 각도에서의 오플립을 방지 ──
+    if(secondCh!==null&&(bestS-secondS)<0.06&&bestS>=0.40){
+      var tpw=Math.max(3,Math.round(gw*0.34));
+      var midY3=gh/2;
+      var segIdxW={
+        A:rectIdx(gw*0.18,0,gw*0.82,tpw),
+        B:rectIdx(gw-tpw,tpw*0.25,gw,midY3-tpw*0.1),
+        C:rectIdx(gw-tpw,midY3+tpw*0.1,gw,gh-tpw*0.25),
+        D:rectIdx(gw*0.18,gh-tpw,gw*0.82,gh),
+        E:rectIdx(0,midY3+tpw*0.1,tpw,gh-tpw*0.25),
+        F:rectIdx(0,tpw*0.25,tpw,midY3-tpw*0.1),
+        G:rectIdx(gw*0.15,midY3-tpw/2,gw*0.85,midY3+tpw/2)
+      };
+      var pat1=DIGSEG[bestCh],pat2=DIGSEG[secondCh];
+      var s1z=0,s2z=0,ndz=0;
+      'ABCDEFG'.split('').forEach(function(sn){
+        var on1=pat1.indexOf(sn)>=0,on2=pat2.indexOf(sn)>=0;
+        if(on1===on2)return;
+        var idl=segIdxW[sn];var onC=0;
+        for(var sj=0;sj<idl.length;sj++)if(lfg[idl[sj]])onC++;
+        var ff=idl.length?onC/idl.length:0;
+        s1z+=on1?ff:(1-ff);s2z+=on2?ff:(1-ff);ndz++;
+      });
+      if(ndz&&(s2z-s1z)/ndz>0.12){
+        if(window.__7segDbg)console.log('[7SEG:Z] 존 재판정 '+bestCh+'→'+secondCh+' (diff '+((s2z-s1z)/ndz).toFixed(2)+')');
+        var tmpC=bestCh;bestCh=secondCh;secondCh=tmpC;
+      }
     }
     var gMargin=Math.min(1,Math.max(0,(bestS-secondS)*4));
+    // ── 대형 글리프(≥60px)는 7세그먼트 구역 직접 샘플링이 Dice보다 훨씬 정확
+    // (글로우·이탤릭·획 굵기 차이에 강함): 구역별 점등 비율을 재고 lit/unlit이
+    // 뚜렷이 갈리면 세그먼트 패턴 → 숫자 매핑으로 Dice 판정을 덮어쓴다 ──
+    if(gh>=60){
+      var SEGR={A:[0.25,0.02,0.75,0.14],B:[0.72,0.15,0.98,0.42],C:[0.72,0.58,0.98,0.85],D:[0.25,0.86,0.75,0.98],E:[0.02,0.58,0.28,0.85],F:[0.02,0.15,0.28,0.42],G:[0.25,0.44,0.75,0.56]};
+      var fillsV={};
+      'ABCDEFG'.split('').forEach(function(k5){
+        var rr=SEGR[k5];
+        var qx0=Math.round(rr[0]*gw),qy0=Math.round(rr[1]*gh),qx1=Math.round(rr[2]*gw),qy1=Math.round(rr[3]*gh);
+        var onC2=0,tot2=0;
+        for(var qy=qy0;qy<qy1;qy++)for(var qx=qx0;qx<qx1;qx++){tot2++;if(lfg[qy*gw+qx])onC2++;}
+        fillsV[k5]=tot2?onC2/tot2:0;
+      });
+      var fvArr='ABCDEFG'.split('').map(function(k6){return fillsV[k6];}).sort(function(a,b){return a-b;});
+      var bi=-1,bg=0;
+      for(var fi=0;fi<6;fi++){var gp2=fvArr[fi+1]-fvArr[fi];if(gp2>bg){bg=gp2;bi=fi;}}
+      var allOn=fvArr[0]>0.55, allOff=fvArr[6]<0.30;
+      var segPat=null;
+      if(allOn)segPat='ABCDEFG';
+      else if(!allOff&&bg>=0.25){
+        var thF=(fvArr[bi]+fvArr[bi+1])/2;
+        segPat='';
+        'ABCDEFG'.split('').forEach(function(k7){if(fillsV[k7]>thF)segPat+=k7;});
+      }
+      if(segPat){
+        var segBest=null;
+        for(var d6 in DIGSEG){if(DIGSEG[d6]===segPat){segBest=d6;break;}}
+        if(!segBest){
+          var cands=[];
+          for(var d7 in DIGSEG){
+            var pa=DIGSEG[d7],hd=0;
+            'ABCDEFG'.split('').forEach(function(k8){if((pa.indexOf(k8)>=0)!==(segPat.indexOf(k8)>=0))hd++;});
+            if(hd===1)cands.push(d7);
+          }
+          if(cands.length===1)segBest=cands[0];
+        }
+        if(segBest&&segBest!=='1'){
+          if(window.__7segDbg&&segBest!==bestCh)console.log('[7SEG:S] 세그먼트 판정 '+bestCh+'→'+segBest+' (pat '+segPat+')');
+          bestCh=segBest;
+          gMargin=Math.max(gMargin,0.5);
+        }
+      }
+    }
     if(window.__7segDbg)console.log('[7SEG:G] x'+gx0Abs+'-'+gx1Abs+' '+gw+'x'+gh+' fill='+fillFrac.toFixed(2)+' → '+bestCh+' (dice '+bestS.toFixed(2)+'/2위 '+secondS.toFixed(2)+')');
     if(bestS>=0.55)push(bestCh,1,0,gMargin);        // 확신 판독
     else if(bestS>=0.40)push(bestCh,0,1,gMargin);   // 근사 판독
@@ -2084,6 +2186,9 @@ function _sevenSegFromImage(img,shear,mode){
       if(num>60&&num/10>=1&&num/10<=60)num=num/10;
       else if(num>60&&num/100>=1&&num/100<=60)num=num/100;
     }
+    // 이 계측기는 소수 1자리만 표시 — 둘째 소수 자릿수는 °C의 'C' 등 단위
+    // 기호가 숫자로 붙은 오염이므로 절사한다 (27.45→27.4)
+    num=Math.floor(num*10+1e-6)/10;
     if(num<1||num>60)return null;                          // 에어컨 온도 현실 범위
     var ex3=0,ap3=0,mS=0,mN=0;
     seq.forEach(function(s2){if(s2.ch!=='.'){ex3+=s2.exact;ap3+=s2.approx;mS+=s2.margin;mN++;}});
@@ -2093,6 +2198,14 @@ function _sevenSegFromImage(img,shear,mode){
   // 그룹 분할은 쓸 수 없다. 대신 전체 열로 시도하고, 실패하면 왼쪽 아이콘/
   // 오른쪽 단위 기호가 숫자로 붙어 들어온 경우를 가정해 가장자리 글리프를
   // 하나씩 떼어내며 재시도한다 (°C의 C가 '0'으로 붙는 경우는 값에 무해).
+  // 왼쪽 아이콘 분리: 글리프 높이(bh)의 0.9배가 넘는 큰 가로 간격은 숫자 내부에
+  // 존재할 수 없다('1'의 선행 간격도 ~0.6bh) — 그 간격 왼쪽은 아이콘이므로 버린다
+  for(var gi2=glyphs.length-1;gi2>0;gi2--){
+    if(glyphs[gi2].x0-glyphs[gi2-1].x1>bh*0.9){
+      if(window.__7segDbg)console.log('[7SEG:I] 좌측 아이콘 제거: 글리프 '+gi2+'개 이전 버림 (간격 '+(glyphs[gi2].x0-glyphs[gi2-1].x1)+'px)');
+      glyphs=glyphs.slice(gi2);break;
+    }
+  }
   var seq=glyphs.slice();
   while(seq.length&&(seq[0].ch==='?'||seq[0].ch==='.'))seq.shift();        // 가장자리 잡음 제거
   while(seq.length&&(seq[seq.length-1].ch==='?'||seq[seq.length-1].ch==='.'))seq.pop();
@@ -2101,9 +2214,11 @@ function _sevenSegFromImage(img,shear,mode){
   if(!final2&&seq.length>2)final2=trySeq(seq.slice(2));
   if(!final2&&seq.length>1)final2=trySeq(seq.slice(0,seq.length-1));
   if(!final2&&seq.length>2)final2=trySeq(seq.slice(1,seq.length-1));
+  if(!final2&&seq.length>3)final2=trySeq(seq.slice(2,seq.length-1));
+  if(!final2&&seq.length>3)final2=trySeq(seq.slice(1,seq.length-2));
   if(!final2)return null;
   console.log('[7SEG] 판독:',final2.str,'→',final2.num,'(shear',shear,'/ 정확',final2.exact,'근사',final2.approx,'여유',final2.margin.toFixed(2),'에너지',energy.toFixed(1),')');
-  return {val:String(Math.round(final2.num*10)/10),exact:final2.exact,approx:final2.approx,margin:final2.margin,energy:energy,shear:shear};
+  return {val:String(Math.round(final2.num*10)/10),str:final2.str,exact:final2.exact,approx:final2.approx,margin:final2.margin,energy:energy,shear:shear};
 }
 // Tesseract 폴백: 크롭 안에 숫자가 하나뿐이라는 전제로 가장 그럴듯한 값 하나 추출
 function tesseractReadNumber(dataUrl){
@@ -2155,8 +2270,9 @@ function splitScreenRegions(dataUrl){
         // 투영에는 Otsu보다 높은 문턱(밝은 숫자 픽셀만) 사용 — 반사광 무시
         var thr2=Math.round((thr+255)/2);
         // 숫자는 화면 오른쪽에 있다 — 왼쪽 아이콘·연결선 제외
-        var xA=Math.round(w*0.20),xB2=Math.round(w*0.94);
-        function bandIn(yLo,yHi){
+        var xB2=Math.round(w*0.94);
+        function bandIn(yLo,yHi,xLoFrac){
+          var xA=Math.round(w*(xLoFrac||0.20));
           var y0=Math.round(h*yLo),y1=Math.round(h*yHi);
           var rows=[],vals=[];
           for(var y=y0;y<y1;y++){var c=0;for(var x=xA;x<xB2;x++)if(g[y*w+x]>thr2)c++;rows.push({y:y,c:c});vals.push(c);}
@@ -2185,7 +2301,10 @@ function splitScreenRegions(dataUrl){
           return best;
         }
         var tempB=bandIn(0.08,0.52);
-        var bigB=bandIn(0.50,0.99);
+        // 큰 숫자는 항상 오른쪽 정렬 — 오른쪽 30%만 투영해 왼쪽의 습도(%)줄과
+        // 세로로 겹쳐 있어도 큰 숫자 줄만 정확히 분리한다 (마지막 자릿수는
+        // 항상 x>0.70 영역을 지나므로 밴드 행 검출에는 충분)
+        var bigB=bandIn(0.50,0.99,0.70);
         if(!tempB||!bigB){resolve(null);return;}
         var pad=Math.round(h*0.02);
         var crop=function(b){
@@ -2209,7 +2328,51 @@ function splitScreenRegions(dataUrl){
           while(sx1>w-1-maxTrim&&isJunkCol(sx1))sx1--;
           if(sx1<=sx0){sx0=0;sx1=w-1;}
           var cw=sx1-sx0+1;
-          var fx0=(sx0+cw*0.22)/sc;                              // 좌측 아이콘 컷
+          // ── 콘텐츠 기반 좌측 아이콘 컷: 밴드 안의 세로 콘텐츠 런들을 찾아,
+          // 글리프 높이가 최대 런의 72% 미만인 선행 런(아이콘 박스·연결선)을
+          // 건너뛰고 첫 번째 숫자 높이 런부터 크롭한다. 고정 비율 컷(22%)은
+          // 촬영 구도에 따라 아이콘이 남거나 숫자가 잘리는 문제가 있었음. ──
+          var colTop=new Int16Array(cw),colBot=new Int16Array(cw),colOn=new Uint8Array(cw);
+          for(var xc=sx0;xc<=sx1;xc++){
+            var tp=-1,bt=-1;
+            for(var yc=y0s;yc<y1s;yc++){if(g[yc*w+xc]>thr2){if(tp<0)tp=yc;bt=yc;}}
+            var ci=xc-sx0;
+            if(tp>=0){colOn[ci]=1;colTop[ci]=tp;colBot[ci]=bt;}
+          }
+          var runs2=[],curR=-1;
+          for(var ci2=0;ci2<cw;ci2++){
+            if(colOn[ci2]&&curR<0)curR=ci2;
+            else if(!colOn[ci2]&&curR>=0){runs2.push([curR,ci2-1]);curR=-1;}
+          }
+          if(curR>=0)runs2.push([curR,cw-1]);
+          var runH=runs2.map(function(r){
+            var t3=1e9,b3=-1;
+            for(var x3=r[0];x3<=r[1];x3++){if(colOn[x3]){if(colTop[x3]<t3)t3=colTop[x3];if(colBot[x3]>b3)b3=colBot[x3];}}
+            return b3-t3+1;
+          });
+          // ── 좌측 아이콘 컷: 이 계측기 레이아웃에서 아이콘 열은 화면(정크 제거
+          // 후) 폭의 ~30% 안에 있다. 30% 지점을 기본 컷으로 하되, 그 지점이
+          // 콘텐츠 런(숫자일 수 있음) 내부에 떨어지면 런 경계로 스냅한다:
+          // 런의 중심이 컷 오른쪽이면 숫자로 보고 런 시작으로 후퇴, 왼쪽이면
+          // 아이콘 꼬리이므로 런 끝으로 전진. 숫자를 자르는 일이 없다. ──
+          var cut=Math.round(cw*0.30);
+          var snapped=false;
+          for(var ri=0;ri<runs2.length;ri++){
+            if(runs2[ri][0]<cut&&runs2[ri][1]>=cut){
+              var midR=(runs2[ri][0]+runs2[ri][1])/2;
+              cut=(midR>=cut)?Math.max(0,runs2[ri][0]-2):Math.min(cw-1,runs2[ri][1]+2);
+              snapped=true;break;
+            }
+          }
+          if(!snapped){
+            // 컷이 간격(빈 열)에 떨어짐 → 다음 콘텐츠 런 직전까지 전진해
+            // 아이콘 박스 테두리 등 잔여 슬리버를 완전히 제거
+            for(var ri2=0;ri2<runs2.length;ri2++){
+              if(runs2[ri2][0]>=cut){cut=Math.max(cut,runs2[ri2][0]-2);break;}
+            }
+          }
+          var startX=sx0+cut;
+          var fx0=startX/sc;
           var fx1=(sx1+1)/sc;
           var y0=y0s/sc,y1=y1s/sc;
           var c2=document.createElement('canvas');
