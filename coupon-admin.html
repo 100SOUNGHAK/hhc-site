@@ -62,6 +62,16 @@ input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--bdr);b
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 20px;border-radius:22px;font-size:12.5px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:300;max-width:92vw;text-align:center}
 .toast.show{opacity:1}
 .empty{text-align:center;color:#9ca3af;font-size:12px;padding:26px 0}
+.sec-grp{display:flex;align-items:center;gap:8px;margin:16px 0 8px}
+.sec-grp:first-child{margin-top:0}
+.sec-grp .sg-t{font-size:11.5px;font-weight:800}
+.sec-grp .sg-line{flex:1;height:1px;background:var(--bdr)}
+.sec-grp .sg-n{font-size:10px;color:#9ca3af;font-weight:700}
+.sec-grp.ok .sg-t{color:#0a7a4a}
+.sec-grp.used .sg-t{color:#6b7280}
+.sec-grp.exp .sg-t{color:#c0392b}
+.vitem.dim{opacity:.62;background:#fafafa}
+.pv-img{width:100%;border-radius:14px;display:block;box-shadow:0 16px 40px -20px rgba(8,18,33,.5)}
 </style>
 </head>
 <body>
@@ -77,7 +87,7 @@ input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--bdr);b
     <div class="card-bd">
       <div class="grid2">
         <div><div class="fl">종류</div><select id="f-type"><option value="gift">상품권 (금액권)</option><option value="discount">할인권 (%)</option></select></div>
-        <div><div class="fl">금액 / 할인율</div><input id="f-val" placeholder="예: RM 50 또는 10%"></div>
+        <div><div class="fl">금액 / 할인율</div><input id="f-val" placeholder="숫자만 입력하면 RM 자동 (예: 100 → RM 100)" onblur="fmtVal(this)"></div>
         <div><div class="fl">고객명</div><input id="f-name" placeholder="예: 김철수"></div>
         <div><div class="fl">유효기간 (까지)</div><input id="f-exp" type="date"></div>
       </div>
@@ -115,23 +125,42 @@ input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--bdr);b
   </div>
 </div>
 
+<!-- 쿠폰 미리보기 모달 -->
+<div class="mbg" id="pvBg" onclick="if(event.target===this)closePv()">
+  <div class="md">
+    <div class="md-hd">👁 쿠폰 미리보기 <button onclick="closePv()">✕</button></div>
+    <div class="md-bd">
+      <img class="pv-img" id="pv-img" alt="쿠폰 미리보기">
+      <div class="note">고객에게 보이는 쿠폰 카드입니다. 발송 시 이 이미지가 메시지와 함께 전달됩니다.</div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="vbtn" style="flex:1;padding:11px" onclick="dlPvImg()">⬇ 이미지 저장</button>
+        <button class="vbtn send" style="flex:1;padding:11px" onclick="openSendFromPv()">📤 발송 창 열기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 발송 모달 -->
 <div class="mbg" id="sendBg" onclick="if(event.target===this)closeSend()">
   <div class="md">
     <div class="md-hd">📤 쿠폰 발송 <button onclick="closeSend()">✕</button></div>
     <div class="md-bd">
+      <img class="pv-img" id="send-img" alt="쿠폰 이미지" style="max-width:220px;margin:0 auto 10px;display:block">
       <div class="lang-row">
         <label><input type="radio" name="slang" value="ko" checked onchange="renderSendMsg()"> 한국어</label>
         <label><input type="radio" name="slang" value="en" onchange="renderSendMsg()"> English</label>
       </div>
       <div class="msg-pre" id="send-msg"></div>
+      <button class="vbtn send" style="width:100%;padding:12px;font-size:12.5px;margin-bottom:8px" onclick="shareBoth()">📱 이미지+메시지 함께 공유 (휴대폰 — 왓챕/카카오 선택)</button>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="vbtn send" style="flex:1;padding:11px" onclick="sendWA()">🟢 왓챕으로 보내기</button>
-        <button class="vbtn" style="flex:1;padding:11px" onclick="copyMsg()">📋 메시지 복사 (카카오용)</button>
+        <button class="vbtn send" style="flex:1;padding:11px" onclick="sendWA()">🟢 왓챕 텍스트</button>
+        <button class="vbtn" style="flex:1;padding:11px" onclick="copyMsg()">📋 메시지 복사</button>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="vbtn" style="flex:1;padding:10px" onclick="dlSendImg()">⬇ 이미지 저장</button>
         <button class="vbtn" style="flex:1;padding:10px" onclick="copyLink()">🔗 링크만 복사</button>
       </div>
+      <div class="note" style="margin-top:10px">휴대폰: 「이미지+메시지 함께 공유」 → 공유 시트에서 WhatsApp/카카오톡 선택 → 이미지와 문구가 함께 첨부됩니다.<br>PC: 이미지를 저장한 뒤 채팅창에 끌어다 놓고 메시지를 붙여넣으세요.</div>
     </div>
   </div>
 </div>
@@ -154,6 +183,12 @@ function genCode(){
   return 'HHC-'+seg()+'-'+seg();
 }
 function typeLabel(t){return t==='discount'?'할인권':'상품권';}
+function fmtValStr(v){
+  v=(v||'').trim();
+  if(/^[0-9]+([.,][0-9]+)?$/.test(v))return 'RM '+v;
+  return v;
+}
+window.fmtVal=function(el){el.value=fmtValStr(el.value);};
 function stOf(c){
   if(c.status==='used')return 'used';
   if(c.expiry&&c.expiry<today())return 'exp';
@@ -164,7 +199,7 @@ function couponLink(id){return PAGE_BASE+'?id='+id;}
 // ── 발급
 window.issueCoupon=async function(){
   var name=gid('f-name').value.trim();
-  var val=gid('f-val').value.trim();
+  var val=fmtValStr(gid('f-val').value.trim());
   if(!name){toast('고객명을 입력하세요');gid('f-name').focus();return;}
   if(!val){toast('금액/할인율을 입력하세요');gid('f-val').focus();return;}
   var btn=gid('btn-issue');btn.disabled=true;btn.textContent='발급 중...';
@@ -214,40 +249,54 @@ function renderChips(){
     w.appendChild(c);
   });
 }
+function mkItem(cpn){
+  var s=stOf(cpn);
+  var stLbl=s==='ok'?'<span class="vst ok">사용 가능</span>':s==='used'?'<span class="vst used">사용완료 '+(cpn.usedAt||'')+'</span>':'<span class="vst exp">기간만료</span>';
+  var d=document.createElement('div');d.className='vitem'+(s!=='ok'?' dim':'');
+  d.innerHTML='<div class="top"><span class="vcode">'+cpn.code+'</span>'+stLbl+'<span class="vamt">'+typeLabel(cpn.type)+' '+cpn.value+'</span></div>'+
+    '<div class="vsub">👤 '+cpn.name+' · 발급 '+(cpn.issuedAt||'')+(cpn.expiry?' · ~'+cpn.expiry:'')+(cpn.cond?' · '+cpn.cond:'')+'</div>'+
+    '<div class="vact"></div>';
+  var act=d.querySelector('.vact');
+  function mk(label,cls,fn){var b=document.createElement('button');b.className='vbtn'+(cls?' '+cls:'');b.textContent=label;b.onclick=fn;act.appendChild(b);}
+  mk('👁 미리보기','',function(){openPv(cpn);});
+  if(s==='ok'){
+    mk('✓ 사용 처리','use',function(){markUsed(cpn);});
+    mk('📤 발송','send',function(){openSend(cpn);});
+  }
+  if(s==='used')mk('↩ 사용 취소','',function(){unmarkUsed(cpn);});
+  mk('🔗 링크 복사','',function(){
+    copyText(couponLink(cpn._id));toast('고객용 링크가 복사되었습니다');
+  });
+  mk('🗑','del',function(){
+    if(!confirm(cpn.name+' 님의 '+cpn.code+' 쿠폰을 삭제할까요?\n삭제하면 고객 링크도 무효화됩니다.'))return;
+    window.__deleteCoupon(cpn._id).then(function(){
+      allCoupons=allCoupons.filter(function(x){return x._id!==cpn._id;});
+      renderAll();toast('삭제되었습니다');
+    }).catch(function(e){alert('삭제 실패: '+e.message);});
+  });
+  return d;
+}
 function renderList(){
   var q=(gid('q-code').value||'').trim().toUpperCase();
   var w=gid('vlist');w.innerHTML='';
-  var rows=allCoupons.filter(function(c){
-    if(filterName&&c.name!==filterName)return false;
-    if(q&&(c.code||'').toUpperCase().indexOf(q)<0)return false;
+  var rows=allCoupons.filter(function(cpn){
+    if(filterName&&cpn.name!==filterName)return false;
+    if(q&&(cpn.code||'').toUpperCase().indexOf(q)<0)return false;
     return true;
   });
   if(!rows.length){w.innerHTML='<div class="empty">'+(allCoupons.length?'조건에 맞는 쿠폰이 없습니다':'아직 발급된 쿠폰이 없습니다')+'</div>';return;}
-  rows.forEach(function(c){
-    var s=stOf(c);
-    var stLbl=s==='ok'?'<span class="vst ok">사용 가능</span>':s==='used'?'<span class="vst used">사용완료 '+(c.usedAt||'')+'</span>':'<span class="vst exp">기간만료</span>';
-    var d=document.createElement('div');d.className='vitem';
-    d.innerHTML='<div class="top"><span class="vcode">'+c.code+'</span>'+stLbl+'<span class="vamt">'+typeLabel(c.type)+' '+c.value+'</span></div>'+
-      '<div class="vsub">👤 '+c.name+' · 발급 '+(c.issuedAt||'')+(c.expiry?' · ~'+c.expiry:'')+(c.cond?' · '+c.cond:'')+'</div>'+
-      '<div class="vact"></div>';
-    var act=d.querySelector('.vact');
-    function mk(label,cls,fn){var b=document.createElement('button');b.className='vbtn'+(cls?' '+cls:'');b.textContent=label;b.onclick=fn;act.appendChild(b);}
-    if(s==='ok'){
-      mk('✓ 사용 처리','use',function(){markUsed(c);});
-      mk('🟢 발송','send',function(){openSend(c);});
-    }
-    if(s==='used')mk('↩ 사용 취소','',function(){unmarkUsed(c);});
-    mk('🔗 링크 복사','',function(){
-      copyText(couponLink(c._id));toast('고객용 링크가 복사되었습니다');
-    });
-    mk('🗑','del',function(){
-      if(!confirm(c.name+' 님의 '+c.code+' 쿠폰을 삭제할까요?\n삭제하면 고객 링크도 무효화됩니다.'))return;
-      window.__deleteCoupon(c._id).then(function(){
-        allCoupons=allCoupons.filter(function(x){return x._id!==c._id;});
-        renderAll();toast('삭제되었습니다');
-      }).catch(function(e){alert('삭제 실패: '+e.message);});
-    });
-    w.appendChild(d);
+  var groups=[
+    {key:'ok',t:'✅ 사용 가능',cls:'ok'},
+    {key:'used',t:'사용완료',cls:'used'},
+    {key:'exp',t:'기간만료',cls:'exp'}
+  ];
+  groups.forEach(function(g){
+    var items=rows.filter(function(cpn){return stOf(cpn)===g.key;});
+    if(!items.length)return;
+    var h=document.createElement('div');h.className='sec-grp '+g.cls;
+    h.innerHTML='<span class="sg-t">'+g.t+'</span><span class="sg-line"></span><span class="sg-n">'+items.length+'장</span>';
+    w.appendChild(h);
+    items.forEach(function(cpn){w.appendChild(mkItem(cpn));});
   });
 }
 function renderAll(){renderStats();renderChips();renderList();}
@@ -300,7 +349,115 @@ function msgOf(c,lang){
     '· 서비스당 1장 사용 가능 · 무단 양도 불가\n\n'+
     '📞 문의: +60 17-247 2774';
 }
-function openSend(c){_sendTarget=c;var ko=document.querySelector('input[name="slang"][value="ko"]');if(ko)ko.checked=true;renderSendMsg();gid('sendBg').classList.add('show');}
+// ── 쿠폰 카드 이미지 생성 (Canvas)
+function roundRect(x,px,py,w,h,r){
+  x.beginPath();x.moveTo(px+r,py);x.arcTo(px+w,py,px+w,py+h,r);x.arcTo(px+w,py+h,px,py+h,r);x.arcTo(px,py+h,px,py,r);x.arcTo(px,py,px+w,py,r);x.closePath();
+}
+function drawCoupon(cpn){
+  var W=680,H=760,s=stOf(cpn);
+  var cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  var x=cv.getContext('2d');
+  var g=x.createRadialGradient(W*0.15,0,60,W*0.15,0,H*1.1);
+  g.addColorStop(0,'#14304f');g.addColorStop(0.6,'#081221');g.addColorStop(1,'#081221');
+  x.fillStyle=g;x.fillRect(0,0,W,H);
+  var gl=x.createLinearGradient(0,0,W,0);
+  gl.addColorStop(0,'#c9a44c');gl.addColorStop(0.5,'#e8cf8a');gl.addColorStop(1,'rgba(201,164,76,0)');
+  x.fillStyle=gl;x.fillRect(0,0,W,6);
+  x.strokeStyle='rgba(201,164,76,.13)';x.lineWidth=40;
+  x.beginPath();x.arc(W-40,20,120,0,7);x.stroke();
+  x.strokeStyle='#c9a44c';x.lineWidth=2;
+  x.beginPath();x.arc(58,66,22,0,7);x.stroke();
+  x.fillStyle='#e8cf8a';x.font='700 22px serif';x.textAlign='center';x.fillText('H',58,74);
+  x.textAlign='left';
+  x.fillStyle='#ffffff';x.font='800 21px sans-serif';x.fillText('해피홈케어',94,62);
+  x.fillStyle='#8ba0ba';x.font='600 11px sans-serif';x.fillText('HAPPY WORKS SERVICES SDN. BHD.',94,82);
+  x.fillStyle='#e8cf8a';x.font='800 15px sans-serif';
+  x.fillText(cpn.type==='discount'?'DISCOUNT COUPON · 할인권':'GIFT VOUCHER · 상품권',44,142);
+  var amtGrad=x.createLinearGradient(0,160,0,230);
+  amtGrad.addColorStop(0,'#e8cf8a');amtGrad.addColorStop(1,'#c9a44c');
+  x.fillStyle=amtGrad;x.font='700 64px serif';x.fillText(String(cpn.value||''),42,218);
+  if(cpn.cond){x.fillStyle='#b9c7d9';x.font='500 17px sans-serif';x.fillText(cpn.cond,44,252);}
+  x.strokeStyle='rgba(255,255,255,.25)';x.setLineDash([10,8]);x.lineWidth=2;
+  x.beginPath();x.moveTo(0,290);x.lineTo(W,290);x.stroke();x.setLineDash([]);
+  x.fillStyle='#eef0f5';
+  x.beginPath();x.arc(0,290,14,0,7);x.fill();
+  x.beginPath();x.arc(W,290,14,0,7);x.fill();
+  function row(y,l,val2){
+    x.fillStyle='#9fb2c8';x.font='500 15px sans-serif';x.fillText(l,44,y);
+    x.fillStyle='#dbe5f0';x.font='700 15px sans-serif';x.textAlign='right';x.fillText(val2,W-44,y);x.textAlign='left';
+  }
+  row(332,'받는 분',(cpn.name||'')+' 님');
+  row(362,'유효기간',cpn.expiry?cpn.expiry+' 까지':'제한 없음');
+  row(392,'발급일',cpn.issuedAt||'');
+  x.strokeStyle='rgba(201,164,76,.55)';x.setLineDash([6,5]);x.lineWidth=2;
+  roundRect(x,44,420,W-88,58,12);x.stroke();x.setLineDash([]);
+  x.fillStyle='rgba(255,255,255,.05)';roundRect(x,44,420,W-88,58,12);x.fill();
+  x.fillStyle='#e8cf8a';x.font='800 24px monospace';x.textAlign='center';x.fillText(cpn.code||'',W/2,458);x.textAlign='left';
+  // 상태 밴드
+  var stTxt=s==='ok'?'✅ 사용 가능한 쿠폰입니다':(s==='used'?'이미 사용된 쿠폰입니다'+(cpn.usedAt?' ('+cpn.usedAt+')':''):'유효기간이 지난 쿠폰입니다');
+  x.fillStyle=s==='ok'?'rgba(16,185,129,.16)':(s==='used'?'rgba(255,255,255,.1)':'rgba(231,76,60,.16)');
+  roundRect(x,44,500,W-88,44,10);x.fill();
+  x.fillStyle=s==='ok'?'#6ee7b7':(s==='used'?'#9fb2c8':'#f5a8a0');
+  x.font='800 16px sans-serif';x.textAlign='center';x.fillText(stTxt,W/2,528);x.textAlign='left';
+  x.strokeStyle='rgba(255,255,255,.15)';x.setLineDash([5,5]);
+  x.beginPath();x.moveTo(44,572);x.lineTo(W-44,572);x.stroke();x.setLineDash([]);
+  x.fillStyle='#c9a44c';x.font='800 12px sans-serif';x.fillText('유 의 사 항',44,600);
+  x.fillStyle='#9fb2c8';x.font='500 14px sans-serif';
+  x.fillText('·  서비스당 1장 사용 가능합니다.',44,628);
+  x.fillText('·  본 쿠폰은 무단 양도가 불가합니다.',44,654);
+  x.fillStyle='#8ba0ba';x.font='500 13px sans-serif';x.textAlign='center';
+  x.fillText('쿠폰 확인: hhc-3p8.pages.dev/coupon  ·  📞 +60 17-247 2774',W/2,712);
+  x.textAlign='left';
+  // 사용완료/만료 대각 스탬프
+  if(s!=='ok'){
+    x.save();x.translate(W/2,H/2);x.rotate(-0.21);
+    x.globalAlpha=0.85;
+    x.strokeStyle='#ffffff';x.lineWidth=4;
+    x.font='700 52px serif';x.textAlign='center';
+    var st2=s==='used'?'사용완료':'기간만료';
+    roundRect(x,-140,-46,280,86,14);x.stroke();
+    x.fillStyle='#ffffff';x.fillText(st2,0,18);
+    x.restore();
+  }
+  return cv;
+}
+
+// ── 미리보기 모달
+var _pvTarget=null;
+window.openPv=function(cpn){
+  _pvTarget=cpn;
+  gid('pv-img').src=drawCoupon(cpn).toDataURL('image/png');
+  gid('pvBg').classList.add('show');
+};
+window.closePv=function(){gid('pvBg').classList.remove('show');};
+window.dlPvImg=function(){
+  var a=document.createElement('a');a.href=gid('pv-img').src;
+  a.download=(_pvTarget?_pvTarget.code:'coupon')+'.png';a.click();
+  toast('이미지가 저장되었습니다');
+};
+window.openSendFromPv=function(){closePv();if(_pvTarget)openSend(_pvTarget);};
+
+// ── 이미지+메시지 공유 / 이미지 저장
+window.shareBoth=function(){
+  if(!_sendTarget)return;
+  var cpn=_sendTarget;
+  drawCoupon(cpn).toBlob(function(blob){
+    var file=new File([blob],cpn.code+'.png',{type:'image/png'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      navigator.share({files:[file],text:msgOf(cpn,curLang())}).catch(function(){});
+    }else{
+      toast('이 기기는 공유 시트를 지원하지 않습니다 — 휴대폰에서 사용하거나 「이미지 저장」 후 첨부하세요',3200);
+    }
+  });
+};
+window.dlSendImg=function(){
+  if(!_sendTarget)return;
+  var a=document.createElement('a');a.href=drawCoupon(_sendTarget).toDataURL('image/png');
+  a.download=_sendTarget.code+'.png';a.click();
+  toast('이미지가 저장되었습니다 — 채팅창에 끌어다 놓으세요');
+};
+
+function openSend(c){_sendTarget=c;var ko=document.querySelector('input[name="slang"][value="ko"]');if(ko)ko.checked=true;renderSendMsg();try{gid('send-img').src=drawCoupon(c).toDataURL('image/png');}catch(e){}gid('sendBg').classList.add('show');}
 function closeSend(){gid('sendBg').classList.remove('show');}
 function curLang(){var r=document.querySelector('input[name="slang"]:checked');return r?r.value:'ko';}
 window.renderSendMsg=function(){if(!_sendTarget)return;gid('send-msg').textContent=msgOf(_sendTarget,curLang());};
