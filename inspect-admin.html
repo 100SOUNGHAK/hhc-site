@@ -290,6 +290,11 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 <!-- ════ 작성 화면 ════ -->
 <div id="view-form" class="main">
 
+<div id="edit-mode-tag" style="display:none;font-size:11px;color:#1d3fd6;background:#eef1ff;border:0.5px solid #c7d2fe;border-radius:8px;padding:8px 10px;font-weight:600;margin-bottom:10px"></div>
+<div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+  <button onclick="window.newReport()" style="padding:9px 14px;border-radius:9px;border:1.5px solid #10b981;background:#e8f8f0;color:#0a7a4a;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap">🆕 신규 작성</button>
+</div>
+
 <div style="display:flex;gap:8px;margin-bottom:14px">
   <button class="rtype-btn on" id="rtype-inspect" onclick="switchReportType('inspect')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #4F6EF7;background:#eef1ff;color:#1d3fd6;font-weight:700;font-size:13px;cursor:pointer">📋 점검보고서</button>
   <button class="rtype-btn" id="rtype-dispatch" onclick="switchReportType('dispatch')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer">🚐 출장점검보고서</button>
@@ -392,8 +397,14 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 
 <!-- 항목별 점검 결과 -->
 <div class="card">
-  <div class="card-hdr"><div class="card-icon">📊</div><div class="card-title">항목별 점검 결과</div>
-    <button onclick="sortResultRows()" style="margin-left:auto;padding:4px 10px;border-radius:5px;border:0.5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;font-size:10px;font-weight:500;cursor:pointer">⇅ 구분별 정렬</button>
+  <div class="card-hdr" style="flex-wrap:wrap;row-gap:8px">
+    <div class="card-icon">📊</div><div class="card-title" style="flex:0 0 auto">항목별 점검 결과</div>
+    <div id="res-stats" style="margin-left:auto;font-size:10.5px;color:#c9d4ee;font-weight:600;white-space:nowrap">총 0 · 양호 0 · 주의 0 · 정비필요 0</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;width:100%">
+      <button onclick="window.bulkResultOk()" style="padding:5px 10px;border-radius:6px;border:0.5px solid rgba(52,211,153,.5);background:rgba(16,185,129,.25);color:#fff;font-size:10.5px;font-weight:600;cursor:pointer">✓ 전체 양호 일괄적용</button>
+      <button onclick="sortResultRows()" style="padding:5px 10px;border-radius:6px;border:0.5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;font-size:10.5px;font-weight:500;cursor:pointer">⇅ 구분별 정렬</button>
+    </div>
+    <div id="res-cat-chips" style="display:flex;gap:6px;overflow-x:auto;width:100%;padding-top:2px"></div>
   </div>
   <div class="card-body" id="result-rows-wrap">
     <div id="result-rows"></div>
@@ -895,6 +906,17 @@ function updateInspProgress(){
 
 function toast(msg,ms){var t=gid('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},ms||2500);}
 
+function updateEditTag(){
+  var tag=gid('edit-mode-tag');
+  if(!tag)return;
+  if(currentEditId){
+    tag.style.display='block';
+    tag.textContent='✏️ 수정 모드 — 불러온 보고서를 수정 중입니다. 저장하면 이 보고서가 덮어써집니다. (새 보고서는 "🆕 신규 작성" 버튼)';
+  }else{
+    tag.style.display='none';
+  }
+}
+
 // ═══════════════════════════════════════════
 // 자주 쓰는 문구 (Firebase settings/insp_phrases 에 저장 — 모든 기기 공유)
 // ═══════════════════════════════════════════
@@ -1153,7 +1175,7 @@ var CAT_COLORS={
   '기타':{bar:'#6b7280',bg:'#f3f4f6',txt:'#6b7280'}
 };
 
-function sortResultRows(){
+function sortResultRows(silent){
   var wrap=gid('result-rows');
   if(!wrap)return;
   // 기존 구분 헤더 제거
@@ -1190,7 +1212,7 @@ function sortResultRows(){
     grp.forEach(function(card){wrap.appendChild(card);});
   });
   updateStats();
-  toast('✓ 구분별 정렬 완료');
+  if(!silent)toast('✓ 구분별 정렬 완료');
 }
 
 function updateStats(){
@@ -1205,7 +1227,43 @@ function updateStats(){
   });
   function sv(id,n){var el=gid(id);if(el)el.value=n>0?n:'';}
   sv('stat-total',total);sv('stat-ok',ok);sv('stat-warn',warn);sv('stat-bad',bad);
+  var rs=gid('res-stats');
+  if(rs)rs.innerHTML='총 '+total+' · <b style="color:#6ee7b7">양호 '+ok+'</b> · <b style="color:'+(warn?'#fcd34d':'#c9d4ee')+'">주의 '+warn+'</b> · <b style="color:'+(bad?'#fca5a5':'#c9d4ee')+'">정비필요 '+bad+'</b>';
+  renderResultCatChips();
 }
+
+function renderResultCatChips(){
+  var wrap=gid('res-cat-chips');if(!wrap)return;
+  var present={};
+  document.querySelectorAll('#result-rows .rcard').forEach(function(c){
+    var cs=c._getCatSel&&c._getCatSel();
+    if(cs)present[cs.value]=(present[cs.value]||0)+1;
+  });
+  wrap.innerHTML='';
+  CAT.forEach(function(cat){
+    if(!present[cat])return;
+    var chip=document.createElement('div');
+    chip.style.cssText='flex-shrink:0;padding:4px 9px;border-radius:12px;font-size:10px;font-weight:600;white-space:nowrap;cursor:pointer;background:rgba(255,255,255,.14);color:#fff;border:0.5px solid rgba(255,255,255,.25)';
+    chip.textContent=cat+' '+present[cat];
+    chip.onclick=function(){
+      var wrap2=gid('result-rows');
+      var hdrs=Array.from(wrap2.querySelectorAll('.cat-sort-hdr'));
+      var target=hdrs.find(function(h){var s=h.querySelector('span');return s&&s.textContent===cat;});
+      if(!target){
+        target=Array.from(wrap2.querySelectorAll('.rcard')).find(function(c){var cs=c._getCatSel&&c._getCatSel();return cs&&cs.value===cat;});
+      }
+      if(target)target.scrollIntoView({behavior:'smooth',block:'start'});
+    };
+    wrap.appendChild(chip);
+  });
+}
+
+window.bulkResultOk=function(){
+  document.querySelectorAll('#result-rows .rcard').forEach(function(c){
+    if(c._statusSel){c._statusSel.value='ok';c._statusSel.dispatchEvent(new Event('change'));}
+  });
+  toast('✓ 항목 결과 전체 "양호" 적용');
+};
 
 function addResultRow(cat,name,status,risk,note){
   var card=document.createElement('div');card.className='rcard';
@@ -2570,6 +2628,7 @@ function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl){
 window.switchReportType=function(t){
   // 유형 전환 = 새 문서 작성 시작으로 간주 (편집 로딩 시엔 로더가 다시 설정함)
   currentEditId=null;
+  updateEditTag();
   var _sb=document.getElementById('btn-save');
   if(_sb){
     _sb.style.background='';
@@ -2823,6 +2882,40 @@ function resetWasherForm(){
   photoData={};
   updatePhotoBadges();
 }
+
+// ═══════════════════════════════════════════
+// 신규 작성 — 저장 후에도 바로 새 보고서를 시작할 수 있도록
+// ═══════════════════════════════════════════
+window.newReport=function(){
+  var hasContent=!!(currentEditId||gv('f-client')||gv('if-client')||gv('w-client')||gv('f-opinion')||
+    (gid('equip-rows')&&gid('equip-rows').children.length)||(gid('defect-rows')&&gid('defect-rows').children.length)||
+    Object.keys(photoData).length);
+  if(hasContent&&!confirm('새 보고서를 작성하시겠습니까?\n저장하지 않은 입력 내용은 모두 사라집니다.'))return;
+  if(window.__clearDraft)window.__clearDraft();
+  var rbn=document.querySelector('.restore-banner');if(rbn)rbn.remove();
+  if(reportType==='install'){
+    resetInstallForm();
+  }else if(reportType==='washer'){
+    resetWasherForm();
+  }else{
+    photoData={};
+    loadIntoForm({});
+    var fd=gid('f-date');if(fd)fd.value=new Date().toISOString().split('T')[0];
+  }
+  currentEditId=null;
+  var sb=gid('btn-save');
+  if(sb){
+    sb.style.background='';
+    sb.textContent=reportType==='install'?'💾 설치보고서 저장하고 고객 링크 생성':(reportType==='dispatch'?'💾 출장점검보고서 저장하고 고객 링크 생성':(reportType==='washer'?'💾 세탁기/건조기 점검보고서 저장하고 고객 링크 생성':'💾 저장하고 고객 링크 생성'));
+  }
+  var db=gid('dup-box');if(db)db.style.display='none';
+  updateEditTag();
+  updateInspProgress();
+  updatePhotoBadges();
+  if(window.buildSectionNav)window.buildSectionNav();
+  window.scrollTo({top:0,behavior:'smooth'});
+  toast('🆕 새 보고서 작성을 시작합니다');
+};
 
 
 
@@ -3635,7 +3728,6 @@ function injectQuickButtons(){
   // 항목별 결과: 전체 양호 + 마지막 항목 복제
   var rBtn=_findAddBtn('항목 추가');
   if(rBtn&&!rBtn._qaDone){rBtn._qaDone=true;var bar=_qaBar();
-    bar.appendChild(_qaBtn('✓ 전체 양호','',function(){document.querySelectorAll('#result-rows .rcard').forEach(function(c){if(c._statusSel){c._statusSel.value='ok';c._statusSel.dispatchEvent(new Event('change'));}});toast('✓ 항목 결과 전체 "양호" 적용');}));
     bar.appendChild(_qaBtn('⧉ 마지막 항목 복제','dup',function(){var cs=document.querySelectorAll('#result-rows .rcard');var l=cs[cs.length-1];if(!l){addResultRow();return;}addResultRow(l._getCatSel().value,'',l._statusSel.value,l._getRkSel().value,'');toast('항목 복제됨 — 이름/비고를 입력하세요');}));
     _insertAfter(bar,rBtn);}
   // 실외기 측정: 판정 전체 양호
@@ -3773,6 +3865,7 @@ window.onload=function(){
   gid('f-date').value=new Date().toISOString().split('T')[0];
   initScopeTags();
   DEFAULT_RESULTS.forEach(function(r){addResultRow(r.cat,r.name,'ok','','');});
+  sortResultRows(true); // 기본적으로 구분별 정렬된 상태로 표시
   initEnhancements();
 };
 </script>
@@ -4052,8 +4145,9 @@ window.saveReport=async function(){
     var rbn=document.querySelector('.restore-banner');if(rbn)rbn.remove();
     toast(wasEdit?'✓ 수정 저장 완료':'✓ 저장 완료');
     // 저장 후에도 수정 모드 유지 — 같은 폼에서 다시 저장하면 같은 보고서를
-    // 덮어쓴다(목록 중복 생성 방지). 새 보고서는 유형 전환/복제/새로고침으로 시작.
+    // 덮어쓴다(목록 중복 생성 방지). 새 보고서는 "🆕 신규 작성" 버튼/유형 전환/복제로 시작.
     currentEditId=rid;
+    updateEditTag();
     var sbtn=document.getElementById('btn-save');
     if(sbtn){sbtn.textContent='💾 수정 저장';sbtn.style.background='#1e40af';}
     document.getElementById('sm-link').textContent=shortUrls.ko;
@@ -4120,6 +4214,7 @@ window.editReport=async function(id){
     var data=null;snap2.docs.forEach(function(d){if(d.id===id)data=Object.assign({_id:id},d.data());});
     if(!data){toast('보고서를 찾을 수 없습니다.');return;}
     currentEditId=id; // 수정 모드 확정 (로드 중 오류나 타이밍과 무관하게 신규 저장 중복 방지)
+    updateEditTag();
     switchView('form');
     if(data.type==='install'){
       switchReportType('install');
@@ -4144,6 +4239,9 @@ window.delReport=async function(id){
 
 // ── 수정 모드 로딩
 window.loadIntoForm=function(data){
+  // 종합평가 선택 초기화 — data.eval이 없으면(신규 작성 등) 이전 값이 남지 않도록
+  document.querySelectorAll('.ev-btn').forEach(function(b){b.classList.remove('sel');});
+  evalVal='';
   var gv2=function(id,val){var el=document.getElementById(id);if(el)el.value=val||'';};
   gv2('f-client',data.client);gv2('f-date',data.date);gv2('f-addr',data.addr);
   gv2('f-units',data.units);gv2('f-scope',data.scope);
@@ -4161,6 +4259,7 @@ window.loadIntoForm=function(data){
   document.getElementById('result-rows').innerHTML='';
   if((data.results||[]).length){data.results.forEach(function(r){addResultRow(r.cat,r.name,r.status,r.risk,r.note);});}
   else{DEFAULT_RESULTS.forEach(function(r){addResultRow(r.cat,r.name,'ok','','');});}
+  sortResultRows(true); // 기본적으로 구분별 정렬된 상태로 표시
   // 냉방검사
   coolCount=0;document.getElementById('cool-units').innerHTML='';
   (data.coolUnits||[]).forEach(function(u){addCoolUnit(u.label,u.a,u.b,u.loc,u.result);});
@@ -4299,6 +4398,7 @@ window.loadIntoForm=function(data){
 
   // 수정 모드
   currentEditId=data._id;
+  updateEditTag();
   var btn=document.getElementById('btn-save');
   if(btn){btn.textContent='💾 수정 저장';btn.style.background='#1e40af';}
   toast('보고서 불러왔습니다. 수정 후 저장하세요.');
@@ -4356,6 +4456,7 @@ window.loadIntoInstallForm=function(data){
   });
 
   currentEditId=data._id;
+  updateEditTag();
   var btn2=document.getElementById('btn-save');
   if(btn2){btn2.textContent='💾 설치보고서 수정 저장';btn2.style.background='#1e40af';}
   toast('설치보고서를 불러왔습니다. 수정 후 저장하세요.');
@@ -4394,6 +4495,7 @@ window.loadIntoWasherForm=function(data){
   restorePhotos(data.wEtcPhotos,'w-etc-photos','w-etc-photos');
 
   currentEditId=data._id;
+  updateEditTag();
   var btn2=document.getElementById('btn-save');
   if(btn2){btn2.textContent='💾 세탁기/건조기 점검보고서 수정 저장';btn2.style.background='#1e40af';}
   toast('세탁기/건조기 점검보고서를 불러왔습니다. 수정 후 저장하세요.');
@@ -4478,6 +4580,7 @@ function restoreDraftBanner(){
     setTimeout(function(){
       if(rt==='install')loadIntoInstallForm(d);else if(rt==='washer')loadIntoWasherForm(d);else loadIntoForm(d);
       currentEditId=null; // 임시저장 복구 → 새 보고서로 저장
+      updateEditTag();
       if(d._evalVal){var eb=document.querySelector('.ev-btn[data-val="'+d._evalVal+'"]');if(eb)setEval(eb);}
       var sb=document.getElementById('btn-save');if(sb){sb.style.background='';sb.textContent=rt==='install'?'💾 설치보고서 저장하고 고객 링크 생성':(rt==='dispatch'?'💾 출장점검보고서 저장하고 고객 링크 생성':(rt==='washer'?'💾 세탁기/건조기 점검보고서 저장하고 고객 링크 생성':'💾 저장하고 고객 링크 생성'));}
       toast('임시저장 내용을 복구했습니다'+(parsed.photoCount?' (사진은 다시 첨부해 주세요)':''));
@@ -4497,6 +4600,7 @@ window.__cloneReport=function(id){
   setTimeout(function(){
     if(rt==='install')loadIntoInstallForm(r);else if(rt==='washer')loadIntoWasherForm(r);else loadIntoForm(r);
     currentEditId=null; // 새 보고서로 저장
+    updateEditTag();
     var dt=document.getElementById(rt==='install'?'if-date':(rt==='washer'?'w-date':'f-date'));if(dt)dt.value=new Date().toISOString().split('T')[0];
     var sb=document.getElementById('btn-save');if(sb){sb.style.background='';sb.textContent=rt==='install'?'💾 설치보고서 저장하고 고객 링크 생성':(rt==='dispatch'?'💾 출장점검보고서 저장하고 고객 링크 생성':(rt==='washer'?'💾 세탁기/건조기 점검보고서 저장하고 고객 링크 생성':'💾 저장하고 고객 링크 생성'));}
     var db=document.getElementById('dup-box');if(db)db.style.display='none';
