@@ -42,11 +42,47 @@ textarea{resize:vertical;line-height:1.6}
 .btn-add:hover{background:#e0faf5}
 .btn-del{width:28px;height:28px;border-radius:6px;background:#fde8e8;color:#c0392b;border:none;font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0}
 .btn-save-main{width:100%;padding:15px;background:#0F1C3F;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;margin-top:4px}
-/* 항목별 점검결과 카드 */
-.rcard{background:#fff;border:0.5px solid #e8e8f0;border-radius:8px;padding:12px;margin-bottom:8px;position:relative}
+/* 항목별 점검결과 카드 (컴팩트: 한 줄 요약 + 펼침 상세) */
+.rcard{background:#fff;border:0.5px solid #e8e8f0;border-radius:9px;margin-bottom:6px;position:relative;overflow:hidden}
+.rcard:last-child{margin-bottom:0}
+.rc-main{display:flex;align-items:center;gap:8px;padding:8px 8px 8px 10px;cursor:pointer}
+.rc-dot{width:3.5px;height:26px;border-radius:2px;flex-shrink:0;background:#6b7280}
+.rc-mid{flex:1;min-width:0}
+.rc-name{font-size:12.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rc-name.empty{color:#9ca3af;font-weight:400}
+.rc-note{font-size:10px;color:#9ca3af;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rc-seg{display:flex;border-radius:8px;overflow:hidden;border:0.5px solid #dde1ee;flex-shrink:0}
+.rc-seg button{border:none;background:#f8f9fc;padding:7px 9px;font-size:13px;cursor:pointer;line-height:1;border-right:0.5px solid #e5e8f0}
+.rc-seg button:last-child{border-right:none}
+.rc-seg button.on-ok{background:#10b981}
+.rc-seg button.on-warn{background:#f59e0b}
+.rc-seg button.on-bad{background:#ef4444}
+.rc-chev{font-size:10px;color:#c3c8d4;flex-shrink:0;padding:4px 2px;transition:transform .15s}
+.rcard.open .rc-chev{transform:rotate(180deg)}
+.rc-detail{display:none;border-top:0.5px solid #eef0f5;background:#fafbfd;padding:9px 10px 11px}
+.rcard.open .rc-detail{display:block}
 .rcard-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
 .rcard-full{margin-bottom:8px}
-.rcard:last-child{margin-bottom:0}
+/* 자주 쓰는 문구 칩 */
+.ph-chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.ph-chip{padding:5px 11px;border-radius:16px;border:0.5px solid #0D9488;background:#f0fdfb;color:#0D9488;font-size:11.5px;font-weight:500;cursor:pointer;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:inherit}
+.ph-chip:active{background:#0D9488;color:#fff}
+.ph-chip-save{border-color:#4F6EF7;background:#eef1ff;color:#1d3fd6;font-weight:600}
+.ph-chip-mng{border-color:#d8dce8;background:#fff;color:#6b7280}
+/* 문구 관리 모달 */
+.phm-bg{display:none;position:fixed;inset:0;background:rgba(15,32,64,.45);z-index:900;align-items:flex-end;justify-content:center}
+.phm-bg.show{display:flex}
+.phm{background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:760px;max-height:80vh;overflow-y:auto;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+.phm-ttl{font-size:14px;font-weight:700;margin-bottom:2px}
+.phm-sub{font-size:11px;color:#9ca3af;margin-bottom:12px;line-height:1.5}
+.phm-item{display:flex;align-items:center;gap:8px;padding:9px 10px;border:0.5px solid #e5e8f0;border-radius:8px;margin-bottom:6px;background:#f8f9fc}
+.phm-item span{flex:1;font-size:12.5px;line-height:1.5;word-break:break-all}
+.phm-edit{width:28px;height:28px;border-radius:7px;border:none;background:#eef1ff;color:#1d3fd6;font-size:12px;cursor:pointer;flex-shrink:0}
+.phm-del{width:28px;height:28px;border-radius:7px;border:none;background:#fde8e8;color:#c0392b;font-size:14px;cursor:pointer;flex-shrink:0}
+.phm-addrow{display:flex;gap:6px;margin-top:10px;align-items:flex-end}
+.phm-addrow textarea{flex:1;min-height:38px}
+.phm-addrow button{padding:10px 16px;border-radius:6px;border:none;background:#0D9488;color:#fff;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0}
+.phm-close{width:100%;margin-top:12px;padding:11px;border-radius:8px;border:none;background:#0F2040;color:#fff;font-size:13px;font-weight:600;cursor:pointer}
 /* 단위 아이템 (msr, leak 등) */
 .unit-item{border:0.5px solid #e8e8f0;border-radius:8px;padding:12px;margin-bottom:8px;position:relative}
 .unit-item-hdr{display:flex;align-items:center;gap:8px;margin-bottom:10px}
@@ -853,6 +889,134 @@ function updateInspProgress(){
 function toast(msg,ms){var t=gid('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},ms||2500);}
 
 // ═══════════════════════════════════════════
+// 자주 쓰는 문구 (Firebase settings/insp_phrases 에 저장 — 모든 기기 공유)
+// ═══════════════════════════════════════════
+var PHRASE_DEFAULTS={
+  verdict:[],opinion:[],work:[],w1:[],w2:[],w3:[],
+  note:['이상 없음','현장 세척 완료','재조임 완료','정상 동작','청소 필요','교체 권장','관찰 요망'],
+  defect:['냉매 저압 저하 (누설 의심)','응축기 핀 오염','필터 막힘 · 풍량 저하','드레인 슬라임 누적','배관 단열 손상','소음·진동 발생','절연저항 저하'],
+  action:['누설점검 후 냉매 보충 예정','고압세척 권장 (분기 1회)','현장 세척 완료','배관 세정 완료','부품 교체 예정','경과 관찰 예정'],
+  rectitle:['냉매 누설 정밀점검 및 보충','응축기 고압세척','전 세대 필터 월 1회 청소','드레인 배관 반기 세정','노후 설비 교체 검토']
+};
+var PHRASE_LABELS={verdict:'종합 판정',opinion:'점검자 종합 의견',work:'출동 처리 내용',w1:'점검 결과 (수리 전)',w2:'점검 결과 (분해 후)',w3:'점검 결과 (사후 시운전)',note:'항목 비고',defect:'발견 결함',action:'조치 내역/계획',rectitle:'권장 정비 제목'};
+var userPhrases=null; // null=미로딩 → 기본 문구 사용, 편집 시 copy-on-write
+var _phraseReg=[];
+function getPhrases(k){return (userPhrases&&Array.isArray(userPhrases[k]))?userPhrases[k]:(PHRASE_DEFAULTS[k]||[]);}
+function editPhraseList(k){
+  if(!userPhrases)userPhrases={};
+  if(!Array.isArray(userPhrases[k]))userPhrases[k]=(PHRASE_DEFAULTS[k]||[]).slice();
+  return userPhrases[k];
+}
+function persistPhrases(){if(window.__savePhrases)window.__savePhrases(userPhrases||{});}
+window.__phrasesLoaded=function(f){userPhrases=f||{};refreshPhraseChips();};
+
+function renderPhraseChips(reg){
+  var list=getPhrases(reg.key);
+  reg.box.innerHTML='';
+  list.forEach(function(p){
+    var b=document.createElement('button');b.type='button';b.className='ph-chip';b.textContent=p;b.title=p;
+    b.onclick=function(){
+      var el=reg.el;
+      if(reg.mode==='append'&&el.value.trim()){el.value=el.value.replace(/\s+$/,'')+'\n'+p;}
+      else{el.value=p;}
+      el.dispatchEvent(new Event('input',{bubbles:true}));
+      toast('✓ 문구 입력됨');
+    };
+    reg.box.appendChild(b);
+  });
+  reg.box.style.display=list.length?'':'none';
+}
+function refreshPhraseChips(key){
+  _phraseReg=_phraseReg.filter(function(r){return r.box&&r.box.isConnected;});
+  _phraseReg.forEach(function(r){if(!key||r.key===key)renderPhraseChips(r);});
+}
+function attachPhraseChips(key,el,opts){
+  opts=opts||{};
+  if(!el)return;
+  var box=document.createElement('div');box.className='ph-chips';
+  var ctl=document.createElement('div');ctl.className='ph-chips';
+  var save=document.createElement('button');save.type='button';save.className='ph-chip ph-chip-save';
+  save.textContent=opts.compact?'＋저장':'＋ 현재 내용을 문구로 저장';
+  save.title='지금 입력된 내용을 자주 쓰는 문구로 저장';
+  save.onclick=function(){
+    var v=(el.value||'').trim();
+    if(!v){toast('먼저 내용을 입력하세요');return;}
+    var list=editPhraseList(key);
+    if(list.indexOf(v)>=0){toast('이미 저장된 문구입니다');return;}
+    list.push(v);persistPhrases();refreshPhraseChips(key);
+    toast('✓ 문구 저장됨 — 모든 기기에서 사용 가능');
+  };
+  var mng=document.createElement('button');mng.type='button';mng.className='ph-chip ph-chip-mng';
+  mng.textContent=opts.compact?'⚙':'⚙ 문구 관리';
+  mng.title='자주 쓰는 문구 추가·수정·삭제';
+  mng.onclick=function(){openPhraseMng(key);};
+  ctl.appendChild(save);ctl.appendChild(mng);
+  if(opts.parent){opts.parent.appendChild(box);opts.parent.appendChild(ctl);}
+  else{el.parentNode.insertBefore(ctl,el.nextSibling);el.parentNode.insertBefore(box,ctl);}
+  var reg={key:key,el:el,box:box,mode:opts.mode||(el.tagName==='TEXTAREA'?'append':'replace')};
+  _phraseReg.push(reg);
+  renderPhraseChips(reg);
+}
+function initPhraseChipsStatic(){
+  [['f-verdict','verdict'],['f-opinion','opinion'],['d-work','work'],['w-diag1','w1'],['w-diag2','w2'],['w-diag3','w3']].forEach(function(p){
+    var el=gid(p[0]);
+    if(el&&!el._phAttached){el._phAttached=true;attachPhraseChips(p[1],el);}
+  });
+}
+
+// ── 문구 관리 모달 ──
+var _phraseMngKey=null;
+function ensurePhraseModal(){
+  if(gid('phm-bg'))return;
+  var bg=document.createElement('div');bg.className='phm-bg';bg.id='phm-bg';
+  bg.innerHTML='<div class="phm">'+
+    '<div class="phm-ttl">⚙ 자주 쓰는 문구 관리</div>'+
+    '<div class="phm-sub" id="phm-sub"></div>'+
+    '<div id="phm-list"></div>'+
+    '<div class="phm-addrow"><textarea id="phm-new" rows="2" placeholder="새 문구 입력..."></textarea><button type="button" onclick="phraseMngAdd()">추가</button></div>'+
+    '<button type="button" class="phm-close" onclick="closePhraseMng()">닫기</button>'+
+    '</div>';
+  bg.addEventListener('click',function(e){if(e.target===bg)closePhraseMng();});
+  document.body.appendChild(bg);
+}
+function openPhraseMng(key){
+  ensurePhraseModal();
+  _phraseMngKey=key;
+  gid('phm-sub').textContent='['+(PHRASE_LABELS[key]||key)+'] 입력칸에서 사용할 문구입니다. 추가·수정·삭제하면 즉시 저장되어 모든 기기에 반영됩니다.';
+  renderPhraseMng();
+  gid('phm-bg').classList.add('show');
+}
+function renderPhraseMng(){
+  var list=gid('phm-list');list.innerHTML='';
+  var arr=getPhrases(_phraseMngKey);
+  if(!arr.length){list.innerHTML='<div style="text-align:center;color:#9ca3af;font-size:12px;padding:14px">저장된 문구가 없습니다 — 아래에서 추가하세요</div>';return;}
+  arr.forEach(function(p,i){
+    var d=document.createElement('div');d.className='phm-item';
+    var s=document.createElement('span');s.textContent=p;
+    var e=document.createElement('button');e.type='button';e.className='phm-edit';e.textContent='✎';
+    e.onclick=function(){
+      var nv=prompt('문구 수정',p);
+      if(nv===null)return;nv=nv.trim();if(!nv)return;
+      editPhraseList(_phraseMngKey)[i]=nv;persistPhrases();renderPhraseMng();refreshPhraseChips(_phraseMngKey);
+    };
+    var x=document.createElement('button');x.type='button';x.className='phm-del';x.textContent='×';
+    x.onclick=function(){
+      editPhraseList(_phraseMngKey).splice(i,1);persistPhrases();renderPhraseMng();refreshPhraseChips(_phraseMngKey);toast('문구 삭제됨');
+    };
+    d.appendChild(s);d.appendChild(e);d.appendChild(x);list.appendChild(d);
+  });
+}
+function phraseMngAdd(){
+  var inp=gid('phm-new');var v=(inp.value||'').trim();
+  if(!v)return;
+  var list=editPhraseList(_phraseMngKey);
+  if(list.indexOf(v)>=0){toast('이미 저장된 문구입니다');return;}
+  list.push(v);persistPhrases();
+  inp.value='';renderPhraseMng();refreshPhraseChips(_phraseMngKey);toast('✓ 문구 추가됨');
+}
+function closePhraseMng(){var bg=gid('phm-bg');if(bg)bg.classList.remove('show');}
+
+// ═══════════════════════════════════════════
 // 점검범위 태그
 // ═══════════════════════════════════════════
 var SCOPE_TAGS=['냉방 성능','전기 안전','냉매 계통','배수','소음/진동','절연저항','필터 점검'];
@@ -1039,53 +1203,79 @@ function updateStats(){
 function addResultRow(cat,name,status,risk,note){
   var card=document.createElement('div');card.className='rcard';
 
-  // 삭제 버튼
-  var del=document.createElement('button');del.className='btn-del';
-  del.style='position:absolute;top:10px;right:10px;width:32px;height:32px;font-size:16px';
-  del.textContent='×';del.onclick=function(){card.remove();updateStats();};
+  // 숨김 결과 select — 기존 저장/일괄적용/복제 코드와의 호환용 (_statusSel.value + change 이벤트)
+  var stSel=document.createElement('select');stSel.style.display='none';
+  STATUS_OPTS.forEach(function(s){var o=document.createElement('option');o.value=s;o.textContent=STATUS_LBL[s];if((status||'ok')===s)o.selected=true;stSel.appendChild(o);});
 
-  // 구분 + 결과
+  // ── 한 줄 요약 ──
+  var main=document.createElement('div');main.className='rc-main';
+  var dot=document.createElement('div');dot.className='rc-dot';
+  var mid=document.createElement('div');mid.className='rc-mid';
+  var nameView=document.createElement('div');nameView.className='rc-name';
+  var noteView=document.createElement('div');noteView.className='rc-note';noteView.style.display='none';
+  mid.appendChild(nameView);mid.appendChild(noteView);
+  var seg=document.createElement('div');seg.className='rc-seg';
+  var segBtns={};
+  [['ok','✅','정상'],['warn','⚠️','주의'],['bad','❌','정비필요']].forEach(function(s){
+    var b=document.createElement('button');b.type='button';b.textContent=s[1];b.title=s[2];
+    b.onclick=function(e){e.stopPropagation();stSel.value=s[0];stSel.dispatchEvent(new Event('change'));if(window.__scheduleDraft)window.__scheduleDraft();};
+    segBtns[s[0]]=b;seg.appendChild(b);
+  });
+  var chev=document.createElement('div');chev.className='rc-chev';chev.textContent='▼';
+  main.appendChild(dot);main.appendChild(mid);main.appendChild(seg);main.appendChild(chev);
+  main.onclick=function(){card.classList.toggle('open');};
+  function paintSeg(){['ok','warn','bad'].forEach(function(k){segBtns[k].className=(stSel.value===k)?('on-'+k):'';});}
+  stSel.addEventListener('change',function(){paintSeg();updateStats();});
+
+  // ── 펼침 상세 ──
+  var det=document.createElement('div');det.className='rc-detail';
+  det.onclick=function(e){e.stopPropagation();};
+
   var row1=document.createElement('div');row1.className='rcard-row';
-
   var catDiv=document.createElement('div');
   var catLbl=document.createElement('div');catLbl.className='fl';catLbl.textContent='구분';
   var catSel=document.createElement('select');
   CAT.forEach(function(c){var o=document.createElement('option');o.value=c;o.textContent=c;if(cat===c)o.selected=true;catSel.appendChild(o);});
   catDiv.appendChild(catLbl);catDiv.appendChild(catSel);
-
-  var stDiv=document.createElement('div');
-  var stLbl=document.createElement('div');stLbl.className='fl';stLbl.textContent='결과';
-  var stSel=document.createElement('select');
-  var stColors={ok:'background:#e8f8f0;color:#0a7a4a',warn:'background:#fff4e0;color:#b36000',bad:'background:#fde8e8;color:#c0392b'};
-  STATUS_OPTS.forEach(function(s){var o=document.createElement('option');o.value=s;o.textContent=STATUS_LBL[s];if((status||'ok')===s)o.selected=true;stSel.appendChild(o);});
-  stSel.style.cssText=stColors[status||'ok']||'';
-  stSel.addEventListener('change',function(){this.style.cssText=stColors[this.value]||'';updateStats();});
-  stDiv.appendChild(stLbl);stDiv.appendChild(stSel);
-
-  row1.appendChild(catDiv);row1.appendChild(stDiv);
-
-  // 항목명
-  var nameDiv=document.createElement('div');nameDiv.className='rcard-full';
-  var nameLbl=document.createElement('div');nameLbl.className='fl';nameLbl.textContent='점검 항목명';
-  var nameInp=document.createElement('input');nameInp.type='text';nameInp.placeholder='예: 본체 고정 및 수평 상태';if(name)nameInp.value=name;
-  nameInp.addEventListener('input',updateStats);
-  nameDiv.appendChild(nameLbl);nameDiv.appendChild(nameInp);
-
-  // 위험도 + 비고
-  var row2=document.createElement('div');row2.className='rcard-row';
-
   var rkDiv=document.createElement('div');
   var rkLbl=document.createElement('div');rkLbl.className='fl';rkLbl.textContent='위험도';
   var rkSel=document.createElement('select');
   RISK_OPTS.forEach(function(r){var o=document.createElement('option');o.value=r.v;o.textContent=r.l;if((risk||'')===r.v)o.selected=true;rkSel.appendChild(o);});
   rkDiv.appendChild(rkLbl);rkDiv.appendChild(rkSel);
+  row1.appendChild(catDiv);row1.appendChild(rkDiv);
 
-  var noteDiv=document.createElement('div');
+  var nameDiv=document.createElement('div');nameDiv.className='rcard-full';
+  var nameLbl=document.createElement('div');nameLbl.className='fl';nameLbl.textContent='점검 항목명';
+  var nameInp=document.createElement('input');nameInp.type='text';nameInp.placeholder='예: 본체 고정 및 수평 상태';if(name)nameInp.value=name;
+  nameDiv.appendChild(nameLbl);nameDiv.appendChild(nameInp);
+
+  var noteDiv=document.createElement('div');noteDiv.className='rcard-full';noteDiv.style.marginBottom='0';
   var noteLbl=document.createElement('div');noteLbl.className='fl';noteLbl.textContent='비고';
   var noteInp=document.createElement('input');noteInp.type='text';noteInp.placeholder='이상없음, 현장세척 등';if(note)noteInp.value=note;noteInp.setAttribute('list','dl-note');
   noteDiv.appendChild(noteLbl);noteDiv.appendChild(noteInp);
 
-  row2.appendChild(rkDiv);row2.appendChild(noteDiv);
+  function syncViews(){
+    var col=CAT_COLORS[catSel.value];dot.style.background=col?col.bar:'#6b7280';
+    var nm=nameInp.value.trim();
+    nameView.textContent=nm||'(항목명 입력)';
+    nameView.className='rc-name'+(nm?'':' empty');
+    var nt=noteInp.value.trim();
+    noteView.textContent=nt;noteView.style.display=nt?'':'none';
+  }
+  nameInp.addEventListener('input',function(){syncViews();updateStats();});
+  noteInp.addEventListener('input',syncViews);
+  catSel.addEventListener('change',syncViews);
+
+  // 삭제 버튼
+  var delWrap=document.createElement('div');delWrap.style='display:flex;justify-content:flex-end;margin-top:8px';
+  var del=document.createElement('button');del.type='button';
+  del.style='padding:6px 12px;border-radius:7px;border:0.5px solid #f2c4c4;background:#fde8e8;color:#c0392b;font-size:11px;font-weight:600;cursor:pointer';
+  del.textContent='🗑 항목 삭제';del.onclick=function(){card.remove();updateStats();};
+  delWrap.appendChild(del);
+
+  det.appendChild(row1);det.appendChild(nameDiv);det.appendChild(noteDiv);
+  if(typeof attachPhraseChips==='function')attachPhraseChips('note',noteInp,{mode:'replace',compact:true,parent:noteDiv});
+  det.appendChild(delWrap);
 
   card._statusSel=stSel;
   card._nameInp=nameInp;
@@ -1093,8 +1283,10 @@ function addResultRow(cat,name,status,risk,note){
   card._getRkSel=function(){return rkSel;};
   card._getNoteInp=function(){return noteInp;};
 
-  card.appendChild(del);card.appendChild(row1);card.appendChild(nameDiv);card.appendChild(row2);
+  card.appendChild(stSel);card.appendChild(main);card.appendChild(det);
   gid('result-rows').appendChild(card);
+  paintSeg();syncViews();
+  if(!name)card.classList.add('open'); // 새 빈 항목은 펼친 상태로 시작
   updateStats();
 }
 
@@ -2587,6 +2779,7 @@ function addDefectRow(defect,loc,risk,action,status){
   var defLbl=document.createElement('div');defLbl.className='fl';defLbl.textContent='발견 결함';
   var defInp=document.createElement('input');defInp.type='text';defInp.placeholder='냉매 저압 저하 등';if(defect)defInp.value=defect;defInp.setAttribute('list','dl-defect');
   defDiv.appendChild(defLbl);defDiv.appendChild(defInp);
+  if(typeof attachPhraseChips==='function')attachPhraseChips('defect',defInp,{mode:'replace',compact:true,parent:defDiv});
 
   var ddLoc=makeDd(LOC_OPTS,loc||'','위치 선택');
   var locDiv=document.createElement('div');
@@ -2611,6 +2804,7 @@ function addDefectRow(defect,loc,risk,action,status){
   var actLbl=document.createElement('div');actLbl.className='fl';actLbl.textContent='조치 내역 / 계획';
   var actInp=document.createElement('input');actInp.type='text';actInp.placeholder='누설점검 후 냉매 보충 예정';if(action)actInp.value=action;actInp.setAttribute('list','dl-action');
   actDiv.appendChild(actLbl);actDiv.appendChild(actInp);
+  if(typeof attachPhraseChips==='function')attachPhraseChips('action',actInp,{mode:'replace',compact:true,parent:actDiv});
 
   r2.appendChild(rkDiv);r2.appendChild(actDiv);
   wrap.appendChild(r2);
@@ -2680,6 +2874,7 @@ function addRecRow(type,title,desc){
   var dInp=document.createElement('input');dInp.type='text';dInp.placeholder='미세 누설점 확인 후 냉매 보충';if(desc)dInp.value=desc;
   g.appendChild(tLbl);g.appendChild(tInp);g.appendChild(dLbl);g.appendChild(dInp);
   wrap.appendChild(g);
+  if(typeof attachPhraseChips==='function')attachPhraseChips('rectitle',tInp,{mode:'replace',compact:true});
 
   wrap._getRecData=function(){
     var ab=typeBtns.find(function(b){return b.className.length>'rt-btn'.length;});
@@ -3364,6 +3559,7 @@ function _setupSectionObserver(cards){
 
 function initEnhancements(){
   ['f-verdict','f-opinion','d-work','w-diag1','w-diag2','w-diag3'].forEach(function(id){var el=gid(id);if(el)window.attachMic(el);});
+  initPhraseChipsStatic();
   injectQuickButtons();
   buildSectionNav();
 }
@@ -3379,7 +3575,7 @@ window.onload=function(){
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, addDoc, setDoc, getDocs, deleteDoc, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
 try{
@@ -3425,6 +3621,20 @@ async function shorten(url){
     return 'https://hhc-3p8.pages.dev/r.html?k='+key;
   }catch(e){return url;}
 }
+
+// ── 자주 쓰는 문구 저장/로딩 (settings/insp_phrases — 모든 기기 공유)
+window.__savePhrases=async function(obj){
+  if(!DB)return;
+  try{await setDoc(doc(DB,'settings','insp_phrases'),{fields:obj,updatedAt:new Date().toISOString()});}
+  catch(e){console.error('phrases save:',e);}
+};
+(async function(){
+  if(!DB)return;
+  try{
+    var s=await getDoc(doc(DB,'settings','insp_phrases'));
+    if(s.exists()&&s.data()&&s.data().fields&&window.__phrasesLoaded)window.__phrasesLoaded(s.data().fields);
+  }catch(e){console.error('phrases load:',e);}
+})();
 
 // ── 데이터 수집
 function collectData(){
