@@ -160,7 +160,7 @@ input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--bdr);b
         <button class="vbtn" style="flex:1;padding:10px" onclick="dlSendImg()">⬇ 이미지 저장</button>
         <button class="vbtn" style="flex:1;padding:10px" onclick="copyLink()">🔗 링크만 복사</button>
       </div>
-      <div class="note" style="margin-top:10px">휴대폰: 「이미지+메시지 함께 공유」 → 공유 시트에서 WhatsApp/카카오톡 선택 → 이미지와 문구가 함께 첨부됩니다.<br>PC: 이미지를 저장한 뒤 채팅창에 끌어다 놓고 메시지를 붙여넣으세요.</div>
+      <div class="note" style="margin-top:10px">휴대폰: 「이미지+메시지 함께 공유」를 누르면 <b>메시지가 자동 복사</b>된 상태로 공유 시트가 열립니다. 앱에 따라 이미지만 첨부되는 경우가 있는데, 그때는 채팅창을 길게 눌러 <b>붙여넣기</b>만 하면 메시지가 입력됩니다.<br>PC: 이미지를 저장한 뒤 채팅창에 끌어다 놓고 메시지를 붙여넣으세요.</div>
     </div>
   </div>
 </div>
@@ -367,83 +367,167 @@ function makeQrCanvas(text,size){
   return out;
 }
 function drawCoupon(cpn){
-  var W=680,H=760,s=stOf(cpn);
+  var s=stOf(cpn);
+  var W=680,P=40;
+  var val=String(cpn.value||'');
+  var hasCond=!!cpn.cond;
+  // ── 세로 배치 계산
+  var typeY=150;
+  var amtY=252;
+  var condCY=308;
+  var perfY=hasCond?372:318;
+  var panelY=perfY+36, panelH=158;
+  var codeY=panelY+panelH+20, codeH=76;
+  var qrS=190, qrY=codeY+codeH+20, qrBoxH=qrS+62;
+  var stY=qrY+qrBoxH+20, stH=56;
+  var tmY=stY+stH+26;
+  var ftY=tmY+118;
+  var H=ftY+34;
+
   var cv=document.createElement('canvas');cv.width=W;cv.height=H;
   var x=cv.getContext('2d');
-  var g=x.createRadialGradient(W*0.15,0,60,W*0.15,0,H*1.1);
-  g.addColorStop(0,'#14304f');g.addColorStop(0.6,'#081221');g.addColorStop(1,'#081221');
+
+  // ── 배경
+  var g=x.createLinearGradient(0,0,W*0.18,H);
+  g.addColorStop(0,'#0B1B2F');g.addColorStop(1,'#050C17');
   x.fillStyle=g;x.fillRect(0,0,W,H);
+  var r1=x.createRadialGradient(W*0.12,-30,20,W*0.12,-30,W*0.85);
+  r1.addColorStop(0,'rgba(27,60,99,.9)');r1.addColorStop(1,'rgba(27,60,99,0)');
+  x.fillStyle=r1;x.fillRect(0,0,W,H);
+  var r2=x.createRadialGradient(W,H,30,W,H,W*0.75);
+  r2.addColorStop(0,'rgba(201,164,76,.2)');r2.addColorStop(1,'rgba(201,164,76,0)');
+  x.fillStyle=r2;x.fillRect(0,0,W,H);
+  // 보안 무늬 (동심원)
+  x.save();x.strokeStyle='rgba(201,164,76,.10)';x.lineWidth=1;
+  for(var rr=36;rr<=300;rr+=15){x.beginPath();x.arc(W+20,-20,rr,0,7);x.stroke();}
+  x.restore();
+  // 골드 포일 상단 라인
   var gl=x.createLinearGradient(0,0,W,0);
-  gl.addColorStop(0,'#c9a44c');gl.addColorStop(0.5,'#e8cf8a');gl.addColorStop(1,'rgba(201,164,76,0)');
+  gl.addColorStop(0,'#8a6f2b');gl.addColorStop(.25,'#c9a44c');gl.addColorStop(.5,'#f4e3ae');gl.addColorStop(.75,'#c9a44c');gl.addColorStop(1,'rgba(201,164,76,0)');
   x.fillStyle=gl;x.fillRect(0,0,W,6);
-  x.strokeStyle='rgba(201,164,76,.13)';x.lineWidth=40;
-  x.beginPath();x.arc(W-40,20,120,0,7);x.stroke();
-  x.strokeStyle='#c9a44c';x.lineWidth=2;
-  x.beginPath();x.arc(58,66,22,0,7);x.stroke();
-  x.fillStyle='#e8cf8a';x.font='700 22px serif';x.textAlign='center';x.fillText('H',58,74);
+
+  // ── 브랜드
+  x.strokeStyle='rgba(201,164,76,.8)';x.lineWidth=2;
+  x.beginPath();x.arc(P+27,80,27,0,7);x.stroke();
+  x.fillStyle='#e8cf8a';x.font='700 24px Georgia,serif';x.textAlign='center';x.fillText('H',P+27,89);
   x.textAlign='left';
-  x.fillStyle='#ffffff';x.font='800 21px sans-serif';x.fillText('해피홈케어',94,62);
-  x.fillStyle='#8ba0ba';x.font='600 11px sans-serif';x.fillText('HAPPY WORKS SERVICES SDN. BHD.',94,82);
-  // QR 코드 (매장 제시용 확인 링크)
-  var qrSize=118,qrX=W-176,qrY=40;
-  x.fillStyle='#ffffff';
-  roundRect(x,qrX-9,qrY-9,qrSize+18,qrSize+40,14);x.fill();
-  var qrCv=makeQrCanvas(couponLink(cpn._id||''),qrSize);
-  if(qrCv){
-    x.drawImage(qrCv,qrX,qrY,qrSize,qrSize);
-  }else{
-    x.fillStyle='#0d1f38';x.font='700 11px sans-serif';x.textAlign='center';
-    x.fillText('QR 준비중',qrX+qrSize/2,qrY+qrSize/2);x.textAlign='left';
+  x.fillStyle='#ffffff';x.font='800 22px sans-serif';x.fillText('해피홈케어',P+70,74);
+  x.fillStyle='#7f95b1';x.font='600 11px sans-serif';x.fillText('HAPPY WORKS SERVICES SDN. BHD.',P+70,95);
+  x.textAlign='right';
+  x.fillStyle='#7f95b1';x.font='700 11px sans-serif';x.fillText('N o .',W-P,66);
+  x.fillStyle='#e8cf8a';x.font='800 17px monospace';x.fillText((cpn.code||'').split('-').pop()||'',W-P,88);
+  x.textAlign='left';
+
+  // ── 종류 라인
+  var typeTxt=cpn.type==='discount'?'D I S C O U N T   C O U P O N  ·  할인권':'G I F T   V O U C H E R  ·  상품권';
+  x.font='900 14px sans-serif';x.textAlign='center';
+  var tw=x.measureText(typeTxt).width;
+  x.fillStyle='#e8cf8a';x.fillText(typeTxt,W/2,typeY);
+  x.strokeStyle='rgba(201,164,76,.5)';x.lineWidth=1;
+  x.beginPath();x.moveTo(P,typeY-5);x.lineTo(W/2-tw/2-16,typeY-5);x.stroke();
+  x.beginPath();x.moveTo(W/2+tw/2+16,typeY-5);x.lineTo(W-P,typeY-5);x.stroke();
+  x.textAlign='left';
+
+  // ── 금액 (중앙 대형, 골드 그라디언트)
+  var m=val.match(/^RM\s*([\d,.]+)$/i);
+  var big=m?m[1]:val, pre=m?'RM':'';
+  x.font='700 84px Georgia,serif';
+  var bw=x.measureText(big).width;
+  var pw=0;
+  if(pre){x.font='600 34px Georgia,serif';pw=x.measureText(pre).width+12;}
+  var totalW=bw+pw, sx=W/2-totalW/2;
+  var ag=x.createLinearGradient(sx,0,sx+totalW,0);
+  ag.addColorStop(0,'#a5822f');ag.addColorStop(.26,'#e8cf8a');ag.addColorStop(.44,'#fff6dd');ag.addColorStop(.62,'#e8cf8a');ag.addColorStop(1,'#a5822f');
+  x.fillStyle=ag;
+  if(pre){x.font='600 34px Georgia,serif';x.fillText(pre,sx,amtY-4);}
+  x.font='700 84px Georgia,serif';x.fillText(big,sx+pw,amtY);
+
+  // ── 조건 알약
+  if(hasCond){
+    x.font='600 18px sans-serif';
+    var cw2=Math.min(x.measureText(cpn.cond).width+56,W-P*2);
+    x.fillStyle='rgba(201,164,76,.13)';roundRect(x,W/2-cw2/2,condCY-22,cw2,44,22);x.fill();
+    x.strokeStyle='rgba(201,164,76,.35)';x.lineWidth=1.5;roundRect(x,W/2-cw2/2,condCY-22,cw2,44,22);x.stroke();
+    x.fillStyle='#e5d5ab';x.textAlign='center';x.fillText(cpn.cond,W/2,condCY+7);x.textAlign='left';
   }
-  x.fillStyle='#0d1f38';x.font='800 11px sans-serif';x.textAlign='center';
-  x.fillText('QR 스캔 확인',qrX+qrSize/2,qrY+qrSize+22);x.textAlign='left';
-  x.fillStyle='#e8cf8a';x.font='800 15px sans-serif';
-  x.fillText(cpn.type==='discount'?'DISCOUNT COUPON · 할인권':'GIFT VOUCHER · 상품권',44,142);
-  var amtGrad=x.createLinearGradient(0,160,0,230);
-  amtGrad.addColorStop(0,'#e8cf8a');amtGrad.addColorStop(1,'#c9a44c');
-  x.fillStyle=amtGrad;x.font='700 64px serif';x.fillText(String(cpn.value||''),42,218);
-  if(cpn.cond){x.fillStyle='#b9c7d9';x.font='500 17px sans-serif';x.fillText(cpn.cond,44,252);}
-  x.strokeStyle='rgba(255,255,255,.25)';x.setLineDash([10,8]);x.lineWidth=2;
-  x.beginPath();x.moveTo(0,290);x.lineTo(W,290);x.stroke();x.setLineDash([]);
-  x.fillStyle='#eef0f5';
-  x.beginPath();x.arc(0,290,14,0,7);x.fill();
-  x.beginPath();x.arc(W,290,14,0,7);x.fill();
-  function row(y,l,val2){
-    x.fillStyle='#9fb2c8';x.font='500 15px sans-serif';x.fillText(l,44,y);
-    x.fillStyle='#dbe5f0';x.font='700 15px sans-serif';x.textAlign='right';x.fillText(val2,W-44,y);x.textAlign='left';
-  }
-  row(332,'받는 분',(cpn.name||'')+' 님');
-  row(362,'유효기간',cpn.expiry?cpn.expiry+' 까지':'제한 없음');
-  row(392,'발급일',cpn.issuedAt||'');
-  x.strokeStyle='rgba(201,164,76,.55)';x.setLineDash([6,5]);x.lineWidth=2;
-  roundRect(x,44,420,W-88,58,12);x.stroke();x.setLineDash([]);
-  x.fillStyle='rgba(255,255,255,.05)';roundRect(x,44,420,W-88,58,12);x.fill();
-  x.fillStyle='#e8cf8a';x.font='800 24px monospace';x.textAlign='center';x.fillText(cpn.code||'',W/2,458);x.textAlign='left';
-  // 상태 밴드
+
+  // ── 절취선
+  x.strokeStyle='rgba(255,255,255,.25)';x.setLineDash([12,9]);x.lineWidth=2;
+  x.beginPath();x.moveTo(30,perfY);x.lineTo(W-30,perfY);x.stroke();x.setLineDash([]);
+  x.fillStyle='#EDEFF4';
+  x.beginPath();x.arc(0,perfY,17,0,7);x.fill();
+  x.beginPath();x.arc(W,perfY,17,0,7);x.fill();
+
+  // ── 정보 패널
+  x.fillStyle='rgba(255,255,255,.05)';roundRect(x,P,panelY,W-P*2,panelH,18);x.fill();
+  x.strokeStyle='rgba(255,255,255,.1)';x.lineWidth=1;roundRect(x,P,panelY,W-P*2,panelH,18);x.stroke();
+  var rows=[
+    ['받 는  분',(cpn.name||'')+' 님'],
+    ['유 효 기 간',cpn.expiry?cpn.expiry+' 까지':'제한 없음'],
+    ['발 급 일',cpn.issuedAt||'']
+  ];
+  rows.forEach(function(rw,i){
+    var ry=panelY+16+i*(panelH-24)/3;
+    x.fillStyle='#8ba3c0';x.font='700 14px sans-serif';x.fillText(rw[0],P+22,ry+26);
+    x.fillStyle='#f0f5fb';x.font='700 19px sans-serif';x.textAlign='right';x.fillText(rw[1],W-P-22,ry+26);x.textAlign='left';
+    if(i<2){x.strokeStyle='rgba(255,255,255,.07)';x.beginPath();x.moveTo(P+18,ry+42);x.lineTo(W-P-18,ry+42);x.stroke();}
+  });
+
+  // ── 코드 박스
+  x.fillStyle='rgba(201,164,76,.06)';roundRect(x,P,codeY,W-P*2,codeH,16);x.fill();
+  x.strokeStyle='rgba(201,164,76,.5)';x.setLineDash([8,6]);x.lineWidth=2;roundRect(x,P,codeY,W-P*2,codeH,16);x.stroke();x.setLineDash([]);
+  x.textAlign='center';
+  x.fillStyle='#a58c55';x.font='900 11px sans-serif';x.fillText('C O U P O N   C O D E',W/2,codeY+26);
+  x.fillStyle='#e8cf8a';x.font='800 28px monospace';x.fillText(cpn.code||'',W/2,codeY+60);
+  x.textAlign='left';
+
+  // ── QR 박스
+  x.fillStyle='#ffffff';roundRect(x,P,qrY,W-P*2,qrBoxH,18);x.fill();
+  var qx=W/2-qrS/2,qy=qrY+18;
+  var qrCv=makeQrCanvas(couponLink(cpn._id||''),qrS);
+  if(qrCv){x.drawImage(qrCv,qx,qy,qrS,qrS);}
+  else{x.fillStyle='#0d1f38';x.font='800 20px monospace';x.textAlign='center';x.fillText(cpn.code||'',W/2,qy+qrS/2);x.textAlign='left';}
+  // 스캔 브래킷
+  x.strokeStyle='#0d1f38';x.lineWidth=3.5;
+  var bo=10,bl=22;
+  [[qx-bo,qy-bo,1,1],[qx+qrS+bo,qy-bo,-1,1],[qx-bo,qy+qrS+bo,1,-1],[qx+qrS+bo,qy+qrS+bo,-1,-1]].forEach(function(c){
+    x.beginPath();x.moveTo(c[0]+c[2]*bl,c[1]);x.lineTo(c[0],c[1]);x.lineTo(c[0],c[1]+c[3]*bl);x.stroke();
+  });
+  x.fillStyle='#5b6478';x.font='600 13px sans-serif';x.textAlign='center';
+  x.fillText('매장 제시용 QR · 직원이 스캔하면 확인 화면이 열립니다',W/2,qrY+qrBoxH-16);x.textAlign='left';
+
+  // ── 상태 밴드
   var stTxt=s==='ok'?'✅ 사용 가능한 쿠폰입니다':(s==='used'?'이미 사용된 쿠폰입니다'+(cpn.usedAt?' ('+cpn.usedAt+')':''):'유효기간이 지난 쿠폰입니다');
-  x.fillStyle=s==='ok'?'rgba(16,185,129,.16)':(s==='used'?'rgba(255,255,255,.1)':'rgba(231,76,60,.16)');
-  roundRect(x,44,500,W-88,44,10);x.fill();
-  x.fillStyle=s==='ok'?'#6ee7b7':(s==='used'?'#9fb2c8':'#f5a8a0');
-  x.font='800 16px sans-serif';x.textAlign='center';x.fillText(stTxt,W/2,528);x.textAlign='left';
-  x.strokeStyle='rgba(255,255,255,.15)';x.setLineDash([5,5]);
-  x.beginPath();x.moveTo(44,572);x.lineTo(W-44,572);x.stroke();x.setLineDash([]);
-  x.fillStyle='#c9a44c';x.font='800 12px sans-serif';x.fillText('유 의 사 항',44,600);
-  x.fillStyle='#9fb2c8';x.font='500 14px sans-serif';
-  x.fillText('·  서비스당 1장 사용 가능합니다.',44,628);
-  x.fillText('·  본 쿠폰은 무단 양도가 불가합니다.',44,654);
-  x.fillStyle='#8ba0ba';x.font='500 13px sans-serif';x.textAlign='center';
-  x.fillText('쿠폰 확인: hhc-3p8.pages.dev/coupon  ·  📞 +60 17-247 2774',W/2,712);
+  x.fillStyle=s==='ok'?'rgba(16,185,129,.18)':(s==='used'?'rgba(255,255,255,.07)':'rgba(231,76,60,.18)');
+  roundRect(x,P,stY,W-P*2,stH,14);x.fill();
+  x.strokeStyle=s==='ok'?'rgba(16,185,129,.34)':(s==='used'?'rgba(255,255,255,.14)':'rgba(231,76,60,.32)');
+  x.lineWidth=1.5;roundRect(x,P,stY,W-P*2,stH,14);x.stroke();
+  x.fillStyle=s==='ok'?'#7cf0c0':(s==='used'?'#93a6bd':'#ffaba1');
+  x.font='800 19px sans-serif';x.textAlign='center';x.fillText(stTxt,W/2,stY+36);x.textAlign='left';
+
+  // ── 유의사항
+  x.strokeStyle='rgba(255,255,255,.16)';x.setLineDash([6,6]);x.lineWidth=1;
+  x.beginPath();x.moveTo(P,tmY-8);x.lineTo(W-P,tmY-8);x.stroke();x.setLineDash([]);
+  x.fillStyle='#c9a44c';x.font='900 13px sans-serif';x.fillText('유 의 사 항',P,tmY+18);
+  x.fillStyle='#c9a44c';x.font='900 15px sans-serif';x.fillText('·',P,tmY+48);x.fillText('·',P,tmY+76);
+  x.fillStyle='#93a6bd';x.font='500 15px sans-serif';
+  x.fillText('서비스당 1장 사용 가능합니다.',P+16,tmY+48);
+  x.fillText('본 쿠폰은 무단 양도가 불가합니다.',P+16,tmY+76);
+
+  // ── 푸터
+  x.fillStyle='#75899f';x.font='600 13px sans-serif';x.textAlign='center';
+  x.fillText('쿠폰 확인 hhc-3p8.pages.dev/coupon  ·  📞 +60 17-247 2774',W/2,ftY);
   x.textAlign='left';
-  // 사용완료/만료 대각 스탬프
+
+  // ── 사용완료/만료 스탬프
   if(s!=='ok'){
-    x.save();x.translate(W/2,H/2);x.rotate(-0.21);
-    x.globalAlpha=0.85;
-    x.strokeStyle='#ffffff';x.lineWidth=4;
-    x.font='700 52px serif';x.textAlign='center';
-    var st2=s==='used'?'사용완료':'기간만료';
-    roundRect(x,-140,-46,280,86,14);x.stroke();
-    x.fillStyle='#ffffff';x.fillText(st2,0,18);
-    x.restore();
+    x.fillStyle='rgba(5,12,23,.72)';x.fillRect(0,0,W,H);
+    x.save();x.translate(W/2,H/2);x.rotate(-0.19);
+    x.strokeStyle='rgba(255,255,255,.92)';x.lineWidth=5;
+    roundRect(x,-150,-52,300,104,16);x.stroke();
+    x.fillStyle='#ffffff';x.font='700 54px Georgia,serif';x.textAlign='center';
+    x.fillText(s==='used'?'사용완료':'기간만료',0,20);
+    x.restore();x.textAlign='left';
   }
   return cv;
 }
@@ -467,12 +551,26 @@ window.openSendFromPv=function(){closePv();if(_pvTarget)openSend(_pvTarget);};
 window.shareBoth=function(){
   if(!_sendTarget)return;
   var cpn=_sendTarget;
+  var msg=msgOf(cpn,curLang());
+  // 안전망: 일부 앱(왓챕·카카오)이 이미지 공유 시 문구를 버리는 경우가 있어
+  // 공유 직전에 메시지를 클립보드에 복사해 둔다 → 붙여넣기만 하면 됨
+  copyText(msg);
   drawCoupon(cpn).toBlob(function(blob){
     var file=new File([blob],cpn.code+'.png',{type:'image/png'});
     if(navigator.canShare&&navigator.canShare({files:[file]})){
-      navigator.share({files:[file],text:msgOf(cpn,curLang())}).catch(function(){});
+      navigator.share({files:[file],title:'해피홈케어 쿠폰 '+cpn.code,text:msg}).then(function(){
+        toast('공유 완료 — 문구가 빠졌으면 채팅창을 길게 눌러 「붙여넣기」 하세요 (메시지 복사됨)',3600);
+      }).catch(function(err){
+        if(err&&err.name==='AbortError'){toast('메시지는 복사되어 있습니다 — 채팅창에 붙여넣을 수 있어요',2600);return;}
+        // 이미지+문구 동시 공유를 거부하는 기기 → 이미지만 재시도
+        try{
+          navigator.share({files:[file]}).then(function(){
+            toast('이미지가 공유되었습니다 — 메시지는 복사됨, 채팅창에 붙여넣으세요',3400);
+          }).catch(function(){});
+        }catch(e){}
+      });
     }else{
-      toast('이 기기는 공유 시트를 지원하지 않습니다 — 휴대폰에서 사용하거나 「이미지 저장」 후 첨부하세요',3200);
+      toast('이 기기는 공유 시트를 지원하지 않습니다 — 메시지는 복사됨, 「이미지 저장」 후 첨부하세요',3200);
     }
   });
 };
