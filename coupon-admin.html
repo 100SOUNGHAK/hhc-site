@@ -353,6 +353,19 @@ function msgOf(c,lang){
 function roundRect(x,px,py,w,h,r){
   x.beginPath();x.moveTo(px+r,py);x.arcTo(px+w,py,px+w,py+h,r);x.arcTo(px+w,py+h,px,py+h,r);x.arcTo(px,py+h,px,py,r);x.arcTo(px,py,px+w,py,r);x.closePath();
 }
+function makeQrCanvas(text,size){
+  if(typeof QRCode==='undefined')return null;
+  var tmp=document.createElement('div');
+  tmp.style.cssText='position:absolute;left:-9999px;top:-9999px';
+  document.body.appendChild(tmp);
+  var out=null;
+  try{
+    new QRCode(tmp,{text:text,width:size,height:size,colorDark:'#0d1f38',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
+    out=tmp.querySelector('canvas');
+  }catch(e){}
+  document.body.removeChild(tmp);
+  return out;
+}
 function drawCoupon(cpn){
   var W=680,H=760,s=stOf(cpn);
   var cv=document.createElement('canvas');cv.width=W;cv.height=H;
@@ -371,6 +384,19 @@ function drawCoupon(cpn){
   x.textAlign='left';
   x.fillStyle='#ffffff';x.font='800 21px sans-serif';x.fillText('해피홈케어',94,62);
   x.fillStyle='#8ba0ba';x.font='600 11px sans-serif';x.fillText('HAPPY WORKS SERVICES SDN. BHD.',94,82);
+  // QR 코드 (매장 제시용 확인 링크)
+  var qrSize=118,qrX=W-176,qrY=40;
+  x.fillStyle='#ffffff';
+  roundRect(x,qrX-9,qrY-9,qrSize+18,qrSize+40,14);x.fill();
+  var qrCv=makeQrCanvas(couponLink(cpn._id||''),qrSize);
+  if(qrCv){
+    x.drawImage(qrCv,qrX,qrY,qrSize,qrSize);
+  }else{
+    x.fillStyle='#0d1f38';x.font='700 11px sans-serif';x.textAlign='center';
+    x.fillText('QR 준비중',qrX+qrSize/2,qrY+qrSize/2);x.textAlign='left';
+  }
+  x.fillStyle='#0d1f38';x.font='800 11px sans-serif';x.textAlign='center';
+  x.fillText('QR 스캔 확인',qrX+qrSize/2,qrY+qrSize+22);x.textAlign='left';
   x.fillStyle='#e8cf8a';x.font='800 15px sans-serif';
   x.fillText(cpn.type==='discount'?'DISCOUNT COUPON · 할인권':'GIFT VOUCHER · 상품권',44,142);
   var amtGrad=x.createLinearGradient(0,160,0,230);
@@ -564,6 +590,7 @@ window.__onCouponsLoaded=function(list){allCoupons=list;renderAll();};
 window.__onDbFail=function(msg){gid('vlist').innerHTML='<div class="empty">로딩 실패: '+msg+'</div>';};
 </script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 
 <script type="module">
