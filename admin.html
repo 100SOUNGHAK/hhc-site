@@ -1335,12 +1335,12 @@ const SERVICES=[
 // 계약서/이용내역 발송메시지 모드별(contract/usage/all) 상태문구·안내문구·링크라벨 (makeMsg/buildContractMsg 공통 사용)
 const CONTRACT_MSG_TXT={
   ko:{
-    contract:{status:'📋 계약서를 보내드립니다 ✅',guide:'언제든지 아래 링크에서 계약서를 확인하실 수 있습니다.',link:'🔗 계약서 확인:'},
+    contract:{status:'📋 패키지 회원제 계약서를 보내드립니다 ✅',guide:'언제든지 아래 링크에서 계약서를 확인하실 수 있습니다.',link:'🔗 계약서 확인:'},
     usage:{status:'📋 서비스 이용내역을 보내드립니다 ✅',guide:'언제든지 아래 링크에서 이용내역을 확인하실 수 있습니다.',link:'🔗 서비스 이용내역 확인:'},
     all:{status:'📋 계약서및 서비스 이용내역 보내드립니다 ✅',guide:'언제든지 아래 링크에서 계약서 및 이용내역을 확인하실 수 있습니다.',link:'🔗 계약서/이용내역 확인:'}
   },
   en:{
-    contract:{status:'📋 Here is your service contract ✅',guide:'You can check your contract anytime via the link below.',link:'🔗 View Contract:'},
+    contract:{status:'📋 Here is your package membership contract ✅',guide:'You can check your contract anytime via the link below.',link:'🔗 View Contract:'},
     usage:{status:'📋 Here is your service usage history ✅',guide:'You can check your usage history anytime via the link below.',link:'🔗 View Usage History:'},
     all:{status:'📋 Here is your contract & usage history ✅',guide:'You can check your contract and usage history anytime via the link below.',link:'🔗 View Contract/Usage:'}
   }
@@ -2263,17 +2263,24 @@ async function renderSendTab(){
     const name=c.name||'고객';
     const div='────────────────';
     const T=CONTRACT_MSG_TXT[L==='en'?'en':'ko'][mode]||CONTRACT_MSG_TXT.ko.contract;
+    const firstAvail=paid+bonus+spec+carryT; // 최초사용가능 금액 = 납부+기본적립+특별적립+이월
     if(L==='en'){
       const greet=`Dear ${name} 😊`;
       const contractInfo=`* Package: ${pkg?pkg.label:'—'}\n* Paid: RM ${fmt(paid)}\n* Bonus: RM ${fmt(bonus)}${spec>0?'\n* Special: RM '+fmt(spec):''}`;
-      const balInfo=`💰 Available Balance: RM ${fmt(remain)}`;
-      const infoBlock=mode==='usage'?balInfo:(mode==='contract'?contractInfo:`${contractInfo}\n\n${balInfo}`);
+      const infoBlock=mode==='usage'
+        ?`* Package: ${pkg?pkg.label:'—'}\n💰 Available Balance: RM ${fmt(remain)}`
+        :(mode==='contract'
+          ?`${contractInfo}\n💰 Initial Available Credit: RM ${fmt(firstAvail)}`
+          :`${contractInfo}     Initial Available: RM ${fmt(firstAvail)}\n💰 Current Available Balance: RM ${fmt(remain)}`);
       return `${greet}\n\n${T.status}\n${div}\n${infoBlock}\n${div}\n\n${T.guide}\n\nThank you 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n${T.link}\n${customerUrl}`;
     }
     const greet=`안녕하세요, ${name}님 😊`;
     const contractInfo=`* 패키지: ${pkg?pkg.label:'—'}\n* 납부금액: RM ${fmt(paid)}\n* 기본적립: RM ${fmt(bonus)}${spec>0?'\n* 특별적립: RM '+fmt(spec):''}`;
-    const balInfo=`💰 사용가능 잔액: RM ${fmt(remain)}`;
-    const infoBlock=mode==='usage'?balInfo:(mode==='contract'?contractInfo:`${contractInfo}\n\n${balInfo}`);
+    const infoBlock=mode==='usage'
+      ?`* 패키지: ${pkg?pkg.label:'—'}\n💰 사용가능 잔액: RM ${fmt(remain)}`
+      :(mode==='contract'
+        ?`${contractInfo}\n💰 최초사용가능 금액: RM ${fmt(firstAvail)}`
+        :`${contractInfo}     최초사용가능 금액: RM ${fmt(firstAvail)}\n💰 현재 사용가능 잔액: RM ${fmt(remain)}`);
     return `${greet}\n\n${T.status}\n${div}\n${infoBlock}\n${div}\n\n${T.guide}\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n${T.link}\n${customerUrl}`;
   }
 
@@ -3131,32 +3138,41 @@ function buildContractMsg(c, webURL, pdfViewURL, pdfDlURL, lang, mode){
   }
   const div='────────────────';
   const T=(CONTRACT_MSG_TXT[lang==='en'?'en':'ko']||CONTRACT_MSG_TXT.ko)[mode]||CONTRACT_MSG_TXT.ko.contract;
+  const firstAvail=total+carryT; // 최초사용가능 금액 = 납부+기본적립+특별적립+이월
   if(lang==='en'){
     const enPdfLines=pdfLines.replace('PDF 보기/다운로드','PDF View/Download').replace('PDF 보기','PDF View').replace('PDF 다운로드','PDF Download');
     const contractInfo=`* Package: ${pkg?pkg.label:'—'}\n* Paid: RM ${paid.toFixed(2)}\n* Bonus: RM ${bonus.toFixed(2)}${spec>0?'\n* Special: RM '+spec.toFixed(2):''}`;
-    const balInfo=`💰 Available Balance: RM ${remain.toFixed(2)}`;
-    const infoBlock=`${contractInfo}\n${balInfo}`;
+    const infoBlock=mode==='usage'
+      ?`* Package: ${pkg?pkg.label:'—'}\n💰 Available Balance: RM ${remain.toFixed(2)}`
+      :(mode==='contract'
+        ?`${contractInfo}\n💰 Initial Available Credit: RM ${firstAvail.toFixed(2)}`
+        :`${contractInfo}     Initial Available: RM ${firstAvail.toFixed(2)}\n💰 Current Available Balance: RM ${remain.toFixed(2)}`);
     return `Dear ${name} 😊\n\n${T.status}\n${div}\n${infoBlock}\n${div}\n\n${T.guide}\n\nThank you 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n${T.link}\n${url}${enPdfLines?'\n'+enPdfLines:''}`;
   }
   const contractInfo=`* 패키지: ${pkg?pkg.label:'—'}\n* 납부금액: RM ${paid.toFixed(2)}\n* 기본적립: RM ${bonus.toFixed(2)}${spec>0?'\n* 특별적립: RM '+spec.toFixed(2):''}`;
-  const balInfo=`💰 사용가능 잔액: RM ${remain.toFixed(2)}`;
-  const infoBlock=`${contractInfo}\n${balInfo}`;
+  const infoBlock=mode==='usage'
+    ?`* 패키지: ${pkg?pkg.label:'—'}\n💰 사용가능 잔액: RM ${remain.toFixed(2)}`
+    :(mode==='contract'
+      ?`${contractInfo}\n💰 최초사용가능 금액: RM ${firstAvail.toFixed(2)}`
+      :`${contractInfo}     최초사용가능 금액: RM ${firstAvail.toFixed(2)}\n💰 현재 사용가능 잔액: RM ${remain.toFixed(2)}`);
   return `안녕하세요, ${name}님 😊\n\n${T.status}\n${div}\n${infoBlock}\n${div}\n\n${T.guide}\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n${T.link}\n${url}${pdfLines?'\n'+pdfLines:''}`;
 }
 
 function getPanelMsg(){
   const url=document.getElementById('clink-url').textContent;
   const name=document.getElementById('f-name').value||'고객';
-  const remain=document.getElementById('bal-remain').textContent;
   const pkg=PACKAGES.find(p=>p.id===document.getElementById('f-package').value);
-  const paid=document.getElementById('f-paid').value||'0';
-  const bonus=document.getElementById('f-bonus').value||'0';
+  const paid=parseFloat(document.getElementById('f-paid').value)||0;
+  const bonus=parseFloat(document.getElementById('f-bonus').value)||0;
+  const spec=parseFloat(document.getElementById('f-special-bonus').value)||0;
+  const carry=currentUsageHistory.reduce((x,u)=>x+(parseFloat(u.carryover)||0),0);
+  const firstAvail=paid+bonus+spec+carry; // 최초사용가능 금액 = 납부+기본적립+특별적립+이월
   const div='────────────────';
   const T=CONTRACT_MSG_TXT[currentSendLang==='en'?'en':'ko'].contract;
   if(currentSendLang==='en'){
-    return `Dear ${name} 😊\n\n${T.status}\n${div}\n* Package: ${pkg?pkg.label:'—'}\n* Paid: RM ${parseFloat(paid).toFixed(2)}\n* Bonus: RM ${parseFloat(bonus).toFixed(2)}\n${div}\n💰 Available Balance: RM ${remain}\n\n${T.guide}\n\nThank you 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n${T.link}\n${url}`;
+    return `Dear ${name} 😊\n\n${T.status}\n${div}\n* Package: ${pkg?pkg.label:'—'}\n* Paid: RM ${paid.toFixed(2)}\n* Bonus: RM ${bonus.toFixed(2)}${spec>0?'\n* Special: RM '+spec.toFixed(2):''}\n💰 Initial Available Credit: RM ${firstAvail.toFixed(2)}\n${div}\n\n${T.guide}\n\nThank you 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n${T.link}\n${url}`;
   }
-  return `안녕하세요, ${name}님 😊\n\n${T.status}\n${div}\n* 패키지: ${pkg?pkg.label:'—'}\n* 납부금액: RM ${parseFloat(paid).toFixed(2)}\n* 기본적립: RM ${parseFloat(bonus).toFixed(2)}\n${div}\n💰 사용가능 잔액: RM ${remain}\n\n${T.guide}\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n${T.link}\n${url}`;
+  return `안녕하세요, ${name}님 😊\n\n${T.status}\n${div}\n* 패키지: ${pkg?pkg.label:'—'}\n* 납부금액: RM ${paid.toFixed(2)}\n* 기본적립: RM ${bonus.toFixed(2)}${spec>0?'\n* 특별적립: RM '+spec.toFixed(2):''}\n💰 최초사용가능 금액: RM ${firstAvail.toFixed(2)}\n${div}\n\n${T.guide}\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n${T.link}\n${url}`;
 }
 
 document.getElementById('btn-wa-link').addEventListener('click',async()=>{
