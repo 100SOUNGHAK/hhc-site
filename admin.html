@@ -245,7 +245,8 @@ input[data-benefit]{display:none}
 .cpc-top .amt{font-size:12.5px;font-weight:800;color:var(--indigo);flex-shrink:0;white-space:nowrap}
 .cpc-top .amt.mn{color:var(--red)}
 .cpc-del{background:var(--red-bg);color:var(--red);border:none;border-radius:6px;width:25px;height:25px;cursor:pointer;font-size:12px;flex-shrink:0}
-.cpc-ed{display:grid;grid-template-columns:auto minmax(0,1fr);gap:7px;margin-top:7px;align-items:end}
+.cpc-ed{display:grid;grid-template-columns:auto 68px minmax(0,1fr);gap:7px;margin-top:7px;align-items:end}
+@media(max-width:420px){.cpc-ed{grid-template-columns:auto 60px minmax(0,1fr)}}
 .cpc-lbm{display:block;font-size:8.5px;font-weight:800;color:#8b93a5;margin-bottom:2px}
 .cstq{display:flex;align-items:center;border:1.5px solid var(--border);border-radius:8px;overflow:hidden;height:32px;background:#fff}
 .cstq button{width:28px;height:100%;border:none;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit}
@@ -1222,7 +1223,8 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
             <button type="button" class="on" data-ulang="ko">한국어</button>
             <button type="button" data-ulang="en">English</button>
           </div>
-          <button type="button" id="btn-translate-all-usage" style="margin-left:auto;font-size:11px;background:var(--violet);color:#fff;border:none;border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px">🤖 영문 미번역 항목 전체 번역</button>
+          <button type="button" id="btn-koreanize-usage" style="margin-left:auto;font-size:11px;background:var(--navy);color:#fff;border:none;border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px">🇰🇷 영문 내역 → 한글 표기 정리</button>
+          <button type="button" id="btn-translate-all-usage" style="font-size:11px;background:var(--violet);color:#fff;border:none;border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px">🤖 영문 미번역 항목 전체 번역</button>
         </div>
         <div class="usage-list" id="usage-tbody"><div class="usage-empty">이용내역이 없습니다</div></div>
       </div>
@@ -2289,6 +2291,74 @@ async function ensureContractEnglish(c){
 window.ensureContractEnglish=ensureContractEnglish;
 window.gTranslateKoToEn=gTranslateKoToEn;
 
+// ── 서비스명/단위 한↔영 표기 헬퍼 (모듈 최상단) ────────────────────────────
+//  인보이스의 services 컬렉션에는 영문 서비스명이 저장돼 있는 경우가 많아,
+//  계약서 이용내역이 한국어 모드에서도 영문으로 보이는 문제가 있었다.
+//  ① 인보이스에 name_ko(한글명)가 있으면 최우선 사용
+//  ② 없으면 아래 용어집으로 치환해 한글 표기를 생성
+const SVC_TERM_KO=[
+  ['Type Wall-Mounted','벽걸이형'],['Wall-Mounted','벽걸이형'],
+  ['Type Ceiling-Cassette','천장형 카세트'],['Ceiling-Cassette','천장형 카세트'],
+  ['Type Ceiling-Exposed','천장 노출형'],['Type Portable','이동식'],
+  ['Type Window','창문형'],['Type Floor-Standing','스탠드형'],['Floor-Standing','스탠드형'],
+  ['SEMI-OVERHAUL CLEANING','세미 오버홀 청소'],['SEMI OVERHAUL CLEANING','세미 오버홀 청소'],
+  ['OVERHAUL CLEANING','오버홀 청소'],['CHEMICAL CLEANING','케미컬 청소'],
+  ['NORMAL CLEANING','기본 청소'],['BASIC CLEANING','기본 청소'],['DEEP CLEANING','딥 클리닝'],
+  ['GAS REFILL','가스 충전'],['GAS TOP-UP','가스 보충'],['INSTALLATION','설치'],
+  ['DISMANTLE','철거'],['RELOCATION','이전 설치'],['REPAIR','수리'],['MAINTENANCE','정기 점검'],
+  ['SERVICE','서비스'],['CLEANING','청소'],
+  ['Air-Con','에어컨'],['Aircon','에어컨'],['Air Con','에어컨'],
+  ['Washing Machine','세탁기'],['Refrigerator','냉장고'],['Fridge','냉장고'],
+  ['Oven','오븐'],['Mattress','매트리스'],['Sofa','쇼파'],['Curtain','커튼'],['Carpet','카펫'],
+  ['Water Heater','온수기'],['Water Filter','정수기'],['Ceiling Fan','천장 선풍기'],['Hood','후드']
+];
+// 가전 품목 키워드 → 단위는 반드시 "대"
+const SVC_UNIT_DAE_RE=/air[\s-]?con|aircon|에어컨|washing\s*machine|세탁기|refrigerator|fridge|냉장고|oven|오븐|water\s*heater|온수기|water\s*filter|정수기|ceiling\s*fan|선풍기|dryer|건조기|tv|텔레비/i;
+const UNIT_EN_MAP={'대':'unit(s)','개':'pcs','세트':'set','장':'pcs','시간':'hr(s)','식':'lot','회':'time(s)','명':'pax','병':'btl','박스':'box'};
+
+function unitEn(u){const k=String(u||'').trim();return UNIT_EN_MAP[k]||k||'unit(s)';}
+
+// 영문 서비스명 → 한글 표기 (용어집 치환)
+function svcKoName(name){
+  let t=String(name==null?'':name);
+  for(const [en,ko] of SVC_TERM_KO){
+    t=t.replace(new RegExp(en.replace(/[.*+?^${}()|[\]\\-]/g,'\\$&'),'gi'),ko);
+  }
+  return t.replace(/\s{2,}/g,' ').trim();
+}
+// 가전 품목이면 저장된 단위가 "식"이라도 "대"로 정규화
+function svcUnitKo(s){
+  const u=String((s&&s.unit)||'').trim();
+  const nm=[(s&&s.name)||'',(s&&s.name_ko)||'',(s&&s.subcat)||'',(s&&s.sub2)||''].join(' ');
+  if(SVC_UNIT_DAE_RE.test(nm))return '대';
+  return u||'대';
+}
+// 조정 항목 영문 라벨
+const ADJ_EN_MAP={
+  '특별할인':'Special Discount',
+  '특별할인(월 프로모션의 50%)':'Special Discount (50% of monthly promotion)',
+  '이월금액':'Carryover'
+};
+function adjLabelEn(l){
+  const k=String(l||'').trim();
+  if(ADJ_EN_MAP[k])return ADJ_EN_MAP[k];
+  return k.replace(/특별할인/g,'Special Discount').replace(/월 프로모션의 50%/g,'50% of monthly promotion')
+          .replace(/이월금액/g,'Carryover').replace(/할인/g,'Discount');
+}
+// 기존에 저장된 영문 이용내역 문구를 한글 표기로 정리 (콤마 단위 세그먼트별 처리)
+function koreanizeUsageDesc(desc){
+  return String(desc==null?'':desc).split(',').map(seg=>{
+    const isAppliance=SVC_UNIT_DAE_RE.test(seg);
+    let t=svcKoName(seg);
+    if(isAppliance)t=t.replace(/(\d+)\s*식/g,'$1대');
+    t=t.replace(/Special Discount \(50% of monthly promotion\)/gi,'특별할인(월 프로모션의 50%)')
+       .replace(/Special Discount/gi,'특별할인').replace(/Carryover/gi,'이월금액');
+    return t.trim();
+  }).filter(Boolean).join(', ');
+}
+window.svcKoName=svcKoName;window.svcUnitKo=svcUnitKo;window.unitEn=unitEn;
+window.adjLabelEn=adjLabelEn;window.koreanizeUsageDesc=koreanizeUsageDesc;
+
 function buildCustomerHTML(c,L,mode){
   L=L||'ko';mode=mode||'all';
   const T=NC_TXT[L]||NC_TXT.ko, isEn=L==='en';
@@ -2727,17 +2797,32 @@ document.querySelectorAll('#aview-switch .avs-btn').forEach(b=>b.addEventListene
 // ── 담은 품목/조정 항목 상태 ──
 let cPicked=[]; // {kind:'svc',svcId,name,subcat,sub2,unit,qty,price} | {kind:'other',name,qty,price} | {kind:'adj',label,amount,isCarry}
 let cpCat='전체',cpS2='전체';
-let uAmtManual=false,uDescManual=false,cpHadDisc=false,cpHadCarry=false;
+let uAmtManual=false,uDescManual=false,uDescEnManual=false,cpHadDisc=false,cpHadCarry=false;
 
 function cpFmt(n){return 'RM '+(Math.round(n*100)/100).toFixed(2);}
 function cpOf(id){return cPicked.find(p=>p.kind==='svc'&&p.svcId===id);}
 function cpItemsGross(){return cPicked.reduce((t,p)=>p.kind==='adj'?t:t+(parseFloat(p.qty)||1)*(parseFloat(p.price)||0),0);}
 function cpDiscSum(){return cPicked.reduce((t,p)=>p.kind==='adj'&&!p.isCarry?t+(parseFloat(p.amount)||0):t,0);}
 function cpCarrySum(){return cPicked.reduce((t,p)=>p.kind==='adj'&&p.isCarry?t+(parseFloat(p.amount)||0):t,0);}
-function cpDescText(){
-  const items=cPicked.filter(p=>p.kind!=='adj').map(p=>`${p.name} ${p.qty||1}${p.unit||'대'}`);
-  const adjs=cPicked.filter(p=>p.kind==='adj'&&(parseFloat(p.amount)||0)>0).map(p=>`${p.label} -RM${(parseFloat(p.amount)||0).toFixed(2)}`);
+// 이용내역 문구 생성 — lang:'ko'(기본) | 'en'
+function cpDescText(lang){
+  const isEn=lang==='en';
+  const items=cPicked.filter(p=>p.kind!=='adj').map(p=>{
+    const nm=isEn?(p.nameEn||p.nameKo||p.name||''):(p.nameKo||p.name||'');
+    const q=p.qty||1;
+    return isEn?`${nm} ${q} ${unitEn(p.unit)}`:`${nm} ${q}${p.unit||'대'}`;
+  });
+  const adjs=cPicked.filter(p=>p.kind==='adj'&&(parseFloat(p.amount)||0)>0).map(p=>{
+    const lb=isEn?adjLabelEn(p.label):p.label;
+    return `${lb} -RM${(parseFloat(p.amount)||0).toFixed(2)}`;
+  });
   return items.concat(adjs).join(', ');
+}
+// #u-desc(한국어) / #u-desc-en(영어)를 동시에 자동 생성
+function cpSyncDesc(){
+  const d=document.getElementById('u-desc'),de=document.getElementById('u-desc-en');
+  if(d&&!uDescManual)d.value=cpDescText('ko');
+  if(de&&!uDescEnManual)de.value=cpDescText('en');
 }
 
 // ── 품목 시트 렌더링 ──
@@ -2852,7 +2937,10 @@ document.getElementById('cs-list').addEventListener('click',e=>{
     if(cpOf(id))return;
     const s=invServices.find(x=>x.id===id);if(!s)return;
     // 담는 순간의 가격을 복사 (이후 인보이스 가격 변경은 새로 담는 품목부터 적용)
-    cPicked.push({kind:'svc',svcId:s.id,name:s.name||'',subcat:s.subcat||'',sub2:s.sub2||'',unit:s.unit||'대',qty:1,price:parseFloat(s.price)||0});
+    // 한글명(name_ko) 우선 → 없으면 용어집으로 한글 표기 생성 / 영문명은 원본 유지
+    const nmEn=s.name_en||s.name||'';
+    const nmKo=(s.name_ko&&String(s.name_ko).trim())?String(s.name_ko).trim():svcKoName(nmEn);
+    cPicked.push({kind:'svc',svcId:s.id,name:nmKo,nameKo:nmKo,nameEn:nmEn,subcat:s.subcat||'',sub2:s.sub2||'',unit:svcUnitKo(s),qty:1,price:parseFloat(s.price)||0});
     cpRefreshRow(id);cpRenderRail();cpRenderFoot();
   }
 });
@@ -2893,6 +2981,7 @@ function cpRenderPicked(){
           <input value="${p.qty}" readonly>
           <button type="button" class="pl" data-cq="${i}" data-d="1">+</button>
         </div></div>
+        <div><span class="cpc-lbm">단위</span><div class="cpin"><input type="text" value="${cpEsc(p.unit||'대')}" data-cunit="${i}" style="text-align:center;padding-left:8px" maxlength="6"></div></div>
         <div><span class="cpc-lbm">단가 (수정 가능)</span><div class="cpin"><i>RM</i><input type="number" min="0" step="0.01" value="${p.price}" data-cprice="${i}"></div></div>
       </div></div>`;
     }).join('');
@@ -2925,8 +3014,8 @@ function cpSync(){
   if(hasCarry)document.getElementById('u-carry').value=cs?cs.toFixed(2):'0';
   else if(cpHadCarry)document.getElementById('u-carry').value='';
   cpHadDisc=hasDisc;cpHadCarry=hasCarry;
-  // 이용내역 문구 자동 생성
-  if(!uDescManual)document.getElementById('u-desc').value=cpDescText();
+  // 이용내역 문구 자동 생성 (한국어 + 영어 동시)
+  cpSyncDesc();
   cpRenderFoot();
 }
 // 카드 이벤트 (위임)
@@ -2945,8 +3034,10 @@ document.getElementById('cpicked-list').addEventListener('input',e=>{
   if(pr){const p=cPicked[parseInt(pr.dataset.cprice)];if(p){p.price=parseFloat(pr.value)||0;const a=document.querySelector(`[data-camt="${pr.dataset.cprice}"]`);if(a)a.textContent=cpFmt((parseFloat(p.qty)||1)*p.price);cpSync();}return;}
   const aa=e.target.closest('[data-adjamt]');
   if(aa){const p=cPicked[parseInt(aa.dataset.adjamt)];if(p){p.amount=parseFloat(aa.value)||0;cpSync();}return;}
+  const cu=e.target.closest('[data-cunit]');
+  if(cu){const p=cPicked[parseInt(cu.dataset.cunit)];if(p){p.unit=cu.value;cpSyncDesc();}return;}
   const on=e.target.closest('[data-oname]');
-  if(on){const p=cPicked[parseInt(on.dataset.oname)];if(p){p.name=on.value;if(!uDescManual)document.getElementById('u-desc').value=cpDescText();}}
+  if(on){const p=cPicked[parseInt(on.dataset.oname)];if(p){p.name=on.value;p.nameKo=on.value;p.nameEn=on.value;cpSyncDesc();}}
 });
 // 조정 항목 칩
 document.querySelectorAll('.adj-chip[data-adj]').forEach(b=>b.addEventListener('click',()=>{
@@ -2956,7 +3047,7 @@ document.querySelectorAll('.adj-chip[data-adj]').forEach(b=>b.addEventListener('
   if(inputs.length)inputs[inputs.length-1].focus();
 }));
 document.getElementById('btn-add-other-item').addEventListener('click',()=>{
-  cPicked.push({kind:'other',name:'',qty:1,price:0});
+  cPicked.push({kind:'other',name:'',nameKo:'',nameEn:'',unit:'대',qty:1,price:0});
   cpRenderPicked();
   const inputs=document.querySelectorAll('[data-oname]');
   if(inputs.length)inputs[inputs.length-1].focus();
@@ -2964,11 +3055,12 @@ document.getElementById('btn-add-other-item').addEventListener('click',()=>{
 // 이용금액/내역 수동 편집 감지
 document.getElementById('u-amount').addEventListener('input',()=>{if(cPicked.length){uAmtManual=true;cpSync();}});
 document.getElementById('u-desc').addEventListener('input',()=>{uDescManual=true;});
-// 내역 재생성 버튼 (기존 자동생성 버튼 재활용)
+document.getElementById('u-desc-en').addEventListener('input',()=>{uDescEnManual=true;});
+// 내역 재생성 버튼 (기존 자동생성 버튼 재활용) — 한국어/영어 모두 다시 생성
 document.getElementById('btn-gen-desc').addEventListener('click',()=>{
   if(!cPicked.length){showModal('알림','품목을 먼저 담아주세요.',false);return;}
-  uDescManual=false;
-  document.getElementById('u-desc').value=cpDescText();
+  uDescManual=false;uDescEnManual=false;
+  cpSyncDesc();
 });
 
 // 초기 렌더링
@@ -3023,7 +3115,7 @@ document.getElementById('btn-add-usage').addEventListener('click',()=>{
     discount:disc||'0'
   });
   ['u-desc','u-desc-en','u-amount','u-carry','u-disc'].forEach(id=>document.getElementById(id).value='');
-  cPicked=[];uAmtManual=false;uDescManual=false;cpHadDisc=false;cpHadCarry=false;
+  cPicked=[];uAmtManual=false;uDescManual=false;uDescEnManual=false;cpHadDisc=false;cpHadCarry=false;
   cpRenderPicked();
   renderUsage();
   document.getElementById('usage-form-panel').style.display='none';
@@ -3073,6 +3165,26 @@ document.getElementById('btn-translate-all-usage').addEventListener('click',asyn
   }finally{
     btn.disabled=false;btn.textContent=orig;
   }
+});
+
+// 기존에 영문으로 저장된 이용내역을 한글 표기로 정리 (영문 원문은 desc_en 으로 보존)
+document.getElementById('btn-koreanize-usage').addEventListener('click',async()=>{
+  if(!currentUsageHistory.length){showModal('알림','이용내역이 없습니다.',false);return;}
+  let n=0;
+  currentUsageHistory.forEach(u=>{
+    const d=(u.desc||'').trim();
+    if(!d)return;
+    const ko=koreanizeUsageDesc(d);
+    if(ko===d)return;
+    if(!(u.desc_en||'').trim())u.desc_en=d;  // 영문 원문 보존
+    u.desc=ko;n++;
+  });
+  if(!n){showModal('알림','정리할 영문 내역이 없습니다. (이미 모두 한글 표기)',false);return;}
+  usageLang='ko';
+  document.querySelectorAll('#usage-lang-sw button').forEach(b=>b.classList.toggle('on',b.dataset.ulang==='ko'));
+  renderUsage();
+  if(currentEditId)await persistUsage();
+  showModal('완료',`${n}건의 이용내역을 한글 표기로 정리했습니다. (영문 원문은 English 전환 시 그대로 표시됩니다)`+(currentEditId?'':' 계약을 저장하면 반영됩니다.'),false);
 });
 
 document.getElementById('customer-select').addEventListener('change',e=>{currentViewId=e.target.value||null;renderCustomerView();});

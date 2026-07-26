@@ -149,7 +149,10 @@ textarea{resize:none;line-height:1.5}
 /* SERVICES */
 .svc-cat-hdr{background:var(--navy);padding:8px 16px;font-size:12px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:space-between}
 .svc-sub-hdr{background:var(--il);padding:6px 16px;font-size:11px;font-weight:700;color:var(--indigo);display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--bdr)}
-.svc-row{display:grid;grid-template-columns:28px 1fr 90px auto;gap:6px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--bdr)}
+.svc-row{display:grid;grid-template-columns:28px 1fr 1fr 90px 62px auto;gap:6px;align-items:center;padding:8px 16px;border-bottom:1px solid var(--bdr)}
+.svc-row .svc-nameko{background:#faf7ff}
+.svc-row .svc-unit{text-align:center}
+@media(max-width:900px){.svc-row{grid-template-columns:28px 1fr 90px 62px auto}.svc-row .svc-nameko{grid-column:2/-1;margin-top:-2px}}
 .svc-row:last-child{border-bottom:none}
 .svc-ord{display:flex;flex-direction:column;gap:1px}
 .svc-ord button{background:none;border:none;cursor:pointer;font-size:12px;color:var(--gray);line-height:1.2;padding:1px 3px}
@@ -2585,7 +2588,9 @@ function renderSvcs(){
             html+='<div class="svc-row" data-sid="'+s.id+'" style="padding-left:20px;background:#fff8e1">'+
               '<div class="svc-ord"><button onclick="moveSvc(\''+s.id+'\',\'up\')">▲</button><button onclick="moveSvc(\''+s.id+'\',\'dn\')">▼</button></div>'+
               '<input class="svc-name" placeholder="서비스명" style="font-size:13px">'+
+              '<input class="svc-nameko" placeholder="한글명 (계약서 표기)" style="font-size:13px">'+
               '<input class="svc-price" type="number" min="0" step="0.5" style="font-size:13px">'+
+              '<input class="svc-unit" placeholder="단위" style="font-size:12px">'+
               '<select class="svc-sub2" style="font-size:11px" onchange="assignSub2(\''+s.id+'\',this.value)">'+
                 '<option value="">소분류 배정...</option>'+
                 acSubs.map(function(a){return '<option value="'+a+'">'+a+'</option>';}).join('')+
@@ -2603,7 +2608,9 @@ function renderSvcs(){
             html+='<div class="svc-row" data-sid="'+s.id+'" style="padding-left:20px">'+
               '<div class="svc-ord"><button onclick="moveSvc(\''+s.id+'\',\'up\')">▲</button><button onclick="moveSvc(\''+s.id+'\',\'dn\')">▼</button></div>'+
               '<input class="svc-name" placeholder="서비스명" style="font-size:13px">'+
+              '<input class="svc-nameko" placeholder="한글명 (계약서 표기)" style="font-size:13px">'+
               '<input class="svc-price" type="number" min="0" step="0.5" style="font-size:13px">'+
+              '<input class="svc-unit" placeholder="단위" style="font-size:12px">'+
               '<button class="btn bxs br" onclick="delSvc(\''+s.id+'\')">삭제</button>'+
             '</div>';
           });
@@ -2618,7 +2625,9 @@ function renderSvcs(){
           html+='<div class="svc-row" data-sid="'+s.id+'">'+
             '<div class="svc-ord"><button onclick="moveSvc(\''+s.id+'\',\'up\')">▲</button><button onclick="moveSvc(\''+s.id+'\',\'dn\')">▼</button></div>'+
             '<input class="svc-name" placeholder="서비스명" style="font-size:13px">'+
+            '<input class="svc-nameko" placeholder="한글명 (계약서 표기)" style="font-size:13px">'+
             '<input class="svc-price" type="number" min="0" step="0.5" style="font-size:13px">'+
+            '<input class="svc-unit" placeholder="단위" style="font-size:12px">'+
             '<button class="btn bxs br" onclick="delSvc(\''+s.id+'\')">삭제</button>'+
           '</div>';
         });
@@ -2631,8 +2640,13 @@ function renderSvcs(){
   services.forEach(function(s){
     var row=el.querySelector('[data-sid="'+s.id+'"]');if(!row)return;
     var ni=row.querySelector('.svc-name'),pi=row.querySelector('.svc-price');
+    var ki=row.querySelector('.svc-nameko'),ui=row.querySelector('.svc-unit');
     if(ni){ni.value=s.name||'';ni.addEventListener('blur',function(){saveSvcFld(s.id,'name',ni.value);});}
     if(pi){pi.value=s.price||0;pi.addEventListener('blur',function(){saveSvcFld(s.id,'price',pi.value);});}
+    // 한글명 — 계약서 이용내역의 기본(한국어) 표기에 사용된다
+    if(ki){ki.value=s.name_ko||'';ki.addEventListener('blur',function(){saveSvcFld(s.id,'name_ko',ki.value);});}
+    // 단위 — 가전은 "대", 자재/공사는 "식" 등
+    if(ui){ui.value=s.unit||'';ui.addEventListener('blur',function(){saveSvcFld(s.id,'unit',ui.value.trim());});}
   });
 }
 function saveSvcFld(id,f,v){
@@ -2645,7 +2659,7 @@ function saveSvcFld(id,f,v){
 function addSvcTo(cat,subcat,sub2){
   if(!DB){showToast('Firebase 연결 안됨');return;}
   var maxO=services.reduce(function(m,s){return Math.max(m,s.order||0);},0);
-  var ns={id:'s'+Date.now(),cat:cat,subcat:subcat,name:'새 서비스',price:0,unit:'식',order:maxO+1};
+  var ns={id:'s'+Date.now(),cat:cat,subcat:subcat,name:'새 서비스',name_ko:'',price:0,unit:'대',order:maxO+1};
   if(sub2)ns.sub2=sub2;
   DB.collection('services').add(ns).then(function(ref){
     ns._docId=ref.id;services.push(ns);
