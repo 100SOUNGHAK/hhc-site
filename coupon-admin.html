@@ -38,6 +38,16 @@ input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--bdr);b
 .vbtn.use{border-color:#10b981;background:#e8f8f0;color:#0a7a4a}
 .vbtn.send{border-color:#25D366;background:#e9fbf0;color:#128C4B}
 .vbtn.del{border-color:#f2c4c4;background:#fde8e8;color:#c0392b}
+.vbtn.ch{border-color:#b7c4f4;background:#eef1fe;color:#3b55d9}
+.vsub b.rc{color:var(--navy);background:#fdf6e5;border:1px solid #ecd9a8;border-radius:5px;padding:0 5px;font-weight:800}
+/* 고객변경 이력 */
+.hist{margin-top:14px;border-top:1px dashed var(--bdr);padding-top:11px}
+.hist-t{font-size:11px;font-weight:800;color:#6b7280;margin-bottom:7px}
+.hist-item{font-size:11px;color:#374151;background:#f8f9fc;border:1px solid var(--bdr);border-radius:8px;padding:7px 10px;margin-bottom:6px;line-height:1.6}
+.hist-item .ht{font-size:9.5px;color:#9ca3af;font-weight:700}
+.hist-item b.fr{color:#c0392b;text-decoration:line-through;text-decoration-thickness:1px}
+.hist-item b.to{color:#0a7a4a}
+.empty-h{font-size:11px;color:#9ca3af;text-align:center;padding:8px}
 .cust-sum{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .cs-chip{font-size:11px;font-weight:700;background:#fff;border:1px solid var(--bdr);border-radius:100px;padding:6px 13px;cursor:pointer}
 .cs-chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
@@ -88,7 +98,8 @@ input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--bdr);b
       <div class="grid2">
         <div><div class="fl">종류</div><select id="f-type"><option value="gift">상품권 (금액권)</option><option value="discount">할인권 (%)</option></select></div>
         <div><div class="fl">금액 / 할인율</div><input id="f-val" placeholder="숫자만 입력하면 RM 자동 (예: 100 → RM 100)" onblur="fmtVal(this)"></div>
-        <div><div class="fl">고객명</div><input id="f-name" placeholder="예: 김철수"></div>
+        <div><div class="fl">구매(양도)고객명</div><input id="f-name" placeholder="예: 김철수"></div>
+        <div><div class="fl">받는(양수)고객명 (선택)</div><input id="f-recv" placeholder="미기재 시 구매고객과 동일"></div>
         <div><div class="fl">유효기간 (까지)</div><input id="f-exp" type="date"></div>
       </div>
       <div style="margin-bottom:10px"><div class="fl">사용 조건 (선택)</div><input id="f-cond" placeholder="예: RM300 이상 서비스 이용 시 (영어 발송 시 자동 번역됩니다)"></div>
@@ -135,6 +146,25 @@ input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--bdr);b
       <div style="display:flex;gap:8px;margin-top:10px">
         <button class="vbtn" style="flex:1;padding:11px" onclick="dlPvImg()">⬇ 이미지 저장</button>
         <button class="vbtn send" style="flex:1;padding:11px" onclick="openSendFromPv()">📤 발송 창 열기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 고객변경 모달 -->
+<div class="mbg" id="chgBg" onclick="if(event.target===this)closeChg()">
+  <div class="md">
+    <div class="md-hd">✏️ 고객 변경 — <span id="chg-code"></span> <button onclick="closeChg()">✕</button></div>
+    <div class="md-bd">
+      <div class="grid2">
+        <div><div class="fl">구매(양도)고객</div><input id="m-buyer"></div>
+        <div><div class="fl">받는(양수)고객</div><input id="m-recv" placeholder="미기재 시 구매고객과 동일"></div>
+      </div>
+      <button class="btn-main" id="chg-save" onclick="saveChg()">변경 저장 (이력에 기록됩니다)</button>
+      <div class="note">※ 이용 안내 기준: 양도·양수 변경 신청은 <b>구매(양도) 고객 본인</b>만 가능합니다. 변경 즉시 고객 쿠폰 화면·이미지에도 반영됩니다.</div>
+      <div class="hist">
+        <div class="hist-t">🕘 변경 이력</div>
+        <div id="histList"><div class="empty-h">아직 변경 이력이 없습니다</div></div>
       </div>
     </div>
   </div>
@@ -208,6 +238,8 @@ window.issueCoupon=async function(){
     type:gid('f-type').value,
     value:val,
     name:name,
+    receiver:gid('f-recv').value.trim(),
+    history:[],
     cond:gid('f-cond').value.trim(),
     expiry:gid('f-exp').value||'',
     status:'active',
@@ -219,7 +251,7 @@ window.issueCoupon=async function(){
     var id=await window.__saveCoupon(data);
     allCoupons.unshift(Object.assign({_id:id},data));
     renderAll();
-    gid('f-name').value='';gid('f-val').value='';gid('f-cond').value='';
+    gid('f-name').value='';gid('f-recv').value='';gid('f-val').value='';gid('f-cond').value='';
     toast('🎫 발급 완료 — '+data.code);
     openSend(Object.assign({_id:id},data));
   }catch(e){alert('발급 실패: '+e.message);}
@@ -253,12 +285,17 @@ function mkItem(cpn){
   var s=stOf(cpn);
   var stLbl=s==='ok'?'<span class="vst ok">사용 가능</span>':s==='used'?'<span class="vst used">사용완료 '+(cpn.usedAt||'')+'</span>':'<span class="vst exp">기간만료</span>';
   var d=document.createElement('div');d.className='vitem'+(s!=='ok'?' dim':'');
+  var recvTxt=cpn.receiver?('🎁 받는 <b class="rc">'+cpn.receiver+'</b>'):'🎁 받는 <b class="rc">'+cpn.name+'</b> <i style="font-style:normal;font-size:10px;color:#9ca3af">(구매고객 동일)</i>';
+  var histN=(cpn.history||[]).length;
   d.innerHTML='<div class="top"><span class="vcode">'+cpn.code+'</span>'+stLbl+'<span class="vamt">'+typeLabel(cpn.type)+' '+cpn.value+'</span></div>'+
-    '<div class="vsub">👤 '+cpn.name+' · 발급 '+(cpn.issuedAt||'')+(cpn.expiry?' · ~'+cpn.expiry:'')+(cpn.cond?' · '+cpn.cond:'')+'</div>'+
+    '<div class="vsub">🛒 구매(양도) '+cpn.name+' · '+recvTxt+'</div>'+
+    '<div class="vsub">발급 '+(cpn.issuedAt||'')+(cpn.expiry?' · ~'+cpn.expiry:'')+(cpn.cond?' · '+cpn.cond:'')+(histN?' · 🕘 고객변경 '+histN+'회':'')+'</div>'+
     '<div class="vact"></div>';
   var act=d.querySelector('.vact');
   function mk(label,cls,fn){var b=document.createElement('button');b.className='vbtn'+(cls?' '+cls:'');b.textContent=label;b.onclick=fn;act.appendChild(b);}
   mk('👁 미리보기','',function(){openPv(cpn);});
+  // 고객변경: 상품권만 (할인권은 양도·양수 불가)
+  if(cpn.type!=='discount')mk('✏️ 고객변경','ch',function(){openChg(cpn);});
   if(s==='ok'){
     mk('✓ 사용 처리','use',function(){markUsed(cpn);});
     mk('📤 발송','send',function(){openSend(cpn);});
@@ -318,6 +355,44 @@ function unmarkUsed(c){
   }).catch(function(e){alert('처리 실패: '+e.message);});
 }
 
+// ── 고객변경 (구매/받는 고객) + 변경이력
+var _chgTarget=null;
+window.openChg=function(c){
+  _chgTarget=c;
+  gid('chg-code').textContent=c.code;
+  gid('m-buyer').value=c.name||'';
+  gid('m-recv').value=c.receiver||'';
+  renderChgHist();
+  gid('chgBg').classList.add('show');
+};
+window.closeChg=function(){gid('chgBg').classList.remove('show');_chgTarget=null;};
+function renderChgHist(){
+  var w=gid('histList');
+  var h=(_chgTarget&&_chgTarget.history)||[];
+  if(!h.length){w.innerHTML='<div class="empty-h">아직 변경 이력이 없습니다</div>';return;}
+  w.innerHTML=h.slice().reverse().map(function(e){
+    return '<div class="hist-item"><span class="ht">'+e.at+' · '+e.field+'</span><br><b class="fr">'+e.from+'</b> → <b class="to">'+e.to+'</b></div>';
+  }).join('');
+}
+window.saveChg=async function(){
+  var c=_chgTarget;if(!c)return;
+  var nb=gid('m-buyer').value.trim(),nr=gid('m-recv').value.trim();
+  if(!nb){toast('구매고객명을 입력하세요');gid('m-buyer').focus();return;}
+  var logs=[];
+  if(nb!==(c.name||''))logs.push({at:nowStr(),field:'구매(양도)고객',from:c.name||'—',to:nb});
+  if(nr!==(c.receiver||''))logs.push({at:nowStr(),field:'받는(양수)고객',from:c.receiver||'(구매고객 동일)',to:nr||'(구매고객 동일)'});
+  if(!logs.length){toast('변경된 내용이 없습니다');return;}
+  var btn=gid('chg-save');btn.disabled=true;btn.textContent='저장 중...';
+  var newHist=(c.history||[]).concat(logs);
+  try{
+    await window.__updateCoupon(c._id,{name:nb,receiver:nr,history:newHist});
+    c.name=nb;c.receiver=nr;c.history=newHist;
+    renderAll();renderChgHist();
+    toast('✓ 변경 저장 — 이력 '+logs.length+'건 기록, 고객 쿠폰 화면에도 즉시 반영됩니다');
+  }catch(e){alert('저장 실패: '+e.message);}
+  btn.disabled=false;btn.textContent='변경 저장 (이력에 기록됩니다)';
+};
+
 // ── 사용 조건 자동 번역 (한→영)
 function trCond(s){
   if(!s)return '';
@@ -367,32 +442,40 @@ function trCond(s){
 function msgOf(c,lang){
   var link=couponLink(c._id)+(lang==='en'?'&lang=en':'');
   var tl=c.type==='discount'?(lang==='en'?'Discount Coupon':'할인권'):(lang==='en'?'Gift Voucher':'상품권');
+  var recv=c.receiver||c.name;
   if(lang==='en'){
     return '🎁 [Happy Home Care] A '+tl+' has arrived!\n\n'+
-      'Dear '+c.name+', thank you for being with us.\n\n'+
+      'Dear '+recv+', thank you for being with us.\n\n'+
       '━━━━━━━━━━━━\n'+
       '🎫 '+tl+': '+c.value+'\n'+
       '· Code: '+c.code+'\n'+
+      '· Recipient: '+recv+'\n'+
+      (c.receiver&&c.receiver!==c.name?'· Purchaser: '+c.name+'\n':'')+
       (c.expiry?'· Valid until: '+c.expiry+'\n':'')+
       (c.cond?'· Condition: '+trCond(c.cond)+'\n':'')+
       '━━━━━━━━━━━━\n\n'+
       '▶ View my coupon\n'+link+'\n\n'+
       'Please show this coupon screen when using our service.\n'+
-      '· One coupon per service. Not transferable.\n\n'+
+      '· Up to 2 coupons per service visit.\n'+
+      (c.type==='discount'?'· Discount coupons are not transferable.\n':'· Transfer is possible with prior request by the purchaser.\n')+
+      '· Not valid on the date of issue.\n\n'+
       '📞 +60 17-247 2774';
   }
   return '🎁 [해피홈케어] '+tl+'이 도착했습니다!\n\n'+
-    c.name+' 님, 감사의 마음을 담아 '+tl+'을 보내드립니다.\n\n'+
+    recv+' 님, 감사의 마음을 담아 '+tl+'을 보내드립니다.\n\n'+
     '━━━━━━━━━━━━\n'+
     '🎫 '+tl+': '+c.value+'\n'+
     '· 코드: '+c.code+'\n'+
+    '· 받는(양수) 분: '+recv+'\n'+
+    (c.receiver&&c.receiver!==c.name?'· 구매(양도)고객: '+c.name+'\n':'')+
     (c.expiry?'· 유효기간: '+c.expiry+' 까지\n':'')+
     (c.cond?'· 조건: '+c.cond+'\n':'')+
     '━━━━━━━━━━━━\n\n'+
     '▶ 내 쿠폰 확인하기\n'+link+'\n\n'+
     '서비스 이용 시 이 쿠폰 화면을 보여주세요.\n'+
-    '· 서비스당 1장 사용 가능 · 무단 양도 불가\n\n'+
-    '📞 문의: +60 17-247 2774';
+    '· 1회 최대 2장 사용 가능 · 발행 당일 사용 불가\n'+
+    (c.type==='discount'?'· 할인권은 양도·양수 불가\n':'· 양도·양수는 구매고객 본인의 사전 신청 시 가능\n')+
+    '\n📞 문의: +60 17-247 2774';
 }
 // ── 쿠폰 카드 이미지 생성 (Canvas)
 function roundRect(x,px,py,w,h,r){
@@ -422,12 +505,13 @@ function drawCoupon(cpn,lang){
   var amtY=252;
   var condCY=308;
   var perfY=hasCond?372:318;
-  var panelY=perfY+36, panelH=158;
+  var recvY=perfY+30, recvH=100;              // 받는(양수)고객 강조 박스
+  var panelY=recvY+recvH+14, panelH=158;
   var codeY=panelY+panelH+20, codeH=76;
   var qrS=190, qrY=codeY+codeH+20, qrBoxH=qrS+62;
   var stY=qrY+qrBoxH+20, stH=56;
   var tmY=stY+stH+26;
-  var ftY=tmY+118;
+  var ftY=tmY+146;                            // 유의사항 3줄
   var H=ftY+34;
 
   var cv=document.createElement('canvas');cv.width=W;cv.height=H;
@@ -509,15 +593,33 @@ function drawCoupon(cpn,lang){
   x.beginPath();x.arc(0,perfY,17,0,7);x.fill();
   x.beginPath();x.arc(W,perfY,17,0,7);x.fill();
 
+  // ── 받는(양수)고객 강조 박스
+  var buyerNm=cpn.name||'';
+  var recvNm=cpn.receiver||buyerNm;
+  x.fillStyle='rgba(201,164,76,.13)';roundRect(x,P,recvY,W-P*2,recvH,16);x.fill();
+  x.strokeStyle='rgba(201,164,76,.55)';x.lineWidth=2;roundRect(x,P,recvY,W-P*2,recvH,16);x.stroke();
+  x.textAlign='center';
+  x.fillStyle='#a58c55';x.font='900 13px sans-serif';
+  x.fillText(en?'R E C I P I E N T':'받 는  분  ·  양 수 고 객',W/2,recvY+27);
+  x.save();x.shadowColor='rgba(232,207,138,.4)';x.shadowBlur=12;
+  x.fillStyle='#e8cf8a';x.font='700 32px Georgia,serif';
+  x.fillText(recvNm+(en?'':' 님'),W/2,recvY+(cpn.receiver?70:64));
+  x.restore();
+  if(!cpn.receiver){
+    x.fillStyle='#8ba3c0';x.font='600 12px sans-serif';
+    x.fillText(en?'Same as purchaser':'(구매고객과 동일)',W/2,recvY+88);
+  }
+  x.textAlign='left';
+
   // ── 정보 패널
   x.fillStyle='rgba(255,255,255,.05)';roundRect(x,P,panelY,W-P*2,panelH,18);x.fill();
   x.strokeStyle='rgba(255,255,255,.1)';x.lineWidth=1;roundRect(x,P,panelY,W-P*2,panelH,18);x.stroke();
   var rows=en?[
-    ['T O',cpn.name||''],
+    ['P U R C H A S E R',buyerNm],
     ['V A L I D   U N T I L',cpn.expiry?cpn.expiry:'No limit'],
     ['I S S U E D',cpn.issuedAt||'']
   ]:[
-    ['받 는  분',(cpn.name||'')+' 님'],
+    ['구 매 (양 도) 고 객',buyerNm+' 님'],
     ['유 효 기 간',cpn.expiry?cpn.expiry+' 까지':'제한 없음'],
     ['발 급 일',cpn.issuedAt||'']
   ];
@@ -566,10 +668,13 @@ function drawCoupon(cpn,lang){
   x.strokeStyle='rgba(255,255,255,.16)';x.setLineDash([6,6]);x.lineWidth=1;
   x.beginPath();x.moveTo(P,tmY-8);x.lineTo(W-P,tmY-8);x.stroke();x.setLineDash([]);
   x.fillStyle='#c9a44c';x.font='900 13px sans-serif';x.fillText(en?'T E R M S':'유 의 사 항',P,tmY+18);
-  x.fillStyle='#c9a44c';x.font='900 15px sans-serif';x.fillText('·',P,tmY+48);x.fillText('·',P,tmY+76);
+  x.fillStyle='#c9a44c';x.font='900 15px sans-serif';x.fillText('·',P,tmY+48);x.fillText('·',P,tmY+76);x.fillText('·',P,tmY+104);
   x.fillStyle='#93a6bd';x.font='500 15px sans-serif';
-  x.fillText(en?'One coupon per service.':'서비스당 1장 사용 가능합니다.',P+16,tmY+48);
-  x.fillText(en?'This coupon is not transferable.':'본 쿠폰은 무단 양도가 불가합니다.',P+16,tmY+76);
+  x.fillText(en?'Up to 2 coupons per service visit.':'서비스 1회 이용 시 최대 2장 사용 가능합니다.',P+16,tmY+48);
+  x.fillText(cpn.type==='discount'
+    ?(en?'Discount coupons are not transferable.':'할인권은 양도 및 양수가 불가능합니다.')
+    :(en?'Transfer possible with prior request by purchaser.':'양도·양수는 구매고객 본인의 사전 신청 시 가능합니다.'),P+16,tmY+76);
+  x.fillText(en?'Not valid on the date of issue.':'발행 당일에는 사용할 수 없습니다.',P+16,tmY+104);
 
   // ── 푸터
   x.fillStyle='#75899f';x.font='600 13px sans-serif';x.textAlign='center';
@@ -721,7 +826,7 @@ async function verifyCoupon(id,code){
   if(s==='ok'){
     r.innerHTML='<div class="top" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="vcode">'+c.code+'</span><span class="vst ok">사용 가능</span></div>'+
       '<div class="sr-big">'+typeLabel(c.type)+' '+c.value+'</div>'+
-      '<div class="vsub">👤 '+c.name+(c.expiry?' · ~'+c.expiry:'')+(c.cond?' · '+c.cond:'')+'</div>'+
+      '<div class="vsub">🛒 구매(양도) '+c.name+' · 🎁 받는(양수) <b class="rc">'+(c.receiver||c.name)+'</b>'+(c.expiry?' · ~'+c.expiry:'')+(c.cond?' · '+c.cond:'')+'</div>'+
       '<button class="btn-main" style="margin-top:10px" id="scan-use-btn">✓ 지금 사용 처리</button>';
     r.classList.add('show');
     gid('scan-use-btn').onclick=function(){
@@ -732,7 +837,7 @@ async function verifyCoupon(id,code){
   }else if(s==='used'){
     r.innerHTML='<div class="top" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="vcode">'+c.code+'</span><span class="vst used">사용완료</span></div>'+
       '<div class="sr-big" style="color:#c0392b">🚫 이미 사용된 쿠폰입니다</div>'+
-      '<div class="vsub">👤 '+c.name+' · '+typeLabel(c.type)+' '+c.value+' · '+(c.usedAt||'')+' 사용 처리됨</div>'+
+      '<div class="vsub">🛒 '+c.name+' · 🎁 '+(c.receiver||c.name)+' · '+typeLabel(c.type)+' '+c.value+' · '+(c.usedAt||'')+' 사용 처리됨</div>'+
       '<div class="note" style="margin-top:8px">서버에 사용 기록이 있어 재사용이 차단됩니다.</div>';
     r.classList.add('show');
   }else{
