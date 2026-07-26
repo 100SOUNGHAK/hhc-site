@@ -2554,6 +2554,8 @@ const HUB_MODE_LB={
   usage:{ko:'이용내역',en:'Usage History'},
   all:{ko:'계약서 + 이용내역',en:'Contract + Usage'}
 };
+// 「무엇을」 선택값 → 간결(잉크 절약) 인쇄 모드
+const LITE_OF={contract:'lite',usage:'lite_usage',all:'lite_all'};
 function hubModeLabel(L){
   return (HUB_MODE_LB[currentSendMode]||HUB_MODE_LB.contract)[L==='en'?'en':'ko'];
 }
@@ -2696,8 +2698,9 @@ async function renderSendTab(){
 
       <div class="hub-gl">저장 · 인쇄 · 링크</div>
       <div class="hub-grid">
-        <button type="button" class="hub-btn" id="btn-hub-dl"><i>⬇️</i>PDF 저장</button>
-        <button type="button" class="hub-btn" id="btn-print-view"><i>🖨</i>인쇄</button>
+        <button type="button" class="hub-btn" id="btn-print-view"><i>🖨</i>인쇄<small>원본 그대로 · 컬러</small></button>
+        <button type="button" class="hub-btn" id="btn-print-lite"><i>🖨</i>간결 인쇄<small>흑백 1장 · 잉크 절약</small></button>
+        <button type="button" class="hub-btn wide" id="btn-hub-dl"><i>⬇️</i>PDF 저장<small>${modeLb}</small></button>
         <button type="button" class="hub-btn wide" id="btn-hub-link"><i>🔗</i>고객 링크 복사<small>${L==='en'?'English':'한국어'} · ${modeLb}</small></button>
       </div>
       <div class="hub-ok" id="hub-link-ok">✓ 링크가 복사되었습니다</div>
@@ -2741,6 +2744,12 @@ async function renderSendTab(){
   });
   document.getElementById('btn-print-view').addEventListener('click',()=>{
     if(typeof window.openPrintWithMode==='function')window.openPrintWithMode(currentSendMode);
+    else{const m=document.getElementById('print-mode-modal');if(m)m.style.display='flex';}
+  });
+  // 간결(잉크 절약) 인쇄 — 위에서 고른 「무엇을」 그대로 흑백 간결본으로 인쇄
+  document.getElementById('btn-print-lite').addEventListener('click',()=>{
+    const liteMode=LITE_OF[currentSendMode]||'lite';
+    if(typeof window.openPrintWithMode==='function')window.openPrintWithMode(liteMode);
     else{const m=document.getElementById('print-mode-modal');if(m)m.style.display='flex';}
   });
 }
@@ -3848,14 +3857,19 @@ async function openPrintWithMode(mode){
   if(!c&&allContracts.length>0)c=allContracts[0];
   if(!c)c=getFormData();
   if(currentLang==='en'){try{await ensureContractEnglish(c);}catch(e){console.warn('영문 변환 실패:',e);}}
-  const isLite=(mode==='lite'||mode==='lite_usage');
-  const inner=mode==='lite'?buildContractLiteHTML(c,currentLang):(mode==='lite_usage'?buildUsageLiteHTML(c,currentLang):buildCustomerHTML(c,currentLang,mode));
+  // lite / lite_usage / lite_all = 간결(잉크 절약) 인쇄
+  const isLite=(mode==='lite'||mode==='lite_usage'||mode==='lite_all');
+  const inner=mode==='lite'?buildContractLiteHTML(c,currentLang)
+    :(mode==='lite_usage'?buildUsageLiteHTML(c,currentLang)
+    :(mode==='lite_all'
+      ?buildContractLiteHTML(c,currentLang)+'<div style="page-break-before:always;break-before:page;height:0"></div>'+buildUsageLiteHTML(c,currentLang)
+      :buildCustomerHTML(c,currentLang,mode)));
   const styleBody=isLite?LITE_CSS:NC_PRINT_CSS;
   const wrapClass=isLite?'lite':'nc';
   const pad=isLite?'padding:14px':'padding:12px';
   const w=window.open('','_blank','width=820,height=1000');
   // 계약서만/간결 인쇄 시 한 페이지에 맞추기: 렌더 높이를 측정해 A4 인쇄영역(여백 11mm) 높이에 맞게 zoom 축소
-  const fitJs = (mode==='contract'||isLite)
+  const fitJs = (mode==='contract'||mode==='lite'||mode==='lite_usage')
     ? 'var el=document.getElementById("pgroot");if(el){el.style.zoom="";var usable=(297-22)*96/25.4*0.96;var h=el.getBoundingClientRect().height;if(h>usable){el.style.zoom=String(usable/h);}}'
     : '';
   w.document.write('<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Happy Home Care</title>'
