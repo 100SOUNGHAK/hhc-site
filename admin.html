@@ -98,6 +98,13 @@ input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
 .avs-jump{width:100%;margin-top:10px;padding:11px;border:1.5px solid var(--lavender);border-radius:10px;background:var(--lavender-lt);color:var(--indigo);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .avs-back{margin-left:auto;border:1px solid var(--border);background:#fff;color:var(--text2);font-family:inherit;font-size:11px;font-weight:700;padding:5px 11px;border-radius:100px;cursor:pointer}
 .admin-grid:not(.view-usage) .avs-back{display:none}
+/* 일자별 이용내역 언어 전환 (기본 한국어) */
+.ul-bar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.ul-lang{display:inline-flex;border:1px solid var(--border);border-radius:100px;overflow:hidden;background:var(--white)}
+.ul-lang button{border:none;background:transparent;font-family:inherit;font-size:11px;font-weight:700;color:var(--text3);padding:5px 12px;cursor:pointer;line-height:1.5}
+.ul-lang button.on{background:var(--navy);color:#fff}
+.usage-card-desc-en{color:var(--text2)}
+.ul-noen{font-size:10.5px;color:var(--amber,#B4820A);font-weight:600;margin-top:2px}
 
 /* CARDS */
 .card{background:var(--white);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow)}
@@ -1210,8 +1217,12 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
         </div>
         </div>
 
-        <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
-          <button type="button" id="btn-translate-all-usage" style="font-size:11px;background:var(--violet);color:#fff;border:none;border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px">🤖 영문 미번역 항목 전체 번역</button>
+        <div class="ul-bar">
+          <div class="ul-lang" id="usage-lang-sw">
+            <button type="button" class="on" data-ulang="ko">한국어</button>
+            <button type="button" data-ulang="en">English</button>
+          </div>
+          <button type="button" id="btn-translate-all-usage" style="margin-left:auto;font-size:11px;background:var(--violet);color:#fff;border:none;border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px">🤖 영문 미번역 항목 전체 번역</button>
         </div>
         <div class="usage-list" id="usage-tbody"><div class="usage-empty">이용내역이 없습니다</div></div>
       </div>
@@ -1471,6 +1482,8 @@ let currentUsageHistory=[];
 let currentViewId=null;
 let currentLang='ko';
 let currentSendLang='ko';
+// 일자별 이용내역 표기 언어 — 기본값 한국어, 'English' 클릭 시에만 영문 표기
+let usageLang='ko';
 let currentContractType='residential';
 
 const fmt=n=>parseFloat(n||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -1772,6 +1785,9 @@ function loadFormData(r){
     cb.checked=v;cb.closest('.ben-item').classList.toggle('on',v);
   });
   currentUsageHistory=typeof r.usage_history==='string'?JSON.parse(r.usage_history||'[]'):(r.usage_history||[]);
+  // 계약을 새로 불러올 때는 기본값(한국어)으로 되돌린다
+  usageLang='ko';
+  document.querySelectorAll('#usage-lang-sw button').forEach(b=>b.classList.toggle('on',b.dataset.ulang==='ko'));
   updateTotal();renderUsage();
   if(typeof syncTierUIFromSelect==='function')syncTierUIFromSelect();
   if(typeof updateProgress==='function')updateProgress();
@@ -1830,30 +1846,57 @@ function updateBalance(){
 
 function renderUsage(){
   const tb=document.getElementById('usage-tbody');
-  if(!currentUsageHistory.length){tb.innerHTML='<div class="usage-empty">이용내역이 없습니다</div>';updateBalance();return;}
+  const isEn=usageLang==='en';
+  const UL=isEn
+    ? {empty:'No usage entries',use:'Used',carry:'Carryover',disc:'Discount',edit:'✏️ Edit',del:'✕ Delete',noen:'⚠ No English text yet — showing Korean'}
+    : {empty:'이용내역이 없습니다',use:'이용',carry:'이월',disc:'할인',edit:'✏️ 수정',del:'✕ 삭제',noen:''};
+  if(!currentUsageHistory.length){tb.innerHTML=`<div class="usage-empty">${UL.empty}</div>`;updateBalance();return;}
   tb.innerHTML=currentUsageHistory.map((u,i)=>{
     const net=(parseFloat(u.amount)||0)-(parseFloat(u.discount)||0);
-    const descEnHTML=u.desc_en?`<div class="usage-card-desc-en">${u.desc_en}</div>`:'';
+    // 기본값(한국어)은 desc, English 전환 시 desc_en — 둘을 동시에 보여주지 않는다
+    const hasEn=!!(u.desc_en&&String(u.desc_en).trim());
+    const descTxt=isEn?(hasEn?u.desc_en:(u.desc||'')):(u.desc||'');
+    const noEnHTML=(isEn&&!hasEn&&(u.desc||'').trim())?`<div class="ul-noen">${UL.noen}</div>`:'';
     return `<div class="usage-card">
       <div class="usage-card-top">
         <span class="usage-card-date">${u.date}</span>
         <span class="usage-card-net">RM ${fmt(net)}</span>
       </div>
-      <div class="usage-card-desc">${u.desc||''}</div>
-      ${descEnHTML}
+      <div class="usage-card-desc">${descTxt}</div>
+      ${noEnHTML}
       <div class="usage-card-meta">
-        <span>이용 RM ${fmt(u.amount)}</span>
-        <span>이월 RM ${fmt(u.carryover)}</span>
-        <span>할인 RM ${fmt(u.discount)}</span>
+        <span>${UL.use} RM ${fmt(u.amount)}</span>
+        <span>${UL.carry} RM ${fmt(u.carryover)}</span>
+        <span>${UL.disc} RM ${fmt(u.discount)}</span>
       </div>
       <div class="usage-card-actions">
-        <button class="btn-edit-usage" data-ei="${i}" style="background:var(--indigo);color:#fff;border:none;border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer">✏️ 수정</button>
-        <button class="btn-del" data-di="${i}">✕ 삭제</button>
+        <button class="btn-edit-usage" data-ei="${i}" style="background:var(--indigo);color:#fff;border:none;border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer">${UL.edit}</button>
+        <button class="btn-del" data-di="${i}">${UL.del}</button>
       </div>
     </div>`;
   }).join('');
   updateBalance();
 }
+
+// 일자별 이용내역 언어 전환 — 'English' 클릭 시 미번역 항목은 자동 번역 후 영문 표기
+async function setUsageLang(l){
+  usageLang=(l==='en')?'en':'ko';
+  document.querySelectorAll('#usage-lang-sw button').forEach(b=>b.classList.toggle('on',b.dataset.ulang===usageLang));
+  renderUsage();
+  if(usageLang==='en'){
+    const missing=currentUsageHistory.filter(u=>(u.desc||'').trim()&&!((u.desc_en||'').trim()));
+    if(missing.length){
+      try{
+        for(const u of missing){
+          const t=await gTranslateKoToEn(u.desc);
+          if(t)u.desc_en=t;
+        }
+        renderUsage();
+      }catch(e){console.warn('이용내역 영문 변환 실패:',e);}
+    }
+  }
+}
+window.setUsageLang=setUsageLang;
 
 // ── 이용내역 수정 모달 ──
 function showUsageEditModal(idx){
@@ -2199,6 +2242,53 @@ function ncBalance(c){
   const carry=h.reduce((s,u)=>s+(parseFloat(u.carryover)||0),0);
   return {paid,bonus,spec,total,used,disc,carry,remain:total-used+disc+carry,history:h};
 }
+// ── 공용 한→영 번역 헬퍼 (모듈 최상단 — 어느 스코프에서도 호출 가능) ──
+async function gTranslateKoToEn(text){
+  const url=`https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q=${encodeURIComponent(text)}`;
+  const res=await fetch(url);
+  const data=await res.json();
+  return data[0]?.map(x=>x[0]).join('')||'';
+}
+
+// ── "계약서 보기" / "발송·공유" 상단의 한국어/English 버튼을 English로 전환할 때,
+//    특약사항·이용내역 중 아직 영문 번역이 안 된 내용을 자동으로 번역해서 채워준다.
+//    (저장된 계약이면 Firestore에도 반영해서 다음부터는 다시 번역할 필요가 없도록 캐싱)
+async function ensureContractEnglish(c){
+  if(!c)return false;
+  let changed=false;
+  const jobs=[];
+  if((c.special_terms||'').trim() && !((c.special_terms_en||'').trim())){
+    jobs.push(gTranslateKoToEn(c.special_terms).then(t=>{if(t){c.special_terms_en=t;changed=true;}}).catch(()=>{}));
+  }
+  const hist=typeof c.usage_history==='string'?JSON.parse(c.usage_history||'[]'):(c.usage_history||[]);
+  const missing=hist.filter(u=>(u.desc||'').trim() && !((u.desc_en||'').trim()));
+  if(missing.length){
+    jobs.push((async()=>{
+      for(const u of missing){
+        try{const t=await gTranslateKoToEn(u.desc);if(t){u.desc_en=t;changed=true;}}catch(e){}
+      }
+    })());
+  }
+  if(!jobs.length)return false;
+  showLoading(true);
+  try{await Promise.all(jobs);}finally{showLoading(false);}
+  if(missing.length)c.usage_history=JSON.stringify(hist);
+  if(changed&&c.__id&&db){
+    try{
+      await updateDoc(doc(db,'contracts',c.__id),{special_terms_en:c.special_terms_en||'',usage_history:c.usage_history});
+    }catch(e){console.warn('영문 자동번역 저장 실패:',e);}
+    if(currentEditId===c.__id){
+      const fte=document.getElementById('f-terms-en');
+      if(fte&&c.special_terms_en)fte.value=c.special_terms_en;
+      currentUsageHistory=hist;
+      renderUsage();
+    }
+  }
+  return changed;
+}
+window.ensureContractEnglish=ensureContractEnglish;
+window.gTranslateKoToEn=gTranslateKoToEn;
+
 function buildCustomerHTML(c,L,mode){
   L=L||'ko';mode=mode||'all';
   const T=NC_TXT[L]||NC_TXT.ko, isEn=L==='en';
@@ -2286,7 +2376,7 @@ async function renderCustomerView(){
   if(!c&&currentEditId)c=allContracts.find(x=>x.__id===currentEditId);
   if(!c&&allContracts.length>0)c=allContracts[0];
   if(!c)c=getFormData();
-  if(currentLang==='en')await ensureContractEnglish(c);
+  if(currentLang==='en'){try{await ensureContractEnglish(c);}catch(e){console.warn('영문 변환 실패:',e);}}
 
   const pkg=PACKAGES.find(p=>p.id===c.package_id);
   const paid=parseFloat(c.amount_paid)||0,bonus=parseFloat(c.bonus_credit)||0,spec=parseFloat(c.special_bonus_credit)||0;
@@ -2329,7 +2419,7 @@ async function renderSendTab(){
     return;
   }
 
-  if(L==='en')await ensureContractEnglish(c);
+  if(L==='en'){try{await ensureContractEnglish(c);}catch(e){console.warn('영문 변환 실패:',e);}}
 
   empty.style.display='none';
   content.style.display='block';
@@ -2595,6 +2685,7 @@ document.querySelectorAll('[data-lang]').forEach(b=>b.addEventListener('click',(
   document.querySelectorAll('[data-lang]').forEach(x=>x.classList.toggle('active',x.dataset.lang===currentLang));
   renderCustomerView();
 }));
+document.querySelectorAll('#usage-lang-sw button').forEach(b=>b.addEventListener('click',()=>setUsageLang(b.dataset.ulang)));
 document.querySelectorAll('[data-slang]').forEach(b=>b.addEventListener('click',()=>{
   currentSendLang=b.dataset.slang;
   document.querySelectorAll('[data-slang]').forEach(x=>x.classList.toggle('active',x.dataset.slang===currentSendLang));
@@ -2883,50 +2974,9 @@ document.getElementById('btn-gen-desc').addEventListener('click',()=>{
 // 초기 렌더링
 cpRenderPicked();
 
-// ── 공용 한→영 번역 헬퍼 ──
-async function gTranslateKoToEn(text){
-  const url=`https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q=${encodeURIComponent(text)}`;
-  const res=await fetch(url);
-  const data=await res.json();
-  return data[0]?.map(x=>x[0]).join('')||'';
-}
-
-// ── "계약서 보기" / "발송·공유" 상단의 한국어/English 버튼을 English로 전환할 때,
-//    특약사항·이용내역 중 아직 영문 번역이 안 된 내용을 자동으로 번역해서 채워준다.
-//    (저장된 계약이면 Firestore에도 반영해서 다음부터는 다시 번역할 필요가 없도록 캐싱)
-async function ensureContractEnglish(c){
-  if(!c)return false;
-  let changed=false;
-  const jobs=[];
-  if((c.special_terms||'').trim() && !((c.special_terms_en||'').trim())){
-    jobs.push(gTranslateKoToEn(c.special_terms).then(t=>{if(t){c.special_terms_en=t;changed=true;}}).catch(()=>{}));
-  }
-  const hist=typeof c.usage_history==='string'?JSON.parse(c.usage_history||'[]'):(c.usage_history||[]);
-  const missing=hist.filter(u=>(u.desc||'').trim() && !((u.desc_en||'').trim()));
-  if(missing.length){
-    jobs.push((async()=>{
-      for(const u of missing){
-        try{const t=await gTranslateKoToEn(u.desc);if(t){u.desc_en=t;changed=true;}}catch(e){}
-      }
-    })());
-  }
-  if(!jobs.length)return false;
-  showLoading(true);
-  try{await Promise.all(jobs);}finally{showLoading(false);}
-  if(missing.length)c.usage_history=JSON.stringify(hist);
-  if(changed&&c.__id&&db){
-    try{
-      await updateDoc(doc(db,'contracts',c.__id),{special_terms_en:c.special_terms_en||'',usage_history:c.usage_history});
-    }catch(e){console.warn('영문 자동번역 저장 실패:',e);}
-    if(currentEditId===c.__id){
-      const fte=document.getElementById('f-terms-en');
-      if(fte&&c.special_terms_en)fte.value=c.special_terms_en;
-      currentUsageHistory=hist;
-      renderUsage();
-    }
-  }
-  return changed;
-}
+// (gTranslateKoToEn / ensureContractEnglish 는 모듈 최상단으로 이동했다 —
+//  DOMContentLoaded 블록 안에 있으면 renderCustomerView 등 최상단 함수에서
+//  ReferenceError 가 발생해 영어 전환이 동작하지 않았다)
 
 // ── 번역 버튼 ──
 document.getElementById('btn-translate').addEventListener('click',async()=>{
@@ -3178,7 +3228,7 @@ window.generateContractPDF=async function generateContractPDF(shareType){
     // 먼저 계약서 뷰 탭으로 이동하여 계약서 렌더링
     const c=allContracts.find(x=>x.__id===contractId);
     if(!c){alert('계약서 데이터를 찾을 수 없습니다. 고객을 다시 선택해주세요.');document.body.removeChild(loadDiv);return;}
-    if(currentSendLang==='en')await ensureContractEnglish(c);
+    if(currentSendLang==='en'){try{await ensureContractEnglish(c);}catch(e){console.warn('영문 변환 실패:',e);}}
 
     // 현재 발송 모드(mode)에 맞춰 캡처 — 이용내역만/계약서만/전체
     const container=document.createElement('div');
@@ -3567,7 +3617,7 @@ async function openPrintWithMode(mode){
   if(!c&&currentEditId)c=allContracts.find(x=>x.__id===currentEditId);
   if(!c&&allContracts.length>0)c=allContracts[0];
   if(!c)c=getFormData();
-  if(currentLang==='en')await ensureContractEnglish(c);
+  if(currentLang==='en'){try{await ensureContractEnglish(c);}catch(e){console.warn('영문 변환 실패:',e);}}
   const isLite=(mode==='lite'||mode==='lite_usage');
   const inner=mode==='lite'?buildContractLiteHTML(c,currentLang):(mode==='lite_usage'?buildUsageLiteHTML(c,currentLang):buildCustomerHTML(c,currentLang,mode));
   const styleBody=isLite?LITE_CSS:NC_PRINT_CSS;
