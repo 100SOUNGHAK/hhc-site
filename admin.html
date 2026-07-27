@@ -1654,10 +1654,37 @@ function invSlim(x){
     cname:String((x.customer&&x.customer.name)||'').trim(),
     items:Array.isArray(x.items)?x.items.slice(0,6).map(it=>({name:it.name||'',qty:it.qty||1})):[]};
 }
-function invBase(){
-  if(location.protocol==='file:')return 'https://hhc-3p8.pages.dev/hhcinvoice.html';
-  return location.origin+location.pathname.replace(/[^/]*$/,'')+'hhcinvoice.html';
+// 인보이스 앱 파일명 — 배포본은 hhc-invoice.html, 작업본은 hhcinvoice.html 로 이름이 다르다.
+// 없는 이름으로 열면 서버가 홈페이지를 대신 보여주므로, 실제 존재하는 쪽을 한 번 확인해 기억해 둔다.
+const INV_APP_KEY='hhc_adm_invoice_app';
+const INV_APP_CANDIDATES=['hhc-invoice.html','hhcinvoice.html'];
+let INV_APP=INV_APP_CANDIDATES[0];
+try{const _sa=localStorage.getItem(INV_APP_KEY);if(_sa&&INV_APP_CANDIDATES.indexOf(_sa)>=0)INV_APP=_sa;}catch(e){}
+
+function invDir(){
+  if(location.protocol==='file:')return 'https://hhc-3p8.pages.dev/';
+  return location.origin+location.pathname.replace(/[^/]*$/,'');
 }
+function invBase(){return invDir()+INV_APP;}
+
+async function invResolveApp(){
+  if(location.protocol==='file:')return;
+  for(const cand of INV_APP_CANDIDATES){
+    try{
+      const res=await fetch(invDir()+cand,{headers:{'Range':'bytes=0-4095'},cache:'no-store'});
+      if(!res.ok&&res.status!==206)continue;
+      const txt=await res.text();
+      if(txt.indexOf('<title>HHC Invoice</title>')<0)continue; // 홈페이지가 대신 응답한 경우 걸러낸다
+      const changed=(INV_APP!==cand);
+      INV_APP=cand;
+      try{localStorage.setItem(INV_APP_KEY,cand);}catch(e){}
+      if(changed&&document.getElementById('usage-tbody')&&currentUsageHistory.length)renderUsage();
+      return;
+    }catch(e){}
+  }
+  console.warn('인보이스 앱 파일을 찾지 못했습니다. 기본값 사용:',INV_APP);
+}
+setTimeout(invResolveApp,0);
 function invViewUrl(id,lang){
   return invBase()+'?view='+encodeURIComponent(id)+'&lang='+((lang==='en')?'en':'ko');
 }
