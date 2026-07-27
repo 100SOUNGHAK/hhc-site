@@ -1640,7 +1640,8 @@ const CONTRACT_MSG_TXT={
 //    계약 정보를 적어 두면 인보이스를 한 번만 수정해도 지워지기 때문.
 //  · usage_history[i] 에 추가되는 필드 (없으면 기존과 100% 동일하게 동작)
 //      inv_id    : 인보이스 번호 — 열람 주소를 만드는 열쇠
-//      inv_total : 표시용 금액 사본
+//      inv_total : 표시용 금액 사본(총액)
+//      inv_sub   : 표시·대조용 소계 사본
 //      inv_link  : 'auto' | 'manual'
 // ═══════════════════════════════════════════════════════════════
 const INV_CACHE_KEY='hhc_adm_invoices_cache';
@@ -1648,11 +1649,51 @@ let allInvoices=[];
 try{const _ic=localStorage.getItem(INV_CACHE_KEY);if(_ic)allInvoices=JSON.parse(_ic)||[];}catch(e){allInvoices=[];}
 
 // 인보이스 문서에서 연동에 필요한 부분만 추려 캐시 (원본 문서는 건드리지 않음)
+// 인보이스 「소계」 — 항목 합계(단가x수량 - 항목별 할인). 인보이스 앱이 저장해 둔 _t.sub 가 있으면 그대로 쓴다.
+// 세금/할인/주차비/적립금 차감 전 금액이라, 계약서 이용내역 금액과 맞춰 보기에 적합하다.
+function invSubOf(x){
+  if(!x)return null;
+  const t=x._t;
+  if(t&&typeof t.sub==='number'&&isFinite(t.sub))return t.sub;
+  const items=Array.isArray(x.items)?x.items:[];
+  if(!items.length)return null;
+  let s=0;
+  for(const l of items){
+    const line=(parseFloat(l.price)||0)*(parseFloat(l.qty)||1);
+    const d=(l.discType==='pct')?line*((parseFloat(l.discVal)||0)/100)
+                                :(parseFloat(l.discVal)||parseFloat(l.disc)||0);
+    s+=line-d;
+  }
+  return s;
+}
 function invSlim(x){
+  const sub=invSubOf(x);
   return {_docId:x._docId||'',id:x.id||'',date:String(x.date||'').slice(0,10),
-    status:x.status||'',total:x.total||0,
+    status:x.status||'',total:x.total||0,sub:(sub===null?null:sub),
     cname:String((x.customer&&x.customer.name)||'').trim(),
     items:Array.isArray(x.items)?x.items.slice(0,6).map(it=>({name:it.name||'',qty:it.qty||1})):[]};
+}
+// 캐시(sub 없음)나 소계 계산이 불가능한 문서는 총액으로 대신한다
+function invCmpAmt(inv){
+  if(!inv)return 0;
+  const s=(inv.sub!==undefined&&inv.sub!==null)?parseFloat(inv.sub):invSubOf(inv);
+  if(s!==null&&isFinite(s)&&s>0)return s;
+  return parseFloat(inv.total)||0;
+}
+// 이용내역 쪽 비교 금액 — 할인 전(gross)과 할인 후(net) 둘 다 인정
+function invUseAmts(u){
+  const gross=parseFloat(u&&u.amount)||0;
+  return {gross:gross,net:gross-(parseFloat(u&&u.discount)||0)};
+}
+// 2 = 정확히 일치, 1 = 2% 이내 근사, 0 = 불일치
+function invAmtMatch(inv,u){
+  const a=invCmpAmt(inv);
+  if(!(a>0))return 0;
+  const {gross,net}=invUseAmts(u);
+  if((net>0&&Math.abs(a-net)<0.01)||(gross>0&&Math.abs(a-gross)<0.01))return 2;
+  if(net>0&&Math.abs(a-net)<=Math.max(1,net*0.02))return 1;
+  if(gross>0&&Math.abs(a-gross)<=Math.max(1,gross*0.02))return 1;
+  return 0;
 }
 // 인보이스 앱 파일명 — 배포본은 hhc-invoice.html, 작업본은 hhcinvoice.html 로 이름이 다르다.
 // 없는 이름으로 열면 서버가 홈페이지를 대신 보여주므로, 실제 존재하는 쪽을 한 번 확인해 기억해 둔다.
@@ -1690,6 +1731,10 @@ function invViewUrl(id,lang){
 }
 window.invViewUrl=invViewUrl;
 function invName(x){return String((x&&(x.cname!==undefined?x.cname:(x.customer&&x.customer.name)))||'').trim();}
+// 고객명 비교용 키 — 「/」 뒤(영문 표기, 담당자명 등)는 무시하고 공백/대소문자도 맞춘다.
+// 예) '김철수 / Kim Chul Su' 와 '김철수' 를 같은 사람으로 본다.
+function invNameKey(s){return String(s||'').split('/')[0].replace(/\s+/g,' ').trim().toLowerCase();}
+function invNameSame(a,b){const x=invNameKey(a),y=invNameKey(b);return !!x&&!!y&&x===y;}
 function invFind(id){
   if(!id)return null;
   const s=String(id);
@@ -1705,16 +1750,13 @@ function invDayDiff(a,b){
 // 고객명이 다르면 -1(후보 제외). 90점 이상이 단 1건일 때만 자동 확정한다.
 function invScore(inv,u,custName){
   if(!inv)return -1;
-  const nm=invName(inv), cn=String(custName||'').trim();
-  if(!nm||!cn||nm!==cn)return -1;
+  if(!invNameSame(invName(inv),custName))return -1;
   let s=40;
   const dd=invDayDiff(inv.date,u.date);
   if(dd===null)return s;
   if(dd===0)s+=35;else if(dd<=2)s+=24;else if(dd<=7)s+=14;else if(dd<=30)s+=4;else return s;
-  const it=parseFloat(inv.total)||0;
-  const gross=parseFloat(u.amount)||0, net=gross-(parseFloat(u.discount)||0);
-  if(it>0&&(Math.abs(it-net)<0.01||Math.abs(it-gross)<0.01))s+=25;
-  else if(it>0&&net>0&&Math.abs(it-net)<=Math.max(1,net*0.02))s+=12;
+  const m=invAmtMatch(inv,u);   // 인보이스 「소계」 기준
+  if(m===2)s+=25;else if(m===1)s+=12;
   return s;
 }
 function invCandidates(u,custName){
@@ -2131,9 +2173,14 @@ function usageInvHTML(u,i,isEn){
   const inv=invFind(u.inv_id);
   const st=inv?invStatusTxt(inv,isEn):'';
   const cls=inv?invStatusCls(inv):'';
-  const amt=inv?fmt(inv.total):(u.inv_total?fmt(u.inv_total):'');
+  // 이용내역 금액과 짝이 맞는 「소계」를 보여준다 (총액은 마우스를 올리면 나온다)
+  const subN=inv?invCmpAmt(inv):(parseFloat(u.inv_sub||u.inv_total)||0);
+  const totN=inv?(parseFloat(inv.total)||0):(parseFloat(u.inv_total)||0);
+  const amt=subN>0?fmt(subN):'';
+  const tip=(totN>0&&Math.abs(totN-subN)>=0.01)
+    ?' title="'+(isEn?'Subtotal':'소계')+' RM '+fmt(subN)+' &#183; '+(isEn?'Total':'총액')+' RM '+fmt(totN)+'"':'';
   return '<div class="inv-row">'+
-    '<span class="inv-chip '+cls+'">&#129534; <span class="num">'+ncEsc(u.inv_id)+'</span>'+
+    '<span class="inv-chip '+cls+'"'+tip+'>&#129534; <span class="num">'+ncEsc(u.inv_id)+'</span>'+
       (st?' · '+st:' · <i>'+L.miss+'</i>')+(amt?' · RM '+amt:'')+'</span>'+
     (u.inv_link==='auto'?'<span class="inv-auto">'+L.auto+'</span>':'')+
     '<button type="button" class="inv-link" data-inv-open="'+i+'">'+L.open+'</button>'+
@@ -2161,6 +2208,7 @@ function showInvLinkModal(idx){
       '</div>'+
       '<div style="font-size:11.5px;color:var(--text3);margin-bottom:10px;line-height:1.7">서비스 내역 · <b style="color:var(--text2)">'+ncEsc(u.date||'—')+'</b> · '+
         ncEsc(ncStripCode(u.desc||'')||'—')+' · <b style="color:var(--text2)">RM '+fmt(net)+'</b>'+
+        ' <span style="color:var(--text3)">(인보이스 <b>소계</b>와 비교)</span>'+
         (cust?' · 고객 <b style="color:var(--text2)">'+ncEsc(cust)+'</b>':' · <b style="color:#B8860B">계약자명이 비어 있어 자동 추천을 할 수 없습니다</b>')+'</div>'+
       '<input id="ivl-q" type="text" class="field-input sm" placeholder="&#128269; 인보이스 번호 또는 고객명으로 검색" style="margin-bottom:10px">'+
       '<div id="ivl-list" style="overflow-y:auto;flex:1;min-height:130px"></div>'+
@@ -2188,22 +2236,26 @@ function showInvLinkModal(idx){
     }
     listEl.innerHTML=rows.map(r=>{
       const x=r.inv, dd=invDayDiff(x.date,u.date);
-      const it=parseFloat(x.total)||0;
-      const amtOk=it>0&&(Math.abs(it-net)<0.01||Math.abs(it-gross)<0.01);
-      const nmOk=!!cust&&invName(x)===cust;
+      const it=parseFloat(x.total)||0;        // 총액(청구금액)
+      const sub=invCmpAmt(x);                 // 소계 — 비교 기준
+      const am=invAmtMatch(x,u);
+      const nmOk=invNameSame(invName(x),cust);
       const pills=[];
       if(r.score>=0)pills.push('<span class="ivl-pill sc'+(r.score>=90?' hi':'')+'">추천 '+r.score+'점</span>');
       if(dd===0)pills.push('<span class="ivl-pill ok">날짜 일치</span>');
       else if(dd!==null)pills.push('<span class="ivl-pill warn">'+dd+'일 차이</span>');
-      pills.push(amtOk?'<span class="ivl-pill ok">금액 일치</span>':'<span class="ivl-pill warn">금액 불일치</span>');
+      pills.push(am===2?'<span class="ivl-pill ok">소계 일치</span>'
+                :am===1?'<span class="ivl-pill warn">소계 근사</span>'
+                       :'<span class="ivl-pill warn">소계 불일치</span>');
       pills.push(nmOk?'<span class="ivl-pill ok">고객명 일치</span>':'<span class="ivl-pill warn">고객명 다름</span>');
       const st=invStatusTxt(x,false);
       if(st)pills.push('<span class="ivl-pill">'+st+'</span>');
       const items=(x.items||[]).map(o=>ncEsc(o.name||'')+((o.qty&&o.qty!=1)?' x'+o.qty:'')).filter(Boolean).join(' · ');
       return '<div class="ivl-cand'+(r.score>=90?' best':'')+'" data-pick-id="'+ncEsc(x.id||x._docId||'')+'">'+
-        '<div class="ivl-t"><span class="ivl-id">'+ncEsc(x.id||'(번호 없음)')+'</span><span class="ivl-amt">RM '+fmt(it)+'</span></div>'+
+        '<div class="ivl-t"><span class="ivl-id">'+ncEsc(x.id||'(번호 없음)')+'</span><span class="ivl-amt">소계 RM '+fmt(sub)+'</span></div>'+
         '<div class="ivl-m">'+pills.join('')+'</div>'+
-        '<div class="ivl-d">'+ncEsc(invName(x)||'—')+' · '+ncEsc(x.date||'—')+(items?' · '+items:'')+'</div>'+
+        '<div class="ivl-d">'+ncEsc(invName(x)||'—')+' · '+ncEsc(x.date||'—')+
+          ((it>0&&Math.abs(it-sub)>=0.01)?' · 총액 RM '+fmt(it):'')+(items?' · '+items:'')+'</div>'+
       '</div>';
     }).join('');
   }
@@ -2217,6 +2269,7 @@ function showInvLinkModal(idx){
     const inv=invFind(id);
     currentUsageHistory[idx].inv_id=id;
     currentUsageHistory[idx].inv_total=inv?String(inv.total||''):'';
+    currentUsageHistory[idx].inv_sub=inv?String(invCmpAmt(inv)||''):'';
     currentUsageHistory[idx].inv_link='manual';
     modal.remove();
     renderUsage();
@@ -3603,7 +3656,7 @@ document.getElementById('usage-tbody').addEventListener('click',e=>{
   const ic=e.target.closest('[data-inv-clear]');
   if(ic){
     const u=currentUsageHistory[parseInt(ic.dataset.invClear)];
-    if(u){delete u.inv_id;delete u.inv_total;delete u.inv_link;renderUsage();persistUsage();}
+    if(u){delete u.inv_id;delete u.inv_total;delete u.inv_sub;delete u.inv_link;renderUsage();persistUsage();}
     return;
   }
   const b=e.target.closest('[data-di]');
@@ -3626,6 +3679,7 @@ document.getElementById('btn-inv-autolink').addEventListener('click',async()=>{
     if(top.length===1){
       u.inv_id=top[0].inv.id||top[0].inv._docId||'';
       u.inv_total=String(top[0].inv.total||'');
+      u.inv_sub=String(invCmpAmt(top[0].inv)||'');
       u.inv_link='auto';
       done++;
     }else if(cs.length){amb++;}
