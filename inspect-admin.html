@@ -408,8 +408,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
         <div class="dup-box" id="dup-box"></div>
       </div>
       <div><div class="fl">점검일</div><input id="f-date" type="date"></div>
-      <div><div class="fl">주소 / 점검 장소</div><input id="f-addr" type="text" placeholder="서울 강남구 테헤란로"></div>
-      <div><div class="fl">점검 대수</div><input id="f-units" type="text" placeholder="4 대"></div>
+      <div style="grid-column:1/-1"><div class="fl">주소 / 점검 장소</div><input id="f-addr" type="text" placeholder="서울 강남구 테헤란로"></div>
     </div>
   </div>
 </div>
@@ -456,6 +455,9 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   </div>
   <div class="card-body" id="result-rows-wrap">
     <button class="btn-pick" type="button" onclick="openItemPicker()">🔧 점검 항목 빠른 선택</button>
+    <div id="res-empty" style="display:none;padding:18px 12px;text-align:center;font-size:12px;line-height:1.7;color:#8a8a9a;background:#f8f9fc;border:1px dashed #dde1ee;border-radius:8px;margin-bottom:8px">
+      담긴 점검 항목이 없습니다.<br>위 <b>🔧 점검 항목 빠른 선택</b>에서 필요한 항목만 <b>＋ 담기</b> 하세요.
+    </div>
     <div id="result-rows"></div>
     <button class="btn-add" onclick="addResultRow()">+ 항목 추가</button>
   </div>
@@ -1272,6 +1274,8 @@ function updateStats(){
   sv('stat-total',total);sv('stat-ok',ok);sv('stat-warn',warn);sv('stat-bad',bad);
   var rs=gid('res-stats');
   if(rs)rs.innerHTML='총 '+total+' · <b style="color:#6ee7b7">양호 '+ok+'</b> · <b style="color:'+(warn?'#fcd34d':'#c9d4ee')+'">주의 '+warn+'</b> · <b style="color:'+(bad?'#fca5a5':'#c9d4ee')+'">정비필요 '+bad+'</b>';
+  var emp=gid('res-empty');
+  if(emp)emp.style.display=rows.length?'none':'block';
   renderResultCatChips();
 }
 
@@ -1353,19 +1357,6 @@ function ipAll(){
   Object.keys(cu).forEach(function(c){ if(!ITEM_CATALOG[c])cu[c].forEach(function(n){out.push({cat:c,name:n});}); });
   return out;
 }
-
-// 카탈로그 전체를 기본으로 담는다 (미담긴 항목만 추가)
-function ipSeedAll(){
-  var all=[];
-  try{all=ipAll();}catch(e){all=[];}
-  if(!all.length){
-    try{all=DEFAULT_RESULTS.map(function(d){return {cat:d.cat,name:d.name};});}catch(e){all=[];}
-  }
-  var added=0;
-  all.forEach(function(it){ if(!ipFind(it.name)){addResultRow(it.cat,it.name,'ok','','');added++;} });
-  return added;
-}
-window.ipSeedAll=ipSeedAll;
 
 function openItemPicker(){
   ipCat='전체';ipQ='';
@@ -4191,8 +4182,8 @@ window.initEnhancements=initEnhancements;
 
 window.onload=function(){
   gid('f-date').value=new Date().toISOString().split('T')[0];
-  ipSeedAll();
   sortResultRows(true); // 기본적으로 구분별 정렬된 상태로 표시
+  updateStats();
   initEnhancements();
 };
 </script>
@@ -4313,7 +4304,8 @@ function collectData(){
 
   return {
     type:reportType==='dispatch'?'dispatch':'inspect',
-    client:gv('f-client'),date:gv('f-date'),addr:gv('f-addr'),units:gv('f-units'),
+    client:gv('f-client'),date:gv('f-date'),addr:gv('f-addr'),
+    units:equipments.length?(equipments.length+' 대'):'',
     eval:evalVal,opinion:gv('f-opinion'),
     statTotal:gv('stat-total'),statOk:gv('stat-ok'),statWarn:gv('stat-warn'),statBad:gv('stat-bad'),
     equipments:equipments,results:results,coolUnits:coolUnits,measurements:measurements,
@@ -4577,7 +4569,7 @@ window.loadIntoForm=function(data){
   evalVal='';
   var gv2=function(id,val){var el=document.getElementById(id);if(el)el.value=val||'';};
   gv2('f-client',data.client);gv2('f-date',data.date);gv2('f-addr',data.addr);
-  gv2('f-units',data.units);gv2('f-opinion',data.opinion);
+  gv2('f-opinion',data.opinion);
   // 출동 정보
   gv2('d-datetime',data.dispatchDatetime);gv2('d-tech',data.dispatchTech);gv2('d-reason',data.dispatchReason);
   gv2('d-work',data.dispatchWork);gv2('d-revisit-date',data.dispatchRevisitDate);
@@ -4590,7 +4582,6 @@ window.loadIntoForm=function(data){
   // 결과
   document.getElementById('result-rows').innerHTML='';
   if((data.results||[]).length){data.results.forEach(function(r){addResultRow(r.cat,r.name,r.status,r.risk,r.note);});}
-  else{ipSeedAll();}
   sortResultRows(true); // 기본적으로 구분별 정렬된 상태로 표시
   // 냉방검사
   coolCount=0;document.getElementById('cool-units').innerHTML='';
