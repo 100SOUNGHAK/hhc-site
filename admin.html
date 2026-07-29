@@ -1319,6 +1319,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
             <!-- 소계/차감 요약 -->
             <div class="csum">
               <div class="csum-row"><span>품목 소계 (이용금액)</span><b id="cs-items">RM 0.00</b></div>
+              <div class="csum-row" id="cs-mem-row" style="display:none"><span>👑 회원제상품 <span style="font-size:9.5px;color:var(--text3);font-weight:400">표시 전용 · 잔액 미차감</span></span><b id="cs-mem" style="color:var(--indigo)"></b></div>
               <div class="csum-row disc" id="cs-disc-row" style="display:none"><span>할인 (특별할인·프로모션)</span><b id="cs-disc"></b></div>
               <div class="csum-row disc" id="cs-carry-row" style="display:none"><span>이월금액</span><b id="cs-carry"></b></div>
               <div class="csum-row net"><span>실차감액 (총사용가능액에서 차감)</span><b id="cs-net">RM 0.00</b></div>
@@ -2308,6 +2309,7 @@ function renderUsage(){
         <span>${UL.carry} RM ${fmt(u.carryover)}</span>
         <span>${UL.disc} RM ${fmt(u.discount)}</span>
       </div>
+      ${(parseFloat(u.member_amount)||0)>0?`<div style="margin-top:5px;font-size:10.5px;font-weight:700;color:var(--indigo);background:var(--lavender-lt);border:1px solid var(--lavender);border-radius:6px;padding:4px 8px;display:inline-block">👑 ${isEn?'Package (membership)':'회원제상품'} RM ${fmt(u.member_amount)} · ${isEn?'not deducted from balance':'잔액 미차감'}</div>`:''}
       ${usageInvHTML(u,i,isEn)}
       <div class="usage-card-actions">
         <button class="btn-edit-usage" data-ei="${i}" style="background:var(--indigo);color:#fff;border:none;border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer">${UL.edit}</button>
@@ -3324,7 +3326,12 @@ let uAmtManual=false,uDescManual=false,uDescEnManual=false,cpHadDisc=false,cpHad
 
 function cpFmt(n){return 'RM '+(Math.round(n*100)/100).toFixed(2);}
 function cpOf(id){return cPicked.find(p=>p.kind==='svc'&&p.svcId===id);}
-function cpItemsGross(){return cPicked.reduce((t,p)=>p.kind==='adj'?t:t+(parseFloat(p.qty)||1)*(parseFloat(p.price)||0),0);}
+// 회원제상품(가정용/매장용) 여부 — 패키지 회원 금액은 이용내역에 표시만 하고 잔액 계산에서는 제외
+function isMemberSvc(s){return /^회원제상품/.test(String((s&&s.cat)||''))||/^회원제상품/.test(String((s&&s.subcat)||''));}
+// 품목 소계 = 회원제상품 제외 (이용금액·실차감액·잔액 계산 기준)
+function cpItemsGross(){return cPicked.reduce((t,p)=>(p.kind==='adj'||p.isMember)?t:t+(parseFloat(p.qty)||1)*(parseFloat(p.price)||0),0);}
+// 회원제상품 합계 — 표시 전용
+function cpMemberSum(){return cPicked.reduce((t,p)=>(p.kind!=='adj'&&p.isMember)?t+(parseFloat(p.qty)||1)*(parseFloat(p.price)||0):t,0);}
 function cpDiscSum(){return cPicked.reduce((t,p)=>p.kind==='adj'&&!p.isCarry?t+(parseFloat(p.amount)||0):t,0);}
 function cpCarrySum(){return cPicked.reduce((t,p)=>p.kind==='adj'&&p.isCarry?t+(parseFloat(p.amount)||0):t,0);}
 // 이용내역 문구 생성 — lang:'ko'(기본) | 'en'
@@ -3333,7 +3340,13 @@ function cpDescText(lang){
   const items=cPicked.filter(p=>p.kind!=='adj').map(p=>{
     const nm=isEn?(p.nameEn||p.nameKo||p.name||''):(p.nameKo||p.name||'');
     const q=p.qty||1;
-    return isEn?`${nm} ${q} ${unitEn(p.unit)}`:`${nm} ${q}${p.unit||'대'}`;
+    const base=isEn?`${nm} ${q} ${unitEn(p.unit)}`:`${nm} ${q}${p.unit||'대'}`;
+    if(p.isMember){
+      // 'RM1500' 형태는 인보이스 번호 제거 정규식에 걸려 지워지므로 'RM 1,500.00' 표기 사용
+      const amt=fmt((parseFloat(p.qty)||1)*(parseFloat(p.price)||0));
+      return base+(isEn?` (RM ${amt}, package — not deducted)`:` (RM ${amt} · 회원제상품, 잔액 미차감)`);
+    }
+    return base;
   });
   const adjs=cPicked.filter(p=>p.kind==='adj'&&(parseFloat(p.amount)||0)>0).map(p=>{
     const lb=isEn?adjLabelEn(p.label):p.label;
@@ -3463,7 +3476,7 @@ document.getElementById('cs-list').addEventListener('click',e=>{
     // 한글명(name_ko) 우선 → 없으면 용어집으로 한글 표기 생성 / 영문명은 원본 유지
     const nmEn=s.name_en||s.name||'';
     const nmKo=(s.name_ko&&String(s.name_ko).trim())?String(s.name_ko).trim():svcKoName(nmEn);
-    cPicked.push({kind:'svc',svcId:s.id,name:nmKo,nameKo:nmKo,nameEn:nmEn,subcat:s.subcat||'',sub2:s.sub2||'',unit:svcUnitKo(s),qty:1,price:parseFloat(s.price)||0});
+    cPicked.push({kind:'svc',svcId:s.id,name:nmKo,nameKo:nmKo,nameEn:nmEn,subcat:s.subcat||'',sub2:s.sub2||'',unit:svcUnitKo(s),qty:1,price:parseFloat(s.price)||0,cat:s.cat||'',isMember:isMemberSvc(s)});
     cpRefreshRow(id);cpRenderRail();cpRenderFoot();
   }
 });
@@ -3494,7 +3507,7 @@ function cpRenderPicked(){
       }
       const isOther=p.kind==='other';
       return `<div class="cpicked-card"><div class="cpc-top">
-        <div class="nm">${isOther?`<input type="text" value="${cpEsc(p.name)}" placeholder="품목명 직접 입력" data-oname="${i}">`:cpEsc(p.name)}<span>${isOther?'직접 입력':'⚡ 인보이스 연동 · '+cpEsc(p.subcat)+(p.sub2?' · '+cpEsc(p.sub2):'')}</span></div>
+        <div class="nm">${isOther?`<input type="text" value="${cpEsc(p.name)}" placeholder="품목명 직접 입력" data-oname="${i}">`:cpEsc(p.name)}<span>${isOther?'직접 입력':'⚡ 인보이스 연동 · '+cpEsc(p.subcat)+(p.sub2?' · '+cpEsc(p.sub2):'')+(p.isMember?' · <b style="color:var(--indigo)">👑 잔액 미차감</b>':'')}</span></div>
         <div class="amt" data-camt="${i}">${cpFmt((parseFloat(p.qty)||1)*(parseFloat(p.price)||0))}</div>
         <button type="button" class="cpc-del" data-del="${i}">✕</button>
       </div>
@@ -3512,10 +3525,12 @@ function cpRenderPicked(){
   cpSync();
 }
 function cpSync(){
-  const gross=cpItemsGross(),ds=cpDiscSum(),cs=cpCarrySum();
+  const gross=cpItemsGross(),ds=cpDiscSum(),cs=cpCarrySum(),mem=cpMemberSum();
   const hasDisc=cPicked.some(p=>p.kind==='adj'&&!p.isCarry);
   const hasCarry=cPicked.some(p=>p.kind==='adj'&&p.isCarry);
   document.getElementById('cs-items').textContent=cpFmt(gross);
+  const memRow=document.getElementById('cs-mem-row');
+  if(memRow){memRow.style.display=mem>0?'flex':'none';document.getElementById('cs-mem').textContent=cpFmt(mem);}
   document.getElementById('cs-disc-row').style.display=hasDisc?'flex':'none';
   document.getElementById('cs-disc').textContent='- '+cpFmt(ds);
   document.getElementById('cs-carry-row').style.display=hasCarry?'flex':'none';
@@ -3628,6 +3643,7 @@ document.getElementById('btn-add-usage').addEventListener('click',()=>{
   const carry=document.getElementById('u-carry').value;
   const disc=document.getElementById('u-disc').value;
   if(!desc&&!amt&&!carry&&!disc)return;
+  const memAmt=cpMemberSum();   // 회원제상품 합계 — 표시 전용, 잔액 계산 제외
   currentUsageHistory.push({
     id:Date.now(),
     date:document.getElementById('u-date').value,
@@ -3635,7 +3651,8 @@ document.getElementById('btn-add-usage').addEventListener('click',()=>{
     desc_en:descEn||'',
     amount:amt||'0',
     carryover:carry||'0',
-    discount:disc||'0'
+    discount:disc||'0',
+    member_amount:memAmt>0?memAmt.toFixed(2):'0'
   });
   ['u-desc','u-desc-en','u-amount','u-carry','u-disc'].forEach(id=>document.getElementById(id).value='');
   cPicked=[];uAmtManual=false;uDescManual=false;uDescEnManual=false;cpHadDisc=false;cpHadCarry=false;
