@@ -2291,7 +2291,9 @@ function renderUsage(){
     ? {empty:'No usage entries',use:'Used',carry:'Carryover',disc:'Discount',edit:'✏️ Edit',del:'✕ Delete',noen:'⚠ No English text yet — showing Korean'}
     : {empty:'이용내역이 없습니다',use:'이용',carry:'이월',disc:'할인',edit:'✏️ 수정',del:'✕ 삭제',noen:''};
   if(!currentUsageHistory.length){tb.innerHTML=`<div class="usage-empty">${UL.empty}</div>`;updateBalance();return;}
-  tb.innerHTML=currentUsageHistory.map((u,i)=>{
+  tb.innerHTML=currentUsageHistory.map((u,i)=>({u:u,i:i}))
+    .sort((a,b)=>(isMemberEntry(a.u)?1:0)-(isMemberEntry(b.u)?1:0))   // 회원제상품 항목은 일자와 무관하게 항상 최하단
+    .map(({u,i})=>{
     const net=(parseFloat(u.amount)||0)-(parseFloat(u.discount)||0);
     // 기본값(한국어)은 desc, English 전환 시 desc_en — 둘을 동시에 보여주지 않는다
     const hasEn=!!(u.desc_en&&String(u.desc_en).trim());
@@ -2686,14 +2688,37 @@ function ncEsc(s){return String(s==null?'':s).replace(/[&<>]/g,m=>({'&':'&amp;',
 /* ── 표시 전용: 상품 일련번호(HHC1003 등) 숨김 + 이용내역 항목 분해 ──
    저장된 desc 값은 그대로 두고 화면에 그릴 때만 코드 토큰을 제거한다. */
 const NC_RE_CODE=/\b[A-Z]{2,5}[-_]?\d{3,6}\b[\s:·\-–]*/g;
+// 회원제상품 코드 표기 제거 — 'HHCMP01[MEMBERSHIP]' / '[MEMBERSHIP]' / 'HHCMP01' → 상품명만 남긴다
+const NC_RE_MEMCODE=/(?:\b[A-Z]{2,12}[-_]?\d{0,6}\s*)?\[\s*MEMBERSHIP\s*\]\s*/gi;
+const NC_RE_MEMPFX=/\bHHCMP[A-Z0-9]*\b\s*/gi;
+// 회원제상품 내역의 수량 표기 제거 — '패키지 - 골드회원 1개 (…회원제상품…)' → '패키지 - 골드회원 (…)'
+const NC_RE_MEMQTY=/\s*\d+(?:\.\d+)?\s*(?:대|개|식|세트|장|pcs?|sets?|units?(?:\(s\))?)\s*(?=\([^()]*(?:회원제상품|package|MEMBERSHIP))/gi;
 const NC_RE_QTY=/[\s]([\d.]+)\s*(대|개|식|EA|unit\(s\)|units?|pcs?|sets?)\s*$/i;
 const NC_RE_ADJ=/([+\-−]\s*RM\s*[\d,]+(?:\.\d+)?)\s*$/i;
-function ncStripCode(s){return String(s==null?'':s).replace(NC_RE_CODE,'').trim();}
+function ncStripCode(s){return String(s==null?'':s).replace(NC_RE_MEMCODE,'').replace(NC_RE_MEMPFX,'').replace(NC_RE_MEMQTY,' ').replace(NC_RE_CODE,'').replace(/\s{2,}/g,' ').trim();}
+// 회원제상품 이용내역 여부 — 목록 최하단 정렬 기준
+function isMemberEntry(u){
+  if((parseFloat(u&&u.member_amount)||0)>0)return true;
+  const d=String((u&&u.desc)||'')+' '+String((u&&u.desc_en)||'');
+  return /회원제상품|\[\s*MEMBERSHIP\s*\]|\bHHCMP/i.test(d);
+}
+// 괄호 밖 쉼표로만 분할 — '(RM 1,500.00 · 회원제상품, 잔액 미차감)' 같은 괄호 안 쉼표는 유지
+function ncSplitTop(raw){
+  const out=[];let buf='',depth=0;
+  for(const ch of String(raw)){
+    if(ch==='(')depth++;
+    else if(ch===')')depth=depth>0?depth-1:0;
+    if(ch===','&&depth===0){out.push(buf);buf='';continue;}
+    buf+=ch;
+  }
+  if(buf.trim())out.push(buf);
+  return out.map(x=>x.trim()).filter(Boolean);
+}
 function ncParseDesc(desc){
   const raw=String(desc==null?'':desc).trim();
   if(!raw)return{items:[],adjs:[],raw:''};
   const items=[],adjs=[];
-  raw.split(/\s*,\s*/).forEach(part=>{
+  ncSplitTop(raw).forEach(part=>{
     let t=ncStripCode(part);
     if(!t)return;
     const a=t.match(NC_RE_ADJ);
@@ -2935,6 +2960,7 @@ function buildCustomerHTML(c,L,mode){
       let run=b.total;
       const built=ordered.map(u=>{const amt=parseFloat(u.amount)||0,dsc=parseFloat(u.discount)||0,cry=parseFloat(u.carryover)||0;const net=amt-dsc;run=run-amt+dsc+cry;return {u,net,bal:run};});
       built.reverse();
+      built.sort((a,b)=>(isMemberEntry(a.u)?1:0)-(isMemberEntry(b.u)?1:0));   // 회원제상품 항목은 항상 최하단
       rows=built.map(r=>ncUsageRow(r.u,r.net,r.bal,isEn,T,fmt)).join('');
     }else{rows='<div class="tl-empty">'+T.usage_empty+'</div>';}
     html+='<div class="sec"><div class="sec-hdr"><div class="sec-num">'+(showContract?'✓':'📊')+'</div><div class="sec-title">'+T.usage_title+'</div></div>'+
@@ -3328,6 +3354,8 @@ function cpFmt(n){return 'RM '+(Math.round(n*100)/100).toFixed(2);}
 function cpOf(id){return cPicked.find(p=>p.kind==='svc'&&p.svcId===id);}
 // 회원제상품(가정용/매장용) 여부 — 패키지 회원 금액은 이용내역에 표시만 하고 잔액 계산에서는 제외
 function isMemberSvc(s){return /^회원제상품/.test(String((s&&s.cat)||''))||/^회원제상품/.test(String((s&&s.subcat)||''));}
+// 회원제상품 이름에서 'HHCMP01[MEMBERSHIP]' 같은 코드 표기를 지우고 상품명만 남긴다
+function stripMemberCode(x){return String(x||'').replace(/(?:\b[A-Z]{2,12}[-_]?\d{0,6}\s*)?\[\s*MEMBERSHIP\s*\]\s*/gi,'').replace(/\bHHCMP[A-Z0-9]*\b\s*/gi,'').replace(/\s{2,}/g,' ').trim();}
 // 품목 소계 = 회원제상품 제외 (이용금액·실차감액·잔액 계산 기준)
 function cpItemsGross(){return cPicked.reduce((t,p)=>(p.kind==='adj'||p.isMember)?t:t+(parseFloat(p.qty)||1)*(parseFloat(p.price)||0),0);}
 // 회원제상품 합계 — 표시 전용
@@ -3342,13 +3370,12 @@ function cpDescTextOf(list,lang){
   const items=list.filter(p=>p.kind!=='adj').map(p=>{
     const nm=isEn?(p.nameEn||p.nameKo||p.name||''):(p.nameKo||p.name||'');
     const q=p.qty||1;
-    const base=isEn?`${nm} ${q} ${unitEn(p.unit)}`:`${nm} ${q}${p.unit||'대'}`;
     if(p.isMember){
-      // 'RM1500' 형태는 인보이스 번호 제거 정규식에 걸려 지워지므로 'RM 1,500.00' 표기 사용
+      // 회원제상품: 코드 표기 제거 + 수량/단위 생략, 'RM 1,500.00' 표기(코드 제거 정규식 회피)
       const amt=fmt((parseFloat(p.qty)||1)*(parseFloat(p.price)||0));
-      return base+(isEn?` (RM ${amt}, package — not deducted)`:` (RM ${amt} · 회원제상품, 잔액 미차감)`);
+      return stripMemberCode(nm)+(isEn?` (RM ${amt}, package — not deducted)`:` (RM ${amt} · 회원제상품, 잔액 미차감)`);
     }
-    return base;
+    return isEn?`${nm} ${q} ${unitEn(p.unit)}`:`${nm} ${q}${p.unit||'대'}`;
   });
   const adjs=list.filter(p=>p.kind==='adj'&&(parseFloat(p.amount)||0)>0).map(p=>{
     const lb=isEn?adjLabelEn(p.label):p.label;
@@ -3478,7 +3505,9 @@ document.getElementById('cs-list').addEventListener('click',e=>{
     // 한글명(name_ko) 우선 → 없으면 용어집으로 한글 표기 생성 / 영문명은 원본 유지
     const nmEn=s.name_en||s.name||'';
     const nmKo=(s.name_ko&&String(s.name_ko).trim())?String(s.name_ko).trim():svcKoName(nmEn);
-    cPicked.push({kind:'svc',svcId:s.id,name:nmKo,nameKo:nmKo,nameEn:nmEn,subcat:s.subcat||'',sub2:s.sub2||'',unit:svcUnitKo(s),qty:1,price:parseFloat(s.price)||0,cat:s.cat||'',isMember:isMemberSvc(s)});
+    const _isMem=isMemberSvc(s);
+    const _ko=_isMem?stripMemberCode(nmKo):nmKo, _en=_isMem?stripMemberCode(nmEn):nmEn;
+    cPicked.push({kind:'svc',svcId:s.id,name:_ko,nameKo:_ko,nameEn:_en,subcat:s.subcat||'',sub2:s.sub2||'',unit:svcUnitKo(s),qty:1,price:parseFloat(s.price)||0,cat:s.cat||'',isMember:_isMem});
     cpRefreshRow(id);cpRenderRail();cpRenderFoot();
   }
 });
@@ -3739,9 +3768,10 @@ function invItemsToPicked(x){
     const price=parseFloat(it.price)||0;
     const line=qty*price;
     const d=(it.discType==='pct')?line*((parseFloat(it.discVal)||0)/100):(parseFloat(it.discVal)||0);
-    return {kind:'svc',name:nmKo,nameKo:nmKo,nameEn:nmEn,
+    const isMem=isMemberSvc({cat:it.cat||(sv&&sv.cat)||'',subcat:it.subcat||(sv&&sv.subcat)||''});
+    return {kind:'svc',name:isMem?stripMemberCode(nmKo):nmKo,nameKo:isMem?stripMemberCode(nmKo):nmKo,nameEn:isMem?stripMemberCode(nmEn):nmEn,
       unit:sv?svcUnitKo(sv):'대',qty:qty,price:price,lineNet:line-d,
-      isMember:isMemberSvc({cat:it.cat||(sv&&sv.cat)||'',subcat:it.subcat||(sv&&sv.subcat)||''})};
+      isMember:isMem};
   });
 }
 function showInvImportModal(){
@@ -4464,6 +4494,7 @@ function buildUsageLiteHTML(c,L){
     let run=b.total;
     const built=ordered.map(u=>{const amt=parseFloat(u.amount)||0,dsc=parseFloat(u.discount)||0,cry=parseFloat(u.carryover)||0;const net=amt-dsc;run=run-amt+dsc+cry;return {u:u,net:net,bal:run};});
     built.reverse();
+    built.sort((a,b)=>(isMemberEntry(a.u)?1:0)-(isMemberEntry(b.u)?1:0));   // 회원제상품 항목은 항상 최하단
     rows=built.map(function(r){const desc=(isEn&&r.u.desc_en)?r.u.desc_en:r.u.desc;return '<tr><td>'+ncEsc(r.u.date||'')+'</td><td class="d">'+ncEsc(ncStripCode(desc)||'—')+'</td><td class="r">- RM '+fmt(r.net)+'</td><td class="r">RM '+fmt(r.bal)+'</td></tr>';}).join('');
   }else{
     rows='<tr><td colspan="4" class="empty">'+ncEsc(T.usage_empty)+'</td></tr>';
