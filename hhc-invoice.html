@@ -3181,6 +3181,101 @@ function bindAll(){
 // ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════
+// 예약관리(확정완료) → 인보이스 자동 반영
+// bookingadmin에서 localStorage('hhc_transfer_invoice')로 넘긴
+// 고객명·연락처·주소·예약일·품목을 새 인보이스 폼에 채운다.
+// 서비스 카탈로그(services)와 이름/키워드 매칭이 되면 단가까지 자동,
+// 안 되면 품목명만 채우고 행을 펼쳐서 단가 입력을 유도한다.
+// ═══════════════════════════════════════════════════════════
+function _bkMatchSvc(cat,subcat,sub2,label){
+  var pool=services.filter(function(s){
+    if(s.cat!==cat||s.subcat!==subcat)return false;
+    if(sub2&&s.sub2&&s.sub2!==sub2)return false;
+    return true;
+  });
+  if(!pool.length||!label)return null;
+  var f=pool.find(function(s){return s.name===label;});
+  if(f)return f;
+  f=pool.find(function(s){return s.name.indexOf(label)>=0||label.indexOf(s.name)>=0;});
+  if(f)return f;
+  // 키워드 매칭 (예약 품목 용어 → 인보이스 서비스명 용어)
+  var toks=[['드럼','드럼'],['통돌이','통돌이'],['약품','화학'],['화학','화학'],['스팀','스팀'],['기본','기본'],['분해','분해'],['수거','수거'],['현장','현장'],['냉장고','냉장고'],['커튼','커튼'],['싱글','싱글'],['퀸','퀸']];
+  for(var i=0;i<toks.length;i++){
+    if(label.indexOf(toks[i][0])>=0){
+      f=pool.find(function(s){return s.name.indexOf(toks[i][1])>=0;});
+      if(f)return f;
+    }
+  }
+  return null;
+}
+function applyBookingTransfer(){
+  var p=new URLSearchParams(location.search);
+  if(p.get('from')!=='booking')return;
+  var d=null;
+  try{d=JSON.parse(localStorage.getItem('hhc_transfer_invoice')||'null');}catch(e){}
+  if(!d||!d.name&&!d.phone&&!(d.items_struct&&d.items_struct.length)&&!d.items_text)return;
+  // 예약 catId → 인보이스 카테고리 매핑
+  var MAP={ac_home:{cat:'청소',subcat:'에어컨(가정용)'},ac_shop:{cat:'청소',subcat:'에어컨(매장용)'},
+    washer:{cat:'청소',subcat:'세탁기'},mattress:{cat:'청소',subcat:'매트리스'},sofa:{cat:'청소',subcat:'쇼파'},
+    curtain:{cat:'청소',subcat:'커튼'},dryer:{cat:'청소',subcat:'기타제품'},hood:{cat:'청소',subcat:'기타제품'},
+    fridge:{cat:'청소',subcat:'기타제품'},purifier:{cat:'청소',subcat:'기타제품'},etc:{cat:'기타',subcat:'기타'}};
+  var GRP2SUB={'벽걸이형':'벽걸이형','매립형 (덕트)':'매립형','천정형 (카세트)':'카세트형','실외기':'실외기','FCU · 덕트형':'매립형'};
+  var CATKO={ac_home:'에어컨(가정용)',ac_shop:'에어컨(매장용)',washer:'세탁기',mattress:'매트리스',sofa:'쇼파',
+    curtain:'커튼',dryer:'건조기',hood:'주방후드',fridge:'냉장고',purifier:'공기청정기',etc:'기타서비스'};
+  // 고객 정보 반영
+  setVal('c-name',d.name||'');
+  setVal('c-phone',d.phone||'+60');
+  setVal('c-addr',d.addr||'');
+  // 서비스일을 메모에 기록 (인보이스 날짜와 별개로 어떤 예약 건인지 추적)
+  if(d.date){
+    var t=d.time?(d.time.indexOf('|')>=0?d.time.split('|')[0]:d.time):'';
+    var line='📅 서비스일: '+d.date+(t?' '+t:'');
+    var cur=val('inv-notes');
+    setVal('inv-notes',cur?cur+'\n'+line:line);
+  }
+  // 품목 반영
+  lineItems=[];expandedLI={};
+  var needPrice=0;
+  var arr=(d.items_struct&&d.items_struct.length)?d.items_struct:null;
+  if(arr){
+    arr.forEach(function(it,i){
+      var m=MAP[it.catId]||{cat:'기타',subcat:'기타'};
+      var sub2=it.grpKo?(GRP2SUB[it.grpKo]||''):'';
+      var label=it.free?(it.text||'기타 서비스'):((it.grpKo?it.grpKo+' · ':'')+(it.svcKo||''));
+      // 대분류가 '기타제품/기타'로 뭉뚱그려지는 품목은 원래 카테고리명을 앞에 병기
+      if((m.subcat==='기타제품'||m.cat==='기타')&&CATKO[it.catId]&&it.catId!=='etc'){label=CATKO[it.catId]+' — '+label;}
+      var svc=it.free?null:_bkMatchSvc(m.cat,m.subcat,sub2,it.svcKo||'');
+      var id='li'+Date.now()+'_'+i;
+      var li={id:id,cat:m.cat,subcat:m.subcat,svcId:svc?svc.id:'',name:svc?svc.name:label,price:svc?(svc.price||0):0,qty:it.qty||1,discVal:0,discType:'pct'};
+      if(sub2)li.sub2=sub2;
+      if(!svc||!li.price){expandedLI[id]=true;needPrice++;}
+      lineItems.push(li);
+    });
+  }else if(d.items_text){
+    // 구조화 데이터가 없는 예전 예약: 표시 문자열을 항목별로 쪼개서 반영
+    var re=/(.+?)\((\d+)\s*(?:대|units?\(s\)|units?)\s*\/\s*([^)]*)\)(?:\s*,\s*|\s*$)/g,mm;
+    var found=false;
+    while((mm=re.exec(d.items_text))!==null){
+      found=true;
+      var id2='li'+Date.now()+'_'+lineItems.length;
+      lineItems.push({id:id2,cat:'기타',subcat:'기타',svcId:'',name:mm[1].trim()+' — '+mm[3].trim(),price:0,qty:parseInt(mm[2],10)||1,discVal:0,discType:'pct'});
+      expandedLI[id2]=true;needPrice++;
+    }
+    if(!found){
+      var id3='li'+Date.now()+'_0';
+      lineItems.push({id:id3,cat:'기타',subcat:'기타',svcId:'',name:d.items_text,price:0,qty:1,discVal:0,discType:'pct'});
+      expandedLI[id3]=true;needPrice++;
+    }
+  }
+  Nav('new');Tab('info');
+  renderLI();App.upPrev();
+  showToast(needPrice>0
+    ?'✓ 예약 정보 자동 반영됨 · 단가 입력 필요 '+needPrice+'건 (서비스 항목 탭 확인)'
+    :'✓ 예약 정보가 자동 반영되었습니다 · 내용 확인 후 저장하세요',5000);
+}
+
 async function init(){
   var _vp=new URLSearchParams(location.search);
   var _vid=_vp.get('view');
@@ -3201,6 +3296,7 @@ async function init(){
   // 즉시 렌더링
   fillMemberSelect('c-member',false);fillMemberSelect('cm-member',false);fillMemberSelect('cust-member-filter',true,true);fillMemberSelect('inv-member-filter',true);
   renderIssView();App.resetForm();renderSvcs();renderBanks();renderBankSel();renderCusts();renderList();renderYearTabs();
+  applyBookingTransfer();
 
   // Firebase 연결
   try{

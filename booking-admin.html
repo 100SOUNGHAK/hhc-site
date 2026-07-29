@@ -218,6 +218,7 @@ select.field-input{cursor:pointer}
 .dd-chip.past{background:#EEF1F7;color:#8A94AC}
 @keyframes ddPulse{0%,100%{box-shadow:0 0 0 0 rgba(229,72,77,.35)}50%{box-shadow:0 0 0 5px rgba(229,72,77,0)}}
 .btn-sm-amber{border-color:var(--amber);color:var(--amber);background:transparent}.btn-sm-amber:hover{background:var(--amber-bg)}
+.btn-sm-navy{border-color:var(--navy);color:#fff;background:var(--navy)}.btn-sm-navy:hover{background:var(--navy2)}
 /* 상태 분포 시각화 바 */
 .dist-bar{display:flex;height:12px;border-radius:8px;overflow:hidden;margin-bottom:7px;background:var(--surface2)}
 .dist-bar .seg{transition:width .4s ease}
@@ -1528,7 +1529,10 @@ function renderList(){
 
       <div class="ci-actions" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px">
         ${b.status==='booked'?`<button class="btn-sm btn-sm-green" style="width:100%" onclick="confirmBooking('${b.__id}')">✓ 확정</button>`:''}
-        ${b.status==='confirmed'?`<button class="btn-sm btn-sm-amber" style="width:100%" onclick="unconfirmBooking('${b.__id}')">↩ 확정 취소</button>`:''}
+        ${b.status==='confirmed'?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <button class="btn-sm btn-sm-navy" onclick="toInvoice('${b.__id}')">🧾 인보이스 작성</button>
+          <button class="btn-sm btn-sm-amber" onclick="unconfirmBooking('${b.__id}')">↩ 확정 취소</button>
+        </div>`:''}
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
           <button class="btn-sm btn-sm-wa" onclick="sendWA('${b.__id}')" title="WhatsApp">💬</button>
           <button class="btn-sm btn-sm-kakao" onclick="sendKakao('${b.__id}')" title="카카오">📋</button>
@@ -1597,6 +1601,35 @@ async function setInvStatus(id, status, btn){
     showToast('✓ 인보이스 상태 변경: '+{billing:'청구',paid:'결제완료',overdue:'연체'}[status]);
   }catch(e){showToast('변경 실패: '+e.message);}
 }
+
+// ── 확정 예약 → 인보이스 작성으로 이동 ──
+// 고객명·연락처·주소·예약일·품목(구조화 데이터 우선)을 localStorage로 전달하고
+// 인보이스 시스템을 새 탭으로 연다. 인보이스 쪽에서 자동 반영 후 관리자가 단가만 확인·수정하면 됨.
+window.toInvoice=function(id){
+  const b=allBookings.find(x=>x.__id===id);
+  if(!b)return;
+  let itemsStruct=[];
+  try{
+    const arr=JSON.parse(b.booking_items_struct||'[]');
+    if(Array.isArray(arr))itemsStruct=arr;
+  }catch(e){}
+  const payload={
+    name:b.customer_name||'',
+    phone:b.customer_phone||'',
+    addr:b.customer_address||'',
+    date:b.booking_date||'',
+    time:b.booking_time||'',
+    memo:b.booking_memo||'',
+    items_struct:itemsStruct,          // [{catId,grpKo,svcKo,free,text,qty}]
+    items_text:b.booking_items||'',    // 표시 문자열 (구조화 데이터 없을 때 대비)
+    booking_id:id,
+    ts:Date.now()
+  };
+  try{localStorage.setItem('hhc_transfer_invoice',JSON.stringify(payload));}
+  catch(e){showToast('전송 실패: '+e.message);return;}
+  showToast('🧾 인보이스로 이동합니다');
+  window.open(`${BASE_URL}hhc-invoice.html?from=booking`,'_blank');
+};
 
 // ── 인보이스 링크 발송 메시지 빌드
 function buildInvMsg(b, lang){
