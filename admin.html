@@ -1367,6 +1367,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
           </div>
           <button type="button" id="btn-koreanize-usage" style="margin-left:auto;font-size:11px;background:var(--navy);color:#fff;border:none;border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px">🇰🇷 영문 내역 → 한글 표기 정리</button>
           <button type="button" id="btn-translate-all-usage" style="font-size:11px;background:var(--violet);color:#fff;border:none;border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px">🤖 영문 미번역 항목 전체 번역</button>
+          <button type="button" id="btn-inv-import" style="font-size:11px;background:var(--violet);color:#fff;border:none;border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px">🧾 인보이스 불러오기</button>
           <button type="button" id="btn-inv-autolink" style="font-size:11px;background:var(--indigo);color:#fff;border:none;border-radius:var(--radius-sm);padding:6px 10px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:5px">🔗 인보이스 일괄 연결</button>
         </div>
         <div class="usage-list" id="usage-tbody"><div class="usage-empty">이용내역이 없습니다</div></div>
@@ -1822,7 +1823,8 @@ async function connectFirebase(cfg){
       allContracts.sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
       updateSelectLists();
       if(document.getElementById('tab-list').classList.contains('active'))renderList();
-      if(document.getElementById('tab-send').classList.contains('active'))renderSendTab();
+      const _ts=document.getElementById('tab-send'); // 「발송」 탭은 「계약서·발송」으로 통합되어 없을 수 있음
+      if(_ts&&_ts.classList.contains('active'))renderSendTab();
     },(err)=>{console.error('Snapshot error:',err);});
     // ── 인보이스 서비스 품목/가격 실시간 연동 (services 컬렉션 구독) ──
     try{
@@ -2156,8 +2158,8 @@ function updateBalance(){
 // 이용내역 카드 하단의 인보이스 줄 — 연결됨 / 연결 안 됨 두 가지 상태
 function usageInvHTML(u,i,isEn){
   const L=isEn
-    ?{open:'&#8599; Open',link:'+ Link invoice',none:'&#128279; No invoice linked',clear:'Unlink',auto:'&#9889; Auto',miss:'not in list',edit:'Change'}
-    :{open:'&#8599; 열기',link:'+ 연결하기',none:'&#128279; 인보이스 연결 안 됨',clear:'연결 해제',auto:'&#9889; 자동매칭',miss:'목록에 없음',edit:'변경'};
+    ?{open:'&#8599; Open',link:'+ Link invoice',none:'&#128279; No invoice linked',clear:'Unlink',auto:'&#9889; Auto',imp:'&#129534; Imported',miss:'not in list',edit:'Change'}
+    :{open:'&#8599; 열기',link:'+ 연결하기',none:'&#128279; 인보이스 연결 안 됨',clear:'연결 해제',auto:'&#9889; 자동매칭',imp:'&#129534; 불러옴',miss:'목록에 없음',edit:'변경'};
   if(!u.inv_id){
     // 강력한 후보(90점 이상)가 하나뿐이면 어떤 인보이스인지 미리 알려준다 — 눌러야 저장된다(C안)
     let sug='';
@@ -2182,7 +2184,7 @@ function usageInvHTML(u,i,isEn){
   return '<div class="inv-row">'+
     '<span class="inv-chip '+cls+'"'+tip+'>&#129534; <span class="num">'+ncEsc(u.inv_id)+'</span>'+
       (st?' · '+st:' · <i>'+L.miss+'</i>')+(amt?' · RM '+amt:'')+'</span>'+
-    (u.inv_link==='auto'?'<span class="inv-auto">'+L.auto+'</span>':'')+
+    (u.inv_link==='auto'?'<span class="inv-auto">'+L.auto+'</span>':u.inv_link==='import'?'<span class="inv-auto">'+L.imp+'</span>':'')+
     '<button type="button" class="inv-link" data-inv-open="'+i+'">'+L.open+'</button>'+
     '<button type="button" class="inv-unlink" data-inv-pick="'+i+'">'+L.edit+'</button>'+
     '<button type="button" class="inv-unlink" data-inv-clear="'+i+'">'+L.clear+'</button>'+
@@ -3694,6 +3696,98 @@ document.getElementById('btn-inv-autolink').addEventListener('click',async()=>{
   if(done&&!currentEditId)msg+=' 계약을 저장하면 반영됩니다.';
   showModal('인보이스 일괄 연결 결과',msg,false);
 });
+
+// ── 인보이스 불러오기 — 동일 고객의 인보이스를 골라 이용내역으로 추가 (자동 연결 포함) ──
+function invLinkedIds(){
+  const st=new Set();
+  currentUsageHistory.forEach(u=>{if(u.inv_id)st.add(String(u.inv_id));});
+  return st;
+}
+function invItemsSummary(inv){
+  return (inv.items||[]).map(o=>String(o.name||'').trim()+((o.qty&&o.qty!=1)?' x'+o.qty:'')).filter(Boolean).join(' · ');
+}
+function showInvImportModal(){
+  const cust=invCurrentName();
+  if(!cust){showModal('알림','계약자명이 비어 있어 동일 고객 인보이스를 찾을 수 없습니다. 계약자명을 먼저 입력해 주세요.',false);return;}
+  if(!allInvoices.length){showModal('알림','인보이스 목록을 아직 불러오지 못했습니다. Firebase 연결 후 다시 시도해 주세요.',false);return;}
+  const linked=invLinkedIds();
+  const mine=allInvoices.filter(x=>invNameSame(invName(x),cust))
+    .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  const ex=document.getElementById('inv-import-modal');if(ex)ex.remove();
+  const modal=document.createElement('div');
+  modal.id='inv-import-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  const rows=mine.length?mine.map((x,i)=>{
+    const id=String(x.id||x._docId||'');
+    const isLinked=linked.has(id);
+    const items=invItemsSummary(x);
+    const st=invStatusTxt(x,false);
+    const sub=invCmpAmt(x);
+    return '<label class="ivl-cand" style="display:block'+(isLinked?';opacity:.55':'')+'">'+
+      '<div class="ivl-t"><div style="display:flex;align-items:center;gap:8px;min-width:0">'+
+        '<input type="checkbox" data-imp-i="'+i+'"'+(isLinked?' disabled':'')+' style="width:15px;height:15px;accent-color:var(--indigo);flex-shrink:0">'+
+        '<span class="ivl-id">'+ncEsc(id)+'</span></div>'+
+        '<span class="ivl-amt">RM '+fmt(sub)+'</span></div>'+
+      '<div class="ivl-m">'+
+        '<span class="ivl-pill">&#128197; '+ncEsc(String(x.date||'—'))+'</span>'+
+        (st?'<span class="ivl-pill">'+st+'</span>':'')+
+        (isLinked?'<span class="ivl-pill ok">&#10003; 이미 이용내역에 연결됨</span>':'')+
+      '</div>'+
+      (items?'<div style="font-size:11px;color:var(--text3);margin-top:5px;line-height:1.5">'+ncEsc(items)+'</div>':'')+
+    '</label>';
+  }).join(''):'<div class="ivl-empty">「'+ncEsc(cust)+'」 고객의 인보이스가 없습니다.<br>인보이스의 고객명과 계약자명이 같아야 목록에 나옵니다.</div>';
+  modal.innerHTML=
+    '<div style="background:#fff;border-radius:16px;padding:20px;max-width:470px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.15)">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
+        '<div style="font-family:\'Syne\',sans-serif;font-size:15px;font-weight:700;color:var(--navy)">&#129534; 인보이스 불러오기</div>'+
+        '<button type="button" id="ivp-x" style="background:none;border:none;font-size:18px;color:var(--text3);cursor:pointer">&#10005;</button>'+
+      '</div>'+
+      '<div style="font-size:11.5px;color:var(--text3);margin-bottom:10px;line-height:1.7">고객 <b style="color:var(--text2)">'+ncEsc(cust)+'</b>의 인보이스 <b style="color:var(--text2)">'+mine.length+'건</b>. '+
+        '선택한 인보이스의 <b>날짜·품목·소계</b>가 이용내역으로 추가되고, 해당 인보이스가 <b>자동으로 연결</b>됩니다.</div>'+
+      '<div id="ivp-list" style="overflow-y:auto;flex:1;min-height:120px">'+rows+'</div>'+
+      '<div style="display:flex;gap:8px;margin-top:12px">'+
+        '<button type="button" id="ivp-cancel" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--text2);font-size:13px;font-weight:500;cursor:pointer">닫기</button>'+
+        '<button type="button" id="ivp-ok" style="flex:2;padding:10px;border:none;border-radius:var(--radius-sm);background:var(--indigo);color:#fff;font-size:13px;font-weight:700;cursor:pointer">선택한 인보이스 추가 (<span id="ivp-cnt">0</span>건)</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(modal);
+  const close=()=>modal.remove();
+  modal.querySelector('#ivp-x').addEventListener('click',close);
+  modal.querySelector('#ivp-cancel').addEventListener('click',close);
+  modal.addEventListener('click',e=>{if(e.target===modal)close();});
+  const cntEl=modal.querySelector('#ivp-cnt');
+  modal.querySelectorAll('input[data-imp-i]').forEach(cb=>cb.addEventListener('change',()=>{
+    cntEl.textContent=modal.querySelectorAll('input[data-imp-i]:checked').length;
+  }));
+  modal.querySelector('#ivp-ok').addEventListener('click',async()=>{
+    const sel=[...modal.querySelectorAll('input[data-imp-i]:checked')].map(cb=>mine[parseInt(cb.dataset.impI)]);
+    if(!sel.length){close();return;}
+    sel.forEach((x,k)=>{
+      const id=String(x.id||x._docId||'');
+      currentUsageHistory.push({
+        id:Date.now()+k,
+        date:String(x.date||'').slice(0,10),
+        desc:invItemsSummary(x)||('인보이스 '+id),
+        desc_en:'',
+        amount:String(invCmpAmt(x)||0),   // 인보이스 소계 → 이용금액
+        carryover:'0',
+        discount:'0',
+        inv_id:id,                        // 인보이스 자동 연결
+        inv_total:String(x.total||''),
+        inv_sub:String(invCmpAmt(x)||''),
+        inv_link:'import'
+      });
+    });
+    close();
+    renderUsage();
+    if(currentEditId)await persistUsage(true);
+    let msg='인보이스 '+sel.length+'건이 이용내역으로 추가되고 자동 연결되었습니다.';
+    if(!currentEditId)msg+=' 계약을 저장하면 반영됩니다.';
+    msg+=' 필요하면 각 항목의 수정(✏️) 버튼으로 금액·내역을 조정하세요.';
+    showModal('인보이스 불러오기 완료',msg,false);
+  });
+}
+document.getElementById('btn-inv-import').addEventListener('click',showInvImportModal);
 
 // ── 특약사항 번역 버튼 ──
 document.getElementById('terms-translate-btn').addEventListener('click',async()=>{
