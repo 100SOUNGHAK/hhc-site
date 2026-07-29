@@ -1673,7 +1673,7 @@ function invSlim(x){
   return {_docId:x._docId||'',id:x.id||'',date:String(x.date||'').slice(0,10),
     status:x.status||'',total:x.total||0,sub:(sub===null?null:sub),
     cname:String((x.customer&&x.customer.name)||'').trim(),
-    items:Array.isArray(x.items)?x.items.slice(0,6).map(it=>({name:it.name||'',qty:it.qty||1})):[]};
+    items:Array.isArray(x.items)?x.items.slice(0,12).map(it=>({name:it.name||'',qty:it.qty||1,price:parseFloat(it.price)||0,cat:it.cat||'',subcat:it.subcat||'',svcId:it.svcId||'',discVal:parseFloat(it.discVal)||0,discType:it.discType||'pct'})):[]};
 }
 // 캐시(sub 없음)나 소계 계산이 불가능한 문서는 총액으로 대신한다
 function invCmpAmt(inv){
@@ -3335,9 +3335,11 @@ function cpMemberSum(){return cPicked.reduce((t,p)=>(p.kind!=='adj'&&p.isMember)
 function cpDiscSum(){return cPicked.reduce((t,p)=>p.kind==='adj'&&!p.isCarry?t+(parseFloat(p.amount)||0):t,0);}
 function cpCarrySum(){return cPicked.reduce((t,p)=>p.kind==='adj'&&p.isCarry?t+(parseFloat(p.amount)||0):t,0);}
 // 이용내역 문구 생성 — lang:'ko'(기본) | 'en'
-function cpDescText(lang){
+function cpDescText(lang){return cpDescTextOf(cPicked,lang);}
+// 품목 배열(직접 기재 cPicked 또는 인보이스 변환 결과)로 내역 문구 생성
+function cpDescTextOf(list,lang){
   const isEn=lang==='en';
-  const items=cPicked.filter(p=>p.kind!=='adj').map(p=>{
+  const items=list.filter(p=>p.kind!=='adj').map(p=>{
     const nm=isEn?(p.nameEn||p.nameKo||p.name||''):(p.nameKo||p.name||'');
     const q=p.qty||1;
     const base=isEn?`${nm} ${q} ${unitEn(p.unit)}`:`${nm} ${q}${p.unit||'대'}`;
@@ -3348,7 +3350,7 @@ function cpDescText(lang){
     }
     return base;
   });
-  const adjs=cPicked.filter(p=>p.kind==='adj'&&(parseFloat(p.amount)||0)>0).map(p=>{
+  const adjs=list.filter(p=>p.kind==='adj'&&(parseFloat(p.amount)||0)>0).map(p=>{
     const lb=isEn?adjLabelEn(p.label):p.label;
     return `${lb} -RM${(parseFloat(p.amount)||0).toFixed(2)}`;
   });
@@ -3723,6 +3725,25 @@ function invLinkedIds(){
 function invItemsSummary(inv){
   return (inv.items||[]).map(o=>String(o.name||'').trim()+((o.qty&&o.qty!=1)?' x'+o.qty:'')).filter(Boolean).join(' · ');
 }
+// 인보이스 품목 → 「품목 빠른 선택」과 동일한 형식(한/영 이름·단위·회원제 구분)으로 변환.
+// 예전 캐시(품목에 가격 정보 없음)면 null → 기존 요약 문구로 대체.
+function invItemsToPicked(x){
+  const items=Array.isArray(x.items)?x.items:[];
+  if(!items.length||items.some(it=>it.price===undefined))return null;
+  return items.map(it=>{
+    const sv=invServices.find(s=>s.id===it.svcId)
+      ||invServices.find(s=>(s.name_en||s.name)===it.name||s.name_ko===it.name||s.name===it.name);
+    const nmEn=(sv&&(sv.name_en||sv.name))||it.name||'';
+    const nmKo=(sv&&sv.name_ko&&String(sv.name_ko).trim())?String(sv.name_ko).trim():svcKoName(it.name||nmEn);
+    const qty=parseFloat(it.qty)||1;
+    const price=parseFloat(it.price)||0;
+    const line=qty*price;
+    const d=(it.discType==='pct')?line*((parseFloat(it.discVal)||0)/100):(parseFloat(it.discVal)||0);
+    return {kind:'svc',name:nmKo,nameKo:nmKo,nameEn:nmEn,
+      unit:sv?svcUnitKo(sv):'대',qty:qty,price:price,lineNet:line-d,
+      isMember:isMemberSvc({cat:it.cat||(sv&&sv.cat)||'',subcat:it.subcat||(sv&&sv.subcat)||''})};
+  });
+}
 function showInvImportModal(){
   const cust=invCurrentName();
   if(!cust){showModal('알림','계약자명이 비어 있어 동일 고객 인보이스를 찾을 수 없습니다. 계약자명을 먼저 입력해 주세요.',false);return;}
@@ -3781,14 +3802,29 @@ function showInvImportModal(){
     if(!sel.length){close();return;}
     sel.forEach((x,k)=>{
       const id=String(x.id||x._docId||'');
+      // 직접 기재(품목 빠른 선택)와 동일한 형식으로 내역·금액 생성
+      const conv=invItemsToPicked(x);
+      let desc,descEn,amount,memAmt;
+      if(conv){
+        desc=cpDescTextOf(conv,'ko')||('인보이스 '+id);
+        descEn=cpDescTextOf(conv,'en')||'';
+        amount=conv.filter(p=>!p.isMember).reduce((t,p)=>t+p.lineNet,0);       // 회원제상품 제외
+        memAmt=conv.filter(p=>p.isMember).reduce((t,p)=>t+p.lineNet,0);        // 표시 전용
+      }else{
+        desc=invItemsSummary(x)||('인보이스 '+id);
+        descEn='';
+        amount=invCmpAmt(x)||0;
+        memAmt=0;
+      }
       currentUsageHistory.push({
         id:Date.now()+k,
         date:String(x.date||'').slice(0,10),
-        desc:invItemsSummary(x)||('인보이스 '+id),
-        desc_en:'',
-        amount:String(invCmpAmt(x)||0),   // 인보이스 소계 → 이용금액
+        desc:desc,
+        desc_en:descEn,
+        amount:amount>0?amount.toFixed(2):'0',
         carryover:'0',
         discount:'0',
+        member_amount:memAmt>0?memAmt.toFixed(2):'0',
         inv_id:id,                        // 인보이스 자동 연결
         inv_total:String(x.total||''),
         inv_sub:String(invCmpAmt(x)||''),
