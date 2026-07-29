@@ -213,6 +213,19 @@ body.pk-lock{overflow:hidden}
 .btn-nav.next{border-color:var(--teal);background:linear-gradient(120deg,var(--teal),var(--teal-deep));color:#fff;box-shadow:0 10px 22px -10px rgba(15,181,164,.6)}
 .btn-nav.next:hover{filter:brightness(1.05)}
 
+/* ── 예약 완료 후 고객 직접 수정 ── */
+.edit-box{background:var(--white);border-radius:var(--radius-lg);border:1px solid var(--border);padding:15px 16px;margin-bottom:13px;box-shadow:var(--shadow);text-align:center}
+.edit-box .et{font-size:12.5px;color:var(--text3);line-height:1.6;margin-bottom:11px}
+.btn-edit-bk{width:100%;padding:13px;border-radius:var(--radius-sm);font-size:14px;font-weight:700;cursor:pointer;border:1.5px solid var(--teal);background:var(--teal-lt);color:var(--teal-dk);transition:all .15s}
+.btn-edit-bk:hover{background:#D3F7F0}
+.btn-edit-bk:active{transform:scale(.98)}
+.edit-lock{background:var(--amber-bg);border:1px solid #F3D9A8;border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:13px;font-size:12.5px;color:#8A5A00;line-height:1.75}
+.edit-lock b{color:#6E4700}
+.edit-banner{background:var(--amber-bg);border:1px solid #F3D9A8;border-radius:var(--radius);padding:12px 14px;font-size:12.5px;color:#8A5A00;line-height:1.6;display:flex;gap:9px;align-items:flex-start}
+.edit-banner b{color:#6E4700}
+.btn-cancel-edit{display:block;width:100%;padding:10px;margin:8px 0 14px;border:1px solid var(--border-dark);background:var(--white);color:var(--text2);border-radius:var(--radius-sm);font-size:12.5px;font-weight:700;cursor:pointer}
+.btn-cancel-edit:hover{background:var(--surface2)}
+
 .hint{font-size:12px;color:var(--text3);margin-top:6px;line-height:1.6}
 .sel-summary{background:var(--teal-lt);border:1px solid var(--border-dark);border-radius:var(--radius-sm);padding:12px 14px;font-size:13.5px;color:var(--teal-dk);font-weight:700;margin-top:12px;display:none}
 
@@ -272,12 +285,23 @@ body.pk-lock{overflow:hidden}
       </div>
       <div class="copy-ok" id="booked-copy-ok">✓ 복사되었습니다!</div>
     </div>
+    <!-- 예약 완료 후 고객이 직접 수정 -->
+    <div class="edit-box" id="booked-edit-box" style="display:none">
+      <div class="et" id="booked-edit-t">예약 내용을 변경하시겠어요?</div>
+      <button type="button" class="btn-edit-bk" id="btn-edit-booking">✏️ 예약 내용 수정하기</button>
+    </div>
+    <div class="edit-lock" id="booked-edit-lock" style="display:none"></div>
   </div>
 </div>
 
 <!-- MAIN BOOKING FORM -->
 <div id="main-content" style="display:none">
   <div class="page-wrap">
+    <!-- 수정 모드 안내 배너 -->
+    <div id="edit-banner-wrap" style="display:none">
+      <div class="edit-banner" id="edit-banner"></div>
+      <button type="button" class="btn-cancel-edit" id="btn-cancel-edit">수정 취소</button>
+    </div>
     <div class="customer-hero">
       <div class="ch-greeting">예약 안내</div>
       <div class="ch-name" id="hero-name"></div>
@@ -396,6 +420,12 @@ body.pk-lock{overflow:hidden}
         <div class="copy-ok" id="confirm-copy-ok">✓ 복사되었습니다! 카카오톡에 붙여넣기 하세요</div>
       </div>
 
+      <!-- 완료 직후에도 바로 수정 가능 -->
+      <div class="edit-box" id="step3-edit-box">
+        <div class="et" id="step3-edit-t">내용이 잘못되었나요? 담당자가 확정하기 전까지 직접 수정하실 수 있습니다.</div>
+        <button type="button" class="btn-edit-bk" id="btn-edit-booking2">✏️ 예약 내용 수정하기</button>
+      </div>
+
       <div class="card">
         <div class="card-body" id="contact-note" style="text-align:center;padding:20px;color:var(--text3);font-size:13px">
           예약 확정 후 담당자가 연락드립니다.<br>
@@ -487,6 +517,7 @@ let calYear=new Date().getFullYear(), calMonth=new Date().getMonth();
 let selectedDate='', selectedTime='';
 let availableDates=[], scheduleMap={};
 let currentStep=1;
+let editMode=false;   // 예약 완료 후 고객이 직접 수정 중인지
 
 const today=()=>new Date().toISOString().slice(0,10);
 const params=new URLSearchParams(window.location.search);
@@ -525,11 +556,30 @@ if(!bookingId){
 
 function renderByStatus(){
   if(!bookingData)return;
-  if(bookingData.status==='booked'||bookingData.status==='confirmed'){
-    showAlreadyBooked();
-  }else{
+  // 수정 중에는 화면을 되돌리지 않고, 언어만 다시 적용
+  if(editMode){
+    document.getElementById('state-booked').style.display='none';
     document.getElementById('main-content').style.display='block';
     initBookingForm();
+    if(selectedDate){
+      document.getElementById('time-card').style.display='block';
+      renderTimeSlots();
+      applySelectionSummaries();
+    }
+    renderPicked();
+    updateEditUI();
+    return;
+  }
+  const done=bookingData.status==='booked'||bookingData.status==='confirmed';
+  // 방금 이 화면에서 신청/수정을 마친 경우에는 완료(3단계) 화면을 유지
+  if(done&&!window._justSubmitted){
+    document.getElementById('main-content').style.display='none';
+    showAlreadyBooked();
+  }else{
+    document.getElementById('state-booked').style.display='none';
+    document.getElementById('main-content').style.display='block';
+    initBookingForm();
+    updateEditUI();
   }
 }
 // 우측 상단 고정 언어 전환 버튼(한국어/EN) — 언제든 언어 전환 가능
@@ -575,6 +625,20 @@ function showAlreadyBooked(){
   document.querySelector('#state-booked .confirm-sub').textContent=isEn?'Please send the message below to our team':'아래 내용을 카카오톡/WhatsApp으로 전송해 주세요';
   document.getElementById('booked-msg').textContent=msg;
   setupCopyBtns('booked-wa','booked-kakao','booked-copy','booked-copy-ok',msg);
+
+  // ── 고객 직접 수정 안내: 확정 전에는 수정 버튼, 확정 후에는 연락 안내 ──
+  const canEdit=bookingData.status!=='confirmed';
+  const box=document.getElementById('booked-edit-box');
+  const lock=document.getElementById('booked-edit-lock');
+  box.style.display=canEdit?'block':'none';
+  lock.style.display=canEdit?'none':'block';
+  document.getElementById('booked-edit-t').textContent=isEn
+    ?'Need to change the date, time or service items?'
+    :'날짜·시간·품목을 변경하시겠어요?';
+  document.getElementById('btn-edit-booking').textContent=isEn?'✏️ Edit my booking':'✏️ 예약 내용 수정하기';
+  lock.innerHTML=isEn
+    ?'🔒 This booking has already been <b>confirmed</b> by our team, so it can no longer be changed here.<br>For any changes, please contact us at <b>+60172472774</b> (KakaoTalk / WhatsApp).'
+    :'🔒 담당자가 <b>확정</b>한 예약이라 이 화면에서는 수정할 수 없습니다.<br>변경이 필요하시면 <b>+60172472774</b> (카카오톡/WhatsApp)로 연락 주세요.';
 }
 
 function initBookingForm(){
@@ -719,10 +783,176 @@ function applyPrefillItems(){
   if(added>0)hadPrefillItems=true;
 }
 
+// ══════════ 예약 완료 후 고객이 직접 수정 ══════════
+// 저장된 예약 품목을 피커 상태(picked)로 복원.
+// 1순위: booking_items_struct(예약 저장 시 기록한 구조화 데이터)
+// 2순위: prefill_items_struct(의뢰 요청서에서 넘어온 데이터)
+// 3순위: booking_items 표시 문자열을 역파싱 (예전 예약 호환)
+function restorePickedFromBooking(){
+  const raw=(bookingData&&(bookingData.booking_items_struct||bookingData.prefill_items_struct))||'';
+  if(raw){
+    let arr=null;
+    try{arr=JSON.parse(raw);}catch(e){}
+    if(Array.isArray(arr)&&arr.length){
+      const out=[];
+      arr.forEach(it=>{
+        const c=pkCatOf(it.catId);
+        if(c&&it.free){out.push({key:'free|'+Date.now()+Math.random(),catId:it.catId,free:true,text:it.text||'',qty:it.qty||1});return;}
+        if(c){
+          let grpPair=null,svcPair=null;
+          c.groups.forEach(g=>{
+            (g.svcs||[]).forEach(svc=>{
+              if((g.ko||null)===(it.grpKo||null)&&svc[0]===it.svcKo){grpPair=g.ko?[g.ko,g.en]:null;svcPair=svc;}
+            });
+          });
+          if(svcPair){out.push({key:pkItemKey(c.id,grpPair,svcPair),catId:c.id,grp:grpPair,svc:svcPair,qty:it.qty||1});return;}
+        }
+        // 매칭 실패 시에도 내용을 잃지 않도록 기타서비스 직접입력으로 보존
+        const label=(it.svcKo||it.text||'').trim();
+        if(label)out.push({key:'free|'+Date.now()+Math.random(),catId:'etc',free:true,text:label,qty:it.qty||1});
+      });
+      if(out.length)return out;
+    }
+  }
+  return parseItemsString((bookingData&&bookingData.booking_items)||'');
+}
+
+// "에어컨(가정용)(2대/벽걸이형 · 기본세척), 세탁기(1대/드럼세탁기)" 형태 역파싱
+function parseItemsString(s){
+  const out=[];
+  if(!s)return out;
+  const re=/(.+?)\((\d+)\s*(?:대|units?\(s\)|units?)\s*\/\s*([^)]*)\)(?:\s*,\s*|\s*$)/g;
+  let m;
+  while((m=re.exec(s))!==null){
+    const name=m[1].trim(), qty=parseInt(m[2],10)||1, svcPart=m[3].trim();
+    const c=PK_CATS.find(cc=>cc.ko===name||cc.en===name);
+    if(c){
+      let gName=null,sName=svcPart;
+      const sep=svcPart.indexOf(' · ');
+      if(sep>=0){gName=svcPart.slice(0,sep);sName=svcPart.slice(sep+3);}
+      let grpPair=null,svcPair=null;
+      c.groups.forEach(g=>{
+        const gOk=gName?(g.ko===gName||g.en===gName):!g.ko;
+        if(!gOk)return;
+        (g.svcs||[]).forEach(svc=>{
+          if(svc[0]===sName||svc[1]===sName){grpPair=g.ko?[g.ko,g.en]:null;svcPair=svc;}
+        });
+      });
+      if(svcPair){out.push({key:pkItemKey(c.id,grpPair,svcPair),catId:c.id,grp:grpPair,svc:svcPair,qty});continue;}
+      if(c.free){out.push({key:'free|'+Date.now()+Math.random(),catId:c.id,free:true,text:svcPart,qty});continue;}
+    }
+    // 카탈로그에 없으면 기타서비스 직접입력으로 보존
+    out.push({key:'free|'+Date.now()+Math.random(),catId:'etc',free:true,text:name,qty});
+  }
+  // 형식이 전혀 맞지 않으면 통째로 직접입력 한 줄로 보존
+  if(!out.length&&s.trim())out.push({key:'free|'+Date.now()+Math.random(),catId:'etc',free:true,text:s.trim(),qty:1});
+  return out;
+}
+
+function applySelectionSummaries(){
+  const isEn=(window._bookingLang||'ko')==='en';
+  const ds=document.getElementById('sel-date-summary');
+  const ts=document.getElementById('sel-time-summary');
+  if(selectedDate&&ds){
+    ds.textContent=(isEn?'Selected date: ':'선택된 날짜: ')+selectedDate;
+    ds.style.display='block';
+  }
+  if(selectedTime&&ts){
+    ts.textContent=(isEn?'Selected time: ':'선택된 시간: ')+getDisplayTime(selectedTime,isEn);
+    ts.style.display='block';
+  }
+  const nx=document.getElementById('btn-step1-next');
+  if(nx)nx.disabled=!(selectedDate&&selectedTime);
+}
+
+// 수정 모드에 맞춰 배너/버튼 문구 갱신
+function updateEditUI(){
+  const isEn=(window._bookingLang||'ko')==='en';
+  const wrap=document.getElementById('edit-banner-wrap');
+  const banner=document.getElementById('edit-banner');
+  const nx=document.getElementById('btn-step2-next');
+  if(wrap)wrap.style.display=editMode?'block':'none';
+  if(editMode&&banner){
+    banner.innerHTML=isEn
+      ? '<span>✏️</span><span><b>You are editing your booking.</b> Change the date, time, service items or notes as needed, then tap “Save changes”.</span>'
+      : '<span>✏️</span><span><b>예약 내용을 수정하고 있습니다.</b> 날짜·시간·품목·요청사항을 자유롭게 바꾸신 뒤 「수정 완료」 버튼을 눌러주세요.</span>';
+  }
+  const cancel=document.getElementById('btn-cancel-edit');
+  if(cancel)cancel.textContent=isEn?'Cancel editing':'수정 취소';
+  if(nx&&editMode)nx.textContent=isEn?'Save changes →':'수정 완료 →';
+  // 3단계 수정 버튼(확정된 예약이면 숨김)
+  const s3=document.getElementById('step3-edit-box');
+  if(s3){
+    const canEdit=!bookingData||bookingData.status!=='confirmed';
+    s3.style.display=(canEdit&&!editMode)?'block':'none';
+    const t=document.getElementById('step3-edit-t');
+    if(t)t.textContent=isEn
+      ?'Something wrong? You can edit it yourself until our team confirms the booking.'
+      :'내용이 잘못되었나요? 담당자가 확정하기 전까지 직접 수정하실 수 있습니다.';
+    const b=document.getElementById('btn-edit-booking2');
+    if(b)b.textContent=isEn?'✏️ Edit my booking':'✏️ 예약 내용 수정하기';
+  }
+}
+
+function startEditBooking(){
+  if(!bookingData)return;
+  if(bookingData.status==='confirmed'){
+    const isEn=(window._bookingLang||'ko')==='en';
+    alert(isEn?'This booking has been confirmed. Please contact us at +60172472774 to make changes.'
+              :'담당자가 확정한 예약입니다. 변경이 필요하시면 +60172472774로 연락 주세요.');
+    return;
+  }
+  editMode=true;
+  window._justSubmitted=true;      // 스냅샷이 완료화면으로 되돌리지 않도록
+  window._prefillApplied=true;     // 의뢰서 프리필 재적용 방지
+  hadPrefillItems=false;           // 수정 모드에서는 '의뢰서 자동반영' 안내 숨김
+  // 기존 예약 내용 복원
+  selectedDate=bookingData.booking_date||'';
+  selectedTime=bookingData.booking_time||'';
+  picked=restorePickedFromBooking();
+
+  document.getElementById('state-booked').style.display='none';
+  document.getElementById('main-content').style.display='block';
+  initBookingForm();
+
+  // 달력을 예약한 달로 이동 (initBookingForm이 첫 가능일 기준으로 옮기므로 그 뒤에 처리)
+  if(selectedDate){
+    const p=selectedDate.split('-');
+    calYear=parseInt(p[0],10);calMonth=parseInt(p[1],10)-1;
+  }
+  renderCalendar();
+  if(selectedDate){
+    document.getElementById('time-card').style.display='block';
+    renderTimeSlots();
+  }
+  applySelectionSummaries();
+  document.getElementById('booking-memo').value=bookingData.booking_memo||'';
+  renderPicked();
+  updateEditUI();
+  goToStep(1);
+}
+
+function cancelEditBooking(){
+  editMode=false;
+  window._justSubmitted=false;
+  picked=[];selectedDate='';selectedTime='';
+  document.getElementById('main-content').style.display='none';
+  updateEditUI();
+  showAlreadyBooked();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+document.getElementById('btn-edit-booking').addEventListener('click',startEditBooking);
+document.getElementById('btn-edit-booking2').addEventListener('click',startEditBooking);
+document.getElementById('btn-cancel-edit').addEventListener('click',cancelEditBooking);
+
 // ── CALENDAR ──
 function renderCalendar(){
   const months=window._calMonths||['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-  document.getElementById('cal-month-label').textContent=`${calYear}${months[calMonth]}`;
+  const isEnCal=(window._bookingLang||'ko')==='en';
+  document.getElementById('cal-month-label').textContent=isEnCal
+    ?`${months[calMonth]} ${calYear}`
+    :`${calYear}년 ${months[calMonth]}`;
   const grid=document.getElementById('cal-grid');
   const dayNames=Array.from(grid.querySelectorAll('.cal-day-name'));
   grid.innerHTML='';
@@ -1031,18 +1261,39 @@ async function submitBooking(){
     return `${name}(${isEn?p.qty+' '+qtyUnit:p.qty+qtyUnit}/${svcPart})`;
   });
 
+  // 나중에 고객이 다시 수정할 때 품목을 그대로 복원하기 위한 구조화 데이터
+  const itemsStruct=picked.map(p=>({
+    catId:p.catId,
+    grpKo:p.grp?p.grp[0]:null,
+    svcKo:p.svc?p.svc[0]:null,
+    free:!!p.free,
+    text:p.free?(p.text||'').trim():'',
+    qty:p.qty
+  }));
+
   const memo=document.getElementById('booking-memo').value.trim();
   const dispTime=getDisplayTime(selectedTime,isEn);
+  const isEdit=editMode;
 
   try{
-    await updateDoc(doc(db,'bookings',bookingId),{
+    window._justSubmitted=true;   // 스냅샷이 완료화면으로 되돌리지 않도록
+    const payload={
       status:'booked',
       booking_date:selectedDate,
       booking_time:selectedTime,
       booking_items:items.join(', '),
+      booking_items_struct:JSON.stringify(itemsStruct),
       booking_memo:memo,
       booked_at:new Date().toISOString(),
-    });
+    };
+    if(isEdit){
+      payload.edited_at=new Date().toISOString();
+      payload.edit_count=(bookingData.edit_count||0)+1;
+    }
+    await updateDoc(doc(db,'bookings',bookingId),payload);
+    // 로컬 상태도 즉시 반영 (메시지 생성 시 최신값 사용)
+    Object.assign(bookingData,payload);
+    editMode=false;
 
     // ── EmailJS 관리자 알림 발송 ──
     try{
@@ -1050,14 +1301,14 @@ async function submitBooking(){
         'service_wf4f4eg',
         'template_mu63ahr',
         {
-          customer_name: bookingData.customer_name||'—',
+          customer_name: (isEdit?'[예약 수정] ':'')+(bookingData.customer_name||'—'),
           customer_phone: bookingData.customer_phone||'—',
           customer_address: bookingData.customer_address||'—',
           booking_date: selectedDate,
           booking_time: dispTime,
           booking_items: items.join(', '),
           booking_memo: memo||'없음',
-          submitted_at: new Date().toLocaleString('ko-KR'),
+          submitted_at: new Date().toLocaleString('ko-KR')+(isEdit?' (고객이 예약 내용을 수정함)':''),
         },
         'O99J6X4SGYUPMfGQy'
       );
@@ -1066,8 +1317,8 @@ async function submitBooking(){
       console.warn('이메일 발송 실패 (예약은 저장됨):', emailErr);
     }
 
-    showStep3(items.join(', '),memo);
-  }catch(e){alert('예약 저장 실패: '+e.message);}
+    showStep3(items.join(', '),memo,isEdit);
+  }catch(e){editMode=isEdit;alert('예약 저장 실패: '+e.message);}
 }
 
 function getDisplayTime(t,isEn){
@@ -1086,11 +1337,20 @@ function getDisplayTime(t,isEn){
   return t;
 }
 
-function showStep3(items,memo){
+function showStep3(items,memo,isEdit){
   const lang=window._bookingLang||'ko';
   const isEn=lang==='en';
   const dispTime=getDisplayTime(selectedTime,isEn);
   goToStep(3);
+  document.getElementById('edit-banner-wrap').style.display='none';
+  updateEditUI();
+  if(isEdit){
+    document.querySelector('#step3-panel .confirm-check').textContent='✏️';
+    document.getElementById('complete-title').textContent=isEn?'Booking Updated!':'예약 내용이 수정되었습니다!';
+    document.getElementById('complete-sub').textContent=isEn
+      ?'Please resend the updated message below via KakaoTalk or WhatsApp'
+      :'변경된 아래 내용을 카카오톡 또는 WhatsApp으로 다시 전송해 주세요';
+  }
   document.getElementById('confirm-detail').innerHTML=
     `<strong>${isEn?'Name:':'이름:'}</strong> ${bookingData.customer_name||'—'}<br>
     <strong>${isEn?'Date:':'예약일:'}</strong> ${selectedDate} ${dispTime}<br>
