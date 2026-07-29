@@ -87,12 +87,32 @@ input,select,textarea,button{font-family:inherit;font-size:15px}
 .app-body.active{display:block}
 
 /* STATS */
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:18px}
-.stat{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:15px 14px;text-align:center;box-shadow:var(--shadow)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:11px}
+.stat{background:var(--white);border:1px solid var(--border);border-radius:var(--radius);padding:14px 8px 12px;text-align:center;box-shadow:var(--shadow);cursor:pointer;font-family:inherit;transition:all .15s;border-top:3px solid var(--navy)}
+.stat:hover{transform:translateY(-1px);box-shadow:0 6px 18px -8px rgba(11,22,51,.18)}
+.stat.on{border-color:var(--teal);box-shadow:0 6px 18px -8px rgba(15,181,164,.35)}
+.stat[data-sf="pending"]{border-top-color:var(--amber)}
+.stat[data-sf="completed"]{border-top-color:var(--green)}
+.stat[data-sf="urgent"]{border-top-color:var(--red)}
 .stat-val{font-size:27px;font-weight:800;color:var(--navy);line-height:1;letter-spacing:-.03em}
 .stat-val.amber{color:var(--amber)}
 .stat-val.green{color:var(--green)}
-.stat-lbl{font-size:10.5px;color:var(--text3);font-weight:700;letter-spacing:.03em;text-transform:uppercase;margin-top:6px}
+.stat-lbl{font-size:10.5px;color:var(--text3);font-weight:700;letter-spacing:.02em;margin-top:6px}
+/* 상태 분포 시각화 바 */
+.dist-bar{display:flex;height:12px;border-radius:8px;overflow:hidden;margin-bottom:7px;background:var(--surface2)}
+.dist-bar .seg{transition:width .4s ease}
+.dist-bar .seg.u{background:linear-gradient(90deg,#F87171,var(--red))}
+.dist-bar .seg.p{background:linear-gradient(90deg,#F5B942,var(--amber))}
+.dist-bar .seg.c{background:linear-gradient(90deg,#34D399,var(--green))}
+.dist-legend{display:flex;gap:13px;flex-wrap:wrap;font-size:11px;color:var(--text3);font-weight:700;margin-bottom:14px}
+.dist-legend .li{display:flex;align-items:center;gap:5px}
+.dist-legend .sw{width:9px;height:9px;border-radius:3px}
+/* 경과 시간 칩 */
+.rc-ago{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:800;background:var(--surface2);color:var(--text3);margin-left:6px}
+.rc-ago.warn{background:var(--amber-bg);color:var(--amber)}
+.rc-ago.late{background:var(--red-bg);color:var(--red)}
+.rc-items-hd{display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:800;color:var(--text3);margin-bottom:5px;letter-spacing:.02em}
+.rc-items-hd .n{background:var(--teal-lt);color:var(--teal-dk);padding:1px 8px;border-radius:10px}
 
 /* CONTROLS */
 .controls{display:flex;gap:9px;margin-bottom:13px;flex-wrap:wrap}
@@ -304,10 +324,19 @@ body.pk-lock{overflow:hidden}
 <div id="app-body" class="app-body">
   <!-- STATS -->
   <div class="stats">
-    <div class="stat"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">전체 의뢰</div></div>
-    <div class="stat"><div class="stat-val amber" id="stat-pending">0</div><div class="stat-lbl">대기중</div></div>
-    <div class="stat"><div class="stat-val green" id="stat-done">0</div><div class="stat-lbl">접수완료</div></div>
-    <div class="stat"><div class="stat-val" id="stat-urgent" style="color:var(--red)">0</div><div class="stat-lbl">24h 경과</div></div>
+    <button type="button" class="stat on" data-sf="all"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">전체 의뢰</div></button>
+    <button type="button" class="stat" data-sf="pending"><div class="stat-val amber" id="stat-pending">0</div><div class="stat-lbl">⏳ 대기중</div></button>
+    <button type="button" class="stat" data-sf="completed"><div class="stat-val green" id="stat-done">0</div><div class="stat-lbl">✅ 접수완료</div></button>
+    <button type="button" class="stat" data-sf="urgent"><div class="stat-val" id="stat-urgent" style="color:var(--red)">0</div><div class="stat-lbl">⚠️ 24h 경과</div></button>
+  </div>
+  <!-- 상태 분포 시각화 -->
+  <div class="dist-bar" id="dist-bar" style="display:none">
+    <div class="seg u" id="seg-u"></div><div class="seg p" id="seg-p"></div><div class="seg c" id="seg-c"></div>
+  </div>
+  <div class="dist-legend" id="dist-legend" style="display:none">
+    <span class="li"><span class="sw" style="background:var(--red)"></span>24h 경과 <b id="lg-u">0</b></span>
+    <span class="li"><span class="sw" style="background:var(--amber)"></span>대기중 <b id="lg-p">0</b></span>
+    <span class="li"><span class="sw" style="background:var(--green)"></span>접수완료 <b id="lg-c">0</b></span>
   </div>
 
   <!-- CONTROLS -->
@@ -318,8 +347,9 @@ body.pk-lock{overflow:hidden}
     </div>
     <select class="filter-sel" id="filter-status">
       <option value="all">전체</option>
-      <option value="pending">대기중</option>
-      <option value="completed">접수완료</option>
+      <option value="pending">⏳ 대기중</option>
+      <option value="completed">✅ 접수완료</option>
+      <option value="urgent">⚠️ 24h 경과</option>
     </select>
     <select class="filter-sel" id="filter-sort">
       <option value="newest">최근순</option>
@@ -684,12 +714,46 @@ document.getElementById('btn-logout').addEventListener('click',()=>{setAuth(fals
 })();
 
 // ── STATS ──
+function isUrgentReq(r){return r.status==='pending'&&r.submitted_at&&(Date.now()-new Date(r.submitted_at).getTime())/36e5>24;}
 function updateStats(){
-  document.getElementById('stat-total').textContent=allRequests.length;
-  document.getElementById('stat-pending').textContent=allRequests.filter(r=>r.status==='pending').length;
-  document.getElementById('stat-done').textContent=allRequests.filter(r=>r.status==='completed').length;
-  document.getElementById('stat-urgent').textContent=allRequests.filter(r=>r.status==='pending'&&r.submitted_at&&(Date.now()-new Date(r.submitted_at).getTime())/36e5>24).length;
+  const total=allRequests.length;
+  const urgent=allRequests.filter(isUrgentReq).length;
+  const pending=allRequests.filter(r=>r.status==='pending').length;
+  const completed=allRequests.filter(r=>r.status==='completed').length;
+  document.getElementById('stat-total').textContent=total;
+  document.getElementById('stat-pending').textContent=pending;
+  document.getElementById('stat-done').textContent=completed;
+  document.getElementById('stat-urgent').textContent=urgent;
+  // 상태 분포 바 (24h 경과는 대기중의 부분집합이므로 빨강+주황으로 분리 표시)
+  const bar=document.getElementById('dist-bar'),lg=document.getElementById('dist-legend');
+  if(bar&&lg){
+    if(!total){bar.style.display='none';lg.style.display='none';}
+    else{
+      bar.style.display='flex';lg.style.display='flex';
+      const rest=pending-urgent;
+      document.getElementById('seg-u').style.width=(urgent/total*100)+'%';
+      document.getElementById('seg-p').style.width=(rest/total*100)+'%';
+      document.getElementById('seg-c').style.width=(completed/total*100)+'%';
+      document.getElementById('lg-u').textContent=urgent;
+      document.getElementById('lg-p').textContent=rest;
+      document.getElementById('lg-c').textContent=completed;
+    }
+  }
 }
+
+// 스탯 카드 클릭 → 상태 필터 연동
+document.querySelectorAll('.stat[data-sf]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.getElementById('filter-status').value=btn.dataset.sf;
+    document.querySelectorAll('.stat[data-sf]').forEach(b=>b.classList.toggle('on',b===btn));
+    renderList();
+  });
+});
+// 셀렉트 직접 변경 시에도 스탯 카드 활성 표시 동기화
+document.getElementById('filter-status').addEventListener('change',()=>{
+  const v=document.getElementById('filter-status').value;
+  document.querySelectorAll('.stat[data-sf]').forEach(b=>b.classList.toggle('on',b.dataset.sf===v));
+});
 
 // ── RENDER LIST ──
 function renderList(){
@@ -702,7 +766,8 @@ function renderList(){
 
   // 필터
   if(search)list=list.filter(r=>(r.condo||'').toLowerCase().includes(search)||(r.condo_name||'').toLowerCase().includes(search)||(r.condo_unit||'').toLowerCase().includes(search)||(r.phone||'').toLowerCase().includes(search));
-  if(statusFilter!=='all')list=list.filter(r=>r.status===statusFilter);
+  if(statusFilter==='urgent')list=list.filter(isUrgentReq);
+  else if(statusFilter!=='all')list=list.filter(r=>r.status===statusFilter);
 
   // 정렬
   list.sort((a,b)=>{
@@ -724,6 +789,15 @@ function renderList(){
     const date=r.submitted_at?new Date(r.submitted_at).toLocaleString('ko-KR'):'—';
     const hoursAgo=r.submitted_at?(Date.now()-new Date(r.submitted_at).getTime())/36e5:0;
     const isUrgent=isPending&&hoursAgo>24;
+    // 접수 후 경과 시간 칩 — 오래된 대기 건일수록 눈에 띄게
+    let agoChip='';
+    if(r.submitted_at){
+      const agoTxt=hoursAgo<1?Math.max(1,Math.round(hoursAgo*60))+'분 전'
+        :hoursAgo<24?Math.round(hoursAgo)+'시간 전'
+        :Math.floor(hoursAgo/24)+'일 전';
+      const agoCls=!isPending?'':(hoursAgo>24?' late':(hoursAgo>12?' warn':''));
+      agoChip=`<span class="rc-ago${agoCls}">${agoTxt}</span>`;
+    }
     const cardCls=isUrgent?'urgent':statusCls;
     const urgentBadge=isUrgent?'<span class="rc-urgent-badge">⚠️ 24시간 경과</span>':'';
 
@@ -763,9 +837,12 @@ function renderList(){
         </div>
         <span class="rc-status ${statusCls}">${statusLabel}</span>
       </div>
-      <div class="rc-items">${itemsHtml||'품목 없음'}</div>
+      <div class="rc-items">
+        <div class="rc-items-hd"><span>🛒 의뢰 품목</span><span class="n">${items.reduce((a,it)=>a+(parseInt(it.qty,10)||1),0)}개</span></div>
+        ${itemsHtml||'품목 없음'}
+      </div>
       ${r.remarks?`<div class="rc-remarks">📝 ${r.remarks}</div>`:''}
-      <div class="rc-date">📅 ${date}</div>
+      <div class="rc-date">📅 ${date}${agoChip}</div>
       <div style="margin:6px 0">
         ${r.converted_to_booking
           ?'<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:10.5px;font-weight:700;background:#CCF2EE;color:#085048">🗓️ 예약전환 완료</span>'
