@@ -857,6 +857,8 @@ function applyTransferData(){
     // 언어 설정
     if(d.lang==='en'&&langEn){langEn.checked=true;if(langKo)langKo.checked=false;}
     window._transferFromRequestId=d.fromRequest||null;
+    // 의뢰 품목 원본 구조 보관 → 저장 시 예약 문서에 실어서 고객용 예약신청 화면의 품목 피커에 그대로 반영
+    window._transferItemsStruct=d.items_struct||'';
     localStorage.removeItem('hhc_transfer_booking');
     // 새 예약 등록 화면으로 바로 이동
     switchTab('new');
@@ -864,7 +866,7 @@ function applyTransferData(){
     setTimeout(function(){
       const t=document.createElement('div');
       t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0D9488;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;z-index:999;font-family:inherit';
-      t.textContent='✓ 의뢰 정보가 자동으로 입력됐습니다';
+      t.textContent=window._transferItemsStruct?'✓ 의뢰 정보와 품목이 자동으로 입력됐습니다':'✓ 의뢰 정보가 자동으로 입력됐습니다';
       document.body.appendChild(t);
       setTimeout(function(){t.remove();},3000);
     },500);
@@ -1197,6 +1199,9 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
       booking_memo:bMemo,
     };
     if(!existing)data.created_at=new Date().toISOString();
+    // 의뢰요청서 품목을 예약신청 화면(고객용)의 피커에 그대로 반영 — 값이 있을 때만 실어서
+    // 기존 예약을 수정 저장할 때 이전에 저장된 값을 실수로 비우지 않도록 함
+    if(window._transferItemsStruct)data.prefill_items_struct=window._transferItemsStruct;
 
     let docId;
     if(currentBookingId){
@@ -1213,6 +1218,7 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
         await updateDoc(doc(db,'requests',window._transferFromRequestId),{converted_to_booking:true,converted_booking_id:docId});
       }catch(e){console.warn('의뢰 전환 표시 실패:',e.message);}
       window._transferFromRequestId=null;
+      window._transferItemsStruct=null;
     }
 
     if(instantConfirm){

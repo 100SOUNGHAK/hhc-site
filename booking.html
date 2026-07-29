@@ -126,6 +126,8 @@ textarea.field-input{resize:vertical;min-height:80px;line-height:1.6}
 .card-cnt.show{display:inline-flex}
 .sched-chip{display:flex;align-items:center;gap:9px;background:var(--teal-lt);border:1.5px solid var(--border-dark);border-radius:var(--radius-sm);padding:11px 14px;margin-bottom:13px;font-size:13px;font-weight:700;color:var(--teal-dk)}
 .sched-chip .d{font-size:16px}
+.prefill-note{display:flex;align-items:flex-start;gap:8px;background:var(--amber-bg);border:1px solid rgba(224,134,0,.3);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:11px;font-size:12px;color:#8a5b00;line-height:1.6}
+.prefill-note .ic{flex:none;font-size:14px}
 
 /* ══ 품목 피커 시트 ══ */
 .pkbg{position:fixed;inset:0;background:rgba(8,18,33,.55);z-index:210}
@@ -349,6 +351,7 @@ body.pk-lock{overflow:hidden}
           <span class="card-cnt" id="items-cnt"></span>
         </div>
         <div class="card-body">
+          <div class="prefill-note" id="prefill-note" style="display:none"></div>
           <div id="picked-list"></div>
           <button class="big-pick" id="btn-open-picker" type="button">🛒 <span id="btn-open-picker-t">품목 선택 / Select Items</span></button>
         </div>
@@ -465,6 +468,7 @@ const PK_L={
     freeRowT:'기타 (직접 입력)',freeRowD:'목록에 없는 요청을 직접 적어주세요',
     freePh:'요청 내용 입력 (예: 방충망 보수)',
     qtyLbl:'수량',removeLbl:'빼기',
+    prefillNote:'의뢰 요청서에서 신청하신 품목이 자동으로 담겼습니다. 필요하면 자유롭게 추가·수정·삭제해주세요.',
     cnt:function(n){return n+'개';},unit:'대'},
   en:{pkTitle:'🛒 Select Items',pkSearch:'Search items & services',pkCntLbl:'Items added',pkOk:'Done',pkNoResult:'No results found',
     openPicker:'Select Items',
@@ -472,6 +476,7 @@ const PK_L={
     freeRowT:'Other (Custom)',freeRowD:'Describe a request not in the list',
     freePh:'Enter your request (e.g. mosquito net repair)',
     qtyLbl:'Qty',removeLbl:'Remove',
+    prefillNote:'The items from your service request have been added automatically. Feel free to add, edit, or remove them as needed.',
     cnt:function(n){return String(n);},unit:'unit(s)'}
 };
 let picked=[];   // {key,catId,grp:[ko,en]|null,svc:[ko,en]|null,free,text,qty}
@@ -666,7 +671,52 @@ function initBookingForm(){
     calYear=parseInt(parts[0]);calMonth=parseInt(parts[1])-1;
   }
   renderCalendar();
+  if(!window._prefillApplied){
+    window._prefillApplied=true;
+    applyPrefillItems();
+  }
   pkApplyLang();
+}
+
+// ══ 의뢰요청서에서 선택한 품목을 예약신청 피커에 그대로 반영 ══
+let hadPrefillItems=false;
+function applyPrefillItems(){
+  if(picked.length)return;              // 이미 담긴 품목이 있으면 건드리지 않음
+  const raw=bookingData&&bookingData.prefill_items_struct;
+  if(!raw)return;
+  let arr;
+  try{arr=JSON.parse(raw);}catch(e){return;}
+  if(!Array.isArray(arr)||!arr.length)return;
+  let added=0;
+  arr.forEach(it=>{
+    const c=pkCatOf(it.catId);
+    if(c&&it.free){
+      picked.push({key:'free|'+Date.now()+Math.random(),catId:it.catId,free:true,text:it.text||'',qty:it.qty||1});
+      added++;return;
+    }
+    if(c){
+      let grpPair=null,svcPair=null;
+      c.groups.forEach(g=>{
+        (g.svcs||[]).forEach(svc=>{
+          if((g.ko||null)===(it.grpKo||null)&&svc[0]===it.svcKo){grpPair=g.ko?[g.ko,g.en]:null;svcPair=svc;}
+        });
+      });
+      if(svcPair){
+        const key=pkItemKey(c.id,grpPair,svcPair);
+        const exist=picked.find(p=>p.key===key);
+        if(exist)exist.qty+=(it.qty||1);
+        else picked.push({key,catId:c.id,grp:grpPair,svc:svcPair,qty:it.qty||1});
+        added++;return;
+      }
+    }
+    // 매칭 실패 시에도 내용을 잃지 않도록 기타서비스에 직접입력으로 보존
+    const label=(it.svcKo||it.text||'').trim();
+    if(label){
+      picked.push({key:'free|'+Date.now()+Math.random(),catId:'etc',free:true,text:label,qty:it.qty||1});
+      added++;
+    }
+  });
+  if(added>0)hadPrefillItems=true;
 }
 
 // ── CALENDAR ──
@@ -802,6 +852,15 @@ function renderPicked(){
   const l=pkL();
   const el=$id('picked-list');
   if(!el)return;
+  const noteEl=$id('prefill-note');
+  if(noteEl){
+    if(hadPrefillItems&&picked.length){
+      noteEl.style.display='flex';
+      noteEl.innerHTML='<span class="ic">📋</span><span>'+pkEsc(l.prefillNote)+'</span>';
+    }else{
+      noteEl.style.display='none';
+    }
+  }
   if(!picked.length){
     el.innerHTML='<div class="pick-empty">'+pkEsc(l.pickEmpty).replace(/\n/g,'<br>')+'</div>';
   }else{
