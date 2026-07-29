@@ -440,7 +440,6 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   </div>
 
   <div id="tab-items" style="display:none">
-    <div id="freq-item-chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
     <button class="big-add" onclick="openSvcPicker()">🛒 품목 빠른 선택</button>
     <button class="manual-add" onclick="addLI()">✏️ 직접 입력으로 추가</button>
     <div id="li-wrap"></div>
@@ -460,7 +459,14 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
       <div id="credit-auto-hint" style="display:none"></div>
       <div class="cr-row"><span class="cr-label" style="color:var(--amber)">상품/할인권 사용</span><input type="number" id="voucher-amt" value="0" min="0" step="0.5" class="cr-inp" style="border-color:rgba(217,119,6,.35)" oninput="App.upPrev()"><span style="font-size:12px;color:var(--amber);flex-shrink:0;padding:0 4px">-차감</span></div>
       <div class="cr-row"><span class="cr-label" style="color:var(--amber);font-size:10.5px">└ 상품권 번호</span><input id="voucher-code" placeholder="예: HHC-XXXX-XXXX" class="cr-inp" style="border-color:rgba(217,119,6,.25);text-transform:uppercase;font-size:12.5px" oninput="App.upPrev()"></div>
-      <div class="cr-row"><span class="cr-label" style="color:var(--green)">기납부액 (일부 결제)</span><input type="number" id="paid-amount" value="0" min="0" step="0.5" class="cr-inp" style="border-color:rgba(22,163,74,.3)" oninput="App.upPrev()"><span style="font-size:12px;color:var(--green);flex-shrink:0;padding:0 4px">-차감</span></div>
+      <div style="padding:9px 0;border-bottom:1px solid var(--bdr)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+          <span class="cr-label" style="color:var(--green)">기납부액 (일부 결제)</span>
+          <span style="font-size:11.5px;color:var(--green);font-weight:800" id="pay-sum-lbl"></span>
+        </div>
+        <div id="pay-list"></div>
+        <button type="button" onclick="addPayment()" style="width:100%;padding:9px;border:1.5px dashed rgba(22,163,74,.45);background:rgba(22,163,74,.05);color:var(--green);border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">+ 결제 내역 추가 (금액 · 결제일)</button>
+      </div>
     </div>
     <div class="tbox">
       <div class="tr"><span>서비스 소계</span><span id="sub-d">RM 0.00</span></div>
@@ -1010,7 +1016,8 @@ App.resetForm=function(){
   ['c-name','c-email','c-addr','c-biz','c-member','inv-notes','inv-terms'].forEach(function(id){setVal(id,'');});
   setVal('c-phone','+60');
   setVal('tax-rate','0');setVal('disc-val','0');setVal('disc-type','pct');
-  setVal('parking-fee','0');setVal('min-charge','0');setVal('extra-fee','0');setVal('credit-use','0');setVal('voucher-amt','0');setVal('voucher-code','');setVal('paid-amount','0');
+  setVal('parking-fee','0');setVal('min-charge','0');setVal('extra-fee','0');setVal('credit-use','0');setVal('voucher-amt','0');setVal('voucher-code','');
+  payments=[];renderPayments();
   setVal('send-email','');
   var _tmpInv=getInvData();
   var _status=_tmpInv.status||'billing';
@@ -1084,7 +1091,9 @@ function loadInvToForm(inv){
   setVal('c-member',inv.customer&&inv.customer.member||'');
   setVal('tax-rate',inv.taxRate||0);setVal('disc-val',inv.discVal||0);setVal('disc-type',inv.discType||'pct');
   setVal('parking-fee',inv.parkingFee||0);setVal('min-charge',inv.minCharge||0);
-  setVal('extra-fee',inv.extraFee||0);setVal('credit-use',inv.creditUse||0);setVal('voucher-amt',inv.voucherAmt||0);setVal('voucher-code',inv.voucherCode||'');setVal('paid-amount',inv.paidAmount||0);
+  setVal('extra-fee',inv.extraFee||0);setVal('credit-use',inv.creditUse||0);setVal('voucher-amt',inv.voucherAmt||0);setVal('voucher-code',inv.voucherCode||'');
+  payments=(inv.payments&&inv.payments.length)?JSON.parse(JSON.stringify(inv.payments)):((parseFloat(inv.paidAmount)||0)>0?[{amt:parseFloat(inv.paidAmount)||0,date:inv.paidDate||''}]:[]);
+  renderPayments();
   setVal('inv-notes',inv.notes||'');setVal('inv-terms',inv.terms||'');
   setVal('send-email',inv.customer&&inv.customer.email||'');
   setVal('wa-num',inv.customer&&inv.customer.phone||'');
@@ -1131,42 +1140,43 @@ window.onBankSel=onBankSel;
 // ═══════════════════════════════════════════════════════════
 // LINE ITEMS
 // ═══════════════════════════════════════════════════════════
-var freqItems=[];
-function computeFreqItems(){
-  var counts={};
-  invoices.forEach(function(inv){
-    (inv.items||[]).forEach(function(it){
-      if(!it.name)return;
-      var key=it.name+'|'+it.cat+'|'+it.subcat+'|'+(it.sub2||'');
-      if(!counts[key])counts[key]={n:0,item:it};
-      counts[key].n++;
-    });
-  });
-  freqItems=Object.keys(counts).map(function(k){return counts[k];}).sort(function(a,b){return b.n-a.n;}).slice(0,4).map(function(c){return c.item;});
-  renderFreqItemChips();
-}
-function renderFreqItemChips(){
-  var el=$('freq-item-chips');if(!el)return;
-  if(!freqItems.length){el.innerHTML='';return;}
-  el.innerHTML=freqItems.map(function(it,i){
-    return '<span onclick="addFreqItem('+i+')" style="font-size:12px;padding:7px 12px;border-radius:20px;background:#f4f6fb;border:1px solid var(--bdr);color:var(--txt2);cursor:pointer;white-space:nowrap">+ '+it.name+'</span>';
-  }).join('');
-}
-window.addFreqItem=function(i){
-  var src=freqItems[i];if(!src)return;
-  var newId='li'+Date.now();
-  lineItems.push({id:newId,cat:src.cat||'',subcat:src.subcat||'',sub2:src.sub2||'',svcId:src.svcId||'',name:src.name||'',price:src.price||0,qty:1,discVal:0,discType:'pct'});
-  renderLI();App.upPrev();
-  showToast('✓ "'+src.name+'" 추가됨');
-};
+// (주로 사용된 항목 칩 기능 제거됨)
 
 function addLI(){
   var newId='li'+Date.now();
-  lineItems.push({id:newId,cat:'',subcat:'',svcId:'',name:'',price:0,qty:1,discVal:0,discType:'pct'});
+  // 직접 입력: 대분류/중분류 선택 없이 서비스 내용을 바로 기록 (분류는 '기타'로 자동 지정)
+  lineItems.push({id:newId,cat:'기타',subcat:'기타',svcId:'',name:'',price:0,qty:1,discVal:0,discType:'pct',direct:true});
   expandedLI[newId]=true;
   renderLI();App.upPrev();
+  setTimeout(function(){var r=document.querySelector('[data-lid="'+newId+'"] input[data-direct-name]');if(r)r.focus();},60);
 }
 window.addLI=addLI;
+
+// ── 일부 결제(기납부) 내역: 금액 + 결제일을 여러 건 기록 ──
+var payments=[];   // [{amt:Number,date:'YYYY-MM-DD'}]
+function _payTotal(){return payments.reduce(function(s,p){return s+(parseFloat(p.amt)||0);},0);}
+function renderPayments(){
+  var el=$('pay-list');if(!el)return;
+  el.innerHTML=payments.length?payments.map(function(p,i){
+    return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">'+
+      '<div style="flex:1;position:relative"><i style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-style:normal;font-size:10px;color:var(--gray);font-weight:800;z-index:1">RM</i>'+
+        '<input type="number" value="'+(p.amt||0)+'" min="0" step="0.5" placeholder="금액" oninput="onPayAmt('+i+',this.value)" style="width:100%;padding:8px 8px 8px 32px;border:1.5px solid rgba(22,163,74,.3);border-radius:9px;font-size:13px;font-weight:700"></div>'+
+      '<input type="date" value="'+(p.date||'')+'" onchange="onPayDate('+i+',this.value)" style="flex:1.15;padding:8px;border:1.5px solid var(--bdr);border-radius:9px;font-size:12px">'+
+      '<button type="button" class="ld" onclick="rmPayment('+i+')" title="삭제">×</button>'+
+    '</div>';
+  }).join(''):'<div style="font-size:11.5px;color:var(--gray);padding:2px 0 8px">아직 기록된 결제가 없습니다</div>';
+  var s=$('pay-sum-lbl');if(s)s.textContent=payments.length?('합계 -'+fmtAmt(_payTotal())):'';
+}
+window.addPayment=function(){payments.push({amt:0,date:today()});renderPayments();App.upPrev();};
+window.rmPayment=function(i){payments.splice(i,1);renderPayments();App.upPrev();};
+window.onPayAmt=function(i,v){if(payments[i]){payments[i].amt=parseFloat(v)||0;var s=$('pay-sum-lbl');if(s)s.textContent='합계 -'+fmtAmt(_payTotal());App.upPrev();}};
+window.onPayDate=function(i,v){if(payments[i]){payments[i].date=v;App.upPrev();}};
+// 잔액이 남은 일부결제 인보이스 판별 (결제완료 처리 전 + 납부액 있음 + 잔액 있음)
+function invIsPartial(inv,t){
+  var pa=t?(t.paidAmount||0):(parseFloat(inv.paidAmount)||0);
+  var bal=t?(t.balance||0):((inv.total||0)-pa);
+  return inv.status!=='paid'&&pa>0.005&&bal>0.005;
+}
 
 function toggleInvNumEdit(){
   var inp=$('inv-num');var btn=$('inv-num-edit-btn');
@@ -1289,16 +1299,18 @@ function renderLI(){
     if(li.svcId&&svcs.findIndex(function(s){return s.id===li.svcId;})<0){var lsv=services.find(function(s){return s.id===li.svcId;});if(lsv)svcs.unshift(lsv);}
     var svcOpts='<option value="">서비스 선택</option>'+svcs.map(function(s){return '<option value="'+s.id+'">'+s.name+'</option>';}).join('');
     var canPickSvc=hasSub2?!!li.sub2:!!li.subcat;
+    var selectorHtml=li.direct
+      ?'<input data-direct-name placeholder="서비스 내용 입력 (예: 방충망 보수)" value="'+(li.name||'').replace(/"/g,'&quot;')+'" oninput="onName(\''+li.id+'\',this.value)" style="font-size:13.5px;font-weight:600">'
+      :'<select onchange="onTopCat(\''+li.id+'\',this.value)" style="font-size:13px">'+topOpts+'</select>'+
+        '<select onchange="onSubCat(\''+li.id+'\',this.value)" style="font-size:13px"'+(li.cat?'':' disabled')+'>'+subOpts+'</select>'+
+        (hasSub2?'<select onchange="onSub2(\''+li.id+'\',this.value)" style="font-size:13px"'+(li.subcat?'':' disabled')+'>'+sub2Opts+'</select>':'')+
+        '<select onchange="onSvcSel(\''+li.id+'\',this.value)" style="font-size:13px"'+(canPickSvc?'':' disabled')+'>'+svcOpts+'</select>'+
+        (canPickSvc&&!li.svcId?'<input placeholder="서비스명 직접 입력" value="'+(li.name||'').replace(/"/g,'&quot;')+'" oninput="onName(\''+li.id+'\',this.value)" style="font-size:13px">':'');
     return '<div class="li" data-lid="'+li.id+'">'+
       summaryHtml+
       '<div style="margin-top:8px">'+
       '<div style="display:flex;gap:6px;margin-bottom:8px;align-items:flex-start">'+
-        '<div style="flex:1;display:flex;flex-direction:column;gap:6px">'+
-          '<select onchange="onTopCat(\''+li.id+'\',this.value)" style="font-size:13px">'+topOpts+'</select>'+
-          '<select onchange="onSubCat(\''+li.id+'\',this.value)" style="font-size:13px"'+(li.cat?'':' disabled')+'>'+subOpts+'</select>'+
-          (hasSub2?'<select onchange="onSub2(\''+li.id+'\',this.value)" style="font-size:13px"'+(li.subcat?'':' disabled')+'>'+sub2Opts+'</select>':'')+
-          '<select onchange="onSvcSel(\''+li.id+'\',this.value)" style="font-size:13px"'+(canPickSvc?'':' disabled')+'>'+svcOpts+'</select>'+
-          (canPickSvc&&!li.svcId?'<input placeholder="서비스명 직접 입력" value="'+(li.name||'')+'" oninput="onName(\''+li.id+'\',this.value)" style="font-size:13px">':'')+
+        '<div style="flex:1;display:flex;flex-direction:column;gap:6px">'+selectorHtml+
         '</div>'+
       '</div>'+
       '<div class="lin">'+
@@ -1551,7 +1563,7 @@ function calcTotals(inv){
   }
   var voucher=parseFloat(inv?inv.voucherAmt:val('voucher-amt'))||0;
   var voucherCode=((inv?(inv.voucherCode||''):val('voucher-code'))||'').trim().toUpperCase();
-  var paidAmount=parseFloat(inv?inv.paidAmount:val('paid-amount'))||0;
+  var paidAmount=inv?(parseFloat(inv.paidAmount)||0):_payTotal();
   var tax=taxRate/100*sub;
   var disc=discType==='pct'?discVal/100*sub:discVal;
   var rawGrand=sub+tax-disc+park+extra-credit-voucher;
@@ -1595,7 +1607,7 @@ function getInvData(){
     issuer:JSON.parse(JSON.stringify(issuer)),
     items:JSON.parse(JSON.stringify(lineItems)),
     taxRate:t.taxRate,discVal:t.discVal,discType:t.discType,
-    parkingFee:t.park,minCharge:t.minC,extraFee:t.extra,creditUse:t.credit,voucherAmt:t.voucher,voucherCode:t.voucherCode,paidAmount:t.paidAmount,
+    parkingFee:t.park,minCharge:t.minC,extraFee:t.extra,creditUse:t.credit,voucherAmt:t.voucher,voucherCode:t.voucherCode,paidAmount:t.paidAmount,payments:JSON.parse(JSON.stringify(payments)),
     notes:val('inv-notes'),terms:val('inv-terms'),bankId:bankId,bankInfo:bank,total:t.grand,_t:t};
 }
 
@@ -1626,6 +1638,7 @@ var IVX_CSS=`
 .ivx .pill.billing{background:rgba(201,162,39,.2);color:#F3D89A;border:1px solid rgba(201,162,39,.42)}
 .ivx .pill.paid{background:rgba(47,207,133,.18);color:#8FF0C4;border:1px solid rgba(47,207,133,.4)}
 .ivx .pill.overdue{background:rgba(255,143,140,.18);color:#FFC0BD;border:1px solid rgba(255,143,140,.4)}
+.ivx .pill.partial{background:rgba(96,148,246,.2);color:#BBD3FF;border:1px solid rgba(96,148,246,.45)}
 .ivx .goldline{height:3px;background:linear-gradient(90deg,var(--gd) 0%,#E8D48A 45%,rgba(201,162,39,.15) 100%)}
 .ivx .wm{position:absolute;top:46%;left:50%;transform:translate(-50%,-50%) rotate(-26deg);z-index:1;font-family:'Inter',sans-serif;font-weight:800;font-size:118px;letter-spacing:.1em;white-space:nowrap;pointer-events:none}
 .ivx .wm.paid{color:rgba(14,158,110,.07)}
@@ -1712,7 +1725,8 @@ function buildInvHTML(inv,custView){
   var cust=inv.customer||{};var iss=inv.issuer||issuer;
   var items=inv.items||[];
   var hasDisc=items.some(function(li){return (li.discVal||li.disc||0)>0;});
-  var stMap={billing:'Billing · 청구',paid:'Paid · 결제완료',overdue:'Overdue · 연체'};
+  var stMap={billing:'Billing · 청구',paid:'Paid · 결제완료',overdue:'Overdue · 연체',partial:'Partially Paid · 일부결제'};
+  var _stKey=invIsPartial(inv,t)?'partial':(inv.status||'billing');
   var rows=items.length?items.map(function(li){
     var la=(li.price||0)*(li.qty||1);
     var da=li.discType==='pct'?la*((li.discVal||0)/100):(li.discVal||li.disc||0);
@@ -1754,7 +1768,7 @@ function buildInvHTML(inv,custView){
       '<span class="mi"><span class="mk">Issued</span>'+ivxEsc(inv.date||'—')+'</span>'+
       '<span class="md">·</span>'+
       '<span class="mi"><span class="mk">Due</span>'+ivxEsc(inv.due||'—')+'</span>'+
-      '<span class="pill '+(inv.status||'billing')+'">'+(stMap[inv.status]||stMap.billing)+'</span>'+
+      '<span class="pill '+_stKey+'">'+(stMap[_stKey]||stMap.billing)+'</span>'+
     '</div></div>'+
     '<div class="goldline"></div>'+
     '<div class="parties">'+
@@ -1765,7 +1779,7 @@ function buildInvHTML(inv,custView){
     '<div class="sumwrap"><div class="sums">'+
       '<div class="sumrow"><span>소계 · Subtotal</span><span class="num">'+fa(t.sub)+'</span></div>'+chargeRows+
       '<div class="total"><span class="total-lbl">청구 합계 · TOTAL ('+cur+')</span><span class="total-val">'+fa(t.grand)+'</span></div>'+
-      (t.paidAmount>0?'<div class="sumrow minus" style="margin-top:6px"><span>기결제 · Paid</span><span class="num">- '+fa(t.paidAmount)+'</span></div><div class="balrow"><span>잔여 결제금액 · BALANCE DUE</span><span>'+fa(t.balance)+'</span></div>':'')+
+      (t.paidAmount>0?((inv.payments&&inv.payments.length?inv.payments:[{amt:t.paidAmount,date:inv.paidDate||''}]).map(function(p,pi){return '<div class="sumrow minus"'+(pi===0?' style="margin-top:6px"':'')+'><span>기결제 · Paid'+(p.date?' <span style="opacity:.72;font-size:.92em">('+ivxEsc(p.date)+')</span>':'')+'</span><span class="num">- '+fa(p.amt)+'</span></div>';}).join('')+'<div class="balrow"><span>잔여 결제금액 · BALANCE DUE</span><span>'+fa(t.balance)+'</span></div>'):'')+
     '</div></div>'+
     '<div class="notes">'+payHtml+noteHtml+'</div>'+signHtml+
     '<div class="ft"><div class="ft-co">'+ivxEsc(iss.name||'HAPPY WORKS SERVICES SDN.BHD.')+(iss.biz?' ('+ivxEsc(iss.biz)+')':'')+'<br>📞 '+ivxEsc(iss.phone||'')+'</div><div class="ft-thanks">Thank you for your business</div></div>'+
@@ -1786,7 +1800,7 @@ function updateTabBadges(){
   var bit=$('badge-items');
   if(bit){var n=lineItems.length;bit.textContent=n;bit.classList.toggle('zero',n===0);}
   var bc=$('badge-charges');
-  var hasAdj=(parseFloat(val('tax-rate'))||0)>0||(parseFloat(val('disc-val'))||0)>0||(parseFloat(val('parking-fee'))||0)>0||(parseFloat(val('extra-fee'))||0)>0||(parseFloat(val('credit-use'))||0)>0||(parseFloat(val('voucher-amt'))||0)>0||(parseFloat(val('paid-amount'))||0)>0;
+  var hasAdj=(parseFloat(val('tax-rate'))||0)>0||(parseFloat(val('disc-val'))||0)>0||(parseFloat(val('parking-fee'))||0)>0||(parseFloat(val('extra-fee'))||0)>0||(parseFloat(val('credit-use'))||0)>0||(parseFloat(val('voucher-amt'))||0)>0||_payTotal()>0;
   if(bc){
     bc.textContent=hasAdj?'✓':'–';bc.classList.toggle('zero',!hasAdj);
   }
@@ -1843,7 +1857,7 @@ function buildInvLiteHTML(inv,custView){
   var cust=inv.customer||{};var iss=inv.issuer||issuer;
   var items=inv.items||[];
   var hasDisc=items.some(function(li){return (li.discVal||li.disc||0)>0;});
-  var stMap={billing:'청구 · Billing',paid:'결제완료 · Paid',overdue:'기한초과 · Overdue'};
+  var stMap={billing:'청구 · Billing',paid:'결제완료 · Paid',overdue:'기한초과 · Overdue',partial:'일부결제 · Partial'};
   var rows=items.length?items.map(function(li){
     var la=(li.price||0)*(li.qty||1);
     var da=li.discType==='pct'?la*((li.discVal||0)/100):(li.discVal||li.disc||0);
@@ -1873,14 +1887,14 @@ function buildInvLiteHTML(inv,custView){
     '<td><div class="k">Invoice No.</div><div class="v">'+ivxEsc(inv.id||'—')+'</div></td>'+
     '<td><div class="k">발행일 · Issued</div><div class="v">'+ivxEsc(inv.date||'—')+'</div></td>'+
     '<td><div class="k">기한 · Due</div><div class="v">'+ivxEsc(inv.due||'—')+'</div></td>'+
-    '<td><div class="k">상태 · Status</div><div class="v">'+(stMap[inv.status]||'—')+'</div></td>'+
+    '<td><div class="k">상태 · Status</div><div class="v">'+(invIsPartial(inv,t)?stMap.partial:(stMap[inv.status]||'—'))+'</div></td>'+
     '</tr></tbody></table>';
   html+='<div class="l-parties"><div class="l-party"><div class="l-plbl">Bill To · 고객</div><div class="l-pname">'+ivxEsc(cust.name||'—')+'</div><div class="l-pline">'+cInfo+'</div></div>'+
     '<div class="l-party"><div class="l-plbl">From · 발행</div><div class="l-pname">'+ivxEsc(iss.name||'')+'</div><div class="l-pline">'+iInfo+'</div></div></div>';
   html+='<table class="l-items"><thead><tr><th>항목 · Description</th><th class="c">수량</th><th class="r">단가</th>'+(hasDisc?'<th class="r">할인</th>':'')+'<th class="r">금액</th></tr></thead><tbody>'+rows+'</tbody></table>';
   html+='<div class="l-sum"><div class="l-srow"><span>소계 · Subtotal</span><span>'+fa(t.sub)+'</span></div>'+charge+
     '<div class="l-total"><span>청구 합계 · TOTAL ('+cur+')</span><span>'+fa(t.grand)+'</span></div>'+
-    (t.paidAmount>0?'<div class="l-srow" style="margin-top:5px"><span>기결제 · Paid</span><span>- '+fa(t.paidAmount)+'</span></div><div class="l-bal"><span>잔여 결제금액 · BALANCE DUE</span><span>'+fa(t.balance)+'</span></div>':'')+
+    (t.paidAmount>0?((inv.payments&&inv.payments.length?inv.payments:[{amt:t.paidAmount,date:inv.paidDate||''}]).map(function(p,pi){return '<div class="l-srow"'+(pi===0?' style="margin-top:5px"':'')+'><span>기결제 · Paid'+(p.date?' ('+ivxEsc(p.date)+')':'')+'</span><span>- '+fa(p.amt)+'</span></div>';}).join('')+'<div class="l-bal"><span>잔여 결제금액 · BALANCE DUE</span><span>'+fa(t.balance)+'</span></div>'):'')+
     '</div>';
   html+='<div class="l-lower"><div class="l-box"><div class="l-btitle">Payment · 결제 안내</div><div class="l-btext">'+ivxEsc(payText)+'</div></div>'+
     '<div class="l-box"><div class="l-btitle">Notes · Terms</div><div class="l-btext">'+ivxEsc(noteText)+'</div></div></div>';
@@ -2167,8 +2181,10 @@ function renderList(){
   var sb=$('stats-bar');
   if(sb){
     var tot=invoices.reduce(function(s,i){return s+(i.total||0);},0);
-    var paid=invoices.filter(function(i){return i.status==='paid';}).reduce(function(s,i){return s+(i.total||0);},0);
-    var pend=invoices.filter(function(i){return i.status==='billing'||i.status==='overdue';}).reduce(function(s,i){return s+(i.total||0);},0);
+    // 일부결제 반영: 수금 완료에는 부분 납부액 포함, 미수금은 잔액 기준
+    var paid=invoices.filter(function(i){return i.status==='paid';}).reduce(function(s,i){return s+(i.total||0);},0)
+      +invoices.filter(function(i){return i.status!=='paid';}).reduce(function(s,i){return s+(parseFloat(i.paidAmount)||0);},0);
+    var pend=invoices.filter(function(i){return i.status==='billing'||i.status==='overdue';}).reduce(function(s,i){return s+Math.max(0,(i.total||0)-(parseFloat(i.paidAmount)||0));},0);
     sb.innerHTML='<div class="sg"><div class="sc"><div class="sl">총 인보이스</div><div class="sv">'+invoices.length+'건</div></div><div class="sc"><div class="sl">수금 완료</div><div class="sv" style="color:var(--green)">'+fmtAmt(paid)+'</div></div><div class="sc"><div class="sl">미수금</div><div class="sv" style="color:var(--red)">'+fmtAmt(pend)+'</div></div><div class="sc"><div class="sl">총 매출</div><div class="sv">'+fmtAmt(tot)+'</div></div></div><div style="height:8px"></div>';
   }
   var sb2={billing:'db',paid:'dp',overdue:'do'},sl2={billing:'청구',paid:'결제완료',overdue:'연체'};
@@ -2176,6 +2192,9 @@ function renderList(){
   el.innerHTML=filtered.map(function(inv){
     var eid=inv.id.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     var st=inv.status||'billing';
+    var _pa=parseFloat(inv.paidAmount)||0;
+    var _bal=(inv.total||0)-_pa;
+    var _partial=st!=='paid'&&_pa>0.005&&_bal>0.005;
     var stColor={billing:'var(--amber)',paid:'var(--green)',overdue:'var(--red)'};
     var stBg={billing:'#fef3c7',paid:'#d1fae5',overdue:'#fee2e2'};
     var memberBadge=(inv.customer&&inv.customer.member)?'<div style="display:inline-block;margin-top:2px;padding:1px 7px;border-radius:20px;font-size:10px;font-weight:600;background:var(--il);color:var(--indigo)">'+inv.customer.member+'</div>':'';
@@ -2184,12 +2203,13 @@ function renderList(){
       '<div class="ii"><div class="iname">'+(inv.customer&&inv.customer.name||'(이름 없음)')+'</div>'+
       '<div class="isub"><span style="font-family:monospace;font-size:10px">'+(inv.id||'')+'</span> · '+fmtDate(inv.date)+'</div>'+memberBadge+'</div>'+
       '<div class="irt">'+
-        '<div class="iamt">'+fmtAmt(inv.total||0,inv.currency)+'</div>'+
+        '<div class="iamt">'+(_partial?'<span style="color:var(--gray);font-size:.85em">총액</span> '+fmtAmt(inv.total||0,inv.currency)+'<div style="font-size:11px;font-weight:800;color:var(--red);margin-top:1px">잔액 '+fmtAmt(_bal,inv.currency)+'</div>':fmtAmt(inv.total||0,inv.currency))+'</div>'+
         '<select onclick="event.stopPropagation()" onchange="quickStatusChange(\''+eid+'\',this.value)" style="font-size:11px;padding:3px 6px;border-radius:12px;border:1px solid '+(stColor[st]||'#ccc')+';background:'+(stBg[st]||'#f9f9f9')+';color:'+(stColor[st]||'#333')+';font-weight:600;cursor:pointer">'+
           '<option value="billing" '+(st==='billing'?'selected':'')+'>⏳ 청구중</option>'+
           '<option value="paid" '+(st==='paid'?'selected':'')+'>✅ 결제완료</option>'+
           '<option value="overdue" '+(st==='overdue'?'selected':'')+'>⚠️ 연체</option>'+
         '</select>'+
+        (_partial?'<div style="margin-top:3px;font-size:10px;font-weight:800;color:#1D4ED8;background:#DBEAFE;border-radius:10px;padding:2px 8px;text-align:center">◐ 일부결제</div>':'')+
       '</div>'+
     '</div>'+
     '<div class="ira">'+
@@ -3174,7 +3194,7 @@ function bindAll(){
   });
   // Live preview inputs
   ['inv-date','inv-due','inv-status','inv-currency','c-name','c-phone','c-email','c-addr','c-biz','c-member',
-   'inv-notes','inv-terms','tax-rate','disc-val','disc-type','parking-fee','min-charge','extra-fee','credit-use','paid-amount'].forEach(function(id){
+   'inv-notes','inv-terms','tax-rate','disc-val','disc-type','parking-fee','min-charge','extra-fee','credit-use'].forEach(function(id){
     var el=$(id);if(el)el.addEventListener('input',App.upPrev);
   });
 }
@@ -3280,6 +3300,7 @@ function applyBookingTransfer(){
       var id='li'+Date.now()+'_'+i;
       var li={id:id,cat:m.cat,subcat:m.subcat,svcId:svc?svc.id:'',name:svc?svc.name:label,price:svc?(svc.price||0):0,qty:it.qty||1,discVal:0,discType:'pct'};
       if(sub2)li.sub2=sub2;
+      if(it.free)li.direct=true;
       if(!svc||!li.price){expandedLI[id]=true;needPrice++;}
       lineItems.push(li);
     });
@@ -3290,12 +3311,12 @@ function applyBookingTransfer(){
     while((mm=re.exec(d.items_text))!==null){
       found=true;
       var id2='li'+Date.now()+'_'+lineItems.length;
-      lineItems.push({id:id2,cat:'기타',subcat:'기타',svcId:'',name:mm[1].trim()+' — '+mm[3].trim(),price:0,qty:parseInt(mm[2],10)||1,discVal:0,discType:'pct'});
+      lineItems.push({id:id2,cat:'기타',subcat:'기타',svcId:'',name:mm[1].trim()+' — '+mm[3].trim(),price:0,qty:parseInt(mm[2],10)||1,discVal:0,discType:'pct',direct:true});
       expandedLI[id2]=true;needPrice++;
     }
     if(!found){
       var id3='li'+Date.now()+'_0';
-      lineItems.push({id:id3,cat:'기타',subcat:'기타',svcId:'',name:d.items_text,price:0,qty:1,discVal:0,discType:'pct'});
+      lineItems.push({id:id3,cat:'기타',subcat:'기타',svcId:'',name:d.items_text,price:0,qty:1,discVal:0,discType:'pct',direct:true});
       expandedLI[id3]=true;needPrice++;
     }
   }
@@ -3354,7 +3375,7 @@ async function init(){
       localStorage.setItem(LINV,JSON.stringify(invoices));
       autoUpdateInvoiceStatus();
       renderList();renderAcc();renderYearTabs();setSS('on');
-      computeFreqItems();renderRecentCustChips();
+      renderRecentCustChips();
     },function(e){setSS('');console.warn(e.code);});
 
     // 비용청구서(expense_claims) 연동 — 회계 탭 순이익 산출용
@@ -3476,7 +3497,9 @@ function loadInvDraft(d){
   var c=d.customer||{};
   setVal('c-name',c.name);setVal('c-phone',c.phone||'+60');setVal('c-email',c.email);setVal('c-addr',c.addr);setVal('c-biz',c.biz);setVal('c-member',c.member);
   setVal('tax-rate',d.taxRate||'0');setVal('disc-val',d.discVal||'0');setVal('disc-type',d.discType||'pct');
-  setVal('parking-fee',d.parkingFee||'0');setVal('min-charge',d.minCharge||'0');setVal('extra-fee',d.extraFee||'0');setVal('credit-use',d.creditUse||'0');setVal('voucher-amt',d.voucherAmt||'0');setVal('voucher-code',d.voucherCode||'');setVal('paid-amount',d.paidAmount||'0');
+  setVal('parking-fee',d.parkingFee||'0');setVal('min-charge',d.minCharge||'0');setVal('extra-fee',d.extraFee||'0');setVal('credit-use',d.creditUse||'0');setVal('voucher-amt',d.voucherAmt||'0');setVal('voucher-code',d.voucherCode||'');
+  payments=(d.payments&&d.payments.length)?d.payments.map(function(x){return Object.assign({},x);}):((parseFloat(d.paidAmount)||0)>0?[{amt:parseFloat(d.paidAmount)||0,date:''}]:[]);
+  renderPayments();
   setVal('inv-notes',d.notes);setVal('inv-terms',d.terms);setVal('bank-select',d.bankId||'');
   lineItems=(d.items||[]).map(function(x){return Object.assign({},x);});
   window._creditAuto=false;updateCreditHint(); // 임시저장 복원: 저장된 차감액 유지
