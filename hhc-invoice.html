@@ -1925,7 +1925,8 @@ async function saveInv(){
 
 function autoSaveCust(c){
   if(!c||!c.name||!DB)return;
-  var ex=customers.find(function(x){return x.name===c.name&&x.phone===c.phone;});
+  // 중복 확인 강화: 연락처 형식이 달라도(하이픈·국가번호 유무) 같은 고객이면 새로 등록하지 않음
+  var ex=customers.find(function(x){return x.name===c.name&&x.phone===c.phone;})||_bkFindCust(c.name,c.phone);
   if(!ex)DB.collection('customers').add({id:'c'+Date.now(),name:c.name,phone:c.phone||'',email:c.email||'',addr:c.addr||'',biz:c.biz||'',member:c.member||''}).catch(function(){});
 }
 
@@ -3189,6 +3190,24 @@ function bindAll(){
 // 서비스 카탈로그(services)와 이름/키워드 매칭이 되면 단가까지 자동,
 // 안 되면 품목명만 채우고 행을 펼쳐서 단가 입력을 유도한다.
 // ═══════════════════════════════════════════════════════════
+// ── 고객 중복 확인 유틸: 연락처는 형식이 달라도 같은 번호로 인식 ──
+// "+60 17-333 4444" / "0173334444" / "60173334444" → 모두 "173334444"로 정규화해 비교
+function _custNormPhone(p){
+  var d=String(p||'').replace(/\D/g,'');
+  d=d.replace(/^0+/,'').replace(/^(60|82)/,'').replace(/^0+/,'');
+  return d.length>=7?d:'';
+}
+// 기존 고객 DB(고객 관리)에서 동일 고객 찾기 — 연락처 우선, 이름(콘도명/동호수) 보조
+function _bkFindCust(name,phone){
+  var np=_custNormPhone(phone);
+  if(np){
+    var byPhone=customers.find(function(c){return _custNormPhone(c.phone)===np;});
+    if(byPhone)return byPhone;
+  }
+  var nm=String(name||'').trim();
+  if(!nm)return null;
+  return customers.find(function(c){return String(c.name||'').trim()===nm;})||null;
+}
 function _bkMatchSvc(cat,subcat,sub2,label){
   var pool=services.filter(function(s){
     if(s.cat!==cat||s.subcat!==subcat)return false;
@@ -3224,10 +3243,21 @@ function applyBookingTransfer(){
   var GRP2SUB={'벽걸이형':'벽걸이형','매립형 (덕트)':'매립형','천정형 (카세트)':'카세트형','실외기':'실외기','FCU · 덕트형':'매립형'};
   var CATKO={ac_home:'에어컨(가정용)',ac_shop:'에어컨(매장용)',washer:'세탁기',mattress:'매트리스',sofa:'쇼파',
     curtain:'커튼',dryer:'건조기',hood:'주방후드',fridge:'냉장고',purifier:'공기청정기',etc:'기타서비스'};
-  // 고객 정보 반영
-  setVal('c-name',d.name||'');
-  setVal('c-phone',d.phone||'+60');
-  setVal('c-addr',d.addr||'');
+  // 고객 정보 반영 — 기존 고객 DB와 중복 확인 후, 있으면 기존 정보(회원등급·이메일 포함)와 연결
+  var exCust=_bkFindCust(d.name,d.phone);
+  if(exCust){
+    setVal('c-name',exCust.name||d.name||'');
+    setVal('c-phone',exCust.phone||d.phone||'+60');
+    if(exCust.email)setVal('c-email',exCust.email);
+    if(exCust.biz)setVal('c-biz',exCust.biz);
+    if(exCust.member)setVal('c-member',exCust.member);
+    setVal('c-addr',d.addr||exCust.addr||'');
+    if(App&&typeof App.onMemberChange==='function'){try{App.onMemberChange();}catch(e){}}
+  }else{
+    setVal('c-name',d.name||'');
+    setVal('c-phone',d.phone||'+60');
+    setVal('c-addr',d.addr||'');
+  }
   // 서비스일을 메모에 기록 (인보이스 날짜와 별개로 어떤 예약 건인지 추적)
   if(d.date){
     var t=d.time?(d.time.indexOf('|')>=0?d.time.split('|')[0]:d.time):'';
@@ -3271,9 +3301,10 @@ function applyBookingTransfer(){
   }
   Nav('new');Tab('info');
   renderLI();App.upPrev();
-  showToast(needPrice>0
+  var custMsg=exCust?(' · 기존 고객 "'+(exCust.name||'')+'"'+(exCust.member?' ('+exCust.member+')':'')+' 매칭됨'):'';
+  showToast((needPrice>0
     ?'✓ 예약 정보 자동 반영됨 · 단가 입력 필요 '+needPrice+'건 (서비스 항목 탭 확인)'
-    :'✓ 예약 정보가 자동 반영되었습니다 · 내용 확인 후 저장하세요',5000);
+    :'✓ 예약 정보가 자동 반영되었습니다 · 내용 확인 후 저장하세요')+custMsg,6000);
 }
 
 async function init(){
