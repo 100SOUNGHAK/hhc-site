@@ -971,6 +971,96 @@ function pkPickedCnt(){return editPicked.reduce((a,p)=>a+p.qty,0);}
 function pkCatCnt(catId){return editPicked.filter(p=>p.catId===catId).reduce((a,p)=>a+p.qty,0);}
 function pkFreeKey(){return 'free|'+Date.now()+Math.random();}
 
+
+// ── 의뢰서(request.html) 어휘 → 예약관리 카탈로그(PK_CATS) 변환표 ──
+// 의뢰서는 "벽걸이 에어컨/전체분해세척" 같은 납작한 이름을 쓰고,
+// 예약관리는 카테고리→그룹→서비스 3단 구조를 쓴다. 이 표가 둘을 이어준다.
+const REQ_CAT_ALIAS={
+  '벽걸이 에어컨':{catId:'ac_home',grpKo:'벽걸이형'},
+  '매립천정형 에어컨':{catId:'ac_home',grpKo:'매립형 (덕트)'},
+  '천정형 에어컨':{catId:'ac_home',grpKo:'천정형 (카세트)'},
+  '실외기 에어컨':{catId:'ac_home',grpKo:'실외기'},
+  '세탁기 (통돌이형, 19kg 이하)':{catId:'washer',svcKo:'통돌이세탁기'},
+  '세탁기 (드럼형, 10kg 이하)':{catId:'washer',svcKo:'드럼세탁기'},
+  '의류 건조기':{catId:'dryer',svcKo:'완전분해세척'},
+  '주방후드':{catId:'hood',svcKo:'완전분해세척'},
+  '냉장고 (싱글도어)':{catId:'fridge',svcKo:'단문형'},
+  '냉장고 (더블도어)':{catId:'fridge',svcKo:'양문형'},
+  '공기청정기':{catId:'purifier',svcKo:'공기청정기 청소'},
+  '매트리스':{catId:'mattress'},
+  '쇼파 [I형]':{catId:'sofa'},
+  '쇼파 [L형]':{catId:'sofa'},
+  '커튼 (현장세탁, 1 SQ당)':{catId:'curtain',svcKo:'현장세탁'},
+  '커튼 (전문수거방식, 1KG당)':{catId:'curtain',svcKo:'수거세탁'}
+};
+// 같은 서비스인데 표기만 다른 경우를 흡수 (null = 서비스 정보 없음 → 카테고리 기본값 사용)
+const REQ_SVC_ALIAS={
+  '전용약품세척':'약품세척','분해약품세척':'분해세척',
+  '전체분해':'전체분해세척','기본':'기본세척',
+  '건식진공흡입방식':'건식방식','습식스팀살균방식':'습식살균방식',
+  '기본가':null
+};
+function pkNorm(v){return String(v||'').replace(/\s+/g,'').toLowerCase();}
+
+// 카테고리명 + 서비스명(어떤 어휘든) → editPicked 항목 1개.
+// 카탈로그에서 찾으면 정식 품목으로, 못 찾으면 기타서비스로 폴백.
+function pkResolve(catText,svcText,qty){
+  qty=parseInt(qty,10)||1;
+  const catRaw=String(catText||'').trim();
+  const svcRaw=String(svcText||'').trim();
+  const alias=REQ_CAT_ALIAS[catRaw];
+  const svcMapped=Object.prototype.hasOwnProperty.call(REQ_SVC_ALIAS,svcRaw)?REQ_SVC_ALIAS[svcRaw]:svcRaw;
+  const c=alias?pkCatOf(alias.catId):PK_CATS.find(cc=>pkNorm(cc.ko)===pkNorm(catRaw));
+  if(c){
+    const wantGrp=alias&&alias.grpKo?alias.grpKo:null;
+    const wantSvc=svcMapped||(alias&&alias.svcKo)||'';
+    let grpPair=null,svcPair=null;
+    c.groups.forEach(g=>{
+      if(wantGrp&&g.ko!==wantGrp)return;
+      (g.svcs||[]).forEach(sv=>{
+        if(svcPair)return;
+        if(wantSvc&&pkNorm(sv[0])!==pkNorm(wantSvc))return;
+        if(!wantSvc&&!wantGrp)return;           // 단서가 전혀 없으면 임의 선택하지 않음
+        grpPair=g.ko?[g.ko]:null;svcPair=sv;
+      });
+    });
+    if(svcPair)return{key:pkItemKey(c.id,grpPair,svcPair),catId:c.id,grp:grpPair,svc:svcPair,qty};
+    if(c.free)return{key:pkFreeKey(),catId:c.id,free:true,text:svcRaw||catRaw,qty};
+  }
+  return{key:pkFreeKey(),catId:'etc',free:true,text:catRaw+(svcRaw?' · '+svcRaw:''),qty};
+}
+
+// 괄호 밖 쉼표로만 분리 — "세탁기 (드럼형, 10kg 이하)"처럼 이름 안에 쉼표가 있어도 안 잘리도록
+function pkSplitTop(str){
+  const out=[];let depth=0,cur='';
+  String(str).split('').forEach(ch=>{
+    if(ch==='('||ch==='[')depth++;
+    else if(ch===')'||ch===']')depth=Math.max(0,depth-1);
+    if(ch===','&&depth===0){out.push(cur);cur='';return;}
+    cur+=ch;
+  });
+  out.push(cur);
+  return out.map(x=>x.trim()).filter(Boolean);
+}
+
+// 고객 메모의 "[의뢰품목] 벽걸이 에어컨 - 전체분해 × 4, 주방후드 × 1" 줄에서 품목 복원
+function pkParseMemoItems(memo){
+  if(!memo)return null;
+  const m=String(memo).match(/\[의뢰품목\]\s*([^\n]+)/);
+  if(!m)return null;
+  const out=[];
+  pkSplitTop(m[1]).forEach(seg=>{
+    seg=seg.trim();if(!seg)return;
+    const mm=seg.match(/^(.+?)(?:\s*-\s*(.+?))?\s*[×xX]\s*(\d+)\s*$/);
+    if(mm){out.push(pkResolve(mm[1],mm[2]||'',mm[3]));return;}
+    const m2=seg.match(/^(.+?)(?:\s*-\s*(.+?))?$/);
+    if(m2)out.push(pkResolve(m2[1],m2[2]||'',1));
+  });
+  return out.length?out:null;
+}
+// 전부 "기타서비스"로 떨어졌다 = 복원 실패로 간주하고 다음 소스를 시도
+function pkAllFree(arr){return !!arr&&arr.length>0&&arr.every(p=>p.free);}
+
 // 저장된 struct 한 줄 → editPicked 항목
 function pkFromStruct(it){
   const c=pkCatOf(it.catId);
@@ -984,6 +1074,8 @@ function pkFromStruct(it){
     });
     if(svcPair)return{key:pkItemKey(c.id,grpPair,svcPair),catId:c.id,grp:grpPair,svc:svcPair,qty:it.qty||1};
   }
+  // 의뢰서 스키마({cat,svc,qty})로 저장된 값도 카탈로그로 복원 시도
+  if(it.cat||it.svc)return pkResolve(it.cat,it.svc,it.qty);
   const label=(it.svcKo||it.text||'').trim();
   return label?{key:pkFreeKey(),catId:'etc',free:true,text:label,qty:it.qty||1}:null;
 }
@@ -1019,14 +1111,23 @@ function pkParseItemsText(s){
       if(svcPair){out.push({key:pkItemKey(c.id,grpPair,svcPair),catId:c.id,grp:grpPair,svc:svcPair,qty});continue;}
       if(c.free){out.push({key:pkFreeKey(),catId:c.id,free:true,text:svcPart,qty});continue;}
     }
-    out.push({key:pkFreeKey(),catId:'etc',free:true,text:name,qty});
+    out.push(pkResolve(name,svcPart,qty));
   }
   if(!out.length&&s.trim())out.push({key:pkFreeKey(),catId:'etc',free:true,text:s.trim(),qty:1});
   return out;
 }
-// 1순위 booking_items_struct → 2순위 prefill_items_struct → 3순위 booking_items 역파싱
+// 복원 우선순위: booking_items_struct → prefill_items_struct → booking_items 역파싱
+//              → 고객메모의 [의뢰품목] 줄. 앞 단계가 전부 '기타서비스'로만 떨어지면
+//              (= 사실상 복원 실패) 다음 단계에서 정식 품목 복원을 한 번 더 시도한다.
 function buildEditPickedFromBooking(b){
-  return pkParseStruct(b.booking_items_struct)||pkParseStruct(b.prefill_items_struct)||pkParseItemsText(b.booking_items||'');
+  const cands=[
+    pkParseStruct(b.booking_items_struct),
+    pkParseStruct(b.prefill_items_struct),
+    pkParseItemsText(b.booking_items||''),
+    pkParseMemoItems(b.customer_memo)
+  ].filter(a=>a&&a.length);
+  const good=cands.find(a=>!pkAllFree(a));
+  return good||cands[0]||[];
 }
 // editPicked → 저장용 문자열 / 구조체
 function pkItemsText(){
@@ -1384,10 +1485,12 @@ function renderCalendar(){
 }
 
 // "09:00 전후|Around 09:00" 형태(한/영 병기 저장값)에서 한글 표기만 추출. 이미 단일 표기면 그대로 반환.
-function cleanTime(t){
+function cleanTime(t,lang){
   if(!t)return'';
   const s=String(t);
-  return s.indexOf('|')!==-1?(s.split('|')[0]||s):s;
+  if(s.indexOf('|')===-1)return s;
+  const p=s.split('|');
+  return ((lang==='en'?p[1]:p[0])||s).trim();
 }
 
 function getDayBusyItems(dateStr){
@@ -1801,11 +1904,13 @@ function renderList(){
     if(ta===99999||tb===99999)return ta-tb; // 시간 미정은 항상 뒤로
     return ad?tb-ta:ta-tb;                  // 작업완료: 늦은 시간부터 / 확정완료: 빠른 시간부터
   });
+  const topHtml=creatingNew?newBookingFormHtml():newBookingBarHtml();
   if(!filtered.length){
-    el.innerHTML='<div class="empty-st"><div class="empty-title">예약 내역이 없습니다</div><div class="empty-desc">새 예약 등록 탭에서 고객을 등록하세요</div></div>';
+    el.innerHTML=topHtml+'<div class="empty-st"><div class="empty-title">예약 내역이 없습니다</div><div class="empty-desc">위 버튼으로 직접 등록하거나, 새 예약 등록 탭을 이용하세요</div></div>';
+    if(creatingNew)renderEditPicked();
     return;
   }
-  el.innerHTML=filtered.map(b=>{
+  el.innerHTML=topHtml+filtered.map(b=>{
     const dates=b.schedule_dates?JSON.parse(b.schedule_dates):[];
     const done=isDoneBooking(b);
     const statusLabel=done?'🏁 작업완료':({'waiting':'⏳ 대기중','booked':'🆕 신청완료','confirmed':'✅ 확정완료'}[b.status]||b.status);
@@ -1854,7 +1959,7 @@ function renderList(){
           </div>
           <div class="field">
             <label class="field-label">예약 시간</label>
-            <input class="field-input sm" id="el-btime-${b.__id}" placeholder="예: 오전 9시, 14:00" value="${escAttr(b.booking_time)}">
+            <input class="field-input sm" id="el-btime-${b.__id}" placeholder="예: 오전 9시, 14:00" value="${escAttr(cleanTime(b.booking_time,b.customer_lang))}">
           </div>
         </div>
         <div style="margin-bottom:10px">
@@ -1920,14 +2025,128 @@ function renderList(){
       </div>
     </div>`;
   }).join('');
-  if(editingListId)renderEditPicked();
+  if(editingListId||creatingNew)renderEditPicked();
 }
+
+
+// ── 예약목록에서 수기로 직접 등록 ──
+let creatingNew=false;
+function newBookingFormHtml(){
+  return `<div class="customer-item" style="border-color:var(--teal);box-shadow:0 2px 12px rgba(13,148,136,.12)">
+    <div style="font-weight:700;font-size:13.5px;color:var(--teal);margin-bottom:10px">📝 수기 예약 등록</div>
+    <div class="fg c2" style="margin-bottom:8px">
+      <div class="field">
+        <label class="field-label">콘도명/동호수(상호) *</label>
+        <input class="field-input sm" id="nl-name" placeholder="예: 파빌리온 A-1203">
+      </div>
+      <div class="field">
+        <label class="field-label">연락처 *</label>
+        <input class="field-input sm" id="nl-phone" placeholder="예: 012-345-6789">
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:8px">
+      <label class="field-label">주소</label>
+      <input class="field-input sm" id="nl-addr">
+    </div>
+    <div class="field" style="margin-bottom:8px">
+      <label class="field-label">고객 메모</label>
+      <textarea class="field-input sm" id="nl-cmemo" style="resize:vertical;min-height:44px"></textarea>
+    </div>
+    <div class="fg c2" style="margin-bottom:8px">
+      <div class="field">
+        <label class="field-label">발송 언어</label>
+        <select class="field-input sm" id="nl-lang">
+          <option value="ko">🇰🇷 한국어</option>
+          <option value="en">🇬🇧 English</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field-label">등록 상태</label>
+        <select class="field-input sm" id="nl-status">
+          <option value="waiting">⏳ 대기중</option>
+          <option value="booked">🆕 신청완료</option>
+          <option value="confirmed">✅ 확정완료</option>
+        </select>
+      </div>
+    </div>
+    <div class="fg c2" style="margin-bottom:8px">
+      <div class="field">
+        <label class="field-label">예약일</label>
+        <input type="date" class="field-input sm" id="nl-bdate">
+      </div>
+      <div class="field">
+        <label class="field-label">예약 시간</label>
+        <input class="field-input sm" id="nl-btime" placeholder="예: 14:00">
+      </div>
+    </div>
+    <div style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
+        <label class="field-label" style="margin-bottom:0">의뢰 품목</label>
+        <span class="card-cnt" id="el-items-cnt"></span>
+      </div>
+      <div id="el-picked-list"></div>
+      <button type="button" class="big-pick" onclick="openItemPicker()">🛒 품목 선택</button>
+    </div>
+    <div class="field" style="margin-bottom:10px">
+      <label class="field-label">추가 요청사항</label>
+      <textarea class="field-input sm" id="nl-bmemo" style="resize:vertical;min-height:50px"></textarea>
+    </div>
+    <div class="ci-actions">
+      <button class="btn-sm btn-sm-teal" onclick="saveNewList()">✓ 등록</button>
+      <button class="btn-sm btn-sm-red" onclick="cancelNewList()">취소</button>
+    </div>
+  </div>`;
+}
+function newBookingBarHtml(){
+  return `<button class="big-pick" style="margin-bottom:10px" onclick="startNewList()">＋ 수기 예약 등록</button>`;
+}
+window.startNewList=function(){
+  creatingNew=true;editingListId=null;editPicked=[];pkCat='ac_home';renderList();
+};
+window.cancelNewList=function(){creatingNew=false;editPicked=[];renderList();};
+window.saveNewList=async function(){
+  const name=document.getElementById('nl-name').value.trim();
+  const phone=document.getElementById('nl-phone').value.trim();
+  if(!name||!phone){showToast('콘도명과 연락처는 필수입니다');return;}
+  if(editPicked.some(p=>p.free&&!(p.text||'').trim())){showToast('기타 항목의 요청 내용을 입력해주세요');return;}
+  const status=document.getElementById('nl-status').value;
+  const bdate=document.getElementById('nl-bdate').value.trim();
+  if(status==='confirmed'&&!bdate){showToast('확정완료로 등록하려면 예약일이 필요합니다');return;}
+  const btimeRaw=document.getElementById('nl-btime').value.trim().split('|')[0].trim();
+  showLoading(true);
+  try{
+    const data={
+      customer_name:name,
+      customer_phone:phone,
+      customer_address:document.getElementById('nl-addr').value.trim(),
+      customer_memo:document.getElementById('nl-cmemo').value.trim(),
+      customer_lang:document.getElementById('nl-lang').value,
+      schedule_dates:JSON.stringify(bdate?[bdate]:[]),
+      schedule_times:JSON.stringify({}),
+      status:status,
+      booking_date:bdate,
+      booking_time:btimeRaw?(formatTimeInput(btimeRaw)||btimeRaw):'',
+      booking_items:pkItemsText(),
+      booking_items_struct:JSON.stringify(pkItemsStruct()),
+      booking_memo:document.getElementById('nl-bmemo').value.trim(),
+      created_at:new Date().toISOString(),
+      source:'manual'
+    };
+    const ref=await addDoc(collection(db,'bookings'),data);
+    // 확정완료로 등록하면 일정 탭에도 바로 반영
+    if(status==='confirmed')await syncBookingMirror(ref.id,data);
+    creatingNew=false;editPicked=[];renderList();
+    showLoading(false);showToast('✓ 예약이 등록되었습니다');
+  }catch(e){
+    showLoading(false);showToast('등록 실패: '+e.message);
+  }
+};
 
 window.startEditList=function(id){
   const b=allBookings.find(x=>x.__id===id);
   editPicked=b?buildEditPickedFromBooking(b):[];
   pkCat='ac_home';
-  editingListId=id;renderList();
+  creatingNew=false;editingListId=id;renderList();
 };
 window.cancelEditList=function(){editingListId=null;editPicked=[];renderList();};
 window.saveEditList=async function(id){
@@ -1937,7 +2156,10 @@ window.saveEditList=async function(id){
   const cmemo=document.getElementById('el-cmemo-'+id).value.trim();
   const lang=document.querySelector(`input[name="el-lang-${id}"]:checked`)?.value||'ko';
   const bdate=document.getElementById('el-bdate-'+id).value.trim();
-  const btime=document.getElementById('el-btime-'+id).value.trim();
+  // 입력칸엔 한쪽 표기만 들어있으므로, 저장 직전 'ko|en' 병기 형태로 다시 만든다.
+  // 기존 파이프는 먼저 잘라내 저장을 반복해도 누적되지 않도록 한다.
+  const btimeRaw=document.getElementById('el-btime-'+id).value.trim().split('|')[0].trim();
+  const btime=btimeRaw?(formatTimeInput(btimeRaw)||btimeRaw):'';
   const bitems=pkItemsText();
   const bitemsStruct=JSON.stringify(pkItemsStruct());
   const bmemo=document.getElementById('el-bmemo-'+id).value.trim();
