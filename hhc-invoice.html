@@ -3236,6 +3236,44 @@ var _BK_MAP={ac_home:{cat:'청소',subcat:'에어컨(가정용)'},ac_shop:{cat:'
 var _BK_GRP2SUB={'벽걸이형':'벽걸이형','매립형 (덕트)':'매립형','천정형 (카세트)':'카세트형','실외기':'실외기','FCU · 덕트형':'매립형'};
 var _BK_CATKO={ac_home:'에어컨(가정용)',ac_shop:'에어컨(매장용)',washer:'세탁기',mattress:'매트리스',sofa:'쇼파',
   curtain:'커튼',dryer:'건조기',hood:'주방후드',fridge:'냉장고',purifier:'공기청정기',etc:'기타서비스'};
+// ── 문자열 품목(booking_items) → 구조화 항목 변환 ──
+// 관리자가 직접 타이핑한 예약 품목("에어컨(벽걸이)(4대/스팀세척)")도
+// 카테고리·형태를 추정해 구조화 품목과 같은 매칭 경로를 태운다.
+function _bkGuessCatId(t){
+  if(/에어컨|aircon|air-con|air con/i.test(t))return /매장|상업|shop|commercial/i.test(t)?'ac_shop':'ac_home';
+  if(/세탁기|washing/i.test(t))return 'washer';
+  if(/매트리스|mattress/i.test(t))return 'mattress';
+  if(/쇼파|소파|sofa/i.test(t))return 'sofa';
+  if(/커튼|curtain/i.test(t))return 'curtain';
+  if(/건조기|dryer/i.test(t))return 'dryer';
+  if(/후드|hood/i.test(t))return 'hood';
+  if(/냉장고|refrigerator|fridge/i.test(t))return 'fridge';
+  if(/공기청정기|purifier/i.test(t))return 'purifier';
+  return 'etc';
+}
+function _bkGuessGrp(t){
+  if(/벽걸이|wall/i.test(t))return '벽걸이형';
+  if(/매립|덕트|duct|conceal/i.test(t))return '매립형 (덕트)';
+  if(/천정|천장|카세트|cassette|ceiling/i.test(t))return '천정형 (카세트)';
+  if(/실외|outdoor/i.test(t))return '실외기';
+  return null;
+}
+function _bkParseItemsText(text){
+  var out=[],re=/(.+?)\((\d+)\s*(?:대|units?\(s\)|units?)\s*\/\s*([^)]*)\)(?:\s*,\s*|\s*$)/g,mm;
+  while((mm=re.exec(text))!==null){
+    var name=mm[1].trim(),qty=parseInt(mm[2],10)||1,svcPart=mm[3].trim();
+    var svcKo=svcPart;
+    var sep=svcPart.indexOf(' · ');
+    if(sep>=0)svcKo=svcPart.slice(sep+3).trim();
+    var catId=_bkGuessCatId(name+' '+svcPart);
+    if(catId==='etc'){
+      out.push({catId:'etc',grpKo:null,svcKo:null,free:true,text:name+(svcPart?' — '+svcPart:''),qty:qty});
+      continue;
+    }
+    out.push({catId:catId,grpKo:_bkGuessGrp(name+' '+svcPart),svcKo:svcKo,free:false,text:'',qty:qty,_label:name+(svcPart?' — '+svcPart:'')});
+  }
+  return out;
+}
 // 서비스의 모든 이름 표기(기본명·한글명·영문명)
 function _bkNames(s){return [s.name,s.name_ko,s.name_en].filter(Boolean).map(String);}
 // 이름 매칭: 정확 일치 → 포함 → (허용 시) 한/영 키워드
@@ -3348,13 +3386,15 @@ function applyBookingTransfer(){
   lineItems=[];expandedLI={};
   var needPrice=0;
   var arr=(d.items_struct&&d.items_struct.length)?d.items_struct:null;
-  if(arr){
+  // 구조화 데이터가 없으면(관리자가 직접 타이핑한 품목 등) 문자열을 구조화로 변환해 같은 매칭 경로를 태운다
+  if(!arr&&d.items_text)arr=_bkParseItemsText(d.items_text);
+  if(arr&&arr.length){
     arr.forEach(function(it,i){
       var m=MAP[it.catId]||{cat:'기타',subcat:'기타'};
       var sub2=it.grpKo?(GRP2SUB[it.grpKo]||''):'';
-      var label=it.free?(it.text||'기타 서비스'):((it.grpKo?it.grpKo+' · ':'')+(it.svcKo||''));
+      var label=it.free?(it.text||'기타 서비스'):(it._label||((it.grpKo?it.grpKo+' · ':'')+(it.svcKo||'')));
       // 대분류가 '기타제품/기타'로 뭉뚱그려지는 품목은 원래 카테고리명을 앞에 병기
-      if((m.subcat==='기타제품'||m.cat==='기타')&&CATKO[it.catId]&&it.catId!=='etc'){label=CATKO[it.catId]+' — '+label;}
+      if(!it._label&&(m.subcat==='기타제품'||m.cat==='기타')&&CATKO[it.catId]&&it.catId!=='etc'){label=CATKO[it.catId]+' — '+label;}
       var svc=it.free?null:_bkMatchSvc(m.cat,m.subcat,sub2,it.svcKo||'',it.catId,it.grpKo||'');
       var id='li'+Date.now()+'_'+i;
       var li={id:id,cat:m.cat,subcat:m.subcat,svcId:svc?svc.id:'',name:svc?svc.name:label,price:svc?(svc.price||0):0,qty:it.qty||1,discVal:0,discType:'pct'};
@@ -3365,20 +3405,10 @@ function applyBookingTransfer(){
       lineItems.push(li);
     });
   }else if(d.items_text){
-    // 구조화 데이터가 없는 예전 예약: 표시 문자열을 항목별로 쪼개서 반영
-    var re=/(.+?)\((\d+)\s*(?:대|units?\(s\)|units?)\s*\/\s*([^)]*)\)(?:\s*,\s*|\s*$)/g,mm;
-    var found=false;
-    while((mm=re.exec(d.items_text))!==null){
-      found=true;
-      var id2='li'+Date.now()+'_'+lineItems.length;
-      lineItems.push({id:id2,cat:'기타',subcat:'기타',svcId:'',name:mm[1].trim()+' — '+mm[3].trim(),price:0,qty:parseInt(mm[2],10)||1,discVal:0,discType:'pct',direct:true});
-      expandedLI[id2]=true;needPrice++;
-    }
-    if(!found){
-      var id3='li'+Date.now()+'_0';
-      lineItems.push({id:id3,cat:'기타',subcat:'기타',svcId:'',name:d.items_text,price:0,qty:1,discVal:0,discType:'pct',direct:true});
-      expandedLI[id3]=true;needPrice++;
-    }
+    // 형식이 전혀 맞지 않는 문자열은 통째로 직접입력 한 줄로 보존
+    var id3='li'+Date.now()+'_0';
+    lineItems.push({id:id3,cat:'기타',subcat:'기타',svcId:'',name:d.items_text,price:0,qty:1,discVal:0,discType:'pct',direct:true});
+    expandedLI[id3]=true;needPrice++;
   }
   window._bkFromBooking=true;   // 서비스 목록 수신 시 자동 재매칭 활성화
   Nav('new');Tab('info');
