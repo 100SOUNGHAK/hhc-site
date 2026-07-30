@@ -331,13 +331,24 @@ const FIREBASE_CFG={
   appId:"1:101289103022:web:d81aca7f3747dd26df673f"
 };
 
+
+// ── 말레이시아(쿠알라룸푸르) 기준 시각 ──────────────────────────
+// 접속 기기의 시간대와 관계없이 항상 UTC+8(말레이시아, 서머타임 없음) 기준으로
+// '오늘/현재 시각'을 계산합니다.
+const MY_TZ='Asia/Kuala_Lumpur';
+const MY_TZ_OFFSET=8*60; // 분
+function myNow(){const n=new Date();return new Date(n.getTime()+(n.getTimezoneOffset()+MY_TZ_OFFSET)*60000);}
+function myDateStr(d){const t=d||myNow();return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');}
+function myFmtDT(v){if(!v)return '—';const d=new Date(v);if(isNaN(d.getTime()))return '—';
+  try{return d.toLocaleString('ko-KR',{timeZone:MY_TZ});}catch(e){return myNow().toLocaleString('ko-KR');}}
+
 let db=null;
 let schedules={};  // Firestore schedules
 let bookings={};   // confirmed bookings
 let translCache={};// 번역 캐시
 
-let curY=new Date().getFullYear(),curM=new Date().getMonth();
-let weekStart=getWeekStart(new Date());
+let curY=myNow().getFullYear(),curM=myNow().getMonth();
+let weekStart=getWeekStart(myNow());
 let selDate='';
 let curLang='ko';
 let curView='month';
@@ -410,7 +421,7 @@ async function initApp(){
     });
 
     showLoading(false);
-    const t=new Date();
+    const t=myNow();
     selDate=fmt(t);
     renderNav();renderCal();renderDay(selDate);
   }catch(e){showLoading(false);alert('Firebase 오류: '+e.message);}
@@ -432,7 +443,7 @@ function renderTodaySummary(){
   const el=document.getElementById('today-summary-txt');
   const dateEl=document.getElementById('today-summary-date');
   if(!el||!dateEl)return;
-  const now=new Date();
+  const now=myNow();
   const ds=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const months=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
   const wdays=['일','월','화','수','목','금','토'];
@@ -490,7 +501,7 @@ window.nextPeriod=function(){
   refresh();
 };
 window.goToday=function(){
-  const t=new Date();curY=t.getFullYear();curM=t.getMonth();weekStart=getWeekStart(t);
+  const t=myNow();curY=t.getFullYear();curM=t.getMonth();weekStart=getWeekStart(t);
   selDate=fmt(t);refresh();renderDay(selDate);
   document.getElementById('day-panel').scrollTop=0;
 };
@@ -501,7 +512,7 @@ function renderCal(){
   const hdrs=Array.from(grid.querySelectorAll('.day-name'));
   grid.innerHTML='';hdrs.forEach(h=>grid.appendChild(h));
 
-  const today=new Date();
+  const today=myNow();
   const first=new Date(curY,curM,1).getDay();
   const last=new Date(curY,curM+1,0).getDate();
   const prevLast=new Date(curY,curM,0).getDate();
@@ -558,7 +569,7 @@ function renderWeek(){
   const SLOT_H=52;
   const DAY_NAMES_KO=['일','월','화','수','목','금','토'];
   const DAY_NAMES_EN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const today=new Date();
+  const today=myNow();
   const todayStr=fmt(today);
 
   // 헤더
@@ -601,7 +612,7 @@ function renderWeek(){
     }
     // 현재 시간 선
     if(ds===todayStr){
-      const now=new Date();
+      const now=myNow();
       const pct=(now.getHours()*60+now.getMinutes())/(HOURS*60);
       const line=document.createElement('div');line.className='week-now-line';line.style.top=(pct*HOURS*SLOT_H)+'px';
       const dot=document.createElement('div');dot.className='week-now-dot';line.appendChild(dot);col.appendChild(line);
@@ -624,7 +635,7 @@ function renderWeek(){
     grid.appendChild(col);
   }
   // 현재 시간으로 스크롤
-  const now=new Date();
+  const now=myNow();
   const scrollY=Math.max((now.getHours()-2)*SLOT_H,0);
   setTimeout(()=>{const wb=document.querySelector('.week-body');if(wb)wb.scrollTop=scrollY;},50);
 }
@@ -846,7 +857,7 @@ window.sendVisitReminder=function(itemId){
   // 예약일 기준 기본 템플릿 자동 선택: 당일→'today', 내일→'tomorrow', 그 외→'pre'
   let defTpl='pre';
   try{
-    const today=new Date();today.setHours(0,0,0,0);
+    const today=myNow();today.setHours(0,0,0,0);
     const bd=new Date(dateStr+'T00:00:00');
     const diff=Math.round((bd-today)/86400000);
     if(diff===0)defTpl='today';else if(diff===1)defTpl='tomorrow';

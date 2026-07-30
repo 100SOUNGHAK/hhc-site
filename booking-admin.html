@@ -823,10 +823,21 @@ const ADMIN_PW='hhc_booking_pw';
 const ADMIN_AUTH='hhc_booking_auth';
 const BASE_URL='https://hhc-3p8.pages.dev/';
 
+
+// ── 말레이시아(쿠알라룸푸르) 기준 시각 ──────────────────────────
+// 접속 기기의 시간대와 관계없이 항상 UTC+8(말레이시아, 서머타임 없음) 기준으로
+// '오늘/현재 시각'을 계산합니다.
+const MY_TZ='Asia/Kuala_Lumpur';
+const MY_TZ_OFFSET=8*60; // 분
+function myNow(){const n=new Date();return new Date(n.getTime()+(n.getTimezoneOffset()+MY_TZ_OFFSET)*60000);}
+function myDateStr(d){const t=d||myNow();return t.getFullYear()+'-'+String(t.getMonth()+1).padStart(2,'0')+'-'+String(t.getDate()).padStart(2,'0');}
+function myFmtDT(v){if(!v)return '—';const d=new Date(v);if(isNaN(d.getTime()))return '—';
+  try{return d.toLocaleString('ko-KR',{timeZone:MY_TZ});}catch(e){return myNow().toLocaleString('ko-KR');}}
+
 let db=null, unsub=null;
 let allBookings=[];
-let calYear=new Date().getFullYear();
-let calMonth=new Date().getMonth();
+let calYear=myNow().getFullYear();
+let calMonth=myNow().getMonth();
 let selectedDates=[];
 let scheduleMap={};
 let currentDateForTime='';
@@ -836,7 +847,7 @@ function escAttr(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"
 function escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 const fmt=n=>n||'';
-const today=()=>new Date().toISOString().slice(0,10);
+const today=()=>myDateStr();
 
 // ── AUTH ──
 function checkAuth(){return localStorage.getItem(ADMIN_AUTH)==='1';}
@@ -1415,6 +1426,19 @@ window.setListFilter=function(f){
   renderList();
 };
 
+// 예약 시간 문자열("오전 9시","오후 2시 30분","14:00","9시" 등)을 분 단위 숫자로 변환 — 정렬용
+function bkTimeMin(v){
+  const s=String(v==null?'':v).trim();
+  if(!s)return 99999;                                   // 시간 미정은 맨 뒤
+  const pm=/오후|저녁|p\.?m\.?/i.test(s), am=/오전|아침|a\.?m\.?/i.test(s);
+  let m=s.match(/(\d{1,2})\s*[:시]\s*(\d{1,2})?/);
+  if(!m){const d=s.match(/(\d{1,2})/);if(!d)return 99999;m=[null,d[1],null];}
+  let h=parseInt(m[1],10)||0;
+  const mi=parseInt(m[2]||'0',10)||0;
+  if(pm&&h<12)h+=12;
+  if(am&&h===12)h=0;
+  return h*60+mi;
+}
 // 확정완료 건 중 예약일이 오늘보다 과거면 "작업완료"로 구분
 function isDoneBooking(b){return b.status==='confirmed'&&!!b.booking_date&&b.booking_date<today();}
 window.renderList=renderList;
@@ -1427,15 +1451,15 @@ function renderList(){
     const mf=listFilter==='all'||(listFilter==='waiting'&&b.status!=='confirmed')||(listFilter==='confirmed'&&b.status==='confirmed'&&!done)||(listFilter==='done'&&done);
     return mq&&mf;
   });
-  // 확정완료(방문 예정)는 가까운 방문일부터, 작업완료(지난 건)는 최근 완료순으로 정렬
+  // 확정완료·작업완료는 예약일 과거 → 미래 순(오름차순), 같은 날짜면 이른 시간부터 정렬
   // (대기중·신청완료 등 그 외 상태는 기존 등록순 유지)
   filtered.sort((a,b)=>{
     if(a.status!=='confirmed'||b.status!=='confirmed')return 0;
     const ad=isDoneBooking(a),bd=isDoneBooking(b);
-    if(ad!==bd)return ad?1:-1;              // 확정완료 먼저, 작업완료는 뒤로
-    return ad
-      ? String(b.booking_date||'').localeCompare(String(a.booking_date||''))   // 작업완료: 최근순
-      : String(a.booking_date||'').localeCompare(String(b.booking_date||''));  // 확정완료: 가까운순
+    if(ad!==bd)return ad?1:-1;              // 확정완료(방문 예정) 먼저, 작업완료는 뒤로
+    const dc=String(a.booking_date||'').localeCompare(String(b.booking_date||''));
+    if(dc)return dc;                        // 예약일: 과거 → 미래
+    return bkTimeMin(a.booking_time)-bkTimeMin(b.booking_time);  // 같은 날: 빠른 시간부터
   });
   if(!filtered.length){
     el.innerHTML='<div class="empty-st"><div class="empty-title">예약 내역이 없습니다</div><div class="empty-desc">새 예약 등록 탭에서 고객을 등록하세요</div></div>';
@@ -1704,7 +1728,7 @@ function viewInv(id){
 // ═══════════════════════════════════════════
 // 일정 캘린더 (schedules 컬렉션)
 // ═══════════════════════════════════════════
-var schYear=new Date().getFullYear(),schMonth=new Date().getMonth();
+var schYear=myNow().getFullYear(),schMonth=myNow().getMonth();
 var schSelDate='';
 var schLang='ko';
 var schedules={};
@@ -1739,7 +1763,7 @@ function schRenderCal(){
   grid.innerHTML='';
   headers.forEach(h=>grid.appendChild(h));
 
-  const today=new Date();
+  const today=myNow();
   const first=new Date(schYear,schMonth,1).getDay();
   const last=new Date(schYear,schMonth+1,0).getDate();
   const prevLast=new Date(schYear,schMonth,0).getDate();
