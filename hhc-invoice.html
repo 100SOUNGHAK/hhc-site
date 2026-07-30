@@ -3153,6 +3153,14 @@ function _bkFindCust(name,phone){
   if(!nm)return null;
   return customers.find(function(c){return String(c.name||'').trim()===nm;})||null;
 }
+// 예약 catId → 인보이스 카테고리 매핑 (전환·재매칭 공용)
+var _BK_MAP={ac_home:{cat:'청소',subcat:'에어컨(가정용)'},ac_shop:{cat:'청소',subcat:'에어컨(매장용)'},
+  washer:{cat:'청소',subcat:'세탁기'},mattress:{cat:'청소',subcat:'매트리스'},sofa:{cat:'청소',subcat:'쇼파'},
+  curtain:{cat:'청소',subcat:'커튼'},dryer:{cat:'청소',subcat:'기타제품'},hood:{cat:'청소',subcat:'기타제품'},
+  fridge:{cat:'청소',subcat:'기타제품'},purifier:{cat:'청소',subcat:'기타제품'},etc:{cat:'기타',subcat:'기타'}};
+var _BK_GRP2SUB={'벽걸이형':'벽걸이형','매립형 (덕트)':'매립형','천정형 (카세트)':'카세트형','실외기':'실외기','FCU · 덕트형':'매립형'};
+var _BK_CATKO={ac_home:'에어컨(가정용)',ac_shop:'에어컨(매장용)',washer:'세탁기',mattress:'매트리스',sofa:'쇼파',
+  curtain:'커튼',dryer:'건조기',hood:'주방후드',fridge:'냉장고',purifier:'공기청정기',etc:'기타서비스'};
 // 서비스의 모든 이름 표기(기본명·한글명·영문명)
 function _bkNames(s){return [s.name,s.name_ko,s.name_en].filter(Boolean).map(String);}
 // 이름 매칭: 정확 일치 → 포함 → (허용 시) 한/영 키워드
@@ -3245,14 +3253,7 @@ function applyBookingTransfer(){
   var d=null;
   try{d=JSON.parse(localStorage.getItem('hhc_transfer_invoice')||'null');}catch(e){}
   if(!d||!d.name&&!d.phone&&!(d.items_struct&&d.items_struct.length)&&!d.items_text)return;
-  // 예약 catId → 인보이스 카테고리 매핑
-  var MAP={ac_home:{cat:'청소',subcat:'에어컨(가정용)'},ac_shop:{cat:'청소',subcat:'에어컨(매장용)'},
-    washer:{cat:'청소',subcat:'세탁기'},mattress:{cat:'청소',subcat:'매트리스'},sofa:{cat:'청소',subcat:'쇼파'},
-    curtain:{cat:'청소',subcat:'커튼'},dryer:{cat:'청소',subcat:'기타제품'},hood:{cat:'청소',subcat:'기타제품'},
-    fridge:{cat:'청소',subcat:'기타제품'},purifier:{cat:'청소',subcat:'기타제품'},etc:{cat:'기타',subcat:'기타'}};
-  var GRP2SUB={'벽걸이형':'벽걸이형','매립형 (덕트)':'매립형','천정형 (카세트)':'카세트형','실외기':'실외기','FCU · 덕트형':'매립형'};
-  var CATKO={ac_home:'에어컨(가정용)',ac_shop:'에어컨(매장용)',washer:'세탁기',mattress:'매트리스',sofa:'쇼파',
-    curtain:'커튼',dryer:'건조기',hood:'주방후드',fridge:'냉장고',purifier:'공기청정기',etc:'기타서비스'};
+  var MAP=_BK_MAP,GRP2SUB=_BK_GRP2SUB,CATKO=_BK_CATKO;
   // 고객 정보 반영 — 기존 고객 DB와 중복 확인 후, 있으면 기존 정보(회원등급·이메일 포함)와 연결
   var exCust=_bkFindCust(d.name,d.phone);
   if(exCust){
@@ -3284,6 +3285,7 @@ function applyBookingTransfer(){
       var li={id:id,cat:m.cat,subcat:m.subcat,svcId:svc?svc.id:'',name:svc?svc.name:label,price:svc?(svc.price||0):0,qty:it.qty||1,discVal:0,discType:'pct'};
       if(sub2)li.sub2=sub2;
       if(it.free)li.direct=true;
+      if(!it.free)li._bkSrc=it;   // 서비스 목록 수신 후 자동 재매칭용 원본
       if(!svc||!li.price){expandedLI[id]=true;needPrice++;}
       lineItems.push(li);
     });
@@ -3303,6 +3305,7 @@ function applyBookingTransfer(){
       expandedLI[id3]=true;needPrice++;
     }
   }
+  window._bkFromBooking=true;   // 서비스 목록 수신 시 자동 재매칭 활성화
   Nav('new');Tab('info');
   renderLI();App.upPrev();
   var custMsg=exCust?(' · 기존 고객 "'+(exCust.name||'')+'"'+(exCust.member?' ('+exCust.member+')':'')+' 매칭됨'):'';
@@ -3311,6 +3314,36 @@ function applyBookingTransfer(){
     :'✓ 예약 정보가 자동 반영되었습니다 · 내용 확인 후 저장하세요')+custMsg,6000);
 }
 
+// ── 예약 전환 자동 재매칭 ──
+// 전환 직후에는 로컬 캐시가 비어 있거나 예전 것일 수 있어 매칭이 빗나갈 수 있다.
+// Firebase에서 실제 서비스 목록이 도착하면, 아직 매칭 안 된(또는 유효하지 않은 서비스에 물린)
+// 예약 품목 행을 실제 카탈로그로 다시 매칭해 정식 서비스명(품목번호 포함)과 단가를 채운다.
+function retryBookingMatch(){
+  if(!window._bkFromBooking||!services.length)return;
+  var fixed=0;
+  lineItems.forEach(function(li){
+    if(!li._bkSrc||li.direct)return;
+    var cur=li.svcId?services.find(function(s){return s.id===li.svcId;}):null;
+    if(cur)return;   // 이미 실제 카탈로그의 서비스에 연결됨 (관리자가 고른 것 포함)
+    var it=li._bkSrc;
+    var m=_BK_MAP[it.catId]||{cat:'기타',subcat:'기타'};
+    var sub2=it.grpKo?(_BK_GRP2SUB[it.grpKo]||''):'';
+    var svc=_bkMatchSvc(m.cat,m.subcat,sub2,it.svcKo||'',it.catId,it.grpKo||'');
+    if(svc){
+      li.svcId=svc.id;li.name=svc.name;
+      if(!(li.price>0)||li.price!==(parseFloat(svc.price)||0))li.price=parseFloat(svc.price)||0;
+      if(svc.cat)li.cat=svc.cat;
+      if(svc.subcat)li.subcat=svc.subcat;
+      if(svc.sub2)li.sub2=svc.sub2;
+      delete expandedLI[li.id];
+      fixed++;
+    }
+  });
+  if(fixed){
+    renderLI();App.upPrev();
+    showToast('✓ 서비스 목록 동기화 — 예약 품목 '+fixed+'건의 정식 명칭·단가 반영됨',4000);
+  }
+}
 async function init(){
   var _vp=new URLSearchParams(location.search);
   var _vid=_vp.get('view');
@@ -3382,6 +3415,7 @@ async function init(){
         services.sort(function(a,b){return(a.order||0)-(b.order||0);});
         localStorage.setItem(LSVC,JSON.stringify(services));
         if(!inSvc)renderSvcs();
+        retryBookingMatch();   // 실제 카탈로그 도착 → 예약 품목 재매칭
       }
     },function(){});
 
