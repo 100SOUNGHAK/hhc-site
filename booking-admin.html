@@ -1451,15 +1451,19 @@ function renderList(){
     const mf=listFilter==='all'||(listFilter==='waiting'&&b.status!=='confirmed')||(listFilter==='confirmed'&&b.status==='confirmed'&&!done)||(listFilter==='done'&&done);
     return mq&&mf;
   });
-  // 확정완료·작업완료는 예약일 과거 → 미래 순(오름차순), 같은 날짜면 이른 시간부터 정렬
+  // 확정완료(방문 예정)는 예약일 과거 → 미래 오름차순, 작업완료(지난 건)는 최근 방문일부터 내림차순.
+  // 두 경우 모두 같은 날짜 안에서는 시간순으로 정렬하고, 시간 미정 건은 그 날짜의 맨 뒤에 둡니다.
   // (대기중·신청완료 등 그 외 상태는 기존 등록순 유지)
   filtered.sort((a,b)=>{
     if(a.status!=='confirmed'||b.status!=='confirmed')return 0;
     const ad=isDoneBooking(a),bd=isDoneBooking(b);
-    if(ad!==bd)return ad?1:-1;              // 확정완료(방문 예정) 먼저, 작업완료는 뒤로
-    const dc=String(a.booking_date||'').localeCompare(String(b.booking_date||''));
-    if(dc)return dc;                        // 예약일: 과거 → 미래
-    return bkTimeMin(a.booking_time)-bkTimeMin(b.booking_time);  // 같은 날: 빠른 시간부터
+    if(ad!==bd)return ad?1:-1;              // 확정완료 먼저, 작업완료는 뒤로
+    const da=String(a.booking_date||''),db2=String(b.booking_date||'');
+    const dc=ad?db2.localeCompare(da):da.localeCompare(db2);   // 작업완료: 최근순 / 확정완료: 과거순
+    if(dc)return dc;
+    const ta=bkTimeMin(a.booking_time),tb=bkTimeMin(b.booking_time);
+    if(ta===99999||tb===99999)return ta-tb; // 시간 미정은 항상 뒤로
+    return ad?tb-ta:ta-tb;                  // 작업완료: 늦은 시간부터 / 확정완료: 빠른 시간부터
   });
   if(!filtered.length){
     el.innerHTML='<div class="empty-st"><div class="empty-title">예약 내역이 없습니다</div><div class="empty-desc">새 예약 등록 탭에서 고객을 등록하세요</div></div>';
