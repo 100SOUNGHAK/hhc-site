@@ -1059,6 +1059,7 @@
   .coupon .dday.always{background:var(--teal-50);color:var(--teal-600);}
   .coupon .dday.ended{background:#e5e7eb;color:#6b7280;}
   .coupon .period{font-size:10.5px;color:var(--ink-400);}
+  .coupon-empty{flex:1 1 100%;text-align:center;padding:26px 18px;border:1px dashed rgba(15,37,64,.18);border-radius:14px;background:rgba(255,255,255,.55);color:var(--ink-600);font-size:13px;line-height:1.7;}
 
   /* ═══ NEW: 쿠폰 해당월 배지 · 신규 리본 · 구분 태그 · 종료 처리 ═══ */
   .coupon .cmonth{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.04em;color:var(--gold-600);background:var(--gold-100);border:1px solid rgba(201,164,76,.42);border-radius:100px;padding:3px 9px;margin:0 0 8px 5px;}
@@ -3274,9 +3275,9 @@ window.submitReview=async function(){
   <a href="https://hhc-3p8.pages.dev/request" class="go"><span class="mq-ic">📅</span><span>예약</span></a>
 </nav>
 <script>
-// 쿠폰 D-DAY 자동 계산 · 해당월 표기 · 자동 정렬 · 종료 7일 후 자동 삭제
+// 쿠폰 D-DAY 자동 계산 · 해당월 표기 · 자동 정렬 · 종료일(D-0) 당일 자동 삭제
 (function(){
-  var PURGE_DAYS=7;   // 종료일로부터 이 일수가 지나면 목록에서 자동 삭제
+  // 종료일 당일(D-0)이 되면 목록에서 즉시 삭제 → 화면에는 D-1까지만 노출됩니다.
   var SOON_DAYS=7;    // 마감 임박 기준 (이 일수 이하면 최우선 정렬)
   var today=new Date();today.setHours(0,0,0,0);
 
@@ -3300,18 +3301,17 @@ window.submitReview=async function(){
       var diff=diffDays(cp);
       cp.__i=i;
 
-      // ① 종료일 + PURGE_DAYS 경과 → 자동 삭제
-      if(diff!==null && diff < -PURGE_DAYS){
+      // ① 종료일(D-0) 도달 → 당일 자동 삭제 (지난 행사도 동일하게 삭제)
+      if(diff!==null && diff<=0){
         cp.__purge=true;
         return;
       }
 
-      // ② D-DAY 표기
+      // ② D-DAY 표기 (남은 기간이 있는 항목만 표시되므로 D-1 이상)
       var el=cp.querySelector('.dday');
       if(el && diff!==null){
-        if(diff<0){el.textContent='종료';el.classList.add('ended');cp.classList.add('is-ended');}
-        else if(diff===0){el.textContent='D-DAY';el.classList.add('soon');}
-        else{el.textContent='D-'+diff;if(diff<=SOON_DAYS)el.classList.add('soon');}
+        el.textContent='D-'+diff;
+        if(diff<=SOON_DAYS)el.classList.add('soon');
       }
 
       // ③ 해당월 배지 (상시 항목 = data-end 없음 → 표기하지 않음)
@@ -3327,11 +3327,10 @@ window.submitReview=async function(){
       }
 
       // ④ 정렬 순위
-      //    0 = 마감 임박(D-7 이하) · 1 = 신규 추가 · 2 = 상시/여유 · 3 = 종료
-      if(diff!==null && diff<0)      cp.__rank=3;
-      else if(diff!==null && diff<=SOON_DAYS) cp.__rank=0;
-      else if(cp.hasAttribute('data-new'))    cp.__rank=1;
-      else                                    cp.__rank=2;
+      //    0 = 마감 임박(D-7 이하) · 1 = 신규 추가 · 2 = 상시/여유
+      if(diff!==null && diff<=SOON_DAYS)   cp.__rank=0;
+      else if(cp.hasAttribute('data-new')) cp.__rank=1;
+      else                                 cp.__rank=2;
       cp.__diff=(diff===null)?9999:diff;
     });
 
@@ -3346,6 +3345,16 @@ window.submitReview=async function(){
       return a.__i-b.__i;
     });
     keep.forEach(function(cp){rail.appendChild(cp);});
+
+    // 남은 쿠폰이 하나도 없을 때 빈 화면 대신 안내 문구
+    if(!keep.length && !rail.querySelector('.coupon-empty')){
+      var em=document.createElement('div');
+      em.className='coupon-empty';
+      em.textContent=(window.currentSiteLang==='en')
+        ? 'The current promotions have ended. New offers are on the way — please contact us for the latest deals.'
+        : '진행 중인 할인 행사가 종료되었습니다. 새로운 프로모션을 준비 중이니 문의 바랍니다.';
+      rail.appendChild(em);
+    }
   });
   // 쿠폰 클릭/탭 시 확대 (다시 누르면 해제, 다른 쿠폰 누르면 이동)
   document.querySelectorAll('.coupon').forEach(function(cp){
