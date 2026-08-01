@@ -89,12 +89,12 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .stripe.warn{background:linear-gradient(180deg,#fbbf24,#b45309)}
 .stripe.bad{background:linear-gradient(180deg,#f87171,#dc2626)}
 .nbody{flex:1;min-width:0;padding:12px 13px}
-.nrow1{display:flex;align-items:center;gap:9px}
+.nrow1{display:flex;align-items:flex-start;gap:9px;flex-wrap:wrap}
 .ntile{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
 .ntile.ok{background:var(--ok-bg)}.ntile.warn{background:var(--warn-bg)}.ntile.bad{background:#fef2f2}
-.nid{font-size:12.5px;font-weight:900;letter-spacing:-.01em;word-break:break-all}
+.nid{font-size:12.5px;font-weight:900;letter-spacing:-.01em;word-break:break-all;flex:1;min-width:0}
 .ndate{font-size:10.5px;color:var(--ink3);font-weight:700;margin-top:2px}
-.nst{margin-left:auto;font-size:10px;font-weight:900;border-radius:8px;padding:5px 10px;white-space:nowrap;flex-shrink:0}
+.nst{font-size:10px;font-weight:900;border-radius:8px;padding:5px 10px;white-space:nowrap;flex-shrink:0;align-self:center}
 .nst.ok{background:var(--ok-bg);color:var(--ok)}
 .nst.warn{background:var(--warn-bg);color:var(--warn)}
 .nst.bad{background:#fef2f2;color:#dc2626}
@@ -340,6 +340,32 @@ function render(){
        '<div><div class="k">'+L.bonus+'</div><div class="v">RM '+fmt0(b.bonus)+'</div></div>'+
        '</div></div>';
   }
+  // ── contracts ──
+  if(VIS.includes('ct')&&DATA.contracts.length){
+    const vN=DATA.contracts.filter(x=>x.status!=='ended').length;
+    h+='<div class="sec"><div class="sh">'+L.ct+'<span class="n">'+L.validN+' '+vN+' · '+L.endedN+' '+(DATA.contracts.length-vN)+'</span></div>';
+    DATA.contracts.slice().sort((a,b)=>((a.status==='ended')?1:0)-((b.status==='ended')?1:0)).forEach(x=>{
+      const ended=x.status==='ended';
+      const b=balCalc(x);
+      const base=tierOf(x.package_id),ti=TIER[base]||{ic:'📑',nm:'PACKAGE'};
+      const cls=(TIER[base]?('t-'+base):'t-silver')+(ended?' off':'');
+      const pct=b.total>0?Math.max(0,Math.min(100,Math.round(b.remain/b.total*100))):0;
+      const rs=fmt(b.remain).split('.');
+      h+='<a class="ccard '+cls+'" target="_blank" rel="noopener" href="'+BASE+'/admin.html?view='+encodeURIComponent(x.__id)+'&mode=all&lang='+LANG+'">'+
+         '<div class="cw"><div class="ctop"><span class="ctier">'+ti.ic+' '+ti.nm+'</span>'+
+         '<span class="cstat'+(ended?' off':'')+'">'+(ended?L.ended:L.inUse)+'</span></div>'+
+         '<div class="cnm">'+esc(pkgLb(x.package_id)||'PACKAGE')+'</div>'+
+         '<div class="clb">'+(ended?L.closedLb:L.remainLb)+'</div>'+
+         '<div class="cval">RM '+rs[0]+'<small>.'+(rs[1]||'00')+'</small></div>'+
+         '<div class="cbar"><i style="width:'+pct+'%"></i></div>'+
+         '<div class="cbl"><span>'+L.used+' RM '+fmt0(b.netUsed)+'</span><span>'+(pct>0?(pct+'% '+L.leftPct):L.allUsed)+'</span></div>'+
+         '<div class="cmeta"><div><div class="k">'+L.cdate+'</div><div class="v">'+esc(dfmt(x.contract_date))+'</div></div>'+
+         '<div><div class="k">'+L.cnt+'</div><div class="v">'+b.cnt+L.ea+'</div></div>'+
+         '<div><div class="k">'+L.bonus+'</div><div class="v">RM '+fmt0(b.bonus)+'</div></div></div>'+
+         '<span class="cbtn">'+L.ctGo+'</span></div></a>';
+    });
+    h+='</div>';
+  }
   // ── invoices ──
   if(VIS.includes('iv')&&DATA.invoices.length){
     const ivSum=DATA.invoices.reduce((a,x)=>a+invTotal(x),0);
@@ -402,32 +428,6 @@ function render(){
          '<div class="ifoot">'+(chip?'<span class="nst '+ccl+'">'+chip+'</span>':'')+
          (x.invoice_id?'<span class="nst" style="background:var(--pri-bg);color:var(--pri)">'+L.linked+'</span>':'')+
          '<span class="nbtn">'+L.ipGo+'</span></div></a>';
-    });
-    h+='</div>';
-  }
-  // ── contracts ──
-  if(VIS.includes('ct')&&DATA.contracts.length){
-    const vN=DATA.contracts.filter(x=>x.status!=='ended').length;
-    h+='<div class="sec"><div class="sh">'+L.ct+'<span class="n">'+L.validN+' '+vN+' · '+L.endedN+' '+(DATA.contracts.length-vN)+'</span></div>';
-    DATA.contracts.slice().sort((a,b)=>((a.status==='ended')?1:0)-((b.status==='ended')?1:0)).forEach(x=>{
-      const ended=x.status==='ended';
-      const b=balCalc(x);
-      const base=tierOf(x.package_id),ti=TIER[base]||{ic:'📑',nm:'PACKAGE'};
-      const cls=(TIER[base]?('t-'+base):'t-silver')+(ended?' off':'');
-      const pct=b.total>0?Math.max(0,Math.min(100,Math.round(b.remain/b.total*100))):0;
-      const rs=fmt(b.remain).split('.');
-      h+='<a class="ccard '+cls+'" target="_blank" rel="noopener" href="'+BASE+'/admin.html?view='+encodeURIComponent(x.__id)+'&mode=all&lang='+LANG+'">'+
-         '<div class="cw"><div class="ctop"><span class="ctier">'+ti.ic+' '+ti.nm+'</span>'+
-         '<span class="cstat'+(ended?' off':'')+'">'+(ended?L.ended:L.inUse)+'</span></div>'+
-         '<div class="cnm">'+esc(pkgLb(x.package_id)||'PACKAGE')+'</div>'+
-         '<div class="clb">'+(ended?L.closedLb:L.remainLb)+'</div>'+
-         '<div class="cval">RM '+rs[0]+'<small>.'+(rs[1]||'00')+'</small></div>'+
-         '<div class="cbar"><i style="width:'+pct+'%"></i></div>'+
-         '<div class="cbl"><span>'+L.used+' RM '+fmt0(b.netUsed)+'</span><span>'+(pct>0?(pct+'% '+L.leftPct):L.allUsed)+'</span></div>'+
-         '<div class="cmeta"><div><div class="k">'+L.cdate+'</div><div class="v">'+esc(dfmt(x.contract_date))+'</div></div>'+
-         '<div><div class="k">'+L.cnt+'</div><div class="v">'+b.cnt+L.ea+'</div></div>'+
-         '<div><div class="k">'+L.bonus+'</div><div class="v">RM '+fmt0(b.bonus)+'</div></div></div>'+
-         '<span class="cbtn">'+L.ctGo+'</span></div></a>';
     });
     h+='</div>';
   }
