@@ -679,7 +679,7 @@ window.caSendModal=async function(idx){
   }
   const D=e.docs||{};
   const CNT={iv:(D.invoices||[]).length,ip:(D.inspections||[]).length,ct:(D.contracts||[]).length,cp:(D.coupons||[]).length};
-  const state={iv:CNT.iv>0,ip:CNT.ip>0,ct:CNT.ct>0,cp:CNT.cp>0,en:false};
+  const state={iv:CNT.iv>0,ip:CNT.ip>0,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:'basic'};
   const OPT=[['iv','💳','인보이스','건'],['ip','🔧','점검보고서','건'],['ct','📑','계약서 · 잔액','건'],['cp','🎫','상품권','장']];
   const mk=genericModal('📤 마이페이지 발송 — '+esc(e.name),
     '<p style="font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:10px">고객이 링크 하나로 본인의 문서를 확인합니다. 노출할 항목을 선택하세요. 링크는 고정이며 열 때마다 최신 내용이 표시됩니다.</p>'+
@@ -696,6 +696,13 @@ window.caSendModal=async function(idx){
         '</div>';
       }).join('')+
     '</div>'+
+    '<div style="display:flex;align-items:center;gap:7px;margin-bottom:9px">'+
+      '<span style="font-size:11px;font-weight:800;color:var(--ink3)">발송 메시지</span>'+
+      '<div id="cs-tpl" style="margin-left:auto;display:flex;background:var(--bg);border:1px solid var(--bdr);border-radius:9px;padding:2px;gap:2px">'+
+        '<span data-t="basic" style="cursor:pointer;font-size:11px;font-weight:800;border-radius:7px;padding:5px 12px">📄 기본 안내</span>'+
+        '<span data-t="revisit" style="cursor:pointer;font-size:11px;font-weight:800;border-radius:7px;padding:5px 12px">🔄 재방문 · 예약</span>'+
+      '</div>'+
+    '</div>'+
     '<div style="display:flex;align-items:center;gap:7px;margin-bottom:11px">'+
       '<span style="font-size:11px;font-weight:800;color:var(--ink3)">발송 언어</span>'+
       '<div id="cs-lang" style="margin-left:auto;display:flex;background:var(--bg);border:1px solid var(--bdr);border-radius:9px;padding:2px;gap:2px">'+
@@ -704,21 +711,41 @@ window.caSendModal=async function(idx){
       '</div>'+
     '</div>'+
     '<div id="cs-warn" style="display:none;background:var(--warn-bg);color:var(--warn);border-radius:9px;padding:8px 11px;font-size:11px;font-weight:800;margin-bottom:9px">⚠️ 항목을 하나 이상 선택하세요 (기본: 인보이스)</div>'+
-    '<div id="cs-link" style="background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:9px 11px;font-size:10.5px;font-family:monospace;color:#4A5578;word-break:break-all;margin-bottom:11px"></div>'+
+    '<div id="cs-link" style="background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:9px 11px;font-size:10.5px;font-family:monospace;color:#4A5578;word-break:break-all;margin-bottom:8px"></div>'+
+    '<div style="font-size:10.5px;font-weight:800;color:var(--ink3);margin-bottom:4px">발송 메시지 미리보기</div>'+
+    '<div id="cs-msg" style="background:#fff;border:1px solid var(--bdr);border-radius:8px;padding:10px 11px;font-size:11px;line-height:1.65;color:var(--ink2);white-space:pre-wrap;word-break:break-word;max-height:190px;overflow:auto;margin-bottom:11px"></div>'+
     '<div style="display:flex;gap:7px">'+
       '<button id="cs-pv" class="btn" style="flex:1;background:var(--pri-bg);border-color:var(--pri);color:var(--pri)">👁 미리보기</button>'+
       '<button id="cs-wa" class="btn" style="flex:1;background:#22c55e;border-color:#22c55e;color:#fff">💬 WhatsApp 발송</button>'+
-      '<button id="cs-cp" class="btn" style="flex:1">🔗 링크 복사</button>'+
+      '<button id="cs-cp" class="btn" style="flex:1">📋 메시지 복사</button>'+
     '</div>');
   function link(){
     const v=['iv','ip','ct','cp'].filter(k=>state[k]);
     return BASE+'/my.html?c='+encodeURIComponent(mid)+'&v='+(v.join(',')||'iv')+'&lang='+(state.en?'en':'ko');
   }
+  // ── 발송 메시지 템플릿 ──────────────────────────────
+  // basic  : 기본 안내 (마이페이지 문서 확인 안내)
+  // revisit: 재방문 · 예약 안내 (서비스/가격 확인 + 예약 신청 문구 추가)
+  // 안내 목록은 위에서 선택한 「노출 항목」에 맞춰 자동으로 만들어집니다.
+  const CS_SEP='------------------------------';
+  const CS_LB={iv:['인보이스 확인','Check invoices'],ip:['점검보고서 확인','Check inspection reports'],ct:['계약 잔액 확인','Check contract balance'],cp:['상품권 확인','Check vouchers']};
+  function msgList(){
+    const en=!!state.en;
+    const sel=['iv','ip','ct','cp'].filter(k=>state[k]);
+    const rows=(sel.length?sel:['iv']).map(k=>'* '+CS_LB[k][en?1:0]);
+    if(state.tpl==='revisit')return [en?'* Services & prices':'* 서비스 및 가격 확인',en?'* Book a service':'* 서비스 예약 신청'].concat(rows).join('\n');
+    return rows.join('\n');
+  }
   function msg(){
-    const l=link();
-    return state.en
-      ?('Hello '+e.name+' 😊\n\nThis is Happy Home Care.\n\n📱 You can check your service records (invoices · inspection reports · contract · vouchers) anytime via your personal page below.\n\n🔗 My Page:\n'+l+'\n\nThank you 🙏\nHappy Home Care\n📞 +60 17-247 2774')
-      :('안녕하세요, '+e.name+' 고객님 😊\n\nHappy Home Care 입니다.\n\n📱 아래 고객님 전용 페이지에서 인보이스 · 점검보고서 · 계약 잔액 · 상품권을 언제든지 확인하실 수 있습니다.\n\n🔗 마이페이지:\n'+l+'\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774');
+    const l=link(),en=!!state.en,nm=e.name||'',list=msgList();
+    if(state.tpl==='revisit'){
+      return en
+        ?('Hello '+nm+' 😊\nThis is Happy Home Care.\nThank you for choosing us again.\n'+CS_SEP+'\n🏠 On your personal My Page below you can:\n\n'+list+'\n\nall in one place.\n'+CS_SEP+'\n📱 My Page\n🔗 '+l+'\nPlease submit your service request through the link above and we will arrange your booking right away.\nThank you. 🙏\nHappy Home Care\n📞 +60 17-247 2774')
+        :('안녕하세요, '+nm+' 고객님 😊\nHappy Home Care입니다.\n다시 찾아주셔서 감사합니다.\n'+CS_SEP+'\n🏠 아래 고객님 전용 마이페이지에서\n\n'+list+'\n\n모두 편리하게 이용하실 수 있습니다.\n'+CS_SEP+'\n📱 마이페이지\n🔗 '+l+'\n상기 링크를 통해 서비스 의뢰를 접수해 주시면 신속하게 예약을 도와드리겠습니다.\n감사합니다. 🙏\nHappy Home Care\n📞 +60 17-247 2774');
+    }
+    return en
+      ?('Hello '+nm+' 😊\nThis is Happy Home Care.\n'+CS_SEP+'\n🏠 On your personal My Page below you can:\n\n'+list+'\n\nall in one place.\n'+CS_SEP+'\n📱 My Page\n🔗 '+l+'\n \n'+CS_SEP+'\nHappy Home Care\n📞 +60 17-247 2774')
+      :('안녕하세요, '+nm+' 고객님 😊\nHappy Home Care입니다.\n'+CS_SEP+'\n🏠 아래 고객님 전용 마이페이지에서\n\n'+list+'\n\n모두 편리하게 이용하실 수 있습니다.\n'+CS_SEP+'\n📱 마이페이지\n🔗 '+l+'\n \n'+CS_SEP+'\nHappy Home Care\n📞 +60 17-247 2774');
   }
   function paint(){
     mk.querySelectorAll('#cs-opts [data-k]').forEach(el=>{
@@ -738,10 +765,17 @@ window.caSendModal=async function(idx){
       el.style.color=on?'var(--pri)':'var(--ink3)';
       el.style.boxShadow=on?'0 1px 3px rgba(11,24,51,.12)':'none';
     });
+    mk.querySelectorAll('#cs-tpl [data-t]').forEach(el=>{
+      const on=el.dataset.t===state.tpl;
+      el.style.background=on?'#fff':'transparent';
+      el.style.color=on?'var(--pri)':'var(--ink3)';
+      el.style.boxShadow=on?'0 1px 3px rgba(11,24,51,.12)':'none';
+    });
     const v=['iv','ip','ct','cp'].filter(k=>state[k]);
     const w=mk.querySelector('#cs-warn');
     if(w)w.style.display=v.length?'none':'block';
     mk.querySelector('#cs-link').textContent=link();
+    mk.querySelector('#cs-msg').textContent=msg();
   }
   mk.querySelector('#cs-opts').addEventListener('click',ev=>{
     const el=ev.target.closest('[data-k]');if(!el)return;
@@ -752,6 +786,10 @@ window.caSendModal=async function(idx){
   mk.querySelector('#cs-lang').addEventListener('click',ev=>{
     const el=ev.target.closest('[data-l]');if(!el)return;
     state.en=(el.dataset.l==='en');paint();
+  });
+  mk.querySelector('#cs-tpl').addEventListener('click',ev=>{
+    const el=ev.target.closest('[data-t]');if(!el)return;
+    state.tpl=el.dataset.t;paint();
   });
   mk.querySelector('#cs-pv').addEventListener('click',()=>{window.caView(link(),'👁 고객 발송 화면 미리보기 — '+(e.name||''));});
   mk.querySelector('#cs-wa').addEventListener('click',()=>{
