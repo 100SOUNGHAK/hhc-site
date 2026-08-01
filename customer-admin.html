@@ -59,6 +59,13 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .drow .m{color:var(--ink3);font-size:11px}
 .open-btn{margin-left:auto;font-size:10.5px;font-weight:800;color:var(--pri);background:var(--pri-bg);border-radius:6px;padding:3px 9px;white-space:nowrap;text-decoration:none}
 .dnone{padding:14px;font-size:12px;color:var(--ink3);text-align:center}
+.rb{border:none;cursor:pointer;font-family:inherit;font-size:10.5px;font-weight:800;border-radius:6px;padding:3px 8px;background:var(--bg);color:var(--ink2);white-space:nowrap}
+.rb.del{background:var(--bad-bg);color:var(--bad)}
+.rb.hd{background:var(--pri-bg);color:var(--pri);font-size:10.5px;padding:4px 10px;border-radius:7px}
+.lk-row{border:1.5px solid var(--bdr);border-radius:10px;padding:10px 12px;margin-bottom:7px;cursor:pointer;font-size:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.lk-row:hover{border-color:var(--pri);background:var(--pri-bg)}
+.lk-row.mine{opacity:.5;cursor:default}
+.lk-row .own{margin-left:auto;font-size:10px;color:var(--ink3);font-weight:700}
 .mini{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
 .mini .mc{background:#fff;border:1px solid var(--bdr);border-radius:10px;padding:9px;text-align:center;font-size:10.5px;color:var(--ink3);font-weight:700}
 .mini .mc b{display:block;font-size:15px;color:var(--ink);font-weight:900}
@@ -320,36 +327,39 @@ function renderList(){
 window.openDrawer=function(idx){
   const e=entries[idx];if(!e)return;
   drawerKey=idx;
+  const idx0=idx;
   const d=document.getElementById('drawer');
   const init=(e.name||'?').trim().charAt(0).toUpperCase();
   let h='<div class="dhead"><div class="avatar">'+esc(init)+'</div><div class="dinfo"><b>'+esc(e.name)+'</b>'+
     '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음')+(e.addr?' · '+esc(e.addr):'')+'</div>'+
     '<div class="tagrow">'+memberBadge(e)+(e.aliases.length?'<span class="pill vio">별칭 '+esc(e.aliases.join(', '))+'</span>':'')+'</div></div>'+
     '<div class="dbtns"><button class="btn sm p" onclick="openEditModal('+idx+')">✏️ 정보 수정</button><button class="btn sm" onclick="closeDrawer()">닫기</button></div></div>';
+  const rowBtns=(coll,id)=>'<button class="rb" onclick="caDocEdit(\''+coll+'\',\''+id+'\')">✏️ 수정</button><button class="rb del" onclick="caDocDel(\''+coll+'\',\''+id+'\')">✕ 삭제</button>';
+  const hdrLink=(coll)=>'<button class="rb hd" onclick="caDocLink(\''+coll+'\','+idx0+')">+ 연결</button>';
   // 인보이스
-  h+='<div class="dcard"><div class="dcard-h">💳 인보이스<span class="cnt">'+e.docs.invoices.length+'건 · '+fmtRM(e.docs.invoices.reduce((a,x)=>a+invTotal(x),0))+'</span></div>';
+  h+='<div class="dcard"><div class="dcard-h">💳 인보이스<span class="cnt">'+e.docs.invoices.length+'건 · '+fmtRM(e.docs.invoices.reduce((a,x)=>a+invTotal(x),0))+'</span>'+hdrLink('invoices')+'</div>';
   h+=e.docs.invoices.length?e.docs.invoices.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>{
     const st=INV_ST[x.status]||[x.status||'-','blue'];
-    return '<div class="drow"><span class="id">'+esc(x.id||x.__id)+'</span><span class="pill '+st[1]+'">'+esc(st[0])+'</span><span class="m">'+esc(x.date||'')+' · '+fmtRM(invTotal(x))+'</span><a class="open-btn" target="_blank" href="'+BASE+'/hhc-invoice.html?view='+encodeURIComponent(x.id||x.__id)+'&lang=ko">↗ 열기</a></div>';
+    return '<div class="drow"><span class="id">'+esc(x.id||x.__id)+'</span><span class="pill '+st[1]+'">'+esc(st[0])+'</span><span class="m">'+esc(x.date||'')+' · '+fmtRM(invTotal(x))+'</span><a class="open-btn" target="_blank" href="'+BASE+'/hhc-invoice.html?view='+encodeURIComponent(x.id||x.__id)+'&lang=ko">↗ 열기</a>'+rowBtns('invoices',x.__id)+'</div>';
   }).join(''):'<div class="dnone">인보이스 없음</div>';
   h+='</div>';
   // 점검보고서
-  h+='<div class="dcard"><div class="dcard-h">🔧 점검보고서<span class="cnt">'+e.docs.inspections.length+'건</span></div>';
+  h+='<div class="dcard"><div class="dcard-h">🔧 점검보고서<span class="cnt">'+e.docs.inspections.length+'건</span>'+hdrLink('inspections')+'</div>';
   h+=e.docs.inspections.length?e.docs.inspections.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>
-    '<div class="drow"><span class="id">'+inspLabel(x.type)+'</span><span class="m">'+esc(x.date||'')+(x.addr?' · '+esc(x.addr):'')+'</span>'+(x.invoice_id?'<span class="pill blue">🧾 '+esc(x.invoice_id)+'</span>':'')+'<a class="open-btn" target="_blank" href="'+BASE+'/'+inspPage(x.type)+'?id='+encodeURIComponent(x.__id)+'&lang=ko">↗ 열기</a></div>').join('')
+    '<div class="drow"><span class="id">'+inspLabel(x.type)+'</span><span class="m">'+esc(x.date||'')+(x.addr?' · '+esc(x.addr):'')+'</span>'+(x.invoice_id?'<span class="pill blue">🧾 '+esc(x.invoice_id)+'</span>':'')+'<a class="open-btn" target="_blank" href="'+BASE+'/'+inspPage(x.type)+'?id='+encodeURIComponent(x.__id)+'&lang=ko">↗ 열기</a>'+rowBtns('inspections',x.__id)+'</div>').join('')
     :'<div class="dnone">점검보고서 없음</div>';
   h+='</div>';
   // 계약서
-  h+='<div class="dcard"><div class="dcard-h">📑 계약서<span class="cnt">'+e.docs.contracts.length+'건</span></div>';
+  h+='<div class="dcard"><div class="dcard-h">📑 계약서<span class="cnt">'+e.docs.contracts.length+'건</span>'+hdrLink('contracts')+'</div>';
   h+=e.docs.contracts.length?e.docs.contracts.map(x=>{
     let usage=[];try{usage=typeof x.usage_history==='string'?JSON.parse(x.usage_history||'[]'):(x.usage_history||[]);}catch(_){ }
-    return '<div class="drow"><span class="id">'+esc(pkgLabel(x.package_id)||'패키지')+'</span><span class="pill ok">납입 '+fmtRM(x.amount_paid)+'</span><span class="m">'+esc(x.contract_date||'')+' · 이용내역 '+usage.length+'건</span><a class="open-btn" target="_blank" href="'+BASE+'/admin.html?view='+encodeURIComponent(x.__id)+'&mode=all&lang=ko">↗ 열기</a></div>';
+    return '<div class="drow"><span class="id">'+esc(pkgLabel(x.package_id)||'패키지')+'</span><span class="pill ok">납입 '+fmtRM(x.amount_paid)+'</span><span class="m">'+esc(x.contract_date||'')+' · 이용내역 '+usage.length+'건</span><a class="open-btn" target="_blank" href="'+BASE+'/admin.html?view='+encodeURIComponent(x.__id)+'&mode=all&lang=ko">↗ 열기</a>'+rowBtns('contracts',x.__id)+'</div>';
   }).join(''):'<div class="dnone">계약서 없음</div>';
   h+='</div>';
   // 상품권
-  h+='<div class="dcard"><div class="dcard-h">🎫 상품권<span class="cnt">'+e.docs.coupons.length+'건</span></div>';
+  h+='<div class="dcard"><div class="dcard-h">🎫 상품권<span class="cnt">'+e.docs.coupons.length+'건</span>'+hdrLink('coupons')+'</div>';
   h+=e.docs.coupons.length?e.docs.coupons.map(x=>
-    '<div class="drow"><span class="id">'+esc(x.code||'')+'</span><span class="pill vio">'+esc(x.value||'')+'</span><span class="m">'+(x.expiry?'~'+esc(x.expiry):'')+(x.receiver?' · 받는분 '+esc(x.receiver):'')+'</span><span class="pill '+(x.status==='active'?'ok':'warn')+'">'+(x.status==='active'?'사용가능':esc(x.status||''))+'</span><a class="open-btn" target="_blank" href="'+BASE+'/coupon.html?id='+encodeURIComponent(x.__id)+'">↗ 열기</a></div>').join('')
+    '<div class="drow"><span class="id">'+esc(x.code||'')+'</span><span class="pill vio">'+esc(x.value||'')+'</span><span class="m">'+(x.expiry?'~'+esc(x.expiry):'')+(x.receiver?' · 받는분 '+esc(x.receiver):'')+'</span><span class="pill '+(x.status==='active'?'ok':'warn')+'">'+(x.status==='active'?'사용가능':esc(x.status||''))+'</span><a class="open-btn" target="_blank" href="'+BASE+'/coupon.html?id='+encodeURIComponent(x.__id)+'">↗ 열기</a>'+rowBtns('coupons',x.__id)+'</div>').join('')
     :'<div class="dnone">상품권 없음</div>';
   h+='</div>';
   // 요약
@@ -498,6 +508,124 @@ async function propagateDocs(e,v){
     }
   }
 }
+
+// ═══ 문서 연결 · 수정 · 삭제 ═══
+const COLL_LB={invoices:'💳 인보이스',inspections:'🔧 점검보고서',contracts:'📑 계약서',coupons:'🎫 상품권'};
+function docOwnerName(coll,x){
+  if(coll==='invoices')return (x.customer&&x.customer.name)||'';
+  if(coll==='inspections')return x.client||'';
+  if(coll==='contracts')return x.name||'';
+  return x.name||x.receiver||'';
+}
+function docOwnerPhone(coll,x){
+  if(coll==='invoices')return (x.customer&&x.customer.phone)||'';
+  if(coll==='inspections')return x.phone||'';
+  if(coll==='contracts')return x.phone||'';
+  return '';
+}
+function docSummary(coll,x){
+  if(coll==='invoices')return (x.id||x.__id)+' · '+(x.date||'')+' · '+fmtRM(invTotal(x));
+  if(coll==='inspections')return inspLabel(x.type)+' · '+(x.date||'')+(x.addr?' · '+x.addr:'');
+  if(coll==='contracts')return (pkgLabel(x.package_id)||'패키지')+' · '+(x.contract_date||'')+' · 납입 '+fmtRM(x.amount_paid);
+  return (x.code||'')+' · '+(x.value||'')+(x.expiry?' · ~'+x.expiry:'');
+}
+function ownerFieldsFor(coll,e){
+  if(coll==='invoices')return {'customer.name':e.name,'customer.phone':e.phone||''};
+  if(coll==='inspections')return {client:e.name,phone:e.phone||''};
+  if(coll==='contracts')return {name:e.name,phone:e.phone||''};
+  return {name:e.name};
+}
+function genericModal(title,bodyHTML,footHTML){
+  const old=document.getElementById('ca-doc-mask');if(old)old.remove();
+  const mk=document.createElement('div');mk.id='ca-doc-mask';mk.className='mask open';
+  mk.innerHTML='<div class="modal"><div class="modal-h">'+title+'<button class="x" onclick="document.getElementById(\'ca-doc-mask\').remove()">✕</button></div>'+
+    '<div class="modal-b">'+bodyHTML+'</div>'+(footHTML?'<div class="modal-f">'+footHTML+'</div>':'')+'</div>';
+  mk.addEventListener('click',ev=>{if(ev.target===mk)mk.remove();});
+  document.body.appendChild(mk);
+  return mk;
+}
+// ── + 연결: 다른/미지정 고객의 문서를 이 고객에게 연결(이관) ──
+window.caDocLink=function(coll,idx){
+  const e=entries[idx];if(!e)return;
+  const myN=nn(e.name),myKeys=[myN].concat(e.aliases.map(nn)),myP=pn(e.phone);
+  const mine=x=>{
+    const on=nn(docOwnerName(coll,x)),op=pn(docOwnerPhone(coll,x));
+    return (myP&&op===myP)||(on&&myKeys.includes(on));
+  };
+  const mk=genericModal(COLL_LB[coll]+' 연결 — '+esc(e.name),
+    '<p style="font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:10px">문서를 선택하면 이 고객('+esc(e.name)+') 소속으로 변경됩니다. 다른 고객에게 있던 문서는 이 고객에게로 옮겨집니다.</p>'+
+    '<input class="fi" id="ca-lk-q" placeholder="🔍 검색 (번호·이름·날짜)" style="margin-bottom:10px">'+
+    '<div id="ca-lk-list" style="max-height:46vh;overflow-y:auto"></div>');
+  const listEl=mk.querySelector('#ca-lk-list'),qEl=mk.querySelector('#ca-lk-q');
+  function draw(){
+    const q=(qEl.value||'').toLowerCase().replace(/\s+/g,'');
+    const rows=RAW[coll].filter(x=>{
+      if(!q)return true;
+      return (docSummary(coll,x)+docOwnerName(coll,x)+(docOwnerPhone(coll,x)||'')).toLowerCase().replace(/\s+/g,'').includes(q);
+    }).slice(0,80);
+    listEl.innerHTML=rows.length?rows.map(x=>{
+      const isMine=mine(x);
+      const own=docOwnerName(coll,x);
+      return '<div class="lk-row'+(isMine?' mine':'')+'" data-id="'+esc(x.__id)+'" data-mine="'+(isMine?'1':'')+'">'+
+        '<span style="font-weight:800">'+esc(docSummary(coll,x))+'</span>'+
+        '<span class="own">'+(isMine?'이미 이 고객':esc(own||'(고객 미지정)'))+'</span></div>';
+    }).join(''):'<div class="dnone">문서가 없습니다</div>';
+  }
+  draw();
+  qEl.addEventListener('input',draw);
+  listEl.addEventListener('click',async ev=>{
+    const el=ev.target.closest('.lk-row');if(!el||el.dataset.mine)return;
+    const x=RAW[coll].find(d=>d.__id===el.dataset.id);if(!x)return;
+    const own=docOwnerName(coll,x);
+    if(!confirm((own?'현재 「'+own+'」 소속 문서입니다.\n':'')+'이 문서를 「'+e.name+'」 고객에게 연결할까요?\n\n'+docSummary(coll,x)))return;
+    try{
+      await updateDoc(doc(db,coll,x.__id),ownerFieldsFor(coll,e));
+      mk.remove();toast('✓ 연결되었습니다');closeDrawer();loadAll(true);
+    }catch(err){toast('연결 실패: '+err.message);}
+  });
+};
+// ── ✏️ 수정: 종류별 핵심 필드 편집 ──
+window.caDocEdit=function(coll,id){
+  const x=RAW[coll].find(d=>d.__id===id);if(!x)return;
+  let body='',fields=[];
+  const fi=(k,lb,v,ph)=>{fields.push(k);return '<div class="fl">'+lb+'</div><input class="fi" id="ca-f-'+k+'" value="'+esc(v||'')+'"'+(ph?' placeholder="'+ph+'"':'')+'>';};
+  const sel=(k,lb,v,opts)=>{fields.push(k);return '<div class="fl">'+lb+'</div><select class="fi" id="ca-f-'+k+'">'+opts.map(o=>'<option value="'+o[0]+'"'+(v===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>';};
+  if(coll==='invoices'){
+    body=fi('cname','고객명',(x.customer&&x.customer.name)||'')+fi('cphone','연락처',(x.customer&&x.customer.phone)||'')+
+      fi('date','날짜',x.date||'','YYYY-MM-DD')+sel('status','상태',x.status||'billing',[['draft','작성중'],['billing','청구중'],['paid','결제완료'],['overdue','연체']]);
+  }else if(coll==='inspections'){
+    body=fi('client','고객명',x.client||'')+fi('phone','연락처',x.phone||'')+fi('date','날짜',x.date||'','YYYY-MM-DD')+
+      sel('type','종류',x.type||'inspect',[['inspect','점검'],['dispatch','출장'],['install','설치'],['washer','세탁기']])+fi('addr','주소',x.addr||'');
+  }else if(coll==='contracts'){
+    body=fi('name','계약자명',x.name||'')+fi('phone','연락처',x.phone||'')+fi('contract_date','계약일',x.contract_date||'','YYYY-MM-DD');
+  }else{
+    body=fi('name','구매고객명',x.name||'')+fi('receiver','받는분 (선택)',x.receiver||'')+fi('value','금액/할인',x.value||'')+
+      fi('expiry','유효기간',x.expiry||'','YYYY-MM-DD')+sel('status','상태',x.status||'active',[['active','사용가능'],['used','사용완료'],['void','취소']]);
+  }
+  const mk=genericModal('✏️ '+COLL_LB[coll]+' 수정',body,
+    '<button class="btn" onclick="document.getElementById(\'ca-doc-mask\').remove()">취소</button><button class="btn p" id="ca-doc-save">저장</button>');
+  mk.querySelector('#ca-doc-save').addEventListener('click',async()=>{
+    const v={};fields.forEach(k=>{v[k]=mk.querySelector('#ca-f-'+k).value.trim();});
+    let upd={};
+    if(coll==='invoices')upd={'customer.name':v.cname,'customer.phone':v.cphone,date:v.date,status:v.status};
+    else if(coll==='inspections')upd={client:v.client,phone:v.phone,date:v.date,type:v.type,addr:v.addr};
+    else if(coll==='contracts')upd={name:v.name,phone:v.phone,contract_date:v.contract_date};
+    else upd={name:v.name,receiver:v.receiver,value:v.value,expiry:v.expiry,status:v.status};
+    try{
+      await updateDoc(doc(db,coll,id),upd);
+      mk.remove();toast('✓ 수정되었습니다');closeDrawer();loadAll(true);
+    }catch(err){toast('수정 실패: '+err.message);}
+  });
+};
+// ── ✕ 삭제 ──
+window.caDocDel=async function(coll,id){
+  const x=RAW[coll].find(d=>d.__id===id);if(!x)return;
+  if(!confirm(COLL_LB[coll]+' 문서를 삭제할까요?\n\n'+docSummary(coll,x)+'\n\n⚠ 삭제하면 되돌릴 수 없습니다.'))return;
+  try{
+    await deleteDoc(doc(db,coll,id));
+    toast('✓ 삭제되었습니다');closeDrawer();loadAll(true);
+  }catch(err){toast('삭제 실패: '+err.message);}
+};
 
 // ═══ 병합 ═══
 window.doMerge=async function(i){

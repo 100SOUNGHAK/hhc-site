@@ -4482,6 +4482,33 @@ try{
   });
   DB=getFirestore(app);ST=getStorage(app);
   setTimeout(function(){ loadInvoicesForLink().then(function(){if(window.renderInvBox)window.renderInvBox();if(typeof filterList==='function'&&allReports.length)filterList();}).catch(function(e){console.warn('inv link load',e);}); },0);
+  // ── 신규 보고서 작성 시 기존 고객 정보 자동 반영 ──
+  //  고객명을 입력하면 고객 마스터(customers)에서 같은 이름(별칭 포함)을 찾아
+  //  연락처(비어있을 때)와 주소(비어있을 때)를 자동으로 채운다.
+  setTimeout(function(){
+    [['f-client','f-phone','f-addr'],['if-client','if-phone','if-addr'],['w-client','w-phone','w-addr']].forEach(function(t){
+      var nEl=document.getElementById(t[0]);
+      if(!nEl)return;
+      function fillFromMaster(){
+        var name=(nEl.value||'').trim();
+        if(!name||typeof hccLoad!=='function')return;
+        hccLoad().then(function(list){
+          var key=hccNN(name);
+          var m=list.find(function(c){return hccNameHit(c,key);});
+          if(!m)return;
+          var pEl=document.getElementById(t[1]);
+          var aEl=document.getElementById(t[2]);
+          var msgs=[];
+          if(pEl&&m.phone&&!(pEl.value||'').trim()){pEl.value=m.phone;msgs.push('연락처');}
+          if(aEl&&m.addr&&!(aEl.value||'').trim()){aEl.value=m.addr;msgs.push('주소');}
+          if(msgs.length&&typeof toast==='function')toast('👥 기존 고객 '+msgs.join('·')+' 자동 입력');
+          if(window.renderInvBox)window.renderInvBox();
+        }).catch(function(){});
+      }
+      nEl.addEventListener('change',fillFromMaster);
+      nEl.addEventListener('blur',fillFromMaster);
+    });
+  },0);
   var dot=document.getElementById('fb-dot');if(dot)dot.className='fb-dot on';
 }catch(e){console.error('Firebase:',e);}
 
