@@ -204,6 +204,13 @@ function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2600);}
 function sn(v){return String(v||'').toLowerCase().replace(/[^0-9a-z가-힣]/g,'');}
 function pn(p){p=String(p||'').replace(/[^0-9]/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');}
+// Firestore는 addDoc 응답 전에 실시간 리스너부터 깨우므로,
+// 저장 후 무조건 push 하면 같은 건이 두 번 들어간다 → 항상 이 함수로 넣는다
+function upsert(arr,id,d){
+  const i=arr.findIndex(x=>x.__id===id);
+  if(i>=0){Object.assign(arr[i],d);return arr[i];}
+  const o=Object.assign({__id:id},d);arr.push(o);return o;
+}
 function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function nowIso(){return new Date().toISOString();}
 
@@ -271,8 +278,8 @@ async function loadAll(force){
       getDocs(collection(db,'customers')),
       getDocs(collection(db,'requests')).catch(()=>({docs:[]}))
     ]);
-    MEMOS=ms.docs.map(d=>Object.assign({__id:d.id},d.data()));
-    SNIPS=ss.docs.map(d=>Object.assign({__id:d.id},d.data()));
+    MEMOS=dedupe(ms.docs.map(d=>Object.assign({__id:d.id},d.data())));
+    SNIPS=dedupe(ss.docs.map(d=>Object.assign({__id:d.id},d.data())));
     buildCusts(
       cs.docs.map(d=>Object.assign({__id:d.id},d.data())),
       rs.docs.map(d=>Object.assign({__id:d.id},d.data()))
@@ -283,11 +290,13 @@ async function loadAll(force){
 }
 window.loadAll=loadAll;
 
+function dedupe(a){const seen={},out=[];a.forEach(x=>{if(seen[x.__id])return;seen[x.__id]=1;out.push(x);});return out;}
+
 let rbT=null;
 function scheduleRebuild(){clearTimeout(rbT);rbT=setTimeout(()=>{renderList();if(document.getElementById('mm-mask').classList.contains('open'))renderSnips();},250);}
 function subscribeAll(){
-  onSnapshot(collection(db,'memos'),s=>{MEMOS=s.docs.map(d=>Object.assign({__id:d.id},d.data()));scheduleRebuild();},e=>console.warn(e));
-  onSnapshot(collection(db,'memo_snippets'),s=>{SNIPS=s.docs.map(d=>Object.assign({__id:d.id},d.data()));scheduleRebuild();},e=>console.warn(e));
+  onSnapshot(collection(db,'memos'),s=>{MEMOS=dedupe(s.docs.map(d=>Object.assign({__id:d.id},d.data())));scheduleRebuild();},e=>console.warn(e));
+  onSnapshot(collection(db,'memo_snippets'),s=>{SNIPS=dedupe(s.docs.map(d=>Object.assign({__id:d.id},d.data())));scheduleRebuild();},e=>console.warn(e));
 }
 
 // ── 목록 ──────────────────────────────────────
@@ -431,11 +440,11 @@ async function saveMemo(thenSend){
     let id=editId;
     if(id){
       await updateDoc(doc(db,'memos',id),d);
-      const m=MEMOS.find(x=>x.__id===id);if(m)Object.assign(m,d);
+      upsert(MEMOS,id,d);
     }else{
       d.created_at=nowIso();d.sent_log=[];
       const r=await addDoc(collection(db,'memos'),d);
-      id=r.id;MEMOS.push(Object.assign({__id:id},d));
+      id=r.id;upsert(MEMOS,id,d);
     }
     closeMemo();renderList();
     toast('✓ 저장되었습니다');
@@ -482,7 +491,7 @@ document.getElementById('mm-snip-add').addEventListener('click',async()=>{
   try{
     const d={text:t,count:0,created_at:nowIso()};
     const r=await addDoc(collection(db,'memo_snippets'),d);
-    SNIPS.push(Object.assign({__id:r.id},d));renderSnips();toast('✓ 문구가 저장되었습니다');
+    upsert(SNIPS,r.id,d);renderSnips();toast('✓ 문구가 저장되었습니다');
   }catch(e){toast('저장 실패: '+e.message);}
 });
 
