@@ -333,7 +333,7 @@ window.openDrawer=function(idx){
   let h='<div class="dhead"><div class="avatar">'+esc(init)+'</div><div class="dinfo"><b>'+esc(e.name)+'</b>'+
     '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음')+(e.addr?' · '+esc(e.addr):'')+'</div>'+
     '<div class="tagrow">'+memberBadge(e)+(e.aliases.length?'<span class="pill vio">별칭 '+esc(e.aliases.join(', '))+'</span>':'')+'</div></div>'+
-    '<div class="dbtns"><button class="btn sm p" onclick="openEditModal('+idx+')">✏️ 정보 수정</button><button class="btn sm" onclick="closeDrawer()">닫기</button></div></div>';
+    '<div class="dbtns"><button class="btn sm" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="caSendModal('+idx+')">📤 고객 발송</button><button class="btn sm p" onclick="openEditModal('+idx+')">✏️ 정보 수정</button><button class="btn sm" onclick="closeDrawer()">닫기</button></div></div>';
   const rowBtns=(coll,id)=>'<button class="rb" onclick="caDocEdit(\''+coll+'\',\''+id+'\')">✏️ 수정</button><button class="rb del" onclick="caDocDel(\''+coll+'\',\''+id+'\')">✕ 삭제</button>';
   const hdrLink=(coll)=>'<button class="rb hd" onclick="caDocLink(\''+coll+'\','+idx0+')">+ 연결</button>';
   // 인보이스
@@ -508,6 +508,68 @@ async function propagateDocs(e,v){
     }
   }
 }
+
+// ═══ 고객 마이페이지 발송 ═══
+window.caSendModal=async function(idx){
+  const e=entries[idx];if(!e)return;
+  let mid=e.master&&e.master.__id;
+  // 마스터 미등록 고객이면 자동 등록 후 발송
+  if(!mid){
+    try{
+      const now=new Date().toISOString();
+      const ref=await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name:e.name,phone:e.phone||'',member:e.member||'',email:'',addr:e.addr||'',memo:'',aliases:e.aliases||[],created_at:now,updated_at:now});
+      mid=ref.id;
+      e.master={__id:mid,name:e.name,phone:e.phone,aliases:e.aliases||[]};
+      toast('👥 고객 마스터에 자동 등록되었습니다');
+    }catch(err){toast('고객 등록 실패: '+err.message);return;}
+  }
+  const state={iv:true,ip:true,ct:true,cp:true,en:false};
+  const mk=genericModal('📤 마이페이지 발송 — '+esc(e.name),
+    '<p style="font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:10px">고객이 링크 하나로 본인의 문서를 확인합니다. 노출할 항목을 선택하세요. 링크는 고정이며 열 때마다 최신 내용이 표시됩니다.</p>'+
+    '<div id="cs-opts" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:11px">'+
+      [['iv','💳 인보이스'],['ip','🔧 점검보고서'],['ct','📑 계약서·잔액'],['cp','🎫 상품권'],['en','🇬🇧 영어로 발송']].map(o=>
+        '<span data-k="'+o[0]+'" style="cursor:pointer;font-size:11px;font-weight:800;border-radius:16px;padding:6px 12px;border:1.5px solid var(--bdr)">'+o[1]+'</span>').join('')+
+    '</div>'+
+    '<div id="cs-link" style="background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:9px 11px;font-size:10.5px;font-family:monospace;color:#4A5578;word-break:break-all;margin-bottom:11px"></div>'+
+    '<div style="display:flex;gap:7px">'+
+      '<button id="cs-wa" class="btn" style="flex:1;background:#22c55e;border-color:#22c55e;color:#fff">💬 WhatsApp 발송</button>'+
+      '<button id="cs-cp" class="btn" style="flex:1">🔗 링크 복사</button>'+
+    '</div>');
+  function link(){
+    const v=['iv','ip','ct','cp'].filter(k=>state[k]);
+    return BASE+'/my.html?c='+encodeURIComponent(mid)+'&v='+(v.join(',')||'iv')+'&lang='+(state.en?'en':'ko');
+  }
+  function msg(){
+    const l=link();
+    return state.en
+      ?('Hello '+e.name+' 😊\n\nThis is Happy Home Care.\n\n📱 You can check your service records (invoices · inspection reports · contract · vouchers) anytime via your personal page below.\n\n🔗 My Page:\n'+l+'\n\nThank you 🙏\nHappy Home Care\n📞 +60 17-247 2774')
+      :('안녕하세요, '+e.name+' 고객님 😊\n\nHappy Home Care 입니다.\n\n📱 아래 고객님 전용 페이지에서 인보이스 · 점검보고서 · 계약 잔액 · 상품권을 언제든지 확인하실 수 있습니다.\n\n🔗 마이페이지:\n'+l+'\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774');
+  }
+  function paint(){
+    mk.querySelectorAll('#cs-opts [data-k]').forEach(el=>{
+      const on=state[el.dataset.k];
+      el.style.background=on?'var(--pri-bg)':'#fff';
+      el.style.borderColor=on?'var(--pri)':'var(--bdr)';
+      el.style.color=on?'var(--pri)':'var(--ink2)';
+    });
+    mk.querySelector('#cs-link').textContent=link();
+  }
+  mk.querySelector('#cs-opts').addEventListener('click',ev=>{
+    const el=ev.target.closest('[data-k]');if(!el)return;
+    state[el.dataset.k]=!state[el.dataset.k];paint();
+  });
+  mk.querySelector('#cs-wa').addEventListener('click',()=>{
+    let wa='https://wa.me/';
+    const ph=pn(e.phone);
+    if(ph)wa+='60'+ph;
+    window.open(wa+'?text='+encodeURIComponent(msg()),'_blank');
+  });
+  mk.querySelector('#cs-cp').addEventListener('click',()=>{
+    navigator.clipboard.writeText(msg()).then(()=>toast('✓ 메시지가 복사되었습니다'))
+      .catch(()=>prompt('복사해서 사용하세요:',link()));
+  });
+  paint();
+};
 
 // ═══ 문서 연결 · 수정 · 삭제 ═══
 const COLL_LB={invoices:'💳 인보이스',inspections:'🔧 점검보고서',contracts:'📑 계약서',coupons:'🎫 상품권'};
