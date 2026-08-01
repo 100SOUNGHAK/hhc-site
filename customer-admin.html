@@ -667,13 +667,33 @@ window.caSendModal=async function(idx){
       toast('👥 고객 마스터에 자동 등록되었습니다');
     }catch(err){toast('고객 등록 실패: '+err.message);return;}
   }
-  const state={iv:true,ip:true,ct:true,cp:true,en:false};
+  const D=e.docs||{};
+  const CNT={iv:(D.invoices||[]).length,ip:(D.inspections||[]).length,ct:(D.contracts||[]).length,cp:(D.coupons||[]).length};
+  const state={iv:CNT.iv>0,ip:CNT.ip>0,ct:CNT.ct>0,cp:CNT.cp>0,en:false};
+  const OPT=[['iv','💳','인보이스','건'],['ip','🔧','점검보고서','건'],['ct','📑','계약서 · 잔액','건'],['cp','🎫','상품권','장']];
   const mk=genericModal('📤 마이페이지 발송 — '+esc(e.name),
     '<p style="font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:10px">고객이 링크 하나로 본인의 문서를 확인합니다. 노출할 항목을 선택하세요. 링크는 고정이며 열 때마다 최신 내용이 표시됩니다.</p>'+
-    '<div id="cs-opts" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:11px">'+
-      [['iv','💳 인보이스'],['ip','🔧 점검보고서'],['ct','📑 계약서·잔액'],['cp','🎫 상품권'],['en','🇬🇧 영어로 발송']].map(o=>
-        '<span data-k="'+o[0]+'" style="cursor:pointer;font-size:11px;font-weight:800;border-radius:16px;padding:6px 12px;border:1.5px solid var(--bdr)">'+o[1]+'</span>').join('')+
+    '<div id="cs-opts" style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px">'+
+      OPT.map(o=>{
+        const n=CNT[o[0]],z=n===0;
+        return '<div data-k="'+o[0]+'" style="cursor:'+(z?'not-allowed':'pointer')+';border-radius:12px;padding:10px 11px;border:1.5px solid var(--bdr);position:relative;transition:.12s">'+
+          '<div style="display:flex;align-items:center;gap:7px">'+
+            '<span style="font-size:16px">'+o[1]+'</span>'+
+            '<span data-nm style="font-size:11.5px;font-weight:800;flex:1;min-width:0">'+o[2]+'</span>'+
+            '<span data-ck style="width:17px;height:17px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#fff;flex-shrink:0">✓</span>'+
+          '</div>'+
+          '<div data-ct style="font-size:16px;font-weight:900;margin-top:5px;letter-spacing:-.02em">'+n+'<span style="font-size:10px;font-weight:800;margin-left:2px">'+o[3]+'</span></div>'+
+        '</div>';
+      }).join('')+
     '</div>'+
+    '<div style="display:flex;align-items:center;gap:7px;margin-bottom:11px">'+
+      '<span style="font-size:11px;font-weight:800;color:var(--ink3)">발송 언어</span>'+
+      '<div id="cs-lang" style="margin-left:auto;display:flex;background:var(--bg);border:1px solid var(--bdr);border-radius:9px;padding:2px;gap:2px">'+
+        '<span data-l="ko" style="cursor:pointer;font-size:11px;font-weight:800;border-radius:7px;padding:5px 13px">🇰🇷 한국어</span>'+
+        '<span data-l="en" style="cursor:pointer;font-size:11px;font-weight:800;border-radius:7px;padding:5px 13px">🇬🇧 English</span>'+
+      '</div>'+
+    '</div>'+
+    '<div id="cs-warn" style="display:none;background:var(--warn-bg);color:var(--warn);border-radius:9px;padding:8px 11px;font-size:11px;font-weight:800;margin-bottom:9px">⚠️ 항목을 하나 이상 선택하세요 (기본: 인보이스)</div>'+
     '<div id="cs-link" style="background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:9px 11px;font-size:10.5px;font-family:monospace;color:#4A5578;word-break:break-all;margin-bottom:11px"></div>'+
     '<div style="display:flex;gap:7px">'+
       '<button id="cs-pv" class="btn" style="flex:1;background:var(--pri-bg);border-color:var(--pri);color:var(--pri)">👁 미리보기</button>'+
@@ -692,16 +712,36 @@ window.caSendModal=async function(idx){
   }
   function paint(){
     mk.querySelectorAll('#cs-opts [data-k]').forEach(el=>{
-      const on=state[el.dataset.k];
-      el.style.background=on?'var(--pri-bg)':'#fff';
+      const k=el.dataset.k,on=state[k],z=CNT[k]===0;
+      el.style.background=on?'var(--pri-bg)':(z?'#fafbfd':'#fff');
       el.style.borderColor=on?'var(--pri)':'var(--bdr)';
-      el.style.color=on?'var(--pri)':'var(--ink2)';
+      el.style.opacity=z?'.55':'1';
+      el.querySelector('[data-nm]').style.color=on?'var(--pri)':'var(--ink2)';
+      el.querySelector('[data-ct]').style.color=on?'var(--pri)':'var(--ink3)';
+      const ck=el.querySelector('[data-ck]');
+      ck.style.background=on?'var(--pri)':'#dde3ec';
+      ck.style.color=on?'#fff':'#fff';
     });
+    mk.querySelectorAll('#cs-lang [data-l]').forEach(el=>{
+      const on=(el.dataset.l==='en')===!!state.en;
+      el.style.background=on?'#fff':'transparent';
+      el.style.color=on?'var(--pri)':'var(--ink3)';
+      el.style.boxShadow=on?'0 1px 3px rgba(11,24,51,.12)':'none';
+    });
+    const v=['iv','ip','ct','cp'].filter(k=>state[k]);
+    const w=mk.querySelector('#cs-warn');
+    if(w)w.style.display=v.length?'none':'block';
     mk.querySelector('#cs-link').textContent=link();
   }
   mk.querySelector('#cs-opts').addEventListener('click',ev=>{
     const el=ev.target.closest('[data-k]');if(!el)return;
-    state[el.dataset.k]=!state[el.dataset.k];paint();
+    const k=el.dataset.k;
+    if(CNT[k]===0){toast('해당 문서가 없습니다');return;}
+    state[k]=!state[k];paint();
+  });
+  mk.querySelector('#cs-lang').addEventListener('click',ev=>{
+    const el=ev.target.closest('[data-l]');if(!el)return;
+    state.en=(el.dataset.l==='en');paint();
   });
   mk.querySelector('#cs-pv').addEventListener('click',()=>{window.caView(link(),'👁 고객 발송 화면 미리보기 — '+(e.name||''));});
   mk.querySelector('#cs-wa').addEventListener('click',()=>{
