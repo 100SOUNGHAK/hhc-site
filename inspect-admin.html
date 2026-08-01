@@ -2999,7 +2999,7 @@ function makeUnitPhotoSlots(keyPrefix,count){
   return {grid:grid,slots:slots,keys:slots.map(function(s){return s.key;})};
 }
 
-function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl){
+function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl,spec){
   msrCount++;
   var id='msr'+msrCount;
   var wrap=document.createElement('div');wrap.className='unit-item';
@@ -3013,25 +3013,45 @@ function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl){
   hdr.appendChild(num);hdr.appendChild(ddLoc);hdr.appendChild(del);
   wrap.appendChild(hdr);
 
-  // 측정값 grid
+  // 측정값 grid — 각 값 아래에 「정상 범위 · 기준 미달 · 기준 초과」 판정 선택
+  spec=spec||{};
   var grid=document.createElement('div');grid.className='mv-grid mv4';
-  var mkMv=function(l,placeholder,val,cls){
+  var specSels={};
+  var SPEC_DEF=[['normal','정상'],['under','미달'],['over','초과']];
+  var SPEC_COL={normal:['#ecfdf5','#059669'],under:['#fef2f2','#dc2626'],over:['#fff7e6','#b45309']};
+  var mkMv=function(l,placeholder,val,specKey,initSpec){
     var b=document.createElement('div');b.className='mvb';
     var lEl=document.createElement('div');lEl.className='mvl';lEl.textContent=l;
-    var inp=document.createElement('input');inp.type='text';inp.placeholder=placeholder;if(val)inp.value=val;if(cls)inp.className=cls;
-    if(cls==='msr-lp'){
-      inp.addEventListener('input',function(){
-        var v=parseFloat(this.value);
-        b.style.background=v>0&&v<80?'#fff4e0':'';
-        b.style.borderColor=v>0&&v<80?'#fcd34d':'';
+    var inp=document.createElement('input');inp.type='text';inp.placeholder=placeholder;if(val)inp.value=val;
+    b.appendChild(lEl);b.appendChild(inp);
+    // 판정 선택 (정상/미달/초과)
+    var segs=document.createElement('div');
+    segs.style='display:flex;gap:3px;margin-top:5px';
+    var cur=initSpec||'normal';
+    var btns=[];
+    function paint(){
+      btns.forEach(function(x){
+        var on=x.dataset.v===cur;
+        var c=SPEC_COL[x.dataset.v];
+        x.style.cssText='flex:1;border:1px solid '+(on?c[1]:'#dde1ee')+';background:'+(on?c[0]:'#fff')+';color:'+(on?c[1]:'#8a94a6')+';font-size:9.5px;font-weight:800;border-radius:5px;padding:3px 0;cursor:pointer;font-family:inherit';
       });
+      b.style.background=cur==='under'?'#fef2f2':cur==='over'?'#fff7e6':'';
+      b.style.borderColor=cur==='under'?'#fca5a5':cur==='over'?'#fcd34d':'';
     }
-    b.appendChild(lEl);b.appendChild(inp);return b;
+    SPEC_DEF.forEach(function(o){
+      var x=document.createElement('button');x.type='button';x.textContent=o[1];x.dataset.v=o[0];
+      x.onclick=function(){cur=o[0];paint();};
+      btns.push(x);segs.appendChild(x);
+    });
+    specSels[specKey]={get:function(){return cur;}};
+    paint();
+    b.appendChild(segs);
+    return b;
   };
-  grid.appendChild(mkMv('고압 (PSI)','380',hp));
-  grid.appendChild(mkMv('저압 (PSI)','98',lp,'msr-lp'));
-  grid.appendChild(mkMv('운전전류 (A)','5.9/7.2',curr));
-  grid.appendChild(mkMv('절연저항 (MΩ)','320',ins));
+  grid.appendChild(mkMv('고압 (PSI)','380',hp,'hp',spec.hp));
+  grid.appendChild(mkMv('저압 (PSI)','98',lp,'lp',spec.lp));
+  grid.appendChild(mkMv('운전전류 (A)','5.9/7.2',curr,'cu',spec.cu));
+  grid.appendChild(mkMv('절연저항 (MΩ)','320',ins,'in',spec.inl));
   wrap.appendChild(grid);
 
   // 판정 버튼
@@ -3080,6 +3100,7 @@ function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl){
       lp:inps[1]?inps[1].value:'',
       current:inps[2]?inps[2].value:'',
       insulation:inps[3]?inps[3].value:'',
+      spec_hp:specSels.hp.get(),spec_lp:specSels.lp.get(),spec_cu:specSels.cu.get(),spec_in:specSels['in'].get(),
       judgment:activeJdg?activeJdg.dataset.jdg:'ok',
       memo:memoInp.value,
       photoKeys:photoKeys
@@ -5211,7 +5232,14 @@ window.loadIntoForm=function(data){
   // 실외기 측정
   msrCount=0;document.getElementById('msr-rows').innerHTML='';
   (data.measurements||[]).forEach(function(m){
-    addMsrRow(m.label,m.hp,m.lp,m.current,m.insulation,m.judgment,m.memo,m.photo);
+    var lpN=parseFloat(m.lp||0),hpN=parseFloat(m.hp||0);
+    var sp={
+      hp:m.spec_hp||((hpN>400)?'over':'normal'),
+      lp:m.spec_lp||((lpN>0&&lpN<80)?'under':'normal'),
+      cu:m.spec_cu||'normal',
+      inl:m.spec_in||'normal'
+    };
+    addMsrRow(m.label,m.hp,m.lp,m.current,m.insulation,m.judgment,m.memo,m.photo,sp);
   });
   // msr 유닛별 사진 복원
   setTimeout(function(){
@@ -5440,7 +5468,7 @@ function validateBeforeSave(data,isInstall,isWasher){
   if(!isInstall&&!isWasher){
     if(!data.eval)soft.push('종합판정이 선택되지 않았습니다');
     if(!(data.results||[]).length)soft.push('항목별 점검 결과가 비어 있습니다');
-    (data.measurements||[]).forEach(function(m){var lp=parseFloat(m.lp);if(lp>0&&lp<80)soft.push((m.label||'실외기')+' 저압('+m.lp+' PSI)이 기준(80) 미만');});
+    (data.measurements||[]).forEach(function(m){var lp=parseFloat(m.lp);if(lp>0&&lp<80&&m.spec_lp!=='under')soft.push((m.label||'실외기')+' 저압('+m.lp+' PSI)이 80 미만인데 판정이 「'+(m.spec_lp==='over'?'기준 초과':'정상 범위')+'」로 선택되어 있습니다');});
     (data.coolUnits||[]).forEach(function(u){var a=parseFloat(u.a),b=parseFloat(u.b);if(a&&b&&(a-b)<12)soft.push((u.label||'냉방')+' 온도차('+(a-b).toFixed(1)+'°C)가 12°C 미만');});
   }
   return {hard:hard,soft:soft};

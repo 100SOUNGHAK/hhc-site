@@ -320,6 +320,8 @@ body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;back
 .mc-flag{display:block;font-size:9.5px;font-weight:700;margin-top:2px;line-height:1.3;word-break:keep-all}
 .mc-flag.warn{color:var(--warn)}
 .mc-flag.bad{color:var(--bad)}
+.mc-flag.ok{color:var(--ok,#059669)}
+.mc-v.ok{color:var(--ok,#059669)}
 .mc-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line-2);border-top:1px solid var(--line-2)}
 .mc-ph{position:relative;background:var(--soft);aspect-ratio:4/3;overflow:hidden}
 .mc-ph img{width:100%;height:100%;object-fit:cover;display:block}
@@ -687,7 +689,7 @@ var T={
     'msr-note':'시운전 30분 후 정상 부하 상태에서 측정한 값입니다.',
     statusOk:'양호',statusWarn:'주의',statusBad:'정비 필요',
     riskVH:'상',riskH:'중',riskL:'하',
-    specOver:'기준 초과',specUnder:'기준 미달',dcActK:'조치',riskPre:'위험도',cntSuffix:'건',
+    specOver:'기준 초과',specUnder:'기준 미달',specOk:'정상 범위',dcActK:'조치',riskPre:'위험도',cntSuffix:'건',
     stDone:'조치완료',stPlan:'조치예정',stRecommend:'조치권유',stAdvise:'조치권고',
     good:'양호',degrade:'저하',leakOk:'이상없음',leakBad:'누설감지',
     watch:'관찰',repair:'수리요망',
@@ -738,7 +740,7 @@ var T={
     'msr-note':'Values measured 30 minutes after start-up under normal load.',
     statusOk:'Good',statusWarn:'Caution',statusBad:'Repair Needed',
     riskVH:'High',riskH:'Med',riskL:'Low',
-    specOver:'Above spec',specUnder:'Below spec',dcActK:'ACTION',riskPre:'Risk',cntSuffix:' found',
+    specOver:'Above spec',specUnder:'Below spec',specOk:'Normal range',dcActK:'ACTION',riskPre:'Risk',cntSuffix:' found',
     stDone:'Completed',stPlan:'Planned',stRecommend:'Recommended',stAdvise:'Advised',
     good:'Good',degrade:'Degraded',leakOk:'No Leakage',leakBad:'Leakage',
     watch:'Monitor',repair:'Repair',
@@ -1140,8 +1142,20 @@ window.renderReport=function renderReport(data){
   }
   (data.measurements||[]).forEach(function(m){
     if(!m.hp&&!m.lp&&!m.current&&!m.insulation&&!(m.photos&&m.photos.length)&&!m.photo)return;hasMsr=true;
-    var lpNum=parseFloat(m.lp||0),lpBad=lpNum>0&&lpNum<80;
-    var hpNum=parseFloat(m.hp||0),hpWarn=hpNum>400;
+    var lpNum=parseFloat(m.lp||0),hpNum=parseFloat(m.hp||0);
+    // 관리자가 값별로 선택한 판정 — 없으면(구버전 문서) 기존 자동 규칙 사용
+    function specOf(sel,autoV){
+      if(sel==='under')return 'under';
+      if(sel==='over')return 'over';
+      if(sel==='normal')return 'normal';
+      return autoV||'';
+    }
+    var spHp=specOf(m.spec_hp,hpNum>400?'over':'');
+    var spLp=specOf(m.spec_lp,(lpNum>0&&lpNum<80)?'under':'');
+    var spCu=specOf(m.spec_cu,'');
+    var spIn=specOf(m.spec_in,'');
+    function spCls(sp){return sp==='under'?'bad':sp==='over'?'warn':sp==='normal'?'ok':'';}
+    function spTxt(sp){return sp==='under'?t.specUnder:sp==='over'?t.specOver:sp==='normal'?t.specOk:'';}
     var jdg=m.judgment||'ok';
     var card=document.createElement('div');
     card.className='mcard'+(jdg==='repair'?' bad':jdg==='watch'?' warn':'');
@@ -1153,10 +1167,10 @@ window.renderReport=function renderReport(data){
     }).join('')+'</div>':'';
     card.innerHTML='<div class="mc-hd"><div class="mc-name">'+nm+'</div>'+(jdgPill[jdg]||jdgPill.ok)+'</div>'+
       '<div class="mc-grid">'+
-        mcCell(kHp,(m.hp?m.hp+'<small>PSI</small>':'—'),hpWarn?'warn':'',hpWarn?t.specOver:'')+
-        mcCell(kLp,(m.lp?m.lp+'<small>PSI</small>':'—'),lpBad?'bad':'',lpBad?t.specUnder:'')+
-        mcCell(kCu,(m.current?String(m.current).replace(/\s*A$/i,'')+'<small>A</small>':'—'),'','')+
-        mcCell(kIn,(m.insulation?m.insulation+'<small>MΩ</small>':'—'),'','')+
+        mcCell(kHp,(m.hp?m.hp+'<small>PSI</small>':'—'),spCls(spHp),m.hp?spTxt(spHp):'')+
+        mcCell(kLp,(m.lp?m.lp+'<small>PSI</small>':'—'),spCls(spLp),m.lp?spTxt(spLp):'')+
+        mcCell(kCu,(m.current?String(m.current).replace(/\s*A$/i,'')+'<small>A</small>':'—'),spCls(spCu),m.current?spTxt(spCu):'')+
+        mcCell(kIn,(m.insulation?m.insulation+'<small>MΩ</small>':'—'),spCls(spIn),m.insulation?spTxt(spIn):'')+
       '</div>'+stripHtml+
       (m.memo?'<div class="mc-memo">'+trSpan(m.memo,m.memo_en)+'</div>':'');
     msrBody.appendChild(card);
