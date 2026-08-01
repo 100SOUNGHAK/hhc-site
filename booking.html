@@ -154,8 +154,15 @@ textarea.field-input{resize:vertical;min-height:80px;line-height:1.6}
 .pk-rl .cnt{position:absolute;top:4px;right:8px;min-width:15px;height:15px;border-radius:8px;background:var(--green);color:#fff;font-size:8.5px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 4px}
 .pk-rl .cnt:empty{display:none}
 .pk-list{flex:1;overflow-y:auto;padding:2px 14px 14px;-webkit-overflow-scrolling:touch;min-width:0}
-.pk-grp{font-size:10px;font-weight:900;letter-spacing:.06em;color:#9ca3af;margin:13px 2px 4px;display:flex;align-items:center;gap:6px}
-.pk-grp::after{content:"";flex:1;height:1px;background:var(--surface2)}
+/* 큰 카테고리(그룹) 헤더 — 확실히 눈에 띄게 */
+.pk-grp{position:sticky;top:0;z-index:3;font-size:13.5px;font-weight:900;letter-spacing:-.01em;color:var(--teal-dk);margin:16px -14px 8px;padding:10px 14px 10px 0;display:flex;align-items:center;gap:9px;background:linear-gradient(96deg,var(--teal-lt) 0%,#F3FCFA 58%,#fff 100%);border-top:1px solid var(--border-dark);border-bottom:1px solid var(--border-dark);word-break:keep-all;line-height:1.3}
+.pk-grp::before{content:"";width:5px;align-self:stretch;margin:-10px 0;background:linear-gradient(180deg,var(--teal),var(--teal-deep));flex:none}
+.pk-grp:first-child{margin-top:2px}
+/* 품목 안내문구 (추가비용 등) */
+.pk-note{display:flex;gap:8px;align-items:flex-start;margin:10px 0 4px;padding:10px 12px;background:#FFF7E6;border:1px solid #F0DBA6;border-left:3px solid #E0A82E;border-radius:10px;font-size:11.5px;line-height:1.6;color:#7A5710;font-weight:600;word-break:keep-all}
+.pk-note .ic{flex:none;font-size:13px;line-height:1.4}
+.pick-note{display:flex;gap:8px;align-items:flex-start;margin:0 0 8px;padding:10px 12px;background:#FFF7E6;border:1px solid #F0DBA6;border-left:3px solid #E0A82E;border-radius:10px;font-size:11.5px;line-height:1.6;color:#7A5710;font-weight:600;word-break:keep-all}
+.pick-note .ic{flex:none;font-size:13px;line-height:1.4}
 .pk-row{border-bottom:1px solid #f0f6f4}
 .pk-row-main{display:flex;align-items:center;gap:9px;padding:11px 2px;cursor:pointer}
 .pk-row-main:active{background:var(--surface)}
@@ -475,9 +482,12 @@ const PK_CATS=[
     {ko:'천정형 (카세트)',en:'Ceiling Cassette',svcs:[['기본세척','Basic Clean'],['약품세척','Chemical Clean'],['스팀살균세척','Steam Sterilize Clean'],['전체분해세척','Full Disassembly Clean']]},
     {ko:'실외기',en:'Outdoor Unit',svcs:[['기본세척','Basic Clean'],['약품세척','Chemical Clean'],['분해세척','Disassembly Clean']]}
   ]},
-  {id:'washer',ko:'세탁기',en:'Washing Machine',ic:'🧺',groups:[{svcs:[['드럼세탁기','Front Load (Drum)'],['통돌이세탁기','Top Load']]}]},
+  {id:'washer',ko:'세탁기',en:'Washing Machine',ic:'🧺',note:['세탁 중량이 통돌이 19KG, 드럼 10KG 을 초과하는 경우 추가비용이 발생합니다.','Additional charges apply if the load capacity exceeds 19KG (top load) or 10KG (front load / drum).'],groups:[{svcs:[['드럼세탁기','Front Load (Drum)'],['통돌이세탁기','Top Load']]}]},
   {id:'mattress',ko:'매트리스',en:'Mattress',ic:'🛏️',groups:[{svcs:[['건식방식','Dry Method'],['습식살균방식','Wet Sterilize Method']]}]},
-  {id:'sofa',ko:'쇼파',en:'Sofa',ic:'🛋️',groups:[{svcs:[['건식방식','Dry Method'],['습식살균방식','Wet Sterilize Method']]}]},
+  {id:'sofa',ko:'쇼파',en:'Sofa',ic:'🛋️',note:['쇼파 3인용 기본 사이즈를 초과하는 경우 추가비용이 발생합니다.','Additional charges apply for sofas larger than the standard 3-seater size.'],groups:[
+    {ko:'건식방식',en:'Dry Method',svcs:[['I 형','I-Shape'],['L 형','L-Shape']]},
+    {ko:'습식살균방식',en:'Wet Sterilize Method',svcs:[['I 형','I-Shape'],['L 형','L-Shape']]}
+  ]},
   {id:'curtain',ko:'커튼',en:'Curtain',ic:'🪟',groups:[{svcs:[['현장세탁','On-site Wash'],['수거세탁','Take-away Wash']]}]},
   {id:'dryer',ko:'건조기',en:'Dryer',ic:'🌀',groups:[{svcs:[['완전분해세척','Full Disassembly Clean']]}]},
   {id:'hood',ko:'주방후드',en:'Kitchen Hood',ic:'🍳',groups:[{svcs:[['완전분해세척','Full Disassembly Clean']]}]},
@@ -838,6 +848,13 @@ function parseItemsString(s){
           if(svc[0]===sName||svc[1]===sName){grpPair=g.ko?[g.ko,g.en]:null;svcPair=svc;}
         });
       });
+      // 구(舊) 형식 호환: 그룹 없이 방식만 저장된 경우(예: 쇼파(1대/건식방식))
+      if(!svcPair&&!gName){
+        c.groups.forEach(g=>{
+          if(svcPair)return;
+          if(g.ko&&(g.ko===sName||g.en===sName)&&(g.svcs||[]).length){grpPair=[g.ko,g.en];svcPair=g.svcs[0];}
+        });
+      }
       if(svcPair){out.push({key:pkItemKey(c.id,grpPair,svcPair),catId:c.id,grp:grpPair,svc:svcPair,qty});continue;}
       if(c.free){out.push({key:'free|'+Date.now()+Math.random(),catId:c.id,free:true,text:svcPart,qty});continue;}
     }
@@ -1055,6 +1072,7 @@ const $id=x=>document.getElementById(x);
 function pkIsEn(){return (window._bookingLang||'ko')==='en';}
 function pkL(){return PK_L[pkIsEn()?'en':'ko'];}
 function pkCatOf(id){return PK_CATS.find(c=>c.id===id);}
+function pkNoteHtml(c,cls){return c&&c.note?'<div class="'+(cls||'pk-note')+'"><span class="ic">💡</span><span>'+pkEsc(pkTr(c.note))+'</span></div>':'';}
 function pkCatName(c){return pkIsEn()?c.en:c.ko;}
 function pkTr(pair){return pair?(pkIsEn()?pair[1]:pair[0]):'';}
 function pkEsc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -1094,7 +1112,9 @@ function renderPicked(){
   if(!picked.length){
     el.innerHTML='<div class="pick-empty">'+pkEsc(l.pickEmpty).replace(/\n/g,'<br>')+'</div>';
   }else{
-    el.innerHTML=picked.map((p,i)=>{
+    const notes=PK_CATS.filter(c=>c.note&&picked.some(p=>p.catId===c.id))
+      .map(c=>pkNoteHtml(c,'pick-note')).join('');
+    el.innerHTML=notes+picked.map((p,i)=>{
       const c=pkCatOf(p.catId);
       const freeIn=p.free?'<input class="free-in" data-i="'+i+'" value="'+pkEsc(p.text)+'" placeholder="'+pkEsc(l.freePh)+'">':'';
       return '<div class="pick-it">'+
@@ -1187,11 +1207,12 @@ function pkRenderList(){
           if(hay.indexOf(q)>=0)rows.push(pkRowHtml(c,(g.ko?[g.ko,g.en]:null),svc));
         });
       });
-      if(rows.length){h+='<div class="pk-grp">'+c.ic+' '+pkEsc(pkCatName(c))+'</div>'+rows.join('');found+=rows.length;}
+      if(rows.length){h+='<div class="pk-grp">'+c.ic+' '+pkEsc(pkCatName(c))+'</div>'+pkNoteHtml(c)+rows.join('');found+=rows.length;}
     });
     if(!found)h='<div class="pk-empty">'+pkEsc(l.pkNoResult)+'</div>';
   }else{
     const c=pkCatOf(pkCat);
+    h+=pkNoteHtml(c);
     c.groups.forEach(g=>{
       if(g.ko)h+='<div class="pk-grp">'+pkEsc(pkTr([g.ko,g.en]))+'</div>';
       else h+='<div class="pk-grp">'+pkEsc(pkCatName(c))+'</div>';
