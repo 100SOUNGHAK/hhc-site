@@ -141,7 +141,7 @@ select.fi{appearance:auto}
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const BASE='https://hhc-3p8.pages.dev';
 const MEMBER_TIERS=['','VVIP','패키지 - 실버회원','패키지 - 티타늄회원','패키지 - 다이아회원','패키지 - 골드회원','패키지 - 로얄회원','패키지(사업) - 티타늄회원','패키지(사업) - 다이아회원','패키지(사업) - 골드회원','패키지(사업) - 로얄회원'];
@@ -153,6 +153,8 @@ let entries=[],mergeSug=[],curFilter='all',editTarget=null,drawerKey=null;
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function pn(p){p=String(p||'').replace(/[^0-9]/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');}
 function nn(n){return String(n||'').toLowerCase().replace(/\s+/g,'');}
+// 검색 전용 정규화 — 대소문자·공백·특수문자를 모두 무시 (예: "THE PARK-2" ↔ "THE PARK2" ↔ "the park 2")
+function sn(n){return String(n||'').toLowerCase().replace(/[^0-9a-z가-힣]/g,'');}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2600);}
 function fmtRM(v){const n=parseFloat(v)||0;return 'RM '+n.toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function invTotal(inv){
@@ -176,15 +178,36 @@ async function fetchColl(name){
   try{const s=await getDocs(collection(db,name));return s.docs.map(d=>{const x=d.data()||{};x.__id=d.id;return x;});}
   catch(e){console.warn(name,e.message);return [];}
 }
+const COLL_NAMES=['customers','contracts','invoices','inspections','coupons','requests','bookings','schedules','quotes'];
 window.loadAll=async function(force){
   if(!db)return;
-  document.getElementById('list').innerHTML='<div class="loading">불러오는 중...</div>';
-  const names=['customers','contracts','invoices','inspections','coupons','requests','bookings','schedules','quotes'];
-  const res=await Promise.all(names.map(fetchColl));
-  names.forEach((n,i)=>RAW[n]=res[i]);
+  if(!entries.length)document.getElementById('list').innerHTML='<div class="loading">불러오는 중...</div>';
+  const res=await Promise.all(COLL_NAMES.map(fetchColl));
+  COLL_NAMES.forEach((n,i)=>RAW[n]=res[i]);
+  rebuildAndPaint();
+};
+// ── 실시간 구독: 어느 프로그램에서 저장·수정해도 이 화면이 즉시 갱신된다 ──
+let _rbTimer=null;
+function scheduleRebuild(){clearTimeout(_rbTimer);_rbTimer=setTimeout(rebuildAndPaint,250);}
+function rebuildAndPaint(){
+  // 상세 화면이 열려 있으면 같은 고객으로 다시 그린다 (목록 순서가 바뀌어도 유지)
+  let sig=null;
+  if(drawerKey!=null&&entries[drawerKey]){const e=entries[drawerKey];sig=pn(e.phone)||nn(e.name);}
   buildEntries();
   renderAll();
-};
+  if(sig!=null){
+    const ni=entries.findIndex(e=>(pn(e.phone)||nn(e.name))===sig);
+    if(ni>=0)openDrawer(ni);else closeDrawer();
+  }
+}
+let _subs=[];
+function subscribeAll(){
+  _subs.forEach(u=>{try{u();}catch(e){}});
+  _subs=COLL_NAMES.map(n=>onSnapshot(collection(db,n),snap=>{
+    RAW[n]=snap.docs.map(d=>{const x=d.data()||{};x.__id=d.id;return x;});
+    scheduleRebuild();
+  },err=>console.warn('sub',n,err.message)));
+}
 function newEntry(name,phone){
   return {master:null,name:name||'',phone:phone||'',aliases:[],member:'',email:'',addr:'',memo:'',
     docs:{contracts:[],invoices:[],inspections:[],coupons:[],requests:[],bookings:[],schedules:[],quotes:[]}};
@@ -298,13 +321,18 @@ function memberBadge(e){
   return '';
 }
 function renderList(){
-  const q=nn(document.getElementById('q').value);
+  const qRaw=document.getElementById('q').value.trim();
+  const q=sn(qRaw);
+  const qNum=qRaw.replace(/[^0-9]/g,'');
   const list=entries.filter(e=>{
     if(!passFilter(e))return false;
-    if(!q)return true;
-    if(nn(e.name).includes(q))return true;
-    if(e.aliases.some(a=>nn(a).includes(q)))return true;
-    if(pn(e.phone).includes(q.replace(/[^0-9]/g,''))&&q.replace(/[^0-9]/g,''))return true;
+    if(!q&&!qNum)return true;
+    if(q&&sn(e.name).includes(q))return true;
+    if(q&&e.aliases.some(a=>sn(a).includes(q)))return true;
+    if(q&&sn(e.addr).includes(q))return true;
+    const qPn=pn(qRaw);
+    if(qPn.length>=3&&pn(e.phone).includes(qPn))return true;
+    if(qNum.length>=4&&String(e.phone||'').replace(/[^0-9]/g,'').includes(qNum))return true;
     return false;
   });
   const host=document.getElementById('list');
@@ -532,6 +560,7 @@ window.caSendModal=async function(idx){
     '</div>'+
     '<div id="cs-link" style="background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:9px 11px;font-size:10.5px;font-family:monospace;color:#4A5578;word-break:break-all;margin-bottom:11px"></div>'+
     '<div style="display:flex;gap:7px">'+
+      '<button id="cs-pv" class="btn" style="flex:1;background:var(--pri-bg);border-color:var(--pri);color:var(--pri)">👁 미리보기</button>'+
       '<button id="cs-wa" class="btn" style="flex:1;background:#22c55e;border-color:#22c55e;color:#fff">💬 WhatsApp 발송</button>'+
       '<button id="cs-cp" class="btn" style="flex:1">🔗 링크 복사</button>'+
     '</div>');
@@ -558,6 +587,7 @@ window.caSendModal=async function(idx){
     const el=ev.target.closest('[data-k]');if(!el)return;
     state[el.dataset.k]=!state[el.dataset.k];paint();
   });
+  mk.querySelector('#cs-pv').addEventListener('click',()=>{window.open(link(),'_blank');});
   mk.querySelector('#cs-wa').addEventListener('click',()=>{
     let wa='https://wa.me/';
     const ph=pn(e.phone);
@@ -730,6 +760,7 @@ try{
   db=getFirestore(app);
   document.getElementById('fb-dot').classList.add('on');
   loadAll();
+  subscribeAll();   // 실시간 반영
 }catch(e){
   document.getElementById('list').innerHTML='<div class="empty">Firebase 연결 실패: '+esc(e.message)+'</div>';
 }
