@@ -69,6 +69,16 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .mini{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
 .mini .mc{background:#fff;border:1px solid var(--bdr);border-radius:10px;padding:9px;text-align:center;font-size:10.5px;color:var(--ink3);font-weight:700}
 .mini .mc b{display:block;font-size:15px;color:var(--ink);font-weight:900}
+/* 문서 뷰어 오버레이 */
+#dv-wrap{position:fixed;inset:0;z-index:1200;background:#fff;display:none;flex-direction:column}
+#dv-wrap.open{display:flex}
+#dv-bar{flex-shrink:0;display:flex;align-items:center;gap:7px;padding:9px 12px;background:linear-gradient(120deg,#0B1833,#16264a);box-shadow:0 2px 10px rgba(11,24,51,.18)}
+#dv-bar button,#dv-bar a{font-family:inherit;font-size:12px;font-weight:800;border-radius:8px;padding:6px 12px;cursor:pointer;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.12);color:#fff;text-decoration:none;white-space:nowrap}
+#dv-bar #dv-back{background:#fff;color:#0B1833;border-color:#fff}
+#dv-ttl{flex:1;min-width:0;font-size:12.5px;font-weight:800;color:#dbe4fb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#dv-body{flex:1;min-height:0;position:relative}
+#dv-body iframe{position:absolute;inset:0;width:100%;height:100%;border:none;display:block;background:#fff}
+@media(max-width:560px){#dv-new{display:none}#dv-bar #dv-x{padding:6px 10px}}
 /* 모달 */
 .mask{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:950;display:none;align-items:center;justify-content:center;padding:16px}
 .mask.open{display:flex}
@@ -111,6 +121,17 @@ select.fi{appearance:auto}
 <!-- 상세 드로어 -->
 <div id="drawer-mask" onclick="closeDrawer()"></div>
 <div id="drawer"></div>
+
+<!-- 문서 뷰어 오버레이 — 닫으면 고객 상세 화면으로 복귀 -->
+<div id="dv-wrap">
+  <div id="dv-bar">
+    <button id="dv-back" onclick="caViewClose()">← 뒤로</button>
+    <span id="dv-ttl">문서</span>
+    <a id="dv-new" href="#" target="_blank" rel="noopener">↗ 새 탭</a>
+    <button id="dv-x" onclick="caViewClose()">✕ 닫기</button>
+  </div>
+  <div id="dv-body"></div>
+</div>
 
 <!-- 신규/수정 모달 -->
 <div class="mask" id="edit-mask">
@@ -385,13 +406,13 @@ window.openDrawer=function(idx){
   h+='<div class="dcard"><div class="dcard-h">💳 인보이스<span class="cnt">'+e.docs.invoices.length+'건 · '+fmtRM(e.docs.invoices.reduce((a,x)=>a+invTotal(x),0))+'</span>'+hdrLink('invoices')+'</div>';
   h+=e.docs.invoices.length?e.docs.invoices.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>{
     const st=INV_ST[x.status]||[x.status||'-','blue'];
-    return '<div class="drow"><span class="id">'+esc(x.id||x.__id)+'</span><span class="pill '+st[1]+'">'+esc(st[0])+'</span><span class="m">'+esc(x.date||'')+' · '+fmtRM(invTotal(x))+'</span><a class="open-btn" target="_blank" href="'+BASE+'/hhc-invoice.html?view='+encodeURIComponent(x.id||x.__id)+'&lang=ko">↗ 열기</a>'+rowBtns('invoices',x.__id)+'</div>';
+    return '<div class="drow"><span class="id">'+esc(x.id||x.__id)+'</span><span class="pill '+st[1]+'">'+esc(st[0])+'</span><span class="m">'+esc(x.date||'')+' · '+fmtRM(invTotal(x))+'</span><a class="open-btn" target="_blank" rel="noopener" data-t="💳 인보이스 '+esc(x.id||x.__id)+'" href="'+BASE+'/hhc-invoice.html?view='+encodeURIComponent(x.id||x.__id)+'&lang=ko" onclick="return caView(this.href,this.dataset.t,event)">↗ 열기</a>'+rowBtns('invoices',x.__id)+'</div>';
   }).join(''):'<div class="dnone">인보이스 없음</div>';
   h+='</div>';
   // 점검보고서
   h+='<div class="dcard"><div class="dcard-h">🔧 점검보고서<span class="cnt">'+e.docs.inspections.length+'건</span>'+hdrLink('inspections')+'</div>';
   h+=e.docs.inspections.length?e.docs.inspections.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>
-    '<div class="drow"><span class="id">'+inspLabel(x.type)+'</span><span class="m">'+esc(x.date||'')+(x.addr?' · '+esc(x.addr):'')+'</span>'+(x.invoice_id?'<span class="pill blue">🧾 '+esc(x.invoice_id)+'</span>':'')+'<a class="open-btn" target="_blank" href="'+BASE+'/'+inspPage(x.type)+'?id='+encodeURIComponent(x.__id)+'&lang=ko">↗ 열기</a>'+rowBtns('inspections',x.__id)+'</div>').join('')
+    '<div class="drow"><span class="id">'+inspLabel(x.type)+'</span><span class="m">'+esc(x.date||'')+(x.addr?' · '+esc(x.addr):'')+'</span>'+(x.invoice_id?'<span class="pill blue">🧾 '+esc(x.invoice_id)+'</span>':'')+'<a class="open-btn" target="_blank" rel="noopener" data-t="'+esc(inspLabel(x.type))+' '+esc(x.date||'')+'" href="'+BASE+'/'+inspPage(x.type)+'?id='+encodeURIComponent(x.__id)+'&lang=ko" onclick="return caView(this.href,this.dataset.t,event)">↗ 열기</a>'+rowBtns('inspections',x.__id)+'</div>').join('')
     :'<div class="dnone">점검보고서 없음</div>';
   h+='</div>';
   // 계약서
@@ -401,13 +422,13 @@ window.openDrawer=function(idx){
     const ctEnded=x.status==='ended';
     return '<div class="drow"'+(ctEnded?' style="opacity:.6;background:#f8fafc"':'')+'><span class="id">'+esc(pkgLabel(x.package_id)||'패키지')+'</span>'+
       (ctEnded?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏹ 종료</span>':'<span class="pill ok">✅ 유효</span>')+
-      '<span class="pill blue">납입 '+fmtRM(x.amount_paid)+'</span><span class="m">'+esc(x.contract_date||'')+' · 이용내역 '+usage.length+'건</span><a class="open-btn" target="_blank" href="'+BASE+'/admin.html?view='+encodeURIComponent(x.__id)+'&mode=all&lang=ko">↗ 열기</a>'+rowBtns('contracts',x.__id)+'</div>';
+      '<span class="pill blue">납입 '+fmtRM(x.amount_paid)+'</span><span class="m">'+esc(x.contract_date||'')+' · 이용내역 '+usage.length+'건</span><a class="open-btn" target="_blank" rel="noopener" data-t="📑 계약서 '+esc(pkgLabel(x.package_id)||'')+' '+esc(x.contract_date||'')+'" href="'+BASE+'/admin.html?view='+encodeURIComponent(x.__id)+'&mode=all&lang=ko" onclick="return caView(this.href,this.dataset.t,event)">↗ 열기</a>'+rowBtns('contracts',x.__id)+'</div>';
   }).join(''):'<div class="dnone">계약서 없음</div>';
   h+='</div>';
   // 상품권
   h+='<div class="dcard"><div class="dcard-h">🎫 상품권<span class="cnt">'+e.docs.coupons.length+'건</span>'+hdrLink('coupons')+'</div>';
   h+=e.docs.coupons.length?e.docs.coupons.map(x=>
-    '<div class="drow"><span class="id">'+esc(x.code||'')+'</span><span class="pill vio">'+esc(x.value||'')+'</span><span class="m">'+(x.expiry?'~'+esc(x.expiry):'')+(x.receiver?' · 받는분 '+esc(x.receiver):'')+'</span><span class="pill '+(x.status==='active'?'ok':'warn')+'">'+(x.status==='active'?'사용가능':esc(x.status||''))+'</span><a class="open-btn" target="_blank" href="'+BASE+'/coupon.html?id='+encodeURIComponent(x.__id)+'">↗ 열기</a>'+rowBtns('coupons',x.__id)+'</div>').join('')
+    '<div class="drow"><span class="id">'+esc(x.code||'')+'</span><span class="pill vio">'+esc(x.value||'')+'</span><span class="m">'+(x.expiry?'~'+esc(x.expiry):'')+(x.receiver?' · 받는분 '+esc(x.receiver):'')+'</span><span class="pill '+(x.status==='active'?'ok':'warn')+'">'+(x.status==='active'?'사용가능':esc(x.status||''))+'</span><a class="open-btn" target="_blank" rel="noopener" data-t="🎫 상품권 '+esc(x.code||'')+'" href="'+BASE+'/coupon.html?id='+encodeURIComponent(x.__id)+'" onclick="return caView(this.href,this.dataset.t,event)">↗ 열기</a>'+rowBtns('coupons',x.__id)+'</div>').join('')
     :'<div class="dnone">상품권 없음</div>';
   h+='</div>';
   // 요약
@@ -436,6 +457,52 @@ window.closeDrawer=function(){
   document.getElementById('drawer').classList.remove('open');
   drawerKey=null;
 };
+
+// ═══ 문서 뷰어 오버레이 ═══
+// 인보이스·점검보고서·계약서·상품권을 앱 안에서 열고, 닫으면 고객 상세 화면으로 그대로 복귀한다.
+let dvOpen=false, dvPushed=false;
+window.caView=function(url,title,ev){
+  if(ev&&(ev.metaKey||ev.ctrlKey||ev.shiftKey||ev.button===1))return true; // 새 탭으로 열기는 그대로 허용
+  const w=document.getElementById('dv-wrap');if(!w)return true;
+  document.getElementById('dv-ttl').textContent=title||'문서';
+  const nb=document.getElementById('dv-new');if(nb)nb.href=url;
+  // iframe은 열 때마다 새로 만든다 — src 교체는 브라우저 히스토리를 오염시켜 뒤로가기가 어긋난다.
+  const host=document.getElementById('dv-body');
+  host.innerHTML='';
+  const f=document.createElement('iframe');
+  f.id='dv-frame';
+  f.setAttribute('title','문서 보기');
+  f.setAttribute('allow','clipboard-write; clipboard-read');
+  f.onload=function(){
+    // 문서 페이지가 스스로 창을 닫으려 하면(×·뒤로) 앱이 아니라 오버레이만 닫히도록 가로챈다.
+    try{
+      const cw=f.contentWindow;
+      cw.close=function(){window.caViewClose();};
+      cw.history.back=function(){window.caViewClose();};
+      cw.addEventListener('keydown',function(k){if(k.key==='Escape')window.caViewClose();});
+    }catch(_){ }
+  };
+  f.src=url;
+  host.appendChild(f);
+  w.classList.add('open');
+  dvOpen=true;
+  document.body.style.overflow='hidden';
+  try{history.pushState({dv:1},'');dvPushed=true;}catch(_){dvPushed=false;}
+  return false;
+};
+window.caViewClose=function(fromPop){
+  const w=document.getElementById('dv-wrap');
+  if(!w||!w.classList.contains('open'))return;
+  w.classList.remove('open');
+  const host=document.getElementById('dv-body');
+  if(host)host.innerHTML='';
+  dvOpen=false;
+  document.body.style.overflow='';
+  if(!fromPop&&dvPushed){dvPushed=false;try{history.back();}catch(_){ }}
+  else dvPushed=false;
+};
+window.addEventListener('popstate',function(){if(dvOpen)window.caViewClose(true);});
+document.addEventListener('keydown',function(k){if(k.key==='Escape'&&dvOpen)window.caViewClose();});
 
 // ═══ 신규/수정 ═══
 function fillMemberSel(v){
@@ -636,7 +703,7 @@ window.caSendModal=async function(idx){
     const el=ev.target.closest('[data-k]');if(!el)return;
     state[el.dataset.k]=!state[el.dataset.k];paint();
   });
-  mk.querySelector('#cs-pv').addEventListener('click',()=>{window.open(link(),'_blank');});
+  mk.querySelector('#cs-pv').addEventListener('click',()=>{window.caView(link(),'👁 고객 발송 화면 미리보기 — '+(e.name||''));});
   mk.querySelector('#cs-wa').addEventListener('click',()=>{
     let wa='https://wa.me/';
     const ph=pn(e.phone);
