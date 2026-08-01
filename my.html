@@ -26,7 +26,9 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .sub{color:#8fa0c9;font-size:11.5px;margin-top:2px}
 .mem{display:inline-flex;align-items:center;gap:5px;margin-top:8px;background:linear-gradient(120deg,rgba(232,168,56,.18),rgba(232,168,56,.06));border:1px solid rgba(232,168,56,.45);color:#f3cd7e;font-size:11px;font-weight:800;border-radius:20px;padding:4px 12px}
 .body{padding:0 15px calc(20px + env(safe-area-inset-bottom));margin-top:-34px;position:relative;z-index:2}
-.body.nb{margin-top:0;padding-top:4px}
+.body.nb>.sec:first-child{margin-top:0}
+.body.nb>.sec:first-child>.sh{color:#fff}
+.body.nb>.sec:first-child>.sh .n{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.22);color:#cfd9f0}
 /* balance */
 .balcard{background:#fff;border-radius:18px;padding:17px;box-shadow:0 10px 30px rgba(11,24,51,.10)}
 .balcard .lb{font-size:10px;font-weight:800;color:var(--ink3);letter-spacing:.06em}
@@ -99,12 +101,9 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .nst.ok{background:var(--ok-bg);color:var(--ok)}
 .nst.warn{background:var(--warn-bg);color:var(--warn)}
 .nst.bad{background:#fef2f2;color:#dc2626}
-.nitems{margin-top:10px;background:#F7F9FC;border-radius:10px;padding:8px 10px}
-.nit{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--ink2);font-weight:700;padding:2px 0}
-.nit .dot{width:4px;height:4px;border-radius:50%;background:#cbd5e1;flex-shrink:0}
-.nit .tx{flex:1;min-width:0;font-size:11px;font-weight:700;letter-spacing:0;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.nit .pz{color:var(--ink3);flex-shrink:0}
-.nmore{font-size:10px;color:var(--ink3);font-weight:700;padding-top:3px}
+.nsum{margin-top:9px;display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--ink2);background:#F7F9FC;border-radius:9px;padding:7px 10px}
+.nsum .dot{width:4px;height:4px;border-radius:50%;background:#a9b6cc;flex-shrink:0}
+.nsum .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .nfoot{display:flex;align-items:flex-end;gap:10px;margin-top:11px;padding-top:10px;border-top:1px dashed var(--bdr)}
 .nlb{font-size:9.5px;font-weight:800;color:var(--ink3);letter-spacing:.04em}
 .nam{font-size:20px;font-weight:900;letter-spacing:-.02em;margin-top:1px;line-height:1.1}
@@ -209,7 +208,7 @@ const T={
       wa:'💬 WhatsApp 문의',rq:'📋 서비스 의뢰',
       hpT:'가격/서비스 확인하기',hpS:'홈페이지에서 전체 서비스와 가격표를 확인하세요',hpB:'홈페이지 바로가기',notfound:'고객 정보를 찾을 수 없습니다.<br>링크를 다시 확인해 주세요.',
       foot:'본 페이지는 열 때마다 최신 내용으로 갱신됩니다.',
-      amtPaid:'결제 금액',amtBill:'청구 금액',amtDue:'미납 금액',more:'개 더',qtyU:'개',
+      amtPaid:'결제 금액',amtBill:'청구 금액',amtDue:'미납 금액',more:'개 더',qtyU:'개',etcA:' 외 ',etcB:'건',svcU:'개 서비스',
       ivGo:'인보이스 보기 →',ipGo:'📄 보고서 열기 →',ctGo:'📑 계약 상세 · 이용내역 보기 →',cpGo:'열기 →',
       unitsLb:'점검 대수',okLb:'정상',actLb:'조치 필요',
       noIssue:'✅ 이상 없음',needAct:'⚠️ 조치 필요',caution:'🔧 주의',dpDone:'✅ 완료',dpRevisit:'⏳ 재방문 필요',
@@ -223,7 +222,7 @@ const T={
       wa:'💬 WhatsApp',rq:'📋 Request Service',
       hpT:'Check Prices & Services',hpS:'See our full service list and price guide on the homepage',hpB:'Visit Homepage',notfound:'Customer not found.<br>Please check your link.',
       foot:'This page always shows your latest records when opened.',
-      amtPaid:'PAID',amtBill:'AMOUNT DUE',amtDue:'OVERDUE',more:' more',qtyU:'',
+      amtPaid:'PAID',amtBill:'AMOUNT DUE',amtDue:'OVERDUE',more:' more',qtyU:'',etcA:' +',etcB:' more',svcU:' services',
       ivGo:'View invoice →',ipGo:'📄 Open report →',ctGo:'📑 Contract details →',cpGo:'Open →',
       unitsLb:'Units',okLb:'Normal',actLb:'Action',
       noIssue:'✅ No issues',needAct:'⚠️ Action needed',caution:'🔧 Caution',dpDone:'✅ Completed',dpRevisit:'⏳ Revisit needed',
@@ -377,13 +376,13 @@ function render(){
       const stc=x.status==='paid'?'ok':(x.status==='overdue'?'bad':'warn');
       const ico=x.status==='paid'?'✅':(x.status==='overdue'?'⚠️':'🧾');
       const its=(x.items||[]).filter(o=>o&&(o.name||o.price!=null));
+      // 상세 품목·단가는 숨기고, 대표 서비스 한 줄만 요약해서 보여준다
       let ib='';
       if(its.length){
-        ib='<div class="nitems">'+its.slice(0,3).map(o=>{
-          const q=parseFloat(o.qty)||0,pr=parseFloat(o.price)||0;
-          const amt=(q&&pr)?('RM '+fmt0(q*pr)):(pr?('RM '+fmt0(pr)):'');
-          return '<div class="nit"><i class="dot"></i><span class="tx">'+esc(o.name||'')+(q>1?' ×'+nn(q)+L.qtyU:'')+'</span><span class="pz">'+amt+'</span></div>';
-        }).join('')+(its.length>3?'<div class="nmore">+'+(its.length-3)+L.more+'</div>':'')+'</div>';
+        const first=String(its[0].name||'').trim();
+        const rest=its.length-1;
+        const txt=first?(first+(rest>0?(L.etcA+rest+L.etcB):'')):(its.length+L.svcU);
+        ib='<div class="nsum"><i class="dot"></i><span class="tx">'+esc(txt)+'</span></div>';
       }
       const dAgo=daysAgo(x.date);
       const sub=(x.status==='overdue'&&dAgo!=null&&dAgo>0)?(dAgo+L.dayAgo):wdLb(x.date);
