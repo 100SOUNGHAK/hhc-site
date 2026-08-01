@@ -1943,6 +1943,17 @@ function inspViewUrl(id,type,lang){
   return invDir()+inspPageFile(type)+'?id='+encodeURIComponent(id)+'&lang='+((lang==='en')?'en':'ko');
 }
 window.inspViewUrl=inspViewUrl;
+// 이용내역 항목의 인보이스(inv_id)에 연결된 점검보고서 목록
+//  · 고객 열람 화면(?view=)에서는 _cvInspMap(문서 조회 결과)을,
+//  · 관리자 화면에서는 allInspections 구독 데이터를 사용한다.
+function inspByInvoice(invId){
+  if(!invId)return [];
+  const key=String(invId);
+  if(window._cvInspMap)return window._cvInspMap[key]||[];
+  if(allInspections&&allInspections.length)
+    return allInspections.filter(r=>r.invoice_id===key).map(r=>({id:r._id,type:r.type,date:r.date}));
+  return [];
+}
 function inspFind(id){
   if(!id)return null;
   const t=String(id);
@@ -1983,8 +1994,9 @@ function usageInspHTML(u,i,isEn){
         sug='<button type="button" class="insp-sug" data-insp-pick="'+i+'">&#9889; '+
           (isEn?'Suggested':'추천')+' '+ncEsc(cs[0].r.client||'')+(cs[0].r.date?' ('+ncEsc(cs[0].r.date)+')':'')+'</button>';
     }
+    const via=inspViaInvHTML(u,'',isEn);
     return '<div class="insp-row"><span class="insp-none">'+L.none+'</span>'+
-      '<button type="button" class="insp-link" data-insp-pick="'+i+'">'+L.link+'</button>'+sug+'</div>';
+      '<button type="button" class="insp-link" data-insp-pick="'+i+'">'+L.link+'</button>'+sug+via+'</div>';
   }
   const r=inspFind(u.insp_id);
   const ty=(r&&r.type)||u.insp_type||'inspect';
@@ -1998,7 +2010,14 @@ function usageInspHTML(u,i,isEn){
     '<button type="button" class="insp-link" data-insp-open="'+i+'">'+L.open+'</button>'+
     '<button type="button" class="insp-unlink" data-insp-pick="'+i+'">'+L.edit+'</button>'+
     '<button type="button" class="insp-unlink" data-insp-clear="'+i+'">'+L.clear+'</button>'+
+    inspViaInvHTML(u,u.insp_id,isEn)+
   '</div>';
+}
+// 인보이스에 연결된 점검보고서 「바로 보기」 버튼들 (usage 카드용)
+function inspViaInvHTML(u,skipId,isEn){
+  return inspByInvoice(u.inv_id).filter(r=>r.id&&r.id!==skipId).map(r=>
+    '<a class="insp-link" style="text-decoration:none" target="_blank" rel="noopener" href="'+ncEsc(inspViewUrl(r.id,r.type||'inspect',isEn?'en':'ko'))+'">'+
+    inspTypeIcon(r.type)+' '+(isEn?'View report':'점검보고서 보기')+(r.date?' <span class="num">'+ncEsc(r.date)+'</span>':'')+' &#8599;</a>').join('');
 }
 
 // 점검보고서 연결 모달 — 고객명·날짜·연락처로 후보를 추천한다
@@ -2326,6 +2345,20 @@ async function runCustomerView(id,mode,lang){
   let c=null;
   try{const snap=await getDoc(doc(db,'contracts',id));if(snap.exists())c=snap.data();}catch(e){console.error(e);}
   if(!c){host.innerHTML='<div style="padding:64px 20px;text-align:center;color:#D6433F;font-size:15px">계약서를 찾을 수 없습니다.<br>Contract not found.</div>';return;}
+  // 이용내역의 인보이스에 연결된 점검보고서를 미리 조회해 「점검보고서 보기」 버튼을 만든다
+  try{
+    const hist=typeof c.usage_history==='string'?JSON.parse(c.usage_history||'[]'):(c.usage_history||[]);
+    const ids=[...new Set(hist.map(u=>String(u.inv_id||'')).filter(Boolean))];
+    const map={};
+    for(let i=0;i<ids.length;i+=10){
+      const chunk=ids.slice(i,i+10);
+      try{
+        const s2=await getDocs(query(collection(db,'inspections'),where('invoice_id','in',chunk)));
+        s2.forEach(d=>{const x=d.data()||{};const k=String(x.invoice_id||'');(map[k]=map[k]||[]).push({id:d.id,type:x.type||'inspect',date:x.date||''});});
+      }catch(e2){}
+    }
+    window._cvInspMap=map;
+  }catch(e){window._cvInspMap={};}
   let curLang=lang;
   async function draw(){
     // EN 표시 시 특약사항·이용내역 설명을 자동 번역(캐시됨) 후 렌더 —
@@ -3091,12 +3124,16 @@ function ncUsageRow(u,net,bal,isEn,T,fmt){
        '\u{1F9FE} '+(isEn?'View invoice':'인보이스 보기')+
        ' <span class="num">'+ncEsc(u.inv_id)+'</span> <span class="go">\u2197</span></a>')
     :'';
-  // 점검보고서가 연결된 항목에만 열람 버튼을 붙인다
-  const inspHtml=u.insp_id
+  // 점검보고서 열람 버튼 — 직접 연결(insp_id) + 인보이스에 연결된 보고서 모두 표시
+  let inspHtml=u.insp_id
     ?('<a class="tl2-insp" href="'+ncEsc(inspViewUrl(u.insp_id,u.insp_type||'inspect',isEn?'en':'ko'))+'" target="_blank" rel="noopener">'+
        '\u{1F50D} '+(isEn?'View inspection report':'점검보고서 보기')+
        (u.insp_date?' <span class="num">'+ncEsc(u.insp_date)+'</span>':'')+' <span class="go">\u2197</span></a>')
     :'';
+  inspHtml+=inspByInvoice(u.inv_id).filter(r=>r.id&&r.id!==u.insp_id).map(r=>
+    '<a class="tl2-insp" href="'+ncEsc(inspViewUrl(r.id,r.type||'inspect',isEn?'en':'ko'))+'" target="_blank" rel="noopener">'+
+    '\u{1F50D} '+(isEn?'View inspection report':'점검보고서 보기')+
+    (r.date?' <span class="num">'+ncEsc(r.date)+'</span>':'')+' <span class="go">\u2197</span></a>').join('');
   return '<div class="tl2-item">'+ncDayChip(u.date,isEn)+
     '<div class="tl2-list">'+list+adj+invHtml+inspHtml+'</div>'+
     '<div class="tl2-money"><div class="tl2-amt">- RM '+fmt(net)+'</div>'+
