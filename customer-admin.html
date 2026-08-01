@@ -181,6 +181,16 @@ function mgPairKey(a,b){return [mgSig(a),mgSig(b)].sort().join('|');}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function pn(p){p=String(p||'').replace(/[^0-9]/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');}
 function nn(n){return String(n||'').toLowerCase().replace(/\s+/g,'');}
+// 의뢰(request) 고객명 = 콘도명 + 동호수 (예: "THE PARK" + "D-31-07" → "THE PARK D-31-07")
+// 구버전 문서는 condo 하나에 "콘도명 (동호수)" 형태로 저장돼 있어 괄호를 풀어 같은 형식으로 맞춘다.
+function reqName(x){
+  const n=String((x&&x.condo_name)||'').trim();
+  const u=String((x&&x.condo_unit)||'').trim();
+  if(n&&u)return (nn(n).indexOf(nn(u))>=0)?n:(n+' '+u);
+  if(n)return n;
+  const c=String((x&&x.condo)||'').trim();
+  return c.replace(/\s*\(\s*(.+?)\s*\)\s*$/,' $1').trim();
+}
 // 검색 전용 정규화 — 대소문자·공백·특수문자를 모두 무시 (예: "THE PARK-2" ↔ "THE PARK2" ↔ "the park 2")
 function sn(n){return String(n||'').toLowerCase().replace(/[^0-9a-z가-힣]/g,'');}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2600);}
@@ -269,7 +279,7 @@ function buildEntries(){
   RAW.inspections.forEach(x=>attach('inspections',x,x.client,x.phone));
   RAW.bookings.forEach(x=>attach('bookings',x,x.customer_name,x.customer_phone));
   RAW.schedules.forEach(x=>{if(x.customer_name||x.customer_phone)attach('schedules',x,x.customer_name,x.customer_phone);});
-  RAW.requests.forEach(x=>attach('requests',x,x.condo_name||x.condo,x.phone));
+  RAW.requests.forEach(x=>attach('requests',x,reqName(x),x.phone));
   RAW.quotes.forEach(x=>attach('quotes',x,x.client,x.phone));
   // 상품권: 이름으로만 매칭 (연락처 없음)
   RAW.coupons.forEach(x=>{
@@ -864,7 +874,7 @@ function docSummary(coll,x){
   if(coll==='inspections')return inspLabel(x.type)+' · '+(x.date||'')+(x.addr?' · '+x.addr:'');
   if(coll==='contracts')return (pkgLabel(x.package_id)||'패키지')+' · '+(x.contract_date||'')+' · 납입 '+fmtRM(x.amount_paid);
   if(coll==='coupons')return (x.code||'')+' · '+(x.value||'')+(x.expiry?' · ~'+x.expiry:'');
-  if(coll==='requests')return (x.condo_name||x.condo||'의뢰')+(x.condo_unit?' '+x.condo_unit:'')+' · '+String(x.created_at||'').slice(0,10);
+  if(coll==='requests')return (reqName(x)||'의뢰')+' · '+String(x.created_at||'').slice(0,10);
   if(coll==='bookings')return (x.customer_name||'예약')+' · '+(x.booking_date||x.created_at&&String(x.created_at).slice(0,10)||'')+(x.status?' · '+x.status:'');
   if(coll==='quotes')return (x.qno||'견적')+' · '+(x.client||'')+' · '+(x.issueDate||'');
   return (x.title||x.customer_name||'일정')+' · '+(x.date||'');
@@ -873,6 +883,9 @@ function ownerFieldsFor(coll,e){
   if(coll==='invoices')return {'customer.name':e.name,'customer.phone':e.phone||''};
   if(coll==='inspections')return {client:e.name,phone:e.phone||''};
   if(coll==='contracts')return {name:e.name,phone:e.phone||''};
+  if(coll==='bookings'||coll==='schedules')return {customer_name:e.name,customer_phone:e.phone||''};
+  if(coll==='quotes')return {client:e.name,phone:e.phone||''};
+  if(coll==='requests')return {phone:e.phone||''};
   return {name:e.name};
 }
 function genericModal(title,bodyHTML,footHTML){
