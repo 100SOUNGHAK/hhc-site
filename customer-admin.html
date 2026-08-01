@@ -119,6 +119,7 @@ select.fi{appearance:auto}
     <div class="modal-b">
       <div class="fl">고객명 *</div><input class="fi" id="em-name" placeholder="예: 김철수">
       <div class="fl">연락처</div><input class="fi" id="em-phone" placeholder="+60 12-345 6789">
+      <div class="fl">별칭 (쉼표로 구분 — 다른 프로그램에 다른 이름으로 저장된 경우)</div><input class="fi" id="em-alias" placeholder="예: Mr. Kim, 김철수 사장님">
       <div class="fl">회원 구분</div><select class="fi" id="em-member"></select>
       <div class="fl">이메일</div><input class="fi" id="em-email" placeholder="선택사항">
       <div class="fl">주소</div><input class="fi" id="em-addr" placeholder="선택사항">
@@ -149,6 +150,12 @@ const PKG_LABEL={silver:'실버',royal:'로얄',gold:'골드',diamond:'다이아
 let db=null;
 let RAW={customers:[],contracts:[],invoices:[],inspections:[],coupons:[],requests:[],bookings:[],schedules:[],quotes:[]};
 let entries=[],mergeSug=[],curFilter='all',editTarget=null,drawerKey=null;
+// 「다른 고객입니다」로 처리한 병합 제안은 저장해 두고 다시 제안하지 않는다
+const MG_DISMISS_KEY='hhc_ca_merge_dismiss';
+let mgDismiss={};
+try{mgDismiss=JSON.parse(localStorage.getItem(MG_DISMISS_KEY)||'{}')||{};}catch(e){mgDismiss={};}
+function mgSig(e){return nn(e.name)+'#'+pn(e.phone);}
+function mgPairKey(a,b){return [mgSig(a),mgSig(b)].sort().join('|');}
 
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function pn(p){p=String(p||'').replace(/[^0-9]/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');}
@@ -262,8 +269,10 @@ function buildEntries(){
   Object.keys(nameMap).forEach(k=>{
     const arr=[...new Set(nameMap[k])];
     if(arr.length>1){
+      const pair=arr.slice(0,2);
+      if(mgDismiss[mgPairKey(pair[0],pair[1])])return;   // 이미 「다른 고객」 처리한 쌍
       const key=arr.map(e=>entries.indexOf(e)).sort().join('-');
-      if(!seen.has(key)){seen.add(key);mergeSug.push(arr.slice(0,2));}
+      if(!seen.has(key)){seen.add(key);mergeSug.push(pair);}
     }
   });
 }
@@ -313,7 +322,15 @@ function renderMerge(){
       '<span class="mb"><button class="btn sm" onclick="dismissMerge('+i+')">다른 고객</button><button class="btn sm p" onclick="doMerge('+i+')">🔗 병합</button></span></div>';
   }).join('');
 }
-window.dismissMerge=function(i){mergeSug.splice(i,1);renderMerge();renderStats();};
+window.dismissMerge=function(i){
+  const pair=mergeSug[i];
+  if(pair){
+    mgDismiss[mgPairKey(pair[0],pair[1])]=1;
+    try{localStorage.setItem(MG_DISMISS_KEY,JSON.stringify(mgDismiss));}catch(e){}
+  }
+  mergeSug.splice(i,1);renderMerge();renderStats();
+  toast('✓ 다른 고객으로 기억했습니다 — 다시 제안하지 않습니다');
+};
 function memberBadge(e){
   if(isVVIP(e))return '<span class="pill gold">👑 VVIP</span>';
   if(/^패키지/.test(e.member||''))return '<span class="pill blue">📦 '+esc(e.member)+'</span>';
@@ -346,7 +363,7 @@ function renderList(){
       '<div><div class="cnm">'+esc(e.name||'(이름 없음)')+(e.aliases.length?'<span class="alias">별칭: '+esc(e.aliases.join(', '))+'</span>':'')+memberBadge(e)+(e.master?'':'<span class="pill vio">미등록</span>')+'</div>'+
       '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음 <span class="pill warn">보완 필요</span>')+(e.addr?' · '+esc(e.addr):'')+'</div>'+
       '<div class="srcs">'+(srcs||'<span class="src qt">기록 없음</span>')+'</div></div>'+
-      '<div class="cbtns"><button class="btn sm p" onclick="openDrawer('+idx+')">상세 보기</button><button class="btn sm" onclick="openEditModal('+idx+')">✏️ 수정</button></div>'+
+      '<div class="cbtns"><button class="btn sm p" onclick="openDrawer('+idx+')">상세 보기</button><button class="btn sm" onclick="openEditModal('+idx+')">✏️ 수정</button>'+(e.master?'<button class="btn sm" style="color:var(--bad);border-color:#fca5a5" onclick="caDelCustomer('+idx+')">✕ 삭제</button>':'')+'</div>'+
       '</div>';
   }).join('');
 }
@@ -361,7 +378,7 @@ window.openDrawer=function(idx){
   let h='<div class="dhead"><div class="avatar">'+esc(init)+'</div><div class="dinfo"><b>'+esc(e.name)+'</b>'+
     '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음')+(e.addr?' · '+esc(e.addr):'')+'</div>'+
     '<div class="tagrow">'+memberBadge(e)+(e.aliases.length?'<span class="pill vio">별칭 '+esc(e.aliases.join(', '))+'</span>':'')+'</div></div>'+
-    '<div class="dbtns"><button class="btn sm" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="caSendModal('+idx+')">📤 고객 발송</button><button class="btn sm p" onclick="openEditModal('+idx+')">✏️ 정보 수정</button><button class="btn sm" onclick="closeDrawer()">닫기</button></div></div>';
+    '<div class="dbtns"><button class="btn sm" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="caSendModal('+idx+')">📤 고객 발송</button><button class="btn sm p" onclick="openEditModal('+idx+')">✏️ 정보 수정</button>'+(e.master?'<button class="btn sm" style="color:var(--bad);border-color:#fca5a5" onclick="caDelCustomer('+idx+')">✕ 삭제</button>':'')+'<button class="btn sm" onclick="closeDrawer()">닫기</button></div></div>';
   const rowBtns=(coll,id)=>'<button class="rb" onclick="caDocEdit(\''+coll+'\',\''+id+'\')">✏️ 수정</button><button class="rb del" onclick="caDocDel(\''+coll+'\',\''+id+'\')">✕ 삭제</button>';
   const hdrLink=(coll)=>'<button class="rb hd" onclick="caDocLink(\''+coll+'\','+idx0+')">+ 연결</button>';
   // 인보이스
@@ -396,6 +413,17 @@ window.openDrawer=function(idx){
     '<div class="mc"><b>'+e.docs.bookings.length+'</b>🗓️ 예약</div>'+
     '<div class="mc"><b>'+e.docs.quotes.length+'</b>🧾 견적</div>'+
     '<div class="mc"><b>'+e.docs.schedules.length+'</b>📅 스케줄</div></div>';
+  // 기타 기록 — 의뢰·예약·견적·스케줄도 항목별 삭제 가능
+  const etcRows=[];
+  [['requests','📥'],['bookings','🗓️'],['quotes','🧾'],['schedules','📅']].forEach(pair=>{
+    e.docs[pair[0]].forEach(x=>etcRows.push({coll:pair[0],ic:pair[1],x}));
+  });
+  if(etcRows.length){
+    h+='<div class="dcard"><div class="dcard-h">📂 기타 기록 (의뢰·예약·견적·스케줄)<span class="cnt">'+etcRows.length+'건</span></div>';
+    h+=etcRows.map(r=>'<div class="drow"><span class="id">'+r.ic+'</span><span class="m">'+esc(docSummary(r.coll,r.x))+'</span>'+
+      '<button class="rb del" style="margin-left:auto" onclick="caDocDel(\''+r.coll+'\',\''+r.x.__id+'\')">✕ 삭제</button></div>').join('');
+    h+='</div>';
+  }
   d.innerHTML=h;
   document.getElementById('drawer-mask').classList.add('open');
   d.classList.add('open');
@@ -413,7 +441,7 @@ function fillMemberSel(v){
 window.openNewModal=function(){
   editTarget=null;
   document.getElementById('em-title').textContent='＋ 신규 고객';
-  ['em-name','em-phone','em-email','em-addr','em-memo'].forEach(id=>document.getElementById(id).value='');
+  ['em-name','em-phone','em-alias','em-email','em-addr','em-memo'].forEach(id=>document.getElementById(id).value='');
   fillMemberSel('');
   document.getElementById('edit-mask').classList.add('open');
   setTimeout(()=>document.getElementById('em-name').focus(),80);
@@ -424,6 +452,7 @@ window.openEditModal=function(idx){
   document.getElementById('em-title').textContent='✏️ '+(e.name||'고객')+' — 정보 수정';
   document.getElementById('em-name').value=e.name||'';
   document.getElementById('em-phone').value=e.phone||'';
+  document.getElementById('em-alias').value=(e.aliases||[]).join(', ');
   document.getElementById('em-email').value=e.email||'';
   document.getElementById('em-addr').value=e.addr||'';
   document.getElementById('em-memo').value=e.memo||'';
@@ -436,6 +465,7 @@ window.saveEdit=async function(){
   const name=document.getElementById('em-name').value.trim();
   const phone=document.getElementById('em-phone').value.trim();
   const member=document.getElementById('em-member').value;
+  const aliases=document.getElementById('em-alias').value.split(',').map(x=>x.trim()).filter(Boolean);
   const email=document.getElementById('em-email').value.trim();
   const addr=document.getElementById('em-addr').value.trim();
   const memo=document.getElementById('em-memo').value.trim();
@@ -447,7 +477,7 @@ window.saveEdit=async function(){
     const dup=entries.find(x=>pn(phone)&&pn(x.phone)===pn(phone));
     if(dup&&!confirm('같은 연락처의 고객('+dup.name+')이 이미 있습니다. 그래도 새로 등록할까요?'))return;
     try{
-      await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name,phone,member,email,addr,memo,aliases:[],created_at:now,updated_at:now});
+      await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name,phone,member,email,addr,memo,aliases,created_at:now,updated_at:now});
       toast('✓ 신규 고객이 등록되었습니다');
       closeEdit();loadAll(true);
     }catch(err){toast('등록 실패: '+err.message);}
@@ -458,20 +488,21 @@ window.saveEdit=async function(){
   const oldName=e.name,oldPhone=e.phone;
   const nameChanged=name!==oldName,phoneChanged=pn(phone)!==pn(e.phone)&&pn(oldPhone);
   if((nameChanged||phoneChanged)&&docCount(e)>0){
-    showPropModal(e,{name,phone,member,email,addr,memo});
+    showPropModal(e,{name,phone,member,email,addr,memo,aliases});
     return;
   }
-  await applyEdit(e,{name,phone,member,email,addr,memo},false);
+  await applyEdit(e,{name,phone,member,email,addr,memo,aliases},false);
 };
 async function applyEdit(e,v,propagate){
   const now=new Date().toISOString();
   try{
+    let als=(v.aliases!=null)?v.aliases.slice():(e.master&&e.master.aliases||e.aliases||[]).slice();
+    if(v.name!==e.name&&e.name&&!als.some(a=>nn(a)===nn(e.name)))als.push(e.name);
+    als=als.filter(a=>nn(a)!==nn(v.name));
     if(e.master&&e.master.__id){
-      const upd={name:v.name,phone:v.phone,member:v.member,email:v.email,addr:v.addr,memo:v.memo,updated_at:now};
-      if(v.name!==e.name&&e.name&&!(e.master.aliases||[]).some(a=>nn(a)===nn(e.name)))upd.aliases=(e.master.aliases||[]).concat([e.name]);
-      await updateDoc(doc(db,'customers',e.master.__id),upd);
+      await updateDoc(doc(db,'customers',e.master.__id),{name:v.name,phone:v.phone,member:v.member,email:v.email,addr:v.addr,memo:v.memo,aliases:als,updated_at:now});
     }else{
-      await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name:v.name,phone:v.phone,member:v.member,email:v.email,addr:v.addr,memo:v.memo,aliases:e.name&&nn(e.name)!==nn(v.name)?[e.name]:[],created_at:now,updated_at:now});
+      await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name:v.name,phone:v.phone,member:v.member,email:v.email,addr:v.addr,memo:v.memo,aliases:als,created_at:now,updated_at:now});
     }
     if(propagate)await propagateDocs(e,v);
     toast('✓ 저장되었습니다'+(propagate?' — 전 프로그램 반영 완료':''));
@@ -536,6 +567,21 @@ async function propagateDocs(e,v){
     }
   }
 }
+
+// ═══ 고객(마스터) 삭제 ═══
+window.caDelCustomer=async function(idx){
+  const e=entries[idx];if(!e)return;
+  if(!e.master||!e.master.__id){
+    toast('문서에서 자동 집계된 고객입니다. 상세 보기에서 각 문서를 삭제하면 목록에서 사라집니다.');
+    return;
+  }
+  if(!confirm('「'+e.name+'」 고객 정보를 삭제할까요?\n\n· 고객 마스터(이름·연락처·별칭·회원구분)만 삭제됩니다.\n· 인보이스·점검보고서·계약서 등 문서는 삭제되지 않습니다.\n  (문서가 남아 있으면 목록에 자동 집계 항목으로 다시 나타날 수 있습니다)'))return;
+  try{
+    await deleteDoc(doc(db,'customers',e.master.__id));
+    toast('✓ 고객 정보가 삭제되었습니다');
+    closeDrawer();loadAll(true);
+  }catch(err){toast('삭제 실패: '+err.message);}
+};
 
 // ═══ 고객 마이페이지 발송 ═══
 window.caSendModal=async function(idx){
@@ -602,7 +648,7 @@ window.caSendModal=async function(idx){
 };
 
 // ═══ 문서 연결 · 수정 · 삭제 ═══
-const COLL_LB={invoices:'💳 인보이스',inspections:'🔧 점검보고서',contracts:'📑 계약서',coupons:'🎫 상품권'};
+const COLL_LB={invoices:'💳 인보이스',inspections:'🔧 점검보고서',contracts:'📑 계약서',coupons:'🎫 상품권',requests:'📥 의뢰',bookings:'🗓️ 예약',quotes:'🧾 견적서',schedules:'📅 스케줄'};
 function docOwnerName(coll,x){
   if(coll==='invoices')return (x.customer&&x.customer.name)||'';
   if(coll==='inspections')return x.client||'';
@@ -619,7 +665,11 @@ function docSummary(coll,x){
   if(coll==='invoices')return (x.id||x.__id)+' · '+(x.date||'')+' · '+fmtRM(invTotal(x));
   if(coll==='inspections')return inspLabel(x.type)+' · '+(x.date||'')+(x.addr?' · '+x.addr:'');
   if(coll==='contracts')return (pkgLabel(x.package_id)||'패키지')+' · '+(x.contract_date||'')+' · 납입 '+fmtRM(x.amount_paid);
-  return (x.code||'')+' · '+(x.value||'')+(x.expiry?' · ~'+x.expiry:'');
+  if(coll==='coupons')return (x.code||'')+' · '+(x.value||'')+(x.expiry?' · ~'+x.expiry:'');
+  if(coll==='requests')return (x.condo_name||x.condo||'의뢰')+(x.condo_unit?' '+x.condo_unit:'')+' · '+String(x.created_at||'').slice(0,10);
+  if(coll==='bookings')return (x.customer_name||'예약')+' · '+(x.booking_date||x.created_at&&String(x.created_at).slice(0,10)||'')+(x.status?' · '+x.status:'');
+  if(coll==='quotes')return (x.qno||'견적')+' · '+(x.client||'')+' · '+(x.issueDate||'');
+  return (x.title||x.customer_name||'일정')+' · '+(x.date||'');
 }
 function ownerFieldsFor(coll,e){
   if(coll==='invoices')return {'customer.name':e.name,'customer.phone':e.phone||''};
