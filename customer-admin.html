@@ -399,7 +399,7 @@ window.openDrawer=function(idx){
   let h='<div class="dhead"><div class="avatar">'+esc(init)+'</div><div class="dinfo"><b>'+esc(e.name)+'</b>'+
     '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음')+(e.addr?' · '+esc(e.addr):'')+'</div>'+
     '<div class="tagrow">'+memberBadge(e)+(e.aliases.length?'<span class="pill vio">별칭 '+esc(e.aliases.join(', '))+'</span>':'')+'</div></div>'+
-    '<div class="dbtns"><button class="btn sm" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="caSendModal('+idx+')">📤 고객 발송</button><button class="btn sm p" onclick="openEditModal('+idx+')">✏️ 정보 수정</button>'+(e.master?'<button class="btn sm" style="color:var(--bad);border-color:#fca5a5" onclick="caDelCustomer('+idx+')">✕ 삭제</button>':'')+'<button class="btn sm" onclick="closeDrawer()">닫기</button></div></div>';
+    '<div class="dbtns"><button class="btn sm" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="caSendModal('+idx+')">📤 고객 발송</button><button class="btn sm" style="background:#0B1833;border-color:#0B1833;color:#fff" onclick="caHomeModal('+idx+')">🏠 홈페이지 안내</button><button class="btn sm p" onclick="openEditModal('+idx+')">✏️ 정보 수정</button>'+(e.master?'<button class="btn sm" style="color:var(--bad);border-color:#fca5a5" onclick="caDelCustomer('+idx+')">✕ 삭제</button>':'')+'<button class="btn sm" onclick="closeDrawer()">닫기</button></div></div>';
   const rowBtns=(coll,id)=>'<button class="rb" onclick="caDocEdit(\''+coll+'\',\''+id+'\')">✏️ 수정</button><button class="rb del" onclick="caDocDel(\''+coll+'\',\''+id+'\')">✕ 삭제</button>';
   const hdrLink=(coll)=>'<button class="rb hd" onclick="caDocLink(\''+coll+'\','+idx0+')">+ 연결</button>';
   // 인보이스
@@ -713,6 +713,94 @@ window.caSendModal=async function(idx){
   mk.querySelector('#cs-cp').addEventListener('click',()=>{
     navigator.clipboard.writeText(msg()).then(()=>toast('✓ 메시지가 복사되었습니다'))
       .catch(()=>prompt('복사해서 사용하세요:',link()));
+  });
+  paint();
+};
+
+// ═══ 홈페이지 섹션 안내 발송 ═══
+const HP_SECS=[
+  {k:'promotion', lb:'🎁 이벤트·할인',
+   ko:'🎁 지금 진행 중인 이벤트·할인 프로모션을 안내드립니다. 아래 링크를 누르시면 바로 확인하실 수 있습니다.',
+   en:'🎁 Here are our ongoing events & promotions. Tap the link below to see the details.'},
+  {k:'pricing', lb:'💰 가격정보',
+   ko:'💰 서비스 가격 안내입니다. 아래 링크에서 항목별 가격표를 확인하실 수 있습니다.',
+   en:'💰 Here is our price guide. Tap the link below for the full price list.'},
+  {k:'membership', lb:'👑 멤버십',
+   ko:'👑 멤버십 혜택을 안내드립니다. 적립금과 회원 혜택을 아래 링크에서 확인해 보세요.',
+   en:'👑 Here are our membership benefits. Check credits and member perks below.'},
+  {k:'voucher', lb:'🎟 할인 상품권',
+   ko:'🎟 할인 상품권을 안내드립니다. 액면가보다 10% 할인된 금액으로 구매하실 수 있습니다.',
+   en:'🎟 Introducing our discount gift vouchers — buy at 10% below face value.'},
+  {k:'services', lb:'🧹 서비스 소개',
+   ko:'🧹 저희 서비스 소개입니다. 에어컨·세탁기·소파·매트리스 케어 서비스를 확인해 보세요.',
+   en:'🧹 Here is an overview of our services — aircon, washer, sofa & mattress care.'},
+  {k:'reviews', lb:'⭐ 고객 후기',
+   ko:'⭐ 실제 고객 후기를 안내드립니다. 아래 링크에서 확인해 보세요.',
+   en:'⭐ See what our customers say — real reviews at the link below.'}
+];
+window.caHomeModal=function(idx){
+  const e=entries[idx];if(!e)return;
+  let sec='promotion', en=false;
+  const mk=genericModal('🏠 홈페이지 안내 발송 — '+esc(e.name),
+    '<p style="font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:10px">안내할 섹션을 선택하세요. 고객이 링크를 누르면 홈페이지가 열리면서 <b>해당 섹션으로 바로 이동</b>합니다.</p>'+
+    '<div id="hp-secs" style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px">'+
+      HP_SECS.map(o=>'<span data-k="'+o.k+'" style="cursor:pointer;display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:800;border-radius:12px;padding:10px 11px;border:1.5px solid var(--bdr)"><i style="width:12px;height:12px;border-radius:50%;border:2px solid #cbd5e1;flex-shrink:0"></i>'+o.lb+'</span>').join('')+
+    '</div>'+
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><span style="font-size:10.5px;font-weight:800;color:var(--ink3)">메시지 언어</span>'+
+      '<span id="hp-lang" style="cursor:pointer;display:inline-flex;border:1.5px solid var(--bdr);border-radius:20px;overflow:hidden;font-size:10.5px;font-weight:900">'+
+      '<b data-l="ko" style="padding:6px 13px">한국어</b><b data-l="en" style="padding:6px 13px">English</b></span></div>'+
+    '<div style="background:#0B1833;border-radius:14px;padding:13px">'+
+      '<div style="font-size:10px;font-weight:800;color:#8fa0c9;letter-spacing:.05em;margin-bottom:8px">📱 고객에게 보이는 화면</div>'+
+      '<div id="hp-bub" style="background:#fff;border-radius:4px 14px 14px 14px;padding:12px 13px;font-size:12px;line-height:1.65;color:#111;white-space:pre-wrap;word-break:break-all"></div>'+
+    '</div>'+
+    '<div style="display:flex;gap:7px;margin-top:11px">'+
+      '<button id="hp-pv" class="btn" style="flex:1;background:var(--pri-bg);border-color:var(--pri);color:var(--pri)">👁 미리보기</button>'+
+      '<button id="hp-wa" class="btn" style="flex:1;background:#22c55e;border-color:#22c55e;color:#fff">💬 WhatsApp 발송</button>'+
+      '<button id="hp-cp" class="btn" style="flex:1">📋 메시지 복사</button>'+
+    '</div>');
+  function link(){return BASE+'/service-info'+(en?'?lang=en':'')+'#'+sec;}
+  function msg(){
+    const o=HP_SECS.find(x=>x.k===sec);
+    return en
+      ?('Hello '+e.name+' 😊\nThis is Happy Home Care.\n\n'+o.en+'\n\n🔗 '+link()+'\n\nThank you 🙏\nHappy Home Care\n📞 +60 17-247 2774')
+      :('안녕하세요, '+e.name+' 고객님 😊\nHappy Home Care 입니다.\n\n'+o.ko+'\n\n🔗 '+link()+'\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774');
+  }
+  function paint(){
+    mk.querySelectorAll('#hp-secs [data-k]').forEach(el=>{
+      const on=el.dataset.k===sec;
+      el.style.background=on?'var(--pri-bg)':'#fff';
+      el.style.borderColor=on?'var(--pri)':'var(--bdr)';
+      el.style.color=on?'#0B1833':'var(--ink2)';
+      const i=el.querySelector('i');
+      i.style.borderColor=on?'var(--pri)':'#cbd5e1';
+      i.style.background=on?'radial-gradient(circle,var(--pri) 0 42%,#fff 45%)':'#fff';
+    });
+    mk.querySelectorAll('#hp-lang b').forEach(b=>{
+      const on=(b.dataset.l==='en')===en;
+      b.style.background=on?'#0B1833':'#fff';
+      b.style.color=on?'#fff':'var(--ink3)';
+    });
+    mk.querySelector('#hp-bub').textContent=msg();
+  }
+  mk.querySelector('#hp-secs').addEventListener('click',ev=>{
+    const el=ev.target.closest('[data-k]');if(!el)return;sec=el.dataset.k;paint();
+  });
+  mk.querySelector('#hp-lang').addEventListener('click',ev=>{
+    const b=ev.target.closest('[data-l]');if(!b)return;en=b.dataset.l==='en';paint();
+  });
+  mk.querySelector('#hp-pv').addEventListener('click',()=>{
+    const o=HP_SECS.find(x=>x.k===sec);
+    window.caView(link(),'👁 홈페이지 미리보기 — '+o.lb);
+  });
+  mk.querySelector('#hp-wa').addEventListener('click',()=>{
+    let wa='https://wa.me/';
+    const ph=pn(e.phone);
+    if(ph)wa+='60'+ph;
+    window.open(wa+'?text='+encodeURIComponent(msg()),'_blank');
+  });
+  mk.querySelector('#hp-cp').addEventListener('click',()=>{
+    navigator.clipboard.writeText(msg()).then(()=>toast('✓ 메시지가 복사되었습니다'))
+      .catch(()=>prompt('복사해서 사용하세요:',msg()));
   });
   paint();
 };
