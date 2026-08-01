@@ -411,6 +411,23 @@ body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;back
 .lb-close{position:absolute;top:18px;right:20px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;border:none;font-size:20px;cursor:pointer}
 .zoomable{cursor:zoom-in}
 </style>
+<style>
+/* ══ 인보이스 연동 카드 ══ */
+.inv-card{margin:14px 16px 4px;background:#fff;border:1px solid var(--line,#E3E0D8);border-radius:16px;overflow:hidden;box-shadow:0 2px 10px rgba(28,28,34,.05)}
+.inv-card-h{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid var(--line-2,#EFEDE7)}
+.inv-card-h .ic{width:30px;height:30px;border-radius:9px;background:#FEF3C7;color:#92400E;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.inv-card-h .tt{font-size:12.5px;font-weight:800;color:var(--ink,#1C1C22);letter-spacing:.01em}
+.inv-card-h .st{margin-left:auto;font-size:10px;font-weight:800;border-radius:20px;padding:3px 9px;background:#FEF3C7;color:#92400E}
+.inv-card-h .st.paid{background:#DCFCE7;color:#14803C}
+.inv-card-h .st.over{background:#FEE2E2;color:#B91C1C}
+.inv-card-b{padding:13px 16px}
+.inv-meta{display:flex;flex-wrap:wrap;gap:6px 18px;margin-bottom:12px}
+.inv-meta .kv{min-width:96px}
+.inv-meta .k{font-size:9.5px;font-weight:700;letter-spacing:.05em;color:var(--ink-mute,#9A9AA6);text-transform:uppercase}
+.inv-meta .v{font-size:13.5px;font-weight:800;color:var(--ink,#1C1C22);margin-top:2px;font-variant-numeric:tabular-nums}
+.inv-open{display:block;width:100%;text-align:center;padding:12px;border-radius:12px;background:#1C1C22;color:#fff;font-size:13.5px;font-weight:800;text-decoration:none;box-sizing:border-box}
+@media print{.inv-open{display:none}}
+</style>
 </head>
 <body>
 
@@ -607,6 +624,8 @@ body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;back
     </div>
   </div>
 
+  <div id="inv-link-card"></div>
+
 </div><!-- /.page -->
 
 <div class="bottom-actionbar">
@@ -749,6 +768,7 @@ function setLang(lang){
     }
   });
   if(window._reportData)renderReport(window._reportData);
+  if(window._invCardData&&window.renderInvoiceCard)window.renderInvoiceCard(window._invCardData);
 }
 window.setLang=setLang;
 </script>
@@ -1338,6 +1358,64 @@ var FB_CFG={
 };
 var app=initializeApp(FB_CFG);
 var DB=getFirestore(app);
+// ── 인보이스 연동 카드 (invoice_id 가 있을 때만 표시) ──
+var INV_BASE='https://hhc-3p8.pages.dev';
+var INV_APP_KEY='hhc_insp_invoice_app';
+var INV_CANDS=['hhc-invoice.html','hhcinvoice.html'];
+function invAppFile(){try{return localStorage.getItem(INV_APP_KEY)||INV_CANDS[0];}catch(e){return INV_CANDS[0];}}
+async function resolveInvApp(){
+  try{
+    var cached=localStorage.getItem(INV_APP_KEY);
+    if(cached)return cached;
+  }catch(e){}
+  for(var i=0;i<INV_CANDS.length;i++){
+    try{
+      var r=await fetch(INV_BASE+'/'+INV_CANDS[i],{headers:{Range:'bytes=0-4000'}});
+      if(!r.ok)continue;
+      var t=await r.text();
+      if(t.indexOf('HHC Invoice')>=0){try{localStorage.setItem(INV_APP_KEY,INV_CANDS[i]);}catch(e){}return INV_CANDS[i];}
+    }catch(e){}
+  }
+  return INV_CANDS[0];
+}
+function invPublicUrl(id,lang){
+  return INV_BASE+'/'+invAppFile()+'?view='+encodeURIComponent(id)+'&lang='+(lang||'ko');
+}
+window.renderInvoiceCard=function(d){
+  var host=document.getElementById('inv-link-card');
+  if(!host)return;
+  d=d||{};
+  var id=(d.invoice_id||'').trim();
+  if(!id){host.innerHTML='';return;}
+  var ko=(currentLang||'ko')==='ko';
+  var st=(d.invoice_status||'billing');
+  var stCls=st==='paid'?'paid':(st==='overdue'?'over':'');
+  var stTxt=ko?(st==='paid'?'결제완료':(st==='overdue'?'연체':'청구중'))
+              :(st==='paid'?'Paid':(st==='overdue'?'Overdue':'Billing'));
+  var tot=(d.invoice_total||'').toString();
+  var totTxt=tot?('RM '+(isNaN(parseFloat(tot))?tot:parseFloat(tot).toFixed(2))):'—';
+  host.innerHTML=
+    '<div class="inv-card">'+
+      '<div class="inv-card-h"><div class="ic">🧾</div>'+
+        '<div><div class="tt">'+(ko?'연결된 인보이스':'Related Invoice')+'</div></div>'+
+        '<div class="st '+stCls+'">'+stTxt+'</div></div>'+
+      '<div class="inv-card-b">'+
+        '<div class="inv-meta">'+
+          '<div class="kv"><div class="k">'+(ko?'인보이스 번호':'Invoice No.')+'</div><div class="v">'+id.replace(/[<>&]/g,'')+'</div></div>'+
+          (d.invoice_date?'<div class="kv"><div class="k">'+(ko?'발행일':'Issued')+'</div><div class="v">'+d.invoice_date.replace(/[<>&]/g,'')+'</div></div>':'')+
+          '<div class="kv"><div class="k">'+(ko?'청구금액':'Total')+'</div><div class="v">'+totTxt+'</div></div>'+
+        '</div>'+
+        '<a class="inv-open" id="inv-open-a" href="'+invPublicUrl(id,currentLang||'ko')+'" target="_blank" rel="noopener">'+
+          (ko?'🧾 인보이스 열기':'🧾 View Invoice')+'</a>'+
+      '</div></div>';
+  resolveInvApp().then(function(){
+    var a=document.getElementById('inv-open-a');
+    if(a)a.href=invPublicUrl(id,currentLang||'ko');
+  });
+  window._invCardData=d;
+};
+window.addEventListener('hhc-lang-change',function(){if(window._invCardData)window.renderInvoiceCard(window._invCardData);});
+
 var params=new URLSearchParams(location.search);
 var rid=params.get('id');
 var initLang=params.get('lang')||'ko';
@@ -1350,7 +1428,7 @@ if(rid){
   document.body.appendChild(lov);
   getDoc(doc(DB,'inspections',rid)).then(function(snap){
     lov.remove();
-    if(snap.exists()){window.renderReport(snap.data());}
+    if(snap.exists()){window.renderReport(snap.data());window.renderInvoiceCard(snap.data());}
     else{lov.style.color='#c0392b';lov.innerHTML='보고서를 찾을 수 없습니다.';document.body.appendChild(lov);}
   }).catch(function(){lov.remove();window.renderReport(window.getSampleData());});
 }else{
