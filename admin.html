@@ -1121,6 +1121,16 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
               <input id="f-date" type="date" class="field-input sm">
             </div>
           </div>
+          <div class="fg" style="margin-top:10px">
+            <div class="field">
+              <label class="field-label">계약 상태 / Status</label>
+              <div style="display:flex;gap:7px;align-items:center">
+                <button type="button" id="st-active" onclick="setContractStatus('active')" style="font-size:12.5px;font-weight:800;border-radius:9px;padding:9px 20px;border:1.5px solid var(--border);background:#fff;color:var(--text3);cursor:pointer;font-family:inherit">✅ 유효</button>
+                <button type="button" id="st-ended" onclick="setContractStatus('ended')" style="font-size:12.5px;font-weight:800;border-radius:9px;padding:9px 20px;border:1.5px solid var(--border);background:#fff;color:var(--text3);cursor:pointer;font-family:inherit">⏹ 종료</button>
+                <span style="font-size:11px;color:var(--text3)">종료로 저장하면 목록·고객 발송 화면에 회색으로 표시됩니다</span>
+              </div>
+            </div>
+          </div>
           <div class="fg c2" style="margin-top:10px">
             <div class="field">
               <label class="field-label">계약자명 / Name</label>
@@ -1487,6 +1497,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
     </select>
     <button id="btn-list-reset" style="padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;color:var(--text3);cursor:pointer;flex-shrink:0">초기화</button>
   </div>
+  <div id="list-st-chips" style="display:flex;gap:6px;margin-bottom:10px"></div>
   <div id="list-count" style="font-size:11px;color:var(--text3);margin-bottom:8px"></div>
   <div id="list-empty" class="empty-st">
     <div class="empty-title">저장된 계약이 없습니다</div>
@@ -2408,6 +2419,16 @@ document.getElementById('tab-nav').addEventListener('click',e=>{
   if(b&&b.dataset.tab)switchTab(b.dataset.tab);
 });
 
+// ── 계약 상태 (유효/종료) ──
+let currentContractStatus='active';
+window.setContractStatus=function(st){
+  currentContractStatus=(st==='ended')?'ended':'active';
+  const a=document.getElementById('st-active'),b=document.getElementById('st-ended');
+  if(a){const on=currentContractStatus==='active';a.style.background=on?'#ecfdf5':'#fff';a.style.borderColor=on?'#059669':'var(--border)';a.style.color=on?'#059669':'var(--text3)';}
+  if(b){const on=currentContractStatus==='ended';b.style.background=on?'#f1f5f9':'#fff';b.style.borderColor=on?'#94a3b8':'var(--border)';b.style.color=on?'#475569':'var(--text3)';}
+};
+setTimeout(()=>setContractStatus('active'),0);
+
 // ── FORM ──
 function getFormData(){
   const benefits={};
@@ -2426,6 +2447,7 @@ function getFormData(){
     benefits:JSON.stringify(benefits),
     usage_history:JSON.stringify(currentUsageHistory),
     contract_type:currentContractType,
+    status:currentContractStatus,
     updated_at:new Date().toISOString(),
   };
 }
@@ -2444,6 +2466,7 @@ function loadFormData(r){
   document.querySelectorAll('input[name="svc"]').forEach(x=>{x.checked=parseInt(x.value)===st;});
   document.querySelectorAll('.svc-opt').forEach((o,i)=>o.classList.toggle('sel',i===st));
   currentContractType=r.contract_type||'residential';
+  setContractStatus(r.status||'active');
   document.querySelectorAll('[data-ctype]').forEach(b=>b.classList.toggle('active',b.dataset.ctype===currentContractType));
   const bens=typeof r.benefits==='string'?JSON.parse(r.benefits||'{}'):(r.benefits||{});
   document.querySelectorAll('[data-benefit]').forEach(cb=>{
@@ -2466,6 +2489,7 @@ function resetForm(){
   currentEditId=null;currentUsageHistory=[];
   document.getElementById('f-date').value=today();
   ['f-name','f-phone','f-terms','f-terms-en'].forEach(id=>document.getElementById(id).value='');
+  setContractStatus('active');
   document.getElementById('f-package').value='';
   document.getElementById('f-paid').value='';
   document.getElementById('f-bonus').value='';
@@ -2933,6 +2957,11 @@ function restoreContractDraftBanner(){
 }
 
 // ── LIST ──
+let listStFilter='all';
+document.getElementById('list-st-chips').addEventListener('click',e=>{
+  const el=e.target.closest('[data-stf]');if(!el)return;
+  listStFilter=el.dataset.stf;renderList();
+});
 function renderList(){
   const empty=document.getElementById('list-empty');
   const wrap=document.getElementById('list-wrap');
@@ -2950,8 +2979,18 @@ function renderList(){
   // 정렬
   const sortVal=document.getElementById('list-sort')?.value||'name';
 
+  // 상태 필터 칩 (전체/유효/종료)
+  const stOf=c=>(c.status==='ended')?'ended':'active';
+  const nAct=allContracts.filter(c=>stOf(c)==='active').length;
+  const nEnd=allContracts.length-nAct;
+  const chipHost=document.getElementById('list-st-chips');
+  if(chipHost){
+    const mk=(v,lb,n)=>'<span data-stf="'+v+'" style="cursor:pointer;font-size:11.5px;font-weight:800;border-radius:16px;padding:6px 13px;border:1.5px solid '+(listStFilter===v?'var(--indigo)':'var(--border)')+';background:'+(listStFilter===v?'var(--indigo)':'#fff')+';color:'+(listStFilter===v?'#fff':'var(--text3)')+'">'+lb+' '+n+'</span>';
+    chipHost.innerHTML=mk('all','전체',allContracts.length)+mk('active','✅ 유효',nAct)+mk('ended','⏹ 종료',nEnd);
+  }
   // 필터링
   let filtered=allContracts.filter(c=>{
+    if(listStFilter!=='all'&&stOf(c)!==listStFilter)return false;
     if(!searchVal)return true;
     return (c.name||'').toLowerCase().includes(searchVal)||
            (c.phone||'').toLowerCase().includes(searchVal);
@@ -2985,9 +3024,13 @@ function renderList(){
     const disc=h.reduce((s,u)=>s+(parseFloat(u.discount)||0),0);
     const carry=h.reduce((s,u)=>s+(parseFloat(u.carryover)||0),0);
     const remain=total-used+disc+carry;
-    return `<tr>
+    const ended=c.status==='ended';
+    const stBadge=ended
+      ?'<span style="font-size:10px;font-weight:800;border-radius:5px;padding:2px 7px;background:#f1f5f9;color:#64748b;margin-left:5px">⏹ 종료</span>'
+      :'<span style="font-size:10px;font-weight:800;border-radius:5px;padding:2px 7px;background:#ecfdf5;color:#059669;margin-left:5px">✅ 유효</span>';
+    return `<tr${ended?' style="opacity:.62;background:#f8fafc"':''}>
       <td>${c.contract_date||''}</td>
-      <td style="font-weight:600">${c.name||''}</td>
+      <td style="font-weight:600">${c.name||''}${stBadge}</td>
       <td style="color:var(--text3)">${c.phone||''}</td>
       <td><span class="pkg-badge">${pkg?pkg.label:'-'}</span></td>
       <td style="text-align:right">RM ${fmt(c.amount_paid)}</td>

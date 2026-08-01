@@ -56,7 +56,11 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 /* voucher */
 .vcard{display:block;text-decoration:none;background:linear-gradient(120deg,#4c2f8f,#7c3aed 60%,#a855f7);border-radius:15px;padding:15px 17px;color:#fff;box-shadow:0 8px 22px rgba(124,58,237,.35);position:relative;overflow:hidden;margin-bottom:9px}
 .vcard:before{content:'';position:absolute;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.12);top:-50px;right:-30px}
-.vcard.used{filter:grayscale(.75);opacity:.75}
+.vcard.used{filter:grayscale(.8);opacity:.72}
+.vcard .stb{position:absolute;top:11px;right:13px;font-size:9px;font-weight:900;border-radius:12px;padding:3px 9px;background:rgba(255,255,255,.92);z-index:1}
+.vcard .stb.ok{color:#059669}
+.vcard .stb.used{color:#64748b}
+.card.dim{opacity:.65;background:#f8fafc}
 .vcard .vt{font-size:10px;font-weight:800;opacity:.8;letter-spacing:.08em}
 .vcard .vv{font-size:21px;font-weight:900;margin-top:2px}
 .vcard .vd{font-size:10.5px;opacity:.9;margin-top:7px;display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1}
@@ -93,14 +97,14 @@ const T={
       inv:'💳 인보이스',ins:'🔧 점검보고서',ct:'📑 계약서',cp:'🎫 상품권',see:'보기 ↗',ea:'건',vch:'장',
       st:{paid:'결제완료',billing:'청구중',overdue:'연체',draft:'작성중'},valid:'유효',usageN:'이용내역',start:'시작',
       insp:{inspect:'에어컨 점검 보고서',dispatch:'출장 보고서',install:'설치 기술보고서',washer:'세탁기 점검 보고서'},
-      linked:'🧾 인보이스 연결',expiry:'유효기간',active:'사용가능',usedv:'사용완료',recv:'받는분',
+      linked:'🧾 인보이스 연결',expiry:'유효기간',active:'사용가능',usedv:'사용완료',recv:'받는분',ended:'⏹ 종료',validB:'✅ 유효',okCnt:'사용가능',usedCnt:'사용완료',
       wa:'💬 WhatsApp 문의',rq:'📋 서비스 의뢰',notfound:'고객 정보를 찾을 수 없습니다.<br>링크를 다시 확인해 주세요.',
       foot:'본 페이지는 열 때마다 최신 내용으로 갱신됩니다.'},
   en:{my:'My Service Overview',asof:'as of',bal:'MEMBERSHIP BALANCE',used:'Used',paid:'Paid',cdate:'Contract',cnt:'Services',bonus:'Bonus',
       inv:'💳 Invoices',ins:'🔧 Inspection Reports',ct:'📑 Contracts',cp:'🎫 Gift Vouchers',see:'View ↗',ea:'',vch:'',
       st:{paid:'Paid',billing:'Billed',overdue:'Overdue',draft:'Draft'},valid:'Active',usageN:'entries',start:'started',
       insp:{inspect:'Aircon Inspection Report',dispatch:'Dispatch Report',install:'Installation Report',washer:'Washer Inspection Report'},
-      linked:'🧾 Invoice linked',expiry:'Valid until',active:'Available',usedv:'Used',recv:'To',
+      linked:'🧾 Invoice linked',expiry:'Valid until',active:'Available',usedv:'Used',recv:'To',ended:'⏹ Ended',validB:'✅ Active',okCnt:'available',usedCnt:'used',
       wa:'💬 WhatsApp',rq:'📋 Request Service',notfound:'Customer not found.<br>Please check your link.',
       foot:'This page always shows your latest records when opened.'}
 };
@@ -173,7 +177,10 @@ function render(){
   const name=m.name||'고객';
   const init=name.trim().charAt(0).toUpperCase();
   let member=m.member||'';
-  if(!member&&DATA.contracts.length)member='패키지 - '+pkgLb(DATA.contracts[0].package_id);
+  if(!member&&DATA.contracts.length){
+    const actC0=DATA.contracts.find(c=>c.status!=='ended')||DATA.contracts[0];
+    member='패키지 - '+pkgLb(actC0.package_id);
+  }
   let h='';
   // ── hero ──
   h+='<div class="hero"><div class="hh"><span class="mark">HHC</span><b>Happy Home Care</b>'+
@@ -186,14 +193,15 @@ function render(){
   h+='<div class="body">';
   // ── balance (계약이 있고 ct 노출일 때) ──
   if(VIS.includes('ct')&&DATA.contracts.length){
-    const b=balCalc(DATA.contracts[0]);
+    const actC=DATA.contracts.find(c=>c.status!=='ended')||DATA.contracts[0];
+    const b=balCalc(actC);
     const pct=b.total>0?Math.max(0,Math.min(100,Math.round(b.remain/b.total*100))):0;
     h+='<div class="balcard"><div class="lb">'+L.bal+'</div>'+
        '<div class="val">RM '+fmt0(Math.floor(b.remain))+'<small>.'+(fmt(b.remain).split('.')[1]||'00')+'</small></div>'+
        '<div class="bar"><i style="width:'+pct+'%"></i></div>'+
        '<div class="bar-lb"><span>'+L.used+' RM '+fmt0(b.netUsed)+'</span><span>'+L.paid+' RM '+fmt0(b.total)+'</span></div>'+
        '<div class="balrow">'+
-       '<div><div class="k">'+L.cdate+'</div><div class="v">'+esc((DATA.contracts[0].contract_date||'').replace(/-/g,'.')||'—')+'</div></div>'+
+       '<div><div class="k">'+L.cdate+'</div><div class="v">'+esc((actC.contract_date||'').replace(/-/g,'.')||'—')+'</div></div>'+
        '<div><div class="k">'+L.cnt+'</div><div class="v">'+b.cnt+(LANG==='ko'?'회':'')+'</div></div>'+
        '<div><div class="k">'+L.bonus+'</div><div class="v">RM '+fmt0(b.bonus)+'</div></div>'+
        '</div></div>';
@@ -226,22 +234,27 @@ function render(){
   // ── contracts ──
   if(VIS.includes('ct')&&DATA.contracts.length){
     h+='<div class="sec"><div class="sh">'+L.ct+'<span class="n">'+DATA.contracts.length+L.ea+'</span></div>';
-    DATA.contracts.forEach(x=>{
+    DATA.contracts.slice().sort((a,b)=>((a.status==='ended')?1:0)-((b.status==='ended')?1:0)).forEach(x=>{
       let cnt=0;try{const hh=typeof x.usage_history==='string'?JSON.parse(x.usage_history||'[]'):(x.usage_history||[]);cnt=hh.length;}catch(e){}
-      h+='<a class="card" target="_blank" rel="noopener" href="'+BASE+'/admin.html?view='+encodeURIComponent(x.__id)+'&mode=all&lang='+LANG+'">'+
-         '<div class="cico ct">📑</div><div class="cm"><div class="t">'+esc(pkgLb(x.package_id)||'패키지')+' <span class="chip ok">'+L.valid+'</span></div>'+
+      const ended=x.status==='ended';
+      h+='<a class="card'+(ended?' dim':'')+'" target="_blank" rel="noopener" href="'+BASE+'/admin.html?view='+encodeURIComponent(x.__id)+'&mode=all&lang='+LANG+'">'+
+         '<div class="cico ct">📑</div><div class="cm"><div class="t">'+esc(pkgLb(x.package_id)||'패키지')+
+         (ended?' <span class="chip" style="background:#f1f5f9;color:#64748b">'+L.ended+'</span>':' <span class="chip ok">'+L.validB+'</span>')+'</div>'+
          '<div class="d">'+esc(x.contract_date||'')+' '+L.start+' · '+L.usageN+' '+cnt+L.ea+'</div></div><div class="go">'+L.see+'</div></a>';
     });
     h+='</div>';
   }
   // ── coupons ──
   if(VIS.includes('cp')&&DATA.coupons.length){
-    h+='<div class="sec"><div class="sh">'+L.cp+'<span class="n">'+DATA.coupons.length+L.vch+'</span></div>';
-    DATA.coupons.forEach(x=>{
+    const okN=DATA.coupons.filter(x=>x.status==='active').length;
+    const usedN=DATA.coupons.length-okN;
+    h+='<div class="sec"><div class="sh">'+L.cp+'<span class="n">'+L.okCnt+' '+okN+' · '+L.usedCnt+' '+usedN+'</span></div>';
+    DATA.coupons.slice().sort((a,b)=>((a.status==='active')?0:1)-((b.status==='active')?0:1)).forEach(x=>{
       const active=x.status==='active';
       h+='<a class="vcard'+(active?'':' used')+'" target="_blank" rel="noopener" href="'+BASE+'/coupon.html?id='+encodeURIComponent(x.__id)+(LANG==='en'?'&lang=en':'')+'">'+
+         '<span class="stb '+(active?'ok':'used')+'">'+(active?'✓ '+L.active:L.usedv)+'</span>'+
          '<div class="vt">GIFT VOUCHER</div><div class="vv">'+esc(x.value||'')+'</div>'+
-         '<div class="vd"><span>'+L.expiry+' '+esc(x.expiry||'—')+' · '+(active?L.active:L.usedv)+
+         '<div class="vd"><span>'+L.expiry+' '+esc(x.expiry||'—')+
          (x.receiver?' · '+L.recv+' '+esc(x.receiver):'')+'</span><span class="code">'+esc(x.code||'')+'</span></div></a>';
     });
     h+='</div>';

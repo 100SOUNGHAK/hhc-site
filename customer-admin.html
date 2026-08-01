@@ -398,7 +398,10 @@ window.openDrawer=function(idx){
   h+='<div class="dcard"><div class="dcard-h">📑 계약서<span class="cnt">'+e.docs.contracts.length+'건</span>'+hdrLink('contracts')+'</div>';
   h+=e.docs.contracts.length?e.docs.contracts.map(x=>{
     let usage=[];try{usage=typeof x.usage_history==='string'?JSON.parse(x.usage_history||'[]'):(x.usage_history||[]);}catch(_){ }
-    return '<div class="drow"><span class="id">'+esc(pkgLabel(x.package_id)||'패키지')+'</span><span class="pill ok">납입 '+fmtRM(x.amount_paid)+'</span><span class="m">'+esc(x.contract_date||'')+' · 이용내역 '+usage.length+'건</span><a class="open-btn" target="_blank" href="'+BASE+'/admin.html?view='+encodeURIComponent(x.__id)+'&mode=all&lang=ko">↗ 열기</a>'+rowBtns('contracts',x.__id)+'</div>';
+    const ctEnded=x.status==='ended';
+    return '<div class="drow"'+(ctEnded?' style="opacity:.6;background:#f8fafc"':'')+'><span class="id">'+esc(pkgLabel(x.package_id)||'패키지')+'</span>'+
+      (ctEnded?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏹ 종료</span>':'<span class="pill ok">✅ 유효</span>')+
+      '<span class="pill blue">납입 '+fmtRM(x.amount_paid)+'</span><span class="m">'+esc(x.contract_date||'')+' · 이용내역 '+usage.length+'건</span><a class="open-btn" target="_blank" href="'+BASE+'/admin.html?view='+encodeURIComponent(x.__id)+'&mode=all&lang=ko">↗ 열기</a>'+rowBtns('contracts',x.__id)+'</div>';
   }).join(''):'<div class="dnone">계약서 없음</div>';
   h+='</div>';
   // 상품권
@@ -739,7 +742,8 @@ window.caDocEdit=function(coll,id){
     body=fi('client','고객명',x.client||'')+fi('phone','연락처',x.phone||'')+fi('date','날짜',x.date||'','YYYY-MM-DD')+
       sel('type','종류',x.type||'inspect',[['inspect','점검'],['dispatch','출장'],['install','설치'],['washer','세탁기']])+fi('addr','주소',x.addr||'');
   }else if(coll==='contracts'){
-    body=fi('name','계약자명',x.name||'')+fi('phone','연락처',x.phone||'')+fi('contract_date','계약일',x.contract_date||'','YYYY-MM-DD');
+    body=fi('name','계약자명',x.name||'')+fi('phone','연락처',x.phone||'')+fi('contract_date','계약일',x.contract_date||'','YYYY-MM-DD')+
+      sel('status','계약 상태',(x.status==='ended')?'ended':'active',[['active','✅ 유효'],['ended','⏹ 종료']]);
   }else{
     body=fi('name','구매고객명',x.name||'')+fi('receiver','받는분 (선택)',x.receiver||'')+fi('value','금액/할인',x.value||'')+
       fi('expiry','유효기간',x.expiry||'','YYYY-MM-DD')+sel('status','상태',x.status||'active',[['active','사용가능'],['used','사용완료'],['void','취소']]);
@@ -751,7 +755,7 @@ window.caDocEdit=function(coll,id){
     let upd={};
     if(coll==='invoices')upd={'customer.name':v.cname,'customer.phone':v.cphone,date:v.date,status:v.status};
     else if(coll==='inspections')upd={client:v.client,phone:v.phone,date:v.date,type:v.type,addr:v.addr};
-    else if(coll==='contracts')upd={name:v.name,phone:v.phone,contract_date:v.contract_date};
+    else if(coll==='contracts')upd={name:v.name,phone:v.phone,contract_date:v.contract_date,status:v.status};
     else upd={name:v.name,receiver:v.receiver,value:v.value,expiry:v.expiry,status:v.status};
     try{
       await updateDoc(doc(db,coll,id),upd);
