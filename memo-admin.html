@@ -94,7 +94,7 @@ textarea.fi{resize:vertical;line-height:1.6}
 .mc b i{width:15px;height:15px;border-radius:50%;border:2px solid #cbd5e1;font-style:normal;flex-shrink:0}
 .mc.on b i{border-color:var(--pri);background:radial-gradient(circle,var(--pri) 0 42%,#fff 45%)}
 .mc .tag{margin-left:auto;font-size:9.5px;font-weight:800;color:var(--ink3);background:var(--bg);border-radius:20px;padding:3px 8px}
-.mc p{font-size:11.5px;color:var(--ink2);line-height:1.6;margin-top:8px;background:var(--bg);border-radius:9px;padding:10px}
+.mc p{font-size:11.5px;color:var(--ink2);line-height:1.6;margin-top:8px;background:var(--bg);border-radius:9px;padding:10px;white-space:pre-wrap;max-height:150px;overflow:auto}
 .mc.on p{background:#fff}
 .pv{background:#0B1833;border-radius:14px;padding:14px;margin-top:4px}
 .pv-h{font-size:10px;font-weight:800;color:#8fa0c9;letter-spacing:.05em;margin-bottom:9px}
@@ -208,9 +208,23 @@ function today(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth
 function nowIso(){return new Date().toISOString();}
 
 // ── 메시지 템플릿 ──────────────────────────────
-// ① 지금 바로 방문  ② 방문 예정일·시각 안내
+// ① 지금 바로 방문  ② 방문 예정일·시각 안내  ③ 매니지먼트 작업방문등록 안내
+// ▼ 회사·차량·직원 정보가 바뀌면 아래 두 줄만 고치면 됩니다
+const REG_CAR='KDV 8859, VJW 2582';
+const REG_STAFF=[['SHAHIN','B00655480'],['REBON','WJ0231305'],['ASIB','BJ0861068'],['SALAM','EJ0208298'],['RAHMAN','BX0562957']];
+const REG_CO='Happy Works Services Sdn.Bhd.';
+function regBody(){
+  return '📋 작업방문등록 필요 정보\n'+
+    '────────────────\n'+
+    '🏢 회사명: '+REG_CO+'\n'+
+    '🚗 차량: '+REG_CAR+'\n'+
+    '👷 직원:\n'+
+    REG_STAFF.map(x=>'  • '+x[0]+(' '.repeat(Math.max(1,9-x[0].length)))+x[1]).join('\n')+'\n'+
+    '────────────────';
+}
 function tplText(m,n){
   const name=(m.name||'').trim()||'고객';
+  if(n===3)return '네. 감사합니다. 저희 점검직원 방문 전까지 매니지먼트에 작업방문등록을 반드시 완료 부탁드립니다\n'+regBody();
   if(n===1)return name+'님. 지금 방문드릴수 있을꺼 같아 가능하신지 확인 연락드립니다.';
   const d=String(m.visit_date||'');const t=String(m.visit_time||'');
   const mo=parseInt(d.slice(5,7),10)||0, dy=parseInt(d.slice(8,10),10)||0;
@@ -219,6 +233,7 @@ function tplText(m,n){
 }
 function tplHtml(m,n){
   const name=esc((m.name||'').trim()||'고객');
+  if(n===3)return '네. 감사합니다. 저희 점검직원 방문 전까지 매니지먼트에 <span class="hl">작업방문등록</span>을 반드시 완료 부탁드립니다\n'+esc(regBody());
   if(n===1)return '<span class="hl">'+name+'</span>님. 지금 방문드릴수 있을꺼 같아 가능하신지 확인 연락드립니다.';
   const d=String(m.visit_date||'');const t=String(m.visit_time||'');
   const mo=parseInt(d.slice(5,7),10)||0, dy=parseInt(d.slice(8,10),10)||0;
@@ -505,7 +520,7 @@ window.closeSend=function(){document.getElementById('sd-mask').classList.remove(
 function paintSend(){
   const m=MEMOS.find(x=>x.__id===sendId);if(!m)return;
   const ok2=canTpl2(m);
-  if(!ok2)sendTpl=1;
+  if(!ok2&&sendTpl===2)sendTpl=1;
   const ch=m.channel||'other';
   document.getElementById('sd-body').innerHTML=
     '<div class="mtitle">보낼 메시지를 선택하세요</div>'+
@@ -513,6 +528,8 @@ function paintSend(){
       '<p>'+esc(tplText(m,1))+'</p></div>'+
     '<div class="mc'+(sendTpl===2?' on':'')+(ok2?'':' off')+'" data-tpl="2"><b><i></i>② 예정 시각 안내<span class="tag">'+(ok2?'방문 예정일 자동 반영':'방문 예정일 필요')+'</span></b>'+
       '<p>'+(ok2?esc(tplText(m,2)):'방문 예정일을 입력하면 사용할 수 있습니다.')+'</p></div>'+
+    '<div class="mc'+(sendTpl===3?' on':'')+'" data-tpl="3"><b><i></i>③ 작업방문등록 안내<span class="tag">고객 확인 후 발송</span></b>'+
+      '<p>'+esc(tplText(m,3))+'</p></div>'+
     '<div class="pv"><div class="pv-h">📱 고객에게 보이는 화면</div>'+
       '<div class="bub">'+tplHtml(m,sendTpl)+'</div>'+
       '<div class="sendrow">'+
@@ -524,6 +541,7 @@ function paintSend(){
       '</div></div>'+
     '<div class="note">노란 부분은 자동으로 채워집니다 — 이름은 등록된 고객명, 날짜·시각은 <b>방문 예정일/예정시각</b>에서 가져옵니다.<br>'+
       '<b>💚 왓챕</b>은 WhatsApp이 바로 열리며 메시지가 채워집니다. <b>💛 카톡</b>은 카카오톡이 외부 자동발송을 막고 있어 메시지를 복사해 드립니다 — 카톡에 붙여넣기만 하시면 됩니다.<br>'+
+      '<b>③ 작업방문등록 안내</b>는 고객이 방문에 동의한 뒤 보내는 메시지입니다 — 회사명·차량번호·직원 명단이 그대로 들어갑니다.<br>'+
       '발송하면 이 요청은 <b>📞 연락완료</b>로 자동 변경되고 발송 기록이 남습니다.</div>';
 }
 document.getElementById('sd-body').addEventListener('click',async ev=>{
