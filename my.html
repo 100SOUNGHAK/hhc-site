@@ -26,9 +26,10 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .sub{color:#8fa0c9;font-size:11.5px;margin-top:2px}
 .mem{display:inline-flex;align-items:center;gap:5px;margin-top:8px;background:linear-gradient(120deg,rgba(232,168,56,.18),rgba(232,168,56,.06));border:1px solid rgba(232,168,56,.45);color:#f3cd7e;font-size:11px;font-weight:800;border-radius:20px;padding:4px 12px}
 .body{padding:0 15px calc(20px + env(safe-area-inset-bottom));margin-top:-34px;position:relative;z-index:2}
+/* 잔액카드가 없을 때(계약 1건) : 히어로와 겹치지 않게 평평하게 */
+.hero.flat{padding-bottom:24px;border-radius:0 0 22px 22px}
+.body.nb{margin-top:0;padding-top:16px}
 .body.nb>.sec:first-child{margin-top:0}
-.body.nb>.sec:first-child>.sh{color:#fff}
-.body.nb>.sec:first-child>.sh .n{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.22);color:#cfd9f0}
 /* balance */
 .balcard{background:#fff;border-radius:18px;padding:17px;box-shadow:0 10px 30px rgba(11,24,51,.10)}
 .balcard .lb{font-size:10px;font-weight:800;color:var(--ink3);letter-spacing:.06em}
@@ -208,7 +209,7 @@ const T={
       wa:'💬 WhatsApp 문의',rq:'📋 서비스 의뢰',
       hpT:'가격/서비스 확인하기',hpS:'홈페이지에서 전체 서비스와 가격표를 확인하세요',hpB:'홈페이지 바로가기',notfound:'고객 정보를 찾을 수 없습니다.<br>링크를 다시 확인해 주세요.',
       foot:'본 페이지는 열 때마다 최신 내용으로 갱신됩니다.',
-      amtPaid:'결제 금액',amtBill:'청구 금액',amtDue:'미납 금액',more:'개 더',qtyU:'개',etcA:' 외 ',etcB:'건',svcU:'개 서비스',
+      amtPaid:'결제 금액',amtBill:'청구 금액',amtDue:'미납 금액',more:'개 더',qtyU:'개',etcA:' 외 ',etcB:'건',svcU:'개 서비스',pkgPre:'패키지 - ',
       ivGo:'인보이스 보기 →',ipGo:'📄 보고서 열기 →',ctGo:'📑 계약 상세 · 이용내역 보기 →',cpGo:'열기 →',
       unitsLb:'점검 대수',okLb:'정상',actLb:'조치 필요',
       noIssue:'✅ 이상 없음',needAct:'⚠️ 조치 필요',caution:'🔧 주의',dpDone:'✅ 완료',dpRevisit:'⏳ 재방문 필요',
@@ -222,7 +223,7 @@ const T={
       wa:'💬 WhatsApp',rq:'📋 Request Service',
       hpT:'Check Prices & Services',hpS:'See our full service list and price guide on the homepage',hpB:'Visit Homepage',notfound:'Customer not found.<br>Please check your link.',
       foot:'This page always shows your latest records when opened.',
-      amtPaid:'PAID',amtBill:'AMOUNT DUE',amtDue:'OVERDUE',more:' more',qtyU:'',etcA:' +',etcB:' more',svcU:' services',
+      amtPaid:'PAID',amtBill:'AMOUNT DUE',amtDue:'OVERDUE',more:' more',qtyU:'',etcA:' +',etcB:' more',svcU:' services',pkgPre:'Package · ',
       ivGo:'View invoice →',ipGo:'📄 Open report →',ctGo:'📑 Contract details →',cpGo:'Open →',
       unitsLb:'Units',okLb:'Normal',actLb:'Action',
       noIssue:'✅ No issues',needAct:'⚠️ Action needed',caution:'🔧 Caution',dpDone:'✅ Completed',dpRevisit:'⏳ Revisit needed',
@@ -241,8 +242,8 @@ function invTotal(inv){
   let t=0;(inv.items||[]).forEach(it=>{t+=(parseFloat(it.qty)||1)*(parseFloat(it.price)||0);});
   return t;
 }
-const PKG_LB={silver:'실버 Silver',royal:'로얄 Royal',gold:'골드 Gold',diamond:'다이아 Diamond',titanium:'티타늄 Titanium',special:'스페셜 Special'};
-function pkgLb(pid){pid=String(pid||'');const biz=/-biz$/.test(pid);const b=PKG_LB[pid.replace(/-biz$/,'')]||pid;return b+(biz?' (Biz)':'');}
+const PKG_LB={silver:['실버 Silver','Silver'],royal:['로얄 Royal','Royal'],gold:['골드 Gold','Gold'],diamond:['다이아 Diamond','Diamond'],titanium:['티타늄 Titanium','Titanium'],special:['스페셜 Special','Special']};
+function pkgLb(pid){pid=String(pid||'');const biz=/-biz$/.test(pid);const e=PKG_LB[pid.replace(/-biz$/,'')];const b=e?(LANG==='en'?e[1]:e[0]):pid;return b+(biz?' (Biz)':'');}
 function inspPage(t){return t==='install'?'install.html':(t==='washer'?'washer.html':'inspect.html');}
 function inspIco(t){return t==='install'?'🔩':(t==='washer'?'🧺':(t==='dispatch'?'🚗':'❄️'));}
 function inspTile(t){return t==='install'?'in':(t==='washer'?'wa':(t==='dispatch'?'ds':'ac'));}
@@ -308,23 +309,23 @@ function balCalc(c){
 function render(){
   const L=T[LANG];
   const m=DATA.m;
-  const name=m.name||'고객';
+  const name=m.name||(LANG==='en'?'Customer':'고객');
   const init=name.trim().charAt(0).toUpperCase();
   let member=m.member||'';
   if(!member&&DATA.contracts.length){
     const actC0=DATA.contracts.find(c=>c.status!=='ended')||DATA.contracts[0];
-    member='패키지 - '+pkgLb(actC0.package_id);
+    member=L.pkgPre+pkgLb(actC0.package_id);
   }
   let h='';
+  const showBal=VIS.includes('ct')&&DATA.contracts.length>1;
   // ── hero ──
-  h+='<div class="hero"><div class="hh"><span class="mark">HHC</span><b>Happy Home Care</b>'+
+  h+='<div class="hero'+(showBal?'':' flat')+'"><div class="hh"><span class="mark">HHC</span><b>Happy Home Care</b>'+
      '<span class="lang"><button id="l-ko" class="'+(LANG==='ko'?'on':'')+'">한국어</button><button id="l-en" class="'+(LANG==='en'?'on':'')+'">EN</button></span></div>'+
      '<div class="who"><div class="ava">'+esc(init)+'</div><div>'+
      '<div class="nm">'+esc(name)+(LANG==='ko'?' 님':'')+'</div>'+
      '<div class="sub">'+(LANG==='en'?(L.my+' · '+L.asof+' '+todayStr()):(L.my+' · '+todayStr()+' '+L.asof))+'</div>'+
      (member?'<div class="mem">👑 '+esc(member)+'</div>':'')+
      '</div></div></div>';
-  const showBal=VIS.includes('ct')&&DATA.contracts.length>1;
   h+='<div class="body'+(showBal?'':' nb')+'">';
   // ── balance (계약 2건 이상일 때 전체 합계) ──
   if(showBal){
