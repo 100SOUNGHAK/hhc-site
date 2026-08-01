@@ -2821,6 +2821,24 @@ async function saveContract(){
     if(!_ck){_isSaving=false;return;}
     if(_ck.phone&&_ck.phone!==data.phone){data.phone=_ck.phone;document.getElementById('f-phone').value=_ck.phone;}
   }
+  // ── 패키지 계약이면 이용내역에 회원제상품(PACKAGE MEMBERSHIP) 항목을 자동 기록 (이미 있으면 건너뜀) ──
+  if(data.package_id&&!currentUsageHistory.some(isMemberEntry)){
+    const _pk=PACKAGES.find(p=>p.id===data.package_id);
+    if(_pk){
+      const _en=(_pk.label.split('/')[1]||_pk.label).trim().toUpperCase();
+      const _pr=parseFloat(data.amount_paid)||_pk.price||0;
+      currentUsageHistory.push({
+        id:Date.now(),
+        date:data.contract_date||today(),
+        desc:'PACKAGE MEMBERSHIP PLAN- '+_en+' (RM '+_pr.toFixed(2)+' · 회원제상품, 잔액 미차감)',
+        desc_en:'PACKAGE MEMBERSHIP PLAN- '+_en+' (RM '+_pr.toFixed(2)+' · Membership, not deducted from balance)',
+        amount:'0',carryover:'0',discount:'0',
+        member_amount:_pr>0?_pr.toFixed(2):'0'
+      });
+      data.usage_history=JSON.stringify(currentUsageHistory);
+      renderUsage();
+    }
+  }
   showLoading(true);
   try{
     if(currentEditId){
