@@ -201,6 +201,14 @@ function invTotal(inv){
   let t=0;(inv.items||[]).forEach(it=>{t+=(parseFloat(it.qty)||1)*(parseFloat(it.price)||0);});
   return t;
 }
+// 기결제(일부 결제) 합계 — paidAmount 우선, 없으면 payments[] 합산
+function invPaid(inv){
+  if(inv.paidAmount!=null)return parseFloat(inv.paidAmount)||0;
+  let t=0;(inv.payments||[]).forEach(p=>{t+=parseFloat(p&&p.amt)||0;});
+  return t;
+}
+// 실제 청구(잔여) 금액 = 총액 - 기결제
+function invDue(inv){return Math.max(0,invTotal(inv)-invPaid(inv));}
 const INV_ST={paid:['결제완료','ok'],billing:['청구중','warn'],overdue:['연체','bad'],draft:['작성중','blue']};
 function inspPage(t){return t==='install'?'install.html':(t==='washer'?'washer.html':'inspect.html');}
 function inspLabel(t){return t==='install'?'🔩 설치':(t==='washer'?'🧺 세탁기':(t==='dispatch'?'🚗 출장':'🔍 점검'));}
@@ -416,7 +424,8 @@ window.openDrawer=function(idx){
   h+='<div class="dcard"><div class="dcard-h">💳 인보이스<span class="cnt">'+e.docs.invoices.length+'건 · '+fmtRM(e.docs.invoices.reduce((a,x)=>a+invTotal(x),0))+'</span>'+hdrLink('invoices')+'</div>';
   h+=e.docs.invoices.length?e.docs.invoices.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>{
     const st=INV_ST[x.status]||[x.status||'-','blue'];
-    return '<div class="drow"><span class="id">'+esc(x.id||x.__id)+'</span><span class="pill '+st[1]+'">'+esc(st[0])+'</span><span class="m">'+esc(x.date||'')+' · '+fmtRM(invTotal(x))+'</span><a class="open-btn" target="_blank" rel="noopener" data-t="💳 인보이스 '+esc(x.id||x.__id)+'" href="'+BASE+'/hhc-invoice.html?view='+encodeURIComponent(x.id||x.__id)+'&lang=ko" onclick="return caView(this.href,this.dataset.t,event)">↗ 열기</a>'+rowBtns('invoices',x.__id)+'</div>';
+    const _pd=invPaid(x),_pt=(x.status!=='paid'&&_pd>0.005);
+    return '<div class="drow"><span class="id">'+esc(x.id||x.__id)+'</span><span class="pill '+st[1]+'">'+esc(st[0])+'</span><span class="m">'+esc(x.date||'')+' · '+fmtRM(invTotal(x))+(_pt?' <b style="color:var(--ok)">(기결제 −'+fmtRM(_pd)+' · 잔여 '+fmtRM(invDue(x))+')</b>':'')+'</span><a class="open-btn" target="_blank" rel="noopener" data-t="💳 인보이스 '+esc(x.id||x.__id)+'" href="'+BASE+'/hhc-invoice.html?view='+encodeURIComponent(x.id||x.__id)+'&lang=ko" onclick="return caView(this.href,this.dataset.t,event)">↗ 열기</a>'+rowBtns('invoices',x.__id)+'</div>';
   }).join(''):'<div class="dnone">인보이스 없음</div>';
   h+='</div>';
   // 점검보고서
@@ -703,7 +712,8 @@ window.caSendModal=async function(idx){
         '<span data-t="revisit" style="flex:1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🔄 재방문 · 예약</span>'+
         '<span data-t="bill" style="flex:1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🧾 청구 안내</span>'+
       '</div>'+
-      '<div id="cs-bwarn" style="display:none;background:var(--warn-bg);color:var(--warn);border-radius:9px;padding:8px 11px;font-size:11px;font-weight:800;margin-top:7px">⚠️ 청구중 · 연체 상태의 인보이스가 없어 청구금액이 0 입니다</div>'+
+      '<div id="cs-bwarn" style="display:none;background:var(--warn-bg);color:var(--warn);border-radius:9px;padding:8px 11px;font-size:11px;font-weight:800;margin-top:7px">⚠️ 잔여 결제금액이 남은 청구중 · 연체 인보이스가 없어 청구금액이 0 입니다</div>'+
+      '<div id="cs-binfo" style="display:none;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:9px 11px;margin-top:7px"></div>'+
     '</div>'+
     '<div style="display:flex;align-items:center;gap:7px;margin-bottom:11px">'+
       '<span style="font-size:11px;font-weight:800;color:var(--ink3)">발송 언어</span>'+
@@ -741,11 +751,11 @@ window.caSendModal=async function(idx){
     if(state.tpl==='revisit')return [en?'* Services & prices':'* 서비스 및 가격 확인',en?'* Book a service':'* 서비스 예약 신청'].concat(rows).join('\n');
     return rows.join('\n');
   }
-  // 청구금액 = 「청구중」 + 「연체」 상태 인보이스 합계 (마이페이지 청구 금액 안내와 동일 규칙)
-  function billAmt(){
-    return (D.invoices||[]).filter(x=>x.status==='billing'||x.status==='overdue')
-      .reduce((a,x)=>a+invTotal(x),0);
-  }
+  // 청구금액 = 「청구중」+「연체」 인보이스의 **잔여 결제금액** 합계
+  //            (기결제/일부 결제가 있으면 그만큼 차감된다 · 마이페이지와 동일 규칙)
+  function billList(){return (D.invoices||[]).filter(x=>(x.status==='billing'||x.status==='overdue')&&invDue(x)>0.005);}
+  function billAmt(){return billList().reduce((a,x)=>a+invDue(x),0);}
+  function billPaid(){return billList().reduce((a,x)=>a+invPaid(x),0);}
   function msg(){
     const l=link(),en=!!state.en,nm=e.name||'',list=msgList();
     if(state.tpl==='bill'){
@@ -809,6 +819,22 @@ window.caSendModal=async function(idx){
     mk.querySelector('#cs-link').textContent=link();
     const bw=mk.querySelector('#cs-bwarn');
     if(bw)bw.style.display=(state.tpl==='bill'&&billAmt()<=0)?'block':'none';
+    const bi=mk.querySelector('#cs-binfo');
+    if(bi){
+      const bl=billList(),bp=billPaid();
+      if(state.tpl==='bill'&&bl.length){
+        bi.style.display='block';
+        bi.innerHTML='<div style="font-size:10.5px;font-weight:800;color:var(--ink3);margin-bottom:5px">청구금액 산출 내역</div>'+
+          bl.map(x=>{
+            const pd=invPaid(x);
+            return '<div style="display:flex;align-items:baseline;gap:7px;font-size:11px;padding:3px 0">'+
+              '<span style="font-weight:800;color:var(--ink2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.date||'')+' · '+esc(x.id||x.__id||'')+'</span>'+
+              (pd>0.005?'<span style="font-size:10px;font-weight:800;color:var(--ok);background:var(--ok-bg);border-radius:6px;padding:2px 6px;white-space:nowrap">기결제 −'+fmtRM(pd)+'</span>':'')+
+              '<span style="font-weight:900;color:var(--ink);white-space:nowrap">'+fmtRM(invDue(x))+'</span></div>';
+          }).join('')+
+          (bp>0.005?'<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--bdr);font-size:11px;font-weight:800;color:var(--ok)">✔️ 기결제 '+fmtRM(bp)+' 이 차감된 잔여 금액입니다</div>':'');
+      }else bi.style.display='none';
+    }
     const raw=msg();
     mk.querySelector('#cs-msg').innerHTML=msgHtml(raw);
     const ln=mk.querySelector('#cs-len');

@@ -142,6 +142,7 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .pyx-n{margin-left:auto;font-size:10.5px;font-weight:800;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);padding:4px 9px;border-radius:999px;white-space:nowrap}
 .pyx-msg{position:relative;margin-top:11px;font-size:13px;line-height:1.75;font-weight:700;word-break:keep-all}
 .pyx-am{font-size:24px;font-weight:900;letter-spacing:-.02em;font-variant-numeric:tabular-nums;text-shadow:0 2px 8px rgba(0,0,0,.25);white-space:nowrap}
+.pyx-pd{position:relative;margin-top:9px;display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.34);border-radius:999px;padding:6px 12px;font-size:11px;font-weight:800;letter-spacing:-.01em}
 .pyx-bank{position:relative;margin-top:12px;background:rgba(255,255,255,.96);border-radius:12px;padding:10px 13px;display:flex;flex-direction:column;gap:6px}
 .pyx-bk{display:flex;align-items:baseline;gap:10px;font-size:12px}
 .pyx-bk .k{flex:none;width:70px;font-size:10.5px;font-weight:800;color:#b45309}
@@ -167,6 +168,10 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .nsum{margin-top:9px;display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--ink2);background:#F7F9FC;border-radius:9px;padding:7px 10px}
 .nsum .dot{width:4px;height:4px;border-radius:50%;background:#a9b6cc;flex-shrink:0}
 .nsum .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.npd{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.npd span{font-size:9.5px;font-weight:800;border-radius:7px;padding:4px 8px;white-space:nowrap}
+.npd .t{background:#f1f4f9;color:var(--ink3)}
+.npd .p{background:var(--ok-bg);color:var(--ok)}
 .nfoot{display:flex;align-items:flex-end;gap:10px;margin-top:11px;padding-top:10px;border-top:1px dashed var(--bdr)}
 .nlb{font-size:9.5px;font-weight:800;color:var(--ink3);letter-spacing:.04em}
 .nam{font-size:20px;font-weight:900;letter-spacing:-.02em;margin-top:1px;line-height:1.1}
@@ -276,6 +281,7 @@ const T={
       ivGo:'인보이스 보기 →',ipGo:'📄 보고서 열기 →',ctGo:'📑 계약 상세 · 이용내역 보기 →',cpGo:'열기 →',
       unitsLb:'점검 대수',okLb:'정상',actLb:'조치 필요',
       pyxT:'청구 금액 안내',pyxBank:'결제은행',pyxAcct:'계좌번호',pyxHolder:'예금주',pyxMany:'청구중·연체 {n}건 합계',
+      pyxPaid:'기결제 {a} 차감 후 잔여 금액입니다',amtBal:'잔여 결제금액',paidPre:'기결제',ofTot:'총액',
       hubIvT:'인보이스',hubIvS:'INVOICE HISTORY',hubIpT:'점검보고서',hubIpS:'INSPECTION REPORTS',
       lastSvc:'최근 서비스일',lastInsp:'최근 점검일',totCnt:'총 건수',noDate:'기록 없음',
       ivOpen:'인보이스 내역 보기',ivClose:'인보이스 내역 닫기',ipOpen:'점검보고서 내역 보기',ipClose:'점검보고서 내역 닫기',
@@ -298,6 +304,7 @@ const T={
       ivGo:'View invoice →',ipGo:'📄 Open report →',ctGo:'📑 Contract details →',cpGo:'Open →',
       unitsLb:'Units',okLb:'Normal',actLb:'Action',
       pyxT:'Payment Due',pyxBank:'Bank',pyxAcct:'Account No.',pyxHolder:'Beneficiary',pyxMany:'{n} unpaid invoices',
+      pyxPaid:'Balance after deducting {a} already paid',amtBal:'BALANCE DUE',paidPre:'Paid',ofTot:'Total',
       hubIvT:'Invoices',hubIvS:'INVOICE HISTORY',hubIpT:'Inspection Reports',hubIpS:'INSPECTION REPORTS',
       lastSvc:'Last service',lastInsp:'Last inspection',totCnt:'Total',noDate:'No record',
       ivOpen:'View invoice history',ivClose:'Hide invoice history',ipOpen:'View report history',ipClose:'Hide report history',
@@ -320,6 +327,14 @@ function invTotal(inv){
   let t=0;(inv.items||[]).forEach(it=>{t+=(parseFloat(it.qty)||1)*(parseFloat(it.price)||0);});
   return t;
 }
+// 기결제(일부 결제) 합계 — paidAmount 우선, 없으면 payments[] 합산
+function invPaid(inv){
+  if(inv.paidAmount!=null)return parseFloat(inv.paidAmount)||0;
+  let t=0;(inv.payments||[]).forEach(p=>{t+=parseFloat(p&&p.amt)||0;});
+  return t;
+}
+// 실제 청구(잔여) 금액 = 총액 - 기결제
+function invDue(inv){return Math.max(0,invTotal(inv)-invPaid(inv));}
 const PKG_LB={silver:['실버 Silver','Silver'],royal:['로얄 Royal','Royal'],gold:['골드 Gold','Gold'],diamond:['다이아 Diamond','Diamond'],titanium:['티타늄 Titanium','Titanium'],special:['스페셜 Special','Special']};
 function pkgLb(pid){pid=String(pid||'');const biz=/-biz$/.test(pid);const e=PKG_LB[pid.replace(/-biz$/,'')];const b=e?(LANG==='en'?e[1]:e[0]):pid;return b+(biz?' (Biz)':'');}
 function inspPage(t){return t==='install'?'install.html':(t==='washer'?'washer.html':'inspect.html');}
@@ -468,9 +483,11 @@ function render(){
   }
   // ── 청구 금액 안내 (청구중 인보이스 금액·날짜 자동 반영) ──
   if(VIS.includes('iv')){
-    const pyL=DATA.invoices.filter(x=>x.status==='billing'||x.status==='overdue');   // 청구중 + 연체 합산
+    // 청구중 + 연체 중 「잔여 결제금액」이 남아 있는 건만 (기결제 완납 건은 제외)
+    const pyL=DATA.invoices.filter(x=>(x.status==='billing'||x.status==='overdue')&&invDue(x)>0.005);
     if(pyL.length){
-      const pyAmt=pyL.reduce((a,x)=>a+invTotal(x),0);
+      const pyAmt=pyL.reduce((a,x)=>a+invDue(x),0);          // 기결제 차감된 잔여 합계
+      const pyPd=pyL.reduce((a,x)=>a+invPaid(x),0);          // 이미 받은 금액
       const pd=dparse(pyL[0].date);
       const pyDate=pd?(LANG==='ko'?(pd.getFullYear()+'년 '+p2(pd.getMonth()+1)+'월 '+p2(pd.getDate())+'일'):dfmt(pyL[0].date)):'';
       const pyMsg=LANG==='ko'
@@ -481,6 +498,7 @@ function render(){
          '<div><div class="pyx-t">'+L.pyxT+'</div><div class="pyx-s">PAYMENT NOTICE</div></div>'+
          (pyL.length>1?'<span class="pyx-n">'+L.pyxMany.replace('{n}',pyL.length)+'</span>':'')+'</div>'+
          '<div class="pyx-msg">'+pyMsg+'</div>'+
+         (pyPd>0.005?'<div class="pyx-pd">\u2714\uFE0F '+L.pyxPaid.replace('{a}','RM '+fmt(pyPd))+'</div>':'')+
          '<div class="pyx-bank">'+
          '<div class="pyx-bk"><span class="k">'+L.pyxBank+'</span><span class="v">MAY BANK</span></div>'+
          '<div class="pyx-bk"><span class="k">'+L.pyxAcct+'</span><span class="v num">562179535697</span></div>'+
@@ -491,8 +509,8 @@ function render(){
   // ── invoices ──
   if(VIS.includes('iv')&&DATA.invoices.length){
     const ivSum=DATA.invoices.reduce((a,x)=>a+invTotal(x),0);
-    const ivDueList=DATA.invoices.filter(x=>x.status&&x.status!=='paid'&&x.status!=='draft');
-    const ivDue=ivDueList.reduce((a,x)=>a+invTotal(x),0);
+    const ivDueList=DATA.invoices.filter(x=>x.status&&x.status!=='paid'&&x.status!=='draft'&&invDue(x)>0.005);
+    const ivDue=ivDueList.reduce((a,x)=>a+invDue(x),0);   // 기결제 차감된 잔여 합계
     const ivLast=DATA.invoices[0]||{};
     h+='<div class="sec">';
     h+=hubBox('iv',{
@@ -515,14 +533,17 @@ function render(){
       const ib='';
       const dAgo=daysAgo(x.date);
       const sub=(x.status==='overdue'&&dAgo!=null&&dAgo>0)?(dAgo+L.dayAgo):wdLb(x.date);
-      const amLb=x.status==='paid'?L.amtPaid:(x.status==='overdue'?L.amtDue:L.amtBill);
-      const rs=fmt(invTotal(x)).split('.');
+      const xPd=invPaid(x),xDue=invDue(x);
+      const part=x.status!=='paid'&&xPd>0.005;          // 일부 결제된 미결제 인보이스
+      const amLb=x.status==='paid'?L.amtPaid:(part?L.amtBal:(x.status==='overdue'?L.amtDue:L.amtBill));
+      const rs=fmt(x.status==='paid'?invTotal(x):xDue).split('.');
       h+='<a class="ncard" target="_blank" rel="noopener" href="'+BASE+'/hhc-invoice.html?view='+encodeURIComponent(x.id||x.__id)+'&lang='+LANG+'">'+
          '<span class="stripe '+stc+'"></span><div class="nbody">'+
          '<div class="nrow1"><div class="ntile '+stc+'">'+ico+'</div>'+
          '<div style="flex:1;min-width:0"><div class="nid">'+esc(dfmt(x.date))+'</div>'+
          (sub?'<div class="ndate">'+esc(sub)+'</div>':'')+'</div>'+
          (st?'<span class="nst '+stc+'">'+esc(st)+'</span>':'')+'</div>'+ib+
+         (part?'<div class="npd"><span class="t">'+L.ofTot+' RM '+fmt(invTotal(x))+'</span><span class="p">'+L.paidPre+' \u2212RM '+fmt(xPd)+'</span></div>':'')+
          '<div class="nfoot"><div><div class="nlb">'+amLb+'</div>'+
          '<div class="nam'+(x.status==='overdue'?' bad':'')+'"><span class="cu">RM</span>'+rs[0]+'.'+(rs[1]||'00')+'</div></div>'+
          '<span class="nbtn">'+L.ivGo+'</span></div></div></a>';
