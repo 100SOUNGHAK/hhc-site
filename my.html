@@ -95,9 +95,10 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 @keyframes sp{to{transform:rotate(360deg)}}
 
 /* ══ v3 섹션 허브 박스 (인보이스 / 점검보고서) ══ */
-.hub{border-radius:19px;padding:16px 16px 15px;position:relative;overflow:hidden;box-shadow:0 9px 24px rgba(11,24,51,.24);color:#fff}
-.hub:before{content:'';position:absolute;width:170px;height:170px;border-radius:50%;background:rgba(255,255,255,.1);top:-70px;right:-50px}
-.hub:after{content:'';position:absolute;width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.07);bottom:-50px;right:24px}
+.hub{border-radius:19px;padding:16px 16px 15px;position:relative;box-shadow:0 9px 24px rgba(11,24,51,.24);color:#fff}
+.hubbg{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none}
+.hubbg:before{content:'';position:absolute;width:170px;height:170px;border-radius:50%;background:rgba(255,255,255,.1);top:-70px;right:-50px}
+.hubbg:after{content:'';position:absolute;width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.07);bottom:-50px;right:24px}
 .hub.iv{background:linear-gradient(135deg,#101f45,#1f3f95 55%,#3268da)}
 .hub.ip{background:linear-gradient(135deg,#053b37,#0a7a70 55%,#12b0a1)}
 .hubw{position:relative;z-index:1}
@@ -127,6 +128,9 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .hubcap:before{content:'';width:3px;height:12px;border-radius:3px;background:var(--indigo)}
 .hubls.ipl .hubcap:before{background:var(--teal)}
 .hubcap .c{margin-left:auto;font-size:9.5px;font-weight:800;color:var(--ink3)}
+.hubcls{width:100%;background:#fff;border:1px solid var(--bdr);color:var(--ink2);font-family:inherit;font-size:12px;font-weight:900;letter-spacing:-.01em;border-radius:13px;padding:13px;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;box-shadow:0 3px 12px rgba(11,24,51,.08)}
+.hubcls .up{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--ink);color:#fff;font-size:7px}
+.hubcls:active{transform:scale(.985)}
 /* ══ 청구 금액 안내 ══ */
 @keyframes pyxPulse{0%,100%{box-shadow:0 12px 28px -10px rgba(194,65,12,.55),0 0 0 0 rgba(245,158,11,.5)}55%{box-shadow:0 12px 28px -10px rgba(194,65,12,.55),0 0 0 10px rgba(245,158,11,0)}}
 .pyx{position:relative;border-radius:18px;padding:15px 16px 14px;background:linear-gradient(135deg,#7c2d12,#c2410c 52%,#ea8c00);color:#fff;overflow:hidden;animation:pyxPulse 2.8s ease-out infinite}
@@ -341,7 +345,7 @@ let OPEN={iv:false,ip:false};   // 인보이스/점검보고서 내역 펼침 �
 // 섹션 허브 박스 (계약서 카드와 동일한 박스형)
 function hubBox(kind,cfg){
   const open=OPEN[kind];
-  return '<div class="hub '+kind+'"><div class="hubw">'+
+  return '<div class="hub '+kind+'"><div class="hubbg"></div><div class="hubw">'+
     '<div class="hubt"><div class="hubic">'+cfg.ic+'</div>'+
     '<div style="flex:1;min-width:0"><div class="hubtt">'+esc(cfg.title)+'</div>'+
     '<div class="hubts">'+esc(cfg.sub)+'</div></div>'+
@@ -523,6 +527,7 @@ function render(){
          '<div class="nam'+(x.status==='overdue'?' bad':'')+'"><span class="cu">RM</span>'+rs[0]+'.'+(rs[1]||'00')+'</div></div>'+
          '<span class="nbtn">'+L.ivGo+'</span></div></div></a>';
     });
+    h+='<button type="button" class="hubcls" id="hub-cls-iv"><span class="up">\u25B2</span>'+esc(L.ivClose)+'</button>';
     h+='</div></div>';
   }
   // ── inspections ──
@@ -573,6 +578,7 @@ function render(){
          (x.invoice_id?'<span class="nst" style="background:var(--pri-bg);color:var(--pri)">'+L.linked+'</span>':'')+
          '<span class="nbtn">'+L.ipGo+'</span></div></a>';
     });
+    h+='<button type="button" class="hubcls" id="hub-cls-ip"><span class="up">\u25B2</span>'+esc(L.ipClose)+'</button>';
     h+='</div></div>';
   }
   // ── coupons ──
@@ -620,13 +626,24 @@ function render(){
   ['iv','ip'].forEach(k=>{
     const b=document.getElementById('hub-btn-'+k),ls=document.getElementById('hub-list-'+k);
     if(!b||!ls)return;
-    b.onclick=()=>{
-      OPEN[k]=!OPEN[k];
+    const hub=b.closest('.hub');
+    // 주의: scrollIntoView 는 overflow 를 가진 조상 박스 내부까지 스크롤시켜
+    //       제목이 박스 위로 밀려 잘리는 문제가 있어 window 스크롤만 사용한다.
+    const go=el=>{try{const y=el.getBoundingClientRect().top+window.scrollY-12;window.scrollTo({top:y<0?0:y,behavior:'smooth'});}catch(e){}};
+    const setSt=()=>{
       b.classList.toggle('open',OPEN[k]);
       const t=b.querySelector('.bt');
       if(t)t.textContent=b.getAttribute(OPEN[k]?'data-c':'data-o');
       ls.classList.toggle('open',OPEN[k]);
-      if(OPEN[k]){try{setTimeout(()=>b.scrollIntoView({behavior:'smooth',block:'center'}),60);}catch(e){}}
+    };
+    b.onclick=()=>{
+      OPEN[k]=!OPEN[k];setSt();
+      if(OPEN[k])setTimeout(()=>go(hub),80);   // 열면 박스 상단이 화면 위로 오게
+    };
+    const c=document.getElementById('hub-cls-'+k);
+    if(c)c.onclick=()=>{
+      OPEN[k]=false;setSt();
+      setTimeout(()=>go(hub),60);              // 하단에서 닫으면 박스 위치로 복귀
     };
   });
 }
