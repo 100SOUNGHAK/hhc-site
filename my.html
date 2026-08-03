@@ -480,7 +480,16 @@ async function load(){
   const m=snap.data()||{};
   const keys=[nn(m.name)].concat((m.aliases||[]).map(nn)).filter(Boolean);
   const mp=pn(m.phone);
-  const hit=(name,phone)=>((mp&&pn(phone)===mp)||(name&&keys.includes(nn(name))));
+  // ── 총괄 고객관리에서 수기로 연결(ca_link)한 문서도 함께 보여줍니다 ──
+  //  · 문서에 ca_link 가 있으면 그 값이 이 고객을 가리킬 때만 포함합니다.
+  //    (고객명·연락처가 달라도 포함 / 다른 고객에게 연결된 문서는 이름이 같아도 제외)
+  //  · ca_link 가 없으면 기존처럼 이름·연락처로 찾습니다.
+  const MYK=['m:'+CID,'k:'+nn(m.name)+'#'+pn(m.phone)];
+  const linked=x=>MYK.indexOf(x&&x.ca_link)>=0;
+  const hit=(name,phone,x)=>{
+    if(x&&x.ca_link)return linked(x);
+    return (mp&&pn(phone)===mp)||(!!name&&keys.includes(nn(name)));
+  };
   async function fetchColl(n){try{const s=await getDocs(collection(db,n));return s.docs.map(d=>{const x=d.data()||{};x.__id=d.id;return x;});}catch(e){return [];}}
   const [invs,insps,cts,cps]=await Promise.all([
     VIS.includes('iv')?fetchColl('invoices'):[],
@@ -490,10 +499,10 @@ async function load(){
   ]);
   DATA={
     m,
-    invoices:invs.filter(x=>hit(x.customer&&x.customer.name,x.customer&&x.customer.phone)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),
-    inspections:insps.filter(x=>hit(x.client,x.phone)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),
-    contracts:cts.filter(x=>hit(x.name,x.phone)),
-    coupons:cps.filter(x=>keys.includes(nn(x.name))||keys.includes(nn(x.receiver)))
+    invoices:invs.filter(x=>hit(x.customer&&x.customer.name,x.customer&&x.customer.phone,x)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),
+    inspections:insps.filter(x=>hit(x.client,x.phone,x)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),
+    contracts:cts.filter(x=>hit(x.name,x.phone,x)),
+    coupons:cps.filter(x=>x.ca_link?linked(x):(keys.includes(nn(x.name))||keys.includes(nn(x.receiver))))
   };
 }
 
