@@ -20,6 +20,13 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .search-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
 #q{flex:1;min-width:220px;border:1.5px solid var(--bdr);border-radius:10px;padding:10px 13px;font-size:13px;font-family:inherit;background:#fff}
 #q:focus{outline:none;border-color:var(--pri)}
+#sortby{border:1.5px solid var(--bdr);border-radius:10px;padding:10px 11px;font-size:12.5px;font-weight:700;font-family:inherit;background:#fff;color:var(--ink);cursor:pointer}
+#sortby:focus{outline:none;border-color:var(--pri)}
+.lk-warn{background:var(--warn-bg);border:1.5px solid #fbbf24;border-radius:10px;padding:10px 12px;font-size:12px;color:#92400e;line-height:1.65;margin:10px 0}
+.lk-keep{display:flex;gap:9px;align-items:flex-start;background:var(--bg);border:1.5px solid var(--bdr);border-radius:10px;padding:11px 12px;margin-bottom:4px;cursor:pointer}
+.lk-keep input{margin-top:2px;width:16px;height:16px;flex:none;accent-color:var(--pri)}
+.lk-keep b{display:block;font-size:12.5px;color:var(--ink)}
+.lk-keep span{display:block;font-size:11px;color:var(--ink3);line-height:1.5;margin-top:2px}
 .stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .st{background:#fff;border:1px solid var(--bdr);border-radius:10px;padding:8px 14px;font-size:11px;color:var(--ink2);font-weight:700}
 .st b{display:block;font-size:17px;color:var(--ink);font-weight:900}
@@ -115,6 +122,12 @@ select.fi{appearance:auto}
   </div>
   <div class="search-row">
     <input id="q" placeholder="🔍 이름 · 연락처 · 별칭 · 콘도명 검색" oninput="renderList()">
+    <select id="sortby" onchange="setSort(this.value)" title="정렬 기준">
+      <option value="name">🔤 이름순 (가나다)</option>
+      <option value="recent">🕘 최근 작성순</option>
+      <option value="oldest">📜 오래된 순</option>
+      <option value="docs">📄 기록 많은순</option>
+    </select>
   </div>
   <div class="stats" id="stats"></div>
   <div class="chips" id="chips"></div>
@@ -175,6 +188,8 @@ const PKG_LABEL={silver:'실버',royal:'로얄',gold:'골드',diamond:'다이아
 let db=null;
 let RAW={customers:[],contracts:[],invoices:[],inspections:[],coupons:[],requests:[],bookings:[],schedules:[],quotes:[]};
 let entries=[],mergeSug=[],curFilter='all',editTarget=null,drawerKey=null;
+// 정렬 기준 (name | recent | oldest | docs) — 마지막 선택을 기억합니다
+let curSort=(function(){try{return localStorage.getItem('hhc_ca_sort')||'name';}catch(e){return 'name';}})();
 // 「다른 고객입니다」로 처리한 병합 제안은 저장해 두고 다시 제안하지 않는다
 const MG_DISMISS_KEY='hhc_ca_merge_dismiss';
 let mgDismiss={};
@@ -300,7 +315,8 @@ function buildEntries(){
     if(!e){e=newEntry(x.name||x.receiver,'');entries.push(e);if(k1&&!byN[k1])byN[k1]=e;}
     e.docs.coupons.push(x);
   });
-  entries.sort((a,b)=>(a.name||'').localeCompare(b.name||'','ko'));
+  entries.forEach(e=>{e.ts=entryTime(e);});
+  sortEntries();
   // 병합 제안: 이름(또는 별칭)이 같은 서로 다른 항목
   mergeSug=[];
   const nameMap={};
@@ -319,6 +335,41 @@ function buildEntries(){
     }
   });
 }
+// ── 문서 1건의 「작성 시각」 : created_at 계열이 있으면 그것을, 없으면 날짜 필드를 사용 ──
+function docTS(coll,x){
+  const c=x.created_at||x.createdAt||x.created||x.updated_at||'';
+  if(c)return String(c);
+  if(coll==='contracts')return String(x.contract_date||'');
+  if(coll==='bookings')return String(x.booking_date||'');
+  if(coll==='coupons')return String(x.issuedAt||'');
+  if(coll==='quotes')return String(x.issueDate||x.date||'');
+  return String(x.date||'');
+}
+// 고객 1명의 「최근 작성」 = 고객 등록 시각과 모든 문서 작성 시각 중 가장 최신 값
+function entryTime(e){
+  let t=String((e.master&&(e.master.created_at||e.master.createdAt))||'');
+  Object.keys(e.docs).forEach(coll=>{
+    e.docs[coll].forEach(x=>{const v=docTS(coll,x);if(v>t)t=v;});
+  });
+  return t;
+}
+function sortEntries(){
+  const byName=(a,b)=>(a.name||'').localeCompare(b.name||'','ko');
+  if(curSort==='recent')      entries.sort((a,b)=>String(b.ts||'').localeCompare(String(a.ts||''))||byName(a,b));
+  else if(curSort==='oldest') entries.sort((a,b)=>{
+    const at=String(a.ts||''),bt=String(b.ts||'');
+    if(!at&&!bt)return byName(a,b);
+    if(!at)return 1;          // 작성 시각을 알 수 없는 건은 항상 뒤로
+    if(!bt)return -1;
+    return at.localeCompare(bt)||byName(a,b);
+  });
+  else if(curSort==='docs')   entries.sort((a,b)=>(docCount(b)-docCount(a))||byName(a,b));
+  else                        entries.sort(byName);
+}
+window.setSort=function(v){
+  curSort=v;try{localStorage.setItem('hhc_ca_sort',v);}catch(e){}
+  sortEntries();renderList();
+};
 function docCount(e){return Object.values(e.docs).reduce((a,arr)=>a+arr.length,0);}
 function isPkg(e){return /^패키지/.test(e.member||'')||e.docs.contracts.length>0;}
 function isVVIP(e){return (e.member||'').toUpperCase()==='VVIP';}
@@ -381,6 +432,7 @@ function memberBadge(e){
   return '';
 }
 function renderList(){
+  sortEntries();
   const qRaw=document.getElementById('q').value.trim();
   const q=sn(qRaw);
   const qNum=qRaw.replace(/[^0-9]/g,'');
@@ -405,7 +457,7 @@ function renderList(){
       '<div class="avatar">'+esc(init)+'</div>'+
       '<div><div class="cnm">'+esc(e.name||'(이름 없음)')+(e.aliases.length?'<span class="alias">별칭: '+esc(e.aliases.join(', '))+'</span>':'')+memberBadge(e)+(e.master?'':'<span class="pill vio">미등록</span>')+'</div>'+
       '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음 <span class="pill warn">보완 필요</span>')+(e.addr?' · '+esc(e.addr):'')+'</div>'+
-      '<div class="srcs">'+(srcs||'<span class="src qt">기록 없음</span>')+'</div></div>'+
+      '<div class="srcs">'+(srcs||'<span class="src qt">기록 없음</span>')+(e.ts?'<span class="src" style="background:#f3f4f6;color:#6b7280">🕘 '+esc(String(e.ts).slice(0,10))+'</span>':'')+'</div></div>'+
       '<div class="cbtns"><button class="btn sm p" onclick="openDrawer('+idx+')">상세 보기</button><button class="btn sm" onclick="openEditModal('+idx+')">✏️ 수정</button>'+(e.master?'<button class="btn sm" style="color:var(--bad);border-color:#fca5a5" onclick="caDelCustomer('+idx+')">✕ 삭제</button>':'')+'</div>'+
       '</div>';
   }).join('');
@@ -1057,14 +1109,28 @@ function docSummary(coll,x){
   if(coll==='quotes')return (x.qno||'견적')+' · '+(x.client||'')+' · '+(x.issueDate||'');
   return (x.title||x.customer_name||'일정')+' · '+(x.date||'');
 }
-function ownerFieldsFor(coll,e){
-  if(coll==='invoices')return {'customer.name':e.name,'customer.phone':e.phone||''};
-  if(coll==='inspections')return {client:e.name,phone:e.phone||''};
-  if(coll==='contracts')return {name:e.name,phone:e.phone||''};
-  if(coll==='bookings'||coll==='schedules')return {customer_name:e.name,customer_phone:e.phone||''};
-  if(coll==='quotes')return {client:e.name,phone:e.phone||''};
-  if(coll==='requests')return {phone:e.phone||''};
-  return {name:e.name};
+// 문서 종류별 「고객명 필드」 이름 — 이름을 바꿀 때만 사용
+function ownerNameKey(coll){
+  if(coll==='invoices')return 'customer.name';
+  if(coll==='inspections'||coll==='quotes')return 'client';
+  if(coll==='bookings'||coll==='schedules')return 'customer_name';
+  return 'name';   // contracts, coupons, requests
+}
+// 문서 종류별 「연락처 필드」 이름 — 상품권(coupons)은 연락처가 없음
+function ownerPhoneKey(coll){
+  if(coll==='invoices')return 'customer.phone';
+  if(coll==='bookings'||coll==='schedules')return 'customer_phone';
+  if(coll==='coupons')return '';
+  return 'phone';  // inspections, contracts, quotes, requests
+}
+// 연결 시 실제로 쓸 필드 : 기본은 「연락처만」 변경(문서의 고객명은 그대로 유지)
+// renameToo=true 이면 고객명까지 이 고객으로 바꿉니다.
+function ownerFieldsFor(coll,e,renameToo){
+  const f={};
+  const pk=ownerPhoneKey(coll);
+  if(pk)f[pk]=e.phone||'';
+  if(renameToo||!pk)f[ownerNameKey(coll)]=e.name;
+  return f;
 }
 function genericModal(title,bodyHTML,footHTML){
   const old=document.getElementById('ca-doc-mask');if(old)old.remove();
@@ -1084,7 +1150,7 @@ window.caDocLink=function(coll,idx){
     return (myP&&op===myP)||(on&&myKeys.includes(on));
   };
   const mk=genericModal(COLL_LB[coll]+' 연결 — '+esc(e.name),
-    '<p style="font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:10px">문서를 선택하면 이 고객('+esc(e.name)+') 소속으로 변경됩니다. 다른 고객에게 있던 문서는 이 고객에게로 옮겨집니다.</p>'+
+    '<p style="font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:10px">문서를 선택하면 이 고객(<b>'+esc(e.name)+'</b>) 소속으로 연결됩니다.<br>📌 <b>문서에 적힌 고객명은 기본적으로 그대로 유지</b>되며, 이름이 다르면 경고만 표시됩니다. 필요하면 확인 창에서 이름 변경을 선택할 수 있습니다.</p>'+
     '<input class="fi" id="ca-lk-q" placeholder="🔍 검색 (번호·이름·날짜)" style="margin-bottom:10px">'+
     '<div id="ca-lk-list" style="max-height:46vh;overflow-y:auto"></div>');
   const listEl=mk.querySelector('#ca-lk-list'),qEl=mk.querySelector('#ca-lk-q');
@@ -1104,17 +1170,48 @@ window.caDocLink=function(coll,idx){
   }
   draw();
   qEl.addEventListener('input',draw);
-  listEl.addEventListener('click',async ev=>{
+  listEl.addEventListener('click',ev=>{
     const el=ev.target.closest('.lk-row');if(!el||el.dataset.mine)return;
     const x=RAW[coll].find(d=>d.__id===el.dataset.id);if(!x)return;
-    const own=docOwnerName(coll,x);
-    if(!confirm((own?'현재 「'+own+'」 소속 문서입니다.\n':'')+'이 문서를 「'+e.name+'」 고객에게 연결할까요?\n\n'+docSummary(coll,x)))return;
-    try{
-      await updateDoc(doc(db,coll,x.__id),ownerFieldsFor(coll,e));
-      mk.remove();toast('✓ 연결되었습니다');closeDrawer();loadAll(true);
-    }catch(err){toast('연결 실패: '+err.message);}
+    caLinkConfirm(coll,x,e,()=>{mk.remove();});
   });
 };
+// ── 연결 확인 모달 : 문서의 고객명은 기본으로 「그대로 유지」 ──
+// 이름이 다르면 경고만 보여주고, 필요할 때만 수동으로 이름을 바꿀 수 있습니다.
+function caLinkConfirm(coll,x,e,onDone){
+  const own=docOwnerName(coll,x);
+  const pk=ownerPhoneKey(coll);
+  const diff=own&&nn(own)!==nn(e.name)&&!e.aliases.some(a=>nn(a)===nn(own));
+  // 연락처 필드가 없거나(상품권) 이 고객에게 연락처가 없으면 → 이름을 바꿔야만 연결이 유지됩니다
+  const mustRename=!pk||!pn(e.phone);
+  const why=!pk
+    ? '🎫 상품권은 연락처 항목이 없어 <b>고객명으로만</b> 연결됩니다. 따라서 문서의 고객명이 「'+esc(e.name)+'」(으)로 변경됩니다.'
+    : '이 고객에게 등록된 연락처가 없어 <b>고객명으로만</b> 연결할 수 있습니다. 따라서 문서의 고객명이 「'+esc(e.name)+'」(으)로 변경됩니다. 연락처를 먼저 등록하면 원래 이름을 유지할 수 있습니다.';
+
+  const mk2=genericModal('🔗 문서 연결 확인',
+    '<div style="font-size:12px;color:var(--ink2);line-height:1.7;margin-bottom:11px">아래 문서를 <b style="color:var(--ink)">'+esc(e.name)+'</b> 고객에게 연결합니다.</div>'+
+    '<div style="background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:10px 12px;font-size:12px;font-weight:800;color:var(--ink);margin-bottom:11px">'+COLL_LB[coll]+'<br><span style="font-weight:700;color:var(--ink2)">'+esc(docSummary(coll,x))+'</span></div>'+
+    (diff
+      ? '<div class="lk-warn">⚠️ <b>고객명이 서로 다릅니다.</b><br>문서에 적힌 이름: <b>'+esc(own)+'</b><br>연결할 고객: <b>'+esc(e.name)+'</b><br>'+
+        (mustRename?why:'기본값은 <b>문서의 이름을 그대로 유지</b>합니다. 계약서·인보이스·점검보고서에 인쇄된 이름이 바뀌지 않습니다.')+'</div>'
+      : '')+
+    (mustRename
+      ? (diff?'':'<div class="lk-warn">ℹ️ '+why+'</div>')
+      : '<label class="lk-keep"><input type="checkbox" id="lk-rename"><span><b>문서의 고객명도 「'+esc(e.name)+'」(으)로 변경</b><span>체크하지 않으면 문서에 적힌 이름'+(own?' 「'+esc(own)+'」':'')+'은 그대로 유지되고, 연락처만 이 고객 것으로 맞춰집니다.</span></span></label>'),
+    '<button class="btn" onclick="document.getElementById(\'ca-doc-mask\').remove()">취소</button><button class="btn p" id="lk-go">연결하기</button>');
+
+  mk2.querySelector('#lk-go').addEventListener('click',async()=>{
+    const cb=mk2.querySelector('#lk-rename');
+    const renameToo=mustRename||!!(cb&&cb.checked);
+    const btn=mk2.querySelector('#lk-go');btn.disabled=true;btn.textContent='연결 중...';
+    try{
+      await updateDoc(doc(db,coll,x.__id),ownerFieldsFor(coll,e,renameToo));
+      mk2.remove();if(onDone)onDone();
+      toast(renameToo?'✓ 연결되었습니다 (고객명도 변경)':'✓ 연결되었습니다 — 문서의 고객명은 그대로 유지');
+      closeDrawer();loadAll(true);
+    }catch(err){btn.disabled=false;btn.textContent='연결하기';toast('연결 실패: '+err.message);}
+  });
+}
 // ── ✏️ 수정: 종류별 핵심 필드 편집 ──
 window.caDocEdit=function(coll,id){
   const x=RAW[coll].find(d=>d.__id===id);if(!x)return;

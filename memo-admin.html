@@ -164,7 +164,7 @@ textarea.fi{resize:vertical;line-height:1.6}
         <div class="hint" style="color:#4f5f8f;margin-top:8px">문구를 누르면 증상칸 끝에 <b>· 로 이어서</b> 붙습니다. ✕로 삭제, 자주 쓴 문구는 앞쪽에 자동 정렬됩니다.</div>
       </div>
       <div class="row">
-        <div><div class="fl">방문 예정일</div><input class="fi" id="mm-vd" type="date"></div>
+        <div><div class="fl">방문 예정일 <span style="font-size:10px;color:#5B21B6;background:#EDE9FE;border-radius:5px;padding:1px 6px;font-weight:800">📅 캘린더 자동등록</span></div><input class="fi" id="mm-vd" type="date"></div>
         <div><div class="fl">방문 예정시각</div><input class="fi" id="mm-vt" type="time"></div>
       </div>
       <div class="fl">내부 메모 (고객에게 보이지 않음)</div>
@@ -357,7 +357,7 @@ window.renderList=function(){
       '<div class="meta">'+
         '<span>👤 '+esc(m.name||'-')+(m.phone?' · '+esc(m.phone):'')+'</span>'+
         '<span>📅 요청 '+esc(m.req_date||'-')+'</span>'+
-        '<span>🚗 방문예정 <b>'+(m.visit_date?esc(m.visit_date)+(m.visit_time?' '+esc(m.visit_time):''):'미정')+'</b></span>'+
+        '<span>🚗 방문예정 <b>'+(m.visit_date?esc(m.visit_date)+(m.visit_time?' '+esc(m.visit_time):''):'미정')+'</b>'+(m.visit_date&&m.schedule_id?' <span style="font-size:10px;color:#5B21B6;background:#EDE9FE;border-radius:5px;padding:1px 6px;font-weight:800">📅 캘린더 반영됨</span>':'')+'</span>'+
       '</div>'+
       (last?'<div class="sentlog">📤 '+esc(String(last.at||'').slice(0,16).replace('T',' '))+' · '+(last.tpl===2?'②예정시각':'①즉시')+' 발송</div>':'')+
       '<div class="acts">'+
@@ -393,9 +393,14 @@ async function setStatus(id,st){
 }
 async function delMemo(id){
   const m=MEMOS.find(x=>x.__id===id);
-  if(!confirm('「'+((m&&m.condo)||'')+'」 요청을 삭제할까요?'))return;
-  try{await deleteDoc(doc(db,'memos',id));MEMOS=MEMOS.filter(x=>x.__id!==id);renderList();toast('✓ 삭제되었습니다');}
-  catch(e){toast('삭제 실패: '+e.message);}
+  const sid=(m&&m.schedule_id)||'';
+  if(!confirm('「'+((m&&m.condo)||'')+'」 요청을 삭제할까요?'+(sid?'\n연결된 캘린더 일정도 함께 삭제됩니다.':'')))return;
+  try{
+    await deleteDoc(doc(db,'memos',id));
+    if(sid){try{await deleteDoc(doc(db,'schedules',sid));}catch(e){}}
+    MEMOS=MEMOS.filter(x=>x.__id!==id);renderList();
+    toast(sid?'✓ 삭제되었습니다 (캘린더 일정 포함)':'✓ 삭제되었습니다');
+  }catch(e){toast('삭제 실패: '+e.message);}
 }
 
 // ── 등록/수정 ─────────────────────────────────
@@ -439,11 +444,73 @@ function collect(){
     updated_at:nowIso()
   };
 }
+// ═══ 스케줄 캘린더 자동 반영 ═══════════════════════════════════
+// 방문 예정일이 입력된 수리요청은 schedules 컬렉션에 type:'repair'(🛠 수리)로
+// 자동 등록됩니다. 예정일을 지우면 캘린더에서도 자동으로 사라집니다.
+// 메모 문서에 schedule_id 를 저장해 두고 1:1로 관리합니다.
+function schedTitle(m){
+  const who=(m.condo||'').trim(), nm=(m.name||'').trim();
+  const base=who&&nm?(who+' ('+nm+')'):(who||nm||'수리 방문');
+  return '🛠 '+base;
+}
+function schedMemo(m){
+  return [
+    m.symptom?'🔧 '+m.symptom:'',
+    m.phone?'📞 '+m.phone:'',
+    m.memo?'📝 '+m.memo:'',
+    '※ 메모장(수리요청)에서 자동 등록된 일정입니다.'
+  ].filter(Boolean).join('\n');
+}
+async function syncSchedule(memoId,d,prevSchedId){
+  if(!db||!memoId)return prevSchedId||'';
+  const sid=prevSchedId||'';
+  try{
+    // 방문 예정일이 없어짐 → 캘린더에서 제거
+    if(!d.visit_date){
+      if(sid){
+        try{await deleteDoc(doc(db,'schedules',sid));}catch(e){}
+        await updateDoc(doc(db,'memos',memoId),{schedule_id:''});
+        const mm=MEMOS.find(x=>x.__id===memoId);if(mm)mm.schedule_id='';
+      }
+      return '';
+    }
+    const fields={
+      date:d.visit_date,
+      title:schedTitle(d),
+      time_s:d.visit_time||'',
+      time_e:'',
+      type:'repair',
+      memo:schedMemo(d),
+      memo_id:memoId,
+      customer_name:d.name||d.condo||'',
+      customer_phone:d.phone||'',
+      updated_at:nowIso()
+    };
+    if(sid){
+      try{
+        await updateDoc(doc(db,'schedules',sid),fields);
+        return sid;
+      }catch(e){/* 캘린더에서 이미 삭제된 경우 → 아래에서 새로 만듭니다 */}
+    }
+    fields.created_at=nowIso();
+    const r=await addDoc(collection(db,'schedules'),fields);
+    await updateDoc(doc(db,'memos',memoId),{schedule_id:r.id});
+    const mm=MEMOS.find(x=>x.__id===memoId);if(mm)mm.schedule_id=r.id;
+    return r.id;
+  }catch(e){
+    toast('⚠ 캘린더 반영 실패: '+e.message);
+    return sid;
+  }
+}
+
 async function saveMemo(thenSend){
   const d=collect();
   if(!d.condo&&!d.name){toast('콘도명 또는 고객명을 입력해 주세요');return null;}
   try{
     let id=editId;
+    const prev=id?(MEMOS.find(x=>x.__id===id)||{}):{};
+    const prevSchedId=prev.schedule_id||'';
+    const hadDate=!!prev.visit_date;
     if(id){
       await updateDoc(doc(db,'memos',id),d);
       upsert(MEMOS,id,d);
@@ -453,7 +520,11 @@ async function saveMemo(thenSend){
       id=r.id;upsert(MEMOS,id,d);
     }
     closeMemo();renderList();
-    toast('✓ 저장되었습니다');
+    // 방문 예정일 → 스케줄 캘린더(🛠 수리) 자동 반영
+    await syncSchedule(id,d,prevSchedId);
+    toast(d.visit_date
+      ? (hadDate&&prevSchedId?'✓ 저장 — 캘린더 일정도 수정되었습니다':'✓ 저장 — 캘린더에 🛠 수리 일정으로 등록했습니다')
+      : (prevSchedId?'✓ 저장 — 방문 예정일이 없어 캘린더에서 제거했습니다':'✓ 저장되었습니다'));
     if(thenSend)openSend(id);
     return id;
   }catch(e){toast('저장 실패: '+e.message);return null;}
