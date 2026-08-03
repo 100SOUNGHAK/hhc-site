@@ -268,11 +268,7 @@ var PRICE_DB={
     {n:'중간 난이도 수리 인건비',en:'Intermediate Repair Labor',p:300,note:'PCB·Fanmotor·Blower·Drainpump 교체 등',noteEn:'PCB·Fan motor·Blower·Drain pump etc.'},
     {n:'고난이도 수리 인건비',en:'Advanced Repair Labor',p:500,note:'Compressor·Capillary tube·실외기 교체 등',noteEn:'Compressor·Capillary tube·Outdoor unit etc.'},
     {n:'배관 진공 작업',en:'Piping Vacuuming',p:300,note:'',noteEn:''},
-    {n:'가스 누설 점검',en:'Gas Leak Inspection',p:500,note:'',noteEn:''},
-    {n:'냉매 충전 - 보충',en:'Refrigerant Top-up',p:150,note:'20PSI(R22)/50PSI(R32·R410A) 이하',noteEn:'Up to 20PSI(R22)/50PSI(R32·R410A)'},
-    {n:'냉매 충전 - 완충',en:'Refrigerant Full Charge',p:300,note:'20PSI(R22)/50PSI(R32·R410A) 초과',noteEn:'Above 20PSI(R22)/50PSI(R32·R410A)'},
-    {n:'CAPACITOR 부품',en:'Capacitor (Part)',p:100,note:'30/50 · Fanmotor/Compressor용',noteEn:'30/50 · For fan motor/compressor'},
-    {n:'THERMISTOR 부품',en:'Thermistor (Part)',p:50,note:'',noteEn:''}
+    {n:'가스 누설 점검',en:'Gas Leak Inspection',p:500,note:'',noteEn:''}
   ],
   material:[
     {n:'냉매구리배관 1.0HP',en:'Copper Refrigerant Piping 1.0HP',p:20,unit:'ft',note:'1FT 기준 · 단열재 포함',noteEn:'Per FT · insulation included'},
@@ -286,7 +282,11 @@ var PRICE_DB={
     {n:'실외기 거치대 1.0~1.5HP',en:'Outdoor Unit Bracket 1.0~1.5HP',p:200,note:'',noteEn:''},
     {n:'실외기 거치대 2.0~2.5HP',en:'Outdoor Unit Bracket 2.0~2.5HP',p:300,note:'',noteEn:''},
     {n:'에어컨 전원 차단 스위치(20A)',en:'AC Power Isolator Switch (20A)',p:50,note:'전기배선 작업 별도',noteEn:'Wiring work billed separately'},
-    {n:'배관 전용 단열테이프',en:'Piping Insulation Tape',p:10,unit:'ft',note:'1FT 기준',noteEn:'Per FT'}
+    {n:'배관 전용 단열테이프',en:'Piping Insulation Tape',p:10,unit:'ft',note:'1FT 기준',noteEn:'Per FT'},
+    {n:'냉매 충전 - 보충',en:'Refrigerant Top-up',p:150,note:'20PSI(R22)/50PSI(R32·R410A) 이하',noteEn:'Up to 20PSI(R22)/50PSI(R32·R410A)'},
+    {n:'냉매 충전 - 완충',en:'Refrigerant Full Charge',p:300,note:'20PSI(R22)/50PSI(R32·R410A) 초과',noteEn:'Above 20PSI(R22)/50PSI(R32·R410A)'},
+    {n:'CAPACITOR 부품',en:'Capacitor (Part)',p:100,note:'30/50 · Fanmotor/Compressor용',noteEn:'30/50 · For fan motor/compressor'},
+    {n:'THERMISTOR 부품',en:'Thermistor (Part)',p:50,note:'',noteEn:''}
   ],
   callout:[
     {n:'출장점검비 - A지역',en:'Call-out Inspection - Zone A',p:100,note:'14KM 이내',noteEn:'Within 14KM'},
@@ -348,12 +348,20 @@ rebuildProductList();
 // ── 단가 오버라이드: Firestore(settings/quote_prices)에 저장된 수정 단가 적용 ──
 // 키: '설치|철거 비용' 형태(카테고리|항목명), 에어컨은 'ac|DAIKIN|1.0|inv'
 window._priceOverrides={};
+// 카테고리를 옮긴 항목 — 예전 키(수리|…)로 저장된 수정 단가도 계속 인식합니다
+var PRICE_KEY_LEGACY={
+  'material|냉매 충전 - 보충':'repair|냉매 충전 - 보충',
+  'material|냉매 충전 - 완충':'repair|냉매 충전 - 완충',
+  'material|CAPACITOR 부품':'repair|CAPACITOR 부품',
+  'material|THERMISTOR 부품':'repair|THERMISTOR 부품'
+};
 function applyPriceOverrides(ov){
   window._priceOverrides=ov||{};
   ['install','repair','material','callout'].forEach(function(cat){
     (PRICE_DB[cat]||[]).forEach(function(it){
       var k=cat+'|'+it.n;
-      if(ov&&ov[k]!=null)it.p=parseFloat(ov[k]);
+      var v=(ov&&ov[k]!=null)?ov[k]:(ov&&PRICE_KEY_LEGACY[k]&&ov[PRICE_KEY_LEGACY[k]]!=null?ov[PRICE_KEY_LEGACY[k]]:null);
+      if(v!=null)it.p=parseFloat(v);
     });
   });
   AC_PRICES.forEach(function(a){
