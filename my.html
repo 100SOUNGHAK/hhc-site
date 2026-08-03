@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Happy Home Care · 마이페이지</title>
+<meta name="theme-color" content="#0B1833">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Happy Home Care">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <style>
 :root{--bg:#F2F4F9;--ink:#1a2233;--ink2:#4b5563;--ink3:#8a94a6;--bdr:#e3e8f0;--pri:#2563eb;--pri-bg:#eff6ff;--ok:#059669;--ok-bg:#ecfdf5;--warn:#b45309;--warn-bg:#fff7e6;--vio:#7c3aed;--vio-bg:#f5f3ff;
 --navy:#0B1833;--teal:#0BB5A4;--indigo:#4F6EF7}
@@ -174,6 +181,16 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .ecbtn:active{transform:scale(.985)}
 .ecls{display:none}
 .ecls.open{display:block;margin-top:10px;animation:hubIn .26s ease}
+/* ══ 홈 화면 설치 안내 (PWA) ══ */
+.a2hs{margin-top:12px;background:linear-gradient(135deg,#0B1833,#16264a 55%,#1d3a63);border-radius:18px;padding:16px 17px;color:#fff;position:relative;overflow:hidden}
+.a2hs:before{content:'';position:absolute;width:150px;height:150px;border-radius:50%;background:radial-gradient(circle,rgba(79,110,247,.4),transparent 70%);top:-50px;right:-40px}
+.a2hs .t{font-size:14.5px;font-weight:900;letter-spacing:-.01em;position:relative}
+.a2hs .s{font-size:11.5px;color:#aebadb;margin-top:4px;line-height:1.65;position:relative;word-break:keep-all}
+.a2hs-btn{position:relative;margin-top:12px;width:100%;border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:900;padding:12px;border-radius:12px;background:linear-gradient(135deg,var(--indigo),var(--teal));color:#fff;box-shadow:0 8px 18px -6px rgba(79,110,247,.55)}
+.a2hs-btn:active{transform:scale(.985)}
+.a2hs-how{position:relative;margin-top:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:11px 13px;display:flex;flex-direction:column;gap:7px}
+.a2hs-st{display:flex;align-items:baseline;gap:9px;font-size:12px;line-height:1.6;color:#dbe3f5;font-weight:700}
+.a2hs-st .n{flex:none;width:17px;height:17px;border-radius:50%;background:linear-gradient(135deg,var(--indigo),var(--teal));color:#fff;font-size:10px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;transform:translateY(2px)}
 /* ══ v2 인보이스 카드 ══ */
 .ncard{background:#fff;border-radius:16px;margin-bottom:10px;box-shadow:0 4px 16px rgba(11,24,51,.07);overflow:hidden;display:flex;text-decoration:none;color:inherit}
 .ncard:active{transform:scale(.99)}
@@ -293,6 +310,42 @@ const CID=P.get('c')||'';
 const VIS=(P.get('v')||'iv,ip,ct,cp').split(',');
 let LANG=(P.get('lang')==='en')?'en':'ko';
 
+// ── PWA : 홈 화면 설치 ──
+const IS_APP=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;
+const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
+let _a2hsEv=null;   // Android Chrome 의 설치 프롬프트 이벤트 보관
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();_a2hsEv=e;
+  const b=document.getElementById('a2hs-btn'),hw=document.getElementById('a2hs-how');
+  if(b)b.style.display='';
+  if(hw)hw.style.display='none';
+});
+// 고객ID 기억 : 주소에 c 없이 열려도(설치된 앱 아이콘 등) 마지막 고객 페이지로 자동 복원
+try{
+  if(CID)localStorage.setItem('hhc_my_last',JSON.stringify({c:CID,v:P.get('v')||'',lang:P.get('lang')||''}));
+  else{
+    const _s=JSON.parse(localStorage.getItem('hhc_my_last')||'null');
+    if(_s&&_s.c)location.replace(location.pathname+'?c='+encodeURIComponent(_s.c)+(_s.v?'&v='+encodeURIComponent(_s.v):'')+(_s.lang?'&lang='+encodeURIComponent(_s.lang):''));
+  }
+}catch(e){}
+// 동적 manifest : 이 고객 전용 시작 주소(c= 포함)로 설치되게 함
+(function(){
+  if(!/^https?:$/.test(location.protocol)||!CID)return;
+  try{
+    const dir=location.origin+location.pathname.replace(/[^/]*$/,'');
+    const start=location.origin+location.pathname+'?c='+encodeURIComponent(CID)+'&v='+encodeURIComponent(P.get('v')||'iv,ip,ct,cp')+'&lang='+(LANG==='en'?'en':'ko');
+    const man={id:'hhc-my-'+CID,name:'Happy Home Care',short_name:'HHC',
+      start_url:start,scope:dir,display:'standalone',background_color:'#F2F4F9',theme_color:'#0B1833',
+      icons:[{src:dir+'icon-192.png',sizes:'192x192',type:'image/png'},
+             {src:dir+'icon-512.png',sizes:'512x512',type:'image/png'},
+             {src:dir+'icon-512.png',sizes:'512x512',type:'image/png',purpose:'maskable'}]};
+    const l=document.createElement('link');l.rel='manifest';
+    l.href='data:application/manifest+json;charset=utf-8,'+encodeURIComponent(JSON.stringify(man));
+    document.head.appendChild(l);
+  }catch(e){}
+  if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+
 const T={
   ko:{my:'나의 서비스 현황',asof:'기준',bal:'MEMBERSHIP BALANCE · 잔액',used:'사용',paid:'납입',cdate:'계약일',cnt:'이용 횟수',bonus:'보너스',
       inv:'💳 인보이스',ins:'🔧 점검보고서',ct:'📑 계약서',cp:'🎫 상품권',see:'보기 ↗',ea:'건',vch:'장',
@@ -316,7 +369,10 @@ const T={
       actLb2:'조치 필요 항목',allOkB:'✅ 전체 이상 없음',hasActB:'⚠️ 조치 필요',caseU:'건',
       noIssue:'✅ 이상 없음',needAct:'⚠️ 조치 필요',caution:'🔧 주의',dpDone:'✅ 완료',dpRevisit:'⏳ 재방문 필요',
       remainLb:'잔여 금액 · REMAINING',closedLb:'최종 잔여 · CLOSED',leftPct:'남음',allUsed:'전액 사용',inUse:'✅ 사용중',
-      validN:'유효',endedN:'종료',totalN:'총',ctEndOpen:'⏹ 종료된 계약 {n}건 보기',ctEndClose:'⏹ 종료된 계약 접기',kGift:'GIFT VOUCHER',kDisc:'DISCOUNT',expiredB:'기간 만료',dayAgo:'일 경과'},
+      validN:'유효',endedN:'종료',totalN:'총',ctEndOpen:'⏹ 종료된 계약 {n}건 보기',ctEndClose:'⏹ 종료된 계약 접기',kGift:'GIFT VOUCHER',kDisc:'DISCOUNT',expiredB:'기간 만료',dayAgo:'일 경과',
+      a2T:'📲 홈 화면에 설치하기',a2S:'한 번 설치해 두면 링크 없이도 홈 화면 아이콘으로 언제든 내 페이지를 열 수 있습니다.',a2Btn:'📲 앱으로 설치',
+      a2i1:'Safari 하단의 공유 버튼(네모에 ↑ 화살표)을 누르세요',a2i2:'"홈 화면에 추가"를 선택하세요',a2i3:'오른쪽 위 "추가"를 누르면 완료!',
+      a2a1:'브라우저 메뉴( ⋮ )를 여세요',a2a2:'"홈 화면에 추가" 또는 "앱 설치"를 선택하세요'},
   en:{my:'My Service Overview',asof:'as of',bal:'MEMBERSHIP BALANCE',used:'Used',paid:'Paid',cdate:'Contract',cnt:'Services',bonus:'Bonus',
       inv:'💳 Invoices',ins:'🔧 Inspection Reports',ct:'📑 Contracts',cp:'🎫 Gift Vouchers',see:'View ↗',ea:'',vch:'',
       st:{paid:'Paid',billing:'Billed',overdue:'Overdue',draft:'Draft'},valid:'Active',usageN:'entries',start:'started',
@@ -339,7 +395,10 @@ const T={
       actLb2:'Needs attention',allOkB:'✅ All clear',hasActB:'⚠️ Action needed',caseU:'',
       noIssue:'✅ No issues',needAct:'⚠️ Action needed',caution:'🔧 Caution',dpDone:'✅ Completed',dpRevisit:'⏳ Revisit needed',
       remainLb:'REMAINING BALANCE',closedLb:'FINAL BALANCE · CLOSED',leftPct:'left',allUsed:'fully used',inUse:'✅ Active',
-      validN:'active',endedN:'ended',totalN:'',ctEndOpen:'⏹ View {n} ended contracts',ctEndClose:'⏹ Hide ended contracts',kGift:'GIFT VOUCHER',kDisc:'DISCOUNT',expiredB:'Expired',dayAgo:' days overdue'}
+      validN:'active',endedN:'ended',totalN:'',ctEndOpen:'⏹ View {n} ended contracts',ctEndClose:'⏹ Hide ended contracts',kGift:'GIFT VOUCHER',kDisc:'DISCOUNT',expiredB:'Expired',dayAgo:' days overdue',
+      a2T:'📲 Install on Home Screen',a2S:'Install once and open your page anytime from a home-screen icon — no link needed.',a2Btn:'📲 Install as App',
+      a2i1:'Tap the Share button at the bottom of Safari',a2i2:'Choose "Add to Home Screen"',a2i3:'Tap "Add" at the top right — done!',
+      a2a1:'Open the browser menu ( ⋮ )',a2a2:'Choose "Add to Home screen" or "Install app"'}
 };
 
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -712,6 +771,22 @@ function render(){
      '<div class="hpt">🏠 '+L.hpT+'</div><div class="hps">'+L.hpS+'</div>'+
      '<span class="hpb">'+L.hpB+' <b>→</b></span></a>';
   h+='<div class="cta"><a class="wa" href="https://wa.me/60172472774" target="_blank" rel="noopener">'+L.wa+'</a></div>';
+  // ── 홈 화면 설치 안내 (이미 앱으로 열었으면 표시하지 않음) ──
+  if(!IS_APP){
+    h+='<div class="a2hs"><div class="t">'+L.a2T+'</div><div class="s">'+L.a2S+'</div>';
+    if(IS_IOS){
+      h+='<div class="a2hs-how">'+
+         '<div class="a2hs-st"><span class="n">1</span><span>'+L.a2i1+'</span></div>'+
+         '<div class="a2hs-st"><span class="n">2</span><span>'+L.a2i2+'</span></div>'+
+         '<div class="a2hs-st"><span class="n">3</span><span>'+L.a2i3+'</span></div></div>';
+    }else{
+      h+='<button type="button" class="a2hs-btn" id="a2hs-btn"'+(_a2hsEv?'':' style="display:none"')+'>'+L.a2Btn+'</button>'+
+         '<div class="a2hs-how" id="a2hs-how"'+(_a2hsEv?' style="display:none"':'')+'>'+
+         '<div class="a2hs-st"><span class="n">1</span><span>'+L.a2a1+'</span></div>'+
+         '<div class="a2hs-st"><span class="n">2</span><span>'+L.a2a2+'</span></div></div>';
+    }
+    h+='</div>';
+  }
   h+='<div class="foot"><b>Happy Works Services Sdn. Bhd.</b> (1278908-M)<br>📞 +60 17-247 2774 · happyhomecare<br>'+L.foot+'</div>';
   h+='</div>';
   document.getElementById('page').innerHTML=h;
@@ -751,6 +826,14 @@ function render(){
       if(t)t.textContent=(OPEN.ec?Lx.ctEndClose:Lx.ctEndOpen).replace('{n}',ecl.children.length);
     };
   }
+  // 앱 설치 버튼 (Android Chrome 등 beforeinstallprompt 지원 브라우저)
+  const ab=document.getElementById('a2hs-btn');
+  if(ab)ab.onclick=async()=>{
+    if(!_a2hsEv)return;
+    _a2hsEv.prompt();
+    try{await _a2hsEv.userChoice;}catch(e){}
+    _a2hsEv=null;
+  };
 }
 
 (async()=>{
