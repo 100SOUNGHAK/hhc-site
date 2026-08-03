@@ -313,9 +313,13 @@ let LANG=(P.get('lang')==='en')?'en':'ko';
 // ── PWA : 홈 화면 설치 ──
 const IS_APP=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;
 const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
+// 삼성 인터넷은 자체 패키징으로 앱을 설치해 Google 서명이 없어
+// Play 프로텍트 경고가 뜨는 문제가 있음 → Chrome 으로 열도록 유도
+const IS_SAMSUNG=/SamsungBrowser/i.test(navigator.userAgent);
 let _a2hsEv=null;   // Android Chrome 의 설치 프롬프트 이벤트 보관
 window.addEventListener('beforeinstallprompt',e=>{
   e.preventDefault();_a2hsEv=e;
+  if(IS_SAMSUNG)return;   // 삼성 인터넷 설치는 Play 프로텍트가 차단 → Chrome 안내로 대체
   const b=document.getElementById('a2hs-btn'),hw=document.getElementById('a2hs-how');
   if(b)b.style.display='';
   if(hw)hw.style.display='none';
@@ -368,7 +372,8 @@ const T={
       validN:'유효',endedN:'종료',totalN:'총',ctEndOpen:'⏹ 종료된 계약 {n}건 보기',ctEndClose:'⏹ 종료된 계약 접기',kGift:'GIFT VOUCHER',kDisc:'DISCOUNT',expiredB:'기간 만료',dayAgo:'일 경과',
       a2T:'📲 홈 화면에 설치하기',a2S:'한 번 설치해 두면 링크 없이도 홈 화면 아이콘으로 언제든 내 페이지를 열 수 있습니다.',a2Btn:'📲 앱으로 설치',
       a2i1:'Safari 하단의 공유 버튼(네모에 ↑ 화살표)을 누르세요',a2i2:'"홈 화면에 추가"를 선택하세요',a2i3:'오른쪽 위 "추가"를 누르면 완료!',
-      a2a1:'브라우저 메뉴( ⋮ )를 여세요',a2a2:'"홈 화면에 추가" 또는 "앱 설치"를 선택하세요'},
+      a2a1:'브라우저 메뉴( ⋮ )를 여세요',a2a2:'"홈 화면에 추가" 또는 "앱 설치"를 선택하세요',
+      a2sBtn:'🌐 Chrome에서 열어 설치하기',a2s1:'위 버튼을 눌러 이 페이지를 Chrome으로 열어주세요',a2s2:'Chrome 페이지 하단의 "📲 앱으로 설치" 버튼을 누르면 완료!',a2s3:'삼성 인터넷에서 바로 설치하면 보안 알림이 떠서 Chrome 설치를 권장합니다'},
   en:{my:'My Service Overview',asof:'as of',bal:'MEMBERSHIP BALANCE',used:'Used',paid:'Paid',cdate:'Contract',cnt:'Services',bonus:'Bonus',
       inv:'💳 Invoices',ins:'🔧 Inspection Reports',ct:'📑 Contracts',cp:'🎫 Gift Vouchers',see:'View ↗',ea:'',vch:'',
       st:{paid:'Paid',billing:'Billed',overdue:'Overdue',draft:'Draft'},valid:'Active',usageN:'entries',start:'started',
@@ -394,7 +399,8 @@ const T={
       validN:'active',endedN:'ended',totalN:'',ctEndOpen:'⏹ View {n} ended contracts',ctEndClose:'⏹ Hide ended contracts',kGift:'GIFT VOUCHER',kDisc:'DISCOUNT',expiredB:'Expired',dayAgo:' days overdue',
       a2T:'📲 Install on Home Screen',a2S:'Install once and open your page anytime from a home-screen icon — no link needed.',a2Btn:'📲 Install as App',
       a2i1:'Tap the Share button at the bottom of Safari',a2i2:'Choose "Add to Home Screen"',a2i3:'Tap "Add" at the top right — done!',
-      a2a1:'Open the browser menu ( ⋮ )',a2a2:'Choose "Add to Home screen" or "Install app"'}
+      a2a1:'Open the browser menu ( ⋮ )',a2a2:'Choose "Add to Home screen" or "Install app"',
+      a2sBtn:'🌐 Open in Chrome to Install',a2s1:'Tap the button above to open this page in Chrome',a2s2:'In Chrome, tap "📲 Install as App" at the bottom — done!',a2s3:'Installing directly from Samsung Internet triggers a security warning, so Chrome is recommended'}
 };
 
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -775,6 +781,15 @@ function render(){
          '<div class="a2hs-st"><span class="n">1</span><span>'+L.a2i1+'</span></div>'+
          '<div class="a2hs-st"><span class="n">2</span><span>'+L.a2i2+'</span></div>'+
          '<div class="a2hs-st"><span class="n">3</span><span>'+L.a2i3+'</span></div></div>';
+    }else if(IS_SAMSUNG&&/^https?:$/.test(location.protocol)){
+      // 삼성 인터넷 → Chrome 으로 열어 설치 (intent: 링크, Chrome 미설치 시 원래 주소로 폴백)
+      const chr='intent://'+location.host+location.pathname+location.search+
+        '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(location.href)+';end';
+      h+='<a class="a2hs-btn" style="display:block;text-align:center;text-decoration:none" href="'+esc(chr)+'">'+L.a2sBtn+'</a>'+
+         '<div class="a2hs-how">'+
+         '<div class="a2hs-st"><span class="n">1</span><span>'+L.a2s1+'</span></div>'+
+         '<div class="a2hs-st"><span class="n">2</span><span>'+L.a2s2+'</span></div>'+
+         '<div class="a2hs-st"><span class="n">3</span><span>'+L.a2s3+'</span></div></div>';
     }else{
       h+='<button type="button" class="a2hs-btn" id="a2hs-btn"'+(_a2hsEv?'':' style="display:none"')+'>'+L.a2Btn+'</button>'+
          '<div class="a2hs-how" id="a2hs-how"'+(_a2hsEv?' style="display:none"':'')+'>'+
