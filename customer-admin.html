@@ -688,7 +688,10 @@ window.caSendModal=async function(idx){
   }
   const D=e.docs||{};
   const CNT={iv:(D.invoices||[]).length,ip:(D.inspections||[]).length,ct:(D.contracts||[]).length,cp:(D.coupons||[]).length};
-  const state={iv:CNT.iv>0,ip:CNT.ip>0,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:'basic'};
+  const _td=new Date();
+  const _p2=n=>String(n).padStart(2,'0');
+  const state={iv:CNT.iv>0,ip:CNT.ip>0,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:'basic',
+    payDate:_td.getFullYear()+'-'+_p2(_td.getMonth()+1)+'-'+_p2(_td.getDate())};
   const OPT=[['iv','💳','인보이스','건'],['ip','🔧','점검보고서','건'],['ct','📑','계약서 · 잔액','건'],['cp','🎫','상품권','장']];
   const mk=genericModal('📤 마이페이지 발송 — '+esc(e.name),
     '<p style="font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:10px">고객이 링크 하나로 본인의 문서를 확인합니다. 노출할 항목을 선택하세요. 링크는 고정이며 열 때마다 최신 내용이 표시됩니다.</p>'+
@@ -707,10 +710,15 @@ window.caSendModal=async function(idx){
     '</div>'+
     '<div style="margin-bottom:9px">'+
       '<div style="font-size:11px;font-weight:800;color:var(--ink3);margin-bottom:5px">발송 메시지</div>'+
-      '<div id="cs-tpl" style="display:flex;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:3px;gap:3px">'+
-        '<span data-t="basic" style="flex:1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📄 기본 안내</span>'+
-        '<span data-t="revisit" style="flex:1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🔄 재방문 · 예약</span>'+
-        '<span data-t="bill" style="flex:1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🧾 청구 안내</span>'+
+      '<div id="cs-tpl" style="display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:3px;gap:3px">'+
+        '<span data-t="basic" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📄 기본 안내</span>'+
+        '<span data-t="revisit" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🔄 재방문 · 예약</span>'+
+        '<span data-t="bill" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🧾 청구 안내</span>'+
+        '<span data-t="pay" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">💳 결제 확인</span>'+
+      '</div>'+
+      '<div id="cs-pay" style="display:none;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:9px 11px;margin-top:7px;align-items:center;gap:9px">'+
+        '<span style="font-size:11px;font-weight:800;color:var(--ink3)">결제 완료일</span>'+
+        '<input type="date" id="cs-paydate" style="margin-left:auto;font-family:inherit;font-size:11.5px;font-weight:800;color:var(--ink);border:1px solid var(--bdr);border-radius:8px;padding:6px 9px;background:#fff">'+
       '</div>'+
       '<div id="cs-bwarn" style="display:none;background:var(--warn-bg);color:var(--warn);border-radius:9px;padding:8px 11px;font-size:11px;font-weight:800;margin-top:7px">⚠️ 잔여 결제금액이 남은 청구중 · 연체 인보이스가 없어 청구금액이 0 입니다</div>'+
       '<div id="cs-binfo" style="display:none;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:9px 11px;margin-top:7px"></div>'+
@@ -741,9 +749,17 @@ window.caSendModal=async function(idx){
   // basic  : 기본 안내 (마이페이지 문서 확인 안내)
   // revisit: 재방문 · 예약 안내 (서비스/가격 확인 + 예약 신청 문구 추가)
   // bill   : 청구 안내 (청구중 + 연체 인보이스 합계 금액 자동 반영)
+  // pay    : 결제 확인 안내 (결제 완료일 자동/직접 지정)
   // 안내 목록은 위에서 선택한 「노출 항목」에 맞춰 자동으로 만들어집니다.
   const CS_SEP='------------------------------';
   const CS_LB={iv:['인보이스 확인','Check invoices'],ip:['점검보고서 확인','Check inspection reports'],ct:['계약 잔액 확인','Check contract balance'],cp:['상품권 확인','Check vouchers']};
+  const CS_MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  // 결제 완료일 표기 (한국어: 2026년08월03일 / 영문: 3 Aug 2026)
+  function payDateTxt(en){
+    const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(state.payDate||'');
+    if(!m)return state.payDate||'';
+    return en?(parseInt(m[3],10)+' '+CS_MN[parseInt(m[2],10)-1]+' '+m[1]):(m[1]+'년'+m[2]+'월'+m[3]+'일');
+  }
   function msgList(){
     const en=!!state.en;
     const sel=['iv','ip','ct','cp'].filter(k=>state[k]);
@@ -763,17 +779,23 @@ window.caSendModal=async function(idx){
       const amtKo=amt.toLocaleString('en-MY',{maximumFractionDigits:2});
       const amtEn=amt.toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
       return en
-        ?('Hello '+nm+' 😊\nThis is Happy Home Care.\nYour current amount due is RM '+amtEn+'.\n'+CS_SEP+'\n🏠 On your personal My Page below you can check your billing details and payment account information.\nAnd anytime:\n\n'+list+'\n\nall in one place.\n'+CS_SEP+'\n📱 My Page\n🔗 '+l+'\n'+CS_SEP+'\nHappy Home Care\n📞 +60 17-247 2774')
-        :('안녕하세요, '+nm+' 고객님 😊\nHappy Home Care입니다.\n금차 청구금액은 '+amtKo+'링깃입니다.\n'+CS_SEP+'\n🏠 아래 고객님 전용 마이페이지에서 청구내역/결재계좌정보 확인가능합니다.\n또한 언제나\n\n'+list+'\n\n모두 편리하게 이용하실 수 있습니다.\n'+CS_SEP+'\n📱 마이페이지\n🔗 '+l+'\n'+CS_SEP+'\nHappy Home Care\n📞 +60 17-247 2774');
+        ?('Hello '+nm+' 😊\nThis is Happy Home Care.\n\n\u{1F449} Your current amount due is RM '+amtEn+'.\n'+CS_SEP+'\n🏠 On your personal My Page below you can check your billing details and payment account information.\nAnd anytime:\n\n'+list+'\n\nall in one place.\n'+CS_SEP+'\n📱 My Page\n🔗 '+l+'\n'+CS_SEP+'\nHappy Home Care\n📞 +60 17-247 2774')
+        :('안녕하세요, '+nm+' 고객님 😊\nHappy Home Care입니다.\n\n\u{1F449} 금차 청구금액은 '+amtKo+'링깃입니다.\n'+CS_SEP+'\n🏠 아래 고객님 전용 마이페이지에서 청구내역/결재계좌정보 확인가능합니다.\n또한 언제나\n\n'+list+'\n\n모두 편리하게 이용/조회 하실 수 있습니다.\n'+CS_SEP+'\n📱 마이페이지\n🔗 '+l+'\n'+CS_SEP+'\nHappy Home Care\n📞 +60 17-247 2774');
+    }
+    if(state.tpl==='pay'){
+      const dt=payDateTxt(en);
+      return en
+        ?('Hello '+nm+' 😊\nThis is Happy Home Care.\nYour payment was completed on '+dt+'. Thank you once again for choosing us.\n'+CS_SEP+'\n🏠 On your personal My Page below you can check your payment history and invoices.\nAnd anytime:\n\n'+list+'\n\nall in one place.\n'+CS_SEP+'\n📱 My Page\n🔗 '+l+'\n'+CS_SEP+'\nHappy Home Care\n📞 +60 17-247 2774')
+        :('안녕하세요, '+nm+' 고객님 😊\nHappy Home Care입니다.\n'+dt+' 결제 완료되었습니다. 이용해주셔서 다시 한번 감사드립니다.\n'+CS_SEP+'\n🏠 아래 고객님 전용 마이페이지에서 결제 내역 및 인보이스 확인가능합니다.\n또한 언제나\n\n'+list+'\n\n모두 편리하게 이용/조회 하실 수 있습니다.\n'+CS_SEP+'\n📱 마이페이지\n🔗 '+l+'\n'+CS_SEP+'\nHappy Home Care\n📞 +60 17-247 2774');
     }
     if(state.tpl==='revisit'){
       return en
         ?('Hello '+nm+' 😊\nThis is Happy Home Care.\nThank you for choosing us again.\n\n\u{1F449} Please submit your service request on the My Page below.\n'+CS_SEP+'\n🏠 On your personal My Page below you can:\n\n'+list+'\n\nall in one place.\n'+CS_SEP+'\n📱 My Page\n🔗 '+l+'\nPlease submit your service request through the link above and we will arrange your booking right away.\nThank you. 🙏\nHappy Home Care\n📞 +60 17-247 2774')
-        :('안녕하세요, '+nm+' 고객님 😊\nHappy Home Care입니다.\n다시 찾아주셔서 감사합니다.\n\n\u{1F449} 아래 마이페이지에서 서비스 의뢰 신청해주시면 감사합니다.\n'+CS_SEP+'\n🏠 아래 고객님 전용 마이페이지에서\n\n'+list+'\n\n모두 편리하게 이용하실 수 있습니다.\n'+CS_SEP+'\n📱 마이페이지\n🔗 '+l+'\n상기 링크를 통해 서비스 의뢰를 접수해 주시면 신속하게 예약을 도와드리겠습니다.\n감사합니다. 🙏\nHappy Home Care\n📞 +60 17-247 2774');
+        :('안녕하세요, '+nm+' 고객님 😊\nHappy Home Care입니다.\n다시 찾아주셔서 감사합니다.\n\n\u{1F449} 아래 마이페이지에서 서비스 의뢰 신청해주시면 감사합니다.\n'+CS_SEP+'\n🏠 아래 고객님 전용 마이페이지에서\n\n'+list+'\n\n모두 편리하게 이용/조회 하실 수 있습니다.\n'+CS_SEP+'\n📱 마이페이지\n🔗 '+l+'\n상기 링크를 통해 서비스 의뢰를 접수해 주시면 신속하게 예약을 도와드리겠습니다.\n감사합니다. 🙏\nHappy Home Care\n📞 +60 17-247 2774');
     }
     return en
       ?('Hello '+nm+' 😊\nThis is Happy Home Care.\n'+CS_SEP+'\n🏠 On your personal My Page below you can:\n\n'+list+'\n\nall in one place.\n'+CS_SEP+'\n📱 My Page\n🔗 '+l+'\n \n'+CS_SEP+'\nHappy Home Care\n📞 +60 17-247 2774')
-      :('안녕하세요, '+nm+' 고객님 😊\nHappy Home Care입니다.\n'+CS_SEP+'\n🏠 아래 고객님 전용 마이페이지에서\n\n'+list+'\n\n모두 편리하게 이용하실 수 있습니다.\n'+CS_SEP+'\n📱 마이페이지\n🔗 '+l+'\n \n'+CS_SEP+'\nHappy Home Care\n📞 +60 17-247 2774');
+      :('안녕하세요, '+nm+' 고객님 😊\nHappy Home Care입니다.\n'+CS_SEP+'\n🏠 아래 고객님 전용 마이페이지에서\n\n'+list+'\n\n모두 편리하게 이용/조회 하실 수 있습니다.\n'+CS_SEP+'\n📱 마이페이지\n🔗 '+l+'\n \n'+CS_SEP+'\nHappy Home Care\n📞 +60 17-247 2774');
   }
   // 미리보기 전용 렌더러 (실제 발송 텍스트는 msg() 원문 그대로 사용)
   function msgHtml(txt){
@@ -817,6 +839,8 @@ window.caSendModal=async function(idx){
     const w=mk.querySelector('#cs-warn');
     if(w)w.style.display=v.length?'none':'block';
     mk.querySelector('#cs-link').textContent=link();
+    const pw=mk.querySelector('#cs-pay');
+    if(pw)pw.style.display=(state.tpl==='pay')?'flex':'none';
     const bw=mk.querySelector('#cs-bwarn');
     if(bw)bw.style.display=(state.tpl==='bill'&&billAmt()<=0)?'block':'none';
     const bi=mk.querySelector('#cs-binfo');
@@ -854,6 +878,8 @@ window.caSendModal=async function(idx){
     const el=ev.target.closest('[data-t]');if(!el)return;
     state.tpl=el.dataset.t;paint();
   });
+  const _pd=mk.querySelector('#cs-paydate');
+  if(_pd){_pd.value=state.payDate;_pd.addEventListener('change',()=>{state.payDate=_pd.value;paint();});}
   mk.querySelector('#cs-pv').addEventListener('click',()=>{window.caView(link(),'👁 고객 발송 화면 미리보기 — '+(e.name||''));});
   mk.querySelector('#cs-wa').addEventListener('click',()=>{
     let wa='https://wa.me/';
