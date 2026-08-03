@@ -488,6 +488,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
     </div>
     <div class="card cp"><div class="f"><label class="lb">메모</label><textarea id="inv-notes" rows="2" placeholder="고객에게 표시될 메모" oninput="App.upPrev()"></textarea></div></div>
     <div class="inv-inspbox" id="inv-insp-box"></div>
+    <div class="inv-inspbox" id="inv-ct-box"></div>
   </div>
 
   <div id="tab-items" style="display:none">
@@ -1080,7 +1081,7 @@ App.resetForm=function(){
   var bp=$('bank-prev');if(bp)bp.style.display='none';
   lineItems=[];
   window._creditAuto=false;updateCreditHint();
-  resetLinkBox();if(window.clearInspBox)window.clearInspBox();if(window.renderInspBox)window.renderInspBox();renderLI();App.upPrev();
+  resetLinkBox();if(window.clearInspBox)window.clearInspBox();if(window.renderInspBox)window.renderInspBox();if(window.clearCtBox)window.clearCtBox();renderLI();App.upPrev();
   // 모든 화면 스크롤을 최상단으로 리셋
   var sc=$('screen-new');if(sc)sc.scrollTop=0;
   Tab('info');
@@ -1166,6 +1167,7 @@ function loadInvToForm(inv){
   window._creditAuto=false;updateCreditHint(); // 기존 인보이스: 저장된 차감액 유지 (자동반영 끔)
   showLinkBox(inv.id);renderLI();App.upPrev();Nav('new');Tab('info');
   if(window.refreshInspBox)window.refreshInspBox(inv.id);
+  if(window.loadCtLinkFromInv)loadCtLinkFromInv(inv);
 }
 window.loadInvToForm=loadInvToForm;
 
@@ -1661,7 +1663,11 @@ function getInvData(){
     taxRate:t.taxRate,discVal:t.discVal,discType:t.discType,
     parkingFee:t.park,minCharge:t.minC,extraFee:t.extra,creditUse:t.credit,voucherAmt:t.voucher,voucherCode:t.voucherCode,paidAmount:t.paidAmount,payments:JSON.parse(JSON.stringify(payments)),
     notes:val('inv-notes'),terms:val('inv-terms'),bankId:bankId,bankInfo:bank,total:t.grand,_t:t,
-    _insp:(window._invInspList||[]).slice()};
+    _insp:(window._invInspList||[]).slice(),
+    contract_id:(window._invCtLink&&window._invCtLink.id)||'',
+    contract_name:(window._invCtLink&&window._invCtLink.name)||'',
+    contract_pkg:(window._invCtLink&&window._invCtLink.pkg)||'',
+    contract_cdate:(window._invCtLink&&window._invCtLink.date)||''};
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1709,7 +1715,7 @@ var IVX_CSS=`
 .ivx th.r,.ivx td.r{text-align:right}
 .ivx th.c,.ivx td.c{text-align:center}
 .ivx td{padding:13px 8px;border-bottom:1px solid var(--ln2);font-size:13.5px;vertical-align:top}
-.ivx .inm{font-weight:600;color:var(--ink);line-height:1.5}
+.ivx .inm{font-weight:600;color:var(--ink);line-height:1.5;overflow-wrap:anywhere;word-break:break-word}
 .ivx .isb{font-size:11.5px;color:var(--ink3);margin-top:2px}
 .ivx .num{font-variant-numeric:tabular-nums;font-family:'Inter','Noto Sans KR',sans-serif}
 .ivx .rowamt{font-weight:700}
@@ -1750,6 +1756,16 @@ var IVX_CSS=`
   .ivx .party{padding:13px 18px}
   .ivx .party:first-child{border-right:none;border-bottom:1px solid var(--ln2)}
   .ivx .items,.ivx .sumwrap,.ivx .notes{padding-left:14px;padding-right:14px}
+  /* 모바일 : 품목 표를 카드형으로 전환 (표가 화면 밖으로 잘리는 문제 해결) */
+  .ivx .items table,.ivx .items tbody,.ivx .items tr,.ivx .items td{display:block;width:100%}
+  .ivx .items thead{display:none}
+  .ivx .items tr{border:1px solid var(--ln2);border-radius:13px;background:var(--soft);padding:12px 14px;margin-bottom:9px}
+  .ivx .items td{border:none;padding:0;text-align:left!important}
+  .ivx .items td.cnm{padding-bottom:9px;margin-bottom:8px;border-bottom:1px dashed var(--ln)}
+  .ivx .items td[data-l]{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:3px 0;font-size:13.5px}
+  .ivx .items td[data-l]::before{content:attr(data-l);font-size:10px;font-weight:700;color:var(--ink3);letter-spacing:.07em;text-transform:uppercase;flex:none}
+  .ivx .items td.rowamt{margin-top:5px;padding-top:7px;border-top:1px solid var(--ln);font-size:15.5px}
+  .ivx .items td[colspan]{text-align:center!important}
   .ivx .sign{margin:0 14px 18px}
   .ivx .ft{padding:15px 18px}
   .ivx .notes{grid-template-columns:1fr}
@@ -1785,11 +1801,11 @@ function buildInvHTML(inv,custView){
     var da=li.discType==='pct'?la*((li.discVal||0)/100):(li.discVal||li.disc||0);
     var lineAmt=la-da;
     var discDisplay=li.discType==='pct'?((li.discVal||0)+'%'):fa(da);
-    var discCell=hasDisc?'<td class="r dtxt num">'+(da>0?'- '+discDisplay:'—')+'</td>':'';
+    var discCell=hasDisc?'<td class="r dtxt num" data-l="할인 · Discount">'+(da>0?'- '+discDisplay:'—')+'</td>':'';
     var sub=[li.cat,li.subcat,li.sub2].filter(Boolean).filter(function(x,i,a){return a.indexOf(x)===i;}).join(' · ');
-    return '<tr><td><div class="inm">'+ivxEsc(trItemName(li.name||'—'))+'</div>'+(sub?'<div class="isb">'+ivxEsc(sub)+'</div>':'')+'</td>'+
-      '<td class="c num">'+(li.qty||1)+'</td><td class="r num">'+fa(li.price)+'</td>'+discCell+
-      '<td class="r num rowamt">'+fa(lineAmt)+'</td></tr>';
+    return '<tr><td class="cnm"><div class="inm">'+ivxEsc(trItemName(li.name||'—'))+'</div>'+(sub?'<div class="isb">'+ivxEsc(sub)+'</div>':'')+'</td>'+
+      '<td class="c num" data-l="수량 · Qty">'+(li.qty||1)+'</td><td class="r num" data-l="단가 · Unit Price">'+fa(li.price)+'</td>'+discCell+
+      '<td class="r num rowamt" data-l="금액 · Amount">'+fa(lineAmt)+'</td></tr>';
   }).join(''):('<tr><td colspan="'+(hasDisc?5:4)+'" style="text-align:center;padding:18px;color:#8792A8">No items</td></tr>');
   var chargeRows='';
   if(t.taxRate>0)chargeRows+='<div class="sumrow"><span>세금 · Tax '+t.taxRate+'%</span><span class="num">'+fa(t.tax)+'</span></div>';
@@ -1816,6 +1832,14 @@ function buildInvHTML(inv,custView){
         var lbl=(r.typeLabel||'점검')+' 보고서'+(r.date?' · '+r.date:'')+(r.client?' · '+r.client:'');
         return '<a href="'+ivxEsc(r.url||'#')+'" target="_blank" rel="noopener" style="color:#0D9488;font-weight:700;text-decoration:none">🔍 '+ivxEsc(lbl)+' ↗</a>';
       }).join('<br>')+
+      '</div></div>';
+  }
+  var ctHtml='';
+  if(inv.contract_id){
+    ctHtml='<div class="nbox" style="border-color:rgba(61,82,160,.35);background:rgba(61,82,160,.05)">'+
+      '<div class="nttl" style="color:#3D52A0">Membership Contract · 계약서</div><div class="nbody">'+
+      '<a href="'+ivxEsc((inv._ctUrl||(BASE_URL+'/admin.html?view='+encodeURIComponent(inv.contract_id)+'&mode=all&lang=ko')))+'" target="_blank" rel="noopener" style="color:#3D52A0;font-weight:700;text-decoration:none">📑 '+
+      ivxEsc((inv.contract_name||'계약서')+(inv.contract_cdate?' · '+inv.contract_cdate:''))+' 계약서 보기 ↗</a>'+
       '</div></div>';
   }
   var stamp=inv.status==='paid'?'<div class="wm paid">PAID</div>':inv.status==='overdue'?'<div class="wm overdue">OVERDUE</div>':'';
@@ -1845,7 +1869,7 @@ function buildInvHTML(inv,custView){
       '<div class="total"><span class="total-lbl">청구 합계 · TOTAL ('+cur+')</span><span class="total-val">'+fa(t.grand)+'</span></div>'+
       (t.paidAmount>0?((inv.payments&&inv.payments.length?inv.payments:[{amt:t.paidAmount,date:inv.paidDate||''}]).map(function(p,pi){return '<div class="sumrow minus"'+(pi===0?' style="margin-top:6px"':'')+'><span>기결제 · Paid'+(p.date?' <span style="opacity:.72;font-size:.92em">('+ivxEsc(p.date)+')</span>':'')+'</span><span class="num">- '+fa(p.amt)+'</span></div>';}).join('')+'<div class="balrow"><span>잔여 결제금액 · BALANCE DUE</span><span>'+fa(t.balance)+'</span></div>'):'')+
     '</div></div>'+
-    '<div class="notes">'+payHtml+noteHtml+inspHtml+'</div>'+signHtml+
+    '<div class="notes">'+payHtml+noteHtml+inspHtml+ctHtml+'</div>'+signHtml+
     '<div class="ft"><div class="ft-co">'+ivxEsc(iss.name||'HAPPY WORKS SERVICES SDN.BHD.')+(iss.biz?' ('+ivxEsc(iss.biz)+')':'')+'<br>📞 '+ivxEsc(iss.phone||'')+'</div><div class="ft-thanks">Thank you for your business</div></div>'+
   '</div></div>';
 }
@@ -2092,6 +2116,7 @@ window.renderInspBox=renderInspBox;
 function clearInspBox(){
   window._invInspList=[];
   var box=$('inv-insp-box');if(box)box.innerHTML='';
+  var box2=$('inv-ct-box');if(box2)box2.innerHTML='';
 }
 window.clearInspBox=clearInspBox;
 async function refreshInspBox(invId){
@@ -2323,6 +2348,107 @@ async function hccPropagate(m,newPhone){
   }catch(e){}
 }
 window.hccPropagate=hccPropagate;
+
+// ═══ 계약서 ↔ 인보이스 연결 (링크는 인보이스 문서에 저장; 폼 상태로 유지되어 저장 시 함께 기록) ═══
+window._invCtLink=window._invCtLink||{id:'',name:'',pkg:'',date:''};
+var CT_ALL=[];
+var CT_PKG_LB={silver:'실버 Silver',royal:'로얄 Royal',gold:'골드 Gold',diamond:'다이아 Diamond',titanium:'티타늄 Titanium',special:'스페셜해피홈 Special'};
+function ctPkgLb(pid){pid=String(pid||'');var biz=/-biz$/.test(pid);var b=CT_PKG_LB[pid.replace(/-biz$/,'')]||pid;return b+(biz?' (사업)':'');}
+function ctViewUrl(id,lang){return BASE_URL+'/admin.html?view='+encodeURIComponent(id)+'&mode=all&lang='+(lang||'ko');}
+async function loadCtAll(force){
+  if(!force&&CT_ALL.length)return CT_ALL;
+  if(!DB)return [];
+  try{
+    var snap=await DB.collection('contracts').limit(500).get();
+    CT_ALL=snap.docs.map(function(d){var x=d.data()||{};return {_id:d.id,name:x.name||'',phone:x.phone||'',pkg:x.package_id||'',date:x.contract_date||''};});
+  }catch(e){}
+  return CT_ALL;
+}
+window.loadCtLinkFromInv=function(inv){
+  window._invCtLink={id:inv.contract_id||'',name:inv.contract_name||'',pkg:inv.contract_pkg||'',date:inv.contract_cdate||''};
+  renderCtBox();
+};
+window.clearCtBox=function(){window._invCtLink={id:'',name:'',pkg:'',date:''};};
+function renderCtBox(){
+  var box=$('inv-ct-box');if(!box)return;
+  var l=window._invCtLink||{};
+  var h='<div class="iib-card"><div class="iib-h"><span class="iib-t">📑 계약서</span>';
+  if(l.id){
+    h+='</div><div class="iib-row"><div class="iib-ic">📑</div><div class="iib-m">'+
+      '<div class="iib-n">'+ivxEsc(l.name||'—')+(l.pkg?' <span style="font-weight:600;color:#8792A8;font-size:11px">'+ivxEsc(ctPkgLb(l.pkg))+'</span>':'')+'</div>'+
+      '<div class="iib-s">'+ivxEsc(l.date||'')+'</div></div>'+
+      '<a class="iib-b go" href="'+ctViewUrl(l.id,'ko')+'" target="_blank" rel="noopener">↗ 열기</a>'+
+      '<button type="button" class="iib-b rm" onclick="unlinkCt()">해제</button></div>';
+  }else{
+    h+='<button type="button" class="iib-add" onclick="openCtLinkModal()">+ 계약서 연결</button></div>'+
+      '<div class="iib-none">연결된 계약서가 없습니다. 패키지 고객이면 계약서를 연결해 두세요.</div>';
+  }
+  h+='</div>';
+  box.innerHTML=h;
+}
+window.renderCtBox=renderCtBox;
+window.unlinkCt=async function(){
+  if(!confirm('이 인보이스와 계약서의 연결을 해제할까요?'))return;
+  window._invCtLink={id:'',name:'',pkg:'',date:''};
+  renderCtBox();
+  try{
+    var ex=invoices.find(function(i){return i.id===val('inv-num');});
+    if(DB&&ex&&ex._docId)await DB.collection('invoices').doc(ex._docId).set({contract_id:'',contract_name:'',contract_pkg:'',contract_cdate:''},{merge:true});
+  }catch(e){}
+  showToast('계약서 연결이 해제되었습니다 (저장 시 반영)');
+};
+window.openCtLinkModal=async function(){
+  await loadCtAll();
+  var old=document.getElementById('ctlk-mask');if(old)old.remove();
+  var mk=document.createElement('div');mk.id='ctlk-mask';
+  mk.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9990;display:flex;align-items:center;justify-content:center;padding:16px';
+  mk.innerHTML='<div style="background:#fff;border-radius:14px;max-width:440px;width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden">'+
+    '<div style="padding:13px 16px;font-size:14px;font-weight:800;border-bottom:1px solid #e5e9f2;display:flex;align-items:center">📑 계약서 연결<button id="ctlk-x" style="margin-left:auto;border:none;background:none;font-size:16px;cursor:pointer;color:#8792A8">✕</button></div>'+
+    '<div style="padding:12px 16px 4px"><input id="ctlk-q" placeholder="🔍 계약자명 · 연락처 검색" style="width:100%;border:1.5px solid #e5e9f2;border-radius:9px;padding:9px 12px;font-size:13px;font-family:inherit"></div>'+
+    '<div id="ctlk-ls" style="padding:10px 16px 16px;overflow-y:auto"></div></div>';
+  document.body.appendChild(mk);
+  mk.addEventListener('click',function(ev){if(ev.target===mk)mk.remove();});
+  document.getElementById('ctlk-x').onclick=function(){mk.remove();};
+  function pnorm(x){x=String(x||'').replace(/[^0-9]/g,'');if(x.indexOf('60')===0)x=x.slice(2);return x.replace(/^0+/,'');}
+  function nnorm(x){return String(x||'').toLowerCase().replace(/\s+/g,'');}
+  function draw(){
+    var q=nnorm(document.getElementById('ctlk-q').value);
+    var myN=nnorm(val('c-name')),myP=pnorm(val('c-phone'));
+    var rows=CT_ALL.filter(function(c){
+      if(!q)return true;
+      return nnorm(c.name).indexOf(q)>=0||pnorm(c.phone).indexOf(q.replace(/[^0-9]/g,''))>=0&&q.replace(/[^0-9]/g,'');
+    });
+    rows.sort(function(a,b){
+      var sa=((myN&&nnorm(a.name)===myN)?2:0)+((myP&&pnorm(a.phone)===myP)?2:0);
+      var sb=((myN&&nnorm(b.name)===myN)?2:0)+((myP&&pnorm(b.phone)===myP)?2:0);
+      return sb-sa;
+    });
+    var ls=document.getElementById('ctlk-ls');
+    ls.innerHTML=rows.length?rows.slice(0,50).map(function(c){
+      var hit=(myN&&nnorm(c.name)===myN)||(myP&&pnorm(c.phone)===myP);
+      return '<div class="ctlk-c" data-cid="'+c._id+'" style="border:1.5px solid '+(hit?'#2563eb':'#e5e9f2')+';'+(hit?'background:#eff6ff;':'')+'border-radius:11px;padding:11px 13px;margin-bottom:8px;cursor:pointer">'+
+        '<div style="font-size:13px;font-weight:800">'+ivxEsc(c.name||'—')+(hit?' <span style="font-size:10px;font-weight:800;color:#2563eb">⚡ 이 고객</span>':'')+'</div>'+
+        '<div style="font-size:11px;color:#8792A8;margin-top:2px">'+ivxEsc(ctPkgLb(c.pkg))+' · '+ivxEsc(c.date||'')+(c.phone?' · '+ivxEsc(c.phone):'')+'</div></div>';
+    }).join(''):'<div style="text-align:center;color:#8792A8;font-size:12px;padding:20px 0">계약서가 없습니다</div>';
+    Array.prototype.forEach.call(ls.querySelectorAll('.ctlk-c'),function(el){
+      el.onclick=async function(){
+        var c=CT_ALL.find(function(x){return x._id===el.getAttribute('data-cid');});
+        if(!c)return;
+        if(!confirm('이 계약서를 연결할까요?\n\n'+(c.name||'—')+' · '+ctPkgLb(c.pkg)+(c.date?' · '+c.date:'')))return;
+        window._invCtLink={id:c._id,name:c.name,pkg:c.pkg,date:c.date};
+        mk.remove();renderCtBox();
+        try{
+          var ex=invoices.find(function(i){return i.id===val('inv-num');});
+          if(DB&&ex&&ex._docId)await DB.collection('invoices').doc(ex._docId).set({contract_id:c._id,contract_name:c.name,contract_pkg:c.pkg,contract_cdate:c.date},{merge:true});
+        }catch(e){}
+        showToast('✓ 계약서 연결됨 (저장 시 반영)');
+      };
+    });
+  }
+  draw();
+  document.getElementById('ctlk-q').addEventListener('input',draw);
+};
+setTimeout(function(){try{renderCtBox();}catch(e){}},400);
 
 async function saveInv(){
   if(!DB){showToast('Firebase 연결 중... 잠시 후 다시 시도해주세요.');return null;}
@@ -4008,6 +4134,7 @@ async function runInvoiceView(vid,lang){
                 url:BASE_URL+'/'+pf+'?id='+encodeURIComponent(d.id)+'&lang='+(lang||'ko')};
       }).sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
     }catch(e){inv._insp=[];}
+    if(inv.contract_id)inv._ctUrl=BASE_URL+'/admin.html?view='+encodeURIComponent(inv.contract_id)+'&mode=all&lang='+(lang||'ko');
     host.innerHTML=buildInvHTML(inv,true);
   }catch(e){
     console.error(e);
