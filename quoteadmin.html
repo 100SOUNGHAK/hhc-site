@@ -38,6 +38,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--indigo)}
 .pitem .nm span{display:block;font-size:10px;color:var(--gray);font-weight:400;margin-top:1px}
 .pitem .pr{font-size:12.5px;font-weight:800;color:var(--indigo);white-space:nowrap}
 .pitem .addb{width:30px;height:30px;border-radius:9px;background:var(--il);color:var(--indigo);border:none;font-weight:800;font-size:17px;flex-shrink:0}
+.pitem .editb{width:26px;height:26px;border-radius:8px;background:#f0f2f8;color:var(--gray);border:none;font-size:12px;flex-shrink:0}
 .sel{display:flex;align-items:center;gap:6px;padding:8px 9px;background:#f8fafc;border-left:3px solid var(--indigo);border-radius:8px;margin-bottom:6px}
 .sel.g-material{border-left-color:#d97706}
 .sel.g-product{border-left-color:#0ea5e9}
@@ -46,7 +47,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--indigo)}
 .sel.g-repair{border-left-color:#ef4444}
 .sel.g-custom{border-left-color:#6b7280}
 .sel .nm{flex:1;font-size:12px;font-weight:600;min-width:0;word-break:keep-all}
-.sel input.q{width:52px;padding:5px 4px;font-size:12px;text-align:center;border-radius:7px}
+.sel input.q{width:48px;padding:5px 3px;font-size:12px;text-align:center;border-radius:7px}
+.sel input.pq{width:62px;padding:5px 3px;font-size:12px;text-align:right;border-radius:7px}
 .sel .un{font-size:10px;color:var(--gray);width:22px;text-align:center}
 .sel .amt{font-size:12px;font-weight:800;width:60px;text-align:right;white-space:nowrap}
 .sel .x{background:none;border:none;color:#d33;font-weight:800;font-size:15px;padding:2px 4px}
@@ -80,6 +82,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--indigo)}
 .acopt .tg.inv{background:#e0f2fe;color:#0369a1}
 .acopt .tg.non{background:#f0f2f8;color:#667}
 .acopt .pr{font-size:12.5px;font-weight:800;color:var(--indigo)}
+.acopt input.aprice{width:70px;padding:5px 5px;font-size:12.5px;font-weight:700;color:var(--indigo);text-align:right;border-radius:7px;border:1px solid var(--bdr)}
 .acopt .rec{font-size:10px;font-weight:700;color:#b58a1f;display:flex;align-items:center;gap:3px;white-space:nowrap}
 .acopt .rec input{width:15px;height:15px;accent-color:var(--gold)}
 /* 목록 */
@@ -102,6 +105,22 @@ input:focus,select:focus,textarea:focus{border-color:var(--indigo)}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:#1c2333;color:#fff;font-size:13px;padding:11px 18px;border-radius:12px;z-index:300;opacity:0;transition:.25s;max-width:88vw;text-align:center}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 .search{margin-bottom:9px}
+</style>
+
+<style>
+/* ══ 모바일·가로모드 개선 ══ */
+@media (max-width:820px){
+  input:not([type=checkbox]):not([type=radio]),select,textarea{font-size:16px!important}
+}
+body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+@media (orientation:landscape) and (max-height:520px){
+  .hd{padding-top:6px;padding-bottom:6px}
+  .hd b{font-size:13.5px}
+  .tabs{top:42px}
+  .tabs .tab{padding:9px 4px}
+  .view{max-width:860px}
+  .card{padding:11px}
+}
 </style>
 </head>
 <body>
@@ -317,14 +336,61 @@ var GROUP_META={
   custom:{ko:'기타 항목',en:'Other Items',icon:'📝',order:6}
 };
 // 제품(에어컨 본체) 가격표 — AC_PRICES에서 자동 생성 (제품 탭에서 고정 금액으로 추가)
-PRICE_DB.product=(function(){
+function rebuildProductList(){
   var out=[];
   AC_PRICES.forEach(function(a){
-    if(a.non)out.push({n:a.brand+' '+a.hp+'HP 일반형',en:a.brand+' '+a.hp+'HP Non-Inverter',p:a.non,note:'벽걸이형 · NON-INVERTER',noteEn:'Wall-mounted · Non-inverter'});
-    if(a.inv)out.push({n:a.brand+' '+a.hp+'HP 인버터',en:a.brand+' '+a.hp+'HP Inverter',p:a.inv,note:'벽걸이형 · INVERTER',noteEn:'Wall-mounted · Inverter'});
+    if(a.non)out.push({n:a.brand+' '+a.hp+'HP 일반형',en:a.brand+' '+a.hp+'HP Non-Inverter',p:a.non,note:'벽걸이형 · NON-INVERTER',noteEn:'Wall-mounted · Non-inverter',_ac:{brand:a.brand,hp:a.hp,tp:'non'}});
+    if(a.inv)out.push({n:a.brand+' '+a.hp+'HP 인버터',en:a.brand+' '+a.hp+'HP Inverter',p:a.inv,note:'벽걸이형 · INVERTER',noteEn:'Wall-mounted · Inverter',_ac:{brand:a.brand,hp:a.hp,tp:'inv'}});
   });
-  return out;
-})();
+  PRICE_DB.product=out;
+}
+rebuildProductList();
+// ── 단가 오버라이드: Firestore(settings/quote_prices)에 저장된 수정 단가 적용 ──
+// 키: '설치|철거 비용' 형태(카테고리|항목명), 에어컨은 'ac|DAIKIN|1.0|inv'
+window._priceOverrides={};
+function applyPriceOverrides(ov){
+  window._priceOverrides=ov||{};
+  ['install','repair','material','callout'].forEach(function(cat){
+    (PRICE_DB[cat]||[]).forEach(function(it){
+      var k=cat+'|'+it.n;
+      if(ov&&ov[k]!=null)it.p=parseFloat(ov[k]);
+    });
+  });
+  AC_PRICES.forEach(function(a){
+    ['non','inv'].forEach(function(t){
+      var k='ac|'+a.brand+'|'+a.hp+'|'+t;
+      if(ov&&ov[k]!=null)a[t]=parseFloat(ov[k]);
+    });
+  });
+  rebuildProductList();
+  renderPriceList();
+  // 열려있는 선택형 그룹 옵션도 새 단가로 갱신 (체크/추천 유지)
+  document.querySelectorAll('#ac-groups .acgroup').forEach(function(box){
+    renderAcGroupOptions(box,captureGroupState(box));
+  });
+}
+function captureGroupState(box){
+  var options=[];
+  box.querySelectorAll('.ag-opts input[type=checkbox]').forEach(function(c){
+    if(c.checked)options.push({key:c.dataset.key});
+  });
+  var rec=box.querySelector('input[name="ac-rec-'+box.dataset.g+'"]:checked');
+  return {options:options,recommended:rec?rec.value:''};
+}
+function editPriceItem(it,cat){
+  if(cat==='clean'){toast('청소 단가는 인보이스의 서비스 항목에서 수정하세요 (자동 연동됨)');return;}
+  var cur=it.p;
+  var v=prompt('"'+it.n+'" 새 단가 (RM)',cur);
+  if(v===null)return;
+  var p=parseFloat(v);
+  if(isNaN(p)||p<0){toast('올바른 금액을 입력해주세요');return;}
+  var key=it._ac?('ac|'+it._ac.brand+'|'+it._ac.hp+'|'+it._ac.tp):(cat+'|'+it.n);
+  if(window.__savePriceOverride)window.__savePriceOverride(key,p);
+  // 즉시 로컬 반영
+  var ov=window._priceOverrides||{};ov[key]=p;
+  applyPriceOverrides(ov);
+  toast('✓ 단가 수정됨: '+it.n+' → RM '+p.toLocaleString('en-US')+' (모든 새 견적에 적용)');
+}
 var NOTICE_TPL={
   install:['기본 설치 인건비에는 배관 진공 작업(VACUUMING) 및 냉매 추가 충전이 포함됩니다.','최종 청구 금액은 현장 조건 및 실제 사용 자재에 따라 다소 차이가 있을 수 있습니다.','에어컨 본체·자재 비용은 주문 확정 시 선결제, 잔금은 작업 완료 후 결제해 주시면 됩니다.'],
   repair:['출장점검 비용은 에어컨 1대 기준이며, 추가 점검 시 대당 RM50이 추가됩니다.','점검 결과에 따라 수리 또는 부품 교체가 필요한 경우 별도 견적이 제공됩니다.','정품 부품 가격은 별도 문의 바랍니다.'],
@@ -425,9 +491,14 @@ function renderAcGroupOptions(box,init){
       var chk=document.createElement('input');chk.type='checkbox';
       chk.checked=initKeys?(initKeys.indexOf(key)>=0):true;
       chk.dataset.key=key;chk.dataset.price=price;chk.dataset.brand=a.brand;chk.dataset.tp=t;
+      // 수정 로드/재렌더 시 저장된 단가 유지 (이 견적 전용 단가)
+      var initOpt=init&&init.options?init.options.find(function(o){return (o.key||o.brand+'|'+o.type)===key;}):null;
+      if(initOpt&&initOpt.price!=null)price=initOpt.price;
+      chk.dataset.price=price;
       var nm=document.createElement('div');nm.className='nm';
       nm.innerHTML=a.brand+'<span class="tg '+(t==='inv'?'inv':'non')+'">'+(t==='inv'?'INVERTER':'NON-INV')+'</span>';
-      var pr=document.createElement('div');pr.className='pr';pr.textContent=price.toLocaleString('en-US');
+      var pr=document.createElement('input');pr.className='aprice';pr.type='number';pr.min='0';pr.value=price;pr.title='단가 (이 견적만)';
+      pr.oninput=function(){chk.dataset.price=parseFloat(pr.value)||0;};
       var rec=document.createElement('label');rec.className='rec';
       var rrad=document.createElement('input');rrad.type='radio';rrad.name='ac-rec-'+gidx;rrad.value=key;
       if(init&&init.recommended===key)rrad.checked=true;
@@ -444,7 +515,7 @@ function collectAcSelect(){
     var options=[];
     box.querySelectorAll('.ag-opts input[type=checkbox]').forEach(function(c){
       if(!c.checked)return;
-      options.push({key:c.dataset.key,brand:c.dataset.brand,type:c.dataset.tp,price:parseInt(c.dataset.price,10)});
+      options.push({key:c.dataset.key,brand:c.dataset.brand,type:c.dataset.tp,price:parseFloat(c.dataset.price)||0});
     });
     if(!options.length)return;
     var rec=box.querySelector('input[name="ac-rec-'+box.dataset.g+'"]:checked');
@@ -479,9 +550,11 @@ function renderPriceList(){
     var nm=document.createElement('div');nm.className='nm';
     nm.innerHTML=escapeHtml(it.n)+(it.note?'<span>'+escapeHtml(it.note)+'</span>':'');
     var pr=document.createElement('div');pr.className='pr';pr.textContent=it.p.toLocaleString('en-US')+(it.unit?'/'+it.unit:'');
+    var eb=document.createElement('button');eb.className='editb';eb.textContent='✏️';eb.title='단가 수정';
+    eb.onclick=function(){editPriceItem(it,curCat);};
     var b=document.createElement('button');b.className='addb';b.textContent='＋';
     b.onclick=function(){addPriceItem(it,curCat);};
-    row.appendChild(nm);row.appendChild(pr);row.appendChild(b);
+    row.appendChild(nm);row.appendChild(pr);row.appendChild(eb);row.appendChild(b);
     host.appendChild(row);
   });
   if(!shown)host.innerHTML='<div class="empty" style="padding:14px">항목 없음</div>';
@@ -513,10 +586,12 @@ function renderSelList(){
     var q=document.createElement('input');q.className='q';q.type='number';q.min='0';q.value=s.qty;
     q.oninput=function(){s.qty=parseFloat(q.value)||0;renderTotals();amt.textContent=(s.qty*s.price).toLocaleString('en-US');};
     var un=document.createElement('div');un.className='un';un.textContent=s.unit||'×';
+    var pq=document.createElement('input');pq.className='pq';pq.type='number';pq.min='0';pq.value=s.price;pq.title='단가 (이 견적만)';
+    pq.oninput=function(){s.price=parseFloat(pq.value)||0;renderTotals();amt.textContent=(s.qty*s.price).toLocaleString('en-US');};
     var amt=document.createElement('div');amt.className='amt';amt.textContent=(s.qty*s.price).toLocaleString('en-US');
     var x=document.createElement('button');x.className='x';x.textContent='×';
     x.onclick=function(){selItems.splice(i,1);renderSelList();};
-    row.appendChild(nm);row.appendChild(q);row.appendChild(un);row.appendChild(amt);row.appendChild(x);
+    row.appendChild(nm);row.appendChild(q);row.appendChild(un);row.appendChild(pq);row.appendChild(amt);row.appendChild(x);
     host.appendChild(row);
   });
   renderTotals();
@@ -573,7 +648,7 @@ function collectQuote(){
 function resetForm(confirmAsk){
   if(confirmAsk&&(selItems.length||gid('f-client').value)&&!confirm('작성 중인 내용을 지우고 새로 작성할까요?'))return;
   selItems=[];currentEditId=null;
-  gid('f-client').value='';gid('f-phone').value='';gid('f-subject').value='';
+  gid('f-client').value='';gid('f-phone').value='+60 ';gid('f-subject').value='';
   gid('f-date').value=todayStr();gid('f-valid').value='7';gid('f-discount').value='0';
   if(acEnabled)toggleAcSelect();
   refreshNotices();renderSelList();
@@ -584,7 +659,7 @@ window.loadQuoteToForm=function(q,id){
   currentEditId=id;
   document.querySelectorAll('#typ-row .typ').forEach(function(b){b.classList.toggle('on',(q.types||[]).indexOf(b.dataset.t)>=0);});
   gid('f-client').value=q.client||'';
-  gid('f-phone').value=q.phone||'';
+  gid('f-phone').value=q.phone||'+60 ';
   gid('f-subject').value=q.subject||'';
   gid('f-date').value=q.issueDate||todayStr();
   gid('f-valid').value=q.validDays||7;
@@ -665,6 +740,118 @@ function viewQuote(id){window.open('https://hhc-3p8.pages.dev/quote.html?id='+id
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getFirestore, collection, doc, addDoc, setDoc, getDocs, getDoc, deleteDoc, updateDoc, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
+// ═══════════════════════════════════════════════════════════
+// HHC 고객 마스터 연동 공통 엔진 (customers 컬렉션)
+//  · 저장 시 고객 마스터 자동 등록/별칭 병합 (HHCC_upsert)
+//  · 같은 이름·다른 연락처 감지 시 확인 모달 (HHCC_check)
+//  · "새 번호로 변경" 선택 시 전 프로그램 문서 일괄 반영 (hccPropagate)
+// ═══════════════════════════════════════════════════════════
+var HHCC_LIST=[],HHCC_TS=0;
+function hccPN(p){p=String(p||'').replace(/[^0-9]/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');}
+function hccNN(n){return String(n||'').toLowerCase().replace(/\s+/g,'');}
+function hccWrite(id,upd){return updateDoc(doc(DB,'customers',id),upd);}
+function hccWriteAny(cl,id,upd){return updateDoc(doc(DB,cl,id),upd);}
+function hccGetAll(cl){return getDocs(collection(DB,cl));}
+function hccAddNew(nd){return addDoc(collection(DB,'customers'),nd);}
+async function hccLoad(force){
+  if(!force&&HHCC_LIST.length&&(Date.now()-HHCC_TS)<60000)return HHCC_LIST;
+  try{var snap=await hccGetAll('customers');
+    HHCC_LIST=snap.docs.map(function(d){var x=d.data()||{};x._docId=d.id;return x;});
+    HHCC_TS=Date.now();
+  }catch(e){}
+  return HHCC_LIST;
+}
+function hccNameHit(c,nn){if(!nn)return false;if(hccNN(c.name)===nn)return true;return (c.aliases||[]).some(function(a){return hccNN(a)===nn;});}
+window.HHCC_upsert=async function(name,phone,extra){
+  try{
+    name=String(name||'').trim();phone=String(phone||'').trim();extra=extra||{};
+    if(hccPN(phone)==='')phone='';
+    if(!name&&!phone)return;
+    var list=await hccLoad();
+    var pn=hccPN(phone),nn=hccNN(name),m=null;
+    if(pn)m=list.find(function(c){return hccPN(c.phone)===pn;})||null;
+    if(!m&&nn)m=list.find(function(c){return hccNameHit(c,nn);})||null;
+    var now=new Date().toISOString();
+    if(m&&m._docId){
+      var upd={updated_at:now},ch=false;
+      if(name&&!hccNameHit(m,nn)){upd.aliases=(m.aliases||[]).concat([name]);m.aliases=upd.aliases;ch=true;}
+      if(phone&&!hccPN(m.phone)){upd.phone=phone;m.phone=phone;ch=true;}
+      ['email','addr','biz','member'].forEach(function(k){if(extra[k]&&!m[k]){upd[k]=extra[k];m[k]=extra[k];ch=true;}});
+      if(ch)await hccWrite(m._docId,upd);
+    }else{
+      var nd={id:'c'+Date.now(),name:name||phone,phone:phone,aliases:[],email:extra.email||'',addr:extra.addr||'',biz:extra.biz||'',member:extra.member||'',created_at:now,updated_at:now};
+      var ref=await hccAddNew(nd);
+      nd._docId=ref&&ref.id;HHCC_LIST.push(nd);
+    }
+  }catch(e){}
+};
+var HHCC_CSSON=false;
+function hccCSS(){
+  if(HHCC_CSSON)return;HHCC_CSSON=true;
+  var st=document.createElement('style');
+  st.textContent='#hhcc-mask{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:99990;display:flex;align-items:center;justify-content:center;padding:16px}#hhcc-box{background:#fff;border-radius:14px;max-width:440px;width:100%;box-shadow:0 18px 60px rgba(0,0,0,.3);overflow:hidden;font-family:inherit}.hhcc-h{padding:13px 16px;font-size:14px;font-weight:800;border-bottom:1px solid #e5e9f2;color:#111827}.hhcc-b{padding:14px 16px}.hhcc-p{font-size:12.5px;color:#4b5563;line-height:1.7;margin:0 0 11px}.hhcc-cmp{display:grid;grid-template-columns:1fr 22px 1fr;gap:6px;align-items:center;background:#f4f6fa;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:12px;text-align:center}.hhcc-cmp small{display:block;font-size:10px;color:#8a94a6;font-weight:700;margin-bottom:2px}.hhcc-cmp b{font-size:12.5px;color:#111827}.hhcc-opt{display:block;width:100%;text-align:left;border:1.5px solid #e5e9f2;border-radius:11px;padding:11px 13px;margin-bottom:8px;cursor:pointer;background:#fff;font-family:inherit}.hhcc-opt:hover{border-color:#2563eb;background:#eff6ff}.hhcc-opt b{display:block;font-size:13px;color:#111827}.hhcc-opt span{display:block;font-size:11px;color:#8a94a6;line-height:1.5;margin-top:2px}.hhcc-f{padding:11px 16px;border-top:1px solid #e5e9f2;text-align:right}.hhcc-x{font-size:12px;font-weight:700;border:1.5px solid #e5e9f2;background:#fff;border-radius:9px;padding:7px 14px;cursor:pointer;color:#4b5563;font-family:inherit}';
+  document.head.appendChild(st);
+}
+function hccEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+window.HHCC_check=async function(name,phone){
+  try{
+    name=String(name||'').trim();phone=String(phone||'').trim();
+    var pn=hccPN(phone);
+    if(!name||!pn)return {phone:phone,action:'keep'};
+    var list=await hccLoad();
+    if(list.some(function(c){return hccPN(c.phone)===pn;}))return {phone:phone,action:'keep'};
+    var nn=hccNN(name);
+    var m=list.find(function(c){return hccPN(c.phone)&&hccNameHit(c,nn);});
+    if(!m)return {phone:phone,action:'keep'};
+    return await new Promise(function(res){
+      hccCSS();
+      var old=document.getElementById('hhcc-mask');if(old)old.remove();
+      var mk=document.createElement('div');mk.id='hhcc-mask';
+      mk.innerHTML='<div id="hhcc-box"><div class="hhcc-h">📞 연락처가 서로 다릅니다</div><div class="hhcc-b">'+
+        '<p class="hhcc-p"><b>'+hccEsc(m.name)+'</b> 고객은 이미 다른 연락처로 등록되어 있습니다. 어떻게 할까요?</p>'+
+        '<div class="hhcc-cmp"><div><small>기존 연락처</small><b>'+hccEsc(m.phone)+'</b></div><div>→</div><div><small>지금 입력한 연락처</small><b style="color:#2563eb">'+hccEsc(phone)+'</b></div></div>'+
+        '<button type="button" class="hhcc-opt" data-a="use_existing"><b>기존 번호 사용</b><span>지금 입력한 번호 대신 '+hccEsc(m.phone)+' 를 그대로 씁니다.</span></button>'+
+        '<button type="button" class="hhcc-opt" data-a="use_new"><b>새 번호로 변경 — 모든 프로그램 반영</b><span>계약서·인보이스·점검보고서·예약·의뢰·견적의 이 고객 기록이 모두 새 번호로 업데이트됩니다.</span></button>'+
+        '<button type="button" class="hhcc-opt" data-a="separate"><b>다른 고객으로 저장</b><span>동명이인입니다. 연결하지 않고 별도 고객으로 기록합니다.</span></button>'+
+        '</div><div class="hhcc-f"><button type="button" class="hhcc-x" data-a="cancel">저장 취소</button></div></div>';
+      document.body.appendChild(mk);
+      mk.addEventListener('click',function(ev){
+        var b=ev.target.closest?ev.target.closest('[data-a]'):null;if(!b)return;
+        var a=b.getAttribute('data-a');mk.remove();
+        if(a==='cancel'){res(null);return;}
+        if(a==='use_existing'){res({phone:m.phone,action:'use_existing'});return;}
+        if(a==='use_new'){hccPropagate(m,phone);res({phone:phone,action:'use_new'});return;}
+        res({phone:phone,action:'separate'});
+      });
+    });
+  }catch(e){return {phone:phone,action:'keep'};}
+};
+async function hccPropagate(m,newPhone){
+  try{
+    var oldPN=hccPN(m.phone);if(!oldPN)return;
+    var jobs=[
+      ['contracts',function(x){return x.phone;},function(){return {phone:newPhone};}],
+      ['invoices',function(x){return x.customer&&x.customer.phone;},function(){return {'customer.phone':newPhone};}],
+      ['inspections',function(x){return x.phone;},function(){return {phone:newPhone};}],
+      ['bookings',function(x){return x.customer_phone;},function(){return {customer_phone:newPhone};}],
+      ['schedules',function(x){return x.customer_phone;},function(){return {customer_phone:newPhone};}],
+      ['requests',function(x){return x.phone;},function(){return {phone:newPhone};}],
+      ['quotes',function(x){return x.phone;},function(){return {phone:newPhone};}]
+    ];
+    for(var j=0;j<jobs.length;j++){
+      try{
+        var snap=await hccGetAll(jobs[j][0]);
+        var ids=snap.docs.filter(function(d){var x=d.data()||{};return hccPN(jobs[j][1](x))===oldPN;}).map(function(d){return d.id;});
+        for(var k=0;k<ids.length;k++){try{await hccWriteAny(jobs[j][0],ids[k],jobs[j][2]());}catch(e2){}}
+      }catch(e1){}
+    }
+    if(m._docId){try{await hccWrite(m._docId,{phone:newPhone,updated_at:new Date().toISOString()});}catch(e3){}}
+    m.phone=newPhone;
+  }catch(e){}
+}
+window.hccPropagate=hccPropagate;
+
+
 const FIREBASE_CFG={
   apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
   authDomain:"happywork-packageplan.firebaseapp.com",
@@ -690,6 +877,25 @@ async function shorten(url){
     return 'https://hhc-3p8.pages.dev/r.html?k='+key;
   }catch(e){return url;}
 }
+
+// 수정 단가(오버라이드) 로드 — settings/quote_prices 문서
+(async function loadPriceOverrides(){
+  if(!DB)return;
+  try{
+    const snap=await getDoc(doc(DB,'settings','quote_prices'));
+    if(snap.exists()&&snap.data().overrides){
+      applyPriceOverrides(snap.data().overrides);
+    }
+  }catch(e){console.warn('단가 오버라이드 로드 실패:',e);}
+})();
+// 수정 단가 저장 (병합 저장 — 다른 항목의 수정값 유지)
+window.__savePriceOverride=async function(key,price){
+  if(!DB)return;
+  try{
+    const o={};o[key]=price;
+    await setDoc(doc(DB,'settings','quote_prices'),{overrides:o},{merge:true});
+  }catch(e){console.warn('단가 저장 실패:',e);toast('⚠ 단가 저장 실패 — 네트워크 확인');}
+};
 
 // 인보이스 서비스 카탈로그(청소) 실시간 연동:
 // hhcinvoice.html이 관리하는 'services' 컬렉션에서 청소 항목을 불러온다.
@@ -745,6 +951,11 @@ window.__saveQuote=async function(){
   const data=collectQuote();
   if(!data)return;
   if(!DB){alert('Firebase가 연결되지 않았습니다. 새로고침 후 다시 시도해주세요.');return;}
+  if(window.HHCC_check&&data.phone){
+    const _ck=await HHCC_check(data.client,data.phone);
+    if(!_ck)return;
+    if(_ck.phone&&_ck.phone!==data.phone){data.phone=_ck.phone;gid('f-phone').value=_ck.phone;}
+  }
   const btn=document.getElementById('save-btn');
   const orig=btn.textContent;
   btn.disabled=true;btn.textContent='저장 중...';
@@ -764,6 +975,7 @@ window.__saveQuote=async function(){
       const ref=await addDoc(collection(DB,'quotes'),data);
       id=ref.id;
     }
+    if(window.HHCC_upsert&&data.phone)HHCC_upsert(data.client,data.phone);
     lastSavedId=id;currentEditId=id;
     btn.textContent='링크 생성 중...';
     const koUrl='https://hhc-3p8.pages.dev/quote.html?id='+id+'&lang=ko';
