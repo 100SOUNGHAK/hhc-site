@@ -328,21 +328,17 @@ try{
     if(_s&&_s.c)location.replace(location.pathname+'?c='+encodeURIComponent(_s.c)+(_s.v?'&v='+encodeURIComponent(_s.v):'')+(_s.lang?'&lang='+encodeURIComponent(_s.lang):''));
   }
 }catch(e){}
-// 동적 manifest : 이 고객 전용 시작 주소(c= 포함)로 설치되게 함
+// manifest 연결 : 정식 manifest.json 파일 사용 (data: 방식은 Play 프로텍트가
+//                  구형 바로가기 패키지로 판단해 설치를 차단하는 문제가 있었음)
+// * Android : manifest.json 의 시작 주소(c= 없음)로 열려도 위의 localStorage 복원으로 자기 페이지 표시
+// * iOS     : manifest 를 연결하지 않음 — 홈 화면 추가 시 현재 주소(c= 포함) 그대로 저장되는 방식이
+//             저장공간이 분리되는 iOS 특성상 더 안정적 (전체화면은 apple-mobile-web-app 메타로 동작)
 (function(){
-  if(!/^https?:$/.test(location.protocol)||!CID)return;
-  try{
-    const dir=location.origin+location.pathname.replace(/[^/]*$/,'');
-    const start=location.origin+location.pathname+'?c='+encodeURIComponent(CID)+'&v='+encodeURIComponent(P.get('v')||'iv,ip,ct,cp')+'&lang='+(LANG==='en'?'en':'ko');
-    const man={id:'hhc-my-'+CID,name:'Happy Home Care',short_name:'HHC',
-      start_url:start,scope:dir,display:'standalone',background_color:'#F2F4F9',theme_color:'#0B1833',
-      icons:[{src:dir+'icon-192.png',sizes:'192x192',type:'image/png'},
-             {src:dir+'icon-512.png',sizes:'512x512',type:'image/png'},
-             {src:dir+'icon-512.png',sizes:'512x512',type:'image/png',purpose:'maskable'}]};
-    const l=document.createElement('link');l.rel='manifest';
-    l.href='data:application/manifest+json;charset=utf-8,'+encodeURIComponent(JSON.stringify(man));
+  if(!/^https?:$/.test(location.protocol))return;
+  if(!IS_IOS){
+    const l=document.createElement('link');l.rel='manifest';l.href='manifest.json';
     document.head.appendChild(l);
-  }catch(e){}
+  }
   if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();
 
