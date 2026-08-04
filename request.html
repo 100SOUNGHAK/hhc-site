@@ -693,6 +693,7 @@ function applyLang(){
   $('pk-ok').textContent=l.pkOk;
   renderPicked();
   pkRenderRail();pkRenderList();pkFoot();
+  setPrefillNote();   // 고객정보 자동 입력 안내 칩도 언어 전환 (선언 호이스팅으로 안전)
 }
 
 document.querySelectorAll('.lang-btn').forEach(btn=>{
@@ -1328,6 +1329,36 @@ if(currentLang!=='ko'){
   document.querySelectorAll('.lang-btn').forEach(b=>b.classList.toggle('active',b.dataset.lang===currentLang));
 }
 applyLang();
+
+// ══ 고객정보 자동 반영 ══
+// 마이페이지의 「의뢰 요청서 작성」 버튼으로 열면 nm(이름)·ph(연락처)·ad(주소)가
+// 주소 파라미터로 함께 넘어온다. 세 칸을 미리 채우되, 일반 입력칸 그대로라서
+// 고객이 언제든 직접 수정할 수 있다. (빈 값은 건드리지 않음)
+(function(){
+  const q=new URLSearchParams(window.location.search);
+  let any=false;
+  [['f-condo-name',q.get('nm')],['f-condo-unit',q.get('ad')],['f-phone',q.get('ph')]].forEach(function(pair){
+    const el=$(pair[0]),v=String(pair[1]||'').trim();
+    if(el&&v&&!el.value.trim()){el.value=v;any=true;}
+  });
+  if(!any)return;
+  checkInfoDone();
+  // 자동 입력 안내 칩 (수정 가능하다는 것을 알려준다)
+  const bd=document.querySelector('#card-info .card-body');
+  if(bd){
+    const n=document.createElement('div');
+    n.id='prefill-note';
+    n.style.cssText='background:#ECFDF5;border:1px solid #A7F3D0;color:#0f766e;border-radius:10px;padding:8px 11px;font-size:11.5px;font-weight:700;line-height:1.55;margin-bottom:12px';
+    bd.insertBefore(n,bd.firstChild);
+    setPrefillNote();
+  }
+})();
+function setPrefillNote(){
+  const n=document.getElementById('prefill-note');
+  if(n)n.textContent=(currentLang==='ko')
+    ?'✅ 마이페이지 고객정보가 자동 입력되었습니다. 필요하면 직접 수정하세요.'
+    :'✅ Your details were filled in automatically from My Page. Feel free to edit them.';
+}
 </script>
 </body>
 </html>
