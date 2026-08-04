@@ -164,6 +164,10 @@ textarea{resize:none;line-height:1.5}
 .svc-sub-hdr .svc-hact button:hover:not(:disabled){background:var(--indigo);color:#fff}
 .svc-sub-hdr.sub2{padding-left:28px;background:#f7f9ff}
 .svc-n{display:inline-block;background:rgba(0,0,0,.10);border-radius:100px;padding:0 6px;font-size:10px;margin-left:5px;font-weight:700}
+.svc-en{font-style:normal;font-size:10.5px;font-weight:600;opacity:.72;margin-left:7px}
+.svc-en.no{opacity:1;color:#F2B23E;font-weight:700}
+.svc-cat-hdr .svc-en{color:#D8E0FF}
+.svc-enp{display:block;font-weight:600;color:var(--indigo);opacity:.75;font-size:10px}
 .svc-empty{padding:12px 16px;font-size:11.5px;color:var(--gray);border-bottom:1px solid var(--bdr)}
 .svc-path{padding:8px 16px 0;font-size:10.5px;font-weight:700;color:var(--gray)}
 .svc-ord{display:flex;flex-direction:column;gap:1px}
@@ -673,12 +677,13 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   <div class="sh"><span class="sht">서비스 항목 (<span id="svc-count">0</span>개)</span>
     <span style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end">
       <button class="btn bxs bp" onclick="addTopCat()" style="font-size:11px">＋ 대분류</button>
+      <button class="btn bxs bgh" onclick="openCatEn()" style="font-size:11px">🌐 영어 이름 <span id="svc-en-n"></span></button>
       <button class="btn bxs bgh" onclick="openTrash()" style="font-size:11px">🗑 휴지통 <span id="svc-trash-n">0</span></button>
       <button class="btn bxs bgh" onclick="syncDocsCats()" style="font-size:11px">🔄 과거 문서 일괄 반영</button>
       <button class="btn bxs bgh" onclick="migrateCats()" style="font-size:11px">구버전 정리</button>
     </span></div>
   <div style="margin:0 16px 8px"><input id="svc-q" type="search" placeholder="🔍 품목명 · 분류로 검색" oninput="onSvcQ(this.value)" style="width:100%;padding:9px 12px;border:1px solid var(--bdr);border-radius:10px;font-size:13px;font-family:inherit;box-sizing:border-box"></div>
-  <div style="margin:0 16px 8px;font-size:11px;color:var(--gray);line-height:1.55">분류 이름을 바꾸거나 항목을 옮기면 <b>이미 작성된 인보이스에도 자동으로 반영</b>됩니다. 품목명·단가·금액은 발행 당시 값 그대로 보존됩니다.</div>
+  <div style="margin:0 16px 8px;font-size:11px;color:var(--gray);line-height:1.55">분류 이름을 바꾸거나 항목을 옮기면 <b>이미 작성된 인보이스에도 자동으로 반영</b>됩니다. 품목명·단가·금액은 발행 당시 값 그대로 보존됩니다.<br>고객용 인보이스에는 분류가 <b>영어로</b> 표시됩니다 — 「🌐 영어 이름」에서 한 번에 수정하세요.</div>
   <div class="card" style="margin:0 16px 20px" id="services-list"></div>
   <!-- 은행 계좌 -->
   <div class="sh"><span class="sht">은행 계좌 (<span id="bank-count">0</span>개)</span><button class="btn bp bsm" id="add-bank-btn">+ 추가</button></div>
@@ -889,19 +894,39 @@ var DEF_CAT_STRUCT={
   '기타':['기타']
 };
 var DEF_TOP_CATS=['청소','수리','설치','회원제상품(가정용)','회원제상품(매장용)','기타'];
+// 영어 분류명 (고객용 인보이스에 표시) — 대/중/소분류 모두 이 하나의 사전을 쓴다
+var DEF_CAT_EN={
+  '청소':'Cleaning','수리':'Repair','설치':'Installation',
+  '회원제상품(가정용)':'Membership (Home)','회원제상품(매장용)':'Membership (Store)','기타':'Others',
+  '에어컨(가정용)':'Air Conditioner (Home)','에어컨(매장용)':'Air Conditioner (Store)',
+  '세탁기':'Washing Machine','매트리스':'Mattress','쇼파':'Sofa','커튼':'Curtain','기타제품':'Other Items',
+  '현장수리':'On-site Repair','인건비용':'Labor Cost','자재비용':'Material Cost',
+  '사전준비인건비용':'Preparation Labor','본설치인건비용':'Installation Labor',
+  '벽걸이형':'Wall-mounted','매립형':'Ceiling Concealed','카세트형':'Cassette','실외기':'Outdoor Unit',
+  '기타제품':'Other Items','기타 서비스':'Other Service'
+};
 var LCAT='hhc_cat1';
 // 살아있는 구조 — Firestore/localStorage 값으로 덮어써진다
 var AC_SUBTYPES=JSON.parse(JSON.stringify(DEF_AC_SUBTYPES));
 var CAT_STRUCT=JSON.parse(JSON.stringify(DEF_CAT_STRUCT));
 var TOP_CATS=DEF_TOP_CATS.slice();
-function catalogObj(){return{tops:TOP_CATS.slice(),struct:JSON.parse(JSON.stringify(CAT_STRUCT)),ac:JSON.parse(JSON.stringify(AC_SUBTYPES))};}
+var CAT_EN=JSON.parse(JSON.stringify(DEF_CAT_EN));
+function catalogObj(){return{tops:TOP_CATS.slice(),struct:JSON.parse(JSON.stringify(CAT_STRUCT)),ac:JSON.parse(JSON.stringify(AC_SUBTYPES)),en:JSON.parse(JSON.stringify(CAT_EN))};}
 function applyCatalog(c){
   if(!c)return false;
   if(Array.isArray(c.tops)&&c.tops.length)TOP_CATS=c.tops.slice();
   if(c.struct&&typeof c.struct==='object')CAT_STRUCT=JSON.parse(JSON.stringify(c.struct));
   if(c.ac&&typeof c.ac==='object')AC_SUBTYPES=JSON.parse(JSON.stringify(c.ac));
+  // 저장된 영어명이 있으면 그것을 쓰되, 아직 없는 분류는 기본 번역으로 채워둔다
+  if(c.en&&typeof c.en==='object')CAT_EN=Object.assign({},DEF_CAT_EN,c.en);
   return true;
 }
+// 분류 이름 → 영어 이름 (없으면 빈 문자열)
+function catEn(n){var v=CAT_EN[n];return (v==null?'':String(v)).trim();}
+// 관리자 화면용 : "청소 · Cleaning"
+function catKoEn(n){var e=catEn(n);return e?(n+' · '+e):n;}
+// 고객용 인보이스에 찍힐 이름 — 영어가 있으면 영어, 없으면 한글 그대로
+function catOut(n){return catEn(n)||n;}
 function loadCatalogLocal(){try{applyCatalog(JSON.parse(localStorage.getItem(LCAT)||'null'));}catch(e){}}
 function saveCatalog(){
   localStorage.setItem(LCAT,JSON.stringify(catalogObj()));
@@ -1005,9 +1030,14 @@ function liCatArr(li){
   if(CAT_MIGRATE[c])c=CAT_MIGRATE[c];
   return [c,b,d];
 }
-// 인보이스 품목 아래에 작게 찍히는 "청소 · 에어컨(가정용) · 벽걸이형" 문자열
-function liCatPath(li){
-  return liCatArr(li).filter(Boolean).filter(function(x,i,a){return a.indexOf(x)===i;}).join(' · ');
+// 인보이스 품목 아래에 작게 찍히는 분류 문자열
+//   기본(고객용 인보이스) : 영어  → "Cleaning · Air Conditioner (Home) · Wall-mounted"
+//   ko=true (관리자 화면) : 한글  → "청소 · 에어컨(가정용) · 벽걸이형"
+//   영어 이름이 아직 입력되지 않은 분류는 한글 그대로 나온다
+function liCatPath(li,ko){
+  var a=liCatArr(li).filter(Boolean).filter(function(x,i,arr){return arr.indexOf(x)===i;});
+  if(!ko)a=a.map(catOut);
+  return a.filter(Boolean).filter(function(x,i,arr){return arr.indexOf(x)===i;}).join(' · ');
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -3200,6 +3230,11 @@ function svcEsc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</
 // onclick="fn('...')" 안에 들어갈 문자열 이스케이프
 function jsq(t){return String(t==null?'':t).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');}
 function byOrd(a,b){return(a.order||0)-(b.order||0);}
+// 분류 이름 옆에 붙는 영어명 칩 — 미입력이면 노란 「EN?」
+function enChip(n){
+  var e=catEn(n);
+  return e?'<i class="svc-en">'+svcEsc(e)+'</i>':'<i class="svc-en no">EN?</i>';
+}
 var svcQ='';
 function onSvcQ(v){svcQ=(v||'').trim().toLowerCase();renderSvcs();}
 function clearSvcQ(){svcQ='';var e=$('svc-q');if(e)e.value='';renderSvcs();}
@@ -3237,6 +3272,7 @@ function renderSvcs(){
   var el=$('services-list');if(!el)return;
   var cnt=$('svc-count');if(cnt)cnt.textContent=services.length;
   var tn=$('svc-trash-n');if(tn)tn.textContent=trashSvcs.length;
+  var en=$('svc-en-n');if(en){var mc=missingEnCount();en.textContent=mc?(mc+'개 미입력'):'완료';en.style.color=mc?'#F2B23E':'';}
   var html='';
 
   // ── 검색 모드 : 트리 대신 평면 결과 ──
@@ -3247,7 +3283,10 @@ function renderSvcs(){
     html+='<div class="svc-cat-hdr"><span>🔍 검색 결과 '+hits.length+'건</span><span class="svc-hact"><button onclick="clearSvcQ()">검색 해제</button></span></div>';
     if(!hits.length)html+='<div class="svc-empty" style="text-align:center;padding:20px">일치하는 항목이 없습니다</div>';
     hits.forEach(function(s){
-      html+='<div class="svc-path">'+svcEsc([s.cat,s.subcat,s.sub2].filter(Boolean).join(' › '))+'</div>'+svcRowHTML(s);
+      var _ko=[s.cat,s.subcat,s.sub2].filter(Boolean);
+      var _en=_ko.map(catOut).join(' › ');
+      html+='<div class="svc-path">'+svcEsc(_ko.join(' › '))+
+            '<span class="svc-enp">'+svcEsc(_en)+'</span></div>'+svcRowHTML(s);
     });
     el.innerHTML=html;bindSvcRows(el);return;
   }
@@ -3255,10 +3294,11 @@ function renderSvcs(){
   // ── 트리 모드 ──
   TOP_CATS.forEach(function(topCat,ti){
     var q=jsq(topCat);
-    html+='<div class="svc-cat-hdr"><span>'+svcEsc(topCat)+'</span><span class="svc-hact">'+
+    html+='<div class="svc-cat-hdr"><span>'+svcEsc(topCat)+enChip(topCat)+'</span><span class="svc-hact">'+
       '<button onclick="moveTopCat(\''+q+'\',-1)" title="위로"'+(ti===0?' disabled':'')+'>▲</button>'+
       '<button onclick="moveTopCat(\''+q+'\',1)" title="아래로"'+(ti===TOP_CATS.length-1?' disabled':'')+'>▼</button>'+
       '<button onclick="renameTopCat(\''+q+'\')" title="이름 변경">✏️ 이름</button>'+
+      '<button onclick="editCatEn(\''+q+'\')" title="영어 이름 (고객용 인보이스 표시)">🌐 EN</button>'+
       '<button onclick="addSubcat(\''+q+'\')" title="중분류 추가">＋중분류</button>'+
       '<button onclick="delTopCat(\''+q+'\')" title="대분류 삭제">🗑</button>'+
       '</span></div>';
@@ -3273,10 +3313,11 @@ function renderSvcs(){
       var mine=services.filter(function(s){return (s.cat===topCat||CAT_MIGRATE[s.cat]===topCat)&&s.subcat===subcat;});
       var direct=mine.filter(function(s){return !s.sub2;}).sort(byOrd);
       var acSubs=(AC_SUBTYPES[subcat]||[]).slice();
-      html+='<div class="svc-sub-hdr"><span>'+(acSubs.length?'📦 ':'')+svcEsc(subcat)+'<b class="svc-n">'+mine.length+'</b></span><span class="svc-hact">'+
+      html+='<div class="svc-sub-hdr"><span>'+(acSubs.length?'📦 ':'')+svcEsc(subcat)+enChip(subcat)+'<b class="svc-n">'+mine.length+'</b></span><span class="svc-hact">'+
         '<button onclick="moveSubcat(\''+q+'\',\''+sq+'\',-1)" title="위로"'+(si===0?' disabled':'')+'>▲</button>'+
         '<button onclick="moveSubcat(\''+q+'\',\''+sq+'\',1)" title="아래로"'+(si===subcats.length-1?' disabled':'')+'>▼</button>'+
         '<button onclick="renameSubcat(\''+q+'\',\''+sq+'\')" title="이름 변경">✏️ 이름</button>'+
+        '<button onclick="editCatEn(\''+sq+'\')" title="영어 이름 (고객용 인보이스 표시)">🌐 EN</button>'+
         '<button onclick="addSub2(\''+sq+'\')" title="소분류 추가">＋소분류</button>'+
         '<button onclick="addSvcTo(\''+q+'\',\''+sq+'\')" title="항목 추가">＋항목</button>'+
         '<button onclick="delSubcat(\''+q+'\',\''+sq+'\')" title="중분류 삭제">🗑</button>'+
@@ -3293,10 +3334,11 @@ function renderSvcs(){
       acSubs.forEach(function(s2,xi){
         var xq=jsq(s2);
         var kids=mine.filter(function(s){return s.sub2===s2;}).sort(byOrd);
-        html+='<div class="svc-sub-hdr sub2"><span>↳ '+svcEsc(s2)+'<b class="svc-n">'+kids.length+'</b></span><span class="svc-hact">'+
+        html+='<div class="svc-sub-hdr sub2"><span>↳ '+svcEsc(s2)+enChip(s2)+'<b class="svc-n">'+kids.length+'</b></span><span class="svc-hact">'+
           '<button onclick="moveSub2(\''+sq+'\',\''+xq+'\',-1)" title="위로"'+(xi===0?' disabled':'')+'>▲</button>'+
           '<button onclick="moveSub2(\''+sq+'\',\''+xq+'\',1)" title="아래로"'+(xi===acSubs.length-1?' disabled':'')+'>▼</button>'+
           '<button onclick="renameSub2(\''+sq+'\',\''+xq+'\')" title="이름 변경">✏️ 이름</button>'+
+          '<button onclick="editCatEn(\''+xq+'\')" title="영어 이름 (고객용 인보이스 표시)">🌐 EN</button>'+
           '<button onclick="addSvcTo(\''+q+'\',\''+sq+'\',\''+xq+'\')" title="항목 추가">＋항목</button>'+
           '<button onclick="delSub2(\''+sq+'\',\''+xq+'\')" title="소분류 삭제">🗑</button>'+
           '</span></div>';
@@ -3314,6 +3356,7 @@ async function addTopCat(){
   if(!n)return;
   if(TOP_CATS.indexOf(n)>=0){showToast('이미 있는 대분류입니다');return;}
   TOP_CATS.push(n);if(!CAT_STRUCT[n])CAT_STRUCT[n]=[];
+  askCatEn(n);
   try{await saveCatalog();}catch(e){showToast('저장 실패: '+e.message);return;}
   renderSvcs();showToast('대분류 추가됨: '+n);
 }
@@ -3325,6 +3368,7 @@ async function renameTopCat(cat){
   try{
     TOP_CATS=TOP_CATS.map(function(x){return x===cat?n:x;});
     CAT_STRUCT[n]=CAT_STRUCT[cat]||[];if(n!==cat)delete CAT_STRUCT[cat];
+    if(CAT_EN[cat]&&!CAT_EN[n]){CAT_EN[n]=CAT_EN[cat];delete CAT_EN[cat];}
     await saveCatalog();
     var hit=services.concat(trashSvcs).filter(function(x){return x.cat===cat||CAT_MIGRATE[x.cat]===cat;});
     for(var i=0;i<hit.length;i++){hit[i].cat=n;if(hit[i]._docId&&DB)await DB.collection('services').doc(hit[i]._docId).update({cat:n});}
@@ -3354,6 +3398,7 @@ async function addSubcat(cat){
   if(!CAT_STRUCT[cat])CAT_STRUCT[cat]=[];
   if(CAT_STRUCT[cat].indexOf(n)>=0){showToast('이미 있는 중분류입니다');return;}
   CAT_STRUCT[cat].push(n);
+  askCatEn(n);
   try{await saveCatalog();}catch(e){showToast('저장 실패: '+e.message);return;}
   renderSvcs();showToast('중분류 추가됨: '+n);
 }
@@ -3366,6 +3411,7 @@ async function renameSubcat(cat,sub){
     if(a.indexOf(n)<0)a.push(n);
     CAT_STRUCT[cat]=a.filter(function(x,i,arr){return arr.indexOf(x)===i;});
     if(AC_SUBTYPES[sub]){AC_SUBTYPES[n]=AC_SUBTYPES[sub];delete AC_SUBTYPES[sub];}
+    if(CAT_EN[sub]&&!CAT_EN[n]){CAT_EN[n]=CAT_EN[sub];delete CAT_EN[sub];}
     await saveCatalog();
     var hit=services.concat(trashSvcs).filter(function(x){return (x.cat===cat||CAT_MIGRATE[x.cat]===cat)&&x.subcat===sub;});
     for(var i=0;i<hit.length;i++){hit[i].subcat=n;if(hit[i]._docId&&DB)await DB.collection('services').doc(hit[i]._docId).update({subcat:n});}
@@ -3396,6 +3442,7 @@ async function addSub2(sub){
   if(!AC_SUBTYPES[sub])AC_SUBTYPES[sub]=[];
   if(AC_SUBTYPES[sub].indexOf(n)>=0){showToast('이미 있는 소분류입니다');return;}
   AC_SUBTYPES[sub].push(n);
+  askCatEn(n);
   try{await saveCatalog();}catch(e){showToast('저장 실패: '+e.message);return;}
   renderSvcs();showToast('소분류 추가됨: '+n);
 }
@@ -3405,6 +3452,7 @@ async function renameSub2(sub,s2){
   showLoad('이름 변경 중...');
   try{
     AC_SUBTYPES[sub]=(AC_SUBTYPES[sub]||[]).map(function(x){return x===s2?n:x;});
+    if(CAT_EN[s2]&&!CAT_EN[n]){CAT_EN[n]=CAT_EN[s2];delete CAT_EN[s2];}
     await saveCatalog();
     var hit=services.concat(trashSvcs).filter(function(x){return x.subcat===sub&&x.sub2===s2;});
     for(var i=0;i<hit.length;i++){hit[i].sub2=n;if(hit[i]._docId&&DB)await DB.collection('services').doc(hit[i]._docId).update({sub2:n});}
@@ -3425,6 +3473,68 @@ async function moveSub2(sub,s2,d){
   var t=a[i];a[i]=a[j];a[j]=t;
   try{await saveCatalog();}catch(e){}
   renderSvcs();
+}
+
+// ── 영어 분류명 ────────────────────────────────────────────
+// 고객용 인보이스에는 분류가 영어로 찍힌다. 영어 이름이 없으면 한글 그대로 나온다.
+function askCatEn(n){
+  var v=(prompt('「'+n+'」의 영어 이름을 입력하세요.\n\n고객용 인보이스에는 이 영어 이름이 표시됩니다.\n비워두면 한글이 그대로 표시됩니다.',catEn(n))||'').trim();
+  if(v)CAT_EN[n]=v;else delete CAT_EN[n];
+}
+async function editCatEn(n){
+  var before=catEn(n);
+  askCatEn(n);
+  if(catEn(n)===before)return;
+  try{await saveCatalog();}catch(e){showToast('저장 실패: '+e.message);return;}
+  renderSvcs();showToast(catEn(n)?('✓ 영어명: '+catEn(n)):'영어명 삭제됨 (한글로 표시)');
+}
+// 전체 분류의 영어 이름을 한 화면에서 모아 편집
+function allCatNames(){
+  var out=[],seen={};
+  function push(k,lv){if(!k||seen[k])return;seen[k]=1;out.push({n:k,lv:lv});}
+  TOP_CATS.forEach(function(c){
+    push(c,'대분류');
+    (CAT_STRUCT[c]||[]).forEach(function(b){
+      push(b,'중분류');
+      (AC_SUBTYPES[b]||[]).forEach(function(d){push(d,'소분류');});
+    });
+  });
+  services.concat(trashSvcs).forEach(function(x){push(x.cat,'대분류');push(x.subcat,'중분류');if(x.sub2)push(x.sub2,'소분류');});
+  return out;
+}
+function missingEnCount(){return allCatNames().filter(function(x){return !catEn(x.n);}).length;}
+function closeCatEn(){var b=$('caten-back');if(b)b.remove();}
+function openCatEn(){
+  closeCatEn();
+  var list=allCatNames();
+  var b=document.createElement('div');b.id='caten-back';
+  b.style.cssText='position:fixed;inset:0;background:rgba(15,28,63,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px';
+  b.onclick=function(e){if(e.target===b)closeCatEn();};
+  var rows=list.map(function(x){
+    return '<tr><td style="padding:5px 8px 5px 0;font-size:10px;color:var(--gray);white-space:nowrap">'+svcEsc(x.lv)+'</td>'+
+      '<td style="padding:5px 8px 5px 0;font-size:12.5px;font-weight:700;color:var(--navy);white-space:nowrap">'+svcEsc(x.n)+'</td>'+
+      '<td style="padding:5px 0"><input data-cen="'+svcEsc(x.n)+'" value="'+svcEsc(catEn(x.n))+'" placeholder="English name" style="width:100%;padding:6px 8px;border:1px solid '+(catEn(x.n)?'var(--bdr)':'#F2B23E')+';border-radius:7px;font-size:12.5px;font-family:inherit;box-sizing:border-box"></td></tr>';
+  }).join('');
+  b.innerHTML='<div style="background:#fff;border-radius:16px;max-width:520px;width:100%;max-height:82vh;display:flex;flex-direction:column;padding:18px;box-sizing:border-box">'+
+    '<div style="font-size:15px;font-weight:800;color:var(--navy)">🌐 분류 영어 이름</div>'+
+    '<div style="font-size:11.5px;color:var(--gray);margin:5px 0 10px;line-height:1.6">고객용 인보이스에는 분류가 <b>영어로</b> 표시됩니다.<br>비워두면 그 분류만 한글 그대로 나옵니다. (노란 테두리 = 미입력)</div>'+
+    '<div style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;border-collapse:collapse">'+rows+'</table></div>'+
+    '<div style="display:flex;gap:8px;margin-top:12px">'+
+      '<button class="btn bgh" style="flex:1" onclick="closeCatEn()">취소</button>'+
+      '<button class="btn bp" style="flex:1" onclick="saveCatEnAll()">저장</button>'+
+    '</div></div>';
+  document.body.appendChild(b);
+}
+async function saveCatEnAll(){
+  var ins=document.querySelectorAll('#caten-back input[data-cen]');
+  for(var i=0;i<ins.length;i++){
+    var k=ins[i].getAttribute('data-cen'),v=(ins[i].value||'').trim();
+    if(v)CAT_EN[k]=v;else delete CAT_EN[k];
+  }
+  closeCatEn();showLoad('저장 중...');
+  try{await saveCatalog();renderSvcs();showToast('✓ 영어 이름 저장됨');}
+  catch(e){showToast('저장 실패: '+e.message);}
+  finally{hideLoad();}
 }
 
 // ── 항목을 다른 분류로 이동 ─────────────────────────────────
