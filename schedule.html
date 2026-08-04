@@ -137,6 +137,10 @@ body{font-family:'Pretendard',-apple-system,'Noto Sans KR',sans-serif;background
 .sch-body{flex:1;min-width:0}
 .sch-type{display:inline-flex;padding:2px 9px;border-radius:8px;font-size:9.5px;font-weight:800;margin-bottom:5px;letter-spacing:.02em}
 .sch-ttl{font-size:14px;font-weight:600;color:var(--tx);margin-bottom:4px;line-height:1.4}
+.mg-badge{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800;vertical-align:middle;letter-spacing:-.01em;white-space:nowrap}
+.mg-vvip{background:#fef9c3;color:#a16207}
+.mg-pkg{background:#eff6ff;color:#2563eb}
+.mg-etc{background:#f5f3ff;color:#7c3aed}
 .sch-ttl-condo{font-size:17px;font-weight:800;color:var(--navy);margin-bottom:5px;line-height:1.25;letter-spacing:-.02em}
 .sch-sub{font-size:12px;color:var(--tx2);line-height:1.7}
 .sch-auto{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:8px;font-size:9.5px;font-weight:700;background:var(--g);color:var(--tx3);margin-top:6px}
@@ -378,11 +382,93 @@ window.changeApiKey=function(){
   }
 };
 
+
+// ═══════════════════════════════════════════════════════════
+// 회원등급 배지 (HHCG) — 총괄 고객관리(customer-admin.html)와 동일 표기
+//  · customers.member 가 1순위, 없으면 contracts.package_id 로 「패키지 - ○○」 추정
+//  · 매칭은 연락처(숫자만 · 60/0 제거) 우선 → 없으면 이름/별칭
+//  · 등급이 없는 고객은 아무것도 표시하지 않는다 (기존 화면 그대로)
+// ═══════════════════════════════════════════════════════════
+var HHCG_PH={},HHCG_NM={},HHCG_CPH={},HHCG_CNM={},HHCG_ON=false;
+var HHCG_PKG={silver:'실버',royal:'로얄',gold:'골드',diamond:'다이아',titanium:'티타늄',special:'스페셜해피홈'};
+function hhcgPN(p){p=String(p||'').replace(/[^0-9]/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');}
+function hhcgNN(n){return String(n||'').toLowerCase().replace(/\s+/g,'');}
+function hhcgEsc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function hhcgPkgLabel(pid){
+  if(!pid)return '';
+  var biz=/-biz$/.test(String(pid)),base=HHCG_PKG[String(pid).replace(/-biz$/,'')]||pid;
+  return base+(biz?'(사업)':'');
+}
+// customers · contracts 를 실시간 구독해 등급표를 항상 최신 상태로 유지
+function hhcgWatch(onChange){
+  if(HHCG_ON||!db)return;HHCG_ON=true;
+  try{
+    onSnapshot(collection(db,'customers'),function(snap){
+      var ph={},nm={};
+      snap.docs.forEach(function(d){
+        var c=d.data()||{},g=String(c.member||'').trim();
+        if(!g)return;
+        var p=hhcgPN(c.phone);if(p&&!ph[p])ph[p]=g;
+        [c.name].concat(c.aliases||[]).forEach(function(a){var k=hhcgNN(a);if(k&&!nm[k])nm[k]=g;});
+      });
+      HHCG_PH=ph;HHCG_NM=nm;
+      if(onChange)try{onChange();}catch(e){}
+    },function(){});
+    onSnapshot(collection(db,'contracts'),function(snap){
+      var ph={},nm={};
+      snap.docs.forEach(function(d){
+        var c=d.data()||{};
+        var g=c.package_id?('패키지 - '+hhcgPkgLabel(c.package_id)):'패키지(계약)';
+        var p=hhcgPN(c.phone);if(p&&!ph[p])ph[p]=g;
+        var k=hhcgNN(c.name);if(k&&!nm[k])nm[k]=g;
+      });
+      HHCG_CPH=ph;HHCG_CNM=nm;
+      if(onChange)try{onChange();}catch(e){}
+    },function(){});
+  }catch(e){}
+}
+function memberGrade(name,phone){
+  var p=hhcgPN(phone),n=hhcgNN(name);
+  if(p&&HHCG_PH[p])return HHCG_PH[p];
+  if(n&&HHCG_NM[n])return HHCG_NM[n];
+  if(p&&HHCG_CPH[p])return HHCG_CPH[p];
+  if(n&&HHCG_CNM[n])return HHCG_CNM[n];
+  return '';
+}
+// 고객명 옆에 붙일 회원등급 배지 HTML (등급 없으면 빈 문자열)
+function gradeBadge(name,phone){
+  var g=memberGrade(name,phone);
+  if(!g)return '';
+  if(g.toUpperCase()==='VVIP')return '<span class="mg-badge mg-vvip">👑 VVIP</span>';
+  if(/^패키지/.test(g))return '<span class="mg-badge mg-pkg">📦 '+hhcgEsc(g)+'</span>';
+  return '<span class="mg-badge mg-etc">'+hhcgEsc(g)+'</span>';
+}
+// 예약 시간 표기 — 내부 저장값이 "오후 2시|14:00" 형태면 뒤의 24시간 표기(14:00)를 쓴다.
+// (예전에는 숫자만 남겨 "214:0" 처럼 깨져 보였다)
+function bkTime(v){
+  var t=String(v||'').trim();
+  if(!t)return '';
+  if(t.indexOf('|')>=0){var a=t.split('|');t=String(a[1]||a[0]||'').trim();}
+  var m=/(\d{1,2}):(\d{2})/.exec(t);
+  if(m)return String(m[1]).padStart(2,'0')+':'+m[2];
+  return t.replace(/[^0-9:]/g,'').slice(0,5);
+}
+
+// 일정 항목에서 고객명을 뽑아 등급 배지를 만든다.
+// 예약 자동반영 일정은 customer_name, 직접입력 일정은 제목 앞부분("고객명 — 내용")을 쓴다.
+function schGrade(s){
+  if(!s)return '';
+  var nm=s.customer_name||'';
+  if(!nm&&s.title)nm=String(s.title).split(' — ')[0].trim();
+  return gradeBadge(nm,s.customer_phone||'');
+}
+
 async function initApp(){
   showLoading(true);
   try{
     const app=initializeApp(FIREBASE_CFG);
     db=getFirestore(app);
+    hhcgWatch(refresh);   // 회원등급표 실시간 구독
 
     onSnapshot(collection(db,'schedules'),snap=>{
       schedules={};
@@ -407,7 +493,7 @@ async function initApp(){
           _id:'bk_'+b._id,source:'booking',
           date:b.booking_date,
           title:b.customer_name||b.customer_address||(curLang==='en'?'Booking':'예약'),
-          time_s:b.booking_time?b.booking_time.replace(/[^0-9:]/g,'').slice(0,5):'',
+          time_s:bkTime(b.booking_time),
           time_e:'',type:'booking',
           memo:[
             b.booking_items?'🔧 '+b.booking_items:'',
@@ -415,6 +501,7 @@ async function initApp(){
           ].filter(Boolean).join('\n'),
           real_booking_id:b._id,
           customer_name:b.customer_name||'',
+          customer_phone:b.customer_phone||'',
           customer_lang:b.customer_lang||'ko',
           booking_date:b.booking_date
         });
@@ -751,7 +838,7 @@ async function renderDay(ds){
       <div class="sch-time-col"><div class="sch-ts">${s.time_s||'—'}</div>${s.time_e?`<div class="sch-te">~${s.time_e}</div>`:''}</div>
       <div class="sch-body">
         <div class="sch-type" style="${typeBg}">${typeLabel}</div>
-        <div class="sch-ttl${isAuto?' sch-ttl-condo':''}">${ds2.title}</div>
+        <div class="sch-ttl${isAuto?' sch-ttl-condo':''}">${ds2.title}${schGrade(s)}</div>
         ${ds2.memo?`<div class="sch-sub">${ds2.memo.replace(/\n/g,'<br>')}</div>`:''}
         ${isAuto?`<div class="sch-auto">📋 ${curLang==='en'?'Auto from booking':'예약시스템 자동반영'}</div>`:''}
       </div>
