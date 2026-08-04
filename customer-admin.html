@@ -842,12 +842,24 @@ window.caSendModal=async function(idx){
   const BKP=(D.bookings||[]).filter(x=>x.status==='waiting');
   const _td=new Date();
   const _p2=n=>String(n).padStart(2,'0');
-  const state={iv:CNT.iv>0,ip:CNT.ip>0,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:BKP.length?'bk':'basic',
+  const _tdy=_td.getFullYear()+'-'+_p2(_td.getMonth()+1)+'-'+_p2(_td.getDate());
+  // 확정된 예약 (「예약 확정 안내」 발송용) — 아직 방문 전인 예약을 먼저, 그다음 최근 방문 순
+  const BKC=(D.bookings||[]).filter(x=>x.status==='confirmed').sort((a,b)=>{
+    const da=String(a.booking_date||''),db2=String(b.booking_date||'');
+    const fa=(da>=_tdy)?0:1,fb=(db2>=_tdy)?0:1;
+    if(fa!==fb)return fa-fb;
+    return fa===0?da.localeCompare(db2):db2.localeCompare(da);
+  });
+  const BKCU=BKC.filter(x=>String(x.booking_date||'')>=_tdy);   // 아직 방문 전인 확정 예약
+  // 접수된 서비스 의뢰 (「의뢰 접수 안내」 발송용) — 최근 접수 순
+  const RQP=(D.requests||[]).slice().sort((a,b)=>String(b.submitted_at||b.created_at||'').localeCompare(String(a.submitted_at||a.created_at||'')));
+  const state={iv:CNT.iv>0,ip:CNT.ip>0,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:BKP.length?'bk':(BKCU.length?'bkc':'basic'),
     payDate:_td.getFullYear()+'-'+_p2(_td.getMonth()+1)+'-'+_p2(_td.getDate())};
   const OPT=[['iv','💳','인보이스','건'],['ip','🔧','점검보고서','건'],['ct','📑','계약서 · 잔액','건'],['cp','🎫','상품권','장']];
   const mk=genericModal('📤 마이페이지 발송 — '+esc(e.name),
     '<p style="font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:10px">고객이 링크 하나로 본인의 문서를 확인합니다. 노출할 항목을 선택하세요. 링크는 고정이며 열 때마다 최신 내용이 표시됩니다.</p>'+
     (BKP.length?'<div style="background:linear-gradient(135deg,#EEF2FF,#E0E7FF);border:1.5px solid #A5B4FC;border-left:5px solid #4F6EF7;border-radius:11px;padding:10px 12px;margin-bottom:10px;font-size:11.5px;font-weight:800;color:#3730A3;line-height:1.65">📅 작성 대기중인 예약 신청서 <b>'+BKP.length+'건</b><br>고객 마이페이지 상단에 예약 신청 화면이 표시되며, 고객이 그곳에서 날짜·시간을 선택해 신청을 완료할 수 있습니다.</div>':'')+
+    (!BKP.length&&BKCU.length?'<div style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border:1.5px solid #6EE7B7;border-left:5px solid #10B981;border-radius:11px;padding:10px 12px;margin-bottom:10px;font-size:11.5px;font-weight:800;color:#065F46;line-height:1.65">✅ 방문 예정인 확정 예약 <b>'+BKCU.length+'건</b><br>「📅 예약 확정 안내」에는 방문일시 · 서비스 품목과 매니지먼트 작업방문등록 정보가 자동으로 들어갑니다.</div>':'')+
     '<div id="cs-opts" style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:9px">'+
       OPT.map(o=>{
         const n=CNT[o[0]],z=n===0;
@@ -865,6 +877,8 @@ window.caSendModal=async function(idx){
       '<div style="font-size:11px;font-weight:800;color:var(--ink3);margin-bottom:5px">발송 메시지</div>'+
       '<div id="cs-tpl" style="display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:3px;gap:3px">'+
         (BKP.length?'<span data-t="bk" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📅 예약 신청 안내</span>':'')+
+        (BKC.length?'<span data-t="bkc" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">✅ 예약 확정 안내</span>':'')+
+        (RQP.length?'<span data-t="rq" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📥 의뢰 접수 안내</span>':'')+
         '<span data-t="basic" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📄 기본 안내</span>'+
         '<span data-t="revisit" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🔄 재방문 · 예약</span>'+
         '<span data-t="bill" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🧾 청구 안내</span>'+
@@ -902,6 +916,9 @@ window.caSendModal=async function(idx){
   }
   // ── 발송 메시지 템플릿 ──────────────────────────────
   // basic  : 기본 안내 (마이페이지 문서 확인 안내)
+  // bk     : 예약 신청 안내 (작성 대기중인 예약 신청서가 있을 때만 표시)
+  // bkc    : 예약 확정 안내 (확정된 예약의 방문일시 · 품목 + 매니지먼트 작업방문등록 정보)
+  // rq     : 의뢰 접수 안내 (접수된 서비스 의뢰의 접수일 · 품목)
   // revisit: 재방문 · 예약 안내 (서비스/가격 확인 + 예약 신청 문구 추가)
   // bill   : 청구 안내 (청구중 + 연체 인보이스 합계 금액 자동 반영)
   // pay    : 결제 확인 안내 (결제 완료일 자동/직접 지정)
@@ -915,6 +932,47 @@ window.caSendModal=async function(idx){
     const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(state.payDate||'');
     if(!m)return state.payDate||'';
     return en?(parseInt(m[3],10)+' '+CS_MN[parseInt(m[2],10)-1]+' '+m[1]):(m[1]+'년'+m[2]+'월'+m[3]+'일');
+  }
+  // 예약일 · 접수일 표기 (한국어: 2026년08월20일 / 영문: 20 Aug 2026)
+  function dTxt(v,en){
+    const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v||''));
+    if(!m)return String(v||'');
+    return en?(parseInt(m[3],10)+' '+CS_MN[parseInt(m[2],10)-1]+' '+m[1]):(m[1]+'년'+m[2]+'월'+m[3]+'일');
+  }
+  // 예약 시간 — 내부 저장값이 "오후 2시|14:00" 형태면
+  // 한국어는 앞부분(오후 2시), 영문은 뒤의 24시간 표기(14:00)를 쓴다
+  function tTxt(v,en){
+    const t=String(v||'').trim();
+    if(t.indexOf('|')<0)return t;
+    const a=t.split('|');
+    return String((en?a[1]:a[0])||a[0]||'').trim();
+  }
+  // 마이페이지(my.html)의 예약 확정 카드와 **같은 내용**의 매니지먼트 작업방문등록 정보.
+  // 정보가 바뀌면 my.html 의 VISIT_REG 와 이곳을 함께 수정한다.
+  const CS_VISIT={company:'Happy Works Services Sdn.Bhd.',cars:'KDV 8859, VJW 2582',
+    staff:[['SHAHIN','B00655480'],['REBON','WJ0231305'],['ASIB','BJ0861068'],['SALAM','EJ0208298'],['RAHMAN','BX0562957']]};
+  function visitTxt(en){
+    return (en?'⚠️ Please complete the work-visit registration with your management office before the visit date.\n📋 Visit registration details'
+              :'⚠️ 예약일 전까지 매니지먼트에 작업방문등록을 반드시 완료해 주세요.\n📋 작업방문등록 필요 정보')+
+      '\n🏢 '+(en?'Company':'회사명')+': '+CS_VISIT.company+
+      '\n🚗 '+(en?'Vehicles':'차량')+': '+CS_VISIT.cars+
+      '\n👷 '+(en?'Workers':'직원')+':\n'+CS_VISIT.staff.map(x=>'* '+x[0]+'  '+x[1]).join('\n');
+  }
+  // 예약 품목 (여러 줄 문자열) → 목록 줄
+  function bkItemLines(v){
+    return String(v||'').split('\n').map(t=>t.trim()).filter(t=>t).map(t=>t.charAt(0)==='*'?t:('* '+t)).join('\n');
+  }
+  // 의뢰 품목 — requests.items 는 [{cat,svc,qty}] 형태의 JSON 문자열
+  function rqItemLines(x){
+    let a=[];
+    try{a=JSON.parse(String((x&&x.items)||'[]'));}catch(_){a=[];}
+    if(!Array.isArray(a))a=[];
+    return a.map(it=>{
+      const nm2=String((it&&it.svc)||'').trim();
+      if(!nm2)return '';
+      const q=(it&&it.qty)?String(it.qty).trim():'';
+      return '* '+nm2+(q&&q!=='0'?' ×'+q:'');
+    }).filter(t=>t).join('\n');
   }
   function msgList(){
     const en=!!state.en;
@@ -954,6 +1012,26 @@ window.caSendModal=async function(idx){
       return en
         ?('Hello '+nm+' 😊\nThis is Happy Home Care.\n\n\u{1F449} A booking request is ready for you. Please choose your visit date & time on your My Page below to complete the booking.\n'+CS_SEP+'\n🏠 Open your personal My Page below — the \u300C📅 Booking Request\u300D screen appears right at the top.'+(bi?'\n\n* Service: '+bi:'')+'\nAnd anytime:\n\n'+list+'\n\nall in one place.\n'+CS_SEP+'\n📱 My Page\n🔗 '+l+'\n'+CS_SEP+'\nOnce you submit, we will confirm your booking and let you know right away.\nThank you. 🙏\nHappy Home Care\n📞 +60 17-247 2774')
         :('안녕하세요, '+nm+' 고객님 😊\nHappy Home Care입니다.\n\n\u{1F449} 예약 신청서가 준비되었습니다. 아래 마이페이지에서 방문 날짜와 시간을 선택해 예약 신청을 완료해 주세요.\n'+CS_SEP+'\n🏠 아래 고객님 전용 마이페이지를 열면 상단에 \u300C📅 예약 신청\u300D 화면이 바로 표시됩니다.'+(bi?'\n\n* 신청 품목: '+bi:'')+'\n또한 언제나\n\n'+list+'\n\n모두 편리하게 이용/조회 하실 수 있습니다.\n'+CS_SEP+'\n📱 마이페이지\n🔗 '+l+'\n'+CS_SEP+'\n신청이 완료되면 확인 후 바로 확정 안내를 드리겠습니다.\n감사합니다. 🙏\nHappy Home Care\n📞 +60 17-247 2774');
+    }
+    if(state.tpl==='bkc'){
+      const b=BKC[0]||{};
+      const dt=b.booking_date?dTxt(b.booking_date,en):'',tm=tTxt(b.booking_time,en);
+      const when=(dt||tm)?((en?'📅 Visit date: ':'📅 방문 예정일: ')+dt+(tm?' '+tm:'')+'\n'):'';
+      const bi=bkItemLines(b.booking_items);
+      const head=when+(bi?bi+'\n':'');
+      return en
+        ?('Hello '+nm+' 😊\nThis is Happy Home Care.\n\n\u{1F449} Your booking has been confirmed.\n'+CS_SEP+'\n'+head+CS_SEP+'\n'+visitTxt(true)+'\n'+CS_SEP+'\n🏠 You can review your booking and these registration details anytime on your My Page below.\nAnd anytime:\n\n'+list+'\n\nall in one place.\n'+CS_SEP+'\n📱 My Page\n🔗 '+l+'\n'+CS_SEP+'\nIf you need to change the schedule, please let us know anytime.\nThank you. 🙏\nHappy Home Care\n📞 +60 17-247 2774')
+        :('안녕하세요, '+nm+' 고객님 😊\nHappy Home Care입니다.\n\n\u{1F449} 예약이 확정되었습니다.\n'+CS_SEP+'\n'+head+CS_SEP+'\n'+visitTxt(false)+'\n'+CS_SEP+'\n🏠 아래 고객님 전용 마이페이지에서 예약 내용과 등록 정보를 언제든 다시 확인하실 수 있습니다.\n또한 언제나\n\n'+list+'\n\n모두 편리하게 이용/조회 하실 수 있습니다.\n'+CS_SEP+'\n📱 마이페이지\n🔗 '+l+'\n'+CS_SEP+'\n일정 변경이 필요하시면 언제든 연락 주세요.\n감사합니다. 🙏\nHappy Home Care\n📞 +60 17-247 2774');
+    }
+    if(state.tpl==='rq'){
+      const r=RQP[0]||{};
+      const rd=String(r.submitted_at||r.created_at||'').slice(0,10);
+      const when=rd?((en?'📥 Received: ':'📥 접수일: ')+dTxt(rd,en)+'\n'):'';
+      const ri=rqItemLines(r);
+      const head=when+(ri?ri+'\n':'');
+      return en
+        ?('Hello '+nm+' 😊\nThis is Happy Home Care.\n\n\u{1F449} Your service request has been received.\n'+CS_SEP+'\n'+head+CS_SEP+'\n🏠 Our team will review the details and contact you shortly with the available visit date & time.\nOn your personal My Page below you can also:\n\n'+list+'\n\nall in one place.\n'+CS_SEP+'\n📱 My Page\n🔗 '+l+'\n'+CS_SEP+'\nIf anything needs to be changed, please let us know.\nThank you. 🙏\nHappy Home Care\n📞 +60 17-247 2774')
+        :('안녕하세요, '+nm+' 고객님 😊\nHappy Home Care입니다.\n\n\u{1F449} 서비스 의뢰가 정상 접수되었습니다.\n'+CS_SEP+'\n'+head+CS_SEP+'\n🏠 담당자가 내용 확인 후 방문 가능한 날짜와 시간을 안내드리겠습니다.\n아래 고객님 전용 마이페이지에서는 언제나\n\n'+list+'\n\n모두 편리하게 이용/조회 하실 수 있습니다.\n'+CS_SEP+'\n📱 마이페이지\n🔗 '+l+'\n'+CS_SEP+'\n접수 내용에 변경사항이 있으시면 편하게 알려주세요.\n감사합니다. 🙏\nHappy Home Care\n📞 +60 17-247 2774');
     }
     if(state.tpl==='revisit'){
       return en
