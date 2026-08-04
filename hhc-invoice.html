@@ -885,17 +885,17 @@ var DEF_SVC=[
   {id:'ds13',cat:'청소',subcat:'커튼',name:'커튼 청소 (수거포함)',price:50,unit:'장',order:12},
   {id:'ds14',cat:'청소',subcat:'기타제품',name:'냉장고 청소',price:100,unit:'대',order:13},
   {id:'ds15',cat:'청소',subcat:'기타제품',name:'오븐 청소',price:80,unit:'대',order:14},
-  {id:'ds16',cat:'수리',subcat:'현장수리',name:'배관 수리',price:150,unit:'식',order:15},
-  {id:'ds17',cat:'수리',subcat:'현장수리',name:'전기 수리',price:200,unit:'식',order:16},
+  {id:'ds16',cat:'수리',subcat:'현장수리',name:'배관 수리',price:150,unit:'대',order:15},
+  {id:'ds17',cat:'수리',subcat:'현장수리',name:'전기 수리',price:200,unit:'대',order:16},
   {id:'ds18',cat:'수리',subcat:'인건비용',name:'기술자 인건비 (시간당)',price:80,unit:'시간',order:17},
   {id:'ds19',cat:'수리',subcat:'인건비용',name:'보조 인건비 (시간당)',price:50,unit:'시간',order:18},
-  {id:'ds20',cat:'수리',subcat:'자재비용',name:'자재비 (별도청구)',price:0,unit:'식',order:19},
-  {id:'ds21',cat:'설치',subcat:'사전준비인건비용',name:'사전 점검 인건비',price:80,unit:'식',order:20},
-  {id:'ds22',cat:'설치',subcat:'사전준비인건비용',name:'배관/배선 사전작업',price:120,unit:'식',order:21},
+  {id:'ds20',cat:'수리',subcat:'자재비용',name:'자재비 (별도청구)',price:0,unit:'대',order:19},
+  {id:'ds21',cat:'설치',subcat:'사전준비인건비용',name:'사전 점검 인건비',price:80,unit:'대',order:20},
+  {id:'ds22',cat:'설치',subcat:'사전준비인건비용',name:'배관/배선 사전작업',price:120,unit:'대',order:21},
   {id:'ds23',cat:'설치',subcat:'본설치인건비용',name:'에어컨 설치 인건비',price:200,unit:'대',order:22},
-  {id:'ds24',cat:'설치',subcat:'본설치인건비용',name:'가구 조립 인건비',price:100,unit:'식',order:23},
-  {id:'ds25',cat:'설치',subcat:'자재비용',name:'설치 자재비 (별도청구)',price:0,unit:'식',order:24},
-  {id:'ds26',cat:'기타',subcat:'기타',name:'기타 서비스',price:0,unit:'식',order:25}
+  {id:'ds24',cat:'설치',subcat:'본설치인건비용',name:'가구 조립 인건비',price:100,unit:'대',order:23},
+  {id:'ds25',cat:'설치',subcat:'자재비용',name:'설치 자재비 (별도청구)',price:0,unit:'대',order:24},
+  {id:'ds26',cat:'기타',subcat:'기타',name:'기타 서비스',price:0,unit:'대',order:25}
 ];
 // 서비스명 한→영 번역 사전 (고객용 인보이스 문서에 병기용, 사전에 없는 커스텀 항목명은 원문 유지)
 var ITEM_NAME_EN={
@@ -3988,6 +3988,19 @@ function retryBookingMatch(){
     showToast('✓ 서비스 목록 동기화 — 예약 품목 '+fixed+'건의 정식 명칭·단가 반영됨',4000);
   }
 }
+// ── 단위 "식" → "대" 일괄 정리 ────────────────────────────
+// 서비스 항목의 단위 표기를 "대"로 통일합니다. 이미 "대"이거나 다른 단위(개·세트·장·시간 등)는 건드리지 않습니다.
+// Firestore 에 반영되면 그 다음부터는 대상이 없어 자동으로 아무 일도 하지 않습니다(1회성).
+function migrateUnitSik(){
+  if(!DB)return;
+  services.forEach(function(s){
+    if(s.unit==='식'){
+      s.unit='대';
+      if(s._docId)DB.collection('services').doc(s._docId).update({unit:'대'}).catch(function(){});
+    }
+  });
+  localStorage.setItem(LSVC,JSON.stringify(services));
+}
 async function init(){
   var _vp=new URLSearchParams(location.search);
   var _vid=_vp.get('view');
@@ -4060,6 +4073,7 @@ async function init(){
         localStorage.setItem(LSVC,JSON.stringify(services));
         if(!inSvc)renderSvcs();
         retryBookingMatch();   // 실제 카탈로그 도착 → 예약 품목 재매칭
+        migrateUnitSik();      // 단위 "식" → "대" 일괄 정리 (최초 1회 실행되면 이후엔 대상 없음)
       }
     },function(){});
 
