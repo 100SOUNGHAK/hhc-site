@@ -110,6 +110,32 @@ select.fi{appearance:auto}
 #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#111827;color:#fff;font-size:12.5px;font-weight:700;border-radius:10px;padding:10px 18px;z-index:9999;display:none}
 .loading{text-align:center;color:var(--ink3);font-size:13px;padding:50px 0}
 @media(max-width:600px){.crow{grid-template-columns:38px 1fr}.cbtns{grid-column:1/-1;flex-direction:row}.mini{grid-template-columns:repeat(2,1fr)}}
+/* ═══ 💎 포인트 ═══ */
+.ptcard{border-radius:16px;overflow:hidden;margin-bottom:12px;background:linear-gradient(135deg,#4C1D95,#6D28D9 55%,#7C3AED);color:#fff;box-shadow:0 10px 26px rgba(109,40,217,.28)}
+.ptcard .pt-top{display:flex;align-items:center;gap:9px;padding:14px 16px 4px}
+.ptcard .pt-t{font-size:12.5px;font-weight:900;letter-spacing:.4px;opacity:.92}
+.ptcard .pt-rule{font-size:10px;font-weight:900;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:3px 9px}
+.ptcard .pt-use-btn{margin-left:auto;background:#fff;color:#5B21B6;border:none;border-radius:10px;font-weight:900;font-size:12px;padding:8px 14px;cursor:pointer;font-family:inherit;box-shadow:0 3px 8px rgba(0,0,0,.18)}
+.ptcard .pt-use-btn:disabled{opacity:.5;cursor:not-allowed}
+.ptcard .pt-bal{padding:2px 16px 12px}
+.ptcard .pt-bal .k{font-size:10.5px;font-weight:800;opacity:.75;letter-spacing:.5px}
+.ptcard .pt-bal .v{font-size:29px;font-weight:900;letter-spacing:-.5px;line-height:1.15}
+.ptcard .pt-bal .v small{font-size:15px;opacity:.85}
+.ptcard .pt-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:rgba(255,255,255,.14)}
+.ptcard .pt-c{background:rgba(255,255,255,.09);padding:9px 12px;text-align:center}
+.ptcard .pt-c .k{font-size:10px;font-weight:800;opacity:.78}
+.ptcard .pt-c .v{font-size:13px;font-weight:900;margin-top:2px}
+.pt-hist .ph{display:flex;align-items:center;gap:8px;padding:8px 13px;border-top:1px solid var(--bdr);font-size:12px}
+.pt-hist .ph:first-of-type{border-top:none}
+.pt-hist .ph .sign{width:22px;height:22px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;flex-shrink:0}
+.pt-hist .ph.earn .sign{background:#ECFDF5;color:#047857}
+.pt-hist .ph.use .sign{background:#FEF2F2;color:#DC2626}
+.pt-hist .ph b{font-weight:800;white-space:nowrap}
+.pt-hist .ph .m{color:var(--ink2);font-size:11px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pt-hist .ph .amt{margin-left:auto;font-weight:900;flex-shrink:0}
+.pt-hist .ph.earn .amt{color:#047857}
+.pt-hist .ph.use .amt{color:#DC2626}
+.pill.pt{background:#F5F3FF;color:#6D28D9}
 </style>
 </head>
 <body>
@@ -217,6 +243,38 @@ function fmtRM(v){const n=parseFloat(v)||0;return 'RM '+n.toLocaleString('en-MY'
 function caToday(){const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 // 견적 합계 — 기본 합계 + 고객이 선택한 에어컨 옵션 금액
 function qtTotal(x){const b=parseFloat(x&&x.baseTotal)||0;const c=(x&&x.customerChoice&&parseFloat(x.customerChoice.price))||0;return b+c;}
+// ═══ 💎 포인트 적립 (RM100 당 RM1) ═══
+// 적립 기준액 : 총 청구금액에서 세금·주차비용·최소청구·추가비용 제외
+//             = 품목 소계(품목별 할인 반영) − 전체 할인 − 상품/할인권
+// 패키지 회원(회원적립잔액 사용 포함)은 회원적립잔액(creditUse) 차감 「전」 금액 기준
+function ptBase(x,pkg){
+  let sub=0;(x.items||[]).forEach(it=>{
+    const amt=(parseFloat(it.price)||0)*(parseFloat(it.qty)||1);
+    const d=it.discType==='pct'?amt*((parseFloat(it.discVal)||0)/100):(parseFloat(it.discVal!=null?it.discVal:it.disc)||0);
+    sub+=amt-d;
+  });
+  const dv=parseFloat(x.discVal)||0;
+  const disc=x.discType==='pct'?dv/100*sub:dv;
+  const credit=parseFloat(x.creditUse)||0;
+  const voucher=parseFloat(x.voucherAmt)||0;
+  let b=sub-disc-voucher;
+  if(!(pkg||credit>0))b-=credit;   // 패키지(또는 적립잔액 사용) 건은 차감 전 금액
+  return Math.max(0,b);
+}
+function ptEarn(base){return Math.floor((parseFloat(base)||0)/100);}   // RM100 → RM1
+// 고객별 포인트 집계 : 「결제완료」 인보이스에서 적립 · 고객 마스터 pt_used 에서 사용 차감
+function ptCalc(e){
+  const pkg=isPkg(e);
+  const earnRows=e.docs.invoices.filter(x=>x.status==='paid').map(x=>{
+    const b=ptBase(x,pkg);return {date:x.date||'',id:x.id||x.__id,base:b,pts:ptEarn(b)};
+  }).filter(r=>r.pts>0).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const useRows=((e.master&&e.master.pt_used)||[]).map((u,i)=>({i,date:u.date||'',memo:u.memo||'',pts:Math.floor(parseFloat(u.amount)||0)}))
+    .filter(r=>r.pts>0).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const earn=earnRows.reduce((a,r)=>a+r.pts,0);
+  const used=useRows.reduce((a,r)=>a+r.pts,0);
+  return {earn,used,bal:earn-used,earnRows,useRows,pkg};
+}
+
 function invTotal(inv){
   if(inv.grand!=null)return parseFloat(inv.grand)||0;
   if(inv.total!=null)return parseFloat(inv.total)||0;
@@ -539,9 +597,10 @@ function renderList(){
     const idx=entries.indexOf(e);
     const init=(e.name||'?').trim().charAt(0).toUpperCase();
     const srcs=SRC_DEF.filter(s=>e.docs[s[0]].length).map(s=>'<span class="src '+s[2]+'">'+s[1]+' '+e.docs[s[0]].length+'</span>').join('');
+    const _pt=ptCalc(e);   // 💎 포인트 잔액 배지
     return '<div class="crow"'+(e.inactive?' style="opacity:.64;background:#f8fafc"':'')+'>'+
       '<div class="avatar"'+(e.inactive?' style="filter:grayscale(1)"':'')+'>'+esc(init)+'</div>'+
-      '<div><div class="cnm">'+esc(e.name||'(이름 없음)')+(e.aliases.length?'<span class="alias">별칭: '+esc(e.aliases.join(', '))+'</span>':'')+((e.linkNames||[]).length?'<span class="alias" style="background:#f5f3ff;color:#5B21B6">🔗 '+esc(e.linkNames.join(', '))+'</span>':'')+memberBadge(e)+(e.inactive?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏸ 비활성</span>':'')+(e.master?'':'<span class="pill vio">미등록</span>')+'</div>'+
+      '<div><div class="cnm">'+esc(e.name||'(이름 없음)')+(e.aliases.length?'<span class="alias">별칭: '+esc(e.aliases.join(', '))+'</span>':'')+((e.linkNames||[]).length?'<span class="alias" style="background:#f5f3ff;color:#5B21B6">🔗 '+esc(e.linkNames.join(', '))+'</span>':'')+memberBadge(e)+(_pt.bal>0?'<span class="pill pt">💎 RM '+_pt.bal.toLocaleString()+'</span>':'')+(e.inactive?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏸ 비활성</span>':'')+(e.master?'':'<span class="pill vio">미등록</span>')+'</div>'+
       '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음 <span class="pill warn">보완 필요</span>')+(e.addr?' · '+esc(e.addr):'')+'</div>'+
       '<div class="srcs">'+(srcs||'<span class="src qt">기록 없음</span>')+(e.ts?'<span class="src" style="background:#f3f4f6;color:#6b7280">🕘 '+esc(String(e.ts).slice(0,10))+'</span>':'')+'</div></div>'+
       '<div class="cbtns"><button class="btn sm p" onclick="openDrawer('+idx+')">상세 보기</button><button class="btn sm" onclick="openEditModal('+idx+')">✏️ 수정</button>'+
@@ -568,6 +627,32 @@ window.openDrawer=function(idx){
       ?'<button class="btn sm" style="color:#047857;border-color:#6EE7B7;background:#ECFDF5" onclick="caToggleInactive('+idx+')">▶️ 활성 복구</button>'
       :'<button class="btn sm" style="color:#64748b" onclick="caToggleInactive('+idx+')">⏸ 비활성</button>')+
     (e.master?'<button class="btn sm" style="color:var(--bad);border-color:#fca5a5" onclick="caDelCustomer('+idx+')">✕ 삭제</button>':'')+'<button class="btn sm" onclick="closeDrawer()">닫기</button></div></div>';
+
+  // ── 💎 포인트 적립금 (RM100 당 RM1 · 결제완료 인보이스 기준) ──
+  const PT=ptCalc(e);
+  if(PT.earn>0||PT.used>0||e.master){
+    const _ptHist=[]
+      .concat(PT.earnRows.map(r=>({t:'earn',date:r.date,lb:'적립 · '+r.id,m:'기준액 '+fmtRM(r.base),pts:r.pts})))
+      .concat(PT.useRows.map(r=>({t:'use',date:r.date,lb:'사용'+(r.memo?' · '+r.memo:''),m:'',pts:r.pts,ui:r.i})))
+      .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+    h+='<div class="ptcard">'+
+       '<div class="pt-top"><span style="font-size:17px">💎</span><span class="pt-t">포인트 적립금</span><span class="pt-rule">RM100 → RM1</span>'+
+       '<button class="pt-use-btn"'+(PT.bal>0?'':' disabled')+' onclick="caPtUse('+idx0+')">💎 포인트 사용</button></div>'+
+       '<div class="pt-bal"><div class="k">사용 가능 잔액</div><div class="v">RM '+PT.bal.toLocaleString()+'<small>.00</small></div></div>'+
+       '<div class="pt-row">'+
+       '<div class="pt-c"><div class="k">누적 적립</div><div class="v">+RM '+PT.earn.toLocaleString()+'</div></div>'+
+       '<div class="pt-c"><div class="k">누적 사용</div><div class="v">−RM '+PT.used.toLocaleString()+'</div></div>'+
+       '<div class="pt-c"><div class="k">적립 대상</div><div class="v">결제완료 '+PT.earnRows.length+'건</div></div>'+
+       '</div></div>';
+    h+='<div class="dcard pt-hist"><div class="dcard-h">📜 포인트 적립·사용 내역<span class="cnt">'+_ptHist.length+'건</span></div>';
+    h+=_ptHist.length?_ptHist.map(r=>'<div class="ph '+r.t+'"><span class="sign">'+(r.t==='earn'?'+':'−')+'</span>'+
+        '<b>'+esc(r.lb)+'</b><span class="m">'+esc(r.date||'')+(r.m?' · '+r.m:'')+'</span>'+
+        '<span class="amt">'+(r.t==='earn'?'+':'−')+'RM '+r.pts.toLocaleString()+'</span>'+
+        (r.t==='use'?'<button class="rb del" title="사용 내역 취소 (잔액 복구)" onclick="caPtUseDel('+idx0+','+r.ui+')">✕</button>':'')+
+        '</div>').join('')
+      :'<div class="dnone">적립·사용 내역이 없습니다</div>';
+    h+='</div>';
+  }
   const myKey0=entryKey(e);
   const rowBtns=(coll,id)=>{
     const dx=RAW[coll].find(d=>d.__id===id);
@@ -907,6 +992,63 @@ window.caToggleInactive=async function(idx){
   }catch(err){toast('변경 실패: '+err.message);}
 };
 
+// ── 💎 포인트 사용 (차감) ──
+window.caPtUse=function(idx){
+  const e=entries[idx];if(!e)return;
+  const PT=ptCalc(e);
+  if(PT.bal<=0){toast('사용 가능한 포인트가 없습니다');return;}
+  genericModal('💎 포인트 사용 — '+esc(e.name),
+    '<div style="background:linear-gradient(135deg,#4C1D95,#7C3AED);color:#fff;border-radius:12px;padding:12px 14px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">'+
+      '<span style="font-size:12px;font-weight:800;opacity:.85">사용 가능 잔액</span><b style="font-size:20px">RM '+PT.bal.toLocaleString()+'</b></div>'+
+    '<div class="fl">사용 금액 (RM)</div><input class="fi" id="pt-amt" type="number" min="1" step="1" max="'+PT.bal+'" placeholder="예: 5">'+
+    '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">'+
+      [1,5,10,20].filter(v=>v<=PT.bal).map(v=>'<button class="rb" onclick="document.getElementById(\'pt-amt\').value='+v+'">RM '+v+'</button>').join('')+
+      '<button class="rb" onclick="document.getElementById(\'pt-amt\').value='+PT.bal+'">전액 RM '+PT.bal+'</button></div>'+
+    '<div class="fl">사용일</div><input class="fi" id="pt-date" type="date" value="'+caToday()+'">'+
+    '<div class="fl">메모 (선택)</div><input class="fi" id="pt-memo" placeholder="예: 에어컨 청소 결제 시 차감">'+
+    '<p style="font-size:11px;color:var(--ink2);line-height:1.6;margin-top:10px">💡 사용 처리하면 잔액에서 즉시 차감되며, 내역에서 언제든지 「✕」로 취소(잔액 복구)할 수 있습니다.</p>',
+    '<button class="btn" onclick="document.getElementById(\'ca-doc-mask\').remove()">취소</button><button class="btn p" onclick="caPtUseSave('+idx+')">💎 사용 저장</button>');
+};
+window.caPtUseSave=async function(idx){
+  const e=entries[idx];if(!e)return;
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  const amt=Math.floor(parseFloat(document.getElementById('pt-amt').value)||0);
+  const date=document.getElementById('pt-date').value||caToday();
+  const memo=(document.getElementById('pt-memo').value||'').trim();
+  const PT=ptCalc(e);
+  if(amt<=0){toast('사용 금액을 입력해 주세요');return;}
+  if(amt>PT.bal){toast('잔액(RM '+PT.bal+')보다 큰 금액은 사용할 수 없습니다');return;}
+  try{
+    let mid=e.master&&e.master.__id;
+    // 문서에서 자동 집계된 고객이면 먼저 고객 마스터에 등록합니다
+    if(!mid){
+      const now=new Date().toISOString();
+      const ref=await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name:e.name,phone:e.phone||'',member:e.member||'',email:'',addr:e.addr||'',memo:'',aliases:e.aliases||[],created_at:now,updated_at:now});
+      mid=ref.id;
+      toast('👥 고객 마스터에 자동 등록되었습니다');
+    }
+    const list=((e.master&&e.master.pt_used)||[]).slice();
+    list.push({amount:amt,date:date,memo:memo,at:new Date().toISOString()});
+    await updateDoc(doc(db,'customers',mid),{pt_used:list,updated_at:new Date().toISOString()});
+    toast('💎 포인트 RM '+amt+' 사용 처리되었습니다 (잔액 RM '+(PT.bal-amt)+')');
+    const mk=document.getElementById('ca-doc-mask');if(mk)mk.remove();
+    closeDrawer();loadAll(true);
+  }catch(err){toast('저장 실패: '+err.message);}
+};
+// ── ↩️ 포인트 사용 취소 (잔액 복구) ──
+window.caPtUseDel=async function(idx,ui){
+  const e=entries[idx];if(!e||!e.master)return;
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  const list=((e.master.pt_used)||[]).slice();
+  const u=list[ui];if(!u)return;
+  if(!confirm('포인트 사용 내역을 취소할까요?\n\n· '+(u.date||'')+' · RM '+(Math.floor(parseFloat(u.amount)||0))+(u.memo?' · '+u.memo:'')+'\n· 취소하면 해당 금액이 잔액으로 복구됩니다.'))return;
+  list.splice(ui,1);
+  try{
+    await updateDoc(doc(db,'customers',e.master.__id),{pt_used:list,updated_at:new Date().toISOString()});
+    toast('↩️ 사용 내역이 취소되어 잔액으로 복구되었습니다');
+    closeDrawer();loadAll(true);
+  }catch(err){toast('취소 실패: '+err.message);}
+};
 // ═══ 고객 마이페이지 발송 ═══
 window.caSendModal=async function(idx){
   const e=entries[idx];if(!e)return;

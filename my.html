@@ -340,6 +340,38 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .vc2.disc .vgo{color:#9a3412}
 .vc2.gift .vgo{color:#6b4700}
 .vc2.off .vgo{color:#334155}
+/* ═══ 💎 포인트 적립금 ═══ */
+.ptc{border-radius:20px;overflow:hidden;background:linear-gradient(140deg,#3B0764,#6D28D9 55%,#8B5CF6);color:#fff;box-shadow:0 14px 30px rgba(109,40,217,.25)}
+.ptc-hd{display:flex;align-items:center;gap:10px;padding:16px 18px 6px}
+.ptc-hd .ic{font-size:22px}
+.ptc-hd .t{font-size:15px;font-weight:900}
+.ptc-hd .s{font-size:9.5px;font-weight:800;letter-spacing:2px;opacity:.65}
+.ptc-rule{margin-left:auto;font-size:10.5px;font-weight:900;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:4px 10px;flex-shrink:0}
+.ptc-bal{padding:6px 18px 14px}
+.ptc-bal .k{font-size:11px;font-weight:800;opacity:.72;letter-spacing:.4px}
+.ptc-bal .v{font-size:34px;font-weight:900;letter-spacing:-1px;line-height:1.15}
+.ptc-bal .v small{font-size:18px;opacity:.85}
+.ptc-row{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.16)}
+.ptc-row>div{background:rgba(255,255,255,.10);padding:10px 18px}
+.ptc-row .k{font-size:10px;font-weight:800;opacity:.75}
+.ptc-row .v{font-size:15px;font-weight:900;margin-top:2px}
+.ptc-note{font-size:11px;line-height:1.55;padding:10px 18px;background:rgba(0,0,0,.14)}
+.ptc-btn{width:100%;border:none;background:rgba(255,255,255,.10);color:#fff;font-weight:900;font-size:12px;padding:11px;display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;font-family:inherit;border-top:1px solid rgba(255,255,255,.12)}
+.ptc-btn .ar{font-size:9px;opacity:.7}
+.ptc-ls{display:none;background:#fff;color:var(--ink)}
+.ptc-ls.open{display:block}
+.ptr{display:flex;align-items:center;gap:10px;padding:11px 16px;border-top:1px solid var(--bdr)}
+.ptr:first-child{border-top:none}
+.ptr .sign{width:26px;height:26px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:900;flex-shrink:0}
+.ptr.earn .sign{background:#ECFDF5;color:#047857}
+.ptr.use .sign{background:#FEF2F2;color:#DC2626}
+.ptr .bx{flex:1;min-width:0}
+.ptr .bx b{display:block;font-size:12.5px;font-weight:800}
+.ptr .bx span{display:block;font-size:11px;color:var(--ink3);margin-top:1px}
+.ptr .amt{font-weight:900;font-size:13.5px;flex-shrink:0}
+.ptr.earn .amt{color:#047857}
+.ptr.use .amt{color:#DC2626}
+.ptr-none{padding:16px;text-align:center;font-size:12px;color:var(--ink3)}
 </style>
 </head>
 <body>
@@ -513,7 +545,7 @@ function tierOf(pid){return String(pid==null?'':pid).replace(/-biz$/,'');}
 function todayStr(){const d=new Date();return d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0');}
 
 let DATA=null;
-let OPEN={iv:false,ip:false,ec:false};   // 인보이스/점검보고서/종료계약 펼침 상태 (언어 전환해도 유지)
+let OPEN={iv:false,ip:false,ec:false,pt:false};   // 인보이스/점검보고서/종료계약 펼침 상태 (언어 전환해도 유지)
 let PYX_DUE=0;          // 금차 청구금액 (render 시 갱신)
 let _pyxPopShown=false; // 청구금액 팝업은 페이지 로드 후 1회만
 
@@ -598,6 +630,26 @@ function balCalc(c){
   const svcCnt=h.filter(u=>(parseFloat(u.amount)||0)>0).length;
   return {paid,bonus,total,netUsed:Math.max(0,used-disc-carry),remain:total-used+disc+carry,cnt:svcCnt};
 }
+
+// ═══ 💎 포인트 적립 (RM100 당 RM1) ═══
+// 적립 기준액 : 세금·주차비용·최소청구·추가비용 제외 (품목 소계 − 전체 할인 − 상품/할인권)
+// 패키지 회원은 회원적립잔액(creditUse) 차감 「전」 금액 기준
+function ptBase(x,pkg){
+  let sub=0;(x.items||[]).forEach(it=>{
+    const amt=(parseFloat(it.price)||0)*(parseFloat(it.qty)||1);
+    const d=it.discType==='pct'?amt*((parseFloat(it.discVal)||0)/100):(parseFloat(it.discVal!=null?it.discVal:it.disc)||0);
+    sub+=amt-d;
+  });
+  const dv=parseFloat(x.discVal)||0;
+  const disc=x.discType==='pct'?dv/100*sub:dv;
+  const credit=parseFloat(x.creditUse)||0;
+  const voucher=parseFloat(x.voucherAmt)||0;
+  let b=sub-disc-voucher;
+  if(!(pkg||credit>0))b-=credit;
+  return Math.max(0,b);
+}
+function ptEarn(base){return Math.floor((parseFloat(base)||0)/100);}
+
 
 // ── 금차 청구금액 팝업 : 확인 → 청구 금액 안내 화면으로 이동 ──
 function showPayPopup(){
@@ -865,6 +917,32 @@ function render(){
          '</div></div></div>';
     }
   }
+  // ── 💎 포인트 적립금 (RM100 당 RM1 · 결제완료 인보이스 기준) ──
+  if(VIS.includes('iv')){
+    const _pkg=/패키지/.test(m.member||'')||DATA.contracts.length>0;
+    const ptER=DATA.invoices.filter(x=>x.status==='paid').map(x=>{const b=ptBase(x,_pkg);return{date:x.date||'',base:b,pts:ptEarn(b)};}).filter(r=>r.pts>0);
+    const ptUR=(m.pt_used||[]).map(u=>({date:u.date||'',memo:u.memo||'',pts:Math.floor(parseFloat(u.amount)||0)})).filter(r=>r.pts>0);
+    const ptE=ptER.reduce((a,r)=>a+r.pts,0),ptU=ptUR.reduce((a,r)=>a+r.pts,0),ptB=ptE-ptU;
+    if(ptE>0||ptU>0){
+      const PL=LANG==='en'
+        ?{t:'Reward Points',bal:'Available Balance',earn:'Total Earned',used:'Total Used',open:'View earn & usage history',close:'Close history',earnLb:'Earned',useLb:'Used',base:'Base',note:'💡 Points can be used like cash for your next service payment. Just let our staff know.',none:'No history yet'}
+        :{t:'포인트 적립금',bal:'사용 가능 잔액',earn:'누적 적립',used:'누적 사용',open:'적립·사용 내역 보기',close:'내역 닫기',earnLb:'적립',useLb:'사용',base:'기준액',note:'💡 적립된 포인트는 다음 서비스 결제 시 현금처럼 사용하실 수 있습니다. 직원에게 말씀해 주세요.',none:'내역이 없습니다'};
+      const ptRows=[].concat(ptER.map(r=>({t:'earn',date:r.date,lb:PL.earnLb,m:PL.base+' RM '+fmt0(r.base),pts:r.pts})))
+        .concat(ptUR.map(r=>({t:'use',date:r.date,lb:PL.useLb+(r.memo?' · '+r.memo:''),m:'',pts:r.pts})))
+        .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+      h+='<div class="sec"><div class="ptc">'+
+         '<div class="ptc-hd"><span class="ic">💎</span><div><div class="t">'+PL.t+'</div><div class="s">REWARD POINTS</div></div>'+
+         '<span class="ptc-rule">RM100 → RM1</span></div>'+
+         '<div class="ptc-bal"><div class="k">'+PL.bal+'</div><div class="v">RM '+fmt0(ptB)+'<small>.00</small></div></div>'+
+         '<div class="ptc-row"><div><div class="k">'+PL.earn+'</div><div class="v">+RM '+fmt0(ptE)+'</div></div>'+
+         '<div><div class="k">'+PL.used+'</div><div class="v">−RM '+fmt0(ptU)+'</div></div></div>'+
+         '<div class="ptc-note">'+PL.note+'</div>'+
+         '<button type="button" class="ptc-btn" id="pt-btn" data-o="'+PL.open+'" data-c="'+PL.close+'"><span>'+(OPEN.pt?PL.close:PL.open)+'</span><span class="ar">▼</span></button>'+
+         '<div class="ptc-ls'+(OPEN.pt?' open':'')+'" id="pt-list">'+
+         (ptRows.length?ptRows.map(r=>'<div class="ptr '+r.t+'"><span class="sign">'+(r.t==='earn'?'+':'−')+'</span><div class="bx"><b>'+esc(r.lb)+'</b><span>'+esc(dfmt(r.date)||r.date||'')+(r.m?' · '+r.m:'')+'</span></div><span class="amt">'+(r.t==='earn'?'+':'−')+'RM '+fmt0(r.pts)+'</span></div>').join(''):'<div class="ptr-none">'+PL.none+'</div>')+
+         '</div></div></div>';
+    }
+  }
   // ── invoices ──
   if(VIS.includes('iv')&&DATA.invoices.length){
     const ivSum=DATA.invoices.reduce((a,x)=>a+invTotal(x),0);
@@ -1053,6 +1131,16 @@ function render(){
       setTimeout(()=>go(hub),60);              // 하단에서 닫으면 박스 위치로 복귀
     };
   });
+  // 💎 포인트 내역 접기/펼치기
+  const ptb=document.getElementById('pt-btn'),ptl=document.getElementById('pt-list');
+  if(ptb&&ptl){
+    ptb.onclick=()=>{
+      OPEN.pt=!OPEN.pt;
+      ptl.classList.toggle('open',OPEN.pt);
+      const s=ptb.querySelector('span');
+      if(s)s.textContent=ptb.getAttribute(OPEN.pt?'data-c':'data-o');
+    };
+  }
   // 종료된 계약 접기/펼치기
   const ecb=document.getElementById('ec-btn'),ecl=document.getElementById('ec-list');
   if(ecb&&ecl){
