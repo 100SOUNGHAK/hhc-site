@@ -284,6 +284,11 @@ function entryKey(e){
   if(e&&e.master&&e.master.__id)return 'm:'+e.master.__id;
   return 'k:'+nn(e&&e.name)+'#'+pn(e&&e.phone);
 }
+// ── 문서 「중복 연결」 ──────────────────────────────────
+//  · ca_link  (기존·1명)   = 이 문서의 소속 고객 자체를 바꾸는 「이관 연결」
+//  · ca_links (신규·여러명) = 원래 고객은 그대로 두고 추가로 함께 보여줄 고객들
+function docExtraKeys(x){const a=(x&&x.ca_links);return Array.isArray(a)?a.filter(Boolean):[];}
+function docLinkedTo(x,key){return !!key&&((x&&x.ca_link===key)||docExtraKeys(x).indexOf(key)>=0);}
 function buildEntries(){
   entries=[];const byP={},byN={};
   const pending=[];   // ca_link(수동 연결)가 지정된 문서 — 모든 고객이 만들어진 뒤에 붙입니다
@@ -359,6 +364,31 @@ function buildEntries(){
       if(it.coll==='invoices'&&!e.member&&it.x.customer&&it.x.customer.member)e.member=it.x.customer.member;
     });
   }
+  // ── 중복 연결(ca_links) 반영 : 원래 고객은 그대로 두고 추가 고객에게도 함께 표시 ──
+  (function(){
+    const COLLS=['contracts','invoices','inspections','bookings','schedules','requests','quotes','coupons'];
+    const ex=[];
+    COLLS.forEach(c=>{(RAW[c]||[]).forEach(x=>{if(docExtraKeys(x).length)ex.push({coll:c,x:x});});});
+    if(!ex.length)return;
+    const byL2={};
+    entries.forEach(e=>{
+      byL2[entryKey(e)]=e;
+      const alt='k:'+nn(e.name)+'#'+pn(e.phone);
+      if(byL2[alt]===undefined)byL2[alt]=e;
+    });
+    ex.forEach(it=>{
+      docExtraKeys(it.x).forEach(k=>{
+        const e=byL2[k];if(!e)return;
+        const arr=e.docs[it.coll];if(!arr||arr.indexOf(it.x)>=0)return;
+        arr.push(it.x);
+        const on=docOwnerName(it.coll,it.x),nk=nn(on);
+        if(nk&&nn(e.name)!==nk&&!e.aliases.some(a=>nn(a)===nk)&&!e.linkNames.some(a=>nn(a)===nk))
+          e.linkNames=e.linkNames.concat([on]);
+        if(it.coll==='contracts'&&!e.member&&it.x.package_id)e.member='패키지 - '+pkgLabel(it.x.package_id);
+        if(it.coll==='invoices'&&!e.member&&it.x.customer&&it.x.customer.member)e.member=it.x.customer.member;
+      });
+    });
+  })();
   entries.forEach(e=>{e.ts=entryTime(e);});
   sortEntries();
   // 병합 제안: 이름(또는 별칭)이 같은 서로 다른 항목
@@ -518,12 +548,16 @@ window.openDrawer=function(idx){
   let h='<div class="dhead"><div class="avatar">'+esc(init)+'</div><div class="dinfo"><b>'+esc(e.name)+'</b>'+
     '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음')+(e.addr?' · '+esc(e.addr):'')+'</div>'+
     '<div class="tagrow">'+memberBadge(e)+(e.aliases.length?'<span class="pill vio">별칭 '+esc(e.aliases.join(', '))+'</span>':'')+((e.linkNames||[]).length?'<span class="pill vio" title="수동 연결된 문서에 적힌 이름입니다. 원본 그대로 유지됩니다.">🔗 연결문서 '+esc(e.linkNames.join(', '))+'</span>':'')+'</div></div>'+
-    '<div class="dbtns"><button class="btn sm" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="caSendModal('+idx+')">📤 고객 발송</button><button class="btn sm" style="background:#0B1833;border-color:#0B1833;color:#fff" onclick="caHomeModal('+idx+')">🏠 홈페이지 안내</button><button class="btn sm p" onclick="openEditModal('+idx+')">✏️ 정보 수정</button>'+(e.master?'<button class="btn sm" style="color:var(--bad);border-color:#fca5a5" onclick="caDelCustomer('+idx+')">✕ 삭제</button>':'')+'<button class="btn sm" onclick="closeDrawer()">닫기</button></div></div>';
+    '<div class="dbtns"><button class="btn sm" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="caSendModal('+idx+')">📤 고객 발송</button><button class="btn sm" style="color:#92400E;border-color:#FCD34D;background:#FFFBEB" onclick="caLinkManage('+idx+')">🔗 연결 관리</button><button class="btn sm" style="background:#0B1833;border-color:#0B1833;color:#fff" onclick="caHomeModal('+idx+')">🏠 홈페이지 안내</button><button class="btn sm p" onclick="openEditModal('+idx+')">✏️ 정보 수정</button>'+(e.master?'<button class="btn sm" style="color:var(--bad);border-color:#fca5a5" onclick="caDelCustomer('+idx+')">✕ 삭제</button>':'')+'<button class="btn sm" onclick="closeDrawer()">닫기</button></div></div>';
+  const myKey0=entryKey(e);
   const rowBtns=(coll,id)=>{
     const dx=RAW[coll].find(d=>d.__id===id);
-    const linked=!!(dx&&dx.ca_link);
-    return (linked?'<button class="rb" style="color:#5B21B6;border-color:#c4b5fd;background:#f5f3ff" title="수동으로 연결된 문서입니다. 눌러서 해제" onclick="caDocUnlink(\''+coll+'\',\''+id+'\')">🔗 연결해제</button>':'')+
-      '<button class="rb" onclick="caDocEdit(\''+coll+'\',\''+id+'\')">✏️ 수정</button><button class="rb del" onclick="caDocDel(\''+coll+'\',\''+id+'\')">✕ 삭제</button>';
+    const isDup=!!(dx&&docExtraKeys(dx).indexOf(myKey0)>=0);
+    const isMove=!!(dx&&dx.ca_link);
+    let btn='';
+    if(isDup)btn='<button class="rb" style="color:#92400E;border-color:#FCD34D;background:#FFFBEB" title="이 고객에게 「중복 연결」된 문서입니다. 눌러서 이 고객에서만 연결 해제" onclick="caDocUnlink(\''+coll+'\',\''+id+'\','+idx0+')">🔗 중복연결 해제</button>';
+    else if(isMove)btn='<button class="rb" style="color:#5B21B6;border-color:#c4b5fd;background:#f5f3ff" title="수동으로 연결된 문서입니다. 눌러서 해제" onclick="caDocUnlink(\''+coll+'\',\''+id+'\','+idx0+')">🔗 연결해제</button>';
+    return btn+'<button class="rb" onclick="caDocEdit(\''+coll+'\',\''+id+'\')">✏️ 수정</button><button class="rb del" onclick="caDocDel(\''+coll+'\',\''+id+'\')">✕ 삭제</button>';
   };
   const hdrLink=(coll)=>'<button class="rb hd" onclick="caDocLink(\''+coll+'\','+idx0+')">+ 연결</button>';
   // 인보이스
@@ -858,10 +892,14 @@ window.caSendModal=async function(idx){
   const _cpLive=(D.coupons||[]).filter(x=>String(x.status||'active')!=='used'&&!(x.expiry&&String(x.expiry)<_tdy));
   const CPG=_cpSort(_cpLive.filter(x=>x.type!=='discount'));   // 상품권
   const CPD=_cpSort(_cpLive.filter(x=>x.type==='discount'));   // 할인권
+  // 점검보고서 · 계약서 발송용 — 최근 순
+  const IPS=(D.inspections||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  const CTS=(D.contracts||[]).slice().sort((a,b)=>String(b.contract_date||'').localeCompare(String(a.contract_date||'')));
   const state={iv:CNT.iv>0,ip:CNT.ip>0,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:BKP.length?'bk':(BKCU.length?'bkc':'basic'),
-    cpi:{cpg:0,cpd:0},
+    cpi:{cpg:0,cpd:0,ins:0,ct:0},
     payDate:_td.getFullYear()+'-'+_p2(_td.getMonth()+1)+'-'+_p2(_td.getDate())};
   const _cpSpan=(CPG.length&&CPD.length)?'':'grid-column:1/-1;';
+  const _icSpan=(IPS.length&&CTS.length)?'':'grid-column:1/-1;';
   const OPT=[['iv','💳','인보이스','건'],['ip','🔧','점검보고서','건'],['ct','📑','계약서 · 잔액','건'],['cp','🎫','상품권','장']];
   const mk=genericModal('📤 마이페이지 발송 — '+esc(e.name),
     '<p style="font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:10px">고객이 링크 하나로 본인의 문서를 확인합니다. 노출할 항목을 선택하세요. 링크는 고정이며 열 때마다 최신 내용이 표시됩니다.</p>'+
@@ -888,6 +926,8 @@ window.caSendModal=async function(idx){
         (RQP.length?'<span data-t="rq" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📥 의뢰 접수 안내</span>':'')+
         (CPG.length?'<span data-t="cpg" style="'+_cpSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🎁 상품권 발송</span>':'')+
         (CPD.length?'<span data-t="cpd" style="'+_cpSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🏷️ 할인권 발송</span>':'')+
+        (IPS.length?'<span data-t="ins" style="'+_icSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🔧 점검보고서 발송</span>':'')+
+        (CTS.length?'<span data-t="ct" style="'+_icSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📑 계약서 발송</span>':'')+
         '<span data-t="basic" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📄 기본 안내</span>'+
         '<span data-t="revisit" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🔄 재방문 · 예약</span>'+
         '<span data-t="bill" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🧾 청구 안내</span>'+
@@ -895,7 +935,7 @@ window.caSendModal=async function(idx){
         '<span data-t="install" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📲 앱 설치 안내</span>'+
       '</div>'+
       '<div id="cs-cpsel" style="display:none;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:9px 11px;margin-top:7px;align-items:center;gap:9px">'+
-        '<span style="font-size:11px;font-weight:800;color:var(--ink3);white-space:nowrap">발송할 쿠폰</span>'+
+        '<span id="cs-cp-lb" style="font-size:11px;font-weight:800;color:var(--ink3);white-space:nowrap">발송할 쿠폰</span>'+
         '<select id="cs-cp-pick" style="margin-left:auto;max-width:66%;font-family:inherit;font-size:11.5px;font-weight:800;color:var(--ink);border:1px solid var(--bdr);border-radius:8px;padding:6px 9px;background:#fff"></select>'+
       '</div>'+
       '<div id="cs-pay" style="display:none;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:9px 11px;margin-top:7px;align-items:center;gap:9px">'+
@@ -1052,8 +1092,169 @@ window.caSendModal=async function(idx){
   // 청구금액 = 「청구중」+「연체」 인보이스의 **잔여 결제금액** 합계
   //            (기결제/일부 결제가 있으면 그만큼 차감된다 · 마이페이지와 동일 규칙)
   // ── 쿠폰(상품권 · 할인권) 발송 ──────────────────────
-  function curCPList(){return state.tpl==='cpd'?CPD:CPG;}
+  const PICK_TPLS=['cpg','cpd','ins','ct'];
+  function curCPList(){
+    if(state.tpl==='cpd')return CPD;
+    if(state.tpl==='ins')return IPS;
+    if(state.tpl==='ct')return CTS;
+    return CPG;
+  }
   function curCoupon(){const a=curCPList();return a[state.cpi[state.tpl]||0]||a[0]||null;}
+  // 드롭다운 옵션 문구
+  function pickLb(x){
+    if(state.tpl==='ins')return inspLabel(x.type)+' · '+(x.date||'')+(x.addr?' · '+x.addr:'');
+    if(state.tpl==='ct')return (pkgLabel(x.package_id)||'패키지')+' · '+(x.contract_date||'')+' · 납입 '+fmtRM(x.amount_paid);
+    return (x.code||'')+' · '+(x.value||'')+(x.expiry?' · ~'+x.expiry:'');
+  }
+  function pickLbTitle(){
+    if(state.tpl==='ins')return '발송할 보고서';
+    if(state.tpl==='ct')return '발송할 계약서';
+    return '발송할 쿠폰';
+  }
+  // 계약 잔액 계산 — 마이페이지(balCalc)와 같은 규칙
+  function ctBal(c){
+    const paid=parseFloat(c.amount_paid)||0;
+    const bonus=(parseFloat(c.bonus_credit)||0)+(parseFloat(c.special_bonus_credit)||0);
+    const total=paid+bonus;
+    let h=[];try{h=typeof c.usage_history==='string'?JSON.parse(c.usage_history||'[]'):(c.usage_history||[]);}catch(_){h=[];}
+    const used=h.reduce((a,u)=>a+(parseFloat(u.amount)||0),0);
+    const disc=h.reduce((a,u)=>a+(parseFloat(u.discount)||0),0);
+    const carry=h.reduce((a,u)=>a+(parseFloat(u.carryover)||0),0);
+    const cnt=h.filter(u=>(parseFloat(u.amount)||0)>0).length;
+    return {paid:paid,bonus:bonus,total:total,remain:total-used+disc+carry,cnt:cnt};
+  }
+  // ── 🔧 점검보고서 발송 ──────────────────────
+  function insMsg(en){
+    const x=curCoupon();
+    if(!x)return en?'No inspection report available to send.':'발송 가능한 점검보고서가 없습니다.';
+    const nm=e.name||'';
+    const rl=BASE+'/'+inspPage(x.type)+'?id='+encodeURIComponent(x.__id||'')+'&lang='+(en?'en':'ko');
+    const tl=en?({install:'Installation Report',washer:'Washing Machine Report',dispatch:'Service Visit Report'}[x.type]||'Air-Con Inspection Report')
+              :({install:'설치 기술보고서',washer:'세탁기 점검 보고서',dispatch:'출장 보고서'}[x.type]||'에어컨 점검 보고서');
+    const L=[];
+    if(en){
+      L.push('Hello '+nm+' 😊');
+      L.push('This is Happy Home Care.');
+      L.push('');
+      L.push('📋 Your service report is ready.');
+      L.push('Please find the details of the work we carried out below.');
+      L.push(SEP2);
+      L.push('🔧 Report Details');
+      L.push('📄 Type : '+tl);
+      if(x.date)L.push('📅 Date : '+x.date);
+      if(x.addr)L.push('📍 Address : '+x.addr);
+      if(x.invoice_id)L.push('🧾 Invoice : '+x.invoice_id);
+      L.push(SEP2);
+      L.push('📄 Open your report');
+      L.push('🔗 '+rl);
+      L.push(SEP2);
+      L.push('🏠 Your Personal My Page');
+      L.push('You can check everything below anytime.');
+      L.push(msgRows(en));
+      L.push('📱 My Page');
+      L.push('🔗 '+link());
+      L.push(SEP2);
+      L.push('If you have any questions about the report, please let us know anytime.');
+      L.push('Thank you. 🙏');
+      L.push('Happy Home Care');
+      L.push('📞 +60 17-247 2774');
+      return L.join('\n');
+    }
+    L.push('안녕하세요, '+nm+' 고객님 😊');
+    L.push('Happy Home Care입니다.');
+    L.push('');
+    L.push('📋 점검보고서가 준비되었습니다.');
+    L.push('작업 내용을 아래에서 확인해 주세요.');
+    L.push(SEP2);
+    L.push('🔧 보고서 정보');
+    L.push('📄 종류 : '+tl);
+    if(x.date)L.push('📅 작업일 : '+x.date);
+    if(x.addr)L.push('📍 주소 : '+x.addr);
+    if(x.invoice_id)L.push('🧾 연결 인보이스 : '+x.invoice_id);
+    L.push(SEP2);
+    L.push('📄 점검보고서 바로 열기');
+    L.push('🔗 '+rl);
+    L.push(SEP2);
+    L.push('🏠 고객 전용 마이페이지');
+    L.push('다음 정보를 언제든지 편리하게 확인하실 수 있습니다.');
+    L.push(msgRows(en));
+    L.push('📱 My Page');
+    L.push('🔗 '+link());
+    L.push(SEP2);
+    L.push('보고서 내용에 궁금하신 점이 있으시면 언제든지 말씀해 주세요.');
+    L.push('감사합니다. 🙏');
+    L.push('Happy Home Care');
+    L.push('📞 +60 17-247 2774');
+    return L.join('\n');
+  }
+  // ── 📑 계약서 발송 ──────────────────────
+  function ctMsg(en){
+    const x=curCoupon();
+    if(!x)return en?'No contract available to send.':'발송 가능한 계약서가 없습니다.';
+    const nm=e.name||'';
+    const b=ctBal(x);
+    const cl=BASE+'/admin.html?view='+encodeURIComponent(x.__id||'')+'&mode=all&lang='+(en?'en':'ko');
+    const pkg=pkgLabel(x.package_id)||(en?'Package':'패키지');
+    const L=[];
+    if(en){
+      L.push('Hello '+nm+' 😊');
+      L.push('This is Happy Home Care.');
+      L.push('');
+      L.push('📑 Here is your membership contract.');
+      L.push('You can check your balance and usage history anytime.');
+      L.push(SEP2);
+      L.push('📑 Contract Details');
+      L.push('📦 Package : '+pkg);
+      if(x.contract_date)L.push('📅 Contract date : '+x.contract_date);
+      L.push('💳 Paid : '+fmtRM(b.paid));
+      if(b.bonus>0.005)L.push('🎁 Bonus credit : '+fmtRM(b.bonus));
+      L.push('💰 Balance : '+fmtRM(b.remain));
+      L.push('🔁 Services used : '+b.cnt);
+      if(x.status==='ended')L.push('⏹ Status : Ended');
+      L.push(SEP2);
+      L.push('📑 Open your contract');
+      L.push('🔗 '+cl);
+      L.push(SEP2);
+      L.push('🏠 Your Personal My Page');
+      L.push('You can check everything below anytime.');
+      L.push(msgRows(en));
+      L.push('📱 My Page');
+      L.push('🔗 '+link());
+      L.push(SEP2);
+      L.push('Thank you. 🙏');
+      L.push('Happy Home Care');
+      L.push('📞 +60 17-247 2774');
+      return L.join('\n');
+    }
+    L.push('안녕하세요, '+nm+' 고객님 😊');
+    L.push('Happy Home Care입니다.');
+    L.push('');
+    L.push('📑 고객님의 멤버십 계약서를 보내드립니다.');
+    L.push('잔액과 이용내역을 언제든지 확인하실 수 있습니다.');
+    L.push(SEP2);
+    L.push('📑 계약 정보');
+    L.push('📦 패키지 : '+pkg);
+    if(x.contract_date)L.push('📅 계약일 : '+x.contract_date);
+    L.push('💳 납입 금액 : '+fmtRM(b.paid));
+    if(b.bonus>0.005)L.push('🎁 보너스 크레딧 : '+fmtRM(b.bonus));
+    L.push('💰 사용 가능 잔액 : '+fmtRM(b.remain));
+    L.push('🔁 이용 횟수 : '+b.cnt+'회');
+    if(x.status==='ended')L.push('⏹ 계약 상태 : 종료');
+    L.push(SEP2);
+    L.push('📑 계약서 바로 열기');
+    L.push('🔗 '+cl);
+    L.push(SEP2);
+    L.push('🏠 고객 전용 마이페이지');
+    L.push('다음 정보를 언제든지 편리하게 확인하실 수 있습니다.');
+    L.push(msgRows(en));
+    L.push('📱 My Page');
+    L.push('🔗 '+link());
+    L.push(SEP2);
+    L.push('감사합니다. 🙏');
+    L.push('Happy Home Care');
+    L.push('📞 +60 17-247 2774');
+    return L.join('\n');
+  }
   function cpExp(d,en){
     const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d||''));
     if(!m)return String(d||'');
@@ -1140,6 +1341,8 @@ window.caSendModal=async function(idx){
   function msg(){
     const l=link(),en=!!state.en,nm=e.name||'',list=msgList();
     if(state.tpl==='cpg'||state.tpl==='cpd')return cpMsg(en);
+    if(state.tpl==='ins')return insMsg(en);
+    if(state.tpl==='ct')return ctMsg(en);
     if(state.tpl==='bill'){
       const amt=billAmt();
       const amtKo=amt.toLocaleString('en-MY',{maximumFractionDigits:2});
@@ -1247,14 +1450,16 @@ window.caSendModal=async function(idx){
     if(pw)pw.style.display=(state.tpl==='pay')?'flex':'none';
     const cw=mk.querySelector('#cs-cpsel');
     if(cw){
-      const isCP=(state.tpl==='cpg'||state.tpl==='cpd');
+      const isCP=PICK_TPLS.indexOf(state.tpl)>=0;
       cw.style.display=isCP?'flex':'none';
       if(isCP){
         const arr=curCPList(),sl=cw.querySelector('#cs-cp-pick');
+        const lb=cw.querySelector('#cs-cp-lb');
+        if(lb)lb.textContent=pickLbTitle();
         const key=state.tpl+'|'+arr.map(x=>x.__id).join(',');
         if(sl.dataset.key!==key){
           sl.dataset.key=key;
-          sl.innerHTML=arr.map((x,i)=>'<option value="'+i+'">'+esc((x.code||'')+' · '+(x.value||'')+(x.expiry?' · ~'+x.expiry:''))+'</option>').join('');
+          sl.innerHTML=arr.map((x,i)=>'<option value="'+i+'">'+esc(pickLb(x))+'</option>').join('');
         }
         sl.value=String(state.cpi[state.tpl]||0);
       }
@@ -1295,8 +1500,10 @@ window.caSendModal=async function(idx){
   mk.querySelector('#cs-tpl').addEventListener('click',ev=>{
     const el=ev.target.closest('[data-t]');if(!el)return;
     state.tpl=el.dataset.t;
-    // 쿠폰 안내는 마이페이지에서 쿠폰을 볼 수 있어야 하므로 「상품권」 항목을 자동으로 켠다
+    // 안내 메시지에 맞는 문서를 마이페이지에서 볼 수 있도록 해당 항목을 자동으로 켠다
     if((state.tpl==='cpg'||state.tpl==='cpd')&&CNT.cp>0)state.cp=true;
+    if(state.tpl==='ins'&&CNT.ip>0)state.ip=true;
+    if(state.tpl==='ct'&&CNT.ct>0)state.ct=true;
     paint();
   });
   const _cps=mk.querySelector('#cs-cp-pick');
@@ -1469,12 +1676,13 @@ window.caDocLink=function(coll,idx){
   const myN=nn(e.name),myKeys=[myN].concat(e.aliases.map(nn)),myP=pn(e.phone);
   const myKey=entryKey(e);
   const mine=x=>{
+    if(docExtraKeys(x).indexOf(myKey)>=0)return true;   // 이미 중복 연결된 문서
     if(x.ca_link)return x.ca_link===myKey;      // 수동 연결이 우선입니다
     const on=nn(docOwnerName(coll,x)),op=pn(docOwnerPhone(coll,x));
     return (myP&&op===myP)||(on&&myKeys.includes(on));
   };
   const mk=genericModal(COLL_LB[coll]+' 연결 — '+esc(e.name),
-    '<p style="font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:10px">문서를 선택하면 이 고객(<b>'+esc(e.name)+'</b>) 소속으로 연결됩니다.<br>📌 고객명·연락처가 <b>서로 달라도 그대로 유지한 채</b> 연결됩니다. 다른 경우 ⚠️ 경고 안내문만 표시되고, 필요하면 확인 창에서 직접 변경할 수 있습니다.</p>'+
+    '<p style="font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:10px">문서를 선택하면 이 고객(<b>'+esc(e.name)+'</b>)에게 연결됩니다.<br>📌 고객명·연락처가 <b>서로 달라도 그대로 유지한 채</b> 연결됩니다.<br>🔗 <b>이미 다른 고객에게 연결된 문서도 그대로 선택</b>할 수 있으며, 기본값인 「중복 연결」을 고르면 <b>기존 고객은 그대로 두고</b> 이 고객에게도 함께 표시됩니다.</p>'+
     '<input class="fi" id="ca-lk-q" placeholder="🔍 검색 (번호·이름·날짜)" style="margin-bottom:10px">'+
     '<div id="ca-lk-list" style="max-height:46vh;overflow-y:auto"></div>');
   const listEl=mk.querySelector('#ca-lk-list'),qEl=mk.querySelector('#ca-lk-q');
@@ -1487,8 +1695,10 @@ window.caDocLink=function(coll,idx){
     listEl.innerHTML=rows.length?rows.map(x=>{
       const isMine=mine(x);
       const own=docOwnerName(coll,x);
+      const dupN=docExtraKeys(x).length;
+      const tag=(x.ca_link?'<span class="own" style="color:#5B21B6">➡️ 이관됨</span>':'')+(dupN?'<span class="own" style="color:#92400E">🔗 중복 '+dupN+'</span>':'');
       return '<div class="lk-row'+(isMine?' mine':'')+'" data-id="'+esc(x.__id)+'" data-mine="'+(isMine?'1':'')+'">'+
-        '<span style="font-weight:800">'+esc(docSummary(coll,x))+'</span>'+
+        '<span style="font-weight:800">'+esc(docSummary(coll,x))+'</span>'+tag+
         '<span class="own">'+(isMine?'이미 이 고객':esc(own||'(고객 미지정)'))+'</span></div>';
     }).join(''):'<div class="dnone">문서가 없습니다</div>';
   }
@@ -1527,32 +1737,115 @@ function caLinkConfirm(coll,x,e,onDone){
     '<div style="background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:10px 12px;font-size:12px;font-weight:800;color:var(--ink);margin-bottom:11px">'+COLL_LB[coll]+'<br><span style="font-weight:700;color:var(--ink2)">'+esc(docSummary(coll,x))+'</span>'+
       (own||ownP?'<br><span style="font-weight:700;color:var(--ink3);font-size:11px">문서에 적힌 정보 — '+esc(own||'(이름 없음)')+(ownP?' · '+esc(ownP):'')+'</span>':'')+'</div>'+
     warn+
-    '<div style="font-size:11.5px;color:var(--ink3);line-height:1.6;margin:2px 0 8px">아래 항목은 <b>필요할 때만</b> 선택하세요. 선택하지 않으면 원본 그대로 유지됩니다.</div>'+
+    '<div style="font-size:11px;font-weight:800;color:var(--ink3);margin:2px 0 6px">연결 방식</div>'+
+    '<label class="lk-keep"><input type="radio" name="lkmode" value="dup" checked><span><b>🔗 중복 연결 — 기존 고객은 그대로 두고 이 고객에게도 함께 표시</b><span>인보이스·계약서·점검보고서·상품권을 여러 고객에게 동시에 보여줄 때 사용합니다. 원래 고객의 목록·마이페이지에서도 그대로 보입니다.</span></span></label>'+
+    '<label class="lk-keep"><input type="radio" name="lkmode" value="move"><span><b>➡️ 이관 연결 — 이 문서를 이 고객 소속으로 옮김</b><span>기존 고객의 목록에서는 사라지고 이 고객에게만 표시됩니다. (기존 방식)</span></span></label>'+
+    '<div id="lk-opt" style="display:none">'+
+    '<div style="font-size:11.5px;color:var(--ink3);line-height:1.6;margin:8px 0 8px">아래 항목은 <b>필요할 때만</b> 선택하세요. 선택하지 않으면 원본 그대로 유지됩니다.</div>'+
     '<label class="lk-keep"><input type="checkbox" id="lk-rename"><span><b>문서의 고객명도 「'+esc(e.name)+'」(으)로 변경</b><span>체크하지 않으면 문서에 적힌 이름'+(own?' 「'+esc(own)+'」':'')+'이 그대로 유지됩니다.</span></span></label>'+
-    (pk?'<label class="lk-keep"><input type="checkbox" id="lk-rephone"><span><b>문서의 연락처도 「'+esc(e.phone||'(없음)')+'」(으)로 변경</b><span>체크하지 않으면 문서에 적힌 연락처'+(ownP?' 「'+esc(ownP)+'」':'')+'가 그대로 유지됩니다.</span></span></label>':''),
+    (pk?'<label class="lk-keep"><input type="checkbox" id="lk-rephone"><span><b>문서의 연락처도 「'+esc(e.phone||'(없음)')+'」(으)로 변경</b><span>체크하지 않으면 문서에 적힌 연락처'+(ownP?' 「'+esc(ownP)+'」':'')+'가 그대로 유지됩니다.</span></span></label>':'')+
+    '</div>',
     '<button class="btn" onclick="document.getElementById(\'ca-doc-mask\').remove()">취소</button><button class="btn p" id="lk-go">연결하기</button>');
 
+  const _mode=()=>{const r=mk2.querySelector('input[name="lkmode"]:checked');return r?r.value:'dup';};
+  const _optBox=mk2.querySelector('#lk-opt');
+  const _syncMode=()=>{if(_optBox)_optBox.style.display=(_mode()==='move')?'block':'none';};
+  Array.prototype.forEach.call(mk2.querySelectorAll('input[name="lkmode"]'),r=>r.addEventListener('change',_syncMode));
+  _syncMode();
+
   mk2.querySelector('#lk-go').addEventListener('click',async()=>{
+    const mode=_mode();
     const cb=mk2.querySelector('#lk-rename'),cp=mk2.querySelector('#lk-rephone');
-    const renameToo=!!(cb&&cb.checked), rephoneToo=!!(cp&&cp.checked);
+    const renameToo=(mode==='move')&&!!(cb&&cb.checked), rephoneToo=(mode==='move')&&!!(cp&&cp.checked);
     const btn=mk2.querySelector('#lk-go');btn.disabled=true;btn.textContent='연결 중...';
+    let f;
+    if(mode==='dup'){
+      const key=entryKey(e);
+      const ks=docExtraKeys(x).slice();
+      if(ks.indexOf(key)<0)ks.push(key);
+      f={ca_links:ks,ca_links_at:new Date().toISOString()};
+    }else{
+      f=linkFieldsFor(coll,e,renameToo,rephoneToo);
+      // 이관 대상 고객이 중복 연결에도 들어 있으면 중복 쪽에서 빼 준다 (중복 표시 방지)
+      const ks=docExtraKeys(x).filter(k=>k!==entryKey(e));
+      if(docExtraKeys(x).length!==ks.length)f.ca_links=ks;
+    }
     try{
-      await updateDoc(doc(db,coll,x.__id),linkFieldsFor(coll,e,renameToo,rephoneToo));
+      await updateDoc(doc(db,coll,x.__id),f);
       mk2.remove();if(onDone)onDone();
-      const chg=[renameToo?'고객명':'',rephoneToo?'연락처':''].filter(Boolean).join('·');
-      toast(chg?'✓ 연결되었습니다 ('+chg+' 변경)':'✓ 연결되었습니다 — 문서 내용은 그대로 유지');
+      if(mode==='dup')toast('✓ 중복 연결되었습니다 — 기존 고객에도 그대로 표시됩니다');
+      else{
+        const chg=[renameToo?'고객명':'',rephoneToo?'연락처':''].filter(Boolean).join('·');
+        toast(chg?'✓ 이관 연결되었습니다 ('+chg+' 변경)':'✓ 이관 연결되었습니다 — 문서 내용은 그대로 유지');
+      }
       closeDrawer();loadAll(true);
     }catch(err){btn.disabled=false;btn.textContent='연결하기';toast('연결 실패: '+err.message);}
   });
 }
-// ── 🔗 수동 연결 해제 : 원래 고객명·연락처 기준으로 되돌립니다 ──
-window.caDocUnlink=async function(coll,id){
+// ── 🔗 수동 연결 해제 ────────────────────────────────
+//  idx(고객 인덱스)가 있고 그 고객이 「중복 연결」 대상이면 그 고객만 빼고,
+//  아니면 기존처럼 이관 연결(ca_link)을 해제해 원래 고객명·연락처 기준으로 되돌립니다.
+window.caDocUnlink=async function(coll,id,idx){
   const x=RAW[coll].find(d=>d.__id===id);if(!x)return;
-  if(!confirm('이 '+COLL_LB[coll]+' 문서의 수동 연결을 해제할까요?\n\n'+docSummary(coll,x)+'\n\n해제하면 문서에 적힌 고객명·연락처 기준으로 다시 분류됩니다.'))return;
+  const e=(idx===undefined||idx===null)?null:entries[idx];
+  const key=e?entryKey(e):'';
+  const isDup=!!(key&&docExtraKeys(x).indexOf(key)>=0);
+  const msgQ=isDup
+    ?('이 '+COLL_LB[coll]+' 문서를 「'+(e.name||'')+'」 고객에서만 연결 해제할까요?\n\n'+docSummary(coll,x)+'\n\n원래 고객과 다른 중복 연결 고객에게는 그대로 남아 있습니다.')
+    :('이 '+COLL_LB[coll]+' 문서의 수동 연결을 해제할까요?\n\n'+docSummary(coll,x)+'\n\n해제하면 문서에 적힌 고객명·연락처 기준으로 다시 분류됩니다.');
+  if(!confirm(msgQ))return;
   try{
-    await updateDoc(doc(db,coll,id),{ca_link:'',ca_link_name:''});
+    if(isDup)await updateDoc(doc(db,coll,id),{ca_links:docExtraKeys(x).filter(k=>k!==key)});
+    else await updateDoc(doc(db,coll,id),{ca_link:'',ca_link_name:''});
     toast('✓ 연결이 해제되었습니다');closeDrawer();loadAll(true);
   }catch(err){toast('해제 실패: '+err.message);}
+};
+
+// ── 🔗 연결 관리 : 이 고객에게 연결된 문서를 한눈에 보고 선택 해제 (F27-c) ──
+window.caLinkManage=function(idx){
+  const e=entries[idx];if(!e)return;
+  const key=entryKey(e);
+  const COLLS=['invoices','inspections','contracts','coupons','requests','bookings','quotes','schedules'];
+  const rows=[];
+  COLLS.forEach(coll=>{
+    (RAW[coll]||[]).forEach(x=>{
+      const dup=docExtraKeys(x).indexOf(key)>=0;
+      const mov=(x.ca_link===key);
+      if(dup||mov)rows.push({coll:coll,x:x,mode:dup?'dup':'move'});
+    });
+  });
+  const body=rows.length
+    ?('<p style="font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:10px">「<b>'+esc(e.name)+'</b>」 고객에게 <b>수동 연결</b>된 문서 '+rows.length+'건입니다.<br>해제할 항목을 선택한 뒤 아래 버튼을 누르세요.<br>🔗 <b>중복 연결</b>은 이 고객에서만 빠지고 원래 고객에는 그대로 남습니다. ➡️ <b>이관 연결</b>을 해제하면 문서에 적힌 고객명·연락처 기준으로 다시 분류됩니다.</p>'+
+       '<div style="display:flex;gap:7px;margin-bottom:9px"><button class="btn sm" id="lkm-all">전체 선택</button><button class="btn sm" id="lkm-none">선택 해제</button></div>'+
+       '<div style="max-height:46vh;overflow-y:auto">'+
+       rows.map((r,i)=>'<label class="lk-keep"><input type="checkbox" class="lkm-cb" data-i="'+i+'"><span><b>'+
+         (r.mode==='dup'?'<i style="font-style:normal;color:#92400E">🔗 중복 연결</i>':'<i style="font-style:normal;color:#5B21B6">➡️ 이관 연결</i>')+' · '+COLL_LB[r.coll]+'</b>'+
+         '<span>'+esc(docSummary(r.coll,r.x))+(docOwnerName(r.coll,r.x)?' · 문서상 고객 「'+esc(docOwnerName(r.coll,r.x))+'」':'')+'</span></span></label>').join('')+
+       '</div>')
+    :'<div class="dnone">이 고객에게 수동으로 연결된 문서가 없습니다.<br><span style="font-size:11px">문서 목록의 「+ 연결」 버튼으로 연결할 수 있습니다.</span></div>';
+  const mk=genericModal('🔗 연결 관리 — '+esc(e.name),body,
+    rows.length?'<button class="btn" onclick="document.getElementById(\'ca-doc-mask\').remove()">닫기</button><button class="btn p" id="lkm-go" style="background:var(--bad);border-color:var(--bad)">선택 항목 연결 해제</button>':'<button class="btn" onclick="document.getElementById(\'ca-doc-mask\').remove()">닫기</button>');
+  if(!rows.length)return;
+  const cbs=()=>Array.prototype.slice.call(mk.querySelectorAll('.lkm-cb'));
+  mk.querySelector('#lkm-all').addEventListener('click',()=>cbs().forEach(c=>{c.checked=true;}));
+  mk.querySelector('#lkm-none').addEventListener('click',()=>cbs().forEach(c=>{c.checked=false;}));
+  mk.querySelector('#lkm-go').addEventListener('click',async()=>{
+    const pick=cbs().filter(c=>c.checked).map(c=>rows[parseInt(c.dataset.i,10)]);
+    if(!pick.length){toast('해제할 항목을 선택하세요');return;}
+    if(!confirm('선택한 '+pick.length+'건의 연결을 해제할까요?'))return;
+    const btn=mk.querySelector('#lkm-go');btn.disabled=true;btn.textContent='해제 중...';
+    let ok=0,ng=0;
+    for(const r of pick){
+      try{
+        if(r.mode==='dup')await updateDoc(doc(db,r.coll,r.x.__id),{ca_links:docExtraKeys(r.x).filter(k=>k!==key)});
+        else await updateDoc(doc(db,r.coll,r.x.__id),{ca_link:'',ca_link_name:''});
+        ok++;
+      }catch(err){ng++;}
+    }
+    mk.remove();
+    toast(ng?('✓ '+ok+'건 해제 · '+ng+'건 실패'):('✓ '+ok+'건 연결이 해제되었습니다'));
+    closeDrawer();loadAll(true);
+  });
 };
 // ── ✏️ 수정: 종류별 핵심 필드 편집 ──
 window.caDocEdit=function(coll,id){
