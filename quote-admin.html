@@ -654,7 +654,10 @@ window.applyInvCatalog=function(svcs){
   (svcs||[]).slice().sort(function(a,b){return (a.order||0)-(b.order||0);}).forEach(function(x){
     if(!x||!x.name)return;
     var g=invGroupOf(x.cat,x.subcat,x.name);
-    byG[g].push({n:x.name,en:x.name_en||ITEM_EN[x.name]||(window.LOCAL_EN&&LOCAL_EN[x.name])||x.name,p:parseFloat(x.price)||0,unit:'',
+    // 관리자 표시는 한글명(name_ko) 우선 — 서비스명(name)이 영문 코드여도 한글로 보인다
+    var ko=(x.name_ko&&String(x.name_ko).trim())||String(x.name||'');
+    var enN=x.name_en||ITEM_EN[ko]||(window.LOCAL_EN&&LOCAL_EN[ko])||((x.name&&x.name!==ko&&!/[가-힣]/.test(x.name))?x.name:'')||ko;
+    byG[g].push({n:ko,en:enN,alt:(x.name&&x.name!==ko)?String(x.name):'',p:parseFloat(x.price)||0,unit:'',
       note:((x.subcat&&x.subcat!==x.cat)?x.subcat:(x.cat||''))+(x.unit?' · '+x.unit+'당':''),
       noteEn:'Per '+(x.unit||'unit'),
       _svc:{id:x.id||'',cat:x.cat||'',subcat:x.subcat||''}});
@@ -706,7 +709,7 @@ function qkBuild(){
     if(nameSeen[k])return;nameSeen[k]=1;
     // 내장 항목이라도 인보이스에 같은 이름이 있으면 인보이스 단가를 기준으로 쓴다
     var p=(!it._svc&&lp[it.n]!=null)?lp[it.n]:(parseFloat(it.p)||0);
-    QCAT.push({qid:'q'+QCAT.length,n:it.n,en:it.en||LOCAL_EN[it.n]||it.n,p:p,unit:it.unit||'',note:it.note||'',noteEn:it.noteEn||'',group:group,rail:rail(railLabel),_svc:it._svc||null});
+    QCAT.push({qid:'q'+QCAT.length,n:it.n,en:it.en||LOCAL_EN[it.n]||it.n,alt:it.alt||'',p:p,unit:it.unit||'',note:it.note||'',noteEn:it.noteEn||'',group:group,rail:rail(railLabel),_svc:it._svc||null});
   }
   var L=LINKED||{install:[],repair:[],material:[],product:[],callout:[],clean:[],other:[]};
   // 🔗 인보이스 단가 사전 (이름 → 단가) — 내장 가격표에 같은 이름이 있으면 인보이스 단가로 교체
@@ -857,7 +860,7 @@ window.qkRender=function(){
   var el=gid('qk-list');if(!el)return;
   var q=(gid('qk-q').value||'').trim().toLowerCase();
   var list=QCAT.filter(function(c){
-    if(q)return (c.n+' '+c.note+' '+c.rail).toLowerCase().indexOf(q)>=0;
+    if(q)return (c.n+' '+(c.alt||'')+' '+(c.en||'')+' '+c.note+' '+c.rail).toLowerCase().indexOf(q)>=0;
     return qkRailSel==='전체'||c.rail===qkRailSel;
   });
   if(!list.length){el.innerHTML='<div style="text-align:center;padding:34px 12px;color:var(--gray);font-size:12.5px">'+(q?'검색 결과가 없습니다':'항목이 없습니다')+'</div>';return;}
@@ -1257,7 +1260,7 @@ window.__savePriceOverride=async function(key,price){
     snap.docs.forEach(d=>{
       const s=d.data()||{};
       if(s._del||!s.name)return;
-      items.push({id:s.id||d.id,cat:s.cat||'',subcat:s.subcat||'',name:s.name,name_en:s.name_en||s.nameEn||'',price:s.price,unit:s.unit||'',order:s.order||0});
+      items.push({id:s.id||d.id,cat:s.cat||'',subcat:s.subcat||'',name:s.name,name_ko:s.name_ko||'',name_en:s.name_en||s.nameEn||'',price:s.price,unit:s.unit||'',order:s.order||0});
     });
     if(items.length&&window.applyInvCatalog)applyInvCatalog(items);
   }catch(e){console.warn('인보이스 품목 연동 실패(내장 가격표 사용):',e);}
