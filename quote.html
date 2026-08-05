@@ -42,12 +42,14 @@ html,body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR'
 .brk-row .bl .bnum{font-size:9.5px;font-weight:800;color:#b09346;flex-shrink:0}
 .brk-row .bl .bname{font-weight:600;word-break:keep-all}
 .brk-row .bl .bqty{font-size:10px;color:#b09346;white-space:nowrap}
-.brk-row .bv{font-weight:800;white-space:nowrap;color:#9c6d00}
+.brk-row .bv{font-weight:800;white-space:nowrap;color:#9c6d00;text-align:right}
+.brk-row .bv .was{display:block;font-size:9px;font-weight:500;color:#c9b78a;text-decoration:line-through;margin-top:0}
 .brk-row.pend .bname,.brk-row.pend .bv{color:#c4a25a;font-weight:500;font-style:italic}
 .qsec .sh{display:flex;align-items:center;gap:7px;margin-bottom:7px}
 .qsec .sh .ic{width:23px;height:23px;border-radius:7px;background:var(--il);display:flex;align-items:center;justify-content:center;font-size:11px}
 .qsec .sh b{font-size:13px}
-.qsec .sh .ssum{margin-left:auto;font-size:12px;font-weight:800;color:var(--indigo)}
+.qsec .sh .ssum{margin-left:auto;font-size:12px;font-weight:800;color:var(--indigo);text-align:right}
+.sh .ssum .was{display:block;font-size:9.5px;font-weight:500;color:#b6bcc9;text-decoration:line-through;margin-top:1px}
 .qtbl{width:100%;border-collapse:collapse;font-size:12px}
 .qtbl td{padding:8px 6px;border-bottom:1px solid #f0f2f7;vertical-align:top}
 .qtbl td.r{text-align:right;font-weight:700;white-space:nowrap}
@@ -281,7 +283,11 @@ function render(){
   let secHtml='';
   Object.keys(SECT_META).sort((a,b)=>SECT_META[a].order-SECT_META[b].order).forEach(g=>{
     if(!groups[g])return;
-    const sum=groups[g].reduce((s,it)=>s+(it.amount||it.qty*it.price||0),0);
+    const itGross=it=>(parseFloat(it.qty)||1)*(parseFloat(it.price)||0);
+    const itDisc=it=>{const dv=parseFloat(it.discVal)||0;if(dv<=0)return 0;const gr=itGross(it);return it.discType==='amt'?Math.min(dv,gr):gr*Math.min(dv,100)/100;};
+    const itNet=it=>(it.amount!=null?it.amount:Math.max(0,itGross(it)-itDisc(it)))||0;
+    const sum=groups[g].reduce((s,it)=>s+itNet(it),0);
+    const sumGross=groups[g].reduce((s,it)=>s+itGross(it),0);
     let rows='';
     groups[g].forEach(it=>{
       const nm=isEn?(it.nameEn||it.name):it.name;
@@ -296,7 +302,7 @@ function render(){
       const amtCell=da>0?(fmtN(netAmt)+'<span class="was">'+fmtN(gross)+'</span>'):fmtN(it.amount!=null?it.amount:gross);
       rows+='<tr><td>'+esc(nm)+(noteAll?'<span class="note">'+esc(noteAll)+'</span>':'')+'</td><td class="r">'+amtCell+'</td></tr>';
     });
-    secHtml+='<div class="qsec"><div class="sh"><div class="ic">'+SECT_META[g].icon+'</div><b>'+(isEn?SECT_META[g].en:SECT_META[g].ko)+'</b><div class="ssum">'+fmtN(sum)+'</div></div><table class="qtbl">'+rows+'</table></div>';
+    secHtml+='<div class="qsec"><div class="sh"><div class="ic">'+SECT_META[g].icon+'</div><b>'+(isEn?SECT_META[g].en:SECT_META[g].ko)+'</b><div class="ssum">'+fmtN(sum)+(sumGross>sum+0.004?'<span class="was">'+fmtN(sumGross)+'</span>':'')+'</div></div><table class="qtbl">'+rows+'</table></div>';
   });
   if(Q.discount>0)secHtml+='<div class="disc"><span>'+t.discount+'</span><span>− '+fmtN(Q.discount)+'</span></div>';
 
@@ -366,9 +372,14 @@ function render(){
   // 금액 내역: 기본인건비 / 추가인건비 / 자재비용 / 기타비용 4구분 + 에어컨 선택 상세
   const circled2=['①','②','③','④','⑤','⑥','⑦','⑧','⑨'];
   const sectSum={base:0,extra:0,material:0,etc:0};
+  const sectGross={base:0,extra:0,material:0,etc:0};
   (Q.items||[]).forEach(it=>{
-    const a=(it.amount!=null?it.amount:(it.qty*it.price))||0;
-    sectSum[sectOf(it)]+=a;
+    const gr=(parseFloat(it.qty)||1)*(parseFloat(it.price)||0);
+    const dv=parseFloat(it.discVal)||0;
+    const da=dv>0?(it.discType==='amt'?Math.min(dv,gr):gr*Math.min(dv,100)/100):0;
+    const a=(it.amount!=null?it.amount:Math.max(0,gr-da))||0;
+    const k=sectOf(it);
+    sectSum[k]+=a;sectGross[k]+=gr;
   });
   const disc=Q.discount||0;
   const nonZero=Object.keys(sectSum).filter(k=>sectSum[k]>0).length;
@@ -376,7 +387,7 @@ function render(){
   if(nonZero>1||acOn||disc>0){
     brkHtml='<div class="brk">';
     Object.keys(SECT_META).sort((a,b)=>SECT_META[a].order-SECT_META[b].order).forEach(k=>{
-      if(sectSum[k]>0)brkHtml+='<div class="brk-row"><div class="bl"><span class="bname">'+SECT_META[k].icon+' '+(isEn?SECT_META[k].en:SECT_META[k].ko)+'</span></div><div class="bv">'+fmtN(sectSum[k])+'</div></div>';
+      if(sectSum[k]>0)brkHtml+='<div class="brk-row"><div class="bl"><span class="bname">'+SECT_META[k].icon+' '+(isEn?SECT_META[k].en:SECT_META[k].ko)+'</span></div><div class="bv">'+fmtN(sectSum[k])+(sectGross[k]>sectSum[k]+0.004?'<span class="was">'+fmtN(sectGross[k])+'</span>':'')+'</div></div>';
     });
     if(acOn){
       brkHtml+='<div class="brk-row"><div class="bl"><span class="bname">❄️ '+t.brkProd+'</span></div><div class="bv">'+(!allChosen()&&acPrice===0?'—':fmtN(acPrice))+'</div></div>';
