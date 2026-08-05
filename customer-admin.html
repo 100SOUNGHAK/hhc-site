@@ -136,6 +136,12 @@ select.fi{appearance:auto}
 .pt-hist .ph.earn .amt{color:#047857}
 .pt-hist .ph.use .amt{color:#DC2626}
 .pill.pt{background:#F5F3FF;color:#6D28D9}
+.ptcard .pt-cfg{font-size:10px;font-weight:900;background:rgba(255,255,255,.12);border:1px dashed rgba(255,255,255,.45);color:#fff;border-radius:999px;padding:3px 9px;cursor:pointer;font-family:inherit}
+.ptcard .pt-cfg:hover{background:rgba(255,255,255,.22)}
+.pt-hx{width:100%;background:none;border:none;cursor:pointer;font-family:inherit;text-align:left}
+.pt-hx .tg{margin-left:8px;font-size:11px;font-weight:900;color:#6D28D9;flex-shrink:0}
+.pt-ls{display:none}
+.pt-ls.open{display:block}
 </style>
 </head>
 <body>
@@ -206,7 +212,7 @@ select.fi{appearance:auto}
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const BASE='https://hhc-3p8.pages.dev';
 const MEMBER_TIERS=['','VVIP','패키지 - 실버회원','패키지 - 티타늄회원','패키지 - 다이아회원','패키지 - 골드회원','패키지 - 로얄회원','패키지(사업) - 티타늄회원','패키지(사업) - 다이아회원','패키지(사업) - 골드회원','패키지(사업) - 로얄회원'];
@@ -244,6 +250,7 @@ function caToday(){const d=new Date(),p=n=>String(n).padStart(2,'0');return d.ge
 // 견적 합계 — 기본 합계 + 고객이 선택한 에어컨 옵션 금액
 function qtTotal(x){const b=parseFloat(x&&x.baseTotal)||0;const c=(x&&x.customerChoice&&parseFloat(x.customerChoice.price))||0;return b+c;}
 // ═══ 💎 포인트 적립 (RM100 당 RM1) ═══
+let PT_START='';   // 📅 적립 적용시작일 (YYYY-MM-DD · 빈값=전체 기간) — settings/points 에 저장, 발행일 기준
 // 적립 기준액 : 총 청구금액에서 세금·주차비용·최소청구·추가비용 제외
 //             = 품목 소계(품목별 할인 반영) − 전체 할인 − 상품/할인권
 // 패키지 회원(회원적립잔액 사용 포함)은 회원적립잔액(creditUse) 차감 「전」 금액 기준
@@ -265,7 +272,7 @@ function ptEarn(base){return Math.floor((parseFloat(base)||0)/100);}   // RM100 
 // 고객별 포인트 집계 : 「결제완료」 인보이스에서 적립 · 고객 마스터 pt_used 에서 사용 차감
 function ptCalc(e){
   const pkg=isPkg(e);
-  const earnRows=e.docs.invoices.filter(x=>x.status==='paid').map(x=>{
+  const earnRows=e.docs.invoices.filter(x=>x.status==='paid'&&!(PT_START&&String(x.date||'')<PT_START)).map(x=>{
     const b=ptBase(x,pkg);return {date:x.date||'',id:x.id||x.__id,base:b,pts:ptEarn(b)};
   }).filter(r=>r.pts>0).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
   const useRows=((e.master&&e.master.pt_used)||[]).map((u,i)=>({i,date:u.date||'',memo:u.memo||'',pts:Math.floor(parseFloat(u.amount)||0)}))
@@ -310,6 +317,8 @@ window.loadAll=async function(force){
   if(!entries.length)document.getElementById('list').innerHTML='<div class="loading">불러오는 중...</div>';
   const res=await Promise.all(COLL_NAMES.map(fetchColl));
   COLL_NAMES.forEach((n,i)=>RAW[n]=res[i]);
+  // 📅 포인트 적립 적용시작일 불러오기
+  try{const s=await getDoc(doc(db,'settings','points'));PT_START=(s&&s.exists&&s.exists())?String((s.data()||{}).pt_start||''):'';}catch(e){}
   rebuildAndPaint();
 };
 // ── 실시간 구독: 어느 프로그램에서 저장·수정해도 이 화면이 즉시 갱신된다 ──
@@ -635,23 +644,27 @@ window.openDrawer=function(idx){
       .concat(PT.earnRows.map(r=>({t:'earn',date:r.date,lb:'적립 · '+r.id,m:'기준액 '+fmtRM(r.base),pts:r.pts})))
       .concat(PT.useRows.map(r=>({t:'use',date:r.date,lb:'사용'+(r.memo?' · '+r.memo:''),m:'',pts:r.pts,ui:r.i})))
       .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+    const _ptExc=e.docs.invoices.filter(x=>x.status==='paid'&&PT_START&&String(x.date||'')<PT_START).length;   // 시작일 이전 발행분
     h+='<div class="ptcard">'+
        '<div class="pt-top"><span style="font-size:17px">💎</span><span class="pt-t">포인트 적립금</span><span class="pt-rule">RM100 → RM1</span>'+
+       '<button class="pt-cfg" onclick="caPtStart('+idx0+')" title="적립 적용시작일 설정 · 취소">📅 '+(PT_START?'적용시작 '+PT_START:'전체 기간 적립')+'</button>'+
        '<button class="pt-use-btn"'+(PT.bal>0?'':' disabled')+' onclick="caPtUse('+idx0+')">💎 포인트 사용</button></div>'+
-       '<div class="pt-bal"><div class="k">사용 가능 잔액</div><div class="v">RM '+PT.bal.toLocaleString()+'<small>.00</small></div></div>'+
+       '<div class="pt-bal"><div class="k">사용 가능 잔액</div><div class="v">RM '+PT.bal.toLocaleString()+'<small>.00</small></div>'+
+       (PT.bal<0?'<div style="font-size:10.5px;font-weight:800;color:#FDE68A;margin-top:4px;line-height:1.5">⚠️ 적용시작일 변경으로 사용액이 적립액보다 많습니다. 사용 내역을 취소하거나 시작일을 조정해 주세요.</div>':'')+'</div>'+
        '<div class="pt-row">'+
        '<div class="pt-c"><div class="k">누적 적립</div><div class="v">+RM '+PT.earn.toLocaleString()+'</div></div>'+
        '<div class="pt-c"><div class="k">누적 사용</div><div class="v">−RM '+PT.used.toLocaleString()+'</div></div>'+
-       '<div class="pt-c"><div class="k">적립 대상</div><div class="v">결제완료 '+PT.earnRows.length+'건</div></div>'+
+       '<div class="pt-c"><div class="k">적립 대상</div><div class="v">결제완료 '+PT.earnRows.length+'건'+(_ptExc?' <small style="opacity:.75;font-size:10px">(시작일 이전 '+_ptExc+'건 제외)</small>':'')+'</div></div>'+
        '</div></div>';
-    h+='<div class="dcard pt-hist"><div class="dcard-h">📜 포인트 적립·사용 내역<span class="cnt">'+_ptHist.length+'건</span></div>';
+    h+='<div class="dcard pt-hist"><button type="button" class="dcard-h pt-hx" onclick="caPtHist(this)">📜 포인트 적립·사용 내역<span class="cnt">'+_ptHist.length+'건</span><span class="tg">'+(window._ptHistOpen?'내역 닫기 ▲':'펼쳐보기 ▼')+'</span></button>';
+    h+='<div class="pt-ls'+(window._ptHistOpen?' open':'')+'" id="pt-hist-ls">';
     h+=_ptHist.length?_ptHist.map(r=>'<div class="ph '+r.t+'"><span class="sign">'+(r.t==='earn'?'+':'−')+'</span>'+
         '<b>'+esc(r.lb)+'</b><span class="m">'+esc(r.date||'')+(r.m?' · '+r.m:'')+'</span>'+
         '<span class="amt">'+(r.t==='earn'?'+':'−')+'RM '+r.pts.toLocaleString()+'</span>'+
         (r.t==='use'?'<button class="rb del" title="사용 내역 취소 (잔액 복구)" onclick="caPtUseDel('+idx0+','+r.ui+')">✕</button>':'')+
         '</div>').join('')
       :'<div class="dnone">적립·사용 내역이 없습니다</div>';
-    h+='</div>';
+    h+='</div></div>';
   }
   const myKey0=entryKey(e);
   const rowBtns=(coll,id)=>{
@@ -992,6 +1005,39 @@ window.caToggleInactive=async function(idx){
   }catch(err){toast('변경 실패: '+err.message);}
 };
 
+// ── 📅 포인트 적립 적용시작일 (모든 고객 공통 · settings/points 문서) ──
+window.caPtStart=function(idx){
+  genericModal('📅 포인트 적립 적용시작일',
+    '<p style="font-size:12px;color:var(--ink2);line-height:1.7;margin-bottom:10px">'+
+    '적용시작일을 설정하면 <b>그 날짜 이후에 발행된(발행일 기준) 결제완료 인보이스만</b> 포인트가 적립됩니다.<br>'+
+    '· 시작일 이전에 발행된 인보이스는 <b>수정·재저장해도</b> 적립되지 않습니다.<br>'+
+    '· 「적용 취소」를 누르면 전체 기간 적립으로 돌아갑니다.<br>'+
+    '· 이 설정은 <b>모든 고객에게 공통</b>으로 적용되며 마이페이지에도 동일하게 반영됩니다.</p>'+
+    '<div class="fl">적용시작일</div><input class="fi" id="pt-start" type="date" value="'+esc(PT_START||'')+'">',
+    '<button class="btn" onclick="document.getElementById(\'ca-doc-mask\').remove()">닫기</button>'+
+    (PT_START?'<button class="btn" style="color:var(--bad);border-color:#fca5a5" onclick="caPtStartSave('+idx+',true)">적용 취소 (전체 기간)</button>':'')+
+    '<button class="btn p" onclick="caPtStartSave('+idx+',false)">저장</button>');
+};
+window.caPtStartSave=async function(idx,clear){
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  const v=clear?'':(document.getElementById('pt-start').value||'');
+  if(!clear&&!v){toast('적용시작일을 선택해 주세요');return;}
+  try{
+    await setDoc(doc(db,'settings','points'),{pt_start:v,updated_at:new Date().toISOString()},{merge:true});
+    PT_START=v;
+    toast(v?('📅 '+v+' 이후 발행분부터 적립됩니다'):'전체 기간 적립으로 변경되었습니다');
+    const mk=document.getElementById('ca-doc-mask');if(mk)mk.remove();
+    renderAll();
+    if(idx!=null&&entries[idx])openDrawer(idx);
+  }catch(err){toast('저장 실패: '+err.message);}
+};
+// ── 📜 포인트 내역 펼쳐보기 / 닫기 ──
+window.caPtHist=function(btn){
+  const l=document.getElementById('pt-hist-ls');if(!l)return;
+  const o=l.classList.toggle('open');
+  window._ptHistOpen=o;
+  const t=btn.querySelector('.tg');if(t)t.textContent=o?'내역 닫기 ▲':'펼쳐보기 ▼';
+};
 // ── 💎 포인트 사용 (차감) ──
 window.caPtUse=function(idx){
   const e=entries[idx];if(!e)return;

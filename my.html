@@ -581,6 +581,9 @@ async function load(){
   const snap=await getDoc(doc(db,'customers',CID));
   if(!snap.exists())throw new Error('not-found');
   const m=snap.data()||{};
+  // 📅 포인트 적립 적용시작일 (관리자 설정 · 발행일 기준)
+  let _ptStart='';
+  try{const ps=await getDoc(doc(db,'settings','points'));if(ps&&ps.exists&&ps.exists())_ptStart=String((ps.data()||{}).pt_start||'');}catch(e){}
   const keys=[nn(m.name)].concat((m.aliases||[]).map(nn)).filter(Boolean);
   const mp=pn(m.phone);
   // ── 총괄 고객관리에서 수기로 연결(ca_link)한 문서도 함께 보여줍니다 ──
@@ -609,7 +612,7 @@ async function load(){
     fetchColl('bookings')   // 예약 신청 — 관리자가 만든 예약 링크는 v= 설정과 무관하게 항상 확인
   ]);
   DATA={
-    m,
+    m,ptStart:_ptStart,
     invoices:invs.filter(x=>hit(x.customer&&x.customer.name,x.customer&&x.customer.phone,x)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),
     inspections:insps.filter(x=>hit(x.client,x.phone,x)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),
     contracts:cts.filter(x=>hit(x.name,x.phone,x)),
@@ -920,7 +923,7 @@ function render(){
   // ── 💎 포인트 적립금 (RM100 당 RM1 · 결제완료 인보이스 기준) ──
   if(VIS.includes('iv')){
     const _pkg=/패키지/.test(m.member||'')||DATA.contracts.length>0;
-    const ptER=DATA.invoices.filter(x=>x.status==='paid').map(x=>{const b=ptBase(x,_pkg);return{date:x.date||'',base:b,pts:ptEarn(b)};}).filter(r=>r.pts>0);
+    const ptER=DATA.invoices.filter(x=>x.status==='paid'&&!(DATA.ptStart&&String(x.date||'')<DATA.ptStart)).map(x=>{const b=ptBase(x,_pkg);return{date:x.date||'',base:b,pts:ptEarn(b)};}).filter(r=>r.pts>0);
     const ptUR=(m.pt_used||[]).map(u=>({date:u.date||'',memo:u.memo||'',pts:Math.floor(parseFloat(u.amount)||0)})).filter(r=>r.pts>0);
     const ptE=ptER.reduce((a,r)=>a+r.pts,0),ptU=ptUR.reduce((a,r)=>a+r.pts,0),ptB=ptE-ptU;
     if(ptE>0||ptU>0){
@@ -933,10 +936,11 @@ function render(){
       h+='<div class="sec"><div class="ptc">'+
          '<div class="ptc-hd"><span class="ic">💎</span><div><div class="t">'+PL.t+'</div><div class="s">REWARD POINTS</div></div>'+
          '<span class="ptc-rule">RM100 → RM1</span></div>'+
-         '<div class="ptc-bal"><div class="k">'+PL.bal+'</div><div class="v">RM '+fmt0(ptB)+'<small>.00</small></div></div>'+
+         '<div class="ptc-bal"><div class="k">'+PL.bal+'</div><div class="v">RM '+fmt0(ptB)+'<small>.00</small></div>'+
+         (ptB<0?'<div style="font-size:10.5px;font-weight:800;color:#FDE68A;margin-top:4px;line-height:1.5">'+(LANG==='en'?'⚠️ Please contact us about your points balance.':'⚠️ 포인트 잔액 관련은 고객센터로 문의해 주세요.')+'</div>':'')+'</div>'+
          '<div class="ptc-row"><div><div class="k">'+PL.earn+'</div><div class="v">+RM '+fmt0(ptE)+'</div></div>'+
          '<div><div class="k">'+PL.used+'</div><div class="v">−RM '+fmt0(ptU)+'</div></div></div>'+
-         '<div class="ptc-note">'+PL.note+'</div>'+
+         '<div class="ptc-note">'+PL.note+(DATA.ptStart?('<br>'+(LANG==='en'?'※ Points apply to invoices issued on/after '+DATA.ptStart+'.':'※ '+DATA.ptStart+' 이후 발행분부터 적립됩니다.')):'')+'</div>'+
          '<button type="button" class="ptc-btn" id="pt-btn" data-o="'+PL.open+'" data-c="'+PL.close+'"><span>'+(OPEN.pt?PL.close:PL.open)+'</span><span class="ar">▼</span></button>'+
          '<div class="ptc-ls'+(OPEN.pt?' open':'')+'" id="pt-list">'+
          (ptRows.length?ptRows.map(r=>'<div class="ptr '+r.t+'"><span class="sign">'+(r.t==='earn'?'+':'−')+'</span><div class="bx"><b>'+esc(r.lb)+'</b><span>'+esc(dfmt(r.date)||r.date||'')+(r.m?' · '+r.m:'')+'</span></div><span class="amt">'+(r.t==='earn'?'+':'−')+'RM '+fmt0(r.pts)+'</span></div>').join(''):'<div class="ptr-none">'+PL.none+'</div>')+
