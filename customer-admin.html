@@ -252,14 +252,29 @@ function caToday(){const d=new Date(),p=n=>String(n).padStart(2,'0');return d.ge
 // 견적 합계 — 기본 합계 + 고객이 선택한 에어컨 옵션 금액
 function qtTotal(x){const b=parseFloat(x&&x.baseTotal)||0;const c=(x&&x.customerChoice&&parseFloat(x.customerChoice.price))||0;return b+c;}
 // ═══ 💎 포인트 적립 (RM100 당 RM1) ═══
+// 🧰 실비 항목(자재비용·설치자재비용·에어컨구매비용) 적립 제외 「시작일」
+//    별도 상수를 두지 않고 「적립 적용시작일(settings/points · pt_start)」을 그대로 따른다.
+//    → 📅 적용시작일 버튼으로 날짜를 바꾸면 제외 규칙 시점도 함께 움직인다.
+//    → 시작일 이전 발행분은 애초에 적립 대상이 아니므로 과거 적립금은 영향받지 않는다.
+function ptExclFrom(){return String(PT_START||'');}
 let PT_START='';   // 📅 적립 적용시작일 (YYYY-MM-DD · 빈값=전체 기간) — settings/points 에 저장, 발행일 기준
 // 적립 기준액 : 총 청구금액에서 세금·주차비용·최소청구·추가비용 제외
+//             실비 항목(자재비용·설치자재비용·에어컨구매비용)과 회원제상품 가입금액도 제외
 //             = 품목 소계(품목별 할인 반영) − 전체 할인 − 상품/할인권
 // 패키지 회원(회원적립잔액 사용 포함)은 회원적립잔액(creditUse) 차감 「전」 금액 기준
 function ptBase(x,pkg){
+  // 🧰 실비 항목 제외 규칙은 「적립 적용시작일」 이후 발행분에만 적용 (과거 인보이스 적립금 보존)
+  const _pf=ptExclFrom();
+  const _newRule = !_pf || String(x.date||'') >= _pf;
   let sub=0;(x.items||[]).forEach(it=>{
+    const _c=String(it.cat||''),_s=String(it.subcat||''),_n=String(it.name||'');
     // 📦 package plan(회원제상품 · 가정용/매장용) 가입금액은 적립 대상에서 제외
-    if(/^회원제상품/.test(String(it.cat||''))||/^회원제상품/.test(String(it.subcat||''))||/package\s*plan/i.test(String(it.name||'')))return;
+    if(/^회원제상품/.test(_c)||/^회원제상품/.test(_s)||/package\s*plan/i.test(_n))return;
+    // 🧰 자재비용 · 설치자재비용 · 에어컨구매(구입)비용
+    if(_newRule){
+      if(/자재/.test(_c)||/자재/.test(_s)||/(구매|구입)\s*비용/.test(_c)||/(구매|구입)\s*비용/.test(_s))return;
+      if(/자재비/.test(_n)||/에어컨\s*(구매|구입)/.test(_n)||/material/i.test(_n))return;
+    }
     const amt=(parseFloat(it.price)||0)*(parseFloat(it.qty)||1);
     const d=it.discType==='pct'?amt*((parseFloat(it.discVal)||0)/100):(parseFloat(it.discVal!=null?it.discVal:it.disc)||0);
     sub+=amt-d;
@@ -668,7 +683,7 @@ window.openDrawer=function(idx){
     const _ptExc=e.docs.invoices.filter(x=>x.status==='paid'&&PT_START&&String(x.date||'')<PT_START).length;   // 시작일 이전 발행분
     h+='<div class="ptcard">'+
        '<div class="pt-top"><span style="font-size:17px">💎</span><span class="pt-t">포인트 적립금</span><span class="pt-rule">RM100 → RM1</span>'+
-       '<button class="pt-cfg" onclick="caPtStart('+idx0+')" title="적립 적용시작일 설정 · 취소">📅 '+(PT_START?'적용시작 '+PT_START:'전체 기간 적립')+'</button>'+
+       '<button class="pt-cfg" onclick="caPtStart('+idx0+')" title="적립 적용시작일 설정 · 취소 (이 날짜부터 적립 시작 · 자재비용/에어컨구매비용 제외 규칙도 이 날짜부터 적용)">📅 '+(PT_START?'적용시작 '+PT_START:'전체 기간 적립')+'</button>'+
        '<button class="pt-adj-btn" onclick="caPtAdj('+idx0+')" title="적립 포인트 수동 조정 (추가/차감)">✏️ 조정</button>'+
        '<button class="pt-use-btn"'+(PT.bal>=10?'':' disabled')+' title="적립금 RM 10 이상부터 사용 가능 (금액 제한 없음)" onclick="caPtUse('+idx0+')">💎 포인트 사용</button></div>'+
        '<div class="pt-bal"><div class="k">사용 가능 잔액</div><div class="v">RM '+PT.bal.toLocaleString()+'<small>.00</small></div>'+
@@ -1036,7 +1051,8 @@ window.caPtStart=function(idx){
     '적용시작일을 설정하면 <b>그 날짜 이후에 발행된(발행일 기준) 결제완료 인보이스만</b> 포인트가 적립됩니다.<br>'+
     '· 시작일 이전에 발행된 인보이스는 <b>수정·재저장해도</b> 적립되지 않습니다.<br>'+
     '· 「적용 취소」를 누르면 전체 기간 적립으로 돌아갑니다.<br>'+
-    '· 이 설정은 <b>모든 고객에게 공통</b>으로 적용되며 마이페이지에도 동일하게 반영됩니다.</p>'+
+    '· 이 설정은 <b>모든 고객에게 공통</b>으로 적용되며 마이페이지에도 동일하게 반영됩니다.<br>'+
+    '· <b>자재비용 · 설치자재비용 · 에어컨구매비용</b>을 적립 기준액에서 빼는 규칙도 <b>이 날짜부터</b> 적용됩니다. (시작일 이전 발행분은 종전 방식 유지)</p>'+
     '<div class="fl">적용시작일</div><input class="fi" id="pt-start" type="date" value="'+esc(PT_START||'')+'">',
     '<button class="btn" onclick="document.getElementById(\'ca-doc-mask\').remove()">닫기</button>'+
     (PT_START?'<button class="btn" style="color:var(--bad);border-color:#fca5a5" onclick="caPtStartSave('+idx+',true)">적용 취소 (전체 기간)</button>':'')+
