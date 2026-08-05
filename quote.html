@@ -259,14 +259,26 @@ function render(){
   const acPrice=acTotal();
   const finalTotal=(Q.baseTotal||0)+acPrice;
 
-  // 그룹별 항목
+  // 표시 구분(4분류)별 항목 — sect 필드 우선, 없으면(구버전 견적) 그룹으로 자동 분류
+  const SECT_META={
+    base:{ko:'기본인건비',en:'Basic Labor',icon:'🔧',order:0},
+    extra:{ko:'추가인건비',en:'Additional Labor',icon:'👷',order:1},
+    material:{ko:'자재비용',en:'Materials',icon:'🧰',order:2},
+    etc:{ko:'기타비용',en:'Other Costs',icon:'📦',order:3}
+  };
+  const sectOf=it=>{
+    if(it.sect&&SECT_META[it.sect])return it.sect;
+    if(it.group==='material')return 'material';
+    if(it.group==='install'||it.group==='repair'||it.group==='clean')return 'base';
+    return 'etc';
+  };
   const groups={};
   (Q.items||[]).forEach(it=>{
-    const g=GROUP_META[it.group]?it.group:'custom';
+    const g=sectOf(it);
     (groups[g]=groups[g]||[]).push(it);
   });
   let secHtml='';
-  Object.keys(GROUP_META).sort((a,b)=>GROUP_META[a].order-GROUP_META[b].order).forEach(g=>{
+  Object.keys(SECT_META).sort((a,b)=>SECT_META[a].order-SECT_META[b].order).forEach(g=>{
     if(!groups[g])return;
     const sum=groups[g].reduce((s,it)=>s+(it.amount||it.qty*it.price||0),0);
     let rows='';
@@ -281,7 +293,7 @@ function render(){
       const noteAll=[nt,qtyTxt,dTxt].filter(Boolean).join(' · ');
       rows+='<tr><td>'+esc(nm)+(noteAll?'<span class="note">'+esc(noteAll)+'</span>':'')+'</td><td class="r">'+fmtN(it.amount||it.qty*it.price)+'</td></tr>';
     });
-    secHtml+='<div class="qsec"><div class="sh"><div class="ic">'+GROUP_META[g].icon+'</div><b>'+(isEn?GROUP_META[g].en:GROUP_META[g].ko)+'</b><div class="ssum">'+fmtN(sum)+'</div></div><table class="qtbl">'+rows+'</table></div>';
+    secHtml+='<div class="qsec"><div class="sh"><div class="ic">'+SECT_META[g].icon+'</div><b>'+(isEn?SECT_META[g].en:SECT_META[g].ko)+'</b><div class="ssum">'+fmtN(sum)+'</div></div><table class="qtbl">'+rows+'</table></div>';
   });
   if(Q.discount>0)secHtml+='<div class="disc"><span>'+t.discount+'</span><span>− '+fmtN(Q.discount)+'</span></div>';
 
@@ -348,26 +360,24 @@ function render(){
       '<button class="cb" id="confirm-btn"'+(allChosen()?'':' disabled')+'>'+t.confirm+'</button></div></div>';
   }
 
-  // 금액 내역: 기본견적(인건비) / 자재비용 / 제품구입비 3구분 + 에어컨 상세
+  // 금액 내역: 기본인건비 / 추가인건비 / 자재비용 / 기타비용 4구분 + 에어컨 선택 상세
   const circled2=['①','②','③','④','⑤','⑥','⑦','⑧','⑨'];
-  let laborSum=0,matSum=0,prodFixed=0;
+  const sectSum={base:0,extra:0,material:0,etc:0};
   (Q.items||[]).forEach(it=>{
     const a=(it.amount!=null?it.amount:(it.qty*it.price))||0;
-    if(it.group==='material')matSum+=a;
-    else if(it.group==='product')prodFixed+=a;
-    else laborSum+=a;
+    sectSum[sectOf(it)]+=a;
   });
   const disc=Q.discount||0;
-  const prodTotal=prodFixed+acPrice;
+  const nonZero=Object.keys(sectSum).filter(k=>sectSum[k]>0).length;
   let brkHtml='';
-  if(matSum>0||prodTotal>0||acOn||disc>0){
+  if(nonZero>1||acOn||disc>0){
     brkHtml='<div class="brk">';
-    brkHtml+='<div class="brk-row"><div class="bl"><span class="bname">🔩 '+t.brkLabor+'</span></div><div class="bv">'+fmtN(laborSum)+'</div></div>';
-    if(matSum>0)brkHtml+='<div class="brk-row"><div class="bl"><span class="bname">📦 '+t.brkMat+'</span></div><div class="bv">'+fmtN(matSum)+'</div></div>';
-    if(prodTotal>0||acOn){
-      brkHtml+='<div class="brk-row"><div class="bl"><span class="bname">❄️ '+t.brkProd+'</span></div><div class="bv">'+(acOn&&!allChosen()&&prodTotal===0?'—':fmtN(prodTotal))+'</div></div>';
-      // 제품구입비 상세 (들여쓰기): 고정 제품 + 에어컨 선택 그룹별
-      if(prodFixed>0)brkHtml+='<div class="brk-row" style="padding-left:16px"><div class="bl"><span class="bname" style="font-weight:500">'+(isEn?'Product items':'제품 항목')+'</span></div><div class="bv" style="font-weight:600">'+fmtN(prodFixed)+'</div></div>';
+    Object.keys(SECT_META).sort((a,b)=>SECT_META[a].order-SECT_META[b].order).forEach(k=>{
+      if(sectSum[k]>0)brkHtml+='<div class="brk-row"><div class="bl"><span class="bname">'+SECT_META[k].icon+' '+(isEn?SECT_META[k].en:SECT_META[k].ko)+'</span></div><div class="bv">'+fmtN(sectSum[k])+'</div></div>';
+    });
+    if(acOn){
+      brkHtml+='<div class="brk-row"><div class="bl"><span class="bname">❄️ '+t.brkProd+'</span></div><div class="bv">'+(!allChosen()&&acPrice===0?'—':fmtN(acPrice))+'</div></div>';
+      // 에어컨 선택 그룹별 상세 (들여쓰기)
       acGroups.forEach((g,i)=>{
         const s=groupSel(i);
         const num=acGroups.length>1?(circled2[i]||(i+1)):'';

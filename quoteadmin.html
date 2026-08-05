@@ -47,6 +47,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--indigo)}
 .sel.g-repair{border-left-color:#ef4444}
 .sel.g-custom{border-left-color:#6b7280}
 .sel .nm{flex:1;font-size:12px;font-weight:600;min-width:0;word-break:keep-all}
+.sel .nm select.sect{display:block;margin-top:3px;font-size:10px;font-weight:700;color:var(--txt2);border:1px solid var(--bdr);border-radius:6px;background:#fff;padding:2px 4px;font-family:inherit;max-width:110px}
 .sel input.q{width:48px;padding:5px 3px;font-size:12px;text-align:center;border-radius:7px}
 .sel input.pq{width:62px;padding:5px 3px;font-size:12px;text-align:right;border-radius:7px}
 .sel .un{font-size:10px;color:var(--gray);width:22px;text-align:center}
@@ -413,6 +414,18 @@ var AC_PRICES=[
   {hp:'2.5',brand:'HISENSE',non:2030,inv:2090},
   {hp:'2.5',brand:'MIDEA',non:2350,inv:2480}
 ];
+// 💬 고객용 견적서 표시 구분 (4분류) — 항목마다 선택 가능
+var SECT_META={
+  base:{ko:'기본인건비',en:'Basic Labor',icon:'🔧',order:0},
+  extra:{ko:'추가인건비',en:'Additional Labor',icon:'👷',order:1},
+  material:{ko:'자재비용',en:'Materials',icon:'🧰',order:2},
+  etc:{ko:'기타비용',en:'Other Costs',icon:'📦',order:3}
+};
+function defaultSect(group){
+  if(group==='material')return 'material';
+  if(group==='install'||group==='repair'||group==='clean')return 'base';
+  return 'etc';   // product · callout · custom
+}
 var GROUP_META={
   install:{ko:'설치 작업 · 인건비',en:'Installation Labor',icon:'🔩',order:0},
   repair:{ko:'수리 작업 · 인건비',en:'Repair Labor',icon:'🔧',order:1},
@@ -798,7 +811,7 @@ function qkRefreshRow(qid){
 window.qkAdd=function(qid){
   var c=qkGet(qid);if(!c)return;
   selItems.push({name:c.n,nameEn:c.en,qty:c.unit==='ft'?10:1,unit:c.unit,price:c.p,group:c.group,note:c.note,noteEn:c.noteEn,
-    discType:'pct',discVal:0,
+    discType:'pct',discVal:0,sect:defaultSect(c.group),
     svcId:c._svc?c._svc.id:'',cat:c._svc?c._svc.cat:'',subcat:c._svc?c._svc.subcat:''});
   qkRefreshRow(qid);qkRail();qkFoot();renderSelList();
 };
@@ -913,7 +926,7 @@ function addCustomItem(){
   var p=parseFloat(gid('cust-price').value);
   if(!n){toast('항목명을 입력해주세요');return;}
   if(isNaN(p)){toast('금액을 입력해주세요');return;}
-  selItems.push({name:n,nameEn:n,qty:1,unit:'',price:p,group:'custom',note:'',noteEn:''});
+  selItems.push({name:n,nameEn:n,qty:1,unit:'',price:p,group:'custom',note:'',noteEn:'',discType:'pct',discVal:0,sect:'etc'});
   gid('cust-name').value='';gid('cust-price').value='';
   renderSelList();
 }
@@ -929,7 +942,15 @@ function renderSelList(){
     var dn=document.createElement('button');dn.type='button';dn.textContent='▼';dn.title='아래로 이동';dn.disabled=(i===selItems.length-1);
     dn.onclick=function(){if(i<selItems.length-1){var t=selItems[i+1];selItems[i+1]=selItems[i];selItems[i]=t;renderSelList();}};
     ord.appendChild(up);ord.appendChild(dn);
-    var nm=document.createElement('div');nm.className='nm';nm.textContent=s.name;
+    var nm=document.createElement('div');nm.className='nm';
+    var nmTxt=document.createElement('div');nmTxt.textContent=s.name;nm.appendChild(nmTxt);
+    var sc=document.createElement('select');sc.className='sect';sc.title='고객 견적서 표시 구분';
+    Object.keys(SECT_META).sort(function(a,b){return SECT_META[a].order-SECT_META[b].order;}).forEach(function(k){
+      var o=document.createElement('option');o.value=k;o.textContent=SECT_META[k].icon+' '+SECT_META[k].ko;sc.appendChild(o);
+    });
+    sc.value=s.sect||defaultSect(s.group);
+    sc.onchange=function(){s.sect=sc.value;renderTotals();};
+    nm.appendChild(sc);
     function amtHtml(){
       var da=itemDisc(s);
       return itemNet(s).toLocaleString('en-US')+(da>0?'<small>'+(s.discType==='amt'?('할인 −'+da.toLocaleString('en-US')):('할인 '+s.discVal+'%↓'))+'</small>':'');
@@ -954,14 +975,22 @@ function calcGroups(){
   });
   return g;
 }
+function calcSects(){
+  var g={};
+  selItems.forEach(function(s){
+    var k=s.sect||defaultSect(s.group);
+    g[k]=(g[k]||0)+itemNet(s);
+  });
+  return g;
+}
 function renderTotals(){
-  var g=calcGroups();
+  var g=calcSects();
   var disc=parseFloat(gid('f-discount').value)||0;
   var base=0;Object.keys(g).forEach(function(k){base+=g[k];});
   base-=disc;
   var html='';
-  Object.keys(GROUP_META).sort(function(a,b){return GROUP_META[a].order-GROUP_META[b].order;}).forEach(function(k){
-    if(g[k])html+='<div class="trow"><span>'+GROUP_META[k].icon+' '+GROUP_META[k].ko+'</span><span>'+g[k].toLocaleString('en-US')+'</span></div>';
+  Object.keys(SECT_META).sort(function(a,b){return SECT_META[a].order-SECT_META[b].order;}).forEach(function(k){
+    if(g[k])html+='<div class="trow"><span>'+SECT_META[k].icon+' '+SECT_META[k].ko+'</span><span>'+g[k].toLocaleString('en-US')+'</span></div>';
   });
   if(disc>0)html+='<div class="trow"><span class="dis">할인</span><span class="dis">− '+disc.toLocaleString('en-US')+'</span></div>';
   html+='<div class="grand"><b>'+(acEnabled?'기본 견적금액':'총 견적금액')+'</b><span class="v">'+fmt(base)+'</span></div>';
@@ -988,7 +1017,7 @@ function collectQuote(){
     issueDate:issue,
     validDays:vd,
     validUntil:addDays(issue,vd),
-    items:selItems.map(function(s){return {name:s.name,nameEn:s.nameEn,qty:s.qty,unit:s.unit,price:s.price,discType:s.discType||'pct',discVal:parseFloat(s.discVal)||0,amount:itemNet(s),group:s.group,note:s.note,noteEn:s.noteEn,svcId:s.svcId||'',cat:s.cat||'',subcat:s.subcat||''};}),
+    items:selItems.map(function(s){return {name:s.name,nameEn:s.nameEn,qty:s.qty,unit:s.unit,price:s.price,discType:s.discType||'pct',discVal:parseFloat(s.discVal)||0,amount:itemNet(s),group:s.group,sect:s.sect||defaultSect(s.group),note:s.note,noteEn:s.noteEn,svcId:s.svcId||'',cat:s.cat||'',subcat:s.subcat||''};}),
     discount:parseFloat(gid('f-discount').value)||0,
     baseTotal:baseTotal(),
     acSelect:collectAcSelect(),
@@ -1014,7 +1043,7 @@ window.loadQuoteToForm=function(q,id){
   gid('f-date').value=q.issueDate||todayStr();
   gid('f-valid').value=q.validDays||7;
   gid('f-discount').value=q.discount||0;
-  selItems=(q.items||[]).map(function(it){return {name:it.name,nameEn:it.nameEn||it.name,qty:it.qty,unit:it.unit||'',price:it.price,discType:it.discType||'pct',discVal:parseFloat(it.discVal)||0,group:it.group||'custom',note:it.note||'',noteEn:it.noteEn||'',svcId:it.svcId||'',cat:it.cat||'',subcat:it.subcat||''};});
+  selItems=(q.items||[]).map(function(it){return {name:it.name,nameEn:it.nameEn||it.name,qty:it.qty,unit:it.unit||'',price:it.price,discType:it.discType||'pct',discVal:parseFloat(it.discVal)||0,group:it.group||'custom',sect:it.sect||defaultSect(it.group||'custom'),note:it.note||'',noteEn:it.noteEn||'',svcId:it.svcId||'',cat:it.cat||'',subcat:it.subcat||''};});
   gid('f-notices').value=(q.notices||[]).join('\n');
   if(q.acSelect){
     // 구 스키마(단일 그룹) → 신 스키마(groups) 호환
