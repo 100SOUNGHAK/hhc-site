@@ -604,12 +604,13 @@ async function load(){
     return (mp&&pn(phone)===mp)||(!!name&&keys.includes(nn(name)));
   };
   async function fetchColl(n){try{const s=await getDocs(collection(db,n));return s.docs.map(d=>{const x=d.data()||{};x.__id=d.id;return x;});}catch(e){return [];}}
-  const [invs,insps,cts,cps,bks]=await Promise.all([
+  const [invs,insps,cts,cps,bks,qts]=await Promise.all([
     VIS.includes('iv')?fetchColl('invoices'):[],
     VIS.includes('ip')?fetchColl('inspections'):[],
     VIS.includes('ct')?fetchColl('contracts'):[],
     VIS.includes('cp')?fetchColl('coupons'):[],
-    fetchColl('bookings')   // 예약 신청 — 관리자가 만든 예약 링크는 v= 설정과 무관하게 항상 확인
+    fetchColl('bookings'),   // 예약 신청 — 관리자가 만든 예약 링크는 v= 설정과 무관하게 항상 확인
+    fetchColl('quotes')      // 🧾 견적서 — 항상 확인
   ]);
   DATA={
     m,ptStart:_ptStart,
@@ -619,7 +620,9 @@ async function load(){
     coupons:cps.filter(x=>inMyLinks(x)||(x.ca_link?linked(x):(keys.includes(nn(x.name))||keys.includes(nn(x.receiver))))),
     // 예약 : 작성 대기(waiting) · 확인 중(booked) · 확정(confirmed) 만
     bookings:bks.filter(x=>hit(x.customer_name,x.customer_phone,x)&&['waiting','booked','confirmed'].indexOf(x.status)>=0)
-      .sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')))
+      .sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))),
+    // 🧾 견적서 — 고객명·연락처 일치 + 수동 연결(ca_link/ca_links) 포함
+    quotes:qts.filter(x=>hit(x.client,x.phone,x)).sort((a,b)=>String(b.issueDate||'').localeCompare(String(a.issueDate||'')))
   };
 }
 
@@ -655,6 +658,8 @@ function ptBase(x,pkg){
   return Math.max(0,b);
 }
 function ptEarn(base){return Math.floor((parseFloat(base)||0)/100);}
+// 견적 합계 — 기본 합계 + 고객이 선택한 에어컨 옵션 금액
+function qtTotal(x){const b=parseFloat(x&&x.baseTotal)||0;const c=(x&&x.customerChoice&&parseFloat(x.customerChoice.price))||0;return b+c;}
 
 
 // ── 금차 청구금액 팝업 : 확인 → 청구 금액 안내 화면으로 이동 ──
@@ -926,7 +931,8 @@ function render(){
   // ── 💎 포인트 적립금 (RM100 당 RM1 · 결제완료 인보이스 기준) ──
   if(VIS.includes('iv')){
     const _pkg=/패키지/.test(m.member||'')||DATA.contracts.length>0;
-    const ptER=DATA.invoices.filter(x=>x.status==='paid'&&!(DATA.ptStart&&String(x.date||'')<DATA.ptStart)).map(x=>{const b=ptBase(x,_pkg);return{date:x.date||'',base:b,pts:ptEarn(b)};}).filter(r=>r.pts>0);
+    const _ptOv=m.pt_ovr||{};
+    const ptER=DATA.invoices.filter(x=>x.status==='paid'&&!(DATA.ptStart&&String(x.date||'')<DATA.ptStart)).map(x=>{const b=ptBase(x,_pkg);const ov=_ptOv[x.__id];return{date:x.date||'',base:b,pts:(ov!=null&&ov!=='')?Math.max(0,Math.floor(parseFloat(ov)||0)):ptEarn(b)};}).filter(r=>r.pts>0);
     const ptUR=(m.pt_used||[]).map(u=>({date:u.date||'',memo:u.memo||'',pts:Math.floor(parseFloat(u.amount)||0)})).filter(r=>r.pts>0)
       .concat(DATA.invoices.filter(x=>x.status!=='draft'&&(parseFloat(x.pointUse)||0)>0).map(x=>({date:x.date||'',memo:'',inv:1,pts:Math.floor(parseFloat(x.pointUse)||0)})));
     const ptAJ=(m.pt_adj||[]).map(u=>({date:u.date||'',memo:u.memo||'',pts:Math.round(parseFloat(u.amount)||0)})).filter(r=>r.pts!==0);
@@ -1076,6 +1082,31 @@ function render(){
          '<div class="vbot2"><div><div class="vk">'+L.expiry+'</div><div class="vv2">'+(esc(dfmt(x.expiry))||'—')+dday+'</div></div>'+
          '<div><div class="vk">CODE</div><div class="vcode2">'+esc(x.code||'')+'</div></div>'+
          '<span class="vgo">'+L.cpGo+'</span></div></a>';
+    });
+    h+='</div>';
+  }
+  // ── 🧾 견적서 (v= 설정과 무관하게 항상 표시) ──
+  if(DATA.quotes&&DATA.quotes.length){
+    const qL=LANG==='en'
+      ?{t:'Quotations',valid:'\u2705 Valid',expired:'\u23F9 Expired',until:'Valid until',amt:'Quote Total',go:'View quotation \u2192',validN:'Valid',expN:'Expired'}
+      :{t:'\uACAC\uC801\uC11C',valid:'\u2705 \uC720\uD6A8',expired:'\u23F9 \uAE30\uD55C \uB9CC\uB8CC',until:'\uC720\uD6A8\uAE30\uD55C',amt:'\uACAC\uC801 \uAE08\uC561',go:'\uACAC\uC801\uC11C \uBCF4\uAE30 \u2192',validN:'\uC720\uD6A8',expN:'\uB9CC\uB8CC'};
+    const _qtd=(function(){const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());})();
+    const _qexp=x=>!!(x.validUntil&&String(x.validUntil)<_qtd);
+    const vN=DATA.quotes.filter(x=>!_qexp(x)).length;
+    h+='<div class="sec"><div class="sh">\uD83E\uDDFE '+qL.t+'<span class="n">'+qL.validN+' '+vN+' \u00b7 '+qL.expN+' '+(DATA.quotes.length-vN)+'</span></div>';
+    DATA.quotes.slice(0,20).forEach(x=>{
+      const exp=_qexp(x);
+      const rs=fmt(qtTotal(x)).split('.');
+      h+='<a class="ncard" target="_blank" rel="noopener"'+(exp?' style="opacity:.62"':'')+' href="'+BASE+'/quote.html?id='+encodeURIComponent(x.__id)+'&lang='+LANG+'">'+
+         '<span class="stripe '+(exp?'warn':'ok')+'"></span><div class="nbody">'+
+         '<div class="nrow1"><div class="ntile '+(exp?'warn':'ok')+'">\uD83E\uDDFE</div>'+
+         '<div style="flex:1;min-width:0"><div class="nid">'+esc(x.qno||dfmt(x.issueDate)||'')+'</div>'+
+         '<div class="ndate">'+esc(dfmt(x.issueDate)||'')+(x.subject?' \u00b7 '+esc(x.subject):'')+'</div></div>'+
+         '<span class="nst '+(exp?'warn':'ok')+'">'+(exp?qL.expired:qL.valid)+'</span></div>'+
+         (x.validUntil?'<div class="npd"><span class="t">'+qL.until+' '+esc(dfmt(x.validUntil))+'</span></div>':'')+
+         '<div class="nfoot"><div><div class="nlb">'+qL.amt+'</div>'+
+         '<div class="nam"><span class="cu">RM</span>'+rs[0]+'.'+(rs[1]||'00')+'</div></div>'+
+         '<span class="nbtn">'+qL.go+'</span></div></div></a>';
     });
     h+='</div>';
   }
