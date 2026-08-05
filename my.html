@@ -638,12 +638,27 @@ function balCalc(c){
 }
 
 // ═══ 💎 포인트 적립 (RM100 당 RM1) ═══
+// 🧰 실비 항목(자재비용·설치자재비용·에어컨구매비용) 적립 제외 「시작일」
+//    별도 상수를 두지 않고 「적립 적용시작일(settings/points · pt_start)」을 그대로 따른다.
+//    → 관리자가 총괄 고객관리에서 📅 적용시작일을 바꾸면 제외 규칙 시점도 함께 움직인다.
+//    → 시작일 이전 발행분은 애초에 적립 대상이 아니므로 과거 적립금은 영향받지 않는다.
+function ptExclFrom(){return String((typeof DATA!=='undefined'&&DATA&&DATA.ptStart)||'');}
 // 적립 기준액 : 세금·주차비용·최소청구·추가비용 제외 (품목 소계 − 전체 할인 − 상품/할인권)
+// 실비 항목(자재비용·설치자재비용·에어컨구매비용)과 회원제상품 가입금액도 제외
 // 패키지 회원은 회원적립잔액(creditUse) 차감 「전」 금액 기준
 function ptBase(x,pkg){
+  // 🧰 실비 항목 제외 규칙은 「적립 적용시작일」 이후 발행분에만 적용 (과거 인보이스 적립금 보존)
+  const _pf=ptExclFrom();
+  const _newRule = !_pf || String(x.date||'') >= _pf;
   let sub=0;(x.items||[]).forEach(it=>{
+    const _c=String(it.cat||''),_s=String(it.subcat||''),_n=String(it.name||'');
     // 📦 package plan(회원제상품 · 가정용/매장용) 가입금액은 적립 대상에서 제외
-    if(/^회원제상품/.test(String(it.cat||''))||/^회원제상품/.test(String(it.subcat||''))||/package\s*plan/i.test(String(it.name||'')))return;
+    if(/^회원제상품/.test(_c)||/^회원제상품/.test(_s)||/package\s*plan/i.test(_n))return;
+    // 🧰 자재비용 · 설치자재비용 · 에어컨구매(구입)비용
+    if(_newRule){
+      if(/자재/.test(_c)||/자재/.test(_s)||/(구매|구입)\s*비용/.test(_c)||/(구매|구입)\s*비용/.test(_s))return;
+      if(/자재비/.test(_n)||/에어컨\s*(구매|구입)/.test(_n)||/material/i.test(_n))return;
+    }
     const amt=(parseFloat(it.price)||0)*(parseFloat(it.qty)||1);
     const d=it.discType==='pct'?amt*((parseFloat(it.discVal)||0)/100):(parseFloat(it.discVal!=null?it.discVal:it.disc)||0);
     sub+=amt-d;
