@@ -853,8 +853,15 @@ window.caSendModal=async function(idx){
   const BKCU=BKC.filter(x=>String(x.booking_date||'')>=_tdy);   // 아직 방문 전인 확정 예약
   // 접수된 서비스 의뢰 (「의뢰 접수 안내」 발송용) — 최근 접수 순
   const RQP=(D.requests||[]).slice().sort((a,b)=>String(b.submitted_at||b.created_at||'').localeCompare(String(a.submitted_at||a.created_at||'')));
+  // 발송 가능한 쿠폰 — 사용/만료되지 않은 것만, 최근 발급 순
+  const _cpSort=a=>a.slice().sort((x,y)=>String(y.createdAt||y.issuedAt||'').localeCompare(String(x.createdAt||x.issuedAt||'')));
+  const _cpLive=(D.coupons||[]).filter(x=>String(x.status||'active')!=='used'&&!(x.expiry&&String(x.expiry)<_tdy));
+  const CPG=_cpSort(_cpLive.filter(x=>x.type!=='discount'));   // 상품권
+  const CPD=_cpSort(_cpLive.filter(x=>x.type==='discount'));   // 할인권
   const state={iv:CNT.iv>0,ip:CNT.ip>0,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:BKP.length?'bk':(BKCU.length?'bkc':'basic'),
+    cpi:{cpg:0,cpd:0},
     payDate:_td.getFullYear()+'-'+_p2(_td.getMonth()+1)+'-'+_p2(_td.getDate())};
+  const _cpSpan=(CPG.length&&CPD.length)?'':'grid-column:1/-1;';
   const OPT=[['iv','💳','인보이스','건'],['ip','🔧','점검보고서','건'],['ct','📑','계약서 · 잔액','건'],['cp','🎫','상품권','장']];
   const mk=genericModal('📤 마이페이지 발송 — '+esc(e.name),
     '<p style="font-size:12px;color:var(--ink2);line-height:1.6;margin-bottom:10px">고객이 링크 하나로 본인의 문서를 확인합니다. 노출할 항목을 선택하세요. 링크는 고정이며 열 때마다 최신 내용이 표시됩니다.</p>'+
@@ -879,11 +886,17 @@ window.caSendModal=async function(idx){
         (BKP.length?'<span data-t="bk" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📅 예약 신청 안내</span>':'')+
         (BKC.length?'<span data-t="bkc" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">✅ 예약 확정 안내</span>':'')+
         (RQP.length?'<span data-t="rq" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📥 의뢰 접수 안내</span>':'')+
+        (CPG.length?'<span data-t="cpg" style="'+_cpSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🎁 상품권 발송</span>':'')+
+        (CPD.length?'<span data-t="cpd" style="'+_cpSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🏷️ 할인권 발송</span>':'')+
         '<span data-t="basic" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📄 기본 안내</span>'+
         '<span data-t="revisit" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🔄 재방문 · 예약</span>'+
         '<span data-t="bill" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🧾 청구 안내</span>'+
         '<span data-t="pay" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">💳 결제 확인</span>'+
         '<span data-t="install" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📲 앱 설치 안내</span>'+
+      '</div>'+
+      '<div id="cs-cpsel" style="display:none;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:9px 11px;margin-top:7px;align-items:center;gap:9px">'+
+        '<span style="font-size:11px;font-weight:800;color:var(--ink3);white-space:nowrap">발송할 쿠폰</span>'+
+        '<select id="cs-cp-pick" style="margin-left:auto;max-width:66%;font-family:inherit;font-size:11.5px;font-weight:800;color:var(--ink);border:1px solid var(--bdr);border-radius:8px;padding:6px 9px;background:#fff"></select>'+
       '</div>'+
       '<div id="cs-pay" style="display:none;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:9px 11px;margin-top:7px;align-items:center;gap:9px">'+
         '<span style="font-size:11px;font-weight:800;color:var(--ink3)">결제 완료일</span>'+
@@ -1038,11 +1051,95 @@ window.caSendModal=async function(idx){
   }
   // 청구금액 = 「청구중」+「연체」 인보이스의 **잔여 결제금액** 합계
   //            (기결제/일부 결제가 있으면 그만큼 차감된다 · 마이페이지와 동일 규칙)
+  // ── 쿠폰(상품권 · 할인권) 발송 ──────────────────────
+  function curCPList(){return state.tpl==='cpd'?CPD:CPG;}
+  function curCoupon(){const a=curCPList();return a[state.cpi[state.tpl]||0]||a[0]||null;}
+  function cpExp(d,en){
+    const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d||''));
+    if(!m)return String(d||'');
+    return en?(CS_MN[parseInt(m[2],10)-1]+' '+m[3]+', '+m[1]):(m[1]+'년 '+m[2]+'월 '+m[3]+'일까지');
+  }
+  function cpMsg(en){
+    const c=curCoupon();
+    if(!c)return en?'No coupon available to send.':'발송 가능한 쿠폰이 없습니다.';
+    const isD=(state.tpl==='cpd');
+    const tl=en?(isD?'Discount Coupon':'Gift Voucher'):(isD?'할인권':'상품권');
+    const recv=c.receiver||c.name||e.name||'';
+    const cl=BASE+'/coupon.html?id='+encodeURIComponent(c.__id||'')+(en?'&lang=en':'');
+    const L=[];
+    if(en){
+      L.push('Hello, '+recv+' 😊');
+      L.push('Thank you for choosing Happy Home Care.');
+      L.push('');
+      L.push('As a token of our appreciation, we are sending you a '+(c.value||'')+' '+tl+'.');
+      L.push('Please feel free to use it for any of our services.');
+      L.push(SEP2);
+      L.push('🎫 '+tl+' Details');
+      L.push('💰 Value : '+(c.value||''));
+      L.push('🔑 Code : '+(c.code||''));
+      L.push('👤 Recipient : '+recv);
+      if(c.receiver&&c.name&&c.receiver!==c.name)L.push('🛒 Purchased by : '+c.name);
+      if(c.expiry)L.push('📅 Valid until : '+cpExp(c.expiry,true));
+      if(c.cond)L.push('📌 Condition : '+c.cond);
+      L.push(SEP2);
+      L.push('📱 Your Personal My Page');
+      L.push('');
+      L.push('You can check and use your '+tl.toLowerCase());
+      L.push('anytime on the My Page below.');
+      L.push('🔗 My Page');
+      L.push(link());
+      L.push('or');
+      L.push('🎫 View my coupon');
+      L.push(cl);
+      L.push(SEP2);
+      L.push('📌 How to use');
+      L.push('• Please show the coupon screen to our staff when using our service.');
+      L.push('• Not valid on the date of issue.');
+      L.push(isD?'• Discount coupons cannot be transferred.':'• Transfer is possible with prior request by the purchaser.');
+      L.push('Thank you. 🙏');
+      L.push('Happy Home Care');
+      L.push('📞 +60 17-247 2774');
+      return L.join('\n');
+    }
+    L.push('안녕하세요, '+recv+' 고객님 😊');
+    L.push('Happy Home Care를 이용해 주셔서 감사합니다.');
+    L.push('');
+    L.push('감사의 마음을 담아 '+(c.value||'')+' '+tl+'을 보내드립니다.');
+    L.push('서비스 이용 시 자유롭게 사용해 주세요.');
+    L.push(SEP2);
+    L.push('🎫 '+tl+' 정보');
+    L.push('💰 '+tl+' 금액 : '+(c.value||''));
+    L.push('🔑 '+tl+' 코드 : '+(c.code||''));
+    L.push('👤 받는 분 : '+recv);
+    if(c.receiver&&c.name&&c.receiver!==c.name)L.push('🛒 구매(양도) 고객 : '+c.name);
+    if(c.expiry)L.push('📅 유효기간 : '+cpExp(c.expiry,false));
+    if(c.cond)L.push('📌 사용 조건 : '+c.cond);
+    L.push(SEP2);
+    L.push('📱 고객 전용 My Page');
+    L.push('');
+    L.push('아래 마이페이지에서 '+tl+'을 언제든지');
+    L.push('확인 및 사용하실 수 있습니다.');
+    L.push('🔗 My Page');
+    L.push(link());
+    L.push('또는');
+    L.push('🎫 내 쿠폰 확인하기');
+    L.push(cl);
+    L.push(SEP2);
+    L.push('📌 이용 안내');
+    L.push('• 서비스 이용 시 쿠폰 화면을 직원에게 보여주세요.');
+    L.push('• 발행 당일에는 사용하실 수 없습니다.');
+    L.push(isD?'• 할인권은 양도/양수가 불가능합니다.':'• 양도·양수는 구매 고객 본인의 사전 신청 시 가능합니다.');
+    L.push('감사합니다. 🙏');
+    L.push('Happy Home Care');
+    L.push('📞 +60 17-247 2774');
+    return L.join('\n');
+  }
   function billList(){return (D.invoices||[]).filter(x=>(x.status==='billing'||x.status==='overdue')&&invDue(x)>0.005);}
   function billAmt(){return billList().reduce((a,x)=>a+invDue(x),0);}
   function billPaid(){return billList().reduce((a,x)=>a+invPaid(x),0);}
   function msg(){
     const l=link(),en=!!state.en,nm=e.name||'',list=msgList();
+    if(state.tpl==='cpg'||state.tpl==='cpd')return cpMsg(en);
     if(state.tpl==='bill'){
       const amt=billAmt();
       const amtKo=amt.toLocaleString('en-MY',{maximumFractionDigits:2});
@@ -1108,7 +1205,8 @@ window.caSendModal=async function(idx){
       if(/^[-━]{5,}$/.test(t))return '<div style="border-top:1px dashed #d3dbe8;margin:9px 0"></div>';
       if(t.indexOf('\u{1F449}')===0)return '<div style="background:linear-gradient(135deg,#fff7e6,#ffedd5);border:1.5px solid #f4b73f;border-left:5px solid #ea8c00;border-radius:11px;padding:11px 13px;margin:8px 0;font-size:13.5px;font-weight:900;color:#9a3412;line-height:1.6;letter-spacing:-.01em;box-shadow:0 2px 8px rgba(234,140,0,.16)">'+esc(t)+'</div>';
       if(t.indexOf('🔗')===0)return '<div style="background:var(--pri-bg);border:1px solid #cfe0ff;border-radius:9px;padding:8px 10px;margin:4px 0;font-size:10.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--pri);font-weight:700;word-break:break-all">'+esc(t)+'</div>';
-      if(t.charAt(0)==='*')return '<div style="display:flex;gap:7px;padding:2px 0 2px 3px"><span style="color:var(--pri);font-weight:900">●</span><span style="font-weight:800">'+esc(t.replace(/^\*\s*/,''))+'</span></div>';
+      if(t.charAt(0)==='*'||t.charAt(0)==='•')return '<div style="display:flex;gap:7px;padding:2px 0 2px 3px"><span style="color:var(--pri);font-weight:900">●</span><span style="font-weight:800">'+esc(t.replace(/^[*•]\s*/,''))+'</span></div>';
+      if(/^https?:\/\//.test(t))return '<div style="background:var(--pri-bg);border:1px solid #cfe0ff;border-radius:9px;padding:8px 10px;margin:4px 0;font-size:10.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--pri);font-weight:700;word-break:break-all">'+esc(t)+'</div>';
       let x=esc(t).replace(/(RM\s?[\d,]+(?:\.\d+)?|[\d,]+링깃)/g,'<b style="color:#c2410c;font-size:14.5px;font-weight:900;letter-spacing:-.01em">$1</b>');
       if(/^[1-9]\u{FE0F}?\u{20E3}/u.test(t))return '<div style="background:var(--pri-bg);border-left:4px solid var(--pri);border-radius:8px;padding:7px 11px;margin:7px 0 4px;font-size:13px;font-weight:900;color:var(--pri);letter-spacing:-.01em">'+esc(t)+'</div>';
       if(/^[①②③④⑤]/.test(t))return '<div style="padding:2px 0 2px 12px;font-weight:700;color:var(--ink2)">'+esc(t)+'</div>';
@@ -1147,6 +1245,20 @@ window.caSendModal=async function(idx){
     mk.querySelector('#cs-link').textContent=link();
     const pw=mk.querySelector('#cs-pay');
     if(pw)pw.style.display=(state.tpl==='pay')?'flex':'none';
+    const cw=mk.querySelector('#cs-cpsel');
+    if(cw){
+      const isCP=(state.tpl==='cpg'||state.tpl==='cpd');
+      cw.style.display=isCP?'flex':'none';
+      if(isCP){
+        const arr=curCPList(),sl=cw.querySelector('#cs-cp-pick');
+        const key=state.tpl+'|'+arr.map(x=>x.__id).join(',');
+        if(sl.dataset.key!==key){
+          sl.dataset.key=key;
+          sl.innerHTML=arr.map((x,i)=>'<option value="'+i+'">'+esc((x.code||'')+' · '+(x.value||'')+(x.expiry?' · ~'+x.expiry:''))+'</option>').join('');
+        }
+        sl.value=String(state.cpi[state.tpl]||0);
+      }
+    }
     const bw=mk.querySelector('#cs-bwarn');
     if(bw)bw.style.display=(state.tpl==='bill'&&billAmt()<=0)?'block':'none';
     const bi=mk.querySelector('#cs-binfo');
@@ -1182,8 +1294,13 @@ window.caSendModal=async function(idx){
   });
   mk.querySelector('#cs-tpl').addEventListener('click',ev=>{
     const el=ev.target.closest('[data-t]');if(!el)return;
-    state.tpl=el.dataset.t;paint();
+    state.tpl=el.dataset.t;
+    // 쿠폰 안내는 마이페이지에서 쿠폰을 볼 수 있어야 하므로 「상품권」 항목을 자동으로 켠다
+    if((state.tpl==='cpg'||state.tpl==='cpd')&&CNT.cp>0)state.cp=true;
+    paint();
   });
+  const _cps=mk.querySelector('#cs-cp-pick');
+  if(_cps)_cps.addEventListener('change',()=>{state.cpi[state.tpl]=parseInt(_cps.value,10)||0;paint();});
   const _pd=mk.querySelector('#cs-paydate');
   if(_pd){_pd.value=state.payDate;_pd.addEventListener('change',()=>{state.payDate=_pd.value;paint();});}
   mk.querySelector('#cs-pv').addEventListener('click',()=>{window.caView(link(),'👁 고객 발송 화면 미리보기 — '+(e.name||''));});

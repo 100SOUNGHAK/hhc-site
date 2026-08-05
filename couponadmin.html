@@ -246,6 +246,37 @@ function stOf(c){
 }
 function couponLink(id){return PAGE_BASE+'?id='+id;}
 
+// ── 고객 마이페이지 링크 (customers 컬렉션에서 이름/별칭으로 문서 id를 찾는다)
+var MY_BASE='https://hhc-3p8.pages.dev/my.html';
+var _customers=[];
+function _nrmNm(v){return String(v||'').toLowerCase().replace(/\s+/g,'');}
+window.__onCustomersLoaded=function(list){
+  _customers=list||[];
+  // 발송창이 열려 있는 상태에서 늦게 로드된 경우 메시지를 다시 그린다
+  try{var bg=gid('sendBg');if(bg&&bg.classList.contains('show')&&window.renderSendMsg)window.renderSendMsg();}catch(e){}
+};
+function findCustomerId(nm){
+  var k=_nrmNm(nm);if(!k)return '';
+  for(var i=0;i<_customers.length;i++){
+    var c=_customers[i];
+    if(_nrmNm(c.name)===k)return c._id;
+    var al=c.aliases||[];
+    for(var j=0;j<al.length;j++){if(_nrmNm(al[j])===k)return c._id;}
+  }
+  return '';
+}
+function myPageLink(nm,lang){
+  var id=findCustomerId(nm);
+  if(!id)return '';
+  return MY_BASE+'?c='+encodeURIComponent(id)+'&v=iv,ct&lang='+(lang==='en'?'en':'ko');
+}
+var _MN_EN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function expTxt(d,en){
+  var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d||''));
+  if(!m)return String(d||'');
+  return en?(_MN_EN[parseInt(m[2],10)-1]+' '+m[3]+', '+m[1]):(m[1]+'년 '+m[2]+'월 '+m[3]+'일까지');
+}
+
 // ── 발급
 window.issueCoupon=async function(){
   var name=gid('f-name').value.trim();
@@ -493,43 +524,91 @@ function trCond(s){
 }
 
 // ── 발송
+var MSG_SEP='━━━━━━━━━━━━━━━━━━';
 function msgOf(c,lang){
-  var link=couponLink(c._id)+(lang==='en'?'&lang=en':'');
-  var tl=c.type==='discount'?(lang==='en'?'Discount Coupon':'할인권'):(lang==='en'?'Gift Voucher':'상품권');
+  var en=(lang==='en');
+  var link=couponLink(c._id)+(en?'&lang=en':'');
+  var isD=(c.type==='discount');
+  var tl=isD?(en?'Discount Coupon':'할인권'):(en?'Gift Voucher':'상품권');
   var recv=c.receiver||c.name;
-  if(lang==='en'){
-    return '🎁 [Happy Home Care] A '+tl+' has arrived!\n\n'+
-      'Dear '+recv+', thank you for being with us.\n\n'+
-      '━━━━━━━━━━━━\n'+
-      '🎫 '+tl+': '+c.value+'\n'+
-      '· Code: '+c.code+'\n'+
-      '· Recipient: '+recv+'\n'+
-      (c.receiver&&c.receiver!==c.name?'· Purchaser: '+c.name+'\n':'')+
-      (c.expiry?'· Valid until: '+c.expiry+'\n':'')+
-      (c.cond?'· Condition: '+trCond(c.cond)+'\n':'')+
-      '━━━━━━━━━━━━\n\n'+
-      '▶ View my coupon\n'+link+'\n\n'+
-      'Please show this coupon screen when using our service.\n'+
-      (c.type==='discount'?'· Up to 2 coupons per service visit.\n':'')+
-      (c.type==='discount'?'· Discount coupons are not transferable.\n':'· Transfer is possible with prior request by the purchaser.\n')+
-      '· Not valid on the date of issue.\n\n'+
-      '📞 +60 17-247 2774';
+  var my=myPageLink(recv,lang);
+  var L=[];
+  if(en){
+    L.push('Hello, '+recv+' 😊');
+    L.push('Thank you for choosing Happy Home Care.');
+    L.push('');
+    L.push('As a token of our appreciation, we are sending you a '+c.value+' '+tl+'.');
+    L.push('Please feel free to use it for any of our services.');
+    L.push(MSG_SEP);
+    L.push('🎫 '+tl+' Details');
+    L.push('💰 Value : '+c.value);
+    L.push('🔑 Code : '+c.code);
+    L.push('👤 Recipient : '+recv);
+    if(c.receiver&&c.receiver!==c.name)L.push('🛒 Purchased by : '+c.name);
+    if(c.expiry)L.push('📅 Valid until : '+expTxt(c.expiry,true));
+    if(c.cond)L.push('📌 Condition : '+trCond(c.cond));
+    L.push(MSG_SEP);
+    if(my){
+      L.push('📱 Your Personal My Page');
+      L.push('');
+      L.push('You can check and use your '+tl.toLowerCase());
+      L.push('anytime on the My Page below.');
+      L.push('🔗 My Page');
+      L.push(my);
+      L.push('or');
+      L.push('🎫 View my coupon');
+      L.push(link);
+    }else{
+      L.push('🎫 View my coupon');
+      L.push(link);
+    }
+    L.push(MSG_SEP);
+    L.push('📌 How to use');
+    L.push('• Please show the coupon screen to our staff when using our service.');
+    L.push('• Not valid on the date of issue.');
+    L.push(isD?'• Discount coupons cannot be transferred.':'• Transfer is possible with prior request by the purchaser.');
+    L.push('Thank you. 🙏');
+    L.push('Happy Home Care');
+    L.push('📞 +60 17-247 2774');
+    return L.join('\n');
   }
-  return '🎁 [해피홈케어] '+tl+'이 도착했습니다!\n\n'+
-    recv+' 님, 감사의 마음을 담아 '+tl+'을 보내드립니다.\n\n'+
-    '━━━━━━━━━━━━\n'+
-    '🎫 '+tl+': '+c.value+'\n'+
-    '· 코드: '+c.code+'\n'+
-    '· 받는(양수) 분: '+recv+'\n'+
-    (c.receiver&&c.receiver!==c.name?'· 구매(양도)고객: '+c.name+'\n':'')+
-    (c.expiry?'· 유효기간: '+c.expiry+' 까지\n':'')+
-    (c.cond?'· 조건: '+c.cond+'\n':'')+
-    '━━━━━━━━━━━━\n\n'+
-    '▶ 내 쿠폰 확인하기\n'+link+'\n\n'+
-    '서비스 이용 시 이 쿠폰 화면을 보여주세요.\n'+
-    (c.type==='discount'?'· 1회 최대 2장 사용 가능 · 발행 당일 사용 불가\n':'· 발행 당일 사용 불가\n')+
-    (c.type==='discount'?'· 할인권은 양도·양수 불가\n':'· 양도·양수는 구매고객 본인의 사전 신청 시 가능\n')+
-    '\n📞 문의: +60 17-247 2774';
+  L.push('안녕하세요, '+recv+' 고객님 😊');
+  L.push('Happy Home Care를 이용해 주셔서 감사합니다.');
+  L.push('');
+  L.push('감사의 마음을 담아 '+c.value+' '+tl+'을 보내드립니다.');
+  L.push('서비스 이용 시 자유롭게 사용해 주세요.');
+  L.push(MSG_SEP);
+  L.push('🎫 '+tl+' 정보');
+  L.push('💰 '+tl+' 금액 : '+c.value);
+  L.push('🔑 '+tl+' 코드 : '+c.code);
+  L.push('👤 받는 분 : '+recv);
+  if(c.receiver&&c.receiver!==c.name)L.push('🛒 구매(양도) 고객 : '+c.name);
+  if(c.expiry)L.push('📅 유효기간 : '+expTxt(c.expiry,false));
+  if(c.cond)L.push('📌 사용 조건 : '+c.cond);
+  L.push(MSG_SEP);
+  if(my){
+    L.push('📱 고객 전용 My Page');
+    L.push('');
+    L.push('아래 마이페이지에서 '+tl+'을 언제든지');
+    L.push('확인 및 사용하실 수 있습니다.');
+    L.push('🔗 My Page');
+    L.push(my);
+    L.push('또는');
+    L.push('🎫 내 쿠폰 확인하기');
+    L.push(link);
+  }else{
+    L.push('🎫 내 쿠폰 확인하기');
+    L.push(link);
+  }
+  L.push(MSG_SEP);
+  L.push('📌 이용 안내');
+  L.push('• 서비스 이용 시 쿠폰 화면을 직원에게 보여주세요.');
+  L.push('• 발행 당일에는 사용하실 수 없습니다.');
+  L.push(isD?'• 할인권은 양도/양수가 불가능합니다.':'• 양도·양수는 구매 고객 본인의 사전 신청 시 가능합니다.');
+  L.push('감사합니다. 🙏');
+  L.push('Happy Home Care');
+  L.push('📞 +60 17-247 2774');
+  return L.join('\n');
 }
 // ── 쿠폰 카드 이미지 생성 (Canvas)
 function roundRect(x,px,py,w,h,r){
@@ -1001,6 +1080,12 @@ window.__fetchCoupon=async function(id){
   }catch(e){
     if(window.__onDbFail)window.__onDbFail(e.message);
   }
+  // 발송 메시지의 「고객 전용 My Page」 링크용 — 고객 마스터 목록
+  try{
+    var cs=await getDocs(collection(DB,'customers'));
+    var cl=cs.docs.map(function(d){return Object.assign({_id:d.id},d.data());});
+    if(window.__onCustomersLoaded)window.__onCustomersLoaded(cl);
+  }catch(e){}
 })();
 </script>
 </body>
