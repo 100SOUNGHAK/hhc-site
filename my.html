@@ -647,7 +647,8 @@ function ptBase(x,pkg){
   const disc=x.discType==='pct'?dv/100*sub:dv;
   const credit=parseFloat(x.creditUse)||0;
   const voucher=parseFloat(x.voucherAmt)||0;
-  let b=sub-disc-voucher;
+  const ptsUse=parseFloat(x.pointUse)||0;
+  let b=sub-disc-voucher-ptsUse;
   if(!(pkg||credit>0))b-=credit;
   return Math.max(0,b);
 }
@@ -924,14 +925,19 @@ function render(){
   if(VIS.includes('iv')){
     const _pkg=/패키지/.test(m.member||'')||DATA.contracts.length>0;
     const ptER=DATA.invoices.filter(x=>x.status==='paid'&&!(DATA.ptStart&&String(x.date||'')<DATA.ptStart)).map(x=>{const b=ptBase(x,_pkg);return{date:x.date||'',base:b,pts:ptEarn(b)};}).filter(r=>r.pts>0);
-    const ptUR=(m.pt_used||[]).map(u=>({date:u.date||'',memo:u.memo||'',pts:Math.floor(parseFloat(u.amount)||0)})).filter(r=>r.pts>0);
-    const ptE=ptER.reduce((a,r)=>a+r.pts,0),ptU=ptUR.reduce((a,r)=>a+r.pts,0),ptB=ptE-ptU;
+    const ptUR=(m.pt_used||[]).map(u=>({date:u.date||'',memo:u.memo||'',pts:Math.floor(parseFloat(u.amount)||0)})).filter(r=>r.pts>0)
+      .concat(DATA.invoices.filter(x=>x.status!=='draft'&&(parseFloat(x.pointUse)||0)>0).map(x=>({date:x.date||'',memo:'',inv:1,pts:Math.floor(parseFloat(x.pointUse)||0)})));
+    const ptAJ=(m.pt_adj||[]).map(u=>({date:u.date||'',memo:u.memo||'',pts:Math.round(parseFloat(u.amount)||0)})).filter(r=>r.pts!==0);
+    const ptE=ptER.reduce((a,r)=>a+r.pts,0)+ptAJ.filter(r=>r.pts>0).reduce((a,r)=>a+r.pts,0);
+    const ptU=ptUR.reduce((a,r)=>a+r.pts,0)+ptAJ.filter(r=>r.pts<0).reduce((a,r)=>a-r.pts,0);
+    const ptB=ptE-ptU;
     if(ptE>0||ptU>0){
       const PL=LANG==='en'
-        ?{t:'Reward Points',bal:'Available Balance',earn:'Total Earned',used:'Total Used',open:'View earn & usage history',close:'Close history',earnLb:'Earned',useLb:'Used',base:'Base',note:'💡 Points can be used like cash for your next service payment. Just let our staff know.',none:'No history yet'}
-        :{t:'포인트 적립금',bal:'사용 가능 잔액',earn:'누적 적립',used:'누적 사용',open:'적립·사용 내역 보기',close:'내역 닫기',earnLb:'적립',useLb:'사용',base:'기준액',note:'💡 적립된 포인트는 다음 서비스 결제 시 현금처럼 사용하실 수 있습니다. 직원에게 말씀해 주세요.',none:'내역이 없습니다'};
+        ?{t:'Reward Points',bal:'Available Balance',earn:'Total Earned',used:'Total Used',open:'View earn & usage history',close:'Close history',earnLb:'Earned',useLb:'Used',base:'Base',note:'💡 Points can be used like cash for your next service payment (minimum use RM 10). Just let our staff know.',none:'No history yet',adjLb:'Adjustment',useIv:'Used · service payment'}
+        :{t:'포인트 적립금',bal:'사용 가능 잔액',earn:'누적 적립',used:'누적 사용',open:'적립·사용 내역 보기',close:'내역 닫기',earnLb:'적립',useLb:'사용',base:'기준액',note:'💡 적립된 포인트는 다음 서비스 결제 시 현금처럼 사용하실 수 있습니다. (최소 사용 금액 RM 10) 직원에게 말씀해 주세요.',none:'내역이 없습니다',adjLb:'조정',useIv:'사용 · 서비스 결제 차감'};
       const ptRows=[].concat(ptER.map(r=>({t:'earn',date:r.date,lb:PL.earnLb,m:PL.base+' RM '+fmt0(r.base),pts:r.pts})))
-        .concat(ptUR.map(r=>({t:'use',date:r.date,lb:PL.useLb+(r.memo?' · '+r.memo:''),m:'',pts:r.pts})))
+        .concat(ptUR.map(r=>({t:'use',date:r.date,lb:(r.inv?PL.useIv:PL.useLb+(r.memo?' · '+r.memo:'')),m:'',pts:r.pts})))
+        .concat(ptAJ.map(r=>({t:r.pts>0?'earn':'use',date:r.date,lb:PL.adjLb+(r.memo?' · '+r.memo:''),m:'',pts:Math.abs(r.pts)})))
         .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
       h+='<div class="sec"><div class="ptc">'+
          '<div class="ptc-hd"><span class="ic">💎</span><div><div class="t">'+PL.t+'</div><div class="s">REWARD POINTS</div></div>'+

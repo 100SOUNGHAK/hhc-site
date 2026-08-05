@@ -115,7 +115,9 @@ select.fi{appearance:auto}
 .ptcard .pt-top{display:flex;align-items:center;gap:9px;padding:14px 16px 4px}
 .ptcard .pt-t{font-size:12.5px;font-weight:900;letter-spacing:.4px;opacity:.92}
 .ptcard .pt-rule{font-size:10px;font-weight:900;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:3px 9px}
-.ptcard .pt-use-btn{margin-left:auto;background:#fff;color:#5B21B6;border:none;border-radius:10px;font-weight:900;font-size:12px;padding:8px 14px;cursor:pointer;font-family:inherit;box-shadow:0 3px 8px rgba(0,0,0,.18)}
+.ptcard .pt-adj-btn{margin-left:auto;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:10px;font-weight:900;font-size:12px;padding:8px 12px;cursor:pointer;font-family:inherit}
+.ptcard .pt-adj-btn:hover{background:rgba(255,255,255,.24)}
+.ptcard .pt-use-btn{margin-left:6px;background:#fff;color:#5B21B6;border:none;border-radius:10px;font-weight:900;font-size:12px;padding:8px 14px;cursor:pointer;font-family:inherit;box-shadow:0 3px 8px rgba(0,0,0,.18)}
 .ptcard .pt-use-btn:disabled{opacity:.5;cursor:not-allowed}
 .ptcard .pt-bal{padding:2px 16px 12px}
 .ptcard .pt-bal .k{font-size:10.5px;font-weight:800;opacity:.75;letter-spacing:.5px}
@@ -264,7 +266,8 @@ function ptBase(x,pkg){
   const disc=x.discType==='pct'?dv/100*sub:dv;
   const credit=parseFloat(x.creditUse)||0;
   const voucher=parseFloat(x.voucherAmt)||0;
-  let b=sub-disc-voucher;
+  const ptsUse=parseFloat(x.pointUse)||0;   // 💎 해피포인트로 결제한 금액은 적립 제외
+  let b=sub-disc-voucher-ptsUse;
   if(!(pkg||credit>0))b-=credit;   // 패키지(또는 적립잔액 사용) 건은 차감 전 금액
   return Math.max(0,b);
 }
@@ -277,9 +280,18 @@ function ptCalc(e){
   }).filter(r=>r.pts>0).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
   const useRows=((e.master&&e.master.pt_used)||[]).map((u,i)=>({i,date:u.date||'',memo:u.memo||'',pts:Math.floor(parseFloat(u.amount)||0)}))
     .filter(r=>r.pts>0).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
-  const earn=earnRows.reduce((a,r)=>a+r.pts,0);
-  const used=useRows.reduce((a,r)=>a+r.pts,0);
-  return {earn,used,bal:earn-used,earnRows,useRows,pkg};
+  // 인보이스 「요금조정 > 💎 해피포인트 사용」 칸으로 차감된 사용액 (작성중 인보이스 제외)
+  const invUseRows=e.docs.invoices.filter(x=>x.status!=='draft'&&(parseFloat(x.pointUse)||0)>0)
+    .map(x=>({date:x.date||'',memo:'인보이스 '+(x.id||x.__id)+' 결제 차감',pts:Math.floor(parseFloat(x.pointUse)||0)}))
+    .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  // ✏️ 적립 조정 (수동 +/−)
+  const adjRows=((e.master&&e.master.pt_adj)||[]).map((u,i)=>({i,date:u.date||'',memo:u.memo||'',pts:Math.round(parseFloat(u.amount)||0)}))
+    .filter(r=>r.pts!==0).sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+  const adjPlus=adjRows.filter(r=>r.pts>0).reduce((a,r)=>a+r.pts,0);
+  const adjMinus=adjRows.filter(r=>r.pts<0).reduce((a,r)=>a-r.pts,0);
+  const earn=earnRows.reduce((a,r)=>a+r.pts,0)+adjPlus;
+  const used=useRows.reduce((a,r)=>a+r.pts,0)+invUseRows.reduce((a,r)=>a+r.pts,0)+adjMinus;
+  return {earn,used,bal:earn-used,earnRows,useRows,invUseRows,adjRows,pkg};
 }
 
 function invTotal(inv){
@@ -643,14 +655,17 @@ window.openDrawer=function(idx){
     const _ptHist=[]
       .concat(PT.earnRows.map(r=>({t:'earn',date:r.date,lb:'적립 · '+r.id,m:'기준액 '+fmtRM(r.base),pts:r.pts})))
       .concat(PT.useRows.map(r=>({t:'use',date:r.date,lb:'사용'+(r.memo?' · '+r.memo:''),m:'',pts:r.pts,ui:r.i})))
+      .concat(PT.invUseRows.map(r=>({t:'use',date:r.date,lb:'사용 · '+r.memo,m:'',pts:r.pts})))
+      .concat(PT.adjRows.map(r=>({t:r.pts>0?'earn':'use',date:r.date,lb:(r.pts>0?'조정 적립':'조정 차감')+(r.memo?' · '+r.memo:''),m:'',pts:Math.abs(r.pts),ai:r.i})))
       .sort((a,b)=>String(b.date).localeCompare(String(a.date)));
     const _ptExc=e.docs.invoices.filter(x=>x.status==='paid'&&PT_START&&String(x.date||'')<PT_START).length;   // 시작일 이전 발행분
     h+='<div class="ptcard">'+
        '<div class="pt-top"><span style="font-size:17px">💎</span><span class="pt-t">포인트 적립금</span><span class="pt-rule">RM100 → RM1</span>'+
        '<button class="pt-cfg" onclick="caPtStart('+idx0+')" title="적립 적용시작일 설정 · 취소">📅 '+(PT_START?'적용시작 '+PT_START:'전체 기간 적립')+'</button>'+
-       '<button class="pt-use-btn"'+(PT.bal>0?'':' disabled')+' onclick="caPtUse('+idx0+')">💎 포인트 사용</button></div>'+
+       '<button class="pt-adj-btn" onclick="caPtAdj('+idx0+')" title="적립 포인트 수동 조정 (추가/차감)">✏️ 조정</button>'+
+       '<button class="pt-use-btn"'+(PT.bal>=10?'':' disabled')+' title="최소 사용 금액 RM 10" onclick="caPtUse('+idx0+')">💎 포인트 사용</button></div>'+
        '<div class="pt-bal"><div class="k">사용 가능 잔액</div><div class="v">RM '+PT.bal.toLocaleString()+'<small>.00</small></div>'+
-       (PT.bal<0?'<div style="font-size:10.5px;font-weight:800;color:#FDE68A;margin-top:4px;line-height:1.5">⚠️ 적용시작일 변경으로 사용액이 적립액보다 많습니다. 사용 내역을 취소하거나 시작일을 조정해 주세요.</div>':'')+'</div>'+
+       (PT.bal<0?'<div style="font-size:10.5px;font-weight:800;color:#FDE68A;margin-top:4px;line-height:1.5">⚠️ 사용·차감액이 적립액보다 많습니다. 내역을 확인해 사용 내역 취소 · ✏️ 조정(적립 추가) · 적용시작일 조정으로 맞춰 주세요.</div>':'')+'</div>'+
        '<div class="pt-row">'+
        '<div class="pt-c"><div class="k">누적 적립</div><div class="v">+RM '+PT.earn.toLocaleString()+'</div></div>'+
        '<div class="pt-c"><div class="k">누적 사용</div><div class="v">−RM '+PT.used.toLocaleString()+'</div></div>'+
@@ -661,7 +676,8 @@ window.openDrawer=function(idx){
     h+=_ptHist.length?_ptHist.map(r=>'<div class="ph '+r.t+'"><span class="sign">'+(r.t==='earn'?'+':'−')+'</span>'+
         '<b>'+esc(r.lb)+'</b><span class="m">'+esc(r.date||'')+(r.m?' · '+r.m:'')+'</span>'+
         '<span class="amt">'+(r.t==='earn'?'+':'−')+'RM '+r.pts.toLocaleString()+'</span>'+
-        (r.t==='use'?'<button class="rb del" title="사용 내역 취소 (잔액 복구)" onclick="caPtUseDel('+idx0+','+r.ui+')">✕</button>':'')+
+        (r.ui!=null?'<button class="rb del" title="사용 내역 취소 (잔액 복구)" onclick="caPtUseDel('+idx0+','+r.ui+')">✕</button>':'')+
+        (r.ai!=null?'<button class="rb del" title="조정 내역 삭제 (원복)" onclick="caPtAdjDel('+idx0+','+r.ai+')">✕</button>':'')+
         '</div>').join('')
       :'<div class="dnone">적립·사용 내역이 없습니다</div>';
     h+='</div></div>';
@@ -1038,21 +1054,74 @@ window.caPtHist=function(btn){
   window._ptHistOpen=o;
   const t=btn.querySelector('.tg');if(t)t.textContent=o?'내역 닫기 ▲':'펼쳐보기 ▼';
 };
+// ── ✏️ 적립 조정 (수동 추가/차감) ──
+window.caPtAdj=function(idx){
+  const e=entries[idx];if(!e)return;
+  const PT=ptCalc(e);
+  genericModal('✏️ 포인트 적립 조정 — '+esc(e.name),
+    '<p style="font-size:12px;color:var(--ink2);line-height:1.7;margin-bottom:10px">자동 적립과 별도로 포인트를 <b>수동으로 추가(➕)하거나 차감(➖)</b>합니다.<br>· 프로모션 지급, 과거 이용분 보상, 착오 정정 등에 사용하세요.<br>· 조정 내역은 목록에 남으며 「✕」로 삭제(원복)할 수 있습니다.</p>'+
+    '<div style="background:linear-gradient(135deg,#4C1D95,#7C3AED);color:#fff;border-radius:12px;padding:12px 14px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:12px;font-weight:800;opacity:.85">현재 잔액</span><b style="font-size:20px">RM '+PT.bal.toLocaleString()+'</b></div>'+
+    '<div class="fl">구분</div><select class="fi" id="pt-adj-type"><option value="plus">➕ 적립 추가</option><option value="minus">➖ 적립 차감</option></select>'+
+    '<div class="fl">금액 (RM)</div><input class="fi" id="pt-adj-amt" type="number" min="1" step="1" placeholder="예: 5">'+
+    '<div class="fl">조정일</div><input class="fi" id="pt-adj-date" type="date" value="'+caToday()+'">'+
+    '<div class="fl">메모 (선택)</div><input class="fi" id="pt-adj-memo" placeholder="예: 오픈 기념 보너스 적립">',
+    '<button class="btn" onclick="document.getElementById(\'ca-doc-mask\').remove()">취소</button><button class="btn p" onclick="caPtAdjSave('+idx+')">저장</button>');
+};
+window.caPtAdjSave=async function(idx){
+  const e=entries[idx];if(!e)return;
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  const sign=document.getElementById('pt-adj-type').value==='minus'?-1:1;
+  const amt=Math.floor(parseFloat(document.getElementById('pt-adj-amt').value)||0);
+  const date=document.getElementById('pt-adj-date').value||caToday();
+  const memo=(document.getElementById('pt-adj-memo').value||'').trim();
+  if(amt<=0){toast('조정 금액을 입력해 주세요');return;}
+  try{
+    let mid=e.master&&e.master.__id;
+    // 문서에서 자동 집계된 고객이면 먼저 고객 마스터에 등록합니다
+    if(!mid){
+      const now=new Date().toISOString();
+      const ref=await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name:e.name,phone:e.phone||'',member:e.member||'',email:'',addr:e.addr||'',memo:'',aliases:e.aliases||[],created_at:now,updated_at:now});
+      mid=ref.id;
+      toast('👥 고객 마스터에 자동 등록되었습니다');
+    }
+    const list=((e.master&&e.master.pt_adj)||[]).slice();
+    list.push({amount:sign*amt,date:date,memo:memo,at:new Date().toISOString()});
+    await updateDoc(doc(db,'customers',mid),{pt_adj:list,updated_at:new Date().toISOString()});
+    toast(sign>0?('➕ RM '+amt+' 적립이 추가되었습니다'):('➖ RM '+amt+' 적립이 차감되었습니다'));
+    const mk=document.getElementById('ca-doc-mask');if(mk)mk.remove();
+    closeDrawer();loadAll(true);
+  }catch(err){toast('저장 실패: '+err.message);}
+};
+// ── ↩️ 조정 내역 삭제 (원복) ──
+window.caPtAdjDel=async function(idx,ai){
+  const e=entries[idx];if(!e||!e.master)return;
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  const list=((e.master.pt_adj)||[]).slice();
+  const u=list[ai];if(!u)return;
+  const uv=Math.round(parseFloat(u.amount)||0);
+  if(!confirm('포인트 조정 내역을 삭제할까요?\n\n· '+(u.date||'')+' · '+(uv>0?'➕':'➖')+' RM '+Math.abs(uv)+(u.memo?' · '+u.memo:'')+'\n· 삭제하면 조정 전 잔액으로 되돌아갑니다.'))return;
+  list.splice(ai,1);
+  try{
+    await updateDoc(doc(db,'customers',e.master.__id),{pt_adj:list,updated_at:new Date().toISOString()});
+    toast('↩️ 조정 내역이 삭제되었습니다');
+    closeDrawer();loadAll(true);
+  }catch(err){toast('삭제 실패: '+err.message);}
+};
 // ── 💎 포인트 사용 (차감) ──
 window.caPtUse=function(idx){
   const e=entries[idx];if(!e)return;
   const PT=ptCalc(e);
-  if(PT.bal<=0){toast('사용 가능한 포인트가 없습니다');return;}
+  if(PT.bal<10){toast('최소 사용 금액은 RM 10입니다 (현재 잔액 RM '+PT.bal+')');return;}
   genericModal('💎 포인트 사용 — '+esc(e.name),
     '<div style="background:linear-gradient(135deg,#4C1D95,#7C3AED);color:#fff;border-radius:12px;padding:12px 14px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">'+
       '<span style="font-size:12px;font-weight:800;opacity:.85">사용 가능 잔액</span><b style="font-size:20px">RM '+PT.bal.toLocaleString()+'</b></div>'+
-    '<div class="fl">사용 금액 (RM)</div><input class="fi" id="pt-amt" type="number" min="1" step="1" max="'+PT.bal+'" placeholder="예: 5">'+
+    '<div class="fl">사용 금액 (RM)</div><input class="fi" id="pt-amt" type="number" min="10" step="1" max="'+PT.bal+'" placeholder="예: 10 (최소 사용 금액 RM 10)">'+
     '<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">'+
-      [1,5,10,20].filter(v=>v<=PT.bal).map(v=>'<button class="rb" onclick="document.getElementById(\'pt-amt\').value='+v+'">RM '+v+'</button>').join('')+
+      [10,20,30,50].filter(v=>v<=PT.bal).map(v=>'<button class="rb" onclick="document.getElementById(\'pt-amt\').value='+v+'">RM '+v+'</button>').join('')+
       '<button class="rb" onclick="document.getElementById(\'pt-amt\').value='+PT.bal+'">전액 RM '+PT.bal+'</button></div>'+
     '<div class="fl">사용일</div><input class="fi" id="pt-date" type="date" value="'+caToday()+'">'+
     '<div class="fl">메모 (선택)</div><input class="fi" id="pt-memo" placeholder="예: 에어컨 청소 결제 시 차감">'+
-    '<p style="font-size:11px;color:var(--ink2);line-height:1.6;margin-top:10px">💡 사용 처리하면 잔액에서 즉시 차감되며, 내역에서 언제든지 「✕」로 취소(잔액 복구)할 수 있습니다.</p>',
+    '<p style="font-size:11px;color:var(--ink2);line-height:1.6;margin-top:10px">💡 최소 사용 금액은 <b>RM 10</b>입니다. 사용 처리하면 잔액에서 즉시 차감되며, 내역에서 언제든지 「✕」로 취소(잔액 복구)할 수 있습니다.</p>',
     '<button class="btn" onclick="document.getElementById(\'ca-doc-mask\').remove()">취소</button><button class="btn p" onclick="caPtUseSave('+idx+')">💎 사용 저장</button>');
 };
 window.caPtUseSave=async function(idx){
@@ -1063,6 +1132,7 @@ window.caPtUseSave=async function(idx){
   const memo=(document.getElementById('pt-memo').value||'').trim();
   const PT=ptCalc(e);
   if(amt<=0){toast('사용 금액을 입력해 주세요');return;}
+  if(amt<10){toast('최소 사용 금액은 RM 10입니다');return;}
   if(amt>PT.bal){toast('잔액(RM '+PT.bal+')보다 큰 금액은 사용할 수 없습니다');return;}
   try{
     let mid=e.master&&e.master.__id;
