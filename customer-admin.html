@@ -73,7 +73,7 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .lk-row:hover{border-color:var(--pri);background:var(--pri-bg)}
 .lk-row.mine{opacity:.5;cursor:default}
 .lk-row .own{margin-left:auto;font-size:10px;color:var(--ink3);font-weight:700}
-.mini{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.mini{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
 .mini .mc{background:#fff;border:1px solid var(--bdr);border-radius:10px;padding:9px;text-align:center;font-size:10.5px;color:var(--ink3);font-weight:700}
 .mini .mc b{display:block;font-size:15px;color:var(--ink);font-weight:900}
 /* 문서 뷰어 오버레이 */
@@ -214,6 +214,9 @@ function reqName(x){
 function sn(n){return String(n||'').toLowerCase().replace(/[^0-9a-z가-힣]/g,'');}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2600);}
 function fmtRM(v){const n=parseFloat(v)||0;return 'RM '+n.toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function caToday(){const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
+// 견적 합계 — 기본 합계 + 고객이 선택한 에어컨 옵션 금액
+function qtTotal(x){const b=parseFloat(x&&x.baseTotal)||0;const c=(x&&x.customerChoice&&parseFloat(x.customerChoice.price))||0;return b+c;}
 function invTotal(inv){
   if(inv.grand!=null)return parseFloat(inv.grand)||0;
   if(inv.total!=null)return parseFloat(inv.total)||0;
@@ -274,7 +277,7 @@ function subscribeAll(){
   },err=>console.warn('sub',n,err.message)));
 }
 function newEntry(name,phone){
-  return {master:null,name:name||'',phone:phone||'',aliases:[],linkNames:[],member:'',email:'',addr:'',memo:'',
+  return {master:null,name:name||'',phone:phone||'',aliases:[],linkNames:[],member:'',email:'',addr:'',memo:'',inactive:false,
     docs:{contracts:[],invoices:[],inspections:[],coupons:[],requests:[],bookings:[],schedules:[],quotes:[]}};
 }
 // ── 고객 1명을 가리키는 고정 키 ──
@@ -296,6 +299,7 @@ function buildEntries(){
   RAW.customers.forEach(m=>{
     const e=newEntry(m.name,m.phone);
     e.master=m;e.aliases=m.aliases||[];e.member=m.member||'';e.email=m.email||'';e.addr=m.addr||'';e.memo=m.memo||'';
+    e.inactive=!!m.ca_inactive;   // ⏸ 비활성 고객 (기본 목록에서 숨김)
     entries.push(e);
     const k=pn(m.phone);if(k&&!byP[k])byP[k]=e;
     idxName(e,m.name);(m.aliases||[]).forEach(a=>idxName(e,a));
@@ -452,24 +456,30 @@ function isVVIP(e){return (e.member||'').toUpperCase()==='VVIP';}
 const SRC_DEF=[['contracts','계약','ct'],['invoices','인보이스','iv'],['inspections','점검','ip'],['coupons','상품권','cp'],['bookings','예약','bk'],['requests','의뢰','rq'],['quotes','견적','qt'],['schedules','스케줄','sc']];
 function renderAll(){renderStats();renderChips();renderMerge();renderList();}
 function renderStats(){
-  const total=entries.length;
-  const pkg=entries.filter(isPkg).length;
-  const vvip=entries.filter(isVVIP).length;
-  const noph=entries.filter(e=>!pn(e.phone)).length;
+  const act=entries.filter(e=>!e.inactive);      // 통계는 활성 고객 기준
+  const total=act.length;
+  const pkg=act.filter(isPkg).length;
+  const vvip=act.filter(isVVIP).length;
+  const noph=act.filter(e=>!pn(e.phone)).length;
+  const inact=entries.length-total;
   document.getElementById('stats').innerHTML=
     '<div class="st"><b>'+total+'</b>전체 고객</div>'+
     '<div class="st"><b>'+pkg+'</b>📦 패키지</div>'+
     '<div class="st"><b>'+vvip+'</b>👑 VVIP</div>'+
     '<div class="st"><b>'+mergeSug.length+'</b>병합 제안</div>'+
-    '<div class="st"><b>'+noph+'</b>연락처 없음</div>';
+    '<div class="st"><b>'+noph+'</b>연락처 없음</div>'+
+    '<div class="st" style="cursor:pointer;color:#64748b" onclick="setFilter(\'inactive\')"><b>'+inact+'</b>⏸ 비활성</div>';
 }
-const FILTERS=[['all','전체'],['contract','📑 계약'],['package','📦 패키지'],['vvip','👑 VVIP'],['invoice','💳 인보이스'],['inspect','🔧 점검'],['coupon','🎫 상품권'],['nophone','연락처 없음']];
+const FILTERS=[['all','전체'],['contract','📑 계약'],['package','📦 패키지'],['vvip','👑 VVIP'],['invoice','💳 인보이스'],['inspect','🔧 점검'],['coupon','🎫 상품권'],['quote','🧾 견적'],['nophone','연락처 없음'],['inactive','⏸ 비활성']];
 function renderChips(){
   document.getElementById('chips').innerHTML=FILTERS.map(f=>
     '<span class="chip'+(curFilter===f[0]?' on':'')+'" onclick="setFilter(\''+f[0]+'\')">'+f[1]+'</span>').join('');
 }
 window.setFilter=function(f){curFilter=f;renderChips();renderList();};
 function passFilter(e){
+  // ⏸ 비활성 고객은 「⏸ 비활성」 목록에서만 보입니다
+  if(curFilter==='inactive')return !!e.inactive;
+  if(e.inactive)return false;
   switch(curFilter){
     case 'contract':return e.docs.contracts.length>0;
     case 'package':return isPkg(e);
@@ -477,6 +487,7 @@ function passFilter(e){
     case 'invoice':return e.docs.invoices.length>0;
     case 'inspect':return e.docs.inspections.length>0;
     case 'coupon':return e.docs.coupons.length>0;
+    case 'quote':return e.docs.quotes.length>0;
     case 'nophone':return !pn(e.phone);
     default:return true;
   }
@@ -528,12 +539,16 @@ function renderList(){
     const idx=entries.indexOf(e);
     const init=(e.name||'?').trim().charAt(0).toUpperCase();
     const srcs=SRC_DEF.filter(s=>e.docs[s[0]].length).map(s=>'<span class="src '+s[2]+'">'+s[1]+' '+e.docs[s[0]].length+'</span>').join('');
-    return '<div class="crow">'+
-      '<div class="avatar">'+esc(init)+'</div>'+
-      '<div><div class="cnm">'+esc(e.name||'(이름 없음)')+(e.aliases.length?'<span class="alias">별칭: '+esc(e.aliases.join(', '))+'</span>':'')+((e.linkNames||[]).length?'<span class="alias" style="background:#f5f3ff;color:#5B21B6">🔗 '+esc(e.linkNames.join(', '))+'</span>':'')+memberBadge(e)+(e.master?'':'<span class="pill vio">미등록</span>')+'</div>'+
+    return '<div class="crow"'+(e.inactive?' style="opacity:.64;background:#f8fafc"':'')+'>'+
+      '<div class="avatar"'+(e.inactive?' style="filter:grayscale(1)"':'')+'>'+esc(init)+'</div>'+
+      '<div><div class="cnm">'+esc(e.name||'(이름 없음)')+(e.aliases.length?'<span class="alias">별칭: '+esc(e.aliases.join(', '))+'</span>':'')+((e.linkNames||[]).length?'<span class="alias" style="background:#f5f3ff;color:#5B21B6">🔗 '+esc(e.linkNames.join(', '))+'</span>':'')+memberBadge(e)+(e.inactive?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏸ 비활성</span>':'')+(e.master?'':'<span class="pill vio">미등록</span>')+'</div>'+
       '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음 <span class="pill warn">보완 필요</span>')+(e.addr?' · '+esc(e.addr):'')+'</div>'+
       '<div class="srcs">'+(srcs||'<span class="src qt">기록 없음</span>')+(e.ts?'<span class="src" style="background:#f3f4f6;color:#6b7280">🕘 '+esc(String(e.ts).slice(0,10))+'</span>':'')+'</div></div>'+
-      '<div class="cbtns"><button class="btn sm p" onclick="openDrawer('+idx+')">상세 보기</button><button class="btn sm" onclick="openEditModal('+idx+')">✏️ 수정</button>'+(e.master?'<button class="btn sm" style="color:var(--bad);border-color:#fca5a5" onclick="caDelCustomer('+idx+')">✕ 삭제</button>':'')+'</div>'+
+      '<div class="cbtns"><button class="btn sm p" onclick="openDrawer('+idx+')">상세 보기</button><button class="btn sm" onclick="openEditModal('+idx+')">✏️ 수정</button>'+
+        (e.inactive
+          ?'<button class="btn sm" style="color:#047857;border-color:#6EE7B7;background:#ECFDF5" onclick="caToggleInactive('+idx+')">▶️ 활성 복구</button>'
+          :'<button class="btn sm" style="color:#64748b" onclick="caToggleInactive('+idx+')">⏸ 비활성</button>')+
+        (e.master?'<button class="btn sm" style="color:var(--bad);border-color:#fca5a5" onclick="caDelCustomer('+idx+')">✕ 삭제</button>':'')+'</div>'+
       '</div>';
   }).join('');
 }
@@ -547,8 +562,12 @@ window.openDrawer=function(idx){
   const init=(e.name||'?').trim().charAt(0).toUpperCase();
   let h='<div class="dhead"><div class="avatar">'+esc(init)+'</div><div class="dinfo"><b>'+esc(e.name)+'</b>'+
     '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음')+(e.addr?' · '+esc(e.addr):'')+'</div>'+
-    '<div class="tagrow">'+memberBadge(e)+(e.aliases.length?'<span class="pill vio">별칭 '+esc(e.aliases.join(', '))+'</span>':'')+((e.linkNames||[]).length?'<span class="pill vio" title="수동 연결된 문서에 적힌 이름입니다. 원본 그대로 유지됩니다.">🔗 연결문서 '+esc(e.linkNames.join(', '))+'</span>':'')+'</div></div>'+
-    '<div class="dbtns"><button class="btn sm" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="caSendModal('+idx+')">📤 고객 발송</button><button class="btn sm" style="color:#92400E;border-color:#FCD34D;background:#FFFBEB" onclick="caLinkManage('+idx+')">🔗 연결 관리</button><button class="btn sm" style="background:#0B1833;border-color:#0B1833;color:#fff" onclick="caHomeModal('+idx+')">🏠 홈페이지 안내</button><button class="btn sm p" onclick="openEditModal('+idx+')">✏️ 정보 수정</button>'+(e.master?'<button class="btn sm" style="color:var(--bad);border-color:#fca5a5" onclick="caDelCustomer('+idx+')">✕ 삭제</button>':'')+'<button class="btn sm" onclick="closeDrawer()">닫기</button></div></div>';
+    '<div class="tagrow">'+memberBadge(e)+(e.inactive?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏸ 비활성 고객</span>':'')+(e.aliases.length?'<span class="pill vio">별칭 '+esc(e.aliases.join(', '))+'</span>':'')+((e.linkNames||[]).length?'<span class="pill vio" title="수동 연결된 문서에 적힌 이름입니다. 원본 그대로 유지됩니다.">🔗 연결문서 '+esc(e.linkNames.join(', '))+'</span>':'')+'</div></div>'+
+    '<div class="dbtns"><button class="btn sm" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="caSendModal('+idx+')">📤 고객 발송</button><button class="btn sm" style="color:#92400E;border-color:#FCD34D;background:#FFFBEB" onclick="caLinkManage('+idx+')">🔗 연결 관리</button><button class="btn sm" style="background:#0B1833;border-color:#0B1833;color:#fff" onclick="caHomeModal('+idx+')">🏠 홈페이지 안내</button><button class="btn sm p" onclick="openEditModal('+idx+')">✏️ 정보 수정</button>'+
+    (e.inactive
+      ?'<button class="btn sm" style="color:#047857;border-color:#6EE7B7;background:#ECFDF5" onclick="caToggleInactive('+idx+')">▶️ 활성 복구</button>'
+      :'<button class="btn sm" style="color:#64748b" onclick="caToggleInactive('+idx+')">⏸ 비활성</button>')+
+    (e.master?'<button class="btn sm" style="color:var(--bad);border-color:#fca5a5" onclick="caDelCustomer('+idx+')">✕ 삭제</button>':'')+'<button class="btn sm" onclick="closeDrawer()">닫기</button></div></div>';
   const myKey0=entryKey(e);
   const rowBtns=(coll,id)=>{
     const dx=RAW[coll].find(d=>d.__id===id);
@@ -590,19 +609,30 @@ window.openDrawer=function(idx){
     '<div class="drow"><span class="id">'+esc(x.code||'')+'</span><span class="pill vio">'+esc(x.value||'')+'</span><span class="m">'+(x.expiry?'~'+esc(x.expiry):'')+(x.receiver?' · 받는분 '+esc(x.receiver):'')+'</span><span class="pill '+(x.status==='active'?'ok':'warn')+'">'+(x.status==='active'?'사용가능':esc(x.status||''))+'</span><a class="open-btn" target="_blank" rel="noopener" data-t="🎫 상품권 '+esc(x.code||'')+'" href="'+BASE+'/coupon.html?id='+encodeURIComponent(x.__id)+'" onclick="return caView(this.href,this.dataset.t,event)">↗ 열기</a>'+rowBtns('coupons',x.__id)+'</div>').join('')
     :'<div class="dnone">상품권 없음</div>';
   h+='</div>';
+  // 견적서
+  const _qtToday=caToday();
+  h+='<div class="dcard"><div class="dcard-h">🧾 견적서<span class="cnt">'+e.docs.quotes.length+'건 · '+fmtRM(e.docs.quotes.reduce((a,x)=>a+qtTotal(x),0))+'</span>'+hdrLink('quotes')+'</div>';
+  h+=e.docs.quotes.length?e.docs.quotes.slice().sort((a,b)=>String(b.issueDate||'').localeCompare(String(a.issueDate||''))).map(x=>{
+    const qtExp=!!(x.validUntil&&String(x.validUntil)<_qtToday);
+    return '<div class="drow"'+(qtExp?' style="opacity:.6;background:#f8fafc"':'')+'><span class="id">'+esc(x.qno||'견적')+'</span>'+
+      (qtExp?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏹ 기한 만료</span>':'<span class="pill ok">✅ 유효</span>')+
+      '<span class="pill blue">'+fmtRM(qtTotal(x))+'</span>'+
+      '<span class="m">'+esc(x.issueDate||'')+(x.subject?' · '+esc(x.subject):'')+(x.validUntil?' · 유효 ~'+esc(x.validUntil):'')+'</span>'+
+      '<a class="open-btn" target="_blank" rel="noopener" data-t="🧾 견적서 '+esc(x.qno||'')+'" href="'+BASE+'/quote.html?id='+encodeURIComponent(x.__id)+'" onclick="return caView(this.href,this.dataset.t,event)">↗ 열기</a>'+rowBtns('quotes',x.__id)+'</div>';
+  }).join(''):'<div class="dnone">견적서 없음</div>';
+  h+='</div>';
   // 요약
   h+='<div class="mini">'+
     '<div class="mc"><b>'+e.docs.requests.length+'</b>📥 의뢰</div>'+
     '<div class="mc"><b>'+e.docs.bookings.length+'</b>🗓️ 예약</div>'+
-    '<div class="mc"><b>'+e.docs.quotes.length+'</b>🧾 견적</div>'+
     '<div class="mc"><b>'+e.docs.schedules.length+'</b>📅 스케줄</div></div>';
-  // 기타 기록 — 의뢰·예약·견적·스케줄도 항목별 삭제 가능
+  // 기타 기록 — 의뢰·예약·스케줄도 항목별 삭제 가능
   const etcRows=[];
-  [['requests','📥'],['bookings','🗓️'],['quotes','🧾'],['schedules','📅']].forEach(pair=>{
+  [['requests','📥'],['bookings','🗓️'],['schedules','📅']].forEach(pair=>{
     e.docs[pair[0]].forEach(x=>etcRows.push({coll:pair[0],ic:pair[1],x}));
   });
   if(etcRows.length){
-    h+='<div class="dcard"><div class="dcard-h">📂 기타 기록 (의뢰·예약·견적·스케줄)<span class="cnt">'+etcRows.length+'건</span></div>';
+    h+='<div class="dcard"><div class="dcard-h">📂 기타 기록 (의뢰·예약·스케줄)<span class="cnt">'+etcRows.length+'건</span></div>';
     h+=etcRows.map(r=>'<div class="drow"><span class="id">'+r.ic+'</span><span class="m">'+esc(docSummary(r.coll,r.x))+'</span>'+
       '<button class="rb del" style="margin-left:auto" onclick="caDocDel(\''+r.coll+'\',\''+r.x.__id+'\')">✕ 삭제</button></div>').join('');
     h+='</div>';
@@ -855,6 +885,28 @@ window.caDelCustomer=async function(idx){
   }catch(err){toast('삭제 실패: '+err.message);}
 };
 
+// ── ⏸ 비활성 전환 / ▶️ 활성 복구 ──
+window.caToggleInactive=async function(idx){
+  const e=entries[idx];if(!e)return;
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  const on=!e.inactive;   // true → 비활성으로 전환
+  if(on&&!confirm('「'+e.name+'」 고객을 비활성으로 변경할까요?\n\n· 기본 목록·통계에서 숨겨지고 「⏸ 비활성」 목록에서만 보입니다.\n· 인보이스·계약서·점검보고서·견적서 등 문서는 그대로 보관됩니다.\n· 언제든지 「▶️ 활성 복구」로 되돌릴 수 있습니다.'))return;
+  try{
+    let mid=e.master&&e.master.__id;
+    // 문서에서 자동 집계된 고객이면 먼저 고객 마스터에 등록합니다
+    if(!mid){
+      const now=new Date().toISOString();
+      const ref=await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name:e.name,phone:e.phone||'',member:e.member||'',email:'',addr:e.addr||'',memo:'',aliases:e.aliases||[],created_at:now,updated_at:now});
+      mid=ref.id;
+      toast('👥 고객 마스터에 자동 등록되었습니다');
+    }
+    const now2=new Date().toISOString();
+    await updateDoc(doc(db,'customers',mid),{ca_inactive:on,ca_inactive_at:on?now2:'',updated_at:now2});
+    toast(on?'⏸ 비활성 고객으로 변경되었습니다':'▶️ 활성 고객으로 복구되었습니다');
+    closeDrawer();loadAll(true);
+  }catch(err){toast('변경 실패: '+err.message);}
+};
+
 // ═══ 고객 마이페이지 발송 ═══
 window.caSendModal=async function(idx){
   const e=entries[idx];if(!e)return;
@@ -884,9 +936,36 @@ window.caSendModal=async function(idx){
     if(fa!==fb)return fa-fb;
     return fa===0?da.localeCompare(db2):db2.localeCompare(da);
   });
-  const BKCU=BKC.filter(x=>String(x.booking_date||'')>=_tdy);   // 아직 방문 전인 확정 예약
+  // 「오전 9시」·「14:00」·「09:00|11:00」 등 자유형식 방문시간 → 분 단위 (시간 미정이면 그날 마지막까지 유효)
+  const _nowMin=_td.getHours()*60+_td.getMinutes();
+  const _bkMin=v=>{
+    const raw=String(v==null?'':v).trim();if(!raw)return 1439;
+    const t=raw.indexOf('|')>=0?(raw.split('|')[0]||raw):raw;
+    const pm=/오후|저녁|p\.?m\.?/i.test(t), am=/오전|아침|a\.?m\.?/i.test(t);
+    let m=t.match(/(\d{1,2})\s*[:시]\s*(\d{1,2})?/);
+    if(!m){const d=t.match(/(\d{1,2})/);if(!d)return 1439;m=[null,d[1],null];}
+    let h=parseInt(m[1],10)||0;const mi=parseInt(m[2]||'0',10)||0;
+    if(pm&&h<12)h+=12;if(am&&h===12)h=0;
+    return h*60+mi;
+  };
+  // 아직 방문 시간이 지나지 않은 확정 예약 — 방문 시간이 지나면 「예약 확정 안내」는 자동으로 사라집니다
+  const BKCU=BKC.filter(x=>{
+    const d=String(x.booking_date||'');
+    if(!d)return false;
+    if(d>_tdy)return true;
+    if(d<_tdy)return false;
+    return _bkMin(x.booking_time)>_nowMin;
+  });
   // 접수된 서비스 의뢰 (「의뢰 접수 안내」 발송용) — 최근 접수 순
-  const RQP=(D.requests||[]).slice().sort((a,b)=>String(b.submitted_at||b.created_at||'').localeCompare(String(a.submitted_at||a.created_at||'')));
+  // 접수 이후에 예약이 확정된 의뢰는 이미 처리된 건이므로 목록에서 제외합니다
+  const _rqDone=rd=>{
+    if(!BKC.length)return false;
+    if(!rd)return true;
+    return BKC.some(b=>String(b.booking_date||'')>=rd||String(b.created_at||'').slice(0,10)>=rd);
+  };
+  const RQP=(D.requests||[]).slice()
+    .filter(x=>!_rqDone(String(x.submitted_at||x.created_at||'').slice(0,10)))
+    .sort((a,b)=>String(b.submitted_at||b.created_at||'').localeCompare(String(a.submitted_at||a.created_at||'')));
   // 발송 가능한 쿠폰 — 사용/만료되지 않은 것만, 최근 발급 순
   const _cpSort=a=>a.slice().sort((x,y)=>String(y.createdAt||y.issuedAt||'').localeCompare(String(x.createdAt||x.issuedAt||'')));
   const _cpLive=(D.coupons||[]).filter(x=>String(x.status||'active')!=='used'&&!(x.expiry&&String(x.expiry)<_tdy));
@@ -895,8 +974,10 @@ window.caSendModal=async function(idx){
   // 점검보고서 · 계약서 발송용 — 최근 순
   const IPS=(D.inspections||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
   const CTS=(D.contracts||[]).slice().sort((a,b)=>String(b.contract_date||'').localeCompare(String(a.contract_date||'')));
+  // 견적서 발송용 — 최근 작성 순 (기한이 지난 견적서도 다시 보낼 수 있도록 모두 포함)
+  const QTS=(D.quotes||[]).slice().sort((a,b)=>String(b.issueDate||'').localeCompare(String(a.issueDate||'')));
   const state={iv:CNT.iv>0,ip:CNT.ip>0,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:BKP.length?'bk':(BKCU.length?'bkc':'basic'),
-    cpi:{cpg:0,cpd:0,ins:0,ct:0},
+    cpi:{cpg:0,cpd:0,ins:0,ct:0,qt:0},
     payDate:_td.getFullYear()+'-'+_p2(_td.getMonth()+1)+'-'+_p2(_td.getDate())};
   const _cpSpan=(CPG.length&&CPD.length)?'':'grid-column:1/-1;';
   const _icSpan=(IPS.length&&CTS.length)?'':'grid-column:1/-1;';
@@ -922,12 +1003,13 @@ window.caSendModal=async function(idx){
       '<div style="font-size:11px;font-weight:800;color:var(--ink3);margin-bottom:5px">발송 메시지</div>'+
       '<div id="cs-tpl" style="display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:3px;gap:3px">'+
         (BKP.length?'<span data-t="bk" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📅 예약 신청 안내</span>':'')+
-        (BKC.length?'<span data-t="bkc" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">✅ 예약 확정 안내</span>':'')+
+        (BKCU.length?'<span data-t="bkc" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">✅ 예약 확정 안내</span>':'')+
         (RQP.length?'<span data-t="rq" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📥 의뢰 접수 안내</span>':'')+
         (CPG.length?'<span data-t="cpg" style="'+_cpSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🎁 상품권 발송</span>':'')+
         (CPD.length?'<span data-t="cpd" style="'+_cpSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🏷️ 할인권 발송</span>':'')+
         (IPS.length?'<span data-t="ins" style="'+_icSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🔧 점검보고서 발송</span>':'')+
         (CTS.length?'<span data-t="ct" style="'+_icSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📑 계약서 발송</span>':'')+
+        (QTS.length?'<span data-t="qt" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🧾 견적서 발송</span>':'')+
         '<span data-t="basic" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📄 기본 안내</span>'+
         '<span data-t="revisit" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🔄 재방문 · 예약</span>'+
         '<span data-t="bill" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🧾 청구 안내</span>'+
@@ -1092,11 +1174,12 @@ window.caSendModal=async function(idx){
   // 청구금액 = 「청구중」+「연체」 인보이스의 **잔여 결제금액** 합계
   //            (기결제/일부 결제가 있으면 그만큼 차감된다 · 마이페이지와 동일 규칙)
   // ── 쿠폰(상품권 · 할인권) 발송 ──────────────────────
-  const PICK_TPLS=['cpg','cpd','ins','ct'];
+  const PICK_TPLS=['cpg','cpd','ins','ct','qt'];
   function curCPList(){
     if(state.tpl==='cpd')return CPD;
     if(state.tpl==='ins')return IPS;
     if(state.tpl==='ct')return CTS;
+    if(state.tpl==='qt')return QTS;
     return CPG;
   }
   function curCoupon(){const a=curCPList();return a[state.cpi[state.tpl]||0]||a[0]||null;}
@@ -1104,11 +1187,13 @@ window.caSendModal=async function(idx){
   function pickLb(x){
     if(state.tpl==='ins')return inspLabel(x.type)+' · '+(x.date||'')+(x.addr?' · '+x.addr:'');
     if(state.tpl==='ct')return (pkgLabel(x.package_id)||'패키지')+' · '+(x.contract_date||'')+' · 납입 '+fmtRM(x.amount_paid);
+    if(state.tpl==='qt')return (x.qno||'견적')+' · '+(x.issueDate||'')+' · '+fmtRM(qtTotal(x))+(x.subject?' · '+x.subject:'');
     return (x.code||'')+' · '+(x.value||'')+(x.expiry?' · ~'+x.expiry:'');
   }
   function pickLbTitle(){
     if(state.tpl==='ins')return '발송할 보고서';
     if(state.tpl==='ct')return '발송할 계약서';
+    if(state.tpl==='qt')return '발송할 견적서';
     return '발송할 쿠폰';
   }
   // 계약 잔액 계산 — 마이페이지(balCalc)와 같은 규칙
@@ -1182,6 +1267,70 @@ window.caSendModal=async function(idx){
     L.push('🔗 '+link());
     L.push(SEP2);
     L.push('보고서 내용에 궁금하신 점이 있으시면 언제든지 말씀해 주세요.');
+    L.push('감사합니다. 🙏');
+    L.push('Happy Home Care');
+    L.push('📞 +60 17-247 2774');
+    return L.join('\n');
+  }
+  // ── 🧾 견적서 발송 ──────────────────────
+  function qtMsg(en){
+    const x=curCoupon();
+    if(!x)return en?'No quotation available to send.':'발송 가능한 견적서가 없습니다.';
+    const nm=e.name||'';
+    const ql=BASE+'/quote.html?id='+encodeURIComponent(x.__id||'');
+    const L=[];
+    if(en){
+      L.push('Hello '+nm+' 😊');
+      L.push('This is Happy Home Care.');
+      L.push('');
+      L.push('🧾 Your quotation is ready.');
+      L.push('Please review the details below.');
+      L.push(SEP2);
+      L.push('🧾 Quotation Details');
+      if(x.qno)L.push('📄 No. : '+x.qno);
+      if(x.subject)L.push('🏠 Subject : '+x.subject);
+      if(x.issueDate)L.push('📅 Issued : '+x.issueDate);
+      if(x.validUntil)L.push('⏳ Valid until : '+x.validUntil);
+      L.push('💰 Total : '+fmtRM(qtTotal(x)));
+      L.push(SEP2);
+      L.push('🧾 Open your quotation');
+      L.push('🔗 '+ql);
+      L.push(SEP2);
+      L.push('🏠 Your Personal My Page');
+      L.push('You can check everything below anytime.');
+      L.push(msgRows(en));
+      L.push('📱 My Page');
+      L.push('🔗 '+link());
+      L.push(SEP2);
+      L.push('Just let us know once you are happy with the quotation and we will arrange your booking.');
+      L.push('Thank you. 🙏');
+      L.push('Happy Home Care');
+      L.push('📞 +60 17-247 2774');
+      return L.join('\n');
+    }
+    L.push('안녕하세요, '+nm+' 고객님 😊');
+    L.push('Happy Home Care입니다.');
+    L.push('');
+    L.push('🧾 요청하신 견적서가 준비되었습니다.');
+    L.push('아래에서 상세 내용을 확인해 주세요.');
+    L.push(SEP2);
+    L.push('🧾 견적 정보');
+    if(x.qno)L.push('📄 견적번호 : '+x.qno);
+    if(x.subject)L.push('🏠 현장/제목 : '+x.subject);
+    if(x.issueDate)L.push('📅 작성일 : '+x.issueDate);
+    if(x.validUntil)L.push('⏳ 유효기한 : '+x.validUntil);
+    L.push('💰 견적 금액 : '+fmtRM(qtTotal(x)));
+    L.push(SEP2);
+    L.push('🧾 견적서 바로 열기');
+    L.push('🔗 '+ql);
+    L.push(SEP2);
+    L.push('🏠 고객 전용 마이페이지');
+    L.push('다음 정보를 언제든지 편리하게 확인하실 수 있습니다.');
+    L.push(msgRows(en));
+    L.push('📱 My Page');
+    L.push('🔗 '+link());
+    L.push(SEP2);
+    L.push('견적 내용을 확인하신 후 말씀해 주시면 바로 예약을 도와드리겠습니다.');
     L.push('감사합니다. 🙏');
     L.push('Happy Home Care');
     L.push('📞 +60 17-247 2774');
@@ -1343,6 +1492,7 @@ window.caSendModal=async function(idx){
     if(state.tpl==='cpg'||state.tpl==='cpd')return cpMsg(en);
     if(state.tpl==='ins')return insMsg(en);
     if(state.tpl==='ct')return ctMsg(en);
+    if(state.tpl==='qt')return qtMsg(en);
     if(state.tpl==='bill'){
       const amt=billAmt();
       const amtKo=amt.toLocaleString('en-MY',{maximumFractionDigits:2});
@@ -1862,6 +2012,9 @@ window.caDocEdit=function(coll,id){
   }else if(coll==='contracts'){
     body=fi('name','계약자명',x.name||'')+fi('phone','연락처',x.phone||'')+fi('contract_date','계약일',x.contract_date||'','YYYY-MM-DD')+
       sel('status','계약 상태',(x.status==='ended')?'ended':'active',[['active','✅ 유효'],['ended','⏹ 종료']]);
+  }else if(coll==='quotes'){
+    body=fi('client','고객명',x.client||'')+fi('phone','연락처',x.phone||'')+fi('subject','제목/현장',x.subject||'')+
+      fi('issueDate','작성일',x.issueDate||'','YYYY-MM-DD')+fi('validUntil','유효기한',x.validUntil||'','YYYY-MM-DD');
   }else{
     body=fi('name','구매고객명',x.name||'')+fi('receiver','받는분 (선택)',x.receiver||'')+fi('value','금액/할인',x.value||'')+
       fi('expiry','유효기간',x.expiry||'','YYYY-MM-DD')+sel('status','상태',x.status||'active',[['active','사용가능'],['used','사용완료'],['void','취소']]);
@@ -1874,6 +2027,7 @@ window.caDocEdit=function(coll,id){
     if(coll==='invoices')upd={'customer.name':v.cname,'customer.phone':v.cphone,date:v.date,status:v.status};
     else if(coll==='inspections')upd={client:v.client,phone:v.phone,date:v.date,type:v.type,addr:v.addr};
     else if(coll==='contracts')upd={name:v.name,phone:v.phone,contract_date:v.contract_date,status:v.status};
+    else if(coll==='quotes')upd={client:v.client,phone:v.phone,subject:v.subject,issueDate:v.issueDate,validUntil:v.validUntil};
     else upd={name:v.name,receiver:v.receiver,value:v.value,expiry:v.expiry,status:v.status};
     try{
       await updateDoc(doc(db,coll,id),upd);
