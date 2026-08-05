@@ -510,6 +510,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   <div id="tab-items" style="display:none">
     <button class="big-add" onclick="openSvcPicker()">🛒 품목 빠른 선택</button>
     <button class="manual-add" onclick="addLI()">✏️ 직접 입력으로 추가</button>
+    <button class="manual-add" onclick="openQuotePick()">📋 견적서 불러오기 — 견적 내용으로 인보이스 작성</button>
     <div id="li-wrap"></div>
   </div>
 
@@ -1278,6 +1279,109 @@ function loadInvToForm(inv){
   if(window.loadCtLinkFromInv)loadCtLinkFromInv(inv);
 }
 window.loadInvToForm=loadInvToForm;
+
+// ═══════════════════════════════════════════════════════════
+// 📋 견적서 → 인보이스 변환 (quotes 컬렉션 연동)
+//  · 견적서 품목이 인보이스 품목선택과 연동(svcId)되어 있으면 그대로 매칭
+//  · 아니면 이름 일치 → 그래도 없으면 견적 그룹으로 알맞은 분류에 직접입력
+//  · 에어컨 선택형 견적: 고객 확정 모델 > 추천 모델 순으로 품목 반영
+// ═══════════════════════════════════════════════════════════
+var _qpList=[];
+function qpFmtRM(n){return 'RM '+(parseFloat(n)||0).toLocaleString('en-US');}
+// 견적 그룹(install/repair/…)을 현재 인보이스 분류에서 가장 알맞은 대/중분류로
+function qpCatSub(group){
+  function bySub(re){for(var i=0;i<TOP_CATS.length;i++){var c=TOP_CATS[i],subs=CAT_STRUCT[c]||[];for(var j=0;j<subs.length;j++)if(re.test(subs[j]))return{cat:c,subcat:subs[j]};}return null;}
+  function byCat(re,subRe){for(var i=0;i<TOP_CATS.length;i++){var c=TOP_CATS[i];if(!re.test(c))continue;var subs=CAT_STRUCT[c]||[];if(subRe){for(var j=0;j<subs.length;j++)if(subRe.test(subs[j]))return{cat:c,subcat:subs[j]};}return{cat:c,subcat:subs[0]||'기타'};}return null;}
+  var r=null;
+  if(group==='install')r=byCat(/설치/,/본설치/)||byCat(/설치/,/인건/);
+  else if(group==='repair')r=byCat(/수리/,/현장/);
+  else if(group==='material')r=bySub(/자재/);
+  else if(group==='product')r=bySub(/(구매|구입)\s*비용/)||byCat(/(구매|구입)/);
+  else if(group==='callout')r=bySub(/출장/)||byCat(/출장/);
+  else if(group==='clean')r=byCat(/청소/);
+  return r||byCat(/^기타/)||{cat:'기타',subcat:'기타'};
+}
+function openQuotePick(){
+  if(!DB){showToast('Firebase 연결 후 이용할 수 있습니다');return;}
+  showToast('견적서 목록 불러오는 중...');
+  DB.collection('quotes').orderBy('createdAt','desc').limit(50).get().then(function(snap){
+    var list=[];
+    snap.docs.forEach(function(d){var q=d.data()||{};q.__id=d.id;list.push(q);});
+    renderQuotePick(list);
+  }).catch(function(e){showToast('견적서 로드 실패: '+e.message);});
+}
+function renderQuotePick(list){
+  _qpList=list||[];
+  var old=document.getElementById('qp-mask');if(old)old.remove();
+  var mk=document.createElement('div');mk.id='qp-mask';
+  mk.style.cssText='position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9000;display:flex;align-items:flex-end;justify-content:center;';
+  var rows=_qpList.length?_qpList.map(function(q,i){
+    var ac='';
+    if(q.acSelect){
+      ac=(q.customerChoice&&q.customerChoice.selections)
+        ?'<span style="font-size:9.5px;font-weight:800;color:#16A34A;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:20px;padding:2px 7px">✅ 고객 모델선택 완료</span>'
+        :'<span style="font-size:9.5px;font-weight:800;color:#B45309;background:#FFFBEB;border:1px solid #FDE68A;border-radius:20px;padding:2px 7px">⭐ 추천모델 기준 반영</span>';
+    }
+    return '<button type="button" onclick="applyQuoteToInv('+i+')" style="display:block;width:100%;text-align:left;background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:11px 13px;margin-bottom:8px;cursor:pointer">'+
+      '<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">'+
+      '<b style="font-size:13px;color:#111827">'+svcEsc(q.client||'-')+'</b>'+
+      '<span style="font-size:10.5px;color:#6B7280;font-family:monospace">'+svcEsc(q.qno||q.__id)+'</span>'+ac+'</div>'+
+      '<div style="display:flex;justify-content:space-between;margin-top:4px;font-size:11px;color:#6B7280">'+
+      '<span>'+svcEsc(q.issueDate||'')+' · 품목 '+((q.items||[]).length)+'개'+(q.subject?' · '+svcEsc(q.subject):'')+'</span>'+
+      '<b style="color:#0F172A">'+qpFmtRM(q.baseTotal)+(q.acSelect?' +에어컨':'')+'</b></div></button>';
+  }).join(''):'<div style="text-align:center;color:#6B7280;font-size:12.5px;padding:30px 0">저장된 견적서가 없습니다</div>';
+  mk.innerHTML='<div style="background:#F8FAFC;border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:78vh;display:flex;flex-direction:column">'+
+    '<div style="padding:14px 16px 10px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #E5E7EB">'+
+    '<b style="font-size:14.5px;color:#0F172A">📋 견적서 불러오기</b>'+
+    '<button type="button" onclick="document.getElementById(\'qp-mask\').remove()" style="border:none;background:none;font-size:16px;color:#6B7280;cursor:pointer">✕</button></div>'+
+    '<div style="padding:8px 16px 4px;font-size:10.5px;color:#6B7280;line-height:1.6">선택한 견적서의 고객정보·품목·할인이 새 인보이스에 채워집니다. 에어컨 선택형 견적은 고객이 확정한 모델(없으면 추천 모델)로 반영됩니다.</div>'+
+    '<div style="overflow-y:auto;padding:10px 16px 20px">'+rows+'</div></div>';
+  mk.addEventListener('click',function(e){if(e.target===mk)mk.remove();});
+  document.body.appendChild(mk);
+}
+window.applyQuoteToInv=function(i){
+  var q=_qpList[i];if(!q)return;
+  var mk=document.getElementById('qp-mask');if(mk)mk.remove();
+  App.resetForm();
+  setVal('c-name',q.client||'');setVal('c-phone',q.phone||'+60');
+  if(q.subject)setVal('inv-notes',q.subject);
+  lineItems=[];expandedLI={};
+  var skipped=[];
+  (q.items||[]).forEach(function(it,idx){
+    var sv=null;
+    if(it.svcId)sv=services.find(function(x){return x.id===it.svcId;});
+    if(!sv)sv=services.find(function(x){return x.name===it.name;});
+    var id='liq'+idx+'_'+Date.now();
+    if(sv){
+      lineItems.push({id:id,cat:sv.cat||'기타',subcat:sv.subcat||'기타',svcId:sv.id,name:it.name||sv.name,price:parseFloat(it.price)||0,qty:parseFloat(it.qty)||1,discVal:0,discType:'pct'});
+    }else{
+      var cs=qpCatSub(it.group||'custom');
+      var nm=(it.name||'')+((it.unit&&it.unit!=='대'&&it.unit!=='개')?' ('+it.unit+')':'');
+      lineItems.push({id:id,cat:cs.cat,subcat:cs.subcat,svcId:'',name:nm,price:parseFloat(it.price)||0,qty:parseFloat(it.qty)||1,discVal:0,discType:'pct',direct:true});
+    }
+  });
+  // ❄️ 에어컨 선택형: 고객 확정 모델 > 추천 모델
+  var acNote='';
+  if(q.acSelect&&q.acSelect.groups){
+    var sels=(q.customerChoice&&q.customerChoice.selections)||null;
+    q.acSelect.groups.forEach(function(g,gi){
+      var key=(sels&&sels[gi]&&sels[gi].key)||g.recommended||'';
+      if(!key){skipped.push('에어컨 유닛그룹 '+(gi+1)+' — 모델 미선택 (직접 추가해 주세요)');return;}
+      if(key==='__none__')return;   // 고객이 「구입 안 함」 선택
+      var opt=(g.options||[]).find(function(o){return o.key===key;});
+      if(!opt){skipped.push('에어컨 유닛그룹 '+(gi+1)+' — 선택 모델 정보를 찾을 수 없음');return;}
+      var tp=(opt.type==='inv'||/\|inv$/.test(String(opt.key||'')))?'인버터':'일반형';
+      var cs=qpCatSub('product');
+      lineItems.push({id:'liqac'+gi+'_'+Date.now(),cat:cs.cat,subcat:cs.subcat,svcId:'',name:String(opt.brand||'')+' '+String(g.hp||'')+'HP '+tp+' 에어컨',price:parseFloat(opt.price)||0,qty:parseInt(g.qty,10)||1,discVal:0,discType:'pct',direct:true});
+    });
+    acNote=sels?' · 에어컨: 고객 선택 모델':' · 에어컨: 추천 모델 기준';
+  }
+  if((parseFloat(q.discount)||0)>0){setVal('disc-val',q.discount);setVal('disc-type','amt');}
+  renderLI();App.upPrev();Nav('new');Tab('items');
+  showToast('📋 '+(q.qno||'견적서')+' 반영 — 품목 '+lineItems.length+'개'+acNote);
+  if(skipped.length)alert('다음 항목은 자동 반영하지 못했습니다:\n· '+skipped.join('\n· '));
+};
+window.openQuotePick=openQuotePick;
 
 // ═══════════════════════════════════════════════════════════
 // BANK SELECT

@@ -183,10 +183,12 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
       <button class="ct on" data-c="install">설치</button>
       <button class="ct" data-c="repair">수리</button>
       <button class="ct" data-c="material">자재</button>
+      <button class="ct" data-c="product">제품(에어컨)</button>
       <button class="ct" data-c="callout">출장</button>
       <button class="ct" data-c="clean">청소</button>
-      <button class="ct" data-c="product">제품</button>
+      <button class="ct" data-c="other">기타</button>
     </div>
+    <div style="font-size:10px;color:var(--gray);margin:2px 0 6px;line-height:1.6">🔗 표시 품목은 인보이스 「항목설정」과 실시간 연동 — 품목·단가 수정은 인보이스 프로그램에서 하면 자동 반영됩니다.</div>
     <input class="search" id="p-search" placeholder="🔍 항목 검색" oninput="renderPriceList()">
     <div class="plist" id="p-list"></div>
     <div class="custrow">
@@ -334,12 +336,12 @@ var AC_PRICES=[
   {hp:'2.5',brand:'MIDEA',non:2350,inv:2480}
 ];
 var GROUP_META={
-  product:{ko:'에어컨 구입비용',en:'AC Unit Purchase',icon:'❄️',order:0},
-  install:{ko:'설치 작업 · 인건비',en:'Installation Labor',icon:'🔩',order:1},
-  repair:{ko:'수리 작업 · 인건비',en:'Repair Labor',icon:'🔧',order:2},
-  clean:{ko:'청소 서비스',en:'Cleaning Service',icon:'🧽',order:3},
+  install:{ko:'설치 작업 · 인건비',en:'Installation Labor',icon:'🔩',order:0},
+  repair:{ko:'수리 작업 · 인건비',en:'Repair Labor',icon:'🔧',order:1},
+  material:{ko:'자재 비용',en:'Materials',icon:'📦',order:2},
+  product:{ko:'에어컨 구입비용',en:'AC Unit Purchase',icon:'❄️',order:3},
   callout:{ko:'출장점검 비용',en:'Call-out Inspection',icon:'🚗',order:4},
-  material:{ko:'자재 비용',en:'Materials',icon:'📦',order:5},
+  clean:{ko:'청소 서비스',en:'Cleaning Service',icon:'🧽',order:5},
   custom:{ko:'기타 항목',en:'Other Items',icon:'📝',order:6}
 };
 // 제품(에어컨 본체) 가격표 — AC_PRICES에서 자동 생성 (제품 탭에서 고정 금액으로 추가)
@@ -393,6 +395,7 @@ function captureGroupState(box){
   return {options:options,recommended:rec?rec.value:''};
 }
 function editPriceItem(it,cat){
+  if(it._svc){toast('🔗 연동 품목 — 인보이스 프로그램의 「항목설정」에서 수정하세요 (자동 반영됨)');return;}
   if(cat==='clean'){toast('청소 단가는 인보이스의 서비스 항목에서 수정하세요 (자동 연동됨)');return;}
   var cur=it.p;
   var v=prompt('"'+it.n+'" 새 단가 (RM)',cur);
@@ -546,6 +549,52 @@ function collectAcSelect(){
   return {groups:groups};
 }
 
+// ═══ 🔗 인보이스 품목선택 연동 (services 컬렉션) ═══
+// 인보이스 「항목설정」의 품목 전체를 견적서 가격표 탭에 나눠 보여준다.
+// 대분류·중분류·이름의 키워드로 탭(설치·수리·자재·제품·출장·청소·기타)을 정한다.
+var LINKED=null;
+var ITEM_EN={
+  '기본청소':'Basic Cleaning','화학청소':'Chemical Cleaning','스팀청소':'Steam Cleaning',
+  '카세트형 기본청소':'Cassette Type Basic Cleaning','카세트형 화학청소':'Cassette Type Chemical Cleaning','FCU 청소':'FCU Cleaning',
+  '통돌이 세탁기 청소':'Top-load Washing Machine Cleaning','드럼 세탁기 청소':'Drum Washing Machine Cleaning',
+  '싱글 매트리스 청소':'Single Mattress Cleaning','퀸/킹 매트리스 청소':'Queen/King Mattress Cleaning',
+  '쇼파 I타입 청소':'Sofa I-Type Cleaning','쇼파 L타입 청소':'Sofa L-Type Cleaning',
+  '커튼 청소 (수거포함)':'Curtain Cleaning (Pickup Included)','냉장고 청소':'Refrigerator Cleaning','오븐 청소':'Oven Cleaning'
+};
+function invGroupOf(cat,sub,name){
+  var c=String(cat||''),s2=String(sub||''),n=String(name||'');
+  if(/(구매|구입)\s*비용/.test(c)||/(구매|구입)\s*비용/.test(s2)||/에어컨\s*(구매|구입)/.test(n))return 'product';
+  if(/자재/.test(c)||/자재/.test(s2))return 'material';
+  if(/출장/.test(c)||/출장/.test(s2))return 'callout';
+  if(/설치/.test(c))return 'install';
+  if(/수리/.test(c))return 'repair';
+  if(/청소/.test(c))return 'clean';
+  return 'other';
+}
+window.applyInvCatalog=function(svcs){
+  var byG={install:[],repair:[],material:[],product:[],callout:[],clean:[],other:[]};
+  (svcs||[]).slice().sort(function(a,b){return (a.order||0)-(b.order||0);}).forEach(function(x){
+    if(!x||!x.name)return;
+    var g=invGroupOf(x.cat,x.subcat,x.name);
+    byG[g].push({n:x.name,en:ITEM_EN[x.name]||x.name,p:parseFloat(x.price)||0,unit:'',
+      note:((x.subcat&&x.subcat!==x.cat)?x.subcat:(x.cat||''))+(x.unit?' · '+x.unit+'당':''),
+      noteEn:'Per '+(x.unit||'unit'),
+      _svc:{id:x.id||'',cat:x.cat||'',subcat:x.subcat||''}});
+  });
+  LINKED=byG;
+  renderPriceList();
+};
+// 탭별 표시 목록 = 연동 품목(앞) + 내장 가격표(이름이 겹치지 않는 것만)
+function listForCat(cat){
+  var linked=(LINKED&&LINKED[cat])||[];
+  var local;
+  if(cat==='other')local=[];
+  else if(cat==='clean')local=linked.length?[]:CLEAN_FALLBACK;
+  else local=PRICE_DB[cat]||[];
+  var seen={};linked.forEach(function(it){seen[it.n]=1;});
+  return linked.concat(local.filter(function(it){return !seen[it.n];}));
+}
+
 // ── 가격표
 document.getElementById('cat-tabs').addEventListener('click',function(e){
   var b=e.target.closest('.ct');if(!b)return;
@@ -556,14 +605,14 @@ document.getElementById('cat-tabs').addEventListener('click',function(e){
 function renderPriceList(){
   var host=gid('p-list');host.innerHTML='';
   var kw=(gid('p-search').value||'').trim().toLowerCase();
-  var list=(curCat==='clean'&&PRICE_DB.clean.length===0)?CLEAN_FALLBACK:(PRICE_DB[curCat]||[]);
+  var list=listForCat(curCat);
   var shown=0;
   list.forEach(function(it,idx){
     if(kw&&(it.n+' '+(it.note||'')).toLowerCase().indexOf(kw)<0)return;
     shown++;
     var row=document.createElement('div');row.className='pitem';
     var nm=document.createElement('div');nm.className='nm';
-    nm.innerHTML=escapeHtml(it.n)+(it.note?'<span>'+escapeHtml(it.note)+'</span>':'');
+    nm.innerHTML=(it._svc?'🔗 ':'')+escapeHtml(it.n)+(it.note?'<span>'+escapeHtml(it.note)+'</span>':'');
     var pr=document.createElement('div');pr.className='pr';pr.textContent=it.p.toLocaleString('en-US')+(it.unit?'/'+it.unit:'');
     var eb=document.createElement('button');eb.className='editb';eb.textContent='✏️';eb.title='단가 수정';
     eb.onclick=function(){editPriceItem(it,curCat);};
@@ -576,9 +625,11 @@ function renderPriceList(){
 }
 function escapeHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function addPriceItem(it,group){
+  if(group==='other')group='custom';
   var ex=selItems.find(function(s){return s.name===it.n&&s.group===group;});
   if(ex){ex.qty+=1;}
-  else selItems.push({name:it.n,nameEn:it.en||it.n,qty:it.unit==='ft'?10:1,unit:it.unit||'',price:it.p,group:group,note:it.note||'',noteEn:it.noteEn||''});
+  else selItems.push({name:it.n,nameEn:it.en||it.n,qty:it.unit==='ft'?10:1,unit:it.unit||'',price:it.p,group:group,note:it.note||'',noteEn:it.noteEn||'',
+    svcId:it._svc?it._svc.id:'',cat:it._svc?it._svc.cat:'',subcat:it._svc?it._svc.subcat:''});
   renderSelList();
   toast('✓ '+it.n+' 추가됨'+(it.unit==='ft'?' (수량 ft 를 조정하세요)':''));
 }
@@ -659,7 +710,7 @@ function collectQuote(){
     issueDate:issue,
     validDays:vd,
     validUntil:addDays(issue,vd),
-    items:selItems.map(function(s){return {name:s.name,nameEn:s.nameEn,qty:s.qty,unit:s.unit,price:s.price,amount:s.qty*s.price,group:s.group,note:s.note,noteEn:s.noteEn};}),
+    items:selItems.map(function(s){return {name:s.name,nameEn:s.nameEn,qty:s.qty,unit:s.unit,price:s.price,amount:s.qty*s.price,group:s.group,note:s.note,noteEn:s.noteEn,svcId:s.svcId||'',cat:s.cat||'',subcat:s.subcat||''};}),
     discount:parseFloat(gid('f-discount').value)||0,
     baseTotal:baseTotal(),
     acSelect:collectAcSelect(),
@@ -685,7 +736,7 @@ window.loadQuoteToForm=function(q,id){
   gid('f-date').value=q.issueDate||todayStr();
   gid('f-valid').value=q.validDays||7;
   gid('f-discount').value=q.discount||0;
-  selItems=(q.items||[]).map(function(it){return {name:it.name,nameEn:it.nameEn||it.name,qty:it.qty,unit:it.unit||'',price:it.price,group:it.group||'custom',note:it.note||'',noteEn:it.noteEn||''};});
+  selItems=(q.items||[]).map(function(it){return {name:it.name,nameEn:it.nameEn||it.name,qty:it.qty,unit:it.unit||'',price:it.price,group:it.group||'custom',note:it.note||'',noteEn:it.noteEn||'',svcId:it.svcId||'',cat:it.cat||'',subcat:it.subcat||''};});
   gid('f-notices').value=(q.notices||[]).join('\n');
   if(q.acSelect){
     // 구 스키마(단일 그룹) → 신 스키마(groups) 호환
@@ -921,33 +972,21 @@ window.__savePriceOverride=async function(key,price){
 // 인보이스 서비스 카탈로그(청소) 실시간 연동:
 // hhcinvoice.html이 관리하는 'services' 컬렉션에서 청소 항목을 불러온다.
 // 인보이스에서 가격을 바꾸면 견적서 가격표에도 자동 반영된다.
-(async function loadCleanServices(){
+(async function loadInvServices(){
+  // 인보이스 「항목설정」(services 컬렉션) 전체를 불러와 견적서 가격표와 연동한다.
+  // 인보이스에서 품목·단가를 바꾸면 견적서 가격표에도 자동 반영된다. (휴지통 _del 제외)
   if(!DB)return;
   try{
     const snap=await getDocs(collection(DB,'services'));
     if(snap.empty)return;
-    const ITEM_EN={
-      '기본청소':'Basic Cleaning','화학청소':'Chemical Cleaning','스팀청소':'Steam Cleaning',
-      '카세트형 기본청소':'Cassette Type Basic Cleaning','카세트형 화학청소':'Cassette Type Chemical Cleaning','FCU 청소':'FCU Cleaning',
-      '통돌이 세탁기 청소':'Top-load Washing Machine Cleaning','드럼 세탁기 청소':'Drum Washing Machine Cleaning',
-      '싱글 매트리스 청소':'Single Mattress Cleaning','퀸/킹 매트리스 청소':'Queen/King Mattress Cleaning',
-      '쇼파 I타입 청소':'Sofa I-Type Cleaning','쇼파 L타입 청소':'Sofa L-Type Cleaning',
-      '커튼 청소 (수거포함)':'Curtain Cleaning (Pickup Included)','냉장고 청소':'Refrigerator Cleaning','오븐 청소':'Oven Cleaning'
-    };
     const items=[];
     snap.docs.forEach(d=>{
-      const s=d.data();
-      if(s.cat!=='청소'||!s.name)return;
-      items.push({n:s.name,en:ITEM_EN[s.name]||s.name,p:parseFloat(s.price)||0,
-        note:(s.subcat?s.subcat+' · ':'')+(s.unit?s.unit+'당':''),
-        noteEn:'Per '+(s.unit||'unit'),order:s.order||0});
+      const s=d.data()||{};
+      if(s._del||!s.name)return;
+      items.push({id:s.id||d.id,cat:s.cat||'',subcat:s.subcat||'',name:s.name,price:s.price,unit:s.unit||'',order:s.order||0});
     });
-    if(items.length){
-      items.sort((a,b)=>a.order-b.order);
-      PRICE_DB.clean=items;
-      if(curCat==='clean')renderPriceList();
-    }
-  }catch(e){console.warn('청소 서비스 로드 실패(폴백 사용):',e);}
+    if(items.length&&window.applyInvCatalog)applyInvCatalog(items);
+  }catch(e){console.warn('인보이스 품목 연동 실패(내장 가격표 사용):',e);}
 })();
 
 // ── 견적번호 생성: HHQ + YYYYMMDD + 2자리 순번
