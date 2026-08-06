@@ -2141,6 +2141,13 @@ function showInspLinkModal(idx){
 
 let db=null, unsub=null;
 let allContracts=[];
+// 📎 외부 프로그램(인보이스·총괄고객관리) → 계약서 이용내역 열기
+// tryHhcGoto 는 DOMContentLoaded 블록 안에 있어 여기서 직접 부를 수 없다 → window.__hhcGoto 훅으로 호출한다.
+// 또한 initApp() 이 폼을 초기화하므로(혜택 재생성·날짜 today) 반드시 초기화가 끝난 뒤에 계약을 불러와야 한다.
+let _hhcInitDone=false;
+function _hhcRunGoto(){if(window.__hhcGoto)try{window.__hhcGoto();}catch(e){console.warn('goto 실패:',e);}}
+function _hhcAfterInit(){_hhcInitDone=true;_hhcRunGoto();}
+window.__hhcInitDone=function(){return _hhcInitDone;};
 let currentEditId=null;
 let _isSaving=false; // 저장 진행 중 중복 실행 방지 (double-submit guard)
 let currentUsageHistory=[];
@@ -2188,7 +2195,7 @@ async function connectFirebase(cfg){
       allContracts=snap.docs.map(d=>({...d.data(),__id:d.id}));
       allContracts.sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
       updateSelectLists();
-      if(typeof tryHhcGoto==='function')try{tryHhcGoto();}catch(e){}
+      _hhcRunGoto();
       if(document.getElementById('tab-list').classList.contains('active'))renderList();
       const _ts=document.getElementById('tab-send'); // 「발송」 탭은 「계약서·발송」으로 통합되어 없을 수 있음
       if(_ts&&_ts.classList.contains('active'))renderSendTab();
@@ -2249,7 +2256,7 @@ document.getElementById('btn-connect').addEventListener('click',async()=>{
     saveCfg(cfg);
     localStorage.setItem(LS_PW,pw);
     setAuth(true);
-    initApp();
+    initApp().then(_hhcAfterInit);
     showScreen('app');
   }else{
     err.textContent='연결 실패. Firebase 설정값을 확인해주세요.';
@@ -2277,7 +2284,7 @@ document.getElementById('btn-login').addEventListener('click',async()=>{
   showLoading(true);
   const ok=await connectFirebase(FIREBASE_CFG);
   showLoading(false);
-  if(ok){setAuth(true);initApp();showScreen('app');}
+  if(ok){setAuth(true);initApp().then(_hhcAfterInit);showScreen('app');}
   else{err.textContent='Firebase 연결 실패. 인터넷 연결을 확인해주세요.';err.style.display='block';}
 });
 
@@ -2430,7 +2437,7 @@ async function runCustomerView(id,mode,lang){
   showLoading(true);
   const ok=await connectFirebase(FIREBASE_CFG);
   showLoading(false);
-  if(ok){setAuth(true);initApp();showScreen('app');}
+  if(ok){setAuth(true);initApp().then(_hhcAfterInit);showScreen('app');}
   else{showScreen('login');}
 })();
 
@@ -4008,7 +4015,7 @@ window.setAdminView=setAdminView;
 window._hhcGoto=(function(){
   try{
     const p=new URLSearchParams(location.search);
-    if(p.get('goto')==='usage')return {cust:p.get('cust')||''};
+    if(p.get('goto')==='usage')return {cust:p.get('cust')||'',cname:p.get('cname')||''};
   }catch(e){}
   return null;
 })();
@@ -4327,19 +4334,31 @@ function uaReadTransfer(){
 }
 function tryHhcGoto(){
   const g=window._hhcGoto;
-  if(!g||!allContracts.length)return;
+  // 계약 목록이 도착하고 초기화(initApp)가 끝난 뒤에만 실행한다.
+  // 초기화가 폼을 today/기본혜택으로 되돌리므로 먼저 불러오면 계약 내용이 지워진다.
+  if(!g||!allContracts.length||!_hhcInitDone)return;
   window._hhcGoto=null;
   const xfer=uaReadTransfer();
-  const norm=v=>{let n=String(v||'').replace(/[^0-9]/g,'');if(n.indexOf('60')===0)n=n.slice(2);if(n.indexOf('0')===0)n=n.slice(1);return n;};
+  const norm=v=>{let n=String(v||'').replace(/[^0-9]/g,'');if(n.indexOf('60')===0)n=n.slice(2);return n.replace(/^0+/,'');};
+  const nmz=v=>String(v||'').trim().toLowerCase().replace(/\s+/g,'');
   const kp=norm(g.cust);
-  const kn=String(g.cust||'').trim().toLowerCase().replace(/\s+/g,'');
-  const cand=allContracts.filter(c=>
+  const kn=nmz(g.cname||(/[0-9]/.test(String(g.cust||''))?'':g.cust));
+  let cand=allContracts.filter(c=>
     (kp&&kp.length>=5&&norm(c.phone)===kp)||
-    (kn&&String(c.name||'').trim().toLowerCase().replace(/\s+/g,'')===kn));
+    (kn&&nmz(c.name)===kn));
+  // ① 완전 일치가 없으면 연락처 뒤 8자리로 다시 찾는다 (국가번호·0 표기 차이 흡수)
+  if(!cand.length&&kp&&kp.length>=8){
+    const tail=kp.slice(-8);
+    cand=allContracts.filter(c=>{const q=norm(c.phone);return q.length>=8&&q.slice(-8)===tail;});
+  }
+  // ② 그래도 없으면 계약자명 부분일치로 찾는다
+  if(!cand.length&&kn&&kn.length>=2){
+    cand=allContracts.filter(c=>{const q=nmz(c.name);return q&&(q.indexOf(kn)>=0||kn.indexOf(q)>=0);});
+  }
   if(!cand.length){
     switchTab('admin');
-    uaPrefillContract(xfer);
-    showModal('계약서 없음','해당 고객('+(g.cust||'')+')의 계약서를 찾을 수 없습니다.\n계약자명·연락처를 채워 두었으니 계약서를 새로 작성해 주세요.');
+    uaPrefillContract(xfer||{name:g.cname||'',phone:g.cust||''});
+    showModal('계약서 없음','해당 고객('+(g.cname||g.cust||'')+')의 계약서를 찾을 수 없습니다.\n계약자명·연락처를 채워 두었으니 계약서를 새로 작성해 주세요.');
     return;
   }
   // 유효(미종료) 계약 우선 · 최신 계약일 우선
@@ -4354,6 +4373,17 @@ function tryHhcGoto(){
   switchTab('admin');
   setAdminView('usage');
   if(xfer)setTimeout(function(){try{uaApplyTransfer(xfer,0);}catch(e){}},350);
+  showToastLike('📑 '+(c.name||'계약')+' 계약서를 불러왔습니다 — 서비스 이용내역');
+}
+// 모듈 최상단(Firebase 스냅샷)에서 호출할 수 있도록 노출
+window.__hhcGoto=tryHhcGoto;
+function showToastLike(msg){
+  var el=document.getElementById('hhc-goto-toast');
+  if(!el){el=document.createElement('div');el.id='hhc-goto-toast';
+    el.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:2000;background:#0F1C3F;color:#fff;padding:10px 16px;border-radius:10px;font-size:12.5px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.25);max-width:90vw;text-align:center';
+    document.body.appendChild(el);}
+  el.textContent=msg;el.style.display='block';
+  clearTimeout(el._t);el._t=setTimeout(function(){el.style.display='none';},3200);
 }
 document.querySelectorAll('#aview-switch .avs-btn').forEach(b=>b.addEventListener('click',()=>setAdminView(b.dataset.aview)));
 
