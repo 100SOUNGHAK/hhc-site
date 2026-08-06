@@ -364,6 +364,8 @@ function rebuildAndPaint(){
   if(drawerKey!=null&&entries[drawerKey]){const e=entries[drawerKey];sig=pn(e.phone)||nn(e.name);}
   buildEntries();
   renderAll();
+  if(typeof tryAutoOpen==='function')tryAutoOpen();
+  if(typeof tryAutoOpen==='function')tryAutoOpen();
   if(sig!=null){
     const ni=entries.findIndex(e=>(pn(e.phone)||nn(e.name))===sig);
     if(ni>=0)openDrawer(ni);else closeDrawer();
@@ -665,7 +667,7 @@ window.openDrawer=function(idx){
   let h='<div class="dhead"><div class="avatar">'+esc(init)+'</div><div class="dinfo"><b>'+esc(e.name)+'</b>'+
     '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음')+(e.addr?' · '+esc(e.addr):'')+'</div>'+
     '<div class="tagrow">'+memberBadge(e)+(e.inactive?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏸ 비활성 고객</span>':'')+(e.aliases.length?'<span class="pill vio">별칭 '+esc(e.aliases.join(', '))+'</span>':'')+((e.linkNames||[]).length?'<span class="pill vio" title="수동 연결된 문서에 적힌 이름입니다. 원본 그대로 유지됩니다.">🔗 연결문서 '+esc(e.linkNames.join(', '))+'</span>':'')+'</div></div>'+
-    '<div class="dbtns"><button class="btn sm" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="caSendModal('+idx+')">📤 고객 발송</button><button class="btn sm" style="color:#92400E;border-color:#FCD34D;background:#FFFBEB" onclick="caLinkManage('+idx+')">🔗 연결 관리</button><button class="btn sm" style="background:#0B1833;border-color:#0B1833;color:#fff" onclick="caHomeModal('+idx+')">🏠 홈페이지 안내</button><button class="btn sm p" onclick="openEditModal('+idx+')">✏️ 정보 수정</button>'+
+    '<div class="dbtns"><button class="btn sm" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="caSendModal('+idx+')">📤 고객 발송</button><button class="btn sm" style="color:#92400E;border-color:#FCD34D;background:#FFFBEB" onclick="caLinkManage('+idx+')">🔗 연결 관리</button><button class="btn sm" style="background:#0B1833;border-color:#0B1833;color:#fff" onclick="caHomeModal('+idx+')">🏠 홈페이지 안내</button><button class="btn sm p" onclick="openEditModal('+idx+')">✏️ 정보 수정</button><button class="btn sm" style="color:#1d4ed8;border-color:#93c5fd;background:#eff6ff" onclick="caMakeInvoice('+idx+')">🧾 인보이스 생성</button><button class="btn sm" style="color:#0f766e;border-color:#5eead4;background:#f0fdfa" onclick="caMakeInspect('+idx+')">📄 점검보고서 생성</button><button class="btn sm" style="color:#7c3aed;border-color:#c4b5fd;background:#f5f3ff" onclick="caOpenContractUsage('+idx+')">📑 계약서 이용내역</button>'+
     (e.inactive
       ?'<button class="btn sm" style="color:#047857;border-color:#6EE7B7;background:#ECFDF5" onclick="caToggleInactive('+idx+')">▶️ 활성 복구</button>'
       :'<button class="btn sm" style="color:#64748b" onclick="caToggleInactive('+idx+')">⏸ 비활성</button>')+
@@ -2445,7 +2447,72 @@ window.doMerge=async function(i){
 };
 
 window.renderList=renderList;
+// ═══ 📎 연계 문서 생성 (인보이스 · 점검보고서 · 계약서 이용내역) ═══
+// 🧾 인보이스 생성 — 고객정보 + 최근 예약(확정 우선)·의뢰 품목을 인보이스로 전달
+//    hhc-invoice.html 의 기존 예약전환 파이프라인(localStorage hhc_transfer_invoice + ?from=booking)을 그대로 사용
+window.caMakeInvoice=function(idx){
+  const e=entries[idx];if(!e)return;
+  const bks=(e.docs.bookings||[]).slice().sort((a,b)=>String(b.booking_date||b.created_at||'').localeCompare(String(a.booking_date||a.created_at||'')));
+  const bk=bks.find(b=>b.status==='confirmed')||bks[0]||null;
+  let itemsText='',src='';
+  if(bk&&bk.booking_items){itemsText=String(bk.booking_items);src='예약'+(bk.booking_date?' '+bk.booking_date:'');}
+  if(!itemsText){
+    const rqs=(e.docs.requests||[]).slice().sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+    const rq=rqs[0];
+    if(rq&&rq.items){
+      try{
+        const a=JSON.parse(String(rq.items||'[]'));
+        if(Array.isArray(a))itemsText=a.map(it=>{
+          const nm2=String((it&&it.svc)||'').trim();if(!nm2)return '';
+          const q=(it&&it.qty)?String(it.qty).trim():'';
+          return nm2+((q&&q!=='0')?' x'+q:'');
+        }).filter(Boolean).join('\n');
+      }catch(_){}
+      if(itemsText)src='의뢰 '+String(rq.created_at||'').slice(0,10);
+    }
+  }
+  const t={name:e.name||'',phone:e.phone||'',addr:e.addr||(bk&&bk.customer_address)||'',items_text:itemsText};
+  try{localStorage.setItem('hhc_transfer_invoice',JSON.stringify(t));}catch(_){}
+  window.open('hhc-invoice.html?from=booking','_blank');
+  toast('🧾 인보이스 생성으로 이동'+(src?' · '+src+' 품목 자동 반영':' · 품목 기록 없음 (고객정보만 반영)'));
+};
+// 📄 점검보고서 생성 — 기본정보(고객명·연락처·주소·오늘 날짜) 전달
+window.caMakeInspect=function(idx){
+  const e=entries[idx];if(!e)return;
+  const t={name:e.name||'',phone:e.phone||'',addr:e.addr||'',date:new Date().toISOString().slice(0,10)};
+  try{localStorage.setItem('hhc_transfer_inspect',JSON.stringify(t));}catch(_){}
+  window.open('inspect-admin.html?from=hhc','_blank');
+  toast('📄 점검보고서 작성으로 이동 · 기본정보 자동 반영');
+};
+// 📑 계약서 이용내역 — 해당 고객 계약 선택 + 서비스 이용내역 화면으로
+window.caOpenContractUsage=function(idx){
+  const e=entries[idx];if(!e)return;
+  if(!(e.docs.contracts||[]).length){
+    toast('이 고객의 계약서가 없습니다 — 계약서 프로그램이 열립니다 (새로 작성)');
+    window.open('admin.html','_blank');return;
+  }
+  const key=pn(e.phone)||e.name||'';
+  window.open('admin.html?goto=usage&cust='+encodeURIComponent(key),'_blank');
+  toast('📑 계약서 이용내역으로 이동');
+};
+
 window._entries=function(){return entries;};
+
+// ═══ 📅 일정캘린더 등에서 ?open=<연락처|이름> 으로 진입 시 해당 고객 상세 자동 열기 ═══
+let _autoOpened=false;
+function tryAutoOpen(){
+  if(_autoOpened||!entries.length)return;
+  let k='';
+  try{k=new URLSearchParams(location.search).get('open')||'';}catch(e){}
+  if(!k)return;
+  const kp=pn(k),kn2=nn(k);
+  const i=entries.findIndex(e=>
+    (kp&&pn(e.phone)===kp)||
+    (kn2&&(nn(e.name)===kn2||(e.aliases||[]).some(a=>nn(a)===kn2))));
+  _autoOpened=true;   // 못 찾아도 1회만 시도
+  if(i>=0){openDrawer(i);toast('🔎 '+(entries[i].name||'고객')+' 상세를 열었습니다');}
+  else toast('해당 고객을 찾지 못했습니다: '+k);
+}
 
 // ═══ INIT ═══
 try{
