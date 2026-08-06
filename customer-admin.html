@@ -2454,27 +2454,37 @@ window.caMakeInvoice=function(idx){
   const e=entries[idx];if(!e)return;
   const bks=(e.docs.bookings||[]).slice().sort((a,b)=>String(b.booking_date||b.created_at||'').localeCompare(String(a.booking_date||a.created_at||'')));
   const bk=bks.find(b=>b.status==='confirmed')||bks[0]||null;
-  let itemsText='',src='';
-  if(bk&&bk.booking_items){itemsText=String(bk.booking_items);src='예약'+(bk.booking_date?' '+bk.booking_date:'');}
-  if(!itemsText){
-    const rqs=(e.docs.requests||[]).slice().sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  // 구조화 품목(items_struct) 이 있어야 인보이스가 정확히 매칭된다. 문자열 역파싱은 마지막 수단.
+  const pj=raw=>{try{const a=JSON.parse(String(raw||'[]'));return Array.isArray(a)?a.filter(x=>x&&typeof x==='object'):[];}catch(_){return [];}};
+  let struct=[],itemsText='',src='',bDate='',bTime='',bMemo='';
+  if(bk){
+    struct=pj(bk.booking_items_struct);
+    if(!struct.length)struct=pj(bk.prefill_items_struct);
+    itemsText=String(bk.booking_items||'');
+    bDate=bk.booking_date||'';bTime=bk.booking_time||'';bMemo=bk.booking_memo||bk.request_memo||'';
+    if(struct.length||itemsText)src='예약'+(bDate?' '+bDate:'');
+  }
+  if(!struct.length&&!itemsText){
+    const rqs=(e.docs.requests||[]).slice().sort((a,b)=>String(b.created_at||b.submitted_at||'').localeCompare(String(a.created_at||a.submitted_at||'')));
     const rq=rqs[0];
-    if(rq&&rq.items){
-      try{
-        const a=JSON.parse(String(rq.items||'[]'));
-        if(Array.isArray(a))itemsText=a.map(it=>{
-          const nm2=String((it&&it.svc)||'').trim();if(!nm2)return '';
-          const q=(it&&it.qty)?String(it.qty).trim():'';
-          return nm2+((q&&q!=='0')?' x'+q:'');
-        }).filter(Boolean).join('\n');
-      }catch(_){}
-      if(itemsText)src='의뢰 '+String(rq.created_at||'').slice(0,10);
+    if(rq){
+      struct=pj(rq.items_struct);
+      itemsText=pj(rq.items).map(it=>{
+        const nm2=String((it&&it.svc)||'').trim();if(!nm2)return '';
+        const q=(it&&it.qty)?String(it.qty).trim():'';
+        return nm2+((q&&q!=='0')?' x'+q:'');
+      }).filter(Boolean).join('\n');
+      if(!bMemo)bMemo=rq.remarks||'';
+      if(struct.length||itemsText)src='의뢰 '+String(rq.created_at||rq.submitted_at||'').slice(0,10);
     }
   }
-  const t={name:e.name||'',phone:e.phone||'',addr:e.addr||(bk&&bk.customer_address)||'',items_text:itemsText};
+  const t={name:e.name||'',phone:e.phone||'',addr:e.addr||(bk&&bk.customer_address)||'',
+           date:bDate,time:bTime,memo:bMemo,
+           items_struct:struct,items_text:itemsText,ts:Date.now()};
   try{localStorage.setItem('hhc_transfer_invoice',JSON.stringify(t));}catch(_){}
   window.open('hhc-invoice.html?from=booking','_blank');
-  toast('🧾 인보이스 생성으로 이동'+(src?' · '+src+' 품목 자동 반영':' · 품목 기록 없음 (고객정보만 반영)'));
+  const cnt=struct.length||(itemsText?itemsText.split(/[,\n]/).filter(x=>x.trim()).length:0);
+  toast('🧾 인보이스 생성으로 이동'+(src?' · '+src+' 품목 '+cnt+'건 반영':' · 품목 기록 없음 (고객정보만 반영)'));
 };
 // 📄 점검보고서 생성 — 기본정보(고객명·연락처·주소·오늘 날짜) 전달
 window.caMakeInspect=function(idx){
