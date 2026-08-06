@@ -2188,6 +2188,7 @@ async function connectFirebase(cfg){
       allContracts=snap.docs.map(d=>({...d.data(),__id:d.id}));
       allContracts.sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
       updateSelectLists();
+      if(typeof tryHhcGoto==='function')try{tryHhcGoto();}catch(e){}
       if(document.getElementById('tab-list').classList.contains('active'))renderList();
       const _ts=document.getElementById('tab-send'); // 「발송」 탭은 「계약서·발송」으로 통합되어 없을 수 있음
       if(_ts&&_ts.classList.contains('active'))renderSendTab();
@@ -4001,6 +4002,42 @@ function setAdminView(v){
   window.scrollTo({top:0,behavior:'instant'});
 }
 window.setAdminView=setAdminView;
+
+// ═══ 📎 외부 프로그램(인보이스 · 총괄 고객관리)에서 바로 열기 ═══
+// admin.html?goto=usage&cust=<연락처|이름> → 해당 고객의 계약을 선택하고 서비스 이용내역 화면을 연다
+window._hhcGoto=(function(){
+  try{
+    const p=new URLSearchParams(location.search);
+    if(p.get('goto')==='usage')return {cust:p.get('cust')||''};
+  }catch(e){}
+  return null;
+})();
+function tryHhcGoto(){
+  const g=window._hhcGoto;
+  if(!g||!allContracts.length)return;
+  window._hhcGoto=null;
+  const norm=v=>{let n=String(v||'').replace(/[^0-9]/g,'');if(n.indexOf('60')===0)n=n.slice(2);if(n.indexOf('0')===0)n=n.slice(1);return n;};
+  const kp=norm(g.cust);
+  const kn=String(g.cust||'').trim().toLowerCase().replace(/\s+/g,'');
+  const cand=allContracts.filter(c=>
+    (kp&&kp.length>=5&&norm(c.phone)===kp)||
+    (kn&&String(c.name||'').trim().toLowerCase().replace(/\s+/g,'')===kn));
+  if(!cand.length){
+    showModal('계약서 없음','해당 고객('+(g.cust||'')+')의 계약서를 찾을 수 없습니다.\n계약서 작성 화면에서 새로 작성해 주세요.');
+    switchTab('admin');return;
+  }
+  // 유효(미종료) 계약 우선 · 최신 계약일 우선
+  const c=cand.slice().sort((a,b)=>{
+    const ae=a.status==='ended'?1:0,be=b.status==='ended'?1:0;
+    if(ae!==be)return ae-be;
+    return String(b.contract_date||'').localeCompare(String(a.contract_date||''));
+  })[0];
+  currentEditId=c.__id;currentViewId=c.__id;
+  if(typeof hubSyncSelects==='function')try{hubSyncSelects(c.__id);}catch(e){}
+  loadFormData(c);
+  switchTab('admin');
+  setAdminView('usage');
+}
 document.querySelectorAll('#aview-switch .avs-btn').forEach(b=>b.addEventListener('click',()=>setAdminView(b.dataset.aview)));
 
 // ── 담은 품목/조정 항목 상태 ──
