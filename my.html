@@ -262,6 +262,7 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .npd .p{background:var(--ok-bg);color:var(--ok)}
 .nfoot{display:flex;align-items:flex-end;gap:10px;margin-top:11px;padding-top:10px;border-top:1px dashed var(--bdr)}
 .nlb{font-size:9.5px;font-weight:800;color:var(--ink3);letter-spacing:.04em}
+.nam .ncu{display:block;font-size:10px;font-weight:700;color:#8B93A5;letter-spacing:0;margin-top:1px}
 .nam{font-size:20px;font-weight:900;letter-spacing:-.02em;margin-top:1px;line-height:1.1}
 .nam .cu{font-size:12px;color:var(--ink3);font-weight:800;margin-right:3px}
 .nam.bad{color:#dc2626}.nam.bad .cu{color:#f87171}
@@ -447,7 +448,7 @@ const T={
       rqT:'서비스 의뢰하기',rqS:'간편 견적 계산기로 예상 금액을 확인하고 그 자리에서 의뢰를 접수하세요',rqB:'의뢰 요청서 작성',rqBadge:'바로 접수',
       hpT:'가격/서비스 확인하기',hpS:'홈페이지에서 전체 서비스와 가격표를 확인하세요',hpB:'홈페이지 바로가기',notfound:'고객 정보를 찾을 수 없습니다.<br>링크를 다시 확인해 주세요.',
       foot:'본 페이지는 열 때마다 최신 내용으로 갱신됩니다.',
-      amtPaid:'결제 금액',amtBill:'청구 금액',amtDue:'미납 금액',more:'개 더',qtyU:'개',etcA:' 외 ',etcB:'건',svcU:'개 서비스',pkgPre:'패키지 - ',
+      amtPaid:'결제 금액',amtBill:'청구 금액',amtDue:'미납 금액',crUsed:'적립잔액',crUsedSuf:' 사용',more:'개 더',qtyU:'개',etcA:' 외 ',etcB:'건',svcU:'개 서비스',pkgPre:'패키지 - ',
       ivGo:'인보이스 보기 →',ipGo:'📄 보고서 열기 →',ctGo:'📑 계약 상세 · 이용내역 보기 →',cpGo:'열기 →',
       unitsLb:'점검 대수',okLb:'정상',actLb:'조치 필요',
       pyxT:'청구 금액 안내',pyxBank:'결제은행',pyxAcct:'계좌번호',pyxHolder:'예금주',pyxMany:'청구중·연체 {n}건 합계',
@@ -486,7 +487,7 @@ const T={
       rqT:'Request a Service',rqS:'Check your estimate with the quick calculator and submit your request on the spot',rqB:'Open Request Form',rqBadge:'Book now',
       hpT:'Check Prices & Services',hpS:'See our full service list and price guide on the homepage',hpB:'Visit Homepage',notfound:'Customer not found.<br>Please check your link.',
       foot:'This page always shows your latest records when opened.',
-      amtPaid:'PAID',amtBill:'AMOUNT DUE',amtDue:'OVERDUE',more:' more',qtyU:'',etcA:' +',etcB:' more',svcU:' services',pkgPre:'Package · ',
+      amtPaid:'PAID',amtBill:'AMOUNT DUE',amtDue:'OVERDUE',crUsed:'Credit',crUsedSuf:' used',more:' more',qtyU:'',etcA:' +',etcB:' more',svcU:' services',pkgPre:'Package · ',
       ivGo:'View invoice →',ipGo:'📄 Open report →',ctGo:'📑 Contract details →',cpGo:'Open →',
       unitsLb:'Units',okLb:'Normal',actLb:'Action',
       pyxT:'Payment Due',pyxBank:'Bank',pyxAcct:'Account No.',pyxHolder:'Beneficiary',pyxMany:'{n} unpaid invoices',
@@ -1007,6 +1008,10 @@ function render(){
       const part=x.status!=='paid'&&xPd>0.005;          // 일부 결제된 미결제 인보이스
       const amLb=x.status==='paid'?L.amtPaid:(part?L.amtBal:(x.status==='overdue'?L.amtDue:L.amtBill));
       const rs=fmt(x.status==='paid'?invTotal(x):xDue).split('.');
+      // 💳 회원적립잔액(creditUse)으로 결제되어 표시 금액이 0인 경우 — 괄호로 사용액만 표기 (합산에는 절대 반영하지 않는 단순 표기)
+      const _cu=parseFloat(x.creditUse)||0;
+      const _shown=x.status==='paid'?invTotal(x):xDue;
+      const cuTag=(_cu>0&&_shown<0.005)?'<span class="ncu">( '+L.crUsed+' RM '+fmt(_cu)+L.crUsedSuf+' )</span>':'';
       h+='<a class="ncard" target="_blank" rel="noopener" href="'+BASE+'/hhc-invoice.html?view='+encodeURIComponent(x.id||x.__id)+'&lang='+LANG+'">'+
          '<span class="stripe '+stc+'"></span><div class="nbody">'+
          '<div class="nrow1"><div class="ntile '+stc+'">'+ico+'</div>'+
@@ -1015,7 +1020,7 @@ function render(){
          (st?'<span class="nst '+stc+'">'+esc(st)+'</span>':'')+'</div>'+ib+
          (part?'<div class="npd"><span class="t">'+L.ofTot+' RM '+fmt(invTotal(x))+'</span><span class="p">'+L.paidPre+' \u2212RM '+fmt(xPd)+'</span></div>':'')+
          '<div class="nfoot"><div><div class="nlb">'+amLb+'</div>'+
-         '<div class="nam'+(x.status==='overdue'?' bad':'')+'"><span class="cu">RM</span>'+rs[0]+'.'+(rs[1]||'00')+'</div></div>'+
+         '<div class="nam'+(x.status==='overdue'?' bad':'')+'"><span class="cu">RM</span>'+rs[0]+'.'+(rs[1]||'00')+cuTag+'</div></div>'+
          '<span class="nbtn">'+L.ivGo+'</span></div></div></a>';
     });
     h+='<button type="button" class="hubcls" id="hub-cls-iv"><span class="up">\u25B2</span>'+esc(L.ivClose)+'</button>';
