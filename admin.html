@@ -4012,10 +4012,324 @@ window._hhcGoto=(function(){
   }catch(e){}
   return null;
 })();
+// ═══ 📎 총괄 고객관리 → 이용내역 품목 자동 반영 ═══
+// 예약(예약관리) · 캘린더에 직접 추가한 예약 일정의 품목을 인보이스 서비스 목록과 매칭해
+// 「담은 품목」에 그대로 채워 넣습니다. 매칭 로직은 인보이스의 예약전환과 동일합니다.
+// 예약 catId → 인보이스 카테고리 매핑 (전환·재매칭 공용)
+var _BK_MAP={ac_home:{cat:'청소',subcat:'에어컨(가정용)'},ac_shop:{cat:'청소',subcat:'에어컨(매장용)'},
+  washer:{cat:'청소',subcat:'세탁기'},mattress:{cat:'청소',subcat:'매트리스'},sofa:{cat:'청소',subcat:'쇼파'},
+  curtain:{cat:'청소',subcat:'커튼'},
+  dryer:{cat:'청소',subcat:'건조기',alt:'기타제품'},hood:{cat:'청소',subcat:'주방후드',alt:'기타제품'},
+  fridge:{cat:'청소',subcat:'냉장고',alt:'기타제품'},purifier:{cat:'청소',subcat:'공기청정기',alt:'기타제품'},
+  fan:{cat:'청소',subcat:'실링팬',alt:'기타제품'},chair:{cat:'청소',subcat:'식탁의자',alt:'기타제품'},
+  carpet:{cat:'청소',subcat:'카페트',alt:'기타제품'},
+  etc:{cat:'기타',subcat:'기타'}};
+// 항목설정(카탈로그)에 전용 중분류가 실제로 있으면 그것을, 없으면 예전 중분류(alt)를 쓴다
+function _bkHasSub(cat,sub){
+  if(!sub)return false;
+  var l=[];
+  if(l.indexOf(sub)>=0)return true;
+  return invServices.some(function(s){return s.cat===cat&&s.subcat===sub;});
+}
+function _bkMapOf(catId){
+  var m=_BK_MAP[catId]||{cat:'기타',subcat:'기타'};
+  if(m.alt&&!_bkHasSub(m.cat,m.subcat)&&_bkHasSub(m.cat,m.alt))return{cat:m.cat,subcat:m.alt};
+  return{cat:m.cat,subcat:m.subcat};
+}
+var _BK_GRP2SUB={'벽걸이형':'벽걸이형','매립형 (덕트)':'매립형','천정형 (카세트)':'카세트형','실외기':'실외기','FCU · 덕트형':'매립형'};
+var _BK_CATKO={ac_home:'에어컨(가정용)',ac_shop:'에어컨(매장용)',washer:'세탁기',mattress:'매트리스',sofa:'쇼파',
+  curtain:'커튼',dryer:'건조기',hood:'주방후드',fridge:'냉장고',purifier:'공기청정기',
+  fan:'실링팬',chair:'식탁의자',carpet:'카페트',etc:'기타서비스'};
+// ── 문자열 품목(booking_items) → 구조화 항목 변환 ──
+// 관리자가 직접 타이핑한 예약 품목("에어컨(벽걸이)(4대/스팀세척)")도
+// 카테고리·형태를 추정해 구조화 품목과 같은 매칭 경로를 태운다.
+function _bkGuessCatId(t){
+  if(/에어컨|aircon|air-con|air con/i.test(t))return /매장|상업|shop|commercial/i.test(t)?'ac_shop':'ac_home';
+  if(/세탁기|washing/i.test(t))return 'washer';
+  if(/매트리스|mattress/i.test(t))return 'mattress';
+  if(/쇼파|소파|sofa/i.test(t))return 'sofa';
+  if(/커튼|curtain/i.test(t))return 'curtain';
+  if(/건조기|dryer/i.test(t))return 'dryer';
+  if(/후드|hood/i.test(t))return 'hood';
+  if(/냉장고|refrigerator|fridge/i.test(t))return 'fridge';
+  if(/공기청정기|purifier/i.test(t))return 'purifier';
+  if(/실링팬|실링|ceiling ?fan/i.test(t))return 'fan';
+  if(/식탁의자|의자|dining ?chair|chair/i.test(t))return 'chair';
+  if(/카페트|카펫|carpet|rug/i.test(t))return 'carpet';
+  return 'etc';
+}
+function _bkGuessGrp(t){
+  if(/벽걸이|wall/i.test(t))return '벽걸이형';
+  if(/매립|덕트|duct|conceal/i.test(t))return '매립형 (덕트)';
+  if(/천정|천장|카세트|cassette|ceiling/i.test(t))return '천정형 (카세트)';
+  if(/실외|outdoor/i.test(t))return '실외기';
+  return null;
+}
+function _bkParseItemsText(text){
+  var out=[],re=/(.+?)\((\d+)\s*(?:대|units?\(s\)|units?)\s*\/\s*((?:[^()]|\([^()]*\))*)\)(?:\s*,\s*|\s*$)/g,mm;
+  while((mm=re.exec(text))!==null){
+    var name=mm[1].trim(),qty=parseInt(mm[2],10)||1,svcPart=mm[3].trim();
+    var svcKo=svcPart;
+    var sep=svcPart.indexOf(' · ');
+    if(sep>=0)svcKo=svcPart.slice(sep+3).trim();
+    var catId=_bkGuessCatId(name+' '+svcPart);
+    if(catId==='etc'){
+      out.push({catId:'etc',grpKo:null,svcKo:null,free:true,text:name+(svcPart?' — '+svcPart:''),qty:qty});
+      continue;
+    }
+    out.push({catId:catId,grpKo:_bkGuessGrp(name+' '+svcPart),svcKo:svcKo,free:false,text:'',qty:qty,_label:name+(svcPart?' — '+svcPart:'')});
+  }
+  return out;
+}
+// 서비스의 모든 이름 표기(기본명·한글명·영문명)
+function _bkNames(s){return [s.name,s.name_ko,s.name_en].filter(Boolean).map(String);}
+// ── 특성(축) 기반 단가 매칭 ────────────────────────────────
+// 예약 품목명과 인보이스 서비스명은 표기가 서로 달라("I 형" ↔ "쇼파 건식 I형") 단순 포함검색으로는 자주 빗나간다.
+// 이름을 정규화한 뒤 "축"(형태·세척방식·건습식·도어·형상 등)별 특성을 뽑아
+//  · 같은 축의 특성이 일치하면 가점
+//  · 같은 축인데 다른 특성이면 감점(예: 건식↔습식, I형↔L형)
+// 하는 방식으로 가장 적합한 서비스를 고른다.
+function _bkNorm(s){return String(s||'').toLowerCase().replace(/[\s·・\-_\/()\[\],.]/g,'');}
+var _BK_AXES=[
+  ['용도',[['가정',['가정용','가정','home','residential']],['매장',['매장','상업','shop','commercial','store']]]],
+  ['형태',[['벽걸이',['벽걸이','wall']],['매립',['매립','덕트','duct','conceal','fcu']],
+           ['천정',['천정','천장','카세트','cassette','ceiling']],['실외기',['실외','outdoor','condenser']]]],
+  ['세척',[['기본',['기본','basic']],['약품',['약품','화학','chemical']],['스팀',['스팀','steam']],
+           ['분해',['분해','disassembl','dismantl','overhaul']],['간이',['간이','quick','simple']]]],
+  ['방식',[['건식',['건식','dry']],['습식',['습식','wet']]]],
+  ['세탁',[['드럼',['드럼','drum','frontload','front']],['통돌이',['통돌이','topload','toploading']]]],
+  ['도어',[['단문',['단문','싱글도어','원도어','singledoor','onedoor']],
+           ['양문',['양문','더블도어','투도어','doubledoor','twodoor','french']]]],
+  ['형상',[['i형',['i형','i자','일자','ishape','itype','straight']],
+           ['l형',['l형','l자','엘자','lshape','ltype','corner','코너']]]],
+  ['장소',[['현장',['현장','onsite','inplace']],['수거',['수거','픽업','pickup','takeaway','collect']]]]
+];
+function _bkFeats(txt){
+  var n=_bkNorm(txt),out={};
+  for(var i=0;i<_BK_AXES.length;i++){
+    var ax=_BK_AXES[i][0],defs=_BK_AXES[i][1],hits=[];
+    for(var j=0;j<defs.length;j++){
+      for(var k=0;k<defs[j][1].length;k++){
+        if(n.indexOf(_bkNorm(defs[j][1][k]))>=0){hits.push(defs[j][0]);break;}
+      }
+    }
+    if(hits.length)out[ax]=hits;
+  }
+  return out;
+}
+function _bkSvcText(s){return [s.name,s.name_ko,s.name_en,s.subcat,s.sub2].filter(Boolean).join(' ');}
+// 제품군 일치 가점 / 다른 제품군이면 감점
+// (여러 제품이 '기타제품' 한 중분류에 섞여 있어도 "건조기 완전분해세척"과 "주방후드 완전분해세척"을 구분한다)
+function _bkProdScore(txt,catId){
+  if(!catId||catId==='etc')return 0;
+  var n=String(txt||'').toLowerCase(),own=_BK_CATTOKS[catId]||[],i,k;
+  for(i=0;i<own.length;i++){if(own[i]&&n.indexOf(String(own[i]).toLowerCase())>=0)return 12;}
+  var ac=(catId==='ac_home'||catId==='ac_shop');
+  for(k in _BK_CATTOKS){
+    if(!Object.prototype.hasOwnProperty.call(_BK_CATTOKS,k)||k===catId)continue;
+    if(ac&&(k==='ac_home'||k==='ac_shop'))continue;
+    var t=_BK_CATTOKS[k];
+    for(i=0;i<t.length;i++){if(t[i]&&n.indexOf(String(t[i]).toLowerCase())>=0)return -12;}
+  }
+  return 0;
+}
+function _bkRate(s,lf,nl,catId){
+  var sf=_bkFeats(_bkSvcText(s)),hit=0,con=0,neu=0,ax,i;
+  for(ax in lf){
+    if(!Object.prototype.hasOwnProperty.call(lf,ax))continue;
+    var got=sf[ax]||[],h=0;
+    for(i=0;i<lf[ax].length;i++){if(got.indexOf(lf[ax][i])>=0)h++;}
+    if(h)hit+=h;else if(got.length)con++;else neu++;
+  }
+  var sc=hit*10-con*8-neu+_bkProdScore(_bkSvcText(s),catId);
+  if(nl){
+    var ns=_bkNames(s).map(_bkNorm);
+    for(i=0;i<ns.length;i++){
+      if(!ns[i])continue;
+      if(ns[i]===nl){sc+=20;break;}
+      if(ns[i].indexOf(nl)>=0||nl.indexOf(ns[i])>=0){sc+=6;break;}
+    }
+  }
+  return{sc:sc,hit:hit,con:con};
+}
+// 후보군에서 최적 서비스 고르기 (근거 = 카테고리명 + 그룹명 + 서비스명 전체)
+function _bkBest(pool,svcKo,catKo,grpKo,catId){
+  if(!pool||!pool.length)return null;
+  var nl=_bkNorm(svcKo),i;
+  if(nl){
+    for(i=0;i<pool.length;i++){
+      if(_bkProdScore(_bkSvcText(pool[i]),catId)<0)continue;   // 다른 제품군의 동명 서비스는 건너뛴다
+      if(_bkNames(pool[i]).map(_bkNorm).indexOf(nl)>=0)return pool[i];
+    }
+  }
+  var lf=_bkFeats([catKo,grpKo,svcKo].filter(Boolean).join(' '));
+  var best=null,bestR=null;
+  for(i=0;i<pool.length;i++){
+    var r=_bkRate(pool[i],lf,nl,catId);
+    if(!bestR||r.sc>bestR.sc){bestR=r;best=pool[i];}
+  }
+  if(!best)return null;
+  // 특성이 어긋나기만 하고 맞는 게 없으면 채택하지 않는다(후보가 딱 하나면 예외)
+  if(bestR.con>0&&bestR.hit<=bestR.con)return pool.length===1?pool[0]:null;
+  return best;
+}
+// 이름 매칭: 정확 일치 → 포함 → (허용 시) 한/영 키워드
+function _bkTryMatch(pool,label,noTok){
+  if(!pool.length||!label)return null;
+  var f=pool.find(function(s){return _bkNames(s).some(function(n){return n===label;});});
+  if(f)return f;
+  f=pool.find(function(s){return _bkNames(s).some(function(n){return n.indexOf(label)>=0||label.indexOf(n)>=0;});});
+  if(f)return f;
+  if(noTok)return null;
+  // 예약 품목 용어 → 인보이스 서비스명 용어 (한글·영문 모두 대응)
+  var toks=[['드럼',['드럼','drum','front']],['통돌이',['통돌이','top load','top-load']],
+    ['약품',['화학','약품','chemical']],['화학',['화학','chemical']],['스팀',['스팀','steam']],
+    ['기본',['기본','basic']],['분해',['분해','disassembl','full']],
+    ['수거',['수거','pickup','take']],['현장',['현장','on-site','onsite']],
+    ['건식',['건식','dry']],['습식',['습식','wet']],
+    ['단문',['단문','single door','single-door']],['양문',['양문','double door','double-door']],
+    ['냉장고',['냉장고','refrigerator','fridge']],['커튼',['커튼','curtain']],
+    ['공기청정기',['공기청정기','air purifier']],['싱글',['싱글','single']],['퀸',['퀸','queen']]];
+  for(var i=0;i<toks.length;i++){
+    if(label.indexOf(toks[i][0])>=0){
+      f=pool.find(function(s){
+        return _bkNames(s).some(function(n){
+          var L=n.toLowerCase();
+          return toks[i][1].some(function(t){return L.indexOf(t)>=0;});
+        });
+      });
+      if(f)return f;
+    }
+  }
+  return null;
+}
+// 예약 카테고리 → 서비스 검색 키워드 (한/영 카탈로그 모두 대응)
+var _BK_CATTOKS={
+  ac_home:['에어컨','aircon','air-con','air con','aircond'],ac_shop:['에어컨','aircon','air-con','air con','aircond'],
+  washer:['세탁기','washing'],mattress:['매트리스','mattress'],sofa:['쇼파','소파','sofa'],
+  curtain:['커튼','curtain'],dryer:['건조기','dryer'],hood:['후드','hood'],
+  fridge:['냉장고','refrigerator','fridge'],purifier:['공기청정기','purifier'],
+  fan:['실링팬','ceiling fan','ceilingfan'],chair:['식탁의자','dining chair','의자','chair'],
+  carpet:['카페트','카펫','carpet','rug'],etc:[]};
+var _BK_SHOPWORDS=['매장','상업','shop','commercial','store'];
+// 카테고리 키워드로 서비스 후보군 구성 (에어컨은 가정용/매장용 구분)
+function _bkCatPool(catId){
+  var toks=_BK_CATTOKS[catId]||[];
+  if(!toks.length)return [];
+  var pool=invServices.filter(function(s){
+    var hay=[s.cat,s.subcat,s.sub2].concat(_bkNames(s)).filter(Boolean).join(' ').toLowerCase();
+    return toks.some(function(t){return hay.indexOf(t)>=0;});
+  });
+  if(catId==='ac_home'||catId==='ac_shop'){
+    var wantShop=(catId==='ac_shop');
+    var filtered=pool.filter(function(s){
+      var hay=[s.cat,s.subcat].concat(_bkNames(s)).filter(Boolean).join(' ').toLowerCase();
+      var isShop=_BK_SHOPWORDS.some(function(w){return hay.indexOf(w)>=0;});
+      return isShop===wantShop;
+    });
+    if(filtered.length)pool=filtered;
+  }
+  return pool;
+}
+// 예약 그룹(벽걸이형 등) → 서비스명 안의 형태 키워드 (한/영)
+var _BK_GRPTOKS={'벽걸이형':['벽걸이','wall'],'매립형 (덕트)':['매립','덕트','duct','conceal'],
+  '천정형 (카세트)':['천정','카세트','cassette','ceiling'],'실외기':['실외','outdoor'],'FCU · 덕트형':['fcu','덕트','duct'],
+  '건식방식':['건식','dry'],'습식살균방식':['습식','wet']};
+// 그룹 키워드가 들어간 서비스만 남긴다 (하나도 없으면 원래 후보 유지)
+function _bkGrpFilter(pool,grpKo){
+  var toks=grpKo?(_BK_GRPTOKS[grpKo]||null):null;
+  if(!toks||!pool.length)return pool;
+  var f=pool.filter(function(s){
+    var hay=[s.subcat,s.sub2].concat(_bkNames(s)).filter(Boolean).join(' ').toLowerCase();
+    return toks.some(function(t){return hay.indexOf(t)>=0;});
+  });
+  return f.length?f:pool;
+}
+// 단가 매칭 — 1) 매핑된 분류 안 → 2) 카테고리 키워드 후보군(한/영, 그룹 우선) → 3) 후보 1개면 그것 → 4) 전체(정확/포함만)
+function _bkMatchSvc(cat,subcat,sub2,label,catId,grpKo){
+  var catKo=_BK_CATKO[catId]||'';
+  var p1=invServices.filter(function(s){
+    if(s.cat!==cat||s.subcat!==subcat)return false;
+    if(sub2&&s.sub2&&s.sub2!==sub2)return false;
+    return true;
+  });
+  var f=_bkBest(_bkGrpFilter(p1,grpKo),label,catKo,grpKo,catId);
+  if(f)return f;
+  var p2=_bkGrpFilter(_bkCatPool(catId),grpKo);
+  f=_bkBest(p2,label,catKo,grpKo,catId);
+  if(f)return f;
+  if(p2.length===1)return p2[0];   // 해당 카테고리(·그룹) 서비스가 하나뿐이면 그 단가를 쓴다
+  return _bkTryMatch(invServices,label,true);
+}
+
+// 전달받은 품목(구조화 우선 · 없으면 문자열 역파싱)을 cPicked 로 변환
+function uaPickedFrom(d){
+  var arr=(d&&Array.isArray(d.items_struct)&&d.items_struct.length)?d.items_struct:null;
+  if(!arr&&d&&d.items_text)arr=_bkParseItemsText(String(d.items_text));
+  if(!arr||!arr.length)return {picked:[],miss:0};
+  var picked=[],miss=0;
+  arr.forEach(function(it){
+    var qty=parseFloat(it.qty)||1;
+    if(it.free){
+      picked.push({kind:'other',name:String(it.text||'기타 서비스'),qty:qty,price:0});
+      miss++;return;
+    }
+    var m=_bkMapOf(it.catId);
+    var sub2=it.grpKo?(_BK_GRP2SUB[it.grpKo]||''):'';
+    var sv=_bkMatchSvc(m.cat,m.subcat,sub2,it.svcKo||'',it.catId,it.grpKo||'');
+    if(!sv){
+      var lb=it._label||((it.grpKo?it.grpKo+' · ':'')+(it.svcKo||''));
+      var ck=_BK_CATKO[it.catId]||'';
+      picked.push({kind:'other',name:(ck?ck+' — ':'')+lb,qty:qty,price:0});
+      miss++;return;
+    }
+    var nmEn=sv.name_en||sv.name||'';
+    var nmKo=(sv.name_ko&&String(sv.name_ko).trim())?String(sv.name_ko).trim():svcKoName(nmEn);
+    var isMem=isMemberSvc(sv);
+    var ko=isMem?stripMemberCode(nmKo):nmKo, en2=isMem?stripMemberCode(nmEn):nmEn;
+    picked.push({kind:'svc',svcId:sv.id,name:ko,nameKo:ko,nameEn:en2,subcat:sv.subcat||'',sub2:sv.sub2||'',
+                 unit:svcUnitKo(sv),qty:qty,price:parseFloat(sv.price)||0,cat:sv.cat||'',isMember:isMem});
+  });
+  return {picked:picked,miss:miss};
+}
+// 이용내역 입력란에 반영
+function uaApplyTransfer(d,tries){
+  if(!d)return;
+  // 인보이스 서비스 목록이 아직 도착하지 않았으면 잠깐 기다린다 (없이 매칭하면 전부 직접입력이 된다)
+  var t=tries||0;
+  var hasItems=(Array.isArray(d.items_struct)&&d.items_struct.length)||!!d.items_text;
+  if(hasItems&&!invServices.length&&t<10){setTimeout(function(){uaApplyTransfer(d,t+1);},400);return;}
+  var r=uaPickedFrom(d);
+  if(d.date){var de=document.getElementById('u-date');if(de)de.value=String(d.date).slice(0,10);}
+  if(!r.picked.length)return;
+  cPicked=r.picked;
+  uAmtManual=false;uDescManual=false;uDescEnManual=false;
+  try{cpRenderPicked();cpRenderRail();cpRenderFoot();cpSyncDesc();}catch(e){}
+  var msg='예약 품목 '+r.picked.length+'건이 「담은 품목」에 반영되었습니다.';
+  if(r.miss)msg+='\n그 중 '+r.miss+'건은 서비스 목록에서 찾지 못해 직접입력 항목으로 넣었습니다 — 품목명·단가를 확인해 주세요.';
+  msg+='\n내용 확인 후 「이용내역 추가」를 눌러 저장하세요.';
+  showModal('📑 예약 품목 반영됨',msg,false);
+}
+// 계약서가 없어 새로 작성하는 경우 — 계약자명·연락처만 채워 준다
+function uaPrefillContract(d){
+  if(!d)return;
+  var n=document.getElementById('f-name'),ph=document.getElementById('f-phone');
+  if(n&&!n.value&&d.name)n.value=d.name;
+  if(ph&&(!ph.value||ph.value.trim()==='+60')&&d.phone)ph.value=d.phone;
+}
+function uaReadTransfer(){
+  var d=null;
+  try{d=JSON.parse(localStorage.getItem('hhc_transfer_usage')||'null');}catch(e){}
+  try{localStorage.removeItem('hhc_transfer_usage');}catch(e){}
+  // 10분이 지난 전달 데이터는 무시 (엉뚱한 고객에 붙는 것 방지)
+  if(d&&d.ts&&(Date.now()-d.ts)>600000)return null;
+  return d;
+}
 function tryHhcGoto(){
   const g=window._hhcGoto;
   if(!g||!allContracts.length)return;
   window._hhcGoto=null;
+  const xfer=uaReadTransfer();
   const norm=v=>{let n=String(v||'').replace(/[^0-9]/g,'');if(n.indexOf('60')===0)n=n.slice(2);if(n.indexOf('0')===0)n=n.slice(1);return n;};
   const kp=norm(g.cust);
   const kn=String(g.cust||'').trim().toLowerCase().replace(/\s+/g,'');
@@ -4023,8 +4337,10 @@ function tryHhcGoto(){
     (kp&&kp.length>=5&&norm(c.phone)===kp)||
     (kn&&String(c.name||'').trim().toLowerCase().replace(/\s+/g,'')===kn));
   if(!cand.length){
-    showModal('계약서 없음','해당 고객('+(g.cust||'')+')의 계약서를 찾을 수 없습니다.\n계약서 작성 화면에서 새로 작성해 주세요.');
-    switchTab('admin');return;
+    switchTab('admin');
+    uaPrefillContract(xfer);
+    showModal('계약서 없음','해당 고객('+(g.cust||'')+')의 계약서를 찾을 수 없습니다.\n계약자명·연락처를 채워 두었으니 계약서를 새로 작성해 주세요.');
+    return;
   }
   // 유효(미종료) 계약 우선 · 최신 계약일 우선
   const c=cand.slice().sort((a,b)=>{
@@ -4037,6 +4353,7 @@ function tryHhcGoto(){
   loadFormData(c);
   switchTab('admin');
   setAdminView('usage');
+  if(xfer)setTimeout(function(){try{uaApplyTransfer(xfer,0);}catch(e){}},350);
 }
 document.querySelectorAll('#aview-switch .avs-btn').forEach(b=>b.addEventListener('click',()=>setAdminView(b.dataset.aview)));
 

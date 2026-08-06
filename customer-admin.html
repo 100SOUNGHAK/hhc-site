@@ -2448,21 +2448,61 @@ window.doMerge=async function(i){
 
 window.renderList=renderList;
 // ═══ 📎 연계 문서 생성 (인보이스 · 점검보고서 · 계약서 이용내역) ═══
+// ── 「예약성 기록」 모으기 ────────────────────────────────
+// 예약관리(bookings) + 일정캘린더에서 직접 추가한 예약 일정(schedules · type=reserve)을
+// 한 가지 모양으로 합쳐 최신순으로 돌려줍니다. 세 개의 생성 버튼이 모두 이 목록을 씁니다.
+function caBkSrcs(e){
+  if(!e)return [];
+  const out=[];
+  (e.docs.bookings||[]).forEach(b=>out.push({
+    kind:'예약',
+    date:b.booking_date||String(b.created_at||'').slice(0,10),
+    time:b.booking_time||'',
+    addr:b.customer_address||'',
+    items:String(b.booking_items||''),
+    struct:b.booking_items_struct||b.prefill_items_struct||'',
+    memo:b.booking_memo||b.request_memo||'',
+    confirmed:b.status==='confirmed'
+  }));
+  (e.docs.schedules||[]).forEach(x=>{
+    if(x.booking_id)return;                                   // 예약에서 자동 생성된 일정 — 원본이 이미 목록에 있음
+    if(x.type!=='reserve'&&!x.booking_items&&!x.booking_items_struct)return;   // 예약 성격이 아닌 일반 일정은 제외
+    out.push({
+      kind:'캘린더 예약',
+      date:x.booking_date||x.date||'',
+      time:x.booking_time||x.time_s||'',
+      addr:x.customer_address||'',
+      items:String(x.booking_items||''),
+      struct:x.booking_items_struct||'',
+      memo:x.request_memo||'',
+      confirmed:true                                          // 관리자가 직접 넣은 일정 = 확정건으로 취급
+    });
+  });
+  return out.filter(o=>o.date||o.items||o.struct)
+            .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+}
+// 가장 적합한 예약성 기록 1건 (확정 우선 → 최신순)
+function caBestSrc(e){const a=caBkSrcs(e);return a.find(x=>x.confirmed)||a[0]||null;}
+// 예약성 기록에서 주소 보완 (고객 마스터에 주소가 없을 때)
+function caAddrOf(e){
+  if(e&&e.addr)return e.addr;
+  const s=caBkSrcs(e).find(x=>x.addr);
+  return s?s.addr:'';
+}
 // 🧾 인보이스 생성 — 고객정보 + 최근 예약(확정 우선)·의뢰 품목을 인보이스로 전달
 //    hhc-invoice.html 의 기존 예약전환 파이프라인(localStorage hhc_transfer_invoice + ?from=booking)을 그대로 사용
 window.caMakeInvoice=function(idx){
   const e=entries[idx];if(!e)return;
-  const bks=(e.docs.bookings||[]).slice().sort((a,b)=>String(b.booking_date||b.created_at||'').localeCompare(String(a.booking_date||a.created_at||'')));
-  const bk=bks.find(b=>b.status==='confirmed')||bks[0]||null;
+  // 예약관리 + 일정캘린더 직접 추가 예약을 함께 본다
+  const bk=caBestSrc(e);
   // 구조화 품목(items_struct) 이 있어야 인보이스가 정확히 매칭된다. 문자열 역파싱은 마지막 수단.
   const pj=raw=>{try{const a=JSON.parse(String(raw||'[]'));return Array.isArray(a)?a.filter(x=>x&&typeof x==='object'):[];}catch(_){return [];}};
   let struct=[],itemsText='',src='',bDate='',bTime='',bMemo='';
   if(bk){
-    struct=pj(bk.booking_items_struct);
-    if(!struct.length)struct=pj(bk.prefill_items_struct);
-    itemsText=String(bk.booking_items||'');
-    bDate=bk.booking_date||'';bTime=bk.booking_time||'';bMemo=bk.booking_memo||bk.request_memo||'';
-    if(struct.length||itemsText)src='예약'+(bDate?' '+bDate:'');
+    struct=pj(bk.struct);
+    itemsText=bk.items;
+    bDate=bk.date||'';bTime=bk.time||'';bMemo=bk.memo||'';
+    if(struct.length||itemsText)src=bk.kind+(bDate?' '+bDate:'');
   }
   if(!struct.length&&!itemsText){
     const rqs=(e.docs.requests||[]).slice().sort((a,b)=>String(b.created_at||b.submitted_at||'').localeCompare(String(a.created_at||a.submitted_at||'')));
@@ -2478,7 +2518,7 @@ window.caMakeInvoice=function(idx){
       if(struct.length||itemsText)src='의뢰 '+String(rq.created_at||rq.submitted_at||'').slice(0,10);
     }
   }
-  const t={name:e.name||'',phone:e.phone||'',addr:e.addr||(bk&&bk.customer_address)||'',
+  const t={name:e.name||'',phone:e.phone||'',addr:e.addr||(bk&&bk.addr)||'',
            date:bDate,time:bTime,memo:bMemo,
            items_struct:struct,items_text:itemsText,ts:Date.now()};
   try{localStorage.setItem('hhc_transfer_invoice',JSON.stringify(t));}catch(_){}
@@ -2489,21 +2529,34 @@ window.caMakeInvoice=function(idx){
 // 📄 점검보고서 생성 — 기본정보(고객명·연락처·주소·오늘 날짜) 전달
 window.caMakeInspect=function(idx){
   const e=entries[idx];if(!e)return;
-  const t={name:e.name||'',phone:e.phone||'',addr:e.addr||'',date:new Date().toISOString().slice(0,10)};
+  const bk=caBestSrc(e);
+  const today=new Date().toISOString().slice(0,10);
+  // 점검일 = 예약일이 오늘 이전이거나 오늘이면 그 날짜, 미래 예약이면 오늘
+  const d0=(bk&&bk.date)||'';
+  const t={name:e.name||'',phone:e.phone||'',addr:caAddrOf(e),
+           date:(d0&&d0<=today)?d0:today,
+           items:(bk&&bk.items)||'',memo:(bk&&bk.memo)||''};
   try{localStorage.setItem('hhc_transfer_inspect',JSON.stringify(t));}catch(_){}
   window.open('inspect-admin.html?from=hhc','_blank');
-  toast('📄 점검보고서 작성으로 이동 · 기본정보 자동 반영');
+  toast('📄 점검보고서 작성으로 이동'+(bk?' · '+bk.kind+' 정보 반영':' · 기본정보 반영'));
 };
 // 📑 계약서 이용내역 — 해당 고객 계약 선택 + 서비스 이용내역 화면으로
 window.caOpenContractUsage=function(idx){
   const e=entries[idx];if(!e)return;
-  if(!(e.docs.contracts||[]).length){
-    toast('이 고객의 계약서가 없습니다 — 계약서 프로그램이 열립니다 (새로 작성)');
-    window.open('admin.html','_blank');return;
-  }
+  const bk=caBestSrc(e);
+  const pj=raw=>{try{const a=JSON.parse(String(raw||'[]'));return Array.isArray(a)?a.filter(x=>x&&typeof x==='object'):[];}catch(_){return [];}};
+  // 이용내역 프리필 — 이용일자·품목(구조화 우선)·메모를 계약서 프로그램으로 전달
+  const t={name:e.name||'',phone:e.phone||'',addr:caAddrOf(e),
+           date:(bk&&bk.date)||'',
+           items_struct:bk?pj(bk.struct):[],items_text:(bk&&bk.items)||'',
+           memo:(bk&&bk.memo)||'',ts:Date.now()};
+  try{localStorage.setItem('hhc_transfer_usage',JSON.stringify(t));}catch(_){}
   const key=pn(e.phone)||e.name||'';
+  const hasCt=(e.docs.contracts||[]).length>0;
   window.open('admin.html?goto=usage&cust='+encodeURIComponent(key),'_blank');
-  toast('📑 계약서 이용내역으로 이동');
+  const cnt=t.items_struct.length||(t.items_text?t.items_text.split(/[,\n]/).filter(x=>x.trim()).length:0);
+  if(!hasCt)toast('이 고객의 계약서가 없습니다 — 계약서 작성 화면이 열립니다 (고객정보 반영)');
+  else toast('📑 계약서 이용내역으로 이동'+(cnt?' · '+bk.kind+' 품목 '+cnt+'건 반영':''));
 };
 
 window._entries=function(){return entries;};
