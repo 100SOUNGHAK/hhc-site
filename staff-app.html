@@ -129,7 +129,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   <div class="hdr-mark">HHC</div>
   <div><div class="hdr-ttl">Happy Home Care</div><div class="hdr-sub">ADMIN CONSOLE</div></div>
   <button id="bell-test" title="알림 테스트" type="button">🔔</button>
-  <span class="vtag">v3</span>
+  <span class="vtag">v4</span>
   <div class="hdr-cur" id="hdr-title">스케줄</div>
 </div>
 
@@ -301,6 +301,18 @@ let SWREG=null;
 // ── 서버 푸시 구독: 앱이 완전히 꺼져 있어도 알림을 받기 위한 기기 등록 ──
 const VAPID_PUB='BE5OUy5k4wwsty8t7vBJ1IH-9LMpqzKI66QAV78Z39lGhYRBImjekMHVyJMhqUDsHJvvwIIVbb-YT-gRtwL5O74';
 function b64ToU8(s){s=(s+'='.repeat((4-s.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/');var b=atob(s),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u;}
+// ── 앱을 열면 알림창에 쌓인 알림과 아이콘 배지를 자동으로 지움 ──
+function clearSysNotifs(){
+  try{
+    if(navigator.clearAppBadge)navigator.clearAppBadge().catch(function(){});
+    if(SWREG&&SWREG.getNotifications)SWREG.getNotifications().then(function(list){
+      list.forEach(function(n){try{n.close();}catch(e){}});
+    }).catch(function(){});
+  }catch(e){}
+}
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible')clearSysNotifs();
+});
 function setupPush(){
   try{
     if(!db||!SWREG||!SWREG.pushManager||notifPerm()!=='granted')return;
@@ -314,7 +326,7 @@ function setupPush(){
   }catch(e){}
 }
 if('serviceWorker' in navigator&&location.protocol==='https:'){
-  navigator.serviceWorker.register('sw.js').then(r=>{SWREG=r;setupPush();}).catch(()=>{});
+  navigator.serviceWorker.register('sw.js').then(r=>{SWREG=r;setupPush();clearSysNotifs();}).catch(()=>{});
   navigator.serviceWorker.addEventListener('message',e=>{
     if(e.data&&e.data.hhcOpenTab&&window.activate)window.activate(e.data.hhcOpenTab);
   });
@@ -550,6 +562,7 @@ watch('bookings','booking','🗓️ 새 예약신청',d=>String(d.status||'')===
 
 // 해당 탭을 열면 배지 해제
 window.__hhcAlertClear=function(tab){
+  clearSysNotifs();
   if(tab==='request'||tab==='booking'){PEND[tab]=0;}
   refreshUI();
   appBadge(PEND.request+PEND.booking);
