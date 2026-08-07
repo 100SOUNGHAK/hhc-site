@@ -30,6 +30,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Pretendard",'Noto Sans KR',sa
   background:rgba(255,255,255,.1);font-size:15px;cursor:pointer;color:#fff;flex-shrink:0;
   display:flex;align-items:center;justify-content:center;padding:0}
 #bell-test:active{transform:scale(.94)}
+.vtag{font-size:9px;font-weight:700;color:rgba(255,255,255,.4);letter-spacing:.04em}
 .hdr-cur{font-size:11px;color:#c9d4ee;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.13);padding:5px 12px;border-radius:16px;font-weight:600;white-space:nowrap}
 
 /* ── 탭 바 ── */
@@ -128,6 +129,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   <div class="hdr-mark">HHC</div>
   <div><div class="hdr-ttl">Happy Home Care</div><div class="hdr-sub">ADMIN CONSOLE</div></div>
   <button id="bell-test" title="알림 테스트" type="button">🔔</button>
+  <span class="vtag">v2</span>
   <div class="hdr-cur" id="hdr-title">스케줄</div>
 </div>
 
@@ -282,8 +284,11 @@ try{db=getFirestore(initializeApp(CFG));}catch(e){}
 // ── 이미 본 문서 기억 (새로고침해도 같은 건으로 다시 울리지 않음) ──
 function loadSeen(k){try{return new Set(JSON.parse(localStorage.getItem(k)||'[]'));}catch(e){return new Set();}}
 function saveSeen(k,set){try{localStorage.setItem(k,JSON.stringify([...set].slice(-600)));}catch(e){}}
-const SEEN={requests:loadSeen('hhc_alert_rq'),bookings:loadSeen('hhc_alert_bk')};
+const SEEN={requests:loadSeen('hhc_alert_rq'),bookings:loadSeen('hhc_alert_bk2')};
 const PEND={request:0,booking:0};
+// 이전 실행 이력이 있는지 (있으면 앱이 닫혀 있던 사이 도착한 건도 알림)
+const INIT=(function(){try{var v=localStorage.getItem('hhc_alert_init')==='1';localStorage.setItem('hhc_alert_init','1');return v;}catch(e){return false;}})();
+function recentDoc(d){var t=Date.parse(d.booked_at||d.submitted_at||'')||0;return t>0&&(Date.now()-t)<72*3600*1000;}
 
 // ── 알림음 (파일 없이 웹오디오 2음 차임) — 브라우저 정책상 첫 터치 이후부터 소리가 납니다 ──
 let AC=null;
@@ -363,7 +368,7 @@ function updateNotifBar(){
   }
   bar.querySelector('#nb-x').onclick=function(){bar.remove();};
 }
-document.addEventListener('pointerdown',askNotifPerm,{capture:true,once:true});
+document.addEventListener('pointerdown',function(){askNotifPerm(false);},{capture:true,once:true});
 // 시작 시: 배너 표시 + 자동 요청 시도 (브라우저가 허용하는 경우 즉시 팝업)
 setTimeout(function(){updateNotifBar();askNotifPerm(false);},900);
 // ── 🔔 알림 테스트 버튼: 기기에서 알림이 실제로 뜨는지 즉시 확인 ──
@@ -371,15 +376,12 @@ var bell=document.getElementById('bell-test');
 if(bell)bell.addEventListener('click',function(){
   primeAudio();
   var st=notifPerm();
+  // ① 앱 내 알림 경로 점검: 토스트 + 알림음 (+ 다른 탭이면 배지)
+  alertHit('request','🔔 알림 테스트',1);
+  // ② 시스템 알림(상단바) 점검
   if(st==='granted'){
     showSys('🔔 테스트 알림',{body:'알림이 정상 동작합니다 — 새 의뢰·예약도 이렇게 도착합니다',
       icon:'icon-admin-192.png',badge:'icon-admin-192.png',tag:'hhc-alert-test',vibrate:[220,110,220]});
-    ding();
-    var t=document.createElement('div');t.className='ntoast';
-    t.innerHTML='<span class="ic">🔔</span><div><b>테스트 알림을 보냈습니다</b><span>알림창(상단바)을 확인하세요</span></div>';
-    t.addEventListener('click',function(){t.remove();});
-    document.body.appendChild(t);
-    setTimeout(function(){t.remove();},6000);
   }else{
     askNotifPerm(true);
   }
@@ -469,7 +471,7 @@ function showToast(tab,kind,n){
 // ── 감시 ──
 function alertHit(tab,kind,n){
   if(n<=0)return;
-  if(window.__hhcActiveTab===tab&&!document.hidden){refreshUI();return;}   // 이미 그 화면을 보는 중이면 조용히
+  if(window.__hhcActiveTab===tab&&!document.hidden){showToast(tab,kind,n);ding();return;}   // 그 화면을 보는 중 — 토스트·알림음만
   PEND[tab]+=n;
   refreshUI();
   appBadge(PEND.request+PEND.booking);   // 홈 화면 앱 아이콘 배지 (지원 기기)
@@ -481,12 +483,21 @@ function alertHit(tab,kind,n){
 function watch(collName,tab,kind,pred){
   if(!db)return;
   let ready=false;
+  const key=collName==='requests'?'hhc_alert_rq':'hhc_alert_bk2';
   try{
     onSnapshot(collection(db,collName),snap=>{
       if(!ready){
         ready=true;
-        snap.docs.forEach(d=>SEEN[collName].add(d.id));
-        saveSeen(collName==='requests'?'hhc_alert_rq':'hhc_alert_bk',SEEN[collName]);
+        // 대상 상태(pred)인 문서만 기억 — 예약이 '대기'였다가 나중에 '신청완료'로 바뀌면 새 알림으로 감지
+        let fresh=0;
+        snap.docs.forEach(dc=>{
+          const d=dc.data()||{};
+          if(!pred(d))return;
+          if(INIT&&!SEEN[collName].has(dc.id)&&recentDoc(d))fresh++;   // 앱이 닫혀 있는 동안(72시간 내) 도착한 건
+          SEEN[collName].add(dc.id);
+        });
+        saveSeen(key,SEEN[collName]);
+        if(fresh>0)alertHit(tab,kind,fresh);
         return;
       }
       let fresh=0;
@@ -500,10 +511,19 @@ function watch(collName,tab,kind,pred){
         fresh++;
       });
       if(fresh>0){
-        saveSeen(collName==='requests'?'hhc_alert_rq':'hhc_alert_bk',SEEN[collName]);
+        saveSeen(key,SEEN[collName]);
         alertHit(tab,kind,fresh);
       }
-    },()=>{});
+    },function(err){
+      // 연결 실패(권한 등)를 조용히 삼키지 않고 한 번 표시 — 원인 파악용
+      if(window.__hhcWatchErr)return;window.__hhcWatchErr=String(err&&err.code||err||'error');
+      try{
+        var d=document.createElement('div');d.className='ntoast';
+        d.innerHTML='<span class="ic">⚠️</span><div><b>알림 연결 실패</b><span>'+window.__hhcWatchErr+'</span></div>';
+        d.addEventListener('click',function(){d.remove();});
+        document.body.appendChild(d);setTimeout(function(){d.remove();},12000);
+      }catch(e){}
+    });
   }catch(e){}
 }
 // 의뢰관리: 새 의뢰요청서 도착
