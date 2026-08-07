@@ -3692,11 +3692,15 @@ function addProblemRow(memo, photoUrl){
   phRow.appendChild(buildPhotoAddGroup(phContId));
   wrap.appendChild(phLbl);wrap.appendChild(phRow);
 
-  // 기존 사진 복원
+  // 기존 사진 복원 (여러 장 지원 — 문자열/배열 모두 허용)
   if(photoUrl){
-    var k='problem-photos-'+id+'-0';
-    photoData[k]=photoUrl;
-    addPhotoThumb(phRow,k,photoUrl);
+    var _list=Array.isArray(photoUrl)?photoUrl:[photoUrl];
+    _list.forEach(function(u,i){
+      if(!u)return;
+      var k='problem-photos-'+id+'-r'+i;
+      photoData[k]=u;
+      addPhotoThumb(phRow,k,u);
+    });
   }
 
   wrap._getProblemData=function(){
@@ -4622,7 +4626,12 @@ function collectData(){
   // 문제 사진
   var problemPhotos=[];
   document.getElementById('problem-rows').querySelectorAll('.unit-item').forEach(function(w){
-    if(w._getProblemData){var d=w._getProblemData();if(d.memo||photoData[d.photoKey+'-0'])problemPhotos.push(d);}
+    if(w._getProblemData){
+      var d=w._getProblemData();
+      // 새로 추가한 사진은 'photoKey-<시각>-<난수>' 키를 쓰므로 접두사로 검사한다
+      var hasPh=Object.keys(photoData).some(function(k){return k===d.photoKey||k.indexOf(d.photoKey+'-')===0;});
+      if(d.memo||hasPh)problemPhotos.push(d);
+    }
   });
 
   // 실외기 사진 세트
@@ -4780,8 +4789,9 @@ window.saveReport=async function(){
       }
       else if(key.startsWith('problem-photos-')){
         // 문제 사진: problemPhotos 배열에서 photoKey로 매핑
+        // (prob1 ↔ prob10 처럼 접두사가 겹치지 않도록 'photoKey-' 경계까지 확인)
         data.problemPhotos=(data.problemPhotos||[]).map(function(p){
-          if(key.startsWith(p.photoKey)){
+          if(key===p.photoKey||key.indexOf(p.photoKey+'-')===0){
             p.photos=(p.photos||[]).concat(url2);
           }return p;
         });
@@ -5348,8 +5358,8 @@ window.loadIntoForm=function(data){
   // 문제 사진 복원
   problemCount=0;document.getElementById('problem-rows').innerHTML='';
   (data.problemPhotos||[]).forEach(function(p){
-    var ph=p.photos&&p.photos[0]?p.photos[0]:null;
-    addProblemRow(p.memo,ph);
+    // 사진 전체를 복원한다 (기존에는 첫 장만 복원돼 재저장 시 나머지가 유실됨)
+    addProblemRow(p.memo,(p.photos&&p.photos.length)?p.photos:null);
   });
 
   // 수정 모드
