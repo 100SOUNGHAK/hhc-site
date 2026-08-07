@@ -266,6 +266,35 @@ let AC=null;
 function primeAudio(){try{if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();if(AC&&AC.state==='suspended')AC.resume();}catch(e){}}
 document.addEventListener('pointerdown',primeAudio,{capture:true});
 document.addEventListener('keydown',primeAudio,{capture:true});
+
+// ── 시스템 알림(안드로이드 알림창 · 앱 아이콘 알림 점) 준비 ──
+let SWREG=null;
+if('serviceWorker' in navigator&&location.protocol==='https:'){
+  navigator.serviceWorker.register('sw.js').then(r=>{SWREG=r;}).catch(()=>{});
+  navigator.serviceWorker.addEventListener('message',e=>{
+    if(e.data&&e.data.hhcOpenTab&&window.activate)window.activate(e.data.hhcOpenTab);
+  });
+}
+function askNotifPerm(){
+  try{if('Notification' in window&&Notification.permission==='default')Notification.requestPermission();}catch(e){}
+}
+document.addEventListener('pointerdown',askNotifPerm,{capture:true,once:true});
+function appBadge(n){
+  try{
+    if(!('setAppBadge' in navigator))return;
+    if(n>0)navigator.setAppBadge(n);else navigator.clearAppBadge();
+  }catch(e){}
+}
+function sysNotify(tab,kind,n){
+  window.__hhcNotif=(window.__hhcNotif||0)+1;
+  try{
+    if(!('Notification' in window)||Notification.permission!=='granted')return;
+    const opt={body:'눌러서 바로 확인하세요',icon:'icon-admin-192.png',badge:'icon-admin-192.png',
+      tag:'hhc-alert-'+tab,renotify:true,vibrate:[220,110,220],data:{tab:tab}};
+    if(SWREG&&SWREG.showNotification){SWREG.showNotification(kind+' '+n+'건 도착',opt);}
+    else{const nt=new Notification(kind+' '+n+'건 도착',opt);nt.onclick=()=>{try{window.focus();}catch(e){};if(window.activate)window.activate(tab);nt.close();};}
+  }catch(e){}
+}
 function ding(){
   window.__hhcDing=(window.__hhcDing||0)+1;
   try{
@@ -324,11 +353,14 @@ function showToast(tab,kind,n){
 // ── 감시 ──
 function alertHit(tab,kind,n){
   if(n<=0)return;
-  if(window.__hhcActiveTab===tab){refreshUI();return;}   // 이미 그 화면을 보는 중이면 조용히
+  if(window.__hhcActiveTab===tab&&!document.hidden){refreshUI();return;}   // 이미 그 화면을 보는 중이면 조용히
   PEND[tab]+=n;
   refreshUI();
+  appBadge(PEND.request+PEND.booking);   // 홈 화면 앱 아이콘 배지 (지원 기기)
   showToast(tab,kind,n);
   ding();
+  // 앱이 뒤로 가 있거나 화면이 꺼져 있으면 안드로이드 알림창으로도 표시 (아이콘에 알림 점)
+  if(document.hidden||window.__hhcForceNotif)sysNotify(tab,kind,n);
 }
 function watch(collName,tab,kind,pred){
   if(!db)return;
@@ -367,6 +399,7 @@ watch('bookings','booking','🗓️ 새 예약신청',d=>String(d.status||'')===
 window.__hhcAlertClear=function(tab){
   if(tab==='request'||tab==='booking'){PEND[tab]=0;}
   refreshUI();
+  appBadge(PEND.request+PEND.booking);
 };
 window.__hhcTestAlert=alertHit;   // 표시 점검용
 </script>
