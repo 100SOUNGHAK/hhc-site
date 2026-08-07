@@ -67,6 +67,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Pretendard",'Noto Sans KR',sa
 .ntoast .x{margin-left:4px;border:none;background:none;color:#B9BFCB;font-size:15px;cursor:pointer;padding:4px}
 @keyframes ntIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
 @keyframes ntRing{0%,100%{transform:rotate(0)}12%{transform:rotate(-14deg)}24%{transform:rotate(12deg)}36%{transform:rotate(-8deg)}48%{transform:rotate(6deg)}60%{transform:rotate(0)}}
+/* ── 알림 켜기 배너 ── */
+#notif-bar{flex-shrink:0;display:flex;align-items:center;gap:9px;background:#FFF8EC;border-bottom:1px solid #F5C56B;
+  padding:8px 12px;font-size:12px;font-weight:700;color:#8A5A00;line-height:1.5}
+#notif-bar .bic{font-size:15px;flex-shrink:0}
+#notif-bar .btxt{flex:1;min-width:0}
+#notif-bar button{flex-shrink:0;border:none;background:#E8A838;color:#3d2c00;font-family:inherit;font-size:12px;
+  font-weight:800;border-radius:9px;padding:8px 14px;cursor:pointer;box-shadow:0 2px 8px rgba(232,168,56,.4)}
+#notif-bar button:active{transform:scale(.97)}
+#notif-bar .bx{background:none;box-shadow:none;color:#C9A45C;font-size:14px;padding:6px 8px}
 .tab.active{background:linear-gradient(120deg,var(--indigo),#3a56d4);color:#fff;box-shadow:0 4px 12px rgba(79,110,247,.35)}
 .tab.active .tab-ico{filter:none}
 .tab.active .tab-lbl{color:#fff}
@@ -275,17 +284,56 @@ if('serviceWorker' in navigator&&location.protocol==='https:'){
     if(e.data&&e.data.hhcOpenTab&&window.activate)window.activate(e.data.hhcOpenTab);
   });
 }
+// ── 알림 권한: 화면 대부분이 내부 프레임이라 터치가 앱 본체에 닿지 않을 수 있어
+//    ① 시작 시 자동 요청을 시도하고 ② 확실한 방법으로 「알림 켜기」 배너 버튼을 제공합니다 ──
+function notifPerm(){try{return ('Notification' in window)?Notification.permission:'unsupported';}catch(e){return 'unsupported';}}
+function grantFeedback(){
+  try{
+    var opt={body:'새 의뢰·예약신청이 오면 이렇게 알려드립니다',icon:'icon-admin-192.png',
+      badge:'icon-admin-192.png',tag:'hhc-alert-hello',vibrate:[220,110,220]};
+    if(SWREG&&SWREG.showNotification)SWREG.showNotification('🔔 알림이 켜졌습니다',opt);
+    else new Notification('🔔 알림이 켜졌습니다',opt);
+    ding();
+  }catch(e){}
+}
 function askNotifPerm(){
-  try{if('Notification' in window&&Notification.permission==='default')Notification.requestPermission();}catch(e){}
+  try{
+    if(notifPerm()!=='default')return;
+    Notification.requestPermission().then(function(r){
+      updateNotifBar();
+      if(r==='granted')grantFeedback();
+    });
+  }catch(e){}
+}
+function updateNotifBar(){
+  var st=notifPerm();
+  var bar=document.getElementById('notif-bar');
+  if(st==='granted'||st==='unsupported'){if(bar)bar.remove();return;}
+  if(!bar){
+    bar=document.createElement('div');bar.id='notif-bar';
+    var nav=document.querySelector('.tabbar');
+    nav.parentNode.insertBefore(bar,nav.nextSibling);
+  }
+  if(st==='default'){
+    bar.innerHTML='<span class="bic">🔔</span><span class="btxt">새 의뢰·예약 알림을 받으려면 알림을 켜 주세요</span>'+
+      '<button id="nb-on">알림 켜기</button><button class="bx" id="nb-x">✕</button>';
+    bar.querySelector('#nb-on').onclick=function(){askNotifPerm();};
+  }else{ // denied
+    bar.innerHTML='<span class="bic">🔕</span><span class="btxt">알림이 차단되어 있습니다 — 브라우저 주소창 옆 자물쇠(또는 ⋮ 메뉴) → 사이트 설정 → 알림에서 「허용」으로 바꿔 주세요</span>'+
+      '<button class="bx" id="nb-x">✕</button>';
+  }
+  bar.querySelector('#nb-x').onclick=function(){bar.remove();};
 }
 document.addEventListener('pointerdown',askNotifPerm,{capture:true,once:true});
+// 시작 시: 배너 표시 + 자동 요청 시도 (브라우저가 허용하는 경우 즉시 팝업)
+setTimeout(function(){updateNotifBar();askNotifPerm();},900);
 function appBadge(n){
   try{
     if(!('setAppBadge' in navigator))return;
     if(n>0)navigator.setAppBadge(n);else navigator.clearAppBadge();
   }catch(e){}
 }
-function sysNotify(tab,kind,n){
+function sysNotify(tab,kind,n,force){
   window.__hhcNotif=(window.__hhcNotif||0)+1;
   try{
     if(!('Notification' in window)||Notification.permission!=='granted')return;
@@ -400,6 +448,7 @@ window.__hhcAlertClear=function(tab){
   if(tab==='request'||tab==='booking'){PEND[tab]=0;}
   refreshUI();
   appBadge(PEND.request+PEND.booking);
+  primeAudio();   // 탭 전환도 사용자 제스처 — 알림음 재생 준비
 };
 window.__hhcTestAlert=alertHit;   // 표시 점검용
 </script>
