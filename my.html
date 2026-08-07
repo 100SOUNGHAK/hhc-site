@@ -561,6 +561,20 @@ body,.page{background:#F1F3F8}
 /* CTA · 설치 안내 · 푸터 압축 */
 .cta{margin-top:11px}
 .cta a{padding:13px;font-size:13px}
+
+/* ── 기록이 없을 때의 빈 카드 (자리를 지켜 화면이 비어 보이지 않게) ── */
+.hub.hubempty{background:#FBFCFE;border:1px dashed #D8E0EC;box-shadow:0 2px 10px rgba(11,24,51,.04);
+  display:flex;flex-direction:column}
+.hub.hubempty .hubw{flex:1;display:flex;flex-direction:column}
+.hub.hubempty .hubic{opacity:.5}
+.hub.hubempty .hubtt{color:var(--ink2)}
+.hubst.mute{background:#F1F4F9;border:1px solid var(--bdr);color:var(--ink3)}
+.hubnone{flex:1;margin-top:11px;padding:16px 10px;border-radius:13px;background:#F6F8FC;
+  border:1px dashed #DEE5EF;text-align:center;display:flex;flex-direction:column;
+  align-items:center;justify-content:center}
+.hubnone .hne{font-size:22px;opacity:.35;line-height:1}
+.hubnone .hnt{font-size:11.5px;font-weight:800;color:var(--ink2);margin-top:7px;word-break:keep-all}
+.hubnone .hns{font-size:10px;font-weight:600;color:var(--ink3);margin-top:4px;line-height:1.5;word-break:keep-all}
 </style>
 </head>
 <body>
@@ -642,6 +656,8 @@ const T={
       pyxT:'청구 금액 안내',pyxBank:'결제은행',pyxAcct:'계좌번호',pyxHolder:'예금주',pyxMany:'청구중·연체 {n}건 합계',
       pyxPaid:'기결제 {a} 차감 후 잔여 금액입니다',amtBal:'잔여 결제금액',paidPre:'기결제',ofTot:'총액',
       hubIvT:'인보이스',hubIvS:'INVOICE HISTORY',hubIpT:'점검보고서',hubIpS:'INSPECTION REPORTS',
+      emptyB:'내역 없음',ivEmpty:'발행된 인보이스가 없습니다',ipEmpty:'등록된 점검보고서가 없습니다',
+      emptyS:'서비스 이용 후 이곳에서 확인하실 수 있습니다',
       lastSvc:'최근 서비스일',lastInsp:'최근 점검일',totCnt:'총 건수',noDate:'기록 없음',
       ivOpen:'인보이스 내역 보기',ivClose:'인보이스 내역 닫기',ipOpen:'점검보고서 내역 보기',ipClose:'점검보고서 내역 닫기',
       ivCap:'인보이스 내역',ipCap:'점검보고서 내역',recentN:'최근 ',
@@ -681,6 +697,8 @@ const T={
       pyxT:'Payment Due',pyxBank:'Bank',pyxAcct:'Account No.',pyxHolder:'Beneficiary',pyxMany:'{n} unpaid invoices',
       pyxPaid:'Balance after deducting {a} already paid',amtBal:'BALANCE DUE',paidPre:'Paid',ofTot:'Total',
       hubIvT:'Invoices',hubIvS:'INVOICE HISTORY',hubIpT:'Inspection Reports',hubIpS:'INSPECTION REPORTS',
+      emptyB:'No records',ivEmpty:'No invoices issued yet',ipEmpty:'No inspection reports yet',
+      emptyS:'They will appear here after your service',
       lastSvc:'Last service',lastInsp:'Last inspection',totCnt:'Total',noDate:'No record',
       ivOpen:'View invoice history',ivClose:'Hide invoice history',ipOpen:'View report history',ipClose:'Hide report history',
       ivCap:'Invoice history',ipCap:'Report history',recentN:'latest ',
@@ -739,6 +757,17 @@ let PYX_DUE=0;          // 금차 청구금액 (render 시 갱신)
 let _pyxPopShown=false; // 청구금액 팝업은 페이지 로드 후 1회만
 
 // 섹션 허브 박스 (계약서 카드와 동일한 박스형)
+// 기록이 아직 없을 때 자리를 지키는 빈 카드 (표시 전용 — 데이터·기능과 무관)
+function hubEmpty(kind,ic,title,sub,msg,note,badge){
+  return '<div class="hub '+kind+' hubempty"><div class="hubbg"></div><div class="hubw">'+
+    '<div class="hubt"><div class="hubic">'+ic+'</div>'+
+    '<div style="flex:1;min-width:0"><div class="hubtt">'+esc(title)+'</div>'+
+    '<div class="hubts">'+esc(sub)+'</div></div>'+
+    '<span class="hubst mute">'+esc(badge)+'</span></div>'+
+    '<div class="hubnone"><div class="hne">'+ic+'</div>'+
+    '<div class="hnt">'+esc(msg)+'</div><div class="hns">'+esc(note)+'</div></div>'+
+    '</div></div>';
+}
 function hubBox(kind,cfg){
   const open=OPEN[kind];
   return '<div class="hub '+kind+'"><div class="hubbg"></div><div class="hubw">'+
@@ -1167,8 +1196,11 @@ function render(){
   }
   // ── invoices ──
   // 인보이스·점검보고서 카드를 2열로 묶는 래퍼 (표시 전용 — 내용은 그대로)
-  const _h2open=(VIS.includes('iv')&&DATA.invoices.length)||(VIS.includes('ip')&&DATA.inspections.length);
+  const _h2open=VIS.includes('iv')||VIS.includes('ip');
   if(_h2open)h+='<div class="hub2">';
+  if(VIS.includes('iv')&&!DATA.invoices.length){
+    h+='<div class="sec">'+hubEmpty('iv','\u{1F4B3}',L.hubIvT,L.hubIvS,L.ivEmpty,L.emptyS,L.emptyB)+'</div>';
+  }
   if(VIS.includes('iv')&&DATA.invoices.length){
     const ivSum=DATA.invoices.reduce((a,x)=>a+invTotal(x),0);
     const ivDueList=DATA.invoices.filter(x=>x.status&&x.status!=='paid'&&x.status!=='draft'&&invDue(x)>0.005);
@@ -1218,6 +1250,9 @@ function render(){
     h+='</div></div>';
   }
   // ── inspections ──
+  if(VIS.includes('ip')&&!DATA.inspections.length){
+    h+='<div class="sec">'+hubEmpty('ip','\u{1F527}',L.hubIpT,L.hubIpS,L.ipEmpty,L.emptyS,L.emptyB)+'</div>';
+  }
   if(VIS.includes('ip')&&DATA.inspections.length){
     let ipAct=0,ipUnits=0;
     DATA.inspections.forEach(x=>{
