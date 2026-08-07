@@ -76,6 +76,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Pretendard",'Noto Sans KR',sa
   font-weight:800;border-radius:9px;padding:8px 14px;cursor:pointer;box-shadow:0 2px 8px rgba(232,168,56,.4)}
 #notif-bar button:active{transform:scale(.97)}
 #notif-bar .bx{background:none;box-shadow:none;color:#C9A45C;font-size:14px;padding:6px 8px}
+/* ── 알림 허용 방법 안내 모달 ── */
+#permhelp{position:fixed;inset:0;z-index:500;background:rgba(11,24,51,.55);display:flex;align-items:center;justify-content:center;padding:18px}
+#permhelp .box{background:#fff;border-radius:18px;max-width:360px;width:100%;padding:20px 18px;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+#permhelp h3{font-size:15.5px;font-weight:800;color:#0B1833;letter-spacing:-.02em;display:flex;align-items:center;gap:8px}
+#permhelp p{font-size:12px;color:#5b6478;line-height:1.7;margin-top:8px;word-break:keep-all}
+#permhelp .step{display:flex;gap:9px;align-items:flex-start;background:#F5F7FB;border-radius:12px;padding:10px 12px;margin-top:8px}
+#permhelp .step .n{width:20px;height:20px;border-radius:50%;background:var(--indigo);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+#permhelp .step div{font-size:12px;color:#39415a;font-weight:600;line-height:1.6;word-break:keep-all}
+#permhelp .step b{color:#0B1833}
+#permhelp .cls{width:100%;margin-top:14px;border:none;background:var(--indigo);color:#fff;font-family:inherit;font-size:13.5px;font-weight:800;border-radius:11px;padding:12px;cursor:pointer}
 .tab.active{background:linear-gradient(120deg,var(--indigo),#3a56d4);color:#fff;box-shadow:0 4px 12px rgba(79,110,247,.35)}
 .tab.active .tab-ico{filter:none}
 .tab.active .tab-lbl{color:#fff}
@@ -296,14 +306,35 @@ function grantFeedback(){
     ding();
   }catch(e){}
 }
-function askNotifPerm(){
+function askNotifPerm(fromUser){
   try{
-    if(notifPerm()!=='default')return;
+    var st=notifPerm();
+    if(st==='granted'){updateNotifBar();return;}
+    if(st==='denied'){if(fromUser)showPermHelp('denied');return;}
     Notification.requestPermission().then(function(r){
       updateNotifBar();
       if(r==='granted')grantFeedback();
+      // 팝업이 표시되지 않고 조용히 무시되었거나(default 유지) 거부된 경우 — 직접 켜는 방법 안내
+      else if(fromUser)showPermHelp(r);
     });
-  }catch(e){}
+  }catch(e){if(fromUser)showPermHelp('error');}
+}
+function showPermHelp(state){
+  var old=document.getElementById('permhelp');if(old)old.remove();
+  var d=document.createElement('div');d.id='permhelp';
+  d.innerHTML='<div class="box">'+
+    '<h3>🔔 알림을 직접 켜 주세요</h3>'+
+    '<p>'+(state==='denied'
+      ?'이 사이트의 알림이 <b>차단</b>되어 있어 팝업이 뜨지 않습니다. 아래 방법으로 직접 허용해 주세요.'
+      :'브라우저가 알림 요청 팝업을 띄우지 않는 상태입니다. 아래 방법으로 직접 허용해 주세요.')+'</p>'+
+    '<div class="step"><span class="n">1</span><div>휴대폰 <b>설정 → 애플리케이션</b>에서 <b>「HHC 관리자」</b>(또는 Chrome)를 찾습니다</div></div>'+
+    '<div class="step"><span class="n">2</span><div><b>알림</b> 메뉴에서 <b>허용</b>으로 바꿉니다</div></div>'+
+    '<div class="step"><span class="n">3</span><div>또는 <b>Chrome</b>으로 이 주소를 연 뒤 주소창의 <b>자물쇠 🔒 → 권한 → 알림 → 허용</b></div></div>'+
+    '<div class="step"><span class="n">4</span><div>앱을 완전히 닫았다가 다시 열면 적용됩니다</div></div>'+
+    '<button class="cls">확인</button></div>';
+  d.querySelector('.cls').onclick=function(){d.remove();};
+  d.addEventListener('click',function(e){if(e.target===d)d.remove();});
+  document.body.appendChild(d);
 }
 function updateNotifBar(){
   var st=notifPerm();
@@ -317,7 +348,12 @@ function updateNotifBar(){
   if(st==='default'){
     bar.innerHTML='<span class="bic">🔔</span><span class="btxt">새 의뢰·예약 알림을 받으려면 알림을 켜 주세요</span>'+
       '<button id="nb-on">알림 켜기</button><button class="bx" id="nb-x">✕</button>';
-    bar.querySelector('#nb-on').onclick=function(){askNotifPerm();};
+    bar.querySelector('#nb-on').onclick=function(){
+      this.textContent='요청 중...';
+      var self=this;
+      setTimeout(function(){self.textContent='알림 켜기';},1500);
+      askNotifPerm(true);
+    };
   }else{ // denied
     bar.innerHTML='<span class="bic">🔕</span><span class="btxt">알림이 차단되어 있습니다 — 브라우저 주소창 옆 자물쇠(또는 ⋮ 메뉴) → 사이트 설정 → 알림에서 「허용」으로 바꿔 주세요</span>'+
       '<button class="bx" id="nb-x">✕</button>';
@@ -326,7 +362,7 @@ function updateNotifBar(){
 }
 document.addEventListener('pointerdown',askNotifPerm,{capture:true,once:true});
 // 시작 시: 배너 표시 + 자동 요청 시도 (브라우저가 허용하는 경우 즉시 팝업)
-setTimeout(function(){updateNotifBar();askNotifPerm();},900);
+setTimeout(function(){updateNotifBar();askNotifPerm(false);},900);
 function appBadge(n){
   try{
     if(!('setAppBadge' in navigator))return;
