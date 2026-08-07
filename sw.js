@@ -8,6 +8,7 @@ self.addEventListener('fetch', function (e) { /* 네트워크 그대로 사용 (
 // ── HHC 관리자 알림 클릭: 앱 창을 앞으로 가져오고 해당 탭을 엽니다 ──
 self.addEventListener('notificationclick', function (e) {
   e.notification.close();
+  try { if (navigator.clearAppBadge) navigator.clearAppBadge(); } catch (err) {}
   var tab = (e.notification.data && e.notification.data.tab) || '';
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
     for (var i = 0; i < list.length; i++) {
@@ -33,6 +34,7 @@ self.addEventListener('push', function (e) {
       var c = list[i];
       if (c.visibilityState === 'visible' && c.url && (c.url.indexOf('staff-app') >= 0 || c.url.indexOf('staffapp') >= 0)) return;
     }
+    try { if (navigator.setAppBadge) navigator.setAppBadge(1); } catch (err) {}   // 앱 아이콘 배지 (지원 기기)
     return self.registration.showNotification(d.title || 'HHC 알림', {
       body: d.body || '눌러서 바로 확인하세요',
       icon: 'icon-admin-192.png', badge: 'icon-admin-192.png',
