@@ -1197,7 +1197,7 @@ App.resetForm=function(){
   setVal('wa-num','');setVal('bank-select','');
   var bp=$('bank-prev');if(bp)bp.style.display='none';
   lineItems=[];
-  window._creditAuto=false;updateCreditHint();
+  window._creditAuto=false;window._creditPicked=false;updateCreditHint();
   resetLinkBox();if(window.clearInspBox)window.clearInspBox();if(window.renderInspBox)window.renderInspBox();if(window.clearCtBox)window.clearCtBox();renderLI();App.upPrev();
   // 모든 화면 스크롤을 최상단으로 리셋
   var sc=$('screen-new');if(sc)sc.scrollTop=0;
@@ -1282,6 +1282,7 @@ function loadInvToForm(inv){
     return copy;
   });
   window._creditAuto=false;updateCreditHint(); // 기존 인보이스: 저장된 차감액 유지 (자동반영 끔)
+  window._creditPicked=(parseFloat(inv.creditUse)||0)>0.005; // 저장된 차감액이 있으면 은행·상태 자동선택 안 함
   showLinkBox(inv.id);renderLI();App.upPrev();Nav('new');Tab('info');
   if(window.refreshInspBox)window.refreshInspBox(inv.id);
   if(window.loadCtLinkFromInv)loadCtLinkFromInv(inv);
@@ -1907,11 +1908,39 @@ function calcTotals(inv){
   var minC=parseFloat(inv?inv.minCharge:val('min-charge'))||0;
   var extra=parseFloat(inv?inv.extraFee:val('extra-fee'))||0;
   var credit=parseFloat(inv?inv.creditUse:val('credit-use'))||0;
-  // 패키지 회원 자동반영: 비용소계를 회원적립잔액에 실시간 반영
+  // 패키지 회원 자동반영: 비용소계 + 세금 − 할인 + 추가비용을 회원적립잔액에 실시간 반영
   if(!inv&&window._creditAuto&&isPkgMember()){
-    credit=Math.round(sub*100)/100;
+    var _cTax=taxRate/100*sub;
+    var _cDisc=discType==='pct'?discVal/100*sub:discVal;
+    credit=Math.round((sub+_cTax-_cDisc+extra)*100)/100;
+    if(credit<0)credit=0;
     var cEl=$('credit-use');
     if(cEl&&parseFloat(cEl.value)!==credit)cEl.value=credit;
+  }
+  // 회원적립잔액이 기재·반영되면: 결제은행 「패키지 회원 적립금 사용」 + 상태 「결제완료」 자동 선택
+  // (한 번만 자동 적용 — 이후 직접 바꾼 선택은 유지)
+  if(!inv){
+    var _cp=credit>0.005;
+    if(_cp&&!window._creditPicked){
+      window._creditPicked=true;
+      try{
+        var _bs=$('bank-select');
+        if(_bs&&!_bs.value){
+          var _opt=(banks||[]).find(function(b){
+            var n=String(b.bankName||'')+' '+String(b.accName||'')+' '+String(b.accNum||'');
+            return /적립금|패키지/.test(n);
+          });
+          if(_opt){
+            if(typeof renderBankSel==='function')renderBankSel();  // 목록이 아직 안 그려진 경우 대비
+            _bs.value=_opt.id;
+            if(typeof onBankSel==='function')onBankSel();
+          }
+        }
+        var _st=$('inv-status');
+        if(_st&&_st.value!=='paid')_st.value='paid';
+      }catch(_){ }
+    }
+    if(!_cp)window._creditPicked=false;
   }
   var voucher=parseFloat(inv?inv.voucherAmt:val('voucher-amt'))||0;
   var ptsUse=parseFloat(inv?inv.pointUse:val('point-use'))||0;   // 💎 해피포인트 사용 (-차감)

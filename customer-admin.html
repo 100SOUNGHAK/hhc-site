@@ -1069,7 +1069,13 @@ window.addEventListener('scroll',()=>caMenuClose(),true);
 
 // ═══ 상세 드로어 ═══
 // ── 상세보기 문서 카드 접힘 상태 (기본: 인보이스·점검만 펼침) ──
-const CA_FOLD=(function(){try{return JSON.parse(localStorage.getItem('hhc_ca_fold')||'null')||{contracts:1,coupons:1,quotes:1,etc:1};}catch(e){return {contracts:1,coupons:1,quotes:1,etc:1};}})();
+// 기본값: 모든 문서 카드 접힘 (요약 칩이나 카드 제목을 누르면 펼쳐집니다)
+const CA_FOLD_DEF={invoices:1,inspections:1,contracts:1,coupons:1,quotes:1,etc:1};
+const CA_FOLD=(function(){
+  // 저장된 상태에 없는 항목은 기본값(접힘)을 따른다 — 이전 버전 사용자도 새 기본값 적용
+  try{return Object.assign({},CA_FOLD_DEF,JSON.parse(localStorage.getItem('hhc_ca_fold')||'null')||{});}
+  catch(e){return Object.assign({},CA_FOLD_DEF);}
+})();
 function caFold(k){return !!CA_FOLD[k];}
 window.caToggleFold=function(hd){
   const card=hd.closest('.dcard'); if(!card)return;
@@ -1229,7 +1235,10 @@ window.openDrawer=function(idx){
   h+=e.docs.invoices.length?e.docs.invoices.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>{
     const st=INV_ST[x.status]||[x.status||'-','blue'];
     const _pd=invPaid(x),_pt=(x.status!=='paid'&&_pd>0.005);
-    return '<div class="drow"><span class="id">'+esc(x.id||x.__id)+'</span><span class="pill '+st[1]+'">'+esc(st[0])+'</span><span class="m">'+esc(x.date||'')+' · '+fmtRM(invTotal(x))+(_pt?' <b style="color:var(--ok)">(기결제 −'+fmtRM(_pd)+' · 잔여 '+fmtRM(invDue(x))+')</b>':'')+'</span><a class="open-btn" target="_blank" rel="noopener" data-t="💳 인보이스 '+esc(x.id||x.__id)+'" href="'+BASE+'/hhc-invoice.html?view='+encodeURIComponent(x.id||x.__id)+'&lang=ko" onclick="return caView(this.href,this.dataset.t,event)">↗ 열기</a>'+rowBtns('invoices',x.__id)+'</div>';
+    // 회원적립잔액(creditUse)으로 차감된 인보이스: 차감 전 금액을 괄호로 표시 (단순 표기 — 합산에 반영 안 함)
+    const _cu=parseFloat(x.creditUse)||0;
+    const _cuTag=_cu>0.005?' <b style="color:#7c3aed">(차감 전 '+fmtRM(invTotal(x)+_cu)+' · 적립금 −'+fmtRM(_cu)+')</b>':'';
+    return '<div class="drow"><span class="id">'+esc(x.id||x.__id)+'</span><span class="pill '+st[1]+'">'+esc(st[0])+'</span><span class="m">'+esc(x.date||'')+' · '+fmtRM(invTotal(x))+_cuTag+(_pt?' <b style="color:var(--ok)">(기결제 −'+fmtRM(_pd)+' · 잔여 '+fmtRM(invDue(x))+')</b>':'')+'</span><a class="open-btn" target="_blank" rel="noopener" data-t="💳 인보이스 '+esc(x.id||x.__id)+'" href="'+BASE+'/hhc-invoice.html?view='+encodeURIComponent(x.id||x.__id)+'&lang=ko" onclick="return caView(this.href,this.dataset.t,event)">↗ 열기</a>'+rowBtns('invoices',x.__id)+'</div>';
   }).join(''):'<div class="dnone">인보이스 없음</div>';
   h+='</div>';
   // 점검보고서
