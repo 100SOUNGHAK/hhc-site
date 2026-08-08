@@ -132,6 +132,10 @@ input,select,textarea,button{font-family:inherit;font-size:15px}
 .rc-urgent-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:800;background:var(--red-bg);color:var(--red);margin-left:6px}
 .rc-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:9px;gap:8px}
 .rc-name{font-size:15px;font-weight:800;color:var(--text);letter-spacing:-.01em}
+.ca-open{cursor:pointer;border-bottom:1px dashed rgba(37,99,235,.45)}
+.ca-open:hover{color:#2563eb;border-bottom-color:#2563eb}
+.ca-open .cai{font-size:11px;margin-left:4px;opacity:.7;vertical-align:middle}
+
 .mg-badge{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800;vertical-align:middle;letter-spacing:-.01em;white-space:nowrap}
 .mg-vvip{background:#fef9c3;color:#a16207}
 .mg-pkg{background:#eff6ff;color:#2563eb}
@@ -1180,7 +1184,7 @@ function renderList(){
     return `<div class="req-card ${cardCls}" data-id="${r.__id}">
       <div class="rc-top">
         <div class="rc-info">
-          <div class="rc-name">${r.condo_name||r.condo||'—'}${r.condo_unit?' '+r.condo_unit:''}${gradeBadge(rqCustName(r),r.phone)}${langBadge}${urgentBadge}</div>
+          <div class="rc-name"><span class="ca-open" data-caopen="${r.__id}" title="총괄 고객관리에서 이 고객 상세 열기">${r.condo_name||r.condo||'—'}${r.condo_unit?' '+r.condo_unit:''}<span class="cai">👤</span></span>${gradeBadge(rqCustName(r),r.phone)}${langBadge}${urgentBadge}</div>
           <div class="rc-phone">📞 ${r.phone||'—'}</div>
         </div>
         <span class="rc-status ${statusCls}">${statusLabel}</span>
@@ -1206,6 +1210,7 @@ function renderList(){
           <button class="btn-sm" style="background:var(--il);color:var(--indigo);border:1px solid var(--indigo)" data-edit="${r.__id}">✏️ 수정</button>
           <details class="rmore"><summary title="더보기 메뉴">⋮</summary>
             <div class="rmenu">
+              <button data-caopen="${r.__id}"><i>👤</i>고객정보 보기</button>
               <button data-kakao="${r.__id}"><i>📋</i>카카오톡 복사</button>
               <div class="sep"></div>
               <button class="dgr" data-del="${r.__id}"><i>🗑</i>의뢰 삭제</button>
@@ -1362,6 +1367,14 @@ document.getElementById('req-list').addEventListener('click',async e=>{
     return;
   }
 
+  // 👤 총괄 고객관리 상세 열기
+  const caBtn=e.target.closest('[data-caopen]');
+  if(caBtn){
+    const r=allRequests.find(x=>x.__id===caBtn.dataset.caopen);
+    if(r)window.openCustomerAdmin(r.phone,rqCustName(r));
+    return;
+  }
+
   // WhatsApp
   const waBtn=e.target.closest('[data-wa]');
   if(waBtn){
@@ -1447,6 +1460,30 @@ function showConfirmModal(msg,onOk){
 }
 
 function showLoading(v){document.getElementById('loading-ov').classList.toggle('open',v);}
+
+// ── 👤 총괄 고객관리(customer-admin.html)의 해당 고객 상세 열기 ──
+// 관리자 허브(staff-app) 안이면 허브의 「고객관리」 탭으로 전환해서 열고,
+// 단독 창으로 열려 있으면 새 탭으로 엽니다.
+window.openCustomerAdmin=function(phone,name){
+  var key=String(phone||'').trim()||String(name||'').trim();
+  if(!key){showToast('연결할 고객 정보가 없습니다');return;}
+  var url='customer-admin.html?open='+encodeURIComponent(key);
+  var done=false;
+  function fallback(){if(done)return;done=true;window.open(url,'_blank');}
+  try{
+    if(window.parent&&window.parent!==window){
+      var ack=function(ev){
+        if(ev&&ev.data&&ev.data.hhcOpenCustomerOk){done=true;window.removeEventListener('message',ack);}
+      };
+      window.addEventListener('message',ack);
+      window.parent.postMessage({hhcOpenCustomer:key},'*');
+      showToast('👤 고객관리에서 여는 중...');
+      setTimeout(function(){window.removeEventListener('message',ack);fallback();},500);
+      return;
+    }
+  }catch(e){}
+  fallback();
+};
 function showToast(msg){
   const t=document.getElementById('toast');
   t.textContent=msg;t.style.display='block';

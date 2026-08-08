@@ -195,6 +195,10 @@ select.field-input{cursor:pointer}
 .customer-item:hover{border-color:var(--teal);box-shadow:0 6px 20px -8px rgba(15,181,164,.2)}
 .ci-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
 .ci-name{font-size:15px;font-weight:800;color:var(--text);letter-spacing:-.01em}
+.ca-open{cursor:pointer;border-bottom:1px dashed rgba(37,99,235,.45)}
+.ca-open:hover{color:#2563eb;border-bottom-color:#2563eb}
+.ca-open .cai{font-size:11px;margin-left:4px;opacity:.7;vertical-align:middle}
+
 .mg-badge{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800;vertical-align:middle;letter-spacing:-.01em;white-space:nowrap}
 .mg-vvip{background:#fef9c3;color:#a16207}
 .mg-pkg{background:#eff6ff;color:#2563eb}
@@ -2254,7 +2258,7 @@ function renderList(){
     return `<div class="customer-item st-${statusCls}">
       <div class="ci-top">
         <div>
-          <div class="ci-name">${b.customer_name||'—'}${gradeBadge(b.customer_name,b.customer_phone)}${langBadge}</div>
+          <div class="ci-name"><span class="ca-open" onclick="openCustomerAdminById('${b.__id}')" title="총괄 고객관리에서 이 고객 상세 열기">${b.customer_name||'—'}<span class="cai">👤</span></span>${gradeBadge(b.customer_name,b.customer_phone)}${langBadge}</div>
           <div class="ci-phone">${b.customer_phone||''} ${b.customer_address?'· '+b.customer_address:''}</div>
         </div>
         <span class="ci-status ${statusCls}">${statusLabel}</span>
@@ -2276,6 +2280,7 @@ function renderList(){
           <button class="btn-sm btn-sm-teal" onclick="startEditList('${b.__id}')">✏️ 수정</button>
           <details class="rmore"><summary title="더보기 메뉴">⋮</summary>
             <div class="rmenu">
+              <button onclick="openCustomerAdminById('${b.__id}')"><i>👤</i>고객정보 보기</button>
               <button onclick="sendKakao('${b.__id}')"><i>📋</i>카카오톡 복사</button>
               <div class="sep"></div>
               <button class="dgr" onclick="deleteBooking('${b.__id}')"><i>🗑</i>예약 삭제</button>
@@ -2998,6 +3003,35 @@ function showModal(title,msg,showCancel,onOk){
   ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open');});
 }
 function showLoading(v){document.getElementById('loading-ov').classList.toggle('open',v);}
+
+// ── 👤 총괄 고객관리(customer-admin.html)의 해당 고객 상세 열기 ──
+// 관리자 허브(staff-app) 안이면 허브의 「고객관리」 탭으로 전환해서 열고,
+// 단독 창으로 열려 있으면 새 탭으로 엽니다.
+window.openCustomerAdmin=function(phone,name){
+  var key=String(phone||'').trim()||String(name||'').trim();
+  if(!key){showToast('연결할 고객 정보가 없습니다');return;}
+  var url='customer-admin.html?open='+encodeURIComponent(key);
+  var done=false;
+  function fallback(){if(done)return;done=true;window.open(url,'_blank');}
+  try{
+    if(window.parent&&window.parent!==window){
+      var ack=function(ev){
+        if(ev&&ev.data&&ev.data.hhcOpenCustomerOk){done=true;window.removeEventListener('message',ack);}
+      };
+      window.addEventListener('message',ack);
+      window.parent.postMessage({hhcOpenCustomer:key},'*');
+      showToast('👤 고객관리에서 여는 중...');
+      setTimeout(function(){window.removeEventListener('message',ack);fallback();},500);
+      return;
+    }
+  }catch(e){}
+  fallback();
+};
+window.openCustomerAdminById=function(id){
+  var b=(allBookings||[]).find(function(x){return x.__id===id;});
+  if(!b){showToast('예약 정보를 찾을 수 없습니다');return;}
+  window.openCustomerAdmin(b.customer_phone,b.customer_name);
+};
 function showToast(msg){
   const t=document.getElementById('toast-box');
   t.textContent=msg;t.style.display='block';

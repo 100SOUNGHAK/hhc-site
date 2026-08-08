@@ -3275,20 +3275,43 @@ window.caOpenContractUsage=function(idx){
 
 window._entries=function(){return entries;};
 
-// ═══ 📅 일정캘린더 등에서 ?open=<연락처|이름> 으로 진입 시 해당 고객 상세 자동 열기 ═══
+// ═══ 📅 일정캘린더 · 의뢰관리 · 예약목록 등에서 특정 고객 상세를 바로 여는 기능 ═══
+// ① 주소로 진입 : customer-admin.html?open=<연락처|이름>
+// ② 관리자 허브 안에서 메시지로 요청 : postMessage({hhcOpenCustomer:'<연락처|이름>'})
+//    → 화면을 새로 불러오지 않고 그 자리에서 해당 고객 상세만 엽니다.
+function caFindByKey(k){
+  const kp=pn(k),kn2=nn(k);
+  return entries.findIndex(e=>
+    (kp&&pn(e.phone)===kp)||
+    (kn2&&(nn(e.name)===kn2||(e.aliases||[]).some(a=>nn(a)===kn2))));
+}
+let _pendingOpen='';
+window.caOpenByKey=function(k){
+  k=String(k||'').trim();
+  if(!k)return false;
+  if(!entries.length){_pendingOpen=k;return true;}   // 아직 목록 로딩 전이면 불러온 뒤 연다
+  const i=caFindByKey(k);
+  if(i>=0){openDrawer(i);toast('🔎 '+(entries[i].name||'고객')+' 상세를 열었습니다');return true;}
+  toast('해당 고객을 찾지 못했습니다: '+k);
+  return false;
+};
+window.addEventListener('message',function(ev){
+  const d=ev&&ev.data;
+  if(!d||!d.hhcOpenCustomer)return;
+  // 먼저 응답을 보내 요청한 화면이 기다리지 않게 한다
+  try{if(ev.source&&ev.source.postMessage)ev.source.postMessage({hhcOpenCustomerDone:1},'*');}catch(e){}
+  try{window.caOpenByKey(String(d.hhcOpenCustomer));}catch(e){}
+});
 let _autoOpened=false;
 function tryAutoOpen(){
-  if(_autoOpened||!entries.length)return;
+  if(!entries.length)return;
+  if(_pendingOpen){const k=_pendingOpen;_pendingOpen='';window.caOpenByKey(k);return;}
+  if(_autoOpened)return;
   let k='';
   try{k=new URLSearchParams(location.search).get('open')||'';}catch(e){}
   if(!k)return;
-  const kp=pn(k),kn2=nn(k);
-  const i=entries.findIndex(e=>
-    (kp&&pn(e.phone)===kp)||
-    (kn2&&(nn(e.name)===kn2||(e.aliases||[]).some(a=>nn(a)===kn2))));
   _autoOpened=true;   // 못 찾아도 1회만 시도
-  if(i>=0){openDrawer(i);toast('🔎 '+(entries[i].name||'고객')+' 상세를 열었습니다');}
-  else toast('해당 고객을 찾지 못했습니다: '+k);
+  window.caOpenByKey(k);
 }
 
 // ═══ INIT ═══
