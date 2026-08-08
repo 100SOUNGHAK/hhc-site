@@ -1224,13 +1224,26 @@ function renderList(){
   if(editingReqId)renderEditPicked();
 }
 
+// ══ 품목명 KO→EN 사전 — 고객용 영문 메시지 전용 (관리화면 표시는 한글 그대로 유지) ══
+var ITEM_EN={"기타 (직접 입력)":"Other (Custom)","천정형 (카세트)":"Ceiling Cassette","FCU · 덕트형":"FCU / Duct","기타(직접 입력)":"Other (Custom)","에어컨(가정용)":"AC (Home)","매립형 (덕트)":"Ducted (Concealed)","공기청정기 청소":"Air Purifier Clean","에어컨(매장용)":"AC (Commercial)","스팀살균세척":"Steam Sterilize Clean","전체분해세척":"Full Disassembly Clean","스팀그릴세척":"Steam Grill Clean","통돌이세탁기":"Top Load","습식살균방식":"Wet Sterilize Method","완전분해세척":"Full Disassembly Clean","카페트 세탁":"Carpet Clean","콘센트 교체":"Socket/Outlet Replacement","드럼세탁기":"Front Load (Drum)","공기청정기":"Air Purifier","기타서비스":"Other Services","벽걸이형":"Wall-mounted","기본세척":"Basic Clean","약품세척":"Chemical Clean","분해세척":"Disassembly Clean","매트리스":"Mattress","건식방식":"Dry Method","현장세탁":"On-site Wash","수거세탁":"Take-away Wash","주방후드":"Kitchen Hood","간이청소":"Quick Clean","분해청소":"Disassembly Clean","식탁의자":"Dining Chair","스팀세탁":"Steam Clean","전등교체":"Light Replacement","화학세척":"Chemical Clean","실외기":"Outdoor Unit","세탁기":"Washing Machine","I 형":"I-Shape","L 형":"L-Shape","건조기":"Dryer","냉장고":"Refrigerator","단문형":"Single Door","양문형":"Double Door","실링팬":"Ceiling Fan","카페트":"Carpet","서비스":"Service","쇼파":"Sofa","커튼":"Curtain"};
+var _IEK=Object.keys(ITEM_EN).sort(function(a,b){return b.length-a.length;});
+function trItemsEn(s){
+  if(s==null)return s;
+  s=String(s);
+  if(!/[\uAC00-\uD7A3]/.test(s))return s;
+  for(var i=0;i<_IEK.length;i++){if(s.indexOf(_IEK[i])>=0)s=s.split(_IEK[i]).join(ITEM_EN[_IEK[i]]);}
+  s=s.replace(/(\d+)\s*\uB300(?![\uAC00-\uD7A3])/g,function(m,n){return n+(n==='1'?' unit':' units');});
+  s=s.replace(/(\d+)\s*\uAC1C(?![\uAC00-\uD7A3])/g,function(m,n){return n+(n==='1'?' item':' items');});
+  return s;
+}
 // ── 메시지 생성 (통일 포맷: 인사 → 상태 → 구분선 → 정보블록 → 구분선 → 안내 → 감사) ──
 function buildMsg(r,isComplete){
   const items=r.items?JSON.parse(r.items):[];
   const lang=r.lang||'ko';
   const name=r.condo_name||r.condo||(lang==='en'?'Customer':'고객');
   const div='────────────────';
-  const itemLines=items.map(it=>{const svc=it.svc?` - ${it.svc}`:'';return `  • ${it.cat}${svc} × ${it.qty}`;}).join('\n');
+  const _EN=(lang==='en');
+  const itemLines=items.map(it=>{const c=_EN?trItemsEn(it.cat):it.cat;const s2=it.svc?(_EN?trItemsEn(it.svc):it.svc):'';return `  • ${c}${s2?` - ${s2}`:''} × ${it.qty}`;}).join('\n');
 
   if(isComplete){
     if(lang==='en'){

@@ -1998,6 +1998,18 @@ window.caPtUseDel=async function(idx,ui){
     closeDrawer();loadAll(true);
   }catch(err){toast('취소 실패: '+err.message);}
 };
+// ══ 품목명 KO→EN 사전 — 고객용 영문 메시지 전용 (관리화면 표시는 한글 그대로 유지) ══
+var ITEM_EN={"기타 (직접 입력)":"Other (Custom)","천정형 (카세트)":"Ceiling Cassette","FCU · 덕트형":"FCU / Duct","기타(직접 입력)":"Other (Custom)","에어컨(가정용)":"AC (Home)","매립형 (덕트)":"Ducted (Concealed)","공기청정기 청소":"Air Purifier Clean","에어컨(매장용)":"AC (Commercial)","스팀살균세척":"Steam Sterilize Clean","전체분해세척":"Full Disassembly Clean","스팀그릴세척":"Steam Grill Clean","통돌이세탁기":"Top Load","습식살균방식":"Wet Sterilize Method","완전분해세척":"Full Disassembly Clean","카페트 세탁":"Carpet Clean","콘센트 교체":"Socket/Outlet Replacement","드럼세탁기":"Front Load (Drum)","공기청정기":"Air Purifier","기타서비스":"Other Services","벽걸이형":"Wall-mounted","기본세척":"Basic Clean","약품세척":"Chemical Clean","분해세척":"Disassembly Clean","매트리스":"Mattress","건식방식":"Dry Method","현장세탁":"On-site Wash","수거세탁":"Take-away Wash","주방후드":"Kitchen Hood","간이청소":"Quick Clean","분해청소":"Disassembly Clean","식탁의자":"Dining Chair","스팀세탁":"Steam Clean","전등교체":"Light Replacement","화학세척":"Chemical Clean","실외기":"Outdoor Unit","세탁기":"Washing Machine","I 형":"I-Shape","L 형":"L-Shape","건조기":"Dryer","냉장고":"Refrigerator","단문형":"Single Door","양문형":"Double Door","실링팬":"Ceiling Fan","카페트":"Carpet","서비스":"Service","쇼파":"Sofa","커튼":"Curtain"};
+var _IEK=Object.keys(ITEM_EN).sort(function(a,b){return b.length-a.length;});
+function trItemsEn(s){
+  if(s==null)return s;
+  s=String(s);
+  if(!/[\uAC00-\uD7A3]/.test(s))return s;
+  for(var i=0;i<_IEK.length;i++){if(s.indexOf(_IEK[i])>=0)s=s.split(_IEK[i]).join(ITEM_EN[_IEK[i]]);}
+  s=s.replace(/(\d+)\s*\uB300(?![\uAC00-\uD7A3])/g,function(m,n){return n+(n==='1'?' unit':' units');});
+  s=s.replace(/(\d+)\s*\uAC1C(?![\uAC00-\uD7A3])/g,function(m,n){return n+(n==='1'?' item':' items');});
+  return s;
+}
 // ═══ 고객 마이페이지 발송 ═══
 window.caSendModal=async function(idx){
   const e=entries[idx];if(!e)return;
@@ -2213,13 +2225,14 @@ window.caSendModal=async function(idx){
     return String(v||'').split('\n').map(t=>t.trim()).filter(t=>t).map(t=>t.charAt(0)==='*'?t:('* '+t)).join('\n');
   }
   // 의뢰 품목 — requests.items 는 [{cat,svc,qty}] 형태의 JSON 문자열
-  function rqItemLines(x){
+  function rqItemLines(x,en){
     let a=[];
     try{a=JSON.parse(String((x&&x.items)||'[]'));}catch(_){a=[];}
     if(!Array.isArray(a))a=[];
     return a.map(it=>{
-      const nm2=String((it&&it.svc)||'').trim();
+      let nm2=String((it&&it.svc)||'').trim();
       if(!nm2)return '';
+      if(en)nm2=trItemsEn(nm2);
       const q=(it&&it.qty)?String(it.qty).trim():'';
       return '* '+nm2+(q&&q!=='0'?' ×'+q:'');
     }).filter(t=>t).join('\n');
@@ -2266,16 +2279,18 @@ window.caSendModal=async function(idx){
     return '🧾';
   }
   // 접수 정보에 넣을 품목 줄 — 「🧼 기본세척 × 5대」 형태 (수량이 없으면 「× -」)
-  function rqItemLines2(x){
+  function rqItemLines2(x,en){
     let a=[];
     try{a=JSON.parse(String((x&&x.items)||'[]'));}catch(_){a=[];}
     if(!Array.isArray(a))a=[];
     return a.map(it=>{
-      const nm2=String((it&&it.svc)||'').trim();
-      if(!nm2)return '';
+      const ko2=String((it&&it.svc)||'').trim();
+      if(!ko2)return '';
+      const ic2=rqIcon(ko2);            // 아이콘은 한글 원본 기준으로 판단
+      const nm2=en?trItemsEn(ko2):ko2;
       const q=(it&&it.qty)?String(it.qty).trim():'';
-      const qt=(!q||q==='0')?'-':(/^\d+$/.test(q)?(q+'대'):q);
-      return rqIcon(nm2)+' '+nm2+' × '+qt;
+      const qt=(!q||q==='0')?'-':(/^\d+$/.test(q)?(q+(en?(q==='1'?' unit':' units'):'대')):q);
+      return ic2+' '+nm2+' × '+qt;
     }).filter(t=>t).join('\n');
   }
   function msgList(){
@@ -2696,7 +2711,8 @@ window.caSendModal=async function(idx){
         :('안녕하세요, '+nm+' 고객님 😊\nHappy Home Care입니다.\n\n\u{1F449} 마이페이지를 앱처럼 설치해보세요!\n설치해 두시면 링크를 찾지 않아도\n아이콘 하나로 언제든 바로 열립니다.\n'+SEP2+'\n1️⃣ 먼저 아래 마이페이지를 열어주세요\n📱 My Page\n🔗 '+l+'\n'+SEP2+'\n2️⃣ 홈 화면에 추가해주세요\n\n🍎 iPhone (Safari)\n① 화면 하단의 공유 버튼(⬆️)을 누르세요\n② "홈 화면에 추가"를 선택하세요\n③ 오른쪽 위 "추가"를 누르면 완료!\n\n🤖 Android (Chrome)\n① 페이지 하단의 "📲 앱으로 설치" 버튼을 누르세요\n② 버튼이 안 보이면 메뉴(⋮) → "홈 화면에 추가"\n'+SEP2+'\n🏠 설치 후에는 홈 화면의 HHC 아이콘 하나로\n'+rowsI+'\n언제든지 편리하게 확인하실 수 있습니다.\n'+SEP2+'\n감사합니다. 🙏\nHappy Home Care\n📞 +60 17-247 2774');
     }
     if(state.tpl==='bk'){
-      const bi=BKP[0]&&BKP[0].booking_items?String(BKP[0].booking_items):'';
+      let bi=BKP[0]&&BKP[0].booking_items?String(BKP[0].booking_items):'';
+      if(en&&bi)bi=trItemsEn(bi);
       return en
         ?('Hello '+nm+' 😊\nThis is Happy Home Care.\n\n\u{1F449} A booking request is ready for you. Please choose your visit date & time on your My Page below to complete the booking.\n'+CS_SEP+'\n🏠 Open your personal My Page below — the \u300C📅 Booking Request\u300D screen appears right at the top.'+(bi?'\n\n* Service: '+bi:'')+'\nAnd anytime:\n\n'+list+'\n\nall in one place.\n'+CS_SEP+'\n📱 My Page\n🔗 '+l+'\n'+CS_SEP+'\nOnce you submit, we will confirm your booking and let you know right away.\nThank you. 🙏\nHappy Home Care\n📞 +60 17-247 2774')
         :('안녕하세요, '+nm+' 고객님 😊\nHappy Home Care입니다.\n\n\u{1F449} 예약 신청서가 준비되었습니다. 아래 마이페이지에서 방문 날짜와 시간을 선택해 예약 신청을 완료해 주세요.\n'+CS_SEP+'\n🏠 아래 고객님 전용 마이페이지를 열면 상단에 \u300C📅 예약 신청\u300D 화면이 바로 표시됩니다.'+(bi?'\n\n* 신청 품목: '+bi:'')+'\n또한 언제나\n\n'+list+'\n\n모두 편리하게 이용/조회 하실 수 있습니다.\n'+CS_SEP+'\n📱 마이페이지\n🔗 '+l+'\n'+CS_SEP+'\n신청이 완료되면 확인 후 바로 확정 안내를 드리겠습니다.\n감사합니다. 🙏\nHappy Home Care\n📞 +60 17-247 2774');
@@ -2712,7 +2728,7 @@ window.caSendModal=async function(idx){
       const r=RQP[0]||{};
       const rd=String(r.submitted_at||r.created_at||'').slice(0,10);
       const when=rd?((en?'📥 Received\n':'📥 접수일\n')+dTxt(rd,en)+'\n'):'';
-      const ri=rqItemLines2(r);
+      const ri=rqItemLines2(r,en);
       const head=when+(ri?ri+'\n':'');
       const rowsR=msgRows(en);
       return en
