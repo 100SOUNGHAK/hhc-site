@@ -538,6 +538,92 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/fireba
 import { getFirestore, collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const BASE='https://hhc-3p8.pages.dev';
+
+// ═══════════════ 카카오톡 공유 (Kakao Share SDK) ═══════════════
+// 카카오 개발자 사이트(developers.kakao.com) → 내 애플리케이션 → 앱 키 → JavaScript 키
+// 를 처음 한 번만 입력하면 Firestore(settings/kakao)에 저장되어 다른 기기에서도 그대로 쓰입니다.
+const KAKAO_SDKS=[
+  'https://t1.kakaocdn.net/kakao_js_sdk/2.7.5/kakao.min.js',
+  'https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js',
+  'https://developers.kakao.com/sdk/js/kakao.js'
+];
+let KAKAO_KEY='';
+try{KAKAO_KEY=localStorage.getItem('hhc_kakao_key')||'';}catch(_){}
+let _kkLoad=null;
+async function kkKey(force){
+  if(KAKAO_KEY&&!force)return KAKAO_KEY;
+  if(!KAKAO_KEY&&db){
+    try{
+      const d=await getDoc(doc(db,'settings','kakao'));
+      const v=d&&d.exists&&d.exists()?(d.data()||{}).jsKey:'';
+      if(v){KAKAO_KEY=v;try{localStorage.setItem('hhc_kakao_key',v);}catch(_){}}
+    }catch(_){}
+  }
+  if(KAKAO_KEY&&!force)return KAKAO_KEY;
+  const v=prompt('카카오 JavaScript 키를 입력하세요.\n\ndevelopers.kakao.com → 내 애플리케이션 → 앱 키 → JavaScript 키\n(처음 한 번만 입력하면 계속 사용됩니다)',KAKAO_KEY||'');
+  if(v===null)return KAKAO_KEY||'';
+  const k=String(v).trim();
+  if(!k)return '';
+  KAKAO_KEY=k;
+  try{localStorage.setItem('hhc_kakao_key',k);}catch(_){}
+  if(db){try{await setDoc(doc(db,'settings','kakao'),{jsKey:k,updated_at:new Date().toISOString()},{merge:true});}catch(_){}}
+  toast('✓ 카카오 키가 저장되었습니다');
+  return k;
+}
+function kkLoad(){
+  if(window.Kakao)return Promise.resolve(window.Kakao);
+  if(_kkLoad)return _kkLoad;
+  _kkLoad=new Promise((res,rej)=>{
+    let i=0;
+    (function next(){
+      if(i>=KAKAO_SDKS.length){rej(new Error('sdk'));return;}
+      const sc=document.createElement('script');
+      sc.src=KAKAO_SDKS[i++];sc.async=true;
+      sc.onload=()=>{window.Kakao?res(window.Kakao):next();};
+      sc.onerror=()=>{try{sc.remove();}catch(_){}next();};
+      document.head.appendChild(sc);
+    })();
+  });
+  return _kkLoad;
+}
+// 카카오 카드 설명문: 링크·구분선을 걷어내고 190자로 요약
+function kkDesc(m){
+  let t=String(m||'').replace(/https?:\/\/\S+/g,'').replace(/^-{3,}$/gm,'')
+        .replace(/\n{2,}/g,'\n').trim();
+  return t.length>185?t.slice(0,185)+'…':t;
+}
+async function kkSend(title,desc,url){
+  const key=await kkKey(false);
+  if(!key){toast('카카오 JavaScript 키가 등록되지 않았습니다');return false;}
+  let K;
+  try{K=await kkLoad();}catch(_){toast('카카오톡 SDK를 불러오지 못했습니다 · 메시지 복사를 이용해 주세요');return false;}
+  try{if(!K.isInitialized())K.init(key);}
+  catch(err){toast('카카오 키가 올바르지 않습니다 · ⚙ 버튼으로 다시 등록해 주세요');return false;}
+  const share=K.Share||K.Link;
+  if(!share||!share.sendDefault){toast('이 브라우저에서는 카카오톡 공유를 지원하지 않습니다');return false;}
+  try{
+    share.sendDefault({
+      objectType:'feed',
+      content:{title:String(title||'').slice(0,80),description:desc,
+        imageUrl:BASE+'/icon-192.png',link:{mobileWebUrl:url,webUrl:url}},
+      buttons:[{title:'마이페이지 열기',link:{mobileWebUrl:url,webUrl:url}}]
+    });
+    return true;
+  }catch(err){toast('카카오톡 공유 실패 · 메시지 복사를 이용해 주세요');return false;}
+}
+// 발송 버튼 공통 처리 (성공 시 전체 메시지도 클립보드에 복사)
+async function kkShareMsg(name,message,url){
+  const ok=await kkSend('[Happy Home Care] '+(name||'고객')+'님 안내',kkDesc(message),url);
+  if(ok){
+    try{await navigator.clipboard.writeText(message);}catch(_){}
+    toast('💛 카카오톡 공유창을 열었습니다 · 전체 메시지도 복사되었습니다');
+  }
+  return ok;
+}
+async function kkResetKey(){
+  const k=await kkKey(true);
+  if(k)toast('✓ 카카오 키가 저장되었습니다');
+}
 const MEMBER_TIERS=['','VVIP','패키지 - 실버회원','패키지 - 티타늄회원','패키지 - 다이아회원','패키지 - 골드회원','패키지 - 로얄회원','패키지(사업) - 티타늄회원','패키지(사업) - 다이아회원','패키지(사업) - 골드회원','패키지(사업) - 로얄회원'];
 const PKG_LABEL={silver:'실버',royal:'로얄',gold:'골드',diamond:'다이아',titanium:'티타늄',special:'스페셜해피홈'};
 let db=null;
@@ -1962,9 +2048,13 @@ window.caSendModal=async function(idx){
     '<div style="background:#E8F3EC;border:1px solid #cfe3d6;border-radius:14px;padding:9px;margin-bottom:11px">'+
       '<div id="cs-msg" style="background:#fff;border-radius:12px;border-bottom-left-radius:4px;padding:13px 14px;font-size:12.5px;line-height:1.75;color:var(--ink);word-break:break-word;max-height:300px;overflow:auto;box-shadow:0 1px 4px rgba(11,24,51,.1)"></div>'+
     '</div>'+
+    '<div style="display:flex;gap:7px;margin-bottom:6px">'+
+      '<button id="cs-wa" class="btn" style="flex:1;background:#22c55e;border-color:#22c55e;color:#fff">💬 WhatsApp 발송</button>'+
+      '<button id="cs-kk" class="btn" style="flex:1;background:#FEE500;border-color:#FEE500;color:#3C1E1E">💛 카카오톡 발송</button>'+
+      '<button id="cs-kkset" class="btn" style="flex:0 0 auto;padding:10px 11px" title="카카오 JavaScript 키 등록 · 변경">⚙</button>'+
+    '</div>'+
     '<div style="display:flex;gap:7px">'+
       '<button id="cs-pv" class="btn" style="flex:1;background:var(--pri-bg);border-color:var(--pri);color:var(--pri)">👁 미리보기</button>'+
-      '<button id="cs-wa" class="btn" style="flex:1;background:#22c55e;border-color:#22c55e;color:#fff">💬 WhatsApp 발송</button>'+
       '<button id="cs-cp" class="btn" style="flex:1">📋 메시지 복사</button>'+
     '</div>');
   function link(){
@@ -2590,6 +2680,8 @@ window.caSendModal=async function(idx){
     if(ph)wa+='60'+ph;
     window.open(wa+'?text='+encodeURIComponent(msg()),'_blank');
   });
+  mk.querySelector('#cs-kk').addEventListener('click',()=>{kkShareMsg(e.name,msg(),link());});
+  mk.querySelector('#cs-kkset').addEventListener('click',()=>{kkResetKey();});
   mk.querySelector('#cs-cp').addEventListener('click',()=>{
     navigator.clipboard.writeText(msg()).then(()=>toast('✓ 메시지가 복사되었습니다'))
       .catch(()=>prompt('복사해서 사용하세요:',link()));
@@ -2699,8 +2791,11 @@ window.caHomeModal=function(idx){
       '<div id="hp-bub" style="background:#fff;border-radius:4px 14px 14px 14px;padding:12px 13px;font-size:12px;line-height:1.65;color:#111;white-space:pre-wrap;word-break:break-all"></div>'+
     '</div>'+
     '<div style="display:flex;gap:7px;margin-top:11px">'+
-      '<button id="hp-pv" class="btn" style="flex:1;background:var(--pri-bg);border-color:var(--pri);color:var(--pri)">👁 미리보기</button>'+
       '<button id="hp-wa" class="btn" style="flex:1;background:#22c55e;border-color:#22c55e;color:#fff">💬 WhatsApp 발송</button>'+
+      '<button id="hp-kk" class="btn" style="flex:1;background:#FEE500;border-color:#FEE500;color:#3C1E1E">💛 카카오톡 발송</button>'+
+    '</div>'+
+    '<div style="display:flex;gap:7px;margin-top:6px">'+
+      '<button id="hp-pv" class="btn" style="flex:1;background:var(--pri-bg);border-color:var(--pri);color:var(--pri)">👁 미리보기</button>'+
       '<button id="hp-cp" class="btn" style="flex:1">📋 메시지 복사</button>'+
     '</div>');
   function link(){return BASE+'/home'+(en?'?lang=en':'')+'#'+sec;}
@@ -2743,6 +2838,7 @@ window.caHomeModal=function(idx){
     if(ph)wa+='60'+ph;
     window.open(wa+'?text='+encodeURIComponent(msg()),'_blank');
   });
+  mk.querySelector('#hp-kk').addEventListener('click',()=>{kkShareMsg(e.name,msg(),link());});
   mk.querySelector('#hp-cp').addEventListener('click',()=>{
     navigator.clipboard.writeText(msg()).then(()=>toast('✓ 메시지가 복사되었습니다'))
       .catch(()=>prompt('복사해서 사용하세요:',msg()));
