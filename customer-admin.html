@@ -2026,6 +2026,7 @@ window.caSendModal=async function(idx){
         (CPD.length?'<span data-t="cpd" style="'+_cpSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🏷️ 할인권 발송</span>':'')+
         (IPS.length?'<span data-t="ins" style="'+_icSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🔧 점검보고서 발송</span>':'')+
         (CTS.length?'<span data-t="ct" style="'+_icSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📑 계약서 발송</span>':'')+
+        (CTS.length?'<span data-t="aw" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🧽 작업후 안내</span>':'')+
         (QTS.length?'<span data-t="qt" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🧾 견적서 발송</span>':'')+
         '<span data-t="basic" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📄 기본 안내</span>'+
         '<span data-t="revisit" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🔄 재방문 · 예약</span>'+
@@ -2077,6 +2078,10 @@ window.caSendModal=async function(idx){
       '<button id="cs-wa" class="btn" style="flex:1;background:#22c55e;border-color:#22c55e;color:#fff">💬 WhatsApp 발송</button>'+
       '<button id="cs-kk" class="btn" style="flex:1;background:#FEE500;border-color:#FEE500;color:#3C1E1E">💛 카카오톡 발송</button>'+
       '<button id="cs-kkset" class="btn" style="flex:0 0 auto;padding:10px 11px" title="카카오 JavaScript 키 등록 · 변경">⚙</button>'+
+    '</div>'+
+    '<div style="display:flex;gap:7px;margin-bottom:6px">'+
+      '<button id="cs-imgs" class="btn" style="flex:1;display:none;background:#0B1833;border-color:#0B1833;color:#fff">📤 이미지 + 메시지 함께 보내기</button>'+
+      '<button id="cs-imgd" class="btn" style="flex:0 0 auto;padding:10px 12px" title="안내 카드 이미지를 저장해 직접 첨부">🖼 카드 저장</button>'+
     '</div>'+
     '<div style="display:flex;gap:7px">'+
       '<button id="cs-pv" class="btn" style="flex:1;background:var(--pri-bg);border-color:var(--pri);color:var(--pri)">👁 미리보기</button>'+
@@ -2211,11 +2216,11 @@ window.caSendModal=async function(idx){
   // 청구금액 = 「청구중」+「연체」 인보이스의 **잔여 결제금액** 합계
   //            (기결제/일부 결제가 있으면 그만큼 차감된다 · 마이페이지와 동일 규칙)
   // ── 쿠폰(상품권 · 할인권) 발송 ──────────────────────
-  const PICK_TPLS=['cpg','cpd','ins','ct','qt'];
+  const PICK_TPLS=['cpg','cpd','ins','ct','qt','aw'];
   function curCPList(){
     if(state.tpl==='cpd')return CPD;
     if(state.tpl==='ins')return IPS;
-    if(state.tpl==='ct')return CTS;
+    if(state.tpl==='ct'||state.tpl==='aw')return CTS;
     if(state.tpl==='qt')return QTS;
     return CPG;
   }
@@ -2223,13 +2228,13 @@ window.caSendModal=async function(idx){
   // 드롭다운 옵션 문구
   function pickLb(x){
     if(state.tpl==='ins')return inspLabel(x.type)+' · '+(x.date||'')+(x.addr?' · '+x.addr:'');
-    if(state.tpl==='ct')return (pkgLabel(x.package_id)||'패키지')+' · '+(x.contract_date||'')+' · 납입 '+fmtRM(x.amount_paid);
+    if(state.tpl==='ct'||state.tpl==='aw')return (pkgLabel(x.package_id)||'패키지')+' · '+(x.contract_date||'')+' · 납입 '+fmtRM(x.amount_paid);
     if(state.tpl==='qt')return (x.qno||'견적')+' · '+(x.issueDate||'')+' · '+fmtRM(qtTotal(x))+(x.subject?' · '+x.subject:'');
     return (x.code||'')+' · '+(x.value||'')+(x.expiry?' · ~'+x.expiry:'');
   }
   function pickLbTitle(){
     if(state.tpl==='ins')return '발송할 보고서';
-    if(state.tpl==='ct')return '발송할 계약서';
+    if(state.tpl==='ct'||state.tpl==='aw')return '발송할 계약서';
     if(state.tpl==='qt')return '발송할 견적서';
     return '발송할 쿠폰';
   }
@@ -2441,6 +2446,71 @@ window.caSendModal=async function(idx){
     L.push('📞 +60 17-247 2774');
     return L.join('\n');
   }
+  // ── 🧽 작업후 안내 (서비스 완료 후 멤버십 이용내역 안내) ──
+  function awMsg(en){
+    const x=curCoupon();
+    if(!x)return en?'No contract available to send.':'발송 가능한 계약서가 없습니다.';
+    const nm=e.name||'';
+    const b=ctBal(x);
+    const cl=BASE+'/admin.html?view='+encodeURIComponent(x.__id||'')+'&mode=all&lang='+(en?'en':'ko');
+    const L=[];
+    if(en){
+      L.push('Hello '+nm+' 😊');
+      L.push('This is Happy Home Care.');
+      L.push('');
+      L.push('Thank you for using our service today.');
+      L.push('');
+      L.push('📑 Here is your [Membership Service Usage History].');
+      L.push('       Please check your balance & usage history.');
+      L.push('');
+      L.push('📑 Contract Details');
+      L.push('📦 Package : '+(pkgLabel(x.package_id)||'Package'));
+      if(x.contract_date)L.push('📅 Contract date : '+x.contract_date);
+      L.push('💰 Available balance : '+fmtRM(b.remain));
+      L.push('🔁 Services used : '+b.cnt);
+      L.push('');
+      L.push('📑 Open [Contract / Usage History]');
+      L.push('🔗 '+cl);
+      L.push('');
+      L.push('🏠 Your Personal My Page');
+      L.push('You can check everything below anytime.');
+      L.push(msgRows(en));
+      L.push('📱 My Page');
+      L.push('🔗 '+link());
+      L.push('');
+      L.push('Thank you. 🙏');
+      L.push('Happy Home Care');
+      L.push('📞 +60 17-247 2774');
+      return L.join('\n');
+    }
+    L.push('안녕하세요, '+nm+' 고객님 😊');
+    L.push('Happy Home Care입니다.');
+    L.push('');
+    L.push('오늘도 저희 서비스를 이용해주셔서 감사합니다.');
+    L.push('');
+    L.push('📑 고객님의 [멤버십 서비스이용내역]을 보내드립니다.');
+    L.push('       잔액 & 이용내역 확인 부탁드립니다.');
+    L.push('');
+    L.push('📑 계약 정보');
+    L.push('📦 패키지 : '+(pkgLabel(x.package_id)||'패키지'));
+    if(x.contract_date)L.push('📅 계약일 : '+x.contract_date);
+    L.push('💰 사용 가능 잔액 : '+fmtRM(b.remain));
+    L.push('🔁 이용 횟수 : '+b.cnt+'회');
+    L.push('');
+    L.push('📑 [계약서/이용내역] 바로 열기');
+    L.push('🔗 '+cl);
+    L.push('');
+    L.push('🏠 고객 전용 마이페이지');
+    L.push('다음 정보를 언제든지 편리하게 확인하실 수 있습니다.');
+    L.push(msgRows(en));
+    L.push('📱 My Page');
+    L.push('🔗 '+link());
+    L.push('');
+    L.push('감사합니다. 🙏');
+    L.push('Happy Home Care');
+    L.push('📞 +60 17-247 2774');
+    return L.join('\n');
+  }
   function cpExp(d,en){
     const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d||''));
     if(!m)return String(d||'');
@@ -2529,6 +2599,7 @@ window.caSendModal=async function(idx){
     if(state.tpl==='cpg'||state.tpl==='cpd')return cpMsg(en);
     if(state.tpl==='ins')return insMsg(en);
     if(state.tpl==='ct')return ctMsg(en);
+    if(state.tpl==='aw')return awMsg(en);
     if(state.tpl==='qt')return qtMsg(en);
     if(state.tpl==='bill'){
       const amt=billAmt();
@@ -2691,7 +2762,7 @@ window.caSendModal=async function(idx){
     // 안내 메시지에 맞는 문서를 마이페이지에서 볼 수 있도록 해당 항목을 자동으로 켠다
     if((state.tpl==='cpg'||state.tpl==='cpd')&&CNT.cp>0)state.cp=true;
     if(state.tpl==='ins'&&CNT.ip>0)state.ip=true;
-    if(state.tpl==='ct'&&CNT.ct>0)state.ct=true;
+    if((state.tpl==='ct'||state.tpl==='aw')&&CNT.ct>0)state.ct=true;
     paint();
   });
   const _cps=mk.querySelector('#cs-cp-pick');
@@ -2705,12 +2776,104 @@ window.caSendModal=async function(idx){
     if(ph)wa+='60'+ph;
     window.open(wa+'?text='+encodeURIComponent(msg()),'_blank');
   });
+  // 📤 이미지 + 메시지 함께 보내기 (휴대폰 공유창 → 왓츠앱 선택 시 이미지가 첨부되어 발송됨)
+  const _is=mk.querySelector('#cs-imgs');
+  if(_is&&navigator.share&&navigator.canShare){
+    _is.style.display='block';
+    _is.addEventListener('click',async()=>{
+      try{
+        const b=await cardBlob();
+        const f=new File([b],cardFile(),{type:'image/png'});
+        if(!navigator.canShare({files:[f]})){toast('이 기기에서는 이미지 공유를 지원하지 않습니다 · 「🖼 카드 저장」을 이용해 주세요');return;}
+        await navigator.share({files:[f],text:msg()});
+      }catch(err){ if(err&&err.name!=='AbortError')toast('공유 실패: '+(err.message||'')); }
+    });
+  }
+  // 🖼 카드 이미지 저장 (PC 등에서 직접 첨부할 때)
+  mk.querySelector('#cs-imgd').addEventListener('click',async()=>{
+    try{
+      const b=await cardBlob(), a=document.createElement('a');
+      a.href=URL.createObjectURL(b);a.download=cardFile();
+      document.body.appendChild(a);a.click();a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+      toast('🖼 카드 이미지가 저장되었습니다 · 대화창에 첨부해 주세요');
+    }catch(err){toast('저장 실패: '+(err.message||''));}
+  });
   mk.querySelector('#cs-kk').addEventListener('click',()=>{kkShareMsg(e.name,msg(),link());});
   mk.querySelector('#cs-kkset').addEventListener('click',()=>{kkResetKey();});
   mk.querySelector('#cs-cp').addEventListener('click',()=>{
     navigator.clipboard.writeText(msg()).then(()=>toast('✓ 메시지가 복사되었습니다'))
       .catch(()=>prompt('복사해서 사용하세요:',link()));
   });
+
+  // ═══ 🖼 안내 카드 이미지 (왓츠앱·문자에 메시지와 함께 첨부) ═══
+  //  · 카카오톡은 앱이 카드를 만들어 주지만, 왓츠앱은 링크 미리보기에만 의존하므로
+  //    이미지를 직접 첨부할 수 있도록 카드를 그려 둡니다. (복사·붙여넣기 발송에도 사용)
+  const CARD_FONT='"Apple SD Gothic Neo","Noto Sans KR",-apple-system,sans-serif';
+  function cardRound(g,x,y,w,h,r){
+    g.beginPath();
+    g.moveTo(x+r,y);g.lineTo(x+w-r,y);g.quadraticCurveTo(x+w,y,x+w,y+r);
+    g.lineTo(x+w,y+h-r);g.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+    g.lineTo(x+r,y+h);g.quadraticCurveTo(x,y+h,x,y+h-r);
+    g.lineTo(x,y+r);g.quadraticCurveTo(x,y,x+r,y);g.closePath();
+  }
+  function cardDraw(){
+    const W=1200,H=630;
+    const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+    const g=cv.getContext('2d');
+    const gr=g.createLinearGradient(0,0,W,H);
+    gr.addColorStop(0,'#0B1833');gr.addColorStop(.55,'#16264a');gr.addColorStop(1,'#1d3a63');
+    g.fillStyle=gr;g.fillRect(0,0,W,H);
+    let rg=g.createRadialGradient(W-150,60,10,W-150,60,460);
+    rg.addColorStop(0,'rgba(11,181,164,.5)');rg.addColorStop(1,'rgba(11,181,164,0)');
+    g.fillStyle=rg;g.fillRect(0,0,W,H);
+    rg=g.createRadialGradient(60,H-40,10,60,H-40,420);
+    rg.addColorStop(0,'rgba(79,110,247,.4)');rg.addColorStop(1,'rgba(79,110,247,0)');
+    g.fillStyle=rg;g.fillRect(0,0,W,H);
+    // 로고
+    cardRound(g,80,66,116,116,30);g.fillStyle='#4F6EF7';g.fill();
+    g.textAlign='center';g.textBaseline='middle';
+    g.fillStyle='#fff';g.font='800 38px '+CARD_FONT;g.fillText('HHC',138,126);
+    g.textAlign='left';g.textBaseline='alphabetic';
+    g.fillStyle='#fff';g.font='800 36px '+CARD_FONT;g.fillText('Happy Home Care',222,120);
+    g.fillStyle='#8fa0c9';g.font='800 24px '+CARD_FONT;g.fillText('BY HAPPY WORKS SERVICES',224,158);
+    g.strokeStyle='rgba(255,255,255,.18)';g.lineWidth=2;
+    g.beginPath();g.moveTo(80,222);g.lineTo(1120,222);g.stroke();
+    // 고객명
+    const nm=String(e.name||'').trim();
+    g.fillStyle='#C9A44C';g.font='800 30px '+CARD_FONT;
+    if(nm){
+      let t=nm.length>26?nm.slice(0,26)+'…':nm;
+      g.fillText(t+(state.en?'':' 고객님'),80,282);
+    }
+    g.fillStyle='#fff';g.font='800 66px '+CARD_FONT;
+    g.fillText(state.en?'Your Personal My Page':'고객 전용 마이페이지',80,362);
+    // 항목 (선택된 노출 항목만)
+    const LBK={iv:'인보이스 확인',ip:'점검보고서 확인',ct:'계약 잔액 확인',cp:'상품권 확인'};
+    const LBE={iv:'Invoices',ip:'Inspection reports',ct:'Contract balance',cp:'Vouchers'};
+    const keys=['iv','ip','ct','cp'].filter(k=>state[k]);
+    const use=keys.length?keys:['iv','ip','ct','cp'];
+    g.font='400 30px '+CARD_FONT;
+    use.slice(0,4).forEach((k,i)=>{
+      const x=80+(i%2)*530, y=452+Math.floor(i/2)*62;
+      g.fillStyle='#0BB5A4';cardRound(g,x,y-18,14,20,4);g.fill();
+      g.fillStyle='#d6e1f4';g.fillText(state.en?LBE[k]:LBK[k],x+32,y);
+    });
+    g.fillStyle='#8fa0c9';g.font='800 24px '+CARD_FONT;
+    g.fillText('+60 17-247 2774',80,H-42);
+    return cv;
+  }
+  function cardBlob(){
+    return new Promise((res,rej)=>{
+      try{cardDraw().toBlob(b=>b?res(b):rej(new Error('blob')),'image/png');}
+      catch(err){rej(err);}
+    });
+  }
+  function cardFile(){
+    const nm=String(e.name||'HHC').replace(/[^0-9A-Za-z가-힣]+/g,'_').slice(0,30);
+    return 'HHC_'+(nm||'card')+'.png';
+  }
+  window.__csCardURL=function(){try{return cardDraw().toDataURL('image/png');}catch(err){return '';}};
 
   // ═══ 고객 전용 QR 카드 ═══
   // 링크·언어가 바뀔 때마다 카드를 다시 그린다 (노출 항목 / 발송 언어가 QR에 그대로 반영됨)
