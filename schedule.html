@@ -141,6 +141,22 @@ body{font-family:'Pretendard',-apple-system,'Noto Sans KR',sans-serif;background
 .mg-vvip{background:#fef9c3;color:#a16207}
 .mg-pkg{background:#eff6ff;color:#2563eb}
 .mg-etc{background:#f5f3ff;color:#7c3aed}
+/* 📞 연락 경로 표시 (W=WhatsApp · K=카카오톡 · O=기타) — 관리 화면 전용 */
+.chb{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;margin-left:6px;
+     border-radius:6px;border:1.5px solid transparent;font-size:10.5px;font-weight:900;line-height:1;
+     cursor:pointer;vertical-align:middle;padding:0;font-family:inherit}
+.chb.w{background:#22c55e;border-color:#22c55e;color:#fff}
+.chb.k{background:#FEE500;border-color:#F5DC00;color:#3C1E1E}
+.chb.o{background:#64748b;border-color:#64748b;color:#fff}
+.chb.n{background:#fff;border-color:#cbd5e1;border-style:dashed;color:#cbd5e1;font-size:11px}
+#chmenu{position:fixed;z-index:9999;background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;
+        box-shadow:0 12px 34px rgba(11,24,51,.18);padding:6px;min-width:186px;font-family:inherit}
+#chmenu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:none;background:none;
+        padding:9px 9px;border-radius:8px;font-size:12.5px;font-weight:700;color:var(--tx);cursor:pointer;font-family:inherit}
+#chmenu button:hover{background:#f1f5f9}
+#chmenu i{font-style:normal;width:17px;text-align:center;font-weight:900}
+#chmenu .ch-t{font-size:10px;font-weight:800;color:#94a3b8;padding:3px 9px 6px}
+#chmenu .ch-sep{height:1px;background:#e2e8f0;margin:5px 4px}
 .sch-ttl-condo{font-size:17px;font-weight:800;color:var(--navy);margin-bottom:5px;line-height:1.25;letter-spacing:-.02em}
 .sch-sub{font-size:12px;color:var(--tx2);line-height:1.7}
 .sch-auto{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:8px;font-size:9.5px;font-weight:700;background:var(--g);color:var(--tx3);margin-top:6px}
@@ -496,6 +512,11 @@ window.changeApiKey=function(){
 //  · 등급이 없는 고객은 아무것도 표시하지 않는다 (기존 화면 그대로)
 // ═══════════════════════════════════════════════════════════
 var HHCG_PH={},HHCG_NM={},HHCG_CPH={},HHCG_CNM={},HHCG_ON=false;
+// 📞 연락 경로 표시 (W=WhatsApp · K=카카오톡 · O=기타) — 총괄 고객관리와 같은 값(customers.ca_ch)을 씁니다.
+// 아무 기능도 하지 않는 표시 전용이며 관리 화면에만 보입니다 (공유 메시지·일정표 이미지에는 들어가지 않습니다).
+var HHCH_PH={},HHCH_NM={},HHCH_IDPH={},HHCH_IDNM={};
+var CH_LB={W:'💬 WhatsApp',K:'💛 카카오톡',O:'🌐 기타'};
+function chOK(v){v=String(v||'').toUpperCase();return CH_LB[v]?v:'';}
 var HHCG_PKG={silver:'실버',royal:'로얄',gold:'골드',diamond:'다이아',titanium:'티타늄',special:'스페셜해피홈'};
 function hhcgPN(p){p=String(p||'').replace(/[^0-9]/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');}
 function hhcgNN(n){return String(n||'').toLowerCase().replace(/\s+/g,'');}
@@ -510,14 +531,20 @@ function hhcgWatch(onChange){
   if(HHCG_ON||!db)return;HHCG_ON=true;
   try{
     onSnapshot(collection(db,'customers'),function(snap){
-      var ph={},nm={};
+      var ph={},nm={},chp={},chn={},idp={},idn={};
       snap.docs.forEach(function(d){
         var c=d.data()||{},g=String(c.member||'').trim();
+        var p0=hhcgPN(c.phone),ns=[c.name].concat(c.aliases||[]);
+        // 📞 연락 경로 표시 + 고객 문서 ID (등급이 없는 고객도 포함해야 하므로 먼저 담는다)
+        var cv=chOK(c.ca_ch);
+        if(p0){if(!idp[p0])idp[p0]=d.id;if(cv&&!chp[p0])chp[p0]=cv;}
+        ns.forEach(function(a){var k=hhcgNN(a);if(!k)return;if(!idn[k])idn[k]=d.id;if(cv&&!chn[k])chn[k]=cv;});
         if(!g)return;
-        var p=hhcgPN(c.phone);if(p&&!ph[p])ph[p]=g;
-        [c.name].concat(c.aliases||[]).forEach(function(a){var k=hhcgNN(a);if(k&&!nm[k])nm[k]=g;});
+        if(p0&&!ph[p0])ph[p0]=g;
+        ns.forEach(function(a){var k=hhcgNN(a);if(k&&!nm[k])nm[k]=g;});
       });
       HHCG_PH=ph;HHCG_NM=nm;
+      HHCH_PH=chp;HHCH_NM=chn;HHCH_IDPH=idp;HHCH_IDNM=idn;
       if(onChange)try{onChange();}catch(e){}
     },function(){});
     onSnapshot(collection(db,'contracts'),function(snap){
@@ -568,6 +595,85 @@ function schGrade(s){
   if(!nm&&s.title)nm=String(s.title).split(' — ')[0].trim();
   return gradeBadge(nm,s.customer_phone||'');
 }
+
+// ── 📞 연락 경로 표시 (W · K · O) ─────────────────────────
+// 총괄 고객관리에서 고른 값을 그대로 보여주며, 여기서 눌러 바꿀 수도 있습니다.
+// 고객이 있는 일정인지 — 예약(자동반영·직접입력) 이거나 고객정보가 들어있는 일정만 해당됩니다.
+// (휴일 · 직접입력 · 구글 캘린더 일정에는 연락 경로를 표시하지 않습니다)
+function schHasCust(s){return !!s&&(schIsBk(s.type)||!!s.customer_name||!!s.customer_phone);}
+function schName(s){
+  if(!s)return '';
+  var nm=s.customer_name||'';
+  // 예약 일정은 제목이 곧 고객명입니다 (그 외 일정의 제목은 고객명이 아니므로 쓰지 않습니다)
+  if(!nm&&schIsBk(s.type)&&s.title)nm=String(s.title).split(' — ')[0].trim();
+  return nm;
+}
+function chValue(name,phone){
+  var p=hhcgPN(phone),n=hhcgNN(name);
+  if(p&&HHCH_PH[p])return HHCH_PH[p];
+  if(n&&HHCH_NM[n])return HHCH_NM[n];
+  return '';
+}
+function chDocId(name,phone){
+  var p=hhcgPN(phone),n=hhcgNN(name);
+  if(p&&HHCH_IDPH[p])return HHCH_IDPH[p];
+  if(n&&HHCH_IDNM[n])return HHCH_IDNM[n];
+  return '';
+}
+function schCh(s){
+  if(!schHasCust(s))return '';                 // 고객이 없는 일정(휴일 · 직접입력 등)은 표시하지 않는다
+  var nm=schName(s),ph=s.customer_phone||'';
+  if(!nm&&!ph)return '';
+  var v=chValue(nm,ph),cls=v?v.toLowerCase():'n';
+  var tt=v?('연락 경로 : '+CH_LB[v]+' (눌러서 변경)'):'연락 경로 표시 (눌러서 선택)';
+  return '<button type="button" class="chb '+cls+'" title="'+hhcgEsc(tt)+'" onclick="schChMenu(event,this,\''+s._id+'\')">'+(v||'＋')+'</button>';
+}
+function schChClose(){var m=document.getElementById('chmenu');if(m)m.remove();}
+document.addEventListener('click',schChClose);
+window.addEventListener('scroll',schChClose,true);
+window.schChMenu=function(ev,btn,id){
+  ev.stopPropagation();ev.preventDefault();
+  schChClose();
+  var it=getMerged(selDate).find(function(x){return x._id===id;});
+  if(!it){showToast('일정 정보를 찾을 수 없습니다');return;}
+  var cur=chValue(schName(it),it.customer_phone||'');
+  var m=document.createElement('div');m.id='chmenu';
+  m.innerHTML='<div class="ch-t">📞 연락 경로 표시</div>'+
+    ['W','K','O'].map(function(k){
+      return '<button onclick="schChSet(\''+id+'\',\''+k+'\')"><i>'+k+'</i>'+CH_LB[k]+(cur===k?' ✓':'')+'</button>';
+    }).join('')+
+    '<div class="ch-sep"></div>'+
+    '<button onclick="schChSet(\''+id+'\',\'\')"><i>–</i>표시 없음'+(cur?'':' ✓')+'</button>';
+  document.body.appendChild(m);
+  var r=btn.getBoundingClientRect(),w=m.offsetWidth||186,h=m.offsetHeight||190;
+  var x=Math.min(r.left,window.innerWidth-w-8),y=r.bottom+6;
+  if(x<8)x=8;
+  if(y+h>window.innerHeight-8)y=Math.max(8,r.top-h-6);
+  m.style.left=x+'px';m.style.top=y+'px';
+};
+window.schChSet=async function(id,v){
+  schChClose();
+  v=chOK(v);
+  var it=getMerged(selDate).find(function(x){return x._id===id;});
+  if(!it)return;
+  var nm=schName(it),ph=it.customer_phone||'';
+  if(!schHasCust(it)||(!nm&&!ph)){showToast('고객 정보가 없는 일정입니다');return;}
+  try{
+    var mid=chDocId(nm,ph);
+    if(!mid){   // 고객 마스터에 없는 고객이면 먼저 등록한다 (총괄 고객관리와 같은 방식)
+      var now=new Date().toISOString();
+      var ref=await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name:nm,phone:ph,member:'',email:'',addr:it.customer_address||'',memo:'',aliases:[],created_at:now,updated_at:now});
+      mid=ref.id;
+    }
+    await updateDoc(doc(db,'customers',mid),{ca_ch:v,updated_at:new Date().toISOString()});
+    // 화면 즉시 반영 (실시간 구독으로도 곧 갱신됩니다)
+    var p=hhcgPN(ph),n=hhcgNN(nm);
+    if(p){if(v)HHCH_PH[p]=v;else delete HHCH_PH[p];HHCH_IDPH[p]=mid;}
+    if(n){if(v)HHCH_NM[n]=v;else delete HHCH_NM[n];HHCH_IDNM[n]=mid;}
+    renderDay(selDate);
+    showToast(v?('📞 '+CH_LB[v]+' 로 표시됩니다'):'📞 연락 경로 표시를 지웠습니다');
+  }catch(err){showToast('저장 실패: '+err.message);}
+};
 
 async function initApp(){
   showLoading(true);
@@ -949,7 +1055,7 @@ async function renderDay(ds){
       <div class="sch-time-col"><div class="sch-ts">${s.time_s||'—'}</div>${s.time_e?`<div class="sch-te">~${s.time_e}</div>`:''}</div>
       <div class="sch-body">
         <div class="sch-type" style="${typeBg}">${typeLabel}</div>
-        <div class="sch-ttl${isAuto?' sch-ttl-condo':''}">${ds2.title}${schGrade(s)}</div>
+        <div class="sch-ttl${isAuto?' sch-ttl-condo':''}">${ds2.title}${schCh(s)}${schGrade(s)}</div>
         ${ds2.memo?`<div class="sch-sub">${ds2.memo.replace(/\n/g,'<br>')}</div>`:''}
         ${isAuto?`<div class="sch-auto">📋 ${curLang==='en'?'Auto from booking':'예약시스템 자동반영'}</div>`:''}
       </div>

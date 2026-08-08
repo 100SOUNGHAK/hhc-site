@@ -213,6 +213,16 @@ html.sa body{padding-left:222px}
 .btn.dtl{white-space:nowrap;padding:8px 17px;border-radius:9px;font-size:12px;box-shadow:0 2px 8px rgba(37,99,235,.25)}
 .btn.mor{padding:8px 11px;border-radius:9px;font-size:14px;line-height:1;color:var(--ink3)}
 .pill.mut{background:#f1f5f9;color:#64748b}
+/* 📞 연락 경로 표시 (W=WhatsApp · K=카카오톡 · O=기타) — 관리 화면 전용 · 표시만 하는 배지 */
+.chb{display:inline-flex;align-items:center;justify-content:center;width:19px;height:19px;margin-left:6px;
+     border-radius:6px;border:1.5px solid transparent;font-size:10.5px;font-weight:900;line-height:1;
+     cursor:pointer;vertical-align:middle;padding:0;font-family:inherit;letter-spacing:0;flex-shrink:0}
+.chb.w{background:#22c55e;border-color:#22c55e;color:#fff}
+.chb.k{background:#FEE500;border-color:#F5DC00;color:#3C1E1E}
+.chb.o{background:#64748b;border-color:#64748b;color:#fff}
+.chb.n{background:#fff;border-color:#cbd5e1;border-style:dashed;color:#cbd5e1;font-size:11px}
+.chb.n:hover{border-color:var(--pri);color:var(--pri)}
+.cnm .chb{margin-left:0}
 .alias.lk{color:#5B21B6}
 .src.dt{background:#f3f4f6;color:#6b7280}
 @media(max-width:760px){
@@ -787,7 +797,7 @@ function subscribeAll(){
   },err=>console.warn('sub',n,err.message)));
 }
 function newEntry(name,phone){
-  return {master:null,name:name||'',phone:phone||'',aliases:[],linkNames:[],member:'',email:'',addr:'',memo:'',inactive:false,
+  return {master:null,name:name||'',phone:phone||'',aliases:[],linkNames:[],member:'',email:'',addr:'',memo:'',inactive:false,ch:'',
     docs:{contracts:[],invoices:[],inspections:[],coupons:[],requests:[],bookings:[],schedules:[],quotes:[]}};
 }
 // ── 고객 1명을 가리키는 고정 키 ──
@@ -810,6 +820,7 @@ function buildEntries(){
     const e=newEntry(m.name,m.phone);
     e.master=m;e.aliases=m.aliases||[];e.member=m.member||'';e.email=m.email||'';e.addr=m.addr||'';e.memo=m.memo||'';
     e.inactive=!!m.ca_inactive;   // ⏸ 비활성 고객 (기본 목록에서 숨김)
+    e.ch=CH_OK(m.ca_ch);          // 📞 연락 경로 표시 (W · K · O · 없음)
     entries.push(e);
     const k=pn(m.phone);if(k&&!byP[k])byP[k]=e;
     idxName(e,m.name);(m.aliases||[]).forEach(a=>idxName(e,a));
@@ -1048,6 +1059,58 @@ window.dismissMerge=function(i){
   mergeSug.splice(i,1);renderMerge();renderStats();
   toast('✓ 다른 고객으로 기억했습니다 — 다시 제안하지 않습니다');
 };
+// ═══ 📞 연락 경로 표시 (W · K · O) ═══
+// 고객이 어느 경로로 연락해 왔는지 관리자가 눈으로 구분하기 위한 표시입니다.
+// · 아무 기능도 하지 않으며 (필터·발송·계산에 전혀 관여하지 않습니다)
+// · 관리 화면(총괄 고객관리 · 일정 캘린더)에만 보이고
+//   인보이스·점검보고서·계약서·마이페이지 등 고객용 화면/자료에는 나타나지 않습니다.
+const CH_LB={W:['W','💬 WhatsApp'],K:['K','💛 카카오톡'],O:['O','🌐 기타']};
+function CH_OK(v){v=String(v||'').toUpperCase();return CH_LB[v]?v:'';}
+function chBadge(e,idx){
+  const v=CH_OK(e&&e.ch);
+  const cls=v?v.toLowerCase():'n';
+  const tt=v?('연락 경로 : '+CH_LB[v][1]+' (눌러서 변경)'):'연락 경로 표시 (눌러서 선택)';
+  return '<button type="button" class="chb '+cls+'" title="'+tt+'" onclick="caChMenu(event,this,'+idx+')">'+(v||'＋')+'</button>';
+}
+window.caChMenu=function(ev,btn,idx){
+  ev.stopPropagation();ev.preventDefault();
+  const e=entries[idx];if(!e)return;
+  caMenuClose();
+  const cur=CH_OK(e.ch);
+  const m=document.createElement('div');m.id='rowmenu';
+  m.innerHTML='<div style="font-size:10px;font-weight:800;color:var(--ink3);padding:3px 9px 6px">📞 연락 경로 표시</div>'+
+    ['W','K','O'].map(k=>'<button onclick="caChSet('+idx+',\''+k+'\')"><i>'+k+'</i>'+CH_LB[k][1]+(cur===k?' ✓':'')+'</button>').join('')+
+    '<div class="sep"></div>'+
+    '<button onclick="caChSet('+idx+',\'\')"><i>–</i>표시 없음'+(cur?'':' ✓')+'</button>';
+  document.body.appendChild(m);
+  const r=btn.getBoundingClientRect();
+  const w=m.offsetWidth||190,hh=m.offsetHeight||200;
+  let x=Math.min(r.left,window.innerWidth-w-8),y=r.bottom+6;
+  if(x<8)x=8;
+  if(y+hh>window.innerHeight-8)y=Math.max(8,r.top-hh-6);
+  m.style.left=x+'px';m.style.top=y+'px';
+};
+window.caChSet=async function(idx,v){
+  caMenuClose();
+  const e=entries[idx];if(!e)return;
+  v=CH_OK(v);
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  const prev=e.ch;
+  e.ch=v;renderAll();if(drawerKey!=null)try{openDrawer(drawerKey);}catch(_){}   // 먼저 화면에 반영
+  try{
+    let mid=e.master&&e.master.__id;
+    if(!mid){
+      const now=new Date().toISOString();
+      const ref=await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name:e.name,phone:e.phone||'',member:e.member||'',email:'',addr:e.addr||'',memo:'',aliases:e.aliases||[],created_at:now,updated_at:now});
+      mid=ref.id;
+    }
+    await updateDoc(doc(db,'customers',mid),{ca_ch:v,updated_at:new Date().toISOString()});
+    toast(v?('📞 연락 경로 '+CH_LB[v][1]+' 로 표시됩니다'):'📞 연락 경로 표시를 지웠습니다');
+  }catch(err){
+    e.ch=prev;renderAll();
+    toast('저장 실패: '+err.message);
+  }
+};
 function memberBadge(e){
   if(isVVIP(e))return '<span class="pill gold">👑 VVIP</span>';
   if(/^패키지/.test(e.member||''))return '<span class="pill blue">📦 '+esc(e.member)+'</span>';
@@ -1087,7 +1150,7 @@ function renderList(){
     const _pt=ptCalc(e);   // 💎 포인트 잔액 배지
     return '<div class="crow'+(e.inactive?' inact':'')+'">'+
       '<div class="avatar">'+esc(init)+'</div>'+
-      '<div class="cmain"><div class="cnm">'+esc(e.name||'(이름 없음)')+memberBadge(e)+
+      '<div class="cmain"><div class="cnm">'+esc(e.name||'(이름 없음)')+chBadge(e,idx)+memberBadge(e)+
         (_pt.bal>0?'<span class="pill pt">💎 RM '+_pt.bal.toLocaleString()+'</span>':'')+
         (e.inactive?'<span class="pill mut">⏸ 비활성</span>':'')+
         (e.master?'':'<span class="pill vio">미등록</span>')+'</div>'+
@@ -1240,7 +1303,7 @@ window.openDrawer=function(idx){
   const idx0=idx;
   const d=document.getElementById('drawer');
   const init=(e.name||'?').trim().charAt(0).toUpperCase();
-  let h='<div class="dhead"><div class="avatar">'+esc(init)+'</div><div class="dinfo"><b>'+esc(e.name)+'</b>'+
+  let h='<div class="dhead"><div class="avatar">'+esc(init)+'</div><div class="dinfo"><b>'+esc(e.name)+chBadge(e,idx)+'</b>'+
     '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음')+(e.addr?' · '+esc(e.addr):'')+'</div>'+
     '<div class="tagrow">'+memberBadge(e)+(e.inactive?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏸ 비활성 고객</span>':'')+(e.aliases.length?'<span class="pill vio">별칭 '+esc(e.aliases.join(', '))+'</span>':'')+((e.linkNames||[]).length?'<span class="pill vio" title="수동 연결된 문서에 적힌 이름입니다. 원본 그대로 유지됩니다.">🔗 연결문서 '+esc(e.linkNames.join(', '))+'</span>':'')+'</div></div>'+
     '<div class="dbtns" style="flex-basis:100%;margin-left:0;flex-direction:column;gap:7px">'+
