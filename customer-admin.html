@@ -2026,6 +2026,7 @@ window.caSendModal=async function(idx){
         (CPD.length?'<span data-t="cpd" style="'+_cpSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🏷️ 할인권 발송</span>':'')+
         (IPS.length?'<span data-t="ins" style="'+_icSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🔧 점검보고서 발송</span>':'')+
         (CTS.length?'<span data-t="ct" style="'+_icSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📑 계약서 발송</span>':'')+
+        (CTS.length?'<span data-t="aw" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🧽 작업후 안내</span>':'')+
         (QTS.length?'<span data-t="qt" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🧾 견적서 발송</span>':'')+
         '<span data-t="basic" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📄 기본 안내</span>'+
         '<span data-t="revisit" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🔄 재방문 · 예약</span>'+
@@ -2211,11 +2212,11 @@ window.caSendModal=async function(idx){
   // 청구금액 = 「청구중」+「연체」 인보이스의 **잔여 결제금액** 합계
   //            (기결제/일부 결제가 있으면 그만큼 차감된다 · 마이페이지와 동일 규칙)
   // ── 쿠폰(상품권 · 할인권) 발송 ──────────────────────
-  const PICK_TPLS=['cpg','cpd','ins','ct','qt'];
+  const PICK_TPLS=['cpg','cpd','ins','ct','qt','aw'];
   function curCPList(){
     if(state.tpl==='cpd')return CPD;
     if(state.tpl==='ins')return IPS;
-    if(state.tpl==='ct')return CTS;
+    if(state.tpl==='ct'||state.tpl==='aw')return CTS;
     if(state.tpl==='qt')return QTS;
     return CPG;
   }
@@ -2223,13 +2224,13 @@ window.caSendModal=async function(idx){
   // 드롭다운 옵션 문구
   function pickLb(x){
     if(state.tpl==='ins')return inspLabel(x.type)+' · '+(x.date||'')+(x.addr?' · '+x.addr:'');
-    if(state.tpl==='ct')return (pkgLabel(x.package_id)||'패키지')+' · '+(x.contract_date||'')+' · 납입 '+fmtRM(x.amount_paid);
+    if(state.tpl==='ct'||state.tpl==='aw')return (pkgLabel(x.package_id)||'패키지')+' · '+(x.contract_date||'')+' · 납입 '+fmtRM(x.amount_paid);
     if(state.tpl==='qt')return (x.qno||'견적')+' · '+(x.issueDate||'')+' · '+fmtRM(qtTotal(x))+(x.subject?' · '+x.subject:'');
     return (x.code||'')+' · '+(x.value||'')+(x.expiry?' · ~'+x.expiry:'');
   }
   function pickLbTitle(){
     if(state.tpl==='ins')return '발송할 보고서';
-    if(state.tpl==='ct')return '발송할 계약서';
+    if(state.tpl==='ct'||state.tpl==='aw')return '발송할 계약서';
     if(state.tpl==='qt')return '발송할 견적서';
     return '발송할 쿠폰';
   }
@@ -2441,6 +2442,71 @@ window.caSendModal=async function(idx){
     L.push('📞 +60 17-247 2774');
     return L.join('\n');
   }
+  // ── 🧽 작업후 안내 (서비스 완료 후 멤버십 이용내역 안내) ──
+  function awMsg(en){
+    const x=curCoupon();
+    if(!x)return en?'No contract available to send.':'발송 가능한 계약서가 없습니다.';
+    const nm=e.name||'';
+    const b=ctBal(x);
+    const cl=BASE+'/admin.html?view='+encodeURIComponent(x.__id||'')+'&mode=all&lang='+(en?'en':'ko');
+    const L=[];
+    if(en){
+      L.push('Hello '+nm+' 😊');
+      L.push('This is Happy Home Care.');
+      L.push('');
+      L.push('Thank you for using our service today.');
+      L.push('');
+      L.push('📑 Here is your [Membership Service Usage History].');
+      L.push('       Please check your balance & usage history.');
+      L.push('');
+      L.push('📑 Contract Details');
+      L.push('📦 Package : '+(pkgLabel(x.package_id)||'Package'));
+      if(x.contract_date)L.push('📅 Contract date : '+x.contract_date);
+      L.push('💰 Available balance : '+fmtRM(b.remain));
+      L.push('🔁 Services used : '+b.cnt);
+      L.push('');
+      L.push('📑 Open [Contract / Usage History]');
+      L.push('🔗 '+cl);
+      L.push('');
+      L.push('🏠 Your Personal My Page');
+      L.push('You can check everything below anytime.');
+      L.push(msgRows(en));
+      L.push('📱 My Page');
+      L.push('🔗 '+link());
+      L.push('');
+      L.push('Thank you. 🙏');
+      L.push('Happy Home Care');
+      L.push('📞 +60 17-247 2774');
+      return L.join('\n');
+    }
+    L.push('안녕하세요, '+nm+' 고객님 😊');
+    L.push('Happy Home Care입니다.');
+    L.push('');
+    L.push('오늘도 저희 서비스를 이용해주셔서 감사합니다.');
+    L.push('');
+    L.push('📑 고객님의 [멤버십 서비스이용내역]을 보내드립니다.');
+    L.push('       잔액 & 이용내역 확인 부탁드립니다.');
+    L.push('');
+    L.push('📑 계약 정보');
+    L.push('📦 패키지 : '+(pkgLabel(x.package_id)||'패키지'));
+    if(x.contract_date)L.push('📅 계약일 : '+x.contract_date);
+    L.push('💰 사용 가능 잔액 : '+fmtRM(b.remain));
+    L.push('🔁 이용 횟수 : '+b.cnt+'회');
+    L.push('');
+    L.push('📑 [계약서/이용내역] 바로 열기');
+    L.push('🔗 '+cl);
+    L.push('');
+    L.push('🏠 고객 전용 마이페이지');
+    L.push('다음 정보를 언제든지 편리하게 확인하실 수 있습니다.');
+    L.push(msgRows(en));
+    L.push('📱 My Page');
+    L.push('🔗 '+link());
+    L.push('');
+    L.push('감사합니다. 🙏');
+    L.push('Happy Home Care');
+    L.push('📞 +60 17-247 2774');
+    return L.join('\n');
+  }
   function cpExp(d,en){
     const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d||''));
     if(!m)return String(d||'');
@@ -2529,6 +2595,7 @@ window.caSendModal=async function(idx){
     if(state.tpl==='cpg'||state.tpl==='cpd')return cpMsg(en);
     if(state.tpl==='ins')return insMsg(en);
     if(state.tpl==='ct')return ctMsg(en);
+    if(state.tpl==='aw')return awMsg(en);
     if(state.tpl==='qt')return qtMsg(en);
     if(state.tpl==='bill'){
       const amt=billAmt();
@@ -2691,7 +2758,7 @@ window.caSendModal=async function(idx){
     // 안내 메시지에 맞는 문서를 마이페이지에서 볼 수 있도록 해당 항목을 자동으로 켠다
     if((state.tpl==='cpg'||state.tpl==='cpd')&&CNT.cp>0)state.cp=true;
     if(state.tpl==='ins'&&CNT.ip>0)state.ip=true;
-    if(state.tpl==='ct'&&CNT.ct>0)state.ct=true;
+    if((state.tpl==='ct'||state.tpl==='aw')&&CNT.ct>0)state.ct=true;
     paint();
   });
   const _cps=mk.querySelector('#cs-cp-pick');
