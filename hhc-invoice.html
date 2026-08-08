@@ -4826,6 +4826,22 @@ function migrateUnitSik(){
   });
   localStorage.setItem(LSVC,JSON.stringify(services));
 }
+// ═══ 📎 총괄 고객관리 등에서 「수정」으로 열기 : hhcinvoice.html?edit=<문서ID 또는 인보이스번호> ═══
+//     해당 인보이스를 작성 화면에 그대로 불러와 모든 항목을 수정할 수 있습니다.
+window._hhcInvEdit=(function(){try{return new URLSearchParams(location.search).get('edit')||'';}catch(e){return '';}})();
+function tryInvEdit(){
+  var k=window._hhcInvEdit;
+  if(!k||!invoices||!invoices.length)return;
+  var inv=null;
+  for(var i=0;i<invoices.length;i++){
+    var v=invoices[i];
+    if(v._docId===k||v.id===k){inv=v;break;}
+  }
+  if(!inv)return;                       // 아직 목록에 없으면 다음 갱신 때 다시 시도
+  window._hhcInvEdit='';
+  try{loadInvToForm(inv);}catch(e){return;}
+  try{if(typeof toast==='function')toast('💳 '+(inv.id||'인보이스')+' 를 불러왔습니다 — 수정 후 저장하세요');}catch(e){}
+}
 async function init(){
   var _vp=new URLSearchParams(location.search);
   var _vid=_vp.get('view');
@@ -4875,6 +4891,7 @@ async function init(){
       autoUpdateInvoiceStatus();
       renderList();renderAcc();renderYearTabs();setSS('on');
       renderRecentCustChips();
+      if(window._hhcInvEdit)tryInvEdit();   // ?edit= 로 들어온 경우 해당 인보이스를 편집 화면에 불러온다
     },function(e){setSS('');console.warn(e.code);});
 
     // 비용청구서(expense_claims) 연동 — 회계 탭 순이익 산출용
