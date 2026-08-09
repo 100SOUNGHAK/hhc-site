@@ -378,6 +378,27 @@ html.sa body{padding-left:222px}
 .rb.mor:hover{border-color:var(--pri);color:var(--pri)}
 .open-btn{background:var(--pri);color:#fff;padding:5px 11px;border-radius:8px;font-weight:900}
 .open-btn:hover{filter:brightness(1.1)}
+
+/* ── 📝 메모장(수리요청) 행 ── */
+.mrow{padding:11px 13px;border-bottom:1px solid #f1f4f9;font-size:12px}
+.mrow:last-child{border-bottom:none}
+.mrow:hover{background:#FAFCFF}
+.mr1{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.mrdt{font-weight:900;font-size:12px}
+.mrbt{margin-left:auto;display:flex;gap:5px}
+.mr2{margin-top:7px;display:grid;grid-template-columns:60px 1fr;gap:4px 8px;align-items:start}
+.mr2 .k{font-size:10px;font-weight:900;color:var(--ink3);padding-top:3px}
+.mr2 .v{font-size:11.5px;font-weight:700;color:var(--ink2);line-height:1.6;word-break:break-word}
+.mr2 .v.sym{color:var(--ink)}
+.mr2 .v.res{color:#065F46;background:var(--ok-bg);border-radius:7px;padding:5px 8px;font-weight:800}
+.mr2 .v.wait{color:#b45309;background:var(--warn-bg);border-radius:7px;padding:5px 8px;font-weight:800}
+.mr2 .v.int{color:#6b7280;background:#F3F4F6;border-radius:7px;padding:5px 8px}
+.rb.ed{background:var(--pri-bg);color:var(--pri)}
+.eye-c{display:inline-block;font-size:9.5px;font-weight:900;border-radius:5px;padding:2px 6px;background:var(--vio-bg);color:var(--vio);margin-left:5px}
+.eye-i{display:inline-block;font-size:9.5px;font-weight:900;border-radius:5px;padding:2px 6px;background:#F3F4F6;color:#6b7280;margin-left:5px}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+textarea.fi{resize:vertical;min-height:60px;line-height:1.6}
+@media(max-width:560px){.mr2{grid-template-columns:1fr;gap:2px}.mr2 .k{padding-top:6px}}
 #rowmenu{z-index:1300}
 </style>
 </head>
@@ -650,7 +671,7 @@ async function kkResetKey(){
 const MEMBER_TIERS=['','VVIP','패키지 - 실버회원','패키지 - 티타늄회원','패키지 - 다이아회원','패키지 - 골드회원','패키지 - 로얄회원','패키지(사업) - 티타늄회원','패키지(사업) - 다이아회원','패키지(사업) - 골드회원','패키지(사업) - 로얄회원'];
 const PKG_LABEL={silver:'실버',royal:'로얄',gold:'골드',diamond:'다이아',titanium:'티타늄',special:'스페셜해피홈'};
 let db=null;
-let RAW={customers:[],contracts:[],invoices:[],inspections:[],coupons:[],requests:[],bookings:[],schedules:[],quotes:[]};
+let RAW={customers:[],contracts:[],invoices:[],inspections:[],coupons:[],requests:[],bookings:[],schedules:[],quotes:[],memos:[]};
 let entries=[],mergeSug=[],curFilter='all',editTarget=null,drawerKey=null;
 // 정렬 기준 (name | recent | oldest | docs) — 마지막 선택을 기억합니다
 let curSort=(function(){try{return localStorage.getItem('hhc_ca_sort')||'name';}catch(e){return 'name';}})();
@@ -775,7 +796,7 @@ async function fetchColl(name){
   try{const s=await getDocs(collection(db,name));return s.docs.map(d=>{const x=d.data()||{};x.__id=d.id;return x;});}
   catch(e){console.warn(name,e.message);return [];}
 }
-const COLL_NAMES=['customers','contracts','invoices','inspections','coupons','requests','bookings','schedules','quotes'];
+const COLL_NAMES=['customers','contracts','invoices','inspections','coupons','requests','bookings','schedules','quotes','memos'];
 window.loadAll=async function(force){
   if(!db)return;
   if(!entries.length)document.getElementById('list').innerHTML='<div class="loading">불러오는 중...</div>';
@@ -811,7 +832,7 @@ function subscribeAll(){
 }
 function newEntry(name,phone){
   return {master:null,name:name||'',phone:phone||'',aliases:[],linkNames:[],member:'',email:'',addr:'',memo:'',inactive:false,ch:'',
-    docs:{contracts:[],invoices:[],inspections:[],coupons:[],requests:[],bookings:[],schedules:[],quotes:[]}};
+    docs:{contracts:[],invoices:[],inspections:[],coupons:[],requests:[],bookings:[],schedules:[],quotes:[],memos:[]}};
 }
 // ── 고객 1명을 가리키는 고정 키 ──
 // 마스터(고객마스터에 등록된 고객)는 문서 ID를, 아니면 이름+연락처 조합을 씁니다.
@@ -861,6 +882,7 @@ function buildEntries(){
   RAW.schedules.forEach(x=>{if(x.customer_name||x.customer_phone)attach('schedules',x,x.customer_name,x.customer_phone);});
   RAW.requests.forEach(x=>attach('requests',x,reqName(x),x.phone));
   RAW.quotes.forEach(x=>attach('quotes',x,x.client,x.phone));
+  RAW.memos.forEach(x=>{if(x.name||x.phone)attach('memos',x,x.name,x.phone);});
   // 상품권: 이름으로만 매칭 (연락처 없음)
   RAW.coupons.forEach(x=>{
     if(x.ca_link){pending.push({coll:'coupons',x,name:x.name||x.receiver,phone:''});return;}
@@ -1447,6 +1469,33 @@ window.openDrawer=function(idx){
     '<div class="drow"><span class="id">'+inspLabel(x.type)+'</span><span class="m">'+esc(x.date||'')+(x.addr?' · '+esc(x.addr):'')+'</span>'+(x.invoice_id?'<span class="pill blue">🧾 '+esc(x.invoice_id)+'</span>':'')+'<a class="open-btn" target="_blank" rel="noopener" data-t="✏️ '+esc(inspLabel(x.type))+' 수정 — '+esc(x.date||'')+'" href="'+window.caEditUrl('inspections',x)+'" onclick="return caView(this.href,this.dataset.t,event)">✏️ 열기·수정</a>'+rowBtns('inspections',x.__id)+'</div>').join('')
     :'<div class="dnone">점검보고서 없음</div>';
   h+='</div>';
+  // 📝 메모장 (수리요청 처리내역) — 등록·수정·삭제 가능
+  {
+    const MM=(e.docs.memos||[]).slice().sort((a,b)=>String(b.req_date||'').localeCompare(String(a.req_date||'')));
+    h+='<div class="dcard'+(caFold('memos')?' fold':'')+'" data-fold="memos"><div class="dcard-h dch"><span class="chv">▾</span>📝 메모장<span class="cnt">'+MM.length+'건</span>'+
+       '<button class="rb hd" style="margin-left:6px" onclick="event.stopPropagation();caMemoEdit('+idx+',\'\')">＋ 새 메모</button></div>';
+    h+=MM.length?MM.map(x=>{
+      const st=x.status==='done'?'<span class="pill ok">✅ 방문완료</span>'
+              :(x.status==='contacted'?'<span class="pill blue">📞 연락완료</span>'
+              :'<span class="pill warn">🕐 대기</span>');
+      const ch=x.channel==='kakao'?'<span class="pill">💛 카톡</span>'
+              :(x.channel==='whatsapp'?'<span class="pill">💚 왓챕</span>':'');
+      return '<div class="mrow">'+
+        '<div class="mr1"><span class="mrdt">'+esc(x.req_date||'')+'</span>'+st+ch+
+          '<span class="mrbt">'+
+            '<button class="rb ed" onclick="caMemoEdit('+idx+',\''+esc(x.__id)+'\')">✏️ 수정</button>'+
+            '<button class="rb del" onclick="caMemoDel('+idx+',\''+esc(x.__id)+'\')">🗑</button>'+
+          '</span></div>'+
+        '<div class="mr2">'+
+          '<div class="k">고객명</div><div class="v">'+esc(x.name||'—')+(x.phone?' · '+esc(x.phone):'')+'</div>'+
+          '<div class="k">증상</div><div class="v sym">'+esc(x.symptom||'—')+'</div>'+
+          '<div class="k">방문일</div><div class="v">'+(x.visit_date?esc(x.visit_date)+(x.visit_time?' '+esc(x.visit_time):''):'<span style="color:#8a94a6">미정</span>')+'</div>'+
+          '<div class="k">진단·결과</div><div class="v '+(x.result?'res':'wait')+'">'+(x.result?esc(x.result):'⚠️ 결과 미입력 — 방문 후 작성해 주세요')+'</div>'+
+          (x.memo?'<div class="k">내부메모</div><div class="v int">🔒 '+esc(x.memo)+'</div>':'')+
+        '</div></div>';
+    }).join(''):'<div class="dnone">메모 없음</div>';
+    h+='</div>';
+  }
   // 계약서
   h+='<div class="dcard'+(caFold('contracts')?' fold':'')+'" data-fold="contracts"><div class="dcard-h dch"><span class="chv">▾</span>📑 계약서<span class="cnt">'+e.docs.contracts.length+'건</span>'+hdrLink('contracts')+'</div>';
   h+=e.docs.contracts.length?e.docs.contracts.map(x=>{
@@ -3079,6 +3128,84 @@ function linkFieldsFor(coll,e,renameToo,rephoneToo){
   if(rephoneToo&&pk)f[pk]=e.phone||'';
   return f;
 }
+// ══════════ 📝 메모장 (수리요청 처리내역) — 등록 · 수정 · 삭제 ══════════
+// memo-admin.html 과 같은 'memos' 컬렉션을 사용합니다.
+// 고객 마이페이지에는 req_date · name · symptom · visit_date · result 만 표시되고,
+// 내부 메모(memo) 와 발송이력(sent_log) 은 고객에게 보이지 않습니다.
+window.caMemoEdit=function(idx,mid){
+  const e=entries[idx];if(!e)return;
+  const m=mid?(e.docs.memos||[]).filter(x=>x.__id===mid)[0]:null;
+  const td=new Date().toISOString().slice(0,10);
+  const v=s=>esc(String(s==null?'':s));
+  const EC='<span class="eye-c">👁 고객 공개</span>',EI='<span class="eye-i">🔒 내부</span>';
+  const body=
+    '<div class="f2">'+
+      '<div><div class="fl">요청 날짜 '+EC+'</div><input type="date" class="fi" id="cm-req" value="'+v(m?m.req_date:td)+'"></div>'+
+      '<div><div class="fl">상태</div><select class="fi" id="cm-status">'+
+        ['pending|🕐 대기','contacted|📞 연락완료','done|✅ 방문완료'].map(o=>{const a=o.split('|');
+          return '<option value="'+a[0]+'"'+((m?m.status:'pending')===a[0]?' selected':'')+'>'+a[1]+'</option>';}).join('')+
+      '</select></div>'+
+    '</div>'+
+    '<div class="fl">고객명 '+EC+'</div><input type="text" class="fi" id="cm-name" value="'+v(m?m.name:e.name)+'">'+
+    '<div class="fl">연락처</div><input type="text" class="fi" id="cm-phone" value="'+v(m?m.phone:e.phone)+'">'+
+    '<div class="fl">콘도명·호수</div><input type="text" class="fi" id="cm-condo" value="'+v(m?m.condo:(e.addr||''))+'">'+
+    '<div class="fl">증상 '+EC+'</div><textarea class="fi" id="cm-sym" placeholder="고객이 알려준 증상을 입력하세요">'+v(m?m.symptom:'')+'</textarea>'+
+    '<div class="f2">'+
+      '<div><div class="fl">방문 예정일 '+EC+'</div><input type="date" class="fi" id="cm-vd" value="'+v(m?m.visit_date:'')+'"></div>'+
+      '<div><div class="fl">방문 시각</div><input type="time" class="fi" id="cm-vt" value="'+v(m?m.visit_time:'')+'"></div>'+
+    '</div>'+
+    '<div class="fl">진단 및 결과 '+EC+'</div><textarea class="fi" id="cm-res" placeholder="방문 후 진단 내용과 처리 결과를 입력하세요 (나중에 입력 가능)">'+v(m?m.result:'')+'</textarea>'+
+    '<div class="fl">내부 메모 '+EI+'</div><textarea class="fi" id="cm-memo" placeholder="관리자만 보는 메모 — 고객에게 표시되지 않습니다">'+v(m?m.memo:'')+'</textarea>';
+  const foot=(mid?'<button class="btn" style="background:var(--bad-bg);border-color:#fecaca;color:var(--bad);margin-right:auto" onclick="caMemoDel('+idx+',\''+esc(mid)+'\')">🗑 삭제</button>':'')+
+    '<button class="btn" onclick="document.getElementById(\'ca-doc-mask\').remove()">취소</button>'+
+    '<button class="btn p" onclick="caMemoSave('+idx+',\''+esc(mid||'')+'\')">💾 저장</button>';
+  genericModal(mid?'✏️ 메모 수정':'📝 메모 등록',body,foot);
+};
+window.caMemoSave=async function(idx,mid){
+  const e=entries[idx];if(!e)return;
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  const g=id=>{const el=document.getElementById(id);return el?el.value:'';};
+  const now=new Date().toISOString();
+  const d={
+    req_date:g('cm-req')||now.slice(0,10),
+    status:g('cm-status')||'pending',
+    condo:g('cm-condo').trim(),
+    name:g('cm-name').trim(),
+    phone:g('cm-phone').trim(),
+    symptom:g('cm-sym').trim(),
+    visit_date:g('cm-vd'),
+    visit_time:g('cm-vt'),
+    result:g('cm-res').trim(),
+    memo:g('cm-memo').trim(),
+    updated_at:now
+  };
+  if(!d.name&&!d.symptom){toast('고객명 또는 증상을 입력해 주세요');return;}
+  try{
+    if(mid){
+      await updateDoc(doc(db,'memos',mid),d);
+      toast('✓ 메모가 수정되었습니다');
+    }else{
+      d.created_at=now;d.channel=CH_OK(e.ch)==='K'?'kakao':(CH_OK(e.ch)==='W'?'whatsapp':'other');d.sent_log=[];
+      await addDoc(collection(db,'memos'),d);
+      toast('✓ 메모가 등록되었습니다');
+    }
+    const mk=document.getElementById('ca-doc-mask');if(mk)mk.remove();
+    await loadAll(true);
+    if(typeof openDrawer==='function')openDrawer(idx);
+  }catch(err){toast('저장 실패: '+err.message);}
+};
+window.caMemoDel=async function(idx,mid){
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  if(!confirm('이 메모를 삭제할까요?\n\n· 메모장(memo-admin) 목록에서도 삭제됩니다.\n· 고객 마이페이지의 수리요청 처리내역에서도 사라집니다.'))return;
+  try{
+    await deleteDoc(doc(db,'memos',mid));
+    const mk=document.getElementById('ca-doc-mask');if(mk)mk.remove();
+    toast('삭제되었습니다');
+    await loadAll(true);
+    if(typeof openDrawer==='function')openDrawer(idx);
+  }catch(err){toast('삭제 실패: '+err.message);}
+};
+
 function genericModal(title,bodyHTML,footHTML){
   const old=document.getElementById('ca-doc-mask');if(old)old.remove();
   const mk=document.createElement('div');mk.id='ca-doc-mask';mk.className='mask open';
