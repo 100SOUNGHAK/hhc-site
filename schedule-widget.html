@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0B1833">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HHC 일정">
+<title>📅 일정 위젯 — Happy Home Care</title>
+<style>
+:root{
+  --navy:#0B1833;--teal:#0f766e;--teal-bg:#CCF2EE;
+  --amber:#b45309;--amber-bg:#FFEFD5;
+  --purple:#6d28d9;--purple-bg:#EDE9FE;
+  --red:#be123c;--red-bg:#FFE4E6;
+  --gray:#64748b;--gray-bg:#EEF2F7;
+  --bg:#F2F4F9;--bdr:#E4E8F0;--ink:#101A33;--ink2:#4A5578;--ink3:#8A93AD;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,'Pretendard','Noto Sans KR',sans-serif;
+  background:var(--bg);color:var(--ink);padding-bottom:26px;
+  padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+.wrap{max-width:520px;margin:0 auto;padding:10px 10px 0}
+
+/* ── 헤더 ── */
+.hdr{display:flex;align-items:center;gap:9px;padding:4px 2px 10px}
+.mark{width:34px;height:34px;border-radius:11px;flex:none;display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:900;color:#fff;letter-spacing:-.04em;
+  background:linear-gradient(145deg,#14958a,#0b5f59);box-shadow:0 4px 10px rgba(11,95,89,.3)}
+.hdr .t{font-size:14.5px;font-weight:900;letter-spacing:-.02em}
+.hdr .s{font-size:9.5px;font-weight:800;color:var(--ink3);letter-spacing:.08em;margin-top:1px}
+.hdr .sp{flex:1}
+.hbtn{font-family:inherit;font-size:11px;font-weight:900;border:1px solid var(--bdr);background:#fff;color:var(--ink2);
+  border-radius:9px;padding:7px 11px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.hbtn.full{background:var(--navy);border-color:var(--navy);color:#fff}
+#a2hs-btn{display:none;background:#EEF2FF;border-color:#c7d2fe;color:#4338CA}
+
+/* ── 월 네비 ── */
+.nav{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--bdr);
+  border-radius:14px;padding:7px 8px;margin-bottom:8px;box-shadow:0 1px 4px rgba(11,24,51,.05)}
+.nav button{font-family:inherit;border:none;background:none;cursor:pointer}
+.nav .arr{width:34px;height:32px;border-radius:9px;font-size:17px;font-weight:900;color:var(--ink2);background:var(--gray-bg)}
+.nav .lbl{flex:1;text-align:center;font-size:15px;font-weight:900;letter-spacing:-.02em}
+.nav .today{font-size:10.5px;font-weight:900;color:var(--teal);background:var(--teal-bg);border-radius:8px;padding:6px 10px}
+
+/* ── 캘린더 (항상 펼침) ── */
+.cal{background:#fff;border:1px solid var(--bdr);border-radius:16px;overflow:hidden;
+  box-shadow:0 2px 8px rgba(11,24,51,.06);margin-bottom:9px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr)}
+.dn{font-size:9.5px;font-weight:900;color:var(--ink3);text-align:center;padding:8px 0 5px;border-bottom:1px solid var(--bdr)}
+.dn:first-child{color:#e11d48}.dn:last-child{color:#2563eb}
+.dc{min-height:47px;border-bottom:1px solid #f1f4f9;border-right:1px solid #f1f4f9;
+  padding:3px 2px 2px;cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:center;gap:2px}
+.dc:nth-child(7n){border-right:none}
+.dc.out{opacity:.32}
+.dc .n{font-size:11.5px;font-weight:800;line-height:1;width:21px;height:21px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center}
+.dc.sun .n{color:#e11d48}.dc.sat .n{color:#2563eb}
+.dc.today .n{background:var(--navy);color:#fff;font-weight:900}
+.dc.sel{background:#F5FBFA}
+.dc.sel:after{content:'';position:absolute;inset:1px;border:2px solid var(--teal);border-radius:9px;pointer-events:none}
+.dots{display:flex;gap:2px;flex-wrap:wrap;justify-content:center;max-width:34px}
+.dot{width:5.5px;height:5.5px;border-radius:50%}
+.dot.bk{background:#14958a}.dot.rp{background:#f59e0b}.dot.mn{background:#8b5cf6}.dot.hd{background:#fb7185}.dot.gg{background:#94a3b8}
+.dc .more{font-size:8px;font-weight:900;color:var(--ink3);line-height:1}
+.dc.holiday{background:#FFF7F8}
+
+/* 범례 */
+.leg{display:flex;gap:9px;flex-wrap:wrap;padding:7px 11px;border-top:1px solid var(--bdr);background:#FAFBFD}
+.leg span{font-size:9px;font-weight:800;color:var(--ink2);display:inline-flex;align-items:center;gap:4px}
+.leg i{width:7px;height:7px;border-radius:50%;display:inline-block}
+
+/* ── 선택한 날짜 일정 ── */
+.sec-t{font-size:11px;font-weight:900;color:var(--ink2);margin:11px 3px 6px;display:flex;align-items:center;gap:6px}
+.sec-t .cnt{font-size:9.5px;font-weight:900;color:var(--teal);background:var(--teal-bg);border-radius:20px;padding:2px 8px}
+.card{background:#fff;border:1px solid var(--bdr);border-radius:14px;overflow:hidden;box-shadow:0 1px 4px rgba(11,24,51,.05)}
+.ev{display:flex;gap:9px;padding:10px 12px;border-bottom:1px solid #f1f4f9;cursor:pointer;align-items:flex-start}
+.ev:last-child{border-bottom:none}
+.ev:active{background:#F7F9FC}
+.ev .bar{width:4px;border-radius:3px;align-self:stretch;flex:none;min-height:30px}
+.ev.bk .bar{background:#14958a}.ev.rp .bar{background:#f59e0b}.ev.mn .bar{background:#8b5cf6}.ev.hd .bar{background:#fb7185}.ev.gg .bar{background:#94a3b8}
+.ev .tm{font-size:11.5px;font-weight:900;color:var(--ink);width:40px;flex:none;padding-top:1px}
+.ev .tm small{display:block;font-size:8.5px;font-weight:800;color:var(--ink3)}
+.ev .bd{flex:1;min-width:0}
+.ev .ti{font-size:12.5px;font-weight:800;letter-spacing:-.01em;line-height:1.4;word-break:break-word}
+.ev .mm{font-size:10.5px;color:var(--ink2);line-height:1.5;margin-top:2px;white-space:pre-wrap;word-break:break-word;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tag{font-size:8.5px;font-weight:900;border-radius:5px;padding:2px 6px;white-space:nowrap;flex:none;margin-top:1px}
+.tag.bk{background:var(--teal-bg);color:var(--teal)}.tag.rp{background:var(--amber-bg);color:var(--amber)}
+.tag.mn{background:var(--purple-bg);color:var(--purple)}.tag.hd{background:var(--red-bg);color:var(--red)}
+.tag.gg{background:var(--gray-bg);color:var(--gray)}
+.none{padding:16px 12px;font-size:11.5px;font-weight:700;color:var(--ink3);text-align:center}
+
+/* ── 다가오는 예약 ── */
+.up .ev .tm{width:52px}
+.up .ev .tm b{font-size:11.5px}
+.foot{margin-top:14px;text-align:center}
+.foot a{font-size:11px;font-weight:900;color:var(--ink2);text-decoration:none;background:#fff;
+  border:1px solid var(--bdr);border-radius:10px;padding:9px 16px;display:inline-block}
+.a2hs-how{display:none;margin-top:10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;
+  padding:11px 13px;font-size:10.5px;line-height:1.7;color:#78350f;font-weight:700}
+#toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:var(--navy);color:#fff;
+  font-size:12px;font-weight:800;border-radius:11px;padding:11px 18px;display:none;z-index:99;
+  box-shadow:0 10px 26px rgba(11,24,51,.4);white-space:nowrap}
+.skel{padding:26px 0;text-align:center;font-size:11.5px;color:var(--ink3);font-weight:800}
+@media (min-width:521px){body{padding-top:8px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hdr">
+    <div class="mark">HHC</div>
+    <div>
+      <div class="t">일정 위젯</div>
+      <div class="s">SCHEDULE WIDGET</div>
+    </div>
+    <span class="sp"></span>
+    <button class="hbtn" id="a2hs-btn" onclick="a2hsInstall()">📲 설치</button>
+    <a class="hbtn full" href="schedule.html" target="_blank" rel="noopener">전체 캘린더 ↗</a>
+  </div>
+
+  <div class="nav">
+    <button class="arr" onclick="mv(-1)">‹</button>
+    <div class="lbl" id="nav-lbl"></div>
+    <button class="today" onclick="goToday()">오늘</button>
+    <button class="arr" onclick="mv(1)">›</button>
+  </div>
+
+  <div class="cal">
+    <div class="grid" id="grid">
+      <div class="dn">일</div><div class="dn">월</div><div class="dn">화</div><div class="dn">수</div>
+      <div class="dn">목</div><div class="dn">금</div><div class="dn">토</div>
+    </div>
+    <div class="leg">
+      <span><i style="background:#14958a"></i>예약확정</span>
+      <span><i style="background:#f59e0b"></i>🛠 수리</span>
+      <span><i style="background:#8b5cf6"></i>직접입력</span>
+      <span><i style="background:#fb7185"></i>휴일</span>
+    </div>
+  </div>
+
+  <div class="sec-t" id="day-t">📌 선택한 날짜</div>
+  <div class="card" id="day-list"><div class="skel">불러오는 중...</div></div>
+
+  <div class="sec-t" id="up-t">🔜 다가오는 예약 · 오늘~내일 <span class="cnt" id="up-cnt" style="display:none"></span></div>
+  <div class="card up" id="up-list"><div class="skel">불러오는 중...</div></div>
+
+  <div class="foot">
+    <a href="schedule.html" target="_blank" rel="noopener">📅 전체 일정 캘린더 열기 — 일정 추가·수정은 여기서</a>
+    <div class="a2hs-how" id="a2hs-how">
+      📲 <b>홈 화면에 위젯처럼 추가하기</b><br>
+      · Android : Chrome 메뉴(⋮) → 「홈 화면에 추가」<br>
+      · iPhone : Safari 공유(□↑) → 「홈 화면에 추가」<br>
+      추가하면 아이콘을 눌러 앱처럼 바로 열립니다.
+    </div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script type="module">
+import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import {getFirestore,collection,onSnapshot} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+/* ══ 말레이시아 시간 기준 ══ */
+const MY_TZ_OFFSET=8*60;
+function myNow(){const n=new Date();return new Date(n.getTime()+(n.getTimezoneOffset()+MY_TZ_OFFSET)*60000);}
+function fmt(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function bkTime(v){
+  var t=String(v||'').trim(); if(!t)return '';
+  if(t.indexOf('|')>=0){var a=t.split('|');t=String(a[1]||a[0]||'').trim();}
+  var m=/(\d{1,2}):(\d{2})/.exec(t);
+  if(m)return String(m[1]).padStart(2,'0')+':'+m[2];
+  return t.replace(/[^0-9:]/g,'').slice(0,5);
+}
+
+/* ══ 상태 ══ */
+let schedules={},bookings={};
+const t0=myNow();
+let curY=t0.getFullYear(),curM=t0.getMonth();
+let selDate=fmt(t0);
+const TODAY=fmt(t0);
+
+/* 유형 → 스타일 클래스 (schedule.html 과 동일 분류) */
+function cls(t){
+  if(t==='booking'||t==='reserve')return 'bk';
+  if(t==='repair')return 'rp';
+  if(t==='holiday')return 'hd';
+  if(t==='google')return 'gg';
+  return 'mn';
+}
+function typeLb(t){
+  if(t==='booking'||t==='reserve')return '예약';
+  if(t==='repair')return '🛠 수리';
+  if(t==='holiday')return '휴일';
+  if(t==='google')return '구글';
+  return '직접';
+}
+function merged(ds){return [...(bookings[ds]||[]),...(schedules[ds]||[])].sort((a,b)=>(a.time_s||'').localeCompare(b.time_s||''));}
+
+/* ══ 렌더 ══ */
+const MONTHS=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+const WD=['일','월','화','수','목','금','토'];
+
+function renderNav(){document.getElementById('nav-lbl').textContent=curY+'년 '+MONTHS[curM];}
+
+function renderCal(){
+  const g=document.getElementById('grid');
+  [...g.querySelectorAll('.dc')].forEach(e=>e.remove());
+  const first=new Date(curY,curM,1);
+  const start=new Date(first); start.setDate(1-first.getDay());
+  const frag=document.createDocumentFragment();
+  for(let i=0;i<42;i++){
+    const d=new Date(start); d.setDate(start.getDate()+i);
+    if(i===35&&d.getMonth()!==curM)break;          // 마지막 줄이 전부 다음달이면 생략
+    const ds=fmt(d), evs=merged(ds);
+    const cell=document.createElement('div');
+    cell.className='dc'
+      +(d.getMonth()!==curM?' out':'')
+      +(d.getDay()===0?' sun':d.getDay()===6?' sat':'')
+      +(ds===TODAY?' today':'')
+      +(ds===selDate?' sel':'')
+      +(evs.some(e=>e.type==='holiday')?' holiday':'');
+    let h='<span class="n">'+d.getDate()+'</span>';
+    if(evs.length){
+      h+='<span class="dots">'+evs.slice(0,4).map(e=>'<i class="dot '+cls(e.type)+'"></i>').join('')+'</span>';
+      if(evs.length>4)h+='<span class="more">+'+(evs.length-4)+'</span>';
+    }
+    cell.innerHTML=h;
+    cell.onclick=()=>{selDate=ds;
+      if(d.getMonth()!==curM){curY=d.getFullYear();curM=d.getMonth();renderNav();renderCal();}
+      else renderCal();
+      renderDay();};
+    frag.appendChild(cell);
+  }
+  g.appendChild(frag);
+}
+
+function evRow(e,withDate){
+  const c=cls(e.type);
+  const tm=withDate
+    ?'<span class="tm"><b>'+esc((e.date||'').slice(5).replace('-','/'))+'</b><small>'+WD[new Date(e.date).getDay()]+'요일 '+esc(e.time_s||'')+'</small></span>'
+    :'<span class="tm">'+(e.time_s?esc(e.time_s):'—')+(e.time_e?'<small>~'+esc(e.time_e)+'</small>':'')+'</span>';
+  return '<div class="ev '+c+'" onclick="openFull(\''+esc(e.date||'')+'\')">'
+    +'<span class="bar"></span>'+tm
+    +'<span class="bd"><span class="ti">'+esc(e.title||'(제목 없음)')+'</span>'
+    +(e.memo?'<span class="mm">'+esc(e.memo)+'</span>':'')+'</span>'
+    +'<span class="tag '+c+'">'+typeLb(e.type)+'</span></div>';
+}
+
+function renderDay(){
+  const d=new Date(selDate);
+  const evs=merged(selDate);
+  document.getElementById('day-t').innerHTML='📌 '+(selDate===TODAY?'오늘':'')+' '
+    +(d.getMonth()+1)+'월 '+d.getDate()+'일 ('+WD[d.getDay()]+') '
+    +(evs.length?'<span class="cnt">'+evs.length+'건</span>':'');
+  document.getElementById('day-list').innerHTML=
+    evs.length?evs.map(e=>evRow(e,false)).join(''):'<div class="none">일정이 없습니다</div>';
+}
+
+function renderUpcoming(){
+  // 오늘 + 내일(다음 1일)의 예약확정·수리·직접입력 일정 — 항상 캘린더 아래에 펼쳐 표시
+  const list=[];
+  for(let i=0;i<2;i++){
+    const d=new Date(myNow()); d.setDate(d.getDate()+i);
+    const ds=fmt(d);
+    merged(ds).forEach(e=>{
+      if(e.type==='holiday')return;   // 휴일은 캘린더 색으로만 표시
+      list.push(e);
+    });
+  }
+  const el=document.getElementById('up-list'),ct=document.getElementById('up-cnt');
+  if(list.length){ct.style.display='';ct.textContent=list.length+'건';}
+  else ct.style.display='none';
+  el.innerHTML=list.length
+    ?list.map(e=>evRow(e,true)).join('')
+    :'<div class="none">오늘·내일 일정이 없습니다</div>';
+}
+
+function refresh(){renderNav();renderCal();renderDay();renderUpcoming();}
+
+/* ══ 조작 ══ */
+window.mv=function(d){curM+=d;if(curM<0){curM=11;curY--;}if(curM>11){curM=0;curY++;}renderNav();renderCal();};
+window.goToday=function(){const n=myNow();curY=n.getFullYear();curM=n.getMonth();selDate=fmt(n);refresh();};
+window.openFull=function(ds){window.open('schedule.html','_blank');};
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';
+  clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2400);}
+
+/* ══ PWA 홈 화면 설치 ══ */
+const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
+const IS_SAMSUNG=/SamsungBrowser/i.test(navigator.userAgent);
+let _a2hsEv=null;
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();_a2hsEv=e;
+  if(IS_SAMSUNG)return;
+  document.getElementById('a2hs-btn').style.display='';
+});
+window.a2hsInstall=async function(){
+  if(_a2hsEv){_a2hsEv.prompt();try{await _a2hsEv.userChoice;}catch(e){}_a2hsEv=null;
+    document.getElementById('a2hs-btn').style.display='none';return;}
+  document.getElementById('a2hs-how').style.display='block';
+};
+// 설치 방법 안내는 프롬프트가 없는 환경(iOS 등)에서 자동 노출
+if(IS_IOS)document.getElementById('a2hs-how').style.display='block';
+(function(){
+  if(!/^https?:$/.test(location.protocol))return;
+  if(!IS_IOS){
+    const l=document.createElement('link');l.rel='manifest';l.href='schedule-widget-manifest.json';
+    document.head.appendChild(l);
+  }
+  if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
+
+/* ══ Firestore — schedule.html 과 동일한 병합 규칙 (보기 전용) ══ */
+try{
+  const app=initializeApp({
+    apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
+    authDomain:"happywork-packageplan.firebaseapp.com",
+    projectId:"happywork-packageplan",
+    storageBucket:"happywork-packageplan.firebasestorage.app",
+    messagingSenderId:"553635350672",
+    appId:"1:553635350672:web:e601b74b96b83e0d4d2b83"
+  });
+  const db=getFirestore(app);
+
+  onSnapshot(collection(db,'schedules'),snap=>{
+    schedules={};
+    snap.docs.forEach(d=>{
+      const dat=Object.assign({},d.data(),{_id:d.id});
+      if(dat.booking_id)return;   // 확정 예약 미러 일정은 bookings 쪽에서 표시 (중복 방지)
+      if(!dat.date)return;
+      (schedules[dat.date]=schedules[dat.date]||[]).push(dat);
+    });
+    Object.values(schedules).forEach(a=>a.sort((x,y)=>(x.time_s||'').localeCompare(y.time_s||'')));
+    refresh();
+  });
+
+  onSnapshot(collection(db,'bookings'),snap=>{
+    bookings={};
+    snap.docs.forEach(d=>{
+      const b=Object.assign({},d.data(),{_id:d.id});
+      if(b.status!=='confirmed'||!b.booking_date)return;
+      (bookings[b.booking_date]=bookings[b.booking_date]||[]).push({
+        _id:'bk_'+b._id,date:b.booking_date,type:'booking',
+        title:b.customer_name||b.customer_address||'예약',
+        time_s:bkTime(b.booking_time),time_e:'',
+        memo:[b.booking_items?'🔧 '+b.booking_items:'',b.booking_memo?'📝 '+b.booking_memo:''].filter(Boolean).join('\n')
+      });
+    });
+    Object.values(bookings).forEach(a=>a.sort((x,y)=>(x.time_s||'').localeCompare(y.time_s||'')));
+    refresh();
+  });
+}catch(e){
+  document.getElementById('day-list').innerHTML='<div class="none">연결 실패: '+esc(e.message)+'</div>';
+}
+refresh();
+</script>
+</body>
+</html>
