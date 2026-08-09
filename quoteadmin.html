@@ -1099,12 +1099,41 @@ window.renderQuoteList=function(list){
       '<div class="lbtns">'+
         '<button class="lb" style="background:#f0f7ff;color:#1e40af" onclick="viewQuote(\''+q._id+'\')">👁 보기</button>'+
         '<button class="lb" style="background:#e8f0fe;color:#1e40af" onclick="window.__editQuote(\''+q._id+'\')">✏️ 수정</button>'+
+        '<button class="lb" style="background:#EEF2FF;color:#4338CA" onclick="qtOpenCustAdmin(\''+q._id+'\')">👤 고객상세</button>'+
         '<button class="lb" style="background:#FEE500;color:#3A1D1D" onclick="window.__sendQuoteFor(\''+q._id+'\')">📤 발송</button>'+
         '<button class="lb" style="background:var(--rbg);color:#c0392b" onclick="window.__delQuote(\''+q._id+'\')">삭제</button>'+
       '</div></div>';
   }).join('');
 };
 function viewQuote(id){window.open('https://hhc-3p8.pages.dev/quote.html?id='+id,'_blank');}
+// 👤 이 견적서 고객의 총괄 고객관리 상세 열기
+window.qtOpenCustAdmin=function(id){
+  var q=(quoteList||[]).find(function(x){return x._id===id;});
+  if(!q){toast('견적서를 찾지 못했습니다');return;}
+  window.hhcOpenCust(q.phone,q.client);
+};
+// ── 👤 총괄 고객관리(customer-admin.html)의 해당 고객 상세 바로 열기 ───────────
+// 관리자 허브(staff-app) 안에서 열려 있으면 허브의 「고객관리」 탭으로 전환해서 열고,
+// 단독 창으로 열려 있으면 새 탭으로 엽니다. key 는 연락처 우선, 없으면 고객명입니다.
+window.hhcOpenCust=function(phone,name){
+  var key=String(phone||'').trim()||String(name||'').trim();
+  if(!key){toast('연결할 고객 정보가 없습니다');return;}
+  var url='customer-admin.html?open='+encodeURIComponent(key);
+  var done=false;
+  function fallback(){if(done)return;done=true;window.open(url,'_blank');}
+  try{
+    if(window.parent&&window.parent!==window){
+      var ack=function(ev){if(ev&&ev.data&&ev.data.hhcOpenCustomerOk){done=true;window.removeEventListener('message',ack);}};
+      window.addEventListener('message',ack);
+      window.parent.postMessage({hhcOpenCustomer:key},'*');
+      toast('👤 고객관리에서 여는 중...');
+      setTimeout(function(){window.removeEventListener('message',ack);fallback();},500);
+      return;
+    }
+  }catch(e){}
+  fallback();
+};
+
 
 // ── 초기화
 (function(){

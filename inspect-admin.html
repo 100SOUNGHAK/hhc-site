@@ -1012,6 +1012,33 @@ function updateInspProgress(){
   pf.style.width=(n/5*100)+'%';
 }
 
+// 👤 이 보고서 고객의 총괄 고객관리 상세 열기
+window.inspOpenCustAdmin=function(id){
+  var r=(window.allReports||[]).find(function(x){return x._id===id;});
+  if(!r){toast('보고서를 찾지 못했습니다');return;}
+  window.hhcOpenCust(r.phone,r.client);
+};
+// ── 👤 총괄 고객관리(customer-admin.html)의 해당 고객 상세 바로 열기 ───────────
+// 관리자 허브(staff-app) 안에서 열려 있으면 허브의 「고객관리」 탭으로 전환해서 열고,
+// 단독 창으로 열려 있으면 새 탭으로 엽니다. key 는 연락처 우선, 없으면 고객명입니다.
+window.hhcOpenCust=function(phone,name){
+  var key=String(phone||'').trim()||String(name||'').trim();
+  if(!key){toast('연결할 고객 정보가 없습니다');return;}
+  var url='customer-admin.html?open='+encodeURIComponent(key);
+  var done=false;
+  function fallback(){if(done)return;done=true;window.open(url,'_blank');}
+  try{
+    if(window.parent&&window.parent!==window){
+      var ack=function(ev){if(ev&&ev.data&&ev.data.hhcOpenCustomerOk){done=true;window.removeEventListener('message',ack);}};
+      window.addEventListener('message',ack);
+      window.parent.postMessage({hhcOpenCustomer:key},'*');
+      toast('👤 고객관리에서 여는 중...');
+      setTimeout(function(){window.removeEventListener('message',ack);fallback();},500);
+      return;
+    }
+  }catch(e){}
+  fallback();
+};
 function toast(msg,ms){var t=gid('toast');if(!t)return;t.textContent=msg;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},ms||2500);}
 
 function updateEditTag(){
@@ -4072,6 +4099,7 @@ function renderList(items,targetId){
       '<div class="lcard-actions">'+
         '<button class="la-btn" style="background:#f0f7ff;color:#1e40af" onclick="viewReport(\''+id+'\')">👁 보기</button>'+
         '<button class="la-btn" style="background:#e8f0fe;color:#1e40af" onclick="editReport(\''+id+'\')">✏️ 수정</button>'+
+        '<button class="la-btn" style="background:#EEF2FF;color:#4338CA" onclick="inspOpenCustAdmin(\''+id+'\')">👤 고객상세</button>'+
         '<button class="la-btn" style="background:#25D366;color:#fff" onclick="sendFromList(\''+id+'\')">WA</button>'+
         '<button class="la-btn" style="background:#FEE500;color:#3A1D1D" onclick="kakaoFromList(\''+id+'\')">카카오</button>'+
         '<button class="la-btn" style="background:#fff7e6;color:#b45309" onclick="openInspInvModal(\''+id+'\')">'+(r.invoice_id?'🧾 인보이스':'🔗 연결')+'</button>'+

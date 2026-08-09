@@ -41,6 +41,7 @@ textarea{resize:none;line-height:1.5}
 .bp{background:var(--indigo);color:#fff} .bg{background:var(--gold);color:#7c3d00}
 .bgh{background:transparent;border:1.5px solid var(--bdr);color:var(--txt2)} .bw{background:#25D366;color:#fff} .bk{background:#FEE500;color:#3A1D1D}
 .br{background:var(--rbg);color:var(--red);border:1px solid #fca5a5} .bn{background:var(--navy);color:#fff}
+.bcu{background:#EEF2FF;color:#4338CA;border:1px solid #c7d2fe}
 .bfu{width:100%} .bsm{padding:8px 12px;font-size:12px;border-radius:8px} .bxs{padding:5px 9px;font-size:11px;border-radius:6px}
 .bdg{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600}
 .db{background:var(--abg);color:var(--amber)} .dp{background:var(--gbg);color:#065f46} .do{background:var(--rbg);color:#991b1b}
@@ -3083,6 +3084,7 @@ function renderList(){
       '</div>'+
     '</div>'+
     '<div class="ira">'+
+      '<button class="btn bxs bcu" onclick="event.stopPropagation();invOpenCustAdmin(\''+eid+'\')">👤 고객상세</button>'+
       '<button class="btn bxs bw" onclick="event.stopPropagation();shareWa(\''+eid+'\')">💬 WA</button>'+
       '<button class="btn bxs bk" onclick="event.stopPropagation();shareKakao(\''+eid+'\')">카카오</button>'+
       '<button class="btn bxs bgh" onclick="event.stopPropagation();quickEmail(\''+eid+'\')">메일</button>'+
@@ -3106,6 +3108,36 @@ function delInv(id){
   showToast('삭제됨');
 }
 window.delInv=delInv;
+// 👤 이 인보이스 고객의 총괄 고객관리 상세 열기
+function invOpenCustAdmin(id){
+  var inv=invoices.find(function(i){return i.id===id;});
+  if(!inv){showToast('인보이스를 찾지 못했습니다');return;}
+  var c=inv.customer||{};
+  window.hhcOpenCust(c.phone,c.name);
+}
+window.invOpenCustAdmin=invOpenCustAdmin;
+// ── 👤 총괄 고객관리(customer-admin.html)의 해당 고객 상세 바로 열기 ───────────
+// 관리자 허브(staff-app) 안에서 열려 있으면 허브의 「고객관리」 탭으로 전환해서 열고,
+// 단독 창으로 열려 있으면 새 탭으로 엽니다. key 는 연락처 우선, 없으면 고객명입니다.
+window.hhcOpenCust=function(phone,name){
+  var key=String(phone||'').trim()||String(name||'').trim();
+  if(!key){showToast('연결할 고객 정보가 없습니다');return;}
+  var url='customer-admin.html?open='+encodeURIComponent(key);
+  var done=false;
+  function fallback(){if(done)return;done=true;window.open(url,'_blank');}
+  try{
+    if(window.parent&&window.parent!==window){
+      var ack=function(ev){if(ev&&ev.data&&ev.data.hhcOpenCustomerOk){done=true;window.removeEventListener('message',ack);}};
+      window.addEventListener('message',ack);
+      window.parent.postMessage({hhcOpenCustomer:key},'*');
+      showToast('👤 고객관리에서 여는 중...');
+      setTimeout(function(){window.removeEventListener('message',ack);fallback();},500);
+      return;
+    }
+  }catch(e){}
+  fallback();
+};
+
 
 // ═══════════════════════════════════════════════════════════
 // STATUS MODAL

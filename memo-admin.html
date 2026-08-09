@@ -45,6 +45,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Pretendard",'Noto Sans KR',sa
 .rb.p{background:var(--pri);border-color:var(--pri);color:#fff}
 .rb.s{background:#22c55e;border-color:#22c55e;color:#fff}
 .rb.del{color:var(--bad);border-color:#fca5a5}
+.rb.ca{background:#EEF2FF;border-color:#c7d2fe;color:#4338CA}
 .sentlog{font-size:10px;color:var(--ink3);margin-top:7px;line-height:1.5}
 
 .mask{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:950;display:none;align-items:center;justify-content:center;padding:14px}
@@ -203,6 +204,28 @@ const CH_LB={kakao:['💛 카톡','k'],whatsapp:['💚 왓챕','wa'],other:['기
 const ST_LB={pending:['🕐 대기','r'],contacted:['📞 연락완료','w'],done:['✅ 방문완료','ok']};
 
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ── 👤 총괄 고객관리(customer-admin.html)의 해당 고객 상세 바로 열기 ───────────
+// 관리자 허브(staff-app) 안에서 열려 있으면 허브의 「고객관리」 탭으로 전환해서 열고,
+// 단독 창으로 열려 있으면 새 탭으로 엽니다. key 는 연락처 우선, 없으면 고객명입니다.
+window.hhcOpenCust=function(phone,name){
+  var key=String(phone||'').trim()||String(name||'').trim();
+  if(!key){toast('연결할 고객 정보가 없습니다');return;}
+  var url='customer-admin.html?open='+encodeURIComponent(key);
+  var done=false;
+  function fallback(){if(done)return;done=true;window.open(url,'_blank');}
+  try{
+    if(window.parent&&window.parent!==window){
+      var ack=function(ev){if(ev&&ev.data&&ev.data.hhcOpenCustomerOk){done=true;window.removeEventListener('message',ack);}};
+      window.addEventListener('message',ack);
+      window.parent.postMessage({hhcOpenCustomer:key},'*');
+      toast('👤 고객관리에서 여는 중...');
+      setTimeout(function(){window.removeEventListener('message',ack);fallback();},500);
+      return;
+    }
+  }catch(e){}
+  fallback();
+};
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2600);}
 function sn(v){return String(v||'').toLowerCase().replace(/[^0-9a-z가-힣]/g,'');}
 function pn(p){p=String(p||'').replace(/[^0-9]/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');}
@@ -367,6 +390,7 @@ window.renderList=function(){
       '<div class="acts">'+
         (m.status==='done'?'':'<button class="rb s" data-act="send" data-id="'+m.__id+'">💬 방문확인 발송</button>')+
         '<button class="rb p" data-act="edit" data-id="'+m.__id+'">✏️ 수정</button>'+
+        '<button class="rb ca" data-act="cust" data-id="'+m.__id+'">👤 고객상세</button>'+
         (m.status==='done'
           ?'<button class="rb" data-act="undone" data-id="'+m.__id+'">↩ 되돌리기</button>'
           :'<button class="rb" data-act="done" data-id="'+m.__id+'">✅ 완료</button>')+
@@ -387,6 +411,7 @@ document.getElementById('list').addEventListener('click',ev=>{
   else if(b.dataset.act==='done')setStatus(id,'done');
   else if(b.dataset.act==='undone')setStatus(id,'pending');
   else if(b.dataset.act==='del')delMemo(id);
+  else if(b.dataset.act==='cust'){const m=MEMOS.find(x=>x.__id===id);if(m)window.hhcOpenCust(m.phone,m.name);}
 });
 
 async function setStatus(id,st){
