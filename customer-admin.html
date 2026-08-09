@@ -307,6 +307,10 @@ html.sa body{padding-left:222px}
 .balc-r1 .pill{font-size:9.5px}
 .balc-rv{margin-left:auto;font-size:14.5px;font-weight:900;letter-spacing:-.02em;white-space:nowrap}
 .balc-r2{display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:10px;font-weight:700;opacity:.8;margin-top:6px}
+.balc-sum .k .balc-pk{font-size:12px;font-weight:900;opacity:1;margin-left:6px;letter-spacing:-.01em}
+.balc-sum .k .pill{opacity:1;margin-left:5px;vertical-align:1px}
+.balc-r2.solo{margin-top:11px;padding-top:10px;border-top:1px solid rgba(255,255,255,.14)}
+.balc-lb{font-size:9.5px;font-weight:900;letter-spacing:.06em;opacity:.62;padding:9px 16px 0}
 .balc-go{margin-left:auto;font-size:10px;font-weight:900;color:#0B1833;background:rgba(255,255,255,.94);
   border-radius:7px;padding:4px 10px;text-decoration:none;white-space:nowrap;opacity:1}
 .balc-go:hover{background:#fff}
@@ -1382,14 +1386,28 @@ window.openDrawer=function(idx){
        '<div class="balc-hd"><span class="ic">📦</span><div><div class="t">패키지 잔액 현황</div>'+
        '<div class="s">MEMBERSHIP BALANCE</div></div>'+
        '<span class="balc-n">유효 '+_live.length+' · 종료 '+(_cts.length-_live.length)+'</span></div>';
+    // 유효 계약이 1건뿐이면 상단 합계와 아래 목록이 완전히 같은 숫자라 중복으로 보입니다.
+    // → 그 1건을 상단 카드에 합쳐서 한 번만 보여주고, 목록에는 종료된 계약만 남깁니다.
+    const _solo=_live.length===1?_live[0]:null;
     if(_live.length){
       const _pct=_sumTotal>0?Math.max(0,Math.min(100,Math.round(_sumRemain/_sumTotal*100))):0;
-      h+='<div class="balc-sum"><div class="k">사용 가능 잔액'+(_live.length>1?' (유효 계약 합계)':'')+'</div>'+
+      h+='<div class="balc-sum"><div class="k">사용 가능 잔액'+(_live.length>1?' (유효 계약 합계)':'')+
+         (_solo?'<b class="balc-pk">'+esc(pkgLabel(_solo.package_id)||'패키지')+'</b><span class="pill ok">✅ 유효</span>':'')+'</div>'+
          '<div class="v">'+fmtRM(_sumRemain)+'</div>'+
          '<div class="balc-bar"><i style="width:'+_pct+'%"></i></div>'+
-         '<div class="balc-bl"><span>사용 '+fmtRM(_sumUsed)+'</span><span>'+(_pct>0?_pct+'% 남음':'전액 사용')+'</span></div></div>';
+         '<div class="balc-bl"><span>사용 '+fmtRM(_sumUsed)+'</span><span>'+(_pct>0?_pct+'% 남음':'전액 사용')+'</span></div>';
+      if(_solo){
+        const _sb=caBal(_solo);
+        h+='<div class="balc-r2 solo"><span>계약일 '+esc(_solo.contract_date||'—')+'</span>'+
+           '<span>납입 '+fmtRM(_sb.paid)+(_sb.bonus>0?' + 보너스 '+fmtRM(_sb.bonus):'')+'</span>'+
+           '<span>이용 '+_sb.cnt+'회 · 사용 '+fmtRM(_sb.netUsed)+'</span>'+
+           '<a class="balc-go" target="_blank" rel="noopener" data-t="📑 계약서 '+esc(pkgLabel(_solo.package_id)||'')+' '+esc(_solo.contract_date||'')+'" href="'+BASE+'/admin.html?view='+encodeURIComponent(_solo.__id)+'&mode=all&lang=ko" onclick="return caView(this.href,this.dataset.t,event)">이용내역 ↗</a></div>';
+      }
+      h+='</div>';
     }
-    h+='<div class="balc-list">'+_cts.map(x=>{
+    const _rows=_solo?_cts.filter(x=>x!==_solo):_cts;
+    if(_rows.length)
+    h+='<div class="balc-list">'+(_solo?'<div class="balc-lb">지난 계약 '+_rows.length+'건</div>':'')+_rows.map(x=>{
       const b=caBal(x), end=x.status==='ended';
       const pct=b.total>0?Math.max(0,Math.min(100,Math.round(b.remain/b.total*100))):0;
       return '<div class="balc-r'+(end?' off':'')+'">'+
@@ -1402,7 +1420,8 @@ window.openDrawer=function(idx){
         '<span>이용 '+b.cnt+'회 · 사용 '+fmtRM(b.netUsed)+'</span>'+
         '<a class="balc-go" target="_blank" rel="noopener" data-t="📑 계약서 '+esc(pkgLabel(x.package_id)||'')+' '+esc(x.contract_date||'')+'" href="'+BASE+'/admin.html?view='+encodeURIComponent(x.__id)+'&mode=all&lang=ko" onclick="return caView(this.href,this.dataset.t,event)">이용내역 ↗</a></div>'+
         '</div>';
-    }).join('')+'</div></div>';
+    }).join('')+'</div>';
+    h+='</div>';
   }
 
   // ── 💎 포인트 적립금 (RM100 당 RM1 · 결제완료 인보이스 기준) ──
