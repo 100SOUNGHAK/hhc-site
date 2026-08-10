@@ -454,8 +454,6 @@ textarea.fi{resize:vertical;min-height:60px;line-height:1.6}
 .sm-bubble>div{background:#fff;border-radius:12px;border-bottom-left-radius:4px;padding:12px 13px;
   font-size:12px;line-height:1.72;color:var(--ink);word-break:break-word;max-height:280px;overflow:auto;
   box-shadow:0 1px 4px rgba(11,24,51,.1)}
-.sm-qr{display:flex;align-items:center;gap:8px;background:#F5F8FF;border:1px dashed #b9cbf2;border-radius:11px;
-  padding:8px 10px;margin-top:8px;font-size:10.5px;font-weight:700;color:#3b4a7a;line-height:1.55}
 .sm-send{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;margin-top:9px}
 .sm-send .btn{padding:12px 6px;font-size:12px;font-weight:900}
 .sm-sub{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
@@ -2344,7 +2342,6 @@ window.caSendModal=async function(idx){
         '<div class="sm-sec" style="margin-bottom:0">'+
           '<div class="sm-h"><span class="no">3</span>발송 미리보기<span class="sp" id="cs-len"></span></div>'+
           '<div class="sm-bubble"><div id="cs-msg"></div></div>'+
-          '<div class="sm-qr">📎<span>발송을 누르면 <b>고객 전용 QR 카드</b>가 자동으로 만들어져 메시지와 함께 전달됩니다.</span></div>'+
           '<div class="sm-send">'+
             '<button id="cs-wa" class="btn" style="background:#22c55e;border-color:#22c55e;color:#fff">💬 WhatsApp</button>'+
             '<button id="cs-kk" class="btn" style="background:#FEE500;border-color:#FEE500;color:#3C1E1E">💛 카카오톡</button>'+
@@ -2760,84 +2757,13 @@ window.caSendModal=async function(idx){
   if(_cps)_cps.addEventListener('change',()=>{state.cpi[state.tpl]=parseInt(_cps.value,10)||0;paint();});
   const _pd=mk.querySelector('#cs-paydate');
   if(_pd){_pd.value=state.payDate;_pd.addEventListener('change',()=>{state.payDate=_pd.value;paint();});}
-  // ═══ 고객 전용 QR 카드 ═══
-  // 링크·언어가 바뀔 때마다 카드를 다시 그린다 (노출 항목 / 발송 언어가 QR에 그대로 반영됨)
-  let QRCV=null, QRKEY='';
-  function qrFile(){
-    const nm=String(e.name||'customer').replace(/[\\/:*?"<>|\s]+/g,'_').slice(0,40);
-    return 'HHC_MyPage_QR_'+nm+'.png';
-  }
-  // QR 카드는 화면에 두지 않고, 발송을 누르는 순간 그 자리에서 만듭니다.
-  function qrEnsure(){
-    if(typeof window.caQrCard!=='function')return null;
-    const u=link(), key=u+'|'+(state.en?'en':'ko');
-    if(QRKEY===key&&QRCV)return QRCV;
-    try{ QRCV=window.caQrCard({name:e.name||'',url:u,en:!!state.en,scale:2}); QRKEY=key; }
-    catch(err){ QRCV=null; }
-    return QRCV;
-  }
-  function qrBlob(){
-    return new Promise((res,rej)=>{
-      if(!QRCV)return rej(new Error('no canvas'));
-      QRCV.toBlob(b=>b?res(b):rej(new Error('blob fail')),'image/png');
-    });
-  }
-  // ══ 발송 : QR 카드를 그 자리에서 만들어 메시지와 함께 전달 ══
-  //  · 휴대폰(공유 지원) : 이미지 + 메시지를 한 번에 공유창으로 넘깁니다.
-  //  · PC              : QR 이미지를 클립보드에 넣고 대화창을 열어 붙여넣기만 하면 되게 합니다.
-  //                      (클립보드 이미지가 막힌 브라우저면 자동으로 내려받습니다)
-  const CAN_SHARE=!!(navigator.canShare&&navigator.share);
-  function qrDownload(){
-    try{
-      QRCV.toBlob(b=>{
-        if(!b)return;
-        const a=document.createElement('a');
-        a.href=URL.createObjectURL(b); a.download=qrFile();
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(()=>URL.revokeObjectURL(a.href),4000);
-      },'image/png');
-    }catch(_){}
-  }
-  async function shareWithQr(text){
-    if(!CAN_SHARE||!QRCV)return false;
-    try{
-      const b=await qrBlob();
-      const f=new File([b],qrFile(),{type:'image/png'});
-      if(!navigator.canShare({files:[f]}))return false;
-      await navigator.share({files:[f],text:text});
-      return true;
-    }catch(err){ return (err&&err.name==='AbortError'); }
-  }
-  // 클립보드에 QR 이미지 담기 — 사용자 클릭 흐름을 끊지 않도록 Promise 를 그대로 넘깁니다.
-  function qrToClipboard(){
-    try{
-      if(!QRCV||!window.ClipboardItem||!navigator.clipboard||!navigator.clipboard.write)return Promise.reject();
-      return navigator.clipboard.write([new ClipboardItem({'image/png':qrBlob()})]);
-    }catch(_){ return Promise.reject(); }
-  }
-  function afterOpenToast(){
-    qrToClipboard()
-      .then(()=>toast('📋 QR 카드가 복사되었습니다 · 대화창에서 붙여넣기(Ctrl+V) 하세요'))
-      .catch(()=>{ qrDownload(); toast('📥 QR 카드를 저장했습니다 · 대화창에 첨부해 주세요'); });
-  }
-
-  mk.querySelector('#cs-wa').addEventListener('click',async()=>{
-    qrEnsure();
-    const text=msg();
-    if(CAN_SHARE&&await shareWithQr(text))return;      // 휴대폰 : 한 번에 전송
+  mk.querySelector('#cs-wa').addEventListener('click',()=>{
     let wa='https://wa.me/';
     const ph=pn(e.phone);
     if(ph)wa+='60'+ph;
-    window.open(wa+'?text='+encodeURIComponent(text),'_blank');
-    afterOpenToast();
+    window.open(wa+'?text='+encodeURIComponent(msg()),'_blank');
   });
-  mk.querySelector('#cs-kk').addEventListener('click',async()=>{
-    qrEnsure();
-    const text=msg();
-    if(CAN_SHARE&&await shareWithQr(text))return;      // 휴대폰 : 한 번에 전송
-    afterOpenToast();
-    kkShareMsg(e.name,text,link());
-  });
+  mk.querySelector('#cs-kk').addEventListener('click',()=>{kkShareMsg(e.name,msg(),link());});
   mk.querySelector('#cs-kkset').addEventListener('click',()=>{kkResetKey();});
   mk.querySelector('#cs-pv').addEventListener('click',()=>{window.caView(link(),'👁 고객 발송 화면 미리보기 — '+(e.name||''));});
   mk.querySelector('#cs-copylink').addEventListener('click',()=>{
