@@ -93,6 +93,7 @@ input,select,textarea,button{font-family:inherit;font-size:15px}
 .stat.on{border-color:var(--teal);box-shadow:0 6px 18px -8px rgba(15,181,164,.35)}
 .stat[data-sf="pending"]{border-top-color:var(--amber)}
 .stat[data-sf="completed"]{border-top-color:var(--green)}
+.stat[data-sf="tobook"]{border-top-color:#7C3AED}
 .stat[data-sf="urgent"]{border-top-color:var(--red)}
 .stat-val{font-size:27px;font-weight:800;color:var(--navy);line-height:1;letter-spacing:-.03em}
 .stat-val.amber{color:var(--amber)}
@@ -103,6 +104,7 @@ input,select,textarea,button{font-family:inherit;font-size:15px}
 .dist-bar .seg{transition:width .4s ease}
 .dist-bar .seg.u{background:linear-gradient(90deg,#F87171,var(--red))}
 .dist-bar .seg.p{background:linear-gradient(90deg,#F5B942,var(--amber))}
+.dist-bar .seg.b{background:linear-gradient(90deg,#A78BFA,#7C3AED)}
 .dist-bar .seg.c{background:linear-gradient(90deg,#34D399,var(--green))}
 .dist-legend{display:flex;gap:13px;flex-wrap:wrap;font-size:11px;color:var(--text3);font-weight:700;margin-bottom:14px}
 .dist-legend .li{display:flex;align-items:center;gap:5px}
@@ -307,11 +309,12 @@ html.sa body:has(.app-body.active){padding-left:200px}
 .pgtitle p{font-size:12.5px;color:var(--text3);font-weight:600;margin-top:2px}
 
 /* ── 요약 카드: 아이콘 원형 + 숫자 ── */
-.stats{grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.stats{grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}
 .stat{display:flex;align-items:center;gap:12px;text-align:left;padding:14px 15px;border-top:none;border-radius:var(--radius-lg)}
 .stat::before{content:'📋';width:40px;height:40px;border-radius:50%;background:#EAF0FB;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
 .stat[data-sf="pending"]::before{content:'⏳';background:var(--amber-bg)}
 .stat[data-sf="completed"]::before{content:'✅';background:var(--green-bg)}
+.stat[data-sf="tobook"]::before{content:'🗓️';background:#EDE9FE}
 .stat[data-sf="urgent"]::before{content:'⚠️';background:var(--red-bg)}
 .stat>div{display:inline-block}
 .stat .stat-val{font-size:23px}
@@ -363,6 +366,7 @@ html.sa body:has(.app-body.active){padding-left:200px}
 .req-card:has(.rmore[open]){border-color:#2563eb;box-shadow:0 0 0 2.5px rgba(37,99,235,.14)}
 .req-card.menu-top{position:relative;z-index:80;border-color:#2563eb;box-shadow:0 0 0 2.5px rgba(37,99,235,.14)}
 .req-card:has(.rmore[open]){position:relative;z-index:80}
+@media(max-width:1080px){.stats{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:600px){.stats{grid-template-columns:repeat(2,1fr)}.stat{padding:12px}.stat::before{width:34px;height:34px;font-size:15px}}
 </style>
 </head>
@@ -441,16 +445,18 @@ html.sa body:has(.app-body.active){padding-left:200px}
     <button type="button" class="stat on" data-sf="all"><div class="stat-val" id="stat-total">0</div><div class="stat-lbl">전체 의뢰</div></button>
     <button type="button" class="stat" data-sf="pending"><div class="stat-val amber" id="stat-pending">0</div><div class="stat-lbl">⏳ 대기중</div></button>
     <button type="button" class="stat" data-sf="completed"><div class="stat-val green" id="stat-done">0</div><div class="stat-lbl">✅ 접수완료</div></button>
+    <button type="button" class="stat" data-sf="tobook"><div class="stat-val" id="stat-tobook" style="color:#6D28D9">0</div><div class="stat-lbl">🗓️ 예약전환 전</div></button>
     <button type="button" class="stat" data-sf="urgent"><div class="stat-val" id="stat-urgent" style="color:var(--red)">0</div><div class="stat-lbl">⚠️ 24h 경과</div></button>
   </div>
   <!-- 상태 분포 시각화 -->
   <div class="dist-bar" id="dist-bar" style="display:none">
-    <div class="seg u" id="seg-u"></div><div class="seg p" id="seg-p"></div><div class="seg c" id="seg-c"></div>
+    <div class="seg u" id="seg-u"></div><div class="seg p" id="seg-p"></div><div class="seg b" id="seg-b"></div><div class="seg c" id="seg-c"></div>
   </div>
   <div class="dist-legend" id="dist-legend" style="display:none">
     <span class="li"><span class="sw" style="background:var(--red)"></span>24h 경과 <b id="lg-u">0</b></span>
     <span class="li"><span class="sw" style="background:var(--amber)"></span>대기중 <b id="lg-p">0</b></span>
-    <span class="li"><span class="sw" style="background:var(--green)"></span>접수완료 <b id="lg-c">0</b></span>
+    <span class="li"><span class="sw" style="background:#7C3AED"></span>예약전환 전 <b id="lg-b">0</b></span>
+    <span class="li"><span class="sw" style="background:var(--green)"></span>예약전환 완료 <b id="lg-c">0</b></span>
   </div>
 
   <!-- 24시간 경과 경고 배너 (표시 전용 — ⚠️ 요약 숫자를 그대로 비춰줍니다) -->
@@ -471,6 +477,7 @@ html.sa body:has(.app-body.active){padding-left:200px}
       <option value="all">전체</option>
       <option value="pending">⏳ 대기중</option>
       <option value="completed">✅ 접수완료</option>
+      <option value="tobook">🗓️ 예약전환 전</option>
       <option value="urgent">⚠️ 24h 경과</option>
     </select>
     <select class="filter-sel" id="filter-sort">
@@ -1069,14 +1076,18 @@ document.getElementById('btn-logout').addEventListener('click',()=>{setAuth(fals
 
 // ── STATS ──
 function isUrgentReq(r){return r.status==='pending'&&r.submitted_at&&(Date.now()-new Date(r.submitted_at).getTime())/36e5>24;}
+// 🗓️ 예약전환 전 = 접수는 완료되었지만 아직 예약으로 전환하지 않은 의뢰
+function isToBookReq(r){return r.status==='completed'&&!r.converted_to_booking;}
 function updateStats(){
   const total=allRequests.length;
   const urgent=allRequests.filter(isUrgentReq).length;
   const pending=allRequests.filter(r=>r.status==='pending').length;
   const completed=allRequests.filter(r=>r.status==='completed').length;
+  const tobook=allRequests.filter(isToBookReq).length;
   document.getElementById('stat-total').textContent=total;
   document.getElementById('stat-pending').textContent=pending;
   document.getElementById('stat-done').textContent=completed;
+  document.getElementById('stat-tobook').textContent=tobook;
   document.getElementById('stat-urgent').textContent=urgent;
   // 상태 분포 바 (24h 경과는 대기중의 부분집합이므로 빨강+주황으로 분리 표시)
   const bar=document.getElementById('dist-bar'),lg=document.getElementById('dist-legend');
@@ -1085,12 +1096,15 @@ function updateStats(){
     else{
       bar.style.display='flex';lg.style.display='flex';
       const rest=pending-urgent;
+      const booked=completed-tobook;                 // 접수완료 중 예약전환까지 끝난 건
       document.getElementById('seg-u').style.width=(urgent/total*100)+'%';
       document.getElementById('seg-p').style.width=(rest/total*100)+'%';
-      document.getElementById('seg-c').style.width=(completed/total*100)+'%';
+      document.getElementById('seg-b').style.width=(tobook/total*100)+'%';
+      document.getElementById('seg-c').style.width=(booked/total*100)+'%';
       document.getElementById('lg-u').textContent=urgent;
       document.getElementById('lg-p').textContent=rest;
-      document.getElementById('lg-c').textContent=completed;
+      document.getElementById('lg-b').textContent=tobook;
+      document.getElementById('lg-c').textContent=booked;
     }
   }
 }
@@ -1121,6 +1135,7 @@ function renderList(){
   // 필터
   if(search)list=list.filter(r=>(r.condo||'').toLowerCase().includes(search)||(r.condo_name||'').toLowerCase().includes(search)||(r.condo_unit||'').toLowerCase().includes(search)||(r.phone||'').toLowerCase().includes(search));
   if(statusFilter==='urgent')list=list.filter(isUrgentReq);
+  else if(statusFilter==='tobook')list=list.filter(isToBookReq);
   else if(statusFilter!=='all')list=list.filter(r=>r.status===statusFilter);
 
   // 정렬
