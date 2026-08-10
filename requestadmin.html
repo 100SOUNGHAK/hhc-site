@@ -349,11 +349,13 @@ html.sa body:has(.app-body.active){padding-left:200px}
 .rmore summary:hover{border-color:var(--border-dark);color:var(--text)}
 .rmore[open] summary{border-color:#2563eb;color:#2563eb;background:#EFF6FF}
 .rmenu{position:absolute;right:0;top:calc(100% + 6px);z-index:60;background:var(--white);border:1.5px solid var(--border);
-  border-radius:var(--radius);box-shadow:0 14px 40px -8px rgba(15,28,63,.28);padding:6px;min-width:172px}
+  border-radius:var(--radius);box-shadow:0 14px 40px -8px rgba(15,28,63,.28);padding:6px;min-width:206px}
 .rmenu button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:none;background:none;cursor:pointer;
   font-family:inherit;font-size:12.5px;font-weight:800;color:var(--text);padding:9px 11px;border-radius:8px}
 .rmenu button:hover{background:var(--surface)}
 .rmenu .sep{height:1px;background:var(--border);margin:5px 4px}
+.rmenu .undo{color:var(--amber)}
+.rmenu .undo:hover{background:var(--amber-bg)}
 .rmenu .dgr{color:var(--red)}
 .rmenu .dgr:hover{background:var(--red-bg)}
 .rmenu i{font-style:normal;width:17px;text-align:center}
@@ -1212,6 +1214,9 @@ function renderList(){
             <div class="rmenu">
               <button data-caopen="${r.__id}"><i>👤</i>고객정보 보기</button>
               <button data-kakao="${r.__id}"><i>📋</i>카카오톡 복사</button>
+              ${(!isPending||r.converted_to_booking)?'<div class="sep"></div>':''}
+              ${!isPending?`<button class="undo" data-uncomplete="${r.__id}"><i>↩️</i>접수완료 취소 → 대기중</button>`:''}
+              ${r.converted_to_booking?`<button class="undo" data-unbooking="${r.__id}"><i>↩️</i>예약전환 취소 → 대기중</button>`:''}
               <div class="sep"></div>
               <button class="dgr" data-del="${r.__id}"><i>🗑</i>의뢰 삭제</button>
             </div>
@@ -1409,6 +1414,38 @@ document.getElementById('req-list').addEventListener('click',async e=>{
   }
 
   // 삭제
+  // ↩️ 접수완료 → 대기중(접수중) 되돌리기
+  const unDoneBtn=e.target.closest('[data-uncomplete]');
+  if(unDoneBtn){
+    const id=unDoneBtn.dataset.uncomplete;
+    const r=allRequests.find(x=>x.__id===id);
+    showConfirmModal(`'${r&&(r.condo_name||r.condo)||''}' 의뢰를 「⏳ 대기중」 상태로 되돌릴까요?\n접수완료 표시와 완료 일시가 지워집니다.`,async()=>{
+      showLoading(true);
+      try{
+        await updateDoc(doc(db,'requests',id),{status:'pending',completed_at:''});
+        showToast('↩️ 대기중으로 되돌렸습니다');
+      }catch(err){console.error(err);showToast('변경 실패');}
+      showLoading(false);
+    },{title:'접수완료 취소',ok:'↩️ 대기중으로',color:'var(--amber)'});
+    return;
+  }
+
+  // ↩️ 예약전환 완료 → 대기 상태로 되돌리기
+  const unBookBtn=e.target.closest('[data-unbooking]');
+  if(unBookBtn){
+    const id=unBookBtn.dataset.unbooking;
+    const r=allRequests.find(x=>x.__id===id);
+    showConfirmModal(`'${r&&(r.condo_name||r.condo)||''}' 의뢰의 「🗓️ 예약전환 완료」 표시를 지울까요?\n※ 이미 만들어진 예약 건은 예약관리에서 따로 정리해 주세요.`,async()=>{
+      showLoading(true);
+      try{
+        await updateDoc(doc(db,'requests',id),{converted_to_booking:false,converted_booking_id:''});
+        showToast('↩️ 예약전환을 취소했습니다');
+      }catch(err){console.error(err);showToast('변경 실패');}
+      showLoading(false);
+    },{title:'예약전환 취소',ok:'↩️ 대기중으로',color:'var(--amber)'});
+    return;
+  }
+
   const delBtn=e.target.closest('[data-del]');
   if(delBtn){
     const id=delBtn.dataset.del;
@@ -1456,16 +1493,18 @@ function showCompleteModal(r,msg,onComplete){
   ov.onclick=e=>{if(e.target===ov)ov.classList.remove('open');};
 }
 
-function showConfirmModal(msg,onOk){
+function showConfirmModal(msg,onOk,opt){
+  opt=opt||{};
   const ov=document.getElementById('modal-ov');
-  document.getElementById('modal-title').textContent='삭제 확인';
+  document.getElementById('modal-title').textContent=opt.title||'삭제 확인';
   document.getElementById('modal-msg').textContent=msg;
+  document.getElementById('modal-msg').style.whiteSpace='pre-line';
   document.getElementById('modal-msg').style.display='block';
   document.getElementById('modal-msg-box').style.display='none';
   document.getElementById('modal-copy-ok').style.display='none';
   const btns=document.getElementById('modal-btns');
   btns.innerHTML=`
-    <button class="modal-btn" style="background:var(--red);color:#fff" id="m-ok">삭제</button>
+    <button class="modal-btn" style="background:${opt.color||'var(--red)'};color:#fff" id="m-ok">${opt.ok||'삭제'}</button>
     <button class="modal-btn modal-btn-cancel" id="m-cancel">취소</button>`;
   document.getElementById('m-ok').onclick=()=>{ov.classList.remove('open');onOk();};
   document.getElementById('m-cancel').onclick=()=>ov.classList.remove('open');
