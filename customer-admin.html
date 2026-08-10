@@ -670,26 +670,19 @@ function kkText(m){
   t=t.replace(/\n{3,}/g,'\n\n').trim();
   const MAX=195;                                  // 카카오 제한 200자 — 여유 5자
   const len=x=>Array.from(x).length;
-  // ① 200자를 넘으면 「MY PAGE 설치 안내」 줄부터 뺍니다 (가장 부가적인 문장)
+  // 200자를 넘을 때 빼는 순서 (안내 내용을 최대한 살립니다)
+  //  ① 맨 끝 회사명·연락처 서명   ② MY PAGE 설치 안내 줄   ③ 그래도 넘치면 본문 끝을 줄임
+  if(len(t)>MAX){
+    t=t.split('\n').filter(x=>!(
+        /📞\s*\+?\s*60[\s-]*17[\s-]*247[\s-]*2774/.test(x) ||   // 연락처 줄
+        /^\s*Happy Home Care\s*$/i.test(x)                        // 회사명 단독 줄
+      )).join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  }
   if(len(t)>MAX){
     t=t.split('\n').filter(x=>!/MY ?PAGE ?설치하시면|Once you install MY ?PAGE/i.test(x))
        .join('\n').replace(/\n{3,}/g,'\n\n').trim();
   }
-  // ② 그래도 넘치면 맨 끝 서명(회사명·연락처)은 반드시 남기고 본문만 줄입니다
-  if(len(t)>MAX){
-    const L2=t.split('\n');
-    let si=-1;
-    for(let k=L2.length-1;k>=0;k--){if(/Happy Home Care/i.test(L2[k])){si=k;break;}}
-    if(si>=0){
-      const sign=L2.slice(si).join('\n');
-      let body=L2.slice(0,si).join('\n').replace(/\s+$/,'');
-      const budget=MAX-len(sign)-2;
-      if(len(body)>budget)body=Array.from(body).slice(0,Math.max(0,budget-1)).join('').replace(/\s+\S*$/,'')+'…';
-      t=body+'\n\n'+sign;
-    }else{
-      t=Array.from(t).slice(0,MAX-1).join('').replace(/\s+\S*$/,'')+'…';
-    }
-  }
+  if(len(t)>MAX)t=Array.from(t).slice(0,MAX-1).join('').replace(/\s+\S*$/,'')+'…';
   return t;
 }
 async function kkSend(title,desc,url){
