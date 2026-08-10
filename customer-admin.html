@@ -816,15 +816,25 @@ window.loadAll=async function(force){
 let _rbTimer=null;
 function scheduleRebuild(){clearTimeout(_rbTimer);_rbTimer=setTimeout(rebuildAndPaint,250);}
 function rebuildAndPaint(){
-  // 상세 화면이 열려 있으면 같은 고객으로 다시 그린다 (목록 순서가 바뀌어도 유지)
-  let sig=null;
-  if(drawerKey!=null&&entries[drawerKey]){const e=entries[drawerKey];sig=pn(e.phone)||nn(e.name);}
+  // 상세 화면이 열려 있으면 같은 고객으로 다시 그린다.
+  // 목록 순서가 바뀌어도, 수정 과정에서 연락처·이름이 바뀌어도 놓치지 않도록
+  // 「고객 문서 id → 연락처 → 이름」 순서로 다시 찾습니다.
+  let sigM=null,sigP=null,sigN=null;
+  if(drawerKey!=null&&entries[drawerKey]){
+    const e=entries[drawerKey];
+    sigM=(e.master&&e.master.__id)||null;
+    sigP=pn(e.phone)||null;
+    sigN=nn(e.name)||null;
+  }
   buildEntries();
   renderAll();
   if(typeof tryAutoOpen==='function')tryAutoOpen();
   if(typeof tryAutoOpen==='function')tryAutoOpen();
-  if(sig!=null){
-    const ni=entries.findIndex(e=>(pn(e.phone)||nn(e.name))===sig);
+  if(sigM||sigP||sigN){
+    let ni=-1;
+    if(sigM)ni=entries.findIndex(e=>e.master&&e.master.__id===sigM);
+    if(ni<0&&sigP)ni=entries.findIndex(e=>pn(e.phone)===sigP);
+    if(ni<0&&sigN)ni=entries.findIndex(e=>nn(e.name)===sigN);
     if(ni>=0)openDrawer(ni);else closeDrawer();
   }
 }
@@ -1707,7 +1717,7 @@ async function applyEdit(e,v,propagate){
     }
     if(propagate)await propagateDocs(e,v);
     toast('✓ 저장되었습니다'+(propagate?' — 전 프로그램 반영 완료':''));
-    closeEdit();closeProp();closeDrawer();loadAll(true);
+    closeEdit();closeProp();loadAll(true);
   }catch(err){toast('저장 실패: '+err.message);}
 }
 // 전파 대상 정의: [컬렉션, 라벨, 매칭(문서,이름셋,pn), 변경필드(이름변경,번호변경)]
@@ -1807,7 +1817,7 @@ window.caDelCustomer=async function(idx){
   try{
     await deleteDoc(doc(db,'customers',e.master.__id));
     toast('✓ 고객 정보가 삭제되었습니다');
-    closeDrawer();loadAll(true);
+    closeDrawer();loadAll(true);   // 고객 자체가 삭제되었으므로 상세보기를 닫습니다
   }catch(err){toast('삭제 실패: '+err.message);}
 };
 
@@ -1829,7 +1839,7 @@ window.caToggleInactive=async function(idx){
     const now2=new Date().toISOString();
     await updateDoc(doc(db,'customers',mid),{ca_inactive:on,ca_inactive_at:on?now2:'',updated_at:now2});
     toast(on?'⏸ 비활성 고객으로 변경되었습니다':'▶️ 활성 고객으로 복구되었습니다');
-    closeDrawer();loadAll(true);
+    loadAll(true);
   }catch(err){toast('변경 실패: '+err.message);}
 };
 
@@ -1904,7 +1914,7 @@ window.caPtEarnSave=async function(idx,did,clear){
     await updateDoc(doc(db,'customers',mid),{pt_ovr:ovr,updated_at:new Date().toISOString()});
     toast(clear?'↩️ 자동 계산 적립으로 복원되었습니다':'✏️ 적립액이 RM '+v+'(으)로 수정되었습니다');
     const mk=document.getElementById('ca-doc-mask');if(mk)mk.remove();
-    closeDrawer();loadAll(true);
+    loadAll(true);
   }catch(err){toast('저장 실패: '+err.message);}
 };
 // ── ✏️ 사용 내역 수정 ──
@@ -1929,7 +1939,7 @@ window.caPtUseEditSave=async function(idx,ui){
     await updateDoc(doc(db,'customers',e.master.__id),{pt_used:list,updated_at:new Date().toISOString()});
     toast('✏️ 사용 내역이 수정되었습니다');
     const mk=document.getElementById('ca-doc-mask');if(mk)mk.remove();
-    closeDrawer();loadAll(true);
+    loadAll(true);
   }catch(err){toast('수정 실패: '+err.message);}
 };
 // ── ✏️ 조정 내역 수정 ──
@@ -1957,7 +1967,7 @@ window.caPtAdjEditSave=async function(idx,ai){
     await updateDoc(doc(db,'customers',e.master.__id),{pt_adj:list,updated_at:new Date().toISOString()});
     toast('✏️ 조정 내역이 수정되었습니다');
     const mk=document.getElementById('ca-doc-mask');if(mk)mk.remove();
-    closeDrawer();loadAll(true);
+    loadAll(true);
   }catch(err){toast('수정 실패: '+err.message);}
 };
 // ── ✏️ 적립 조정 (수동 추가/차감) ──
@@ -1995,7 +2005,7 @@ window.caPtAdjSave=async function(idx){
     await updateDoc(doc(db,'customers',mid),{pt_adj:list,updated_at:new Date().toISOString()});
     toast(sign>0?('➕ RM '+amt+' 적립이 추가되었습니다'):('➖ RM '+amt+' 적립이 차감되었습니다'));
     const mk=document.getElementById('ca-doc-mask');if(mk)mk.remove();
-    closeDrawer();loadAll(true);
+    loadAll(true);
   }catch(err){toast('저장 실패: '+err.message);}
 };
 // ── ↩️ 조정 내역 삭제 (원복) ──
@@ -2010,7 +2020,7 @@ window.caPtAdjDel=async function(idx,ai){
   try{
     await updateDoc(doc(db,'customers',e.master.__id),{pt_adj:list,updated_at:new Date().toISOString()});
     toast('↩️ 조정 내역이 삭제되었습니다');
-    closeDrawer();loadAll(true);
+    loadAll(true);
   }catch(err){toast('삭제 실패: '+err.message);}
 };
 // ── 💎 포인트 사용 (차감) ──
@@ -2053,7 +2063,7 @@ window.caPtUseSave=async function(idx){
     await updateDoc(doc(db,'customers',mid),{pt_used:list,updated_at:new Date().toISOString()});
     toast('💎 포인트 RM '+amt+' 사용 처리되었습니다 (잔액 RM '+(PT.bal-amt)+')');
     const mk=document.getElementById('ca-doc-mask');if(mk)mk.remove();
-    closeDrawer();loadAll(true);
+    loadAll(true);
   }catch(err){toast('저장 실패: '+err.message);}
 };
 // ── ↩️ 포인트 사용 취소 (잔액 복구) ──
@@ -2067,7 +2077,7 @@ window.caPtUseDel=async function(idx,ui){
   try{
     await updateDoc(doc(db,'customers',e.master.__id),{pt_used:list,updated_at:new Date().toISOString()});
     toast('↩️ 사용 내역이 취소되어 잔액으로 복구되었습니다');
-    closeDrawer();loadAll(true);
+    loadAll(true);
   }catch(err){toast('취소 실패: '+err.message);}
 };
 // ══ 품목명 KO→EN 사전 — 고객용 영문 메시지 전용 (관리화면 표시는 한글 그대로 유지) ══
@@ -3351,7 +3361,7 @@ function caLinkConfirm(coll,x,e,onDone){
         const chg=[renameToo?'고객명':'',rephoneToo?'연락처':''].filter(Boolean).join('·');
         toast(chg?'✓ 이관 연결되었습니다 ('+chg+' 변경)':'✓ 이관 연결되었습니다 — 문서 내용은 그대로 유지');
       }
-      closeDrawer();loadAll(true);
+      loadAll(true);
     }catch(err){btn.disabled=false;btn.textContent='연결하기';toast('연결 실패: '+err.message);}
   });
 }
@@ -3370,7 +3380,7 @@ window.caDocUnlink=async function(coll,id,idx){
   try{
     if(isDup)await updateDoc(doc(db,coll,id),{ca_links:docExtraKeys(x).filter(k=>k!==key)});
     else await updateDoc(doc(db,coll,id),{ca_link:'',ca_link_name:''});
-    toast('✓ 연결이 해제되었습니다');closeDrawer();loadAll(true);
+    toast('✓ 연결이 해제되었습니다');loadAll(true);
   }catch(err){toast('해제 실패: '+err.message);}
 };
 
@@ -3417,7 +3427,7 @@ window.caLinkManage=function(idx){
     }
     mk.remove();
     toast(ng?('✓ '+ok+'건 해제 · '+ng+'건 실패'):('✓ '+ok+'건 연결이 해제되었습니다'));
-    closeDrawer();loadAll(true);
+    loadAll(true);
   });
 };
 // ── ✏️ 수정: 종류별 핵심 필드 편집 ──
@@ -3454,7 +3464,7 @@ window.caDocEdit=function(coll,id){
     else upd={name:v.name,receiver:v.receiver,value:v.value,expiry:v.expiry,status:v.status};
     try{
       await updateDoc(doc(db,coll,id),upd);
-      mk.remove();toast('✓ 수정되었습니다');closeDrawer();loadAll(true);
+      mk.remove();toast('✓ 수정되었습니다');loadAll(true);
     }catch(err){toast('수정 실패: '+err.message);}
   });
 };
@@ -3464,7 +3474,7 @@ window.caDocDel=async function(coll,id){
   if(!confirm(COLL_LB[coll]+' 문서를 삭제할까요?\n\n'+docSummary(coll,x)+'\n\n⚠ 삭제하면 되돌릴 수 없습니다.'))return;
   try{
     await deleteDoc(doc(db,coll,id));
-    toast('✓ 삭제되었습니다');closeDrawer();loadAll(true);
+    toast('✓ 삭제되었습니다');loadAll(true);
   }catch(err){toast('삭제 실패: '+err.message);}
 };
 
