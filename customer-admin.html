@@ -636,11 +636,41 @@ function kkLoad(){
   });
   return _kkLoad;
 }
-// 카카오 카드 설명문: 링크·구분선을 걷어내고 190자로 요약
-function kkDesc(m){
-  let t=String(m||'').replace(/https?:\/\/\S+/g,'').replace(/^-{3,}$/gm,'')
-        .replace(/\n{2,}/g,'\n').trim();
-  return t.length>185?t.slice(0,185)+'…':t;
+// 카카오 「텍스트형」 카드 본문
+//  · 피드형 카드는 제목 2줄 + 설명 2줄(합쳐 4줄)까지만 보여 주고 나머지를 잘라내는
+//    카카오 고정 사양이라, 안내문이 늘 앞부분만 보였습니다.
+//  · 텍스트형 템플릿은 최대 200자를 그대로 모두 표시하므로 이쪽을 사용합니다.
+//  · 링크 줄은 아래 「마이페이지 열기」 버튼이 대신하므로 본문에서 걷어내
+//    한 글자라도 더 안내 내용이 들어가게 합니다.
+function kkText(m){
+  let t=String(m||'')
+    .replace(/^.*https?:\/\/\S+.*$/gm,'')        // 링크가 들어간 줄 통째로 제거
+    .replace(/^\s*[-=─━_·]{3,}\s*$/gm,'')        // 구분선 줄 제거
+    .replace(/[ \t]+$/gm,'')
+    .trim();
+  // 「🏠 마이페이지 소개 ~ 📱 My Page」 구간은 아래 「마이페이지 열기」 버튼이 대신하므로
+  // 통째로 걷어내 200자 안에 실제 안내 내용이 최대한 들어가게 합니다.
+  // (단 '* 신청 품목' 처럼 별표로 시작하는 실제 정보 줄은 남깁니다)
+  const L=t.split('\n');
+  const i=L.findIndex(x=>/^🏠/.test(x.trim()));
+  if(i>=0){
+    let j=i;
+    for(let k=i;k<L.length;k++){
+      const ln=L[k].trim();
+      if(k>i&&/^(감사|Thank|Happy Home Care|📞|고객님의 소중한)/.test(ln)){j=k-1;break;}
+      if(/^📱/.test(ln)){j=k;break;}
+      j=k;
+    }
+    const keep=L.slice(i,j+1).filter(x=>/^[*•]/.test(x.trim()));
+    L.splice(i,j-i+1);
+    keep.reverse().forEach(x=>L.splice(i,0,x));
+    t=L.join('\n');
+  }
+  t=t.replace(/\n{3,}/g,'\n\n').trim();
+  const MAX=195;                                  // 카카오 제한 200자 — 여유 5자
+  const a=Array.from(t);
+  if(a.length>MAX)t=a.slice(0,MAX-1).join('').replace(/\s+\S*$/,'')+'…';
+  return t;
 }
 async function kkSend(title,desc,url){
   const key=await kkKey(false);
@@ -653,9 +683,9 @@ async function kkSend(title,desc,url){
   if(!share||!share.sendDefault){toast('이 브라우저에서는 카카오톡 공유를 지원하지 않습니다');return false;}
   try{
     share.sendDefault({
-      objectType:'feed',
-      content:{title:String(title||'').slice(0,80),description:desc,
-        imageUrl:BASE+'/icon-192.png',link:{mobileWebUrl:url,webUrl:url}},
+      objectType:'text',
+      text:desc,                                   // 안내문 전문 (최대 200자)
+      link:{mobileWebUrl:url,webUrl:url},
       buttons:[{title:'마이페이지 열기',link:{mobileWebUrl:url,webUrl:url}}]
     });
     return true;
@@ -667,7 +697,7 @@ async function kkSend(title,desc,url){
 async function kkShareMsg(name,message,url){
   try{await navigator.clipboard.writeText(message);}catch(_){}
   toast('💛 카카오톡 공유창을 엽니다 · 전체 메시지도 복사되었습니다');
-  const ok=await kkSend('[Happy Home Care] '+(name||'고객')+'님 안내',kkDesc(message),url);
+  const ok=await kkSend('[Happy Home Care] '+(name||'고객')+'님 안내',kkText(message),url);
   return ok;
 }
 async function kkResetKey(){
@@ -2166,6 +2196,25 @@ window.caSendModal=async function(idx){
   const state={iv:true,ip:true,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:BKP.length?'bk':(BKCU.length?'bkc':'basic'),
     cpi:{cpg:0,cpd:0,ins:0,ct:0,qt:0},
     payDate:_td.getFullYear()+'-'+_p2(_td.getMonth()+1)+'-'+_p2(_td.getDate())};
+  // 발송 메시지 종류 — 14가지를 항상 표시합니다.
+  //  need:true 인 항목은 해당 자료(예약·상품권·점검보고서 등)가 있어야 발송할 수 있어
+  //  0건이면 흐리게 표시하고 선택을 막습니다.
+  const TPLS=[
+    {t:'bk',      lb:'📅 예약 신청',    n:BKP.length,  need:true},
+    {t:'bkc',     lb:'✅ 예약 확정',    n:BKCU.length, need:true},
+    {t:'rq',      lb:'📥 의뢰 접수',    n:RQP.length,  need:true},
+    {t:'cpg',     lb:'🎁 상품권 발송',  n:CPG.length,  need:true},
+    {t:'cpd',     lb:'🏷️ 할인권 발송',  n:CPD.length,  need:true},
+    {t:'ins',     lb:'🔧 점검보고서',   n:IPS.length,  need:true},
+    {t:'ct',      lb:'📑 계약서 발송',  n:CTS.length,  need:true},
+    {t:'aw',      lb:'🧽 작업후 안내',  n:CTS.length,  need:true},
+    {t:'qt',      lb:'🧾 견적서 발송',  n:QTS.length,  need:true},
+    {t:'basic',   lb:'📄 기본 안내',    n:0, need:false},
+    {t:'revisit', lb:'🔄 재방문 · 예약', n:0, need:false},
+    {t:'bill',    lb:'🧾 청구 안내',    n:0, need:false},
+    {t:'pay',     lb:'💳 결제 확인',    n:0, need:false},
+    {t:'install', lb:'📲 앱 설치 안내', n:0, need:false}
+  ];
   const _cpSpan=(CPG.length&&CPD.length)?'':'grid-column:1/-1;';
   const _icSpan=(IPS.length&&CTS.length)?'':'grid-column:1/-1;';
   const OPT=[['iv','💳','인보이스','건'],['ip','🔧','점검보고서','건'],['ct','📑','계약서 · 잔액','건'],['cp','🎫','상품권','장']];
@@ -2189,20 +2238,15 @@ window.caSendModal=async function(idx){
     '<div style="margin-bottom:9px">'+
       '<div style="font-size:11px;font-weight:800;color:var(--ink3);margin-bottom:5px">발송 메시지</div>'+
       '<div id="cs-tpl" style="display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:3px;gap:3px">'+
-        (BKP.length?'<span data-t="bk" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📅 예약 신청 안내</span>':'')+
-        (BKCU.length?'<span data-t="bkc" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">✅ 예약 확정 안내</span>':'')+
-        (RQP.length?'<span data-t="rq" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📥 의뢰 접수 안내</span>':'')+
-        (CPG.length?'<span data-t="cpg" style="'+_cpSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🎁 상품권 발송</span>':'')+
-        (CPD.length?'<span data-t="cpd" style="'+_cpSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🏷️ 할인권 발송</span>':'')+
-        (IPS.length?'<span data-t="ins" style="'+_icSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🔧 점검보고서 발송</span>':'')+
-        (CTS.length?'<span data-t="ct" style="'+_icSpan+'text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📑 계약서 발송</span>':'')+
-        (CTS.length?'<span data-t="aw" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🧽 작업후 안내</span>':'')+
-        (QTS.length?'<span data-t="qt" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🧾 견적서 발송</span>':'')+
-        '<span data-t="basic" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📄 기본 안내</span>'+
-        '<span data-t="revisit" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🔄 재방문 · 예약</span>'+
-        '<span data-t="bill" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">🧾 청구 안내</span>'+
-        '<span data-t="pay" style="text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">💳 결제 확인</span>'+
-        '<span data-t="install" style="grid-column:1/-1;text-align:center;cursor:pointer;font-size:11px;font-weight:800;border-radius:8px;padding:7px 6px;white-space:nowrap">📲 앱 설치 안내</span>'+
+        TPLS.map(function(o){
+          const off=o.need&&o.n===0;   // 해당 자료가 없는 종류 → 흐리게 · 선택 불가
+          return '<span data-t="'+o.t+'"'+(off?' data-off="1"':'')+
+            ' title="'+(off?'이 고객에게는 해당 자료가 없습니다':o.lb)+'"'+
+            ' style="text-align:center;font-size:11px;font-weight:800;border-radius:8px;padding:7px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'+
+            (off?'cursor:not-allowed;opacity:.36;':'cursor:pointer;')+'">'+o.lb+
+            (o.need?'<span style="font-size:9px;font-weight:900;margin-left:3px;opacity:.85">'+o.n+'</span>':'')+
+            '</span>';
+        }).join('')+
       '</div>'+
       '<div id="cs-cpsel" style="display:none;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:9px 11px;margin-top:7px;align-items:center;gap:9px">'+
         '<span id="cs-cp-lb" style="font-size:11px;font-weight:800;color:var(--ink3);white-space:nowrap">발송할 쿠폰</span>'+
@@ -2865,10 +2909,11 @@ window.caSendModal=async function(idx){
       el.style.boxShadow=on?'0 1px 3px rgba(11,24,51,.12)':'none';
     });
     mk.querySelectorAll('#cs-tpl [data-t]').forEach(el=>{
-      const on=el.dataset.t===state.tpl;
+      const on=el.dataset.t===state.tpl,off=!!el.dataset.off;
       el.style.background=on?'#fff':'transparent';
       el.style.color=on?'var(--pri)':'var(--ink3)';
       el.style.boxShadow=on?'0 1px 3px rgba(11,24,51,.12)':'none';
+      el.style.opacity=off?'.36':'1';
     });
     const v=['iv','ip','ct','cp'].filter(k=>state[k]);
     const w=mk.querySelector('#cs-warn');
@@ -2928,6 +2973,7 @@ window.caSendModal=async function(idx){
   });
   mk.querySelector('#cs-tpl').addEventListener('click',ev=>{
     const el=ev.target.closest('[data-t]');if(!el)return;
+    if(el.dataset.off){toast('이 고객에게는 해당 자료가 없어 이 메시지는 발송할 수 없습니다');return;}
     state.tpl=el.dataset.t;
     // 안내 메시지에 맞는 문서를 마이페이지에서 볼 수 있도록 해당 항목을 자동으로 켠다
     if((state.tpl==='cpg'||state.tpl==='cpd')&&CNT.cp>0)state.cp=true;
