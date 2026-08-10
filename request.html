@@ -576,6 +576,7 @@ const L={
     nxLbl:'담은 품목',
     submitText:'의뢰 요청서 제출',
     errReq:'필수 입력 항목입니다',
+    errCondoEn:'콘도명(상호)은 영문으로 기재해주세요.',
     errItems:'품목을 최소 1개 담아주세요',
     errFree:'직접 입력 품목의 내용을 적어주세요',
     completeTitle:'요청서가 접수되었습니다!',
@@ -621,6 +622,7 @@ const L={
     nxLbl:'Items added',
     submitText:'Submit Service Request',
     errReq:'This field is required',
+    errCondoEn:'Please enter the condo (business) name in English.',
     errItems:'Please add at least one item',
     errFree:'Please describe your custom request',
     completeTitle:'Request Submitted!',
@@ -1197,6 +1199,19 @@ function pkBindList(){
 function pkFoot(){$('pk-cnt').textContent=L[currentLang].cnt(pickedCnt());}
 $('pk-q').addEventListener('input',pkRenderList);
 
+// ══ 콘도명(상호) : 자동 대문자 변환 + 한글 입력 검사 ══
+//  · 소문자로 입력해도 대문자로 바꿔 저장·표시를 통일합니다.
+//  · 한글이 섞여 있으면 제출을 막고 영문 입력을 안내합니다.
+function hasHangul(v){return /[\u3130-\u318F\uAC00-\uD7A3]/.test(String(v==null?'':v));}
+function applyCondoUpper(){
+  var el=$('f-condo-name'); if(!el)return;
+  var up=el.value.toUpperCase();
+  if(up===el.value)return;
+  var s0=el.selectionStart,s1=el.selectionEnd;   // 커서 위치 유지 (길이 변화 없음)
+  el.value=up;
+  try{el.setSelectionRange(s0,s1);}catch(e){}
+}
+
 // ══ 전화번호 자동 보정 : +60 을 적지 않아도 자동으로 붙입니다 ══
 //  012-345 6789 → +60 12-345 6789 / 60123456789 → +60 123456789
 //  이미 +로 시작하면(다른 국가번호 포함) 그대로 둡니다.
@@ -1224,9 +1239,13 @@ function checkInfoDone(){
 ['f-condo-name','f-condo-unit','f-phone'].forEach(id=>{
   $(id).addEventListener('input',()=>{
     checkInfoDone();
-    if($(id).value.trim()){$(id).classList.remove('error');$('err-'+id.replace('f-','')).style.display='none';}
+    const _v=$(id).value.trim();
+    if(_v&&!(id==='f-condo-name'&&hasHangul(_v))){
+      $(id).classList.remove('error');$('err-'+id.replace('f-','')).style.display='none';
+    }
   });
 });
+$('f-condo-name').addEventListener('input',applyCondoUpper);
 $('f-phone').addEventListener('blur',()=>{applyPhoneNorm();checkInfoDone();});
 $('f-phone').addEventListener('change',()=>{applyPhoneNorm();checkInfoDone();});
 $('f-remarks').addEventListener('input',()=>{$('card-remarks').classList.toggle('done',!!$('f-remarks').value.trim());});
@@ -1234,11 +1253,17 @@ $('f-remarks').addEventListener('input',()=>{$('card-remarks').classList.toggle(
 // ══ VALIDATION ══
 function validate(){
   applyPhoneNorm();          // 제출 직전에도 +60 보정
+  applyCondoUpper();         // 콘도명 대문자 통일
   const l=L[currentLang];
   let valid=true,firstErr=null;
   [['f-condo-name','err-condo-name'],['f-condo-unit','err-condo-unit'],['f-phone','err-phone']].forEach(([fid,eid])=>{
     const v=$(fid).value.trim();
     if(!v){$(fid).classList.add('error');$(eid).textContent=l.errReq;$(eid).style.display='block';valid=false;if(!firstErr)firstErr=$(fid);}
+    else if(fid==='f-condo-name'&&hasHangul(v)){
+      // 콘도명(상호)에 한글이 섞여 있으면 완료되지 않습니다.
+      $(fid).classList.add('error');$(eid).textContent=l.errCondoEn;$(eid).style.display='block';
+      valid=false;if(!firstErr)firstErr=$(fid);
+    }
     else{$(fid).classList.remove('error');$(eid).style.display='none';}
   });
   if(!picked.length){
@@ -1368,7 +1393,7 @@ applyLang();
 (function(){
   const q=new URLSearchParams(window.location.search);
   let any=false;
-  [['f-condo-name',q.get('nm')],['f-condo-unit',q.get('ad')],['f-phone',q.get('ph')]].forEach(function(pair){
+  [['f-condo-name',String(q.get('nm')||'').toUpperCase()],['f-condo-unit',q.get('ad')],['f-phone',q.get('ph')]].forEach(function(pair){
     const el=$(pair[0]),v=String(pair[1]||'').trim();
     if(el&&v&&!el.value.trim()){el.value=v;any=true;}
   });
