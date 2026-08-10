@@ -646,6 +646,7 @@ function kkText(m){
   let t=String(m||'')
     .replace(/^.*https?:\/\/\S+.*$/gm,'')        // 링크가 들어간 줄 통째로 제거
     .replace(/^\s*[-=─━_·]{3,}\s*$/gm,'')        // 구분선 줄 제거
+    .replace(/^\s*📱\s*(MY ?PAGE|My Page|마이페이지)\s*$/gim,'')   // 주소 줄과 짝인 제목 줄
     .replace(/[ \t]+$/gm,'')
     .trim();
   // 「🏠 마이페이지 소개 ~ 📱 My Page」 구간은 아래 「마이페이지 열기」 버튼이 대신하므로
@@ -2463,266 +2464,47 @@ window.caSendModal=async function(idx){
     const cnt=h.filter(u=>(parseFloat(u.amount)||0)>0).length;
     return {paid:paid,bonus:bonus,total:total,remain:total-used+disc+carry,cnt:cnt};
   }
+  // 모든 발송 문구 공통 꼬리 — 마이페이지 주소 + 서명
+  //  · WhatsApp : 아래 🔗 주소가 그대로 발송됩니다.
+  //  · 카카오톡 : kkText 가 주소 줄을 걷어내고 「마이페이지 열기」 버튼이 대신합니다.
+  function msgTail(en){
+    return '\n\n📱 MY PAGE\n🔗 '+link()+'\n\nHappy Home Care 📞 +60 17-247 2774';
+  }
   // ── 🔧 점검보고서 발송 ──────────────────────
   function insMsg(en){
     const x=curCoupon();
     if(!x)return en?'No inspection report available to send.':'발송 가능한 점검보고서가 없습니다.';
     const nm=e.name||'';
-    const rl=BASE+'/'+inspPage(x.type)+'?id='+encodeURIComponent(x.__id||'')+'&lang='+(en?'en':'ko');
+    const dt=String(x.date||'');
     const tl=en?({install:'Installation Report',washer:'Washing Machine Report',dispatch:'Service Visit Report'}[x.type]||'Air-Con Inspection Report')
-              :({install:'설치 기술보고서',washer:'세탁기 점검 보고서',dispatch:'출장 보고서'}[x.type]||'에어컨 점검 보고서');
-    const L=[];
-    if(en){
-      L.push('Hello '+nm+' 😊');
-      L.push('This is Happy Home Care.');
-      L.push('');
-      L.push('📋 Your service report is ready.');
-      L.push('Please find the details of the work we carried out below.');
-      L.push(SEP2);
-      L.push('🔧 Report Details');
-      L.push('📄 Type : '+tl);
-      if(x.date)L.push('📅 Date : '+x.date);
-      if(x.addr)L.push('📍 Address : '+x.addr);
-      if(x.invoice_id)L.push('🧾 Invoice : '+x.invoice_id);
-      L.push(SEP2);
-      L.push('📄 Open your report');
-      L.push('🔗 '+rl);
-      L.push(SEP2);
-      L.push('🏠 Your Personal My Page');
-      L.push('You can check everything below anytime.');
-      L.push(msgRows(en));
-      L.push('📱 My Page');
-      L.push('🔗 '+link());
-      L.push(SEP2);
-      L.push('If you have any questions about the report, please let us know anytime.');
-      L.push('Thank you. 🙏');
-      L.push('Happy Home Care');
-      L.push('📞 +60 17-247 2774');
-      return L.join('\n');
-    }
-    L.push('안녕하세요, '+nm+' 고객님 😊');
-    L.push('Happy Home Care입니다.');
-    L.push('');
-    L.push('📋 점검보고서가 준비되었습니다.');
-    L.push('작업 내용을 아래에서 확인해 주세요.');
-    L.push(SEP2);
-    L.push('🔧 보고서 정보');
-    L.push('📄 종류 : '+tl);
-    if(x.date)L.push('📅 작업일 : '+x.date);
-    if(x.addr)L.push('📍 주소 : '+x.addr);
-    if(x.invoice_id)L.push('🧾 연결 인보이스 : '+x.invoice_id);
-    L.push(SEP2);
-    L.push('📄 점검보고서 바로 열기');
-    L.push('🔗 '+rl);
-    L.push(SEP2);
-    L.push('🏠 고객 전용 마이페이지');
-    L.push('다음 정보를 언제든지 편리하게 확인하실 수 있습니다.');
-    L.push(msgRows(en));
-    L.push('📱 My Page');
-    L.push('🔗 '+link());
-    L.push(SEP2);
-    L.push('보고서 내용에 궁금하신 점이 있으시면 언제든지 말씀해 주세요.');
-    L.push('감사합니다. 🙏');
-    L.push('Happy Home Care');
-    L.push('📞 +60 17-247 2774');
-    return L.join('\n');
+              :({install:'설치 기술보고서',washer:'세탁기 점검 보고서',dispatch:'출장 보고서'}[x.type]||'에어컨 점검보고서');
+    return en
+      ?('Hello, '+nm+' 😊\n\n'+dt+' your ['+tl+'] is ready.\n\n[Full report details]\n\nare available on your personal [MY PAGE] below.'+msgTail(en))
+      :('안녕하세요, '+nm+' 고객님 😊\n\n'+dt+' ['+tl+'] 준비되었습니다.\n\n[점검보고서 상세 내용]은\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.'+msgTail(en));
   }
-  // ── 🧾 견적서 발송 ──────────────────────
   function qtMsg(en){
     const x=curCoupon();
     if(!x)return en?'No quotation available to send.':'발송 가능한 견적서가 없습니다.';
     const nm=e.name||'';
-    const ql=BASE+'/quote.html?id='+encodeURIComponent(x.__id||'')+(en?'&lang=en':'&lang=ko');
-    const L=[];
-    if(en){
-      L.push('Hello '+nm+' 😊');
-      L.push('This is Happy Home Care.');
-      L.push('');
-      L.push('🧾 Your quotation is ready.');
-      L.push('Please review the details below.');
-      L.push(SEP2);
-      L.push('🧾 Quotation Details');
-      if(x.qno)L.push('📄 No. : '+x.qno);
-      if(x.subject)L.push('🏠 Subject : '+x.subject);
-      if(x.issueDate)L.push('📅 Issued : '+x.issueDate);
-      if(x.validUntil)L.push('⏳ Valid until : '+x.validUntil);
-      L.push('💰 Total : '+fmtRM(qtTotal(x)));
-      L.push(SEP2);
-      L.push('🧾 Open your quotation');
-      L.push('🔗 '+ql);
-      L.push(SEP2);
-      L.push('🏠 Your Personal My Page');
-      L.push('You can check everything below anytime.');
-      L.push(msgRows(en));
-      L.push('📱 My Page');
-      L.push('🔗 '+link());
-      L.push(SEP2);
-      L.push('Just let us know once you are happy with the quotation and we will arrange your booking.');
-      L.push('Thank you. 🙏');
-      L.push('Happy Home Care');
-      L.push('📞 +60 17-247 2774');
-      return L.join('\n');
-    }
-    L.push('안녕하세요, '+nm+' 고객님 😊');
-    L.push('Happy Home Care입니다.');
-    L.push('');
-    L.push('🧾 요청하신 견적서가 준비되었습니다.');
-    L.push('아래에서 상세 내용을 확인해 주세요.');
-    L.push(SEP2);
-    L.push('🧾 견적 정보');
-    if(x.qno)L.push('📄 견적번호 : '+x.qno);
-    if(x.subject)L.push('🏠 현장/제목 : '+x.subject);
-    if(x.issueDate)L.push('📅 작성일 : '+x.issueDate);
-    if(x.validUntil)L.push('⏳ 유효기한 : '+x.validUntil);
-    L.push('💰 견적 금액 : '+fmtRM(qtTotal(x)));
-    L.push(SEP2);
-    L.push('🧾 견적서 바로 열기');
-    L.push('🔗 '+ql);
-    L.push(SEP2);
-    L.push('🏠 고객 전용 마이페이지');
-    L.push('다음 정보를 언제든지 편리하게 확인하실 수 있습니다.');
-    L.push(msgRows(en));
-    L.push('📱 My Page');
-    L.push('🔗 '+link());
-    L.push(SEP2);
-    L.push('견적 내용을 확인하신 후 말씀해 주시면 바로 예약을 도와드리겠습니다.');
-    L.push('감사합니다. 🙏');
-    L.push('Happy Home Care');
-    L.push('📞 +60 17-247 2774');
-    return L.join('\n');
+    return en
+      ?('Hello, '+nm+' 😊\n\nHere is the [Quotation] you requested.\n\n[Full quotation details]\n\nare available on your personal [MY PAGE] below.\n\n* Once you install MY PAGE, you can check it anytime with a single tap.'+msgTail(en))
+      :('안녕하세요, '+nm+' 고객님 😊\n\n요청하신 [견적서] 보내드립니다.\n\n[상세 견적내용]은\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.\n\n* MY PAGE 설치하시면 클릭 한번으로 언제든 확인 가능합니다.'+msgTail(en));
   }
-  // ── 📑 계약서 발송 ──────────────────────
   function ctMsg(en){
     const x=curCoupon();
     if(!x)return en?'No contract available to send.':'발송 가능한 계약서가 없습니다.';
     const nm=e.name||'';
-    const b=ctBal(x);
-    const cl=BASE+'/admin.html?view='+encodeURIComponent(x.__id||'')+'&mode=all&lang='+(en?'en':'ko');
-    const pkg=pkgLabel(x.package_id)||(en?'Package':'패키지');
-    const L=[];
-    if(en){
-      L.push('Hello '+nm+' 😊');
-      L.push('');
-      L.push('📑 Here is your [Membership Contract].');
-      L.push('');
-      L.push('You can check [your balance and usage history] anytime.');
-      L.push('');
-      L.push('📑 Contract Details');
-      L.push('');
-      L.push('📦 Package : '+pkg);
-      if(x.contract_date)L.push('📅 Contract date : '+x.contract_date);
-      L.push('💳 Paid : '+fmtRM(b.paid));
-      if(b.bonus>0.005)L.push('🎁 Bonus credit : '+fmtRM(b.bonus));
-      L.push('💰 Balance : '+fmtRM(b.remain));
-      L.push('🔁 Services used : '+b.cnt);
-      if(x.status==='ended')L.push('⏹ Status : Ended');
-      L.push('');
-      L.push('📑 Open your contract');
-      L.push('🔗 '+cl);
-      L.push('');
-      L.push('🏠 Your Personal My Page');
-      L.push('You can check everything below anytime.');
-      L.push('');
-      L.push(msgRows(en));
-      L.push('');
-      L.push('📱 My Page');
-      L.push('🔗 '+link());
-      L.push('');
-      L.push('Thank you. 🙏 Happy Home Care 📞 +60 17-247 2774');
-      return L.join('\n');
-    }
-    L.push('안녕하세요, '+nm+' 고객님 😊');
-    L.push('');
-    L.push('📑 고객님의 [멤버십 계약서] 를 보내드립니다.');
-    L.push('');
-    L.push('[잔액과 이용내역] 을 언제든지 확인하실 수 있습니다.');
-    L.push('');
-    L.push('📑 계약 정보');
-    L.push('');
-    L.push('📦 패키지 : '+pkg);
-    if(x.contract_date)L.push('📅 계약일 : '+x.contract_date);
-    L.push('💳 납입 금액 : '+fmtRM(b.paid));
-    if(b.bonus>0.005)L.push('🎁 보너스 크레딧 : '+fmtRM(b.bonus));
-    L.push('💰 사용 가능 잔액 : '+fmtRM(b.remain));
-    L.push('🔁 이용 횟수 : '+b.cnt+'회');
-    if(x.status==='ended')L.push('⏹ 계약 상태 : 종료');
-    L.push('');
-    L.push('📑 계약서 바로 열기');
-    L.push('🔗 '+cl);
-    L.push('');
-    L.push('🏠 고객 전용 마이페이지');
-    L.push('다음 정보를 언제든지 편리하게 확인하실 수 있습니다.');
-    L.push('');
-    L.push(msgRows(en));
-    L.push('');
-    L.push('📱 My Page');
-    L.push('🔗 '+link());
-    L.push('');
-    L.push('감사합니다. 🙏 Happy Home Care 📞 +60 17-247 2774');
-    return L.join('\n');
+    return en
+      ?('Hello, '+nm+' 😊\n\nHere is your [Membership Contract].\n\n[Contract details / credit balance & usage history]\n\nare available on your personal [MY PAGE] below.\n\n* Once you install MY PAGE, you can check it anytime with a single tap.'+msgTail(en))
+      :('안녕하세요, '+nm+' 고객님 😊\n\n[회원제 상품 계약서] 보내드립니다.\n\n[계약내용/적립금 잔액&이용내역]은\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.\n\n* MY PAGE 설치하시면 클릭 한번으로 언제든 확인 가능합니다.'+msgTail(en));
   }
-  // ── 🧽 작업후 안내 (서비스 완료 후 멤버십 이용내역 안내) ──
   function awMsg(en){
     const x=curCoupon();
     if(!x)return en?'No contract available to send.':'발송 가능한 계약서가 없습니다.';
     const nm=e.name||'';
-    const b=ctBal(x);
-    const cl=BASE+'/admin.html?view='+encodeURIComponent(x.__id||'')+'&mode=all&lang='+(en?'en':'ko');
-    const L=[];
-    if(en){
-      L.push('Hello '+nm+' 😊');
-      L.push('This is Happy Home Care. Thank you for using our service today.');
-      L.push('');
-      L.push('📑 Here is your [Membership Service Usage History].');
-      L.push('');
-      L.push('Please check your [balance & usage history].');
-      L.push('');
-      L.push('📑 Contract Details');
-      L.push('📦 Package : '+(pkgLabel(x.package_id)||'Package'));
-      if(x.contract_date)L.push('📅 Contract date : '+x.contract_date);
-      L.push('💰 Available balance : '+fmtRM(b.remain));
-      L.push('🔁 Services used : '+b.cnt);
-      L.push('');
-      L.push('📑 Open [Contract / Usage History]');
-      L.push('🔗 '+cl);
-      L.push('');
-      L.push('🏠 Your Personal My Page');
-      L.push('You can conveniently check/use your <service request/booking & pricing & service info> anytime.');
-      L.push('');
-      L.push(msgRows(en));
-      L.push('');
-      L.push('📱 My Page');
-      L.push('🔗 '+link());
-      L.push('');
-      L.push('Thank you. 🙏 Happy Home Care 📞 +60 17-247 2774');
-      return L.join('\n');
-    }
-    L.push('안녕하세요, '+nm+' 고객님 😊');
-    L.push('Happy Home Care입니다. 오늘도 저희 서비스를 이용해주셔서 감사합니다.');
-    L.push('');
-    L.push('📑 고객님의 [멤버십 서비스이용내역]을 보내드립니다.');
-    L.push('');
-    L.push('[잔액 & 이용내역] 확인 부탁드립니다.');
-    L.push('');
-    L.push('📑 계약 정보');
-    L.push('📦 패키지 : '+(pkgLabel(x.package_id)||'패키지'));
-    if(x.contract_date)L.push('📅 계약일 : '+x.contract_date);
-    L.push('💰 사용 가능 잔액 : '+fmtRM(b.remain));
-    L.push('🔁 이용 횟수 : '+b.cnt+'회');
-    L.push('');
-    L.push('📑 [계약서/이용내역] 바로 열기');
-    L.push('🔗 '+cl);
-    L.push('');
-    L.push('🏠 고객 전용 마이페이지');
-    L.push('<의뢰/예약 신청 및 가격&서비스 관련 정보>를 언제든지 편리하게 확인/이용 하실 수 있습니다.');
-    L.push('');
-    L.push(msgRows(en));
-    L.push('');
-    L.push('📱 My Page');
-    L.push('🔗 '+link());
-    L.push('');
-    L.push('감사합니다. 🙏 Happy Home Care 📞 +60 17-247 2774');
-    return L.join('\n');
+    return en
+      ?('Hello, '+nm+' 😊\n\nThank you for using our service today.\n\n[Membership usage history and full details]\n\nare available on your personal [MY PAGE] below.'+msgTail(en))
+      :('안녕하세요, '+nm+' 고객님 😊\n\n오늘도 저희 서비스 이용해주셔서 감사합니다.\n\n[멤버쉽 서비스 이용내역 등 상세정보]는\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.'+msgTail(en));
   }
   function cpExp(d,en){
     const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d||''));
@@ -2733,76 +2515,14 @@ window.caSendModal=async function(idx){
     const c=curCoupon();
     if(!c)return en?'No coupon available to send.':'발송 가능한 쿠폰이 없습니다.';
     const isD=(state.tpl==='cpd');
-    const tl=en?(isD?'Discount Coupon':'Gift Voucher'):(isD?'할인권':'상품권');
+    const tl=en?(isD?'Discount Coupon (e-coupon)':'Gift Voucher (e-voucher)'):(isD?'할인권(전자)':'상품권(전자)');
+    const dl=en?(isD?'e-Discount Coupon':'e-Gift Voucher'):(isD?'전자할인권':'전자상품권');
     const recv=c.receiver||c.name||e.name||'';
-    const cl=BASE+'/coupon.html?id='+encodeURIComponent(c.__id||'')+(en?'&lang=en':'');
-    const L=[];
-    if(en){
-      L.push('Hello, '+recv+' 😊');
-      L.push('Thank you for choosing Happy Home Care.');
-      L.push('');
-      L.push('As a token of our appreciation, we are sending you a '+(c.value||'')+' '+tl+'.');
-      L.push('Please feel free to use it for any of our services.');
-      L.push(SEP2);
-      L.push('🎫 '+tl+' Details');
-      L.push('💰 Value : '+(c.value||''));
-      L.push('🔑 Code : '+(c.code||''));
-      L.push('👤 Recipient : '+recv);
-      if(c.receiver&&c.name&&c.receiver!==c.name)L.push('🛒 Purchased by : '+c.name);
-      if(c.expiry)L.push('📅 Valid until : '+cpExp(c.expiry,true));
-      if(c.cond)L.push('📌 Condition : '+c.cond);
-      L.push(SEP2);
-      L.push('📱 Your Personal My Page');
-      L.push('');
-      L.push('You can check and use your '+tl.toLowerCase());
-      L.push('anytime on the My Page below.');
-      L.push('🔗 My Page');
-      L.push(link());
-      L.push('or');
-      L.push('🎫 View my coupon');
-      L.push(cl);
-      L.push(SEP2);
-      L.push('📌 How to use');
-      L.push('• Please show the coupon screen to our staff when using our service.');
-      L.push('• Not valid on the date of issue.');
-      L.push(isD?'• Discount coupons cannot be transferred.':'• Transfer is possible with prior request by the purchaser.');
-      L.push('Thank you. 🙏');
-      L.push('Happy Home Care');
-      L.push('📞 +60 17-247 2774');
-      return L.join('\n');
-    }
-    L.push('안녕하세요, '+recv+' 고객님 😊');
-    L.push('Happy Home Care를 이용해 주셔서 감사합니다.');
-    L.push('');
-    L.push('감사의 마음을 담아 '+(c.value||'')+' '+tl+'을 보내드립니다.');
-    L.push('서비스 이용 시 자유롭게 사용해 주세요.');
-    L.push(SEP2);
-    L.push('🎫 '+tl+' 정보');
-    L.push('💰 '+tl+' 금액 : '+(c.value||''));
-    L.push('🔑 '+tl+' 코드 : '+(c.code||''));
-    L.push('👤 받는 분 : '+recv);
-    if(c.receiver&&c.name&&c.receiver!==c.name)L.push('🛒 구매(양도) 고객 : '+c.name);
-    if(c.expiry)L.push('📅 유효기간 : '+cpExp(c.expiry,false));
-    if(c.cond)L.push('📌 사용 조건 : '+c.cond);
-    L.push(SEP2);
-    L.push('📱 고객 전용 My Page');
-    L.push('');
-    L.push('아래 마이페이지에서 '+tl+'을 언제든지');
-    L.push('확인 및 사용하실 수 있습니다.');
-    L.push('🔗 My Page');
-    L.push(link());
-    L.push('또는');
-    L.push('🎫 내 쿠폰 확인하기');
-    L.push(cl);
-    L.push(SEP2);
-    L.push('📌 이용 안내');
-    L.push('• 서비스 이용 시 쿠폰 화면을 직원에게 보여주세요.');
-    L.push('• 발행 당일에는 사용하실 수 없습니다.');
-    L.push(isD?'• 할인권은 양도/양수가 불가능합니다.':'• 양도·양수는 구매 고객 본인의 사전 신청 시 가능합니다.');
-    L.push('감사합니다. 🙏');
-    L.push('Happy Home Care');
-    L.push('📞 +60 17-247 2774');
-    return L.join('\n');
+    let val=String(c.value||'').trim();
+    if(/^[0-9,.]+$/.test(val))val='RM'+val;          // 숫자만 있으면 RM 붙임 (10% 등은 그대로)
+    return en
+      ?('Hello, '+recv+' 😊\n\nAs a token of our appreciation, we are sending you a '+val+' '+tl+'.\n\nIt can be used like cash for any of our services.\n\n['+dl+' details]\n\nare available on your personal [MY PAGE] below.'+msgTail(en))
+      :('안녕하세요, '+recv+' 고객님 😊\n\n감사의 마음을 담아 '+val+' '+tl+'을 보내드립니다.\n\n서비스 이용시 현금처럼 사용 가능합니다.\n\n['+dl+' 상세정보]는\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.'+msgTail(en));
   }
   function billList(){return (D.invoices||[]).filter(x=>(x.status==='billing'||x.status==='overdue')&&invDue(x)>0.005);}
   function billAmt(){return billList().reduce((a,x)=>a+invDue(x),0);}
@@ -2816,19 +2536,15 @@ window.caSendModal=async function(idx){
     if(state.tpl==='qt')return qtMsg(en);
     if(state.tpl==='bill'){
       const amt=billAmt();
-      const amtKo=amt.toLocaleString('en-MY',{maximumFractionDigits:2});
       const amtEn=amt.toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
-      const rowsB=msgRows(en,[en?'📑 Check your billing details':'📑 청구내역(Invoice) 확인',en?'🏦 Payment account information':'🏦 결제 계좌정보 확인'],['iv']);
       return en
-        ?('Hello '+nm+' 😊\n\n💳[ Billing Notice]\n\n✅ Your current amount due is RM '+amtEn+'.\n\nOn your personal [My Page] below you can check\n[your billing details and payment account information].\n\nThank you very much for always choosing Happy Home Care. 🙏\n\n🏠 Your Personal My Page\nYou can check the following anytime.\n\n'+rowsB+'\n\n📱 My Page\n🔗 '+l+'\n\nThank you. 🙏 Happy Home Care 📞 +60 17-247 2774')
-        :('안녕하세요, '+nm+' 고객님 😊\n\n💳[ 금차 청구 안내]\n\n✅ 금차 청구금액은 RM '+amtEn+'입니다.\n\n아래 고객님 [전용 마이페이지]에서\n[청구내역 및 결제 계좌정보]를 확인하실 수 있습니다.\n\n항상 Happy Home Care를 이용해 주셔서 진심으로 감사드립니다. 🙏\n\n🏠 고객 전용 마이페이지\n다음 정보를 언제든지 편리하게 확인하실 수 있습니다.\n\n'+rowsB+'\n\n📱 My Page\n🔗 '+l+'\n\n감사합니다. 🙏 Happy Home Care 📞 +60 17-247 2774');
+        ?('Hello, '+nm+' 😊\n\nYour current amount due is RM '+amtEn+'.\n\n[Payment account information and full breakdown]\n\nare available on your personal [MY PAGE] below.'+msgTail(en))
+        :('안녕하세요, '+nm+' 고객님 😊\n\n금차 청구금액 RM '+amtEn+'입니다.\n\n[결제 계좌 정보 및 상세 내역]은\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.'+msgTail(en));
     }
     if(state.tpl==='pay'){
-      const dt=payDateTxt(en);
-      const rowsP=msgRows(en,[en?'💳 Check your payment history':'💳 결제 내역(Payment History) 확인']);
       return en
-        ?('Hello '+nm+' 😊\n\n✅ [Payment Confirmed]\n\n'+dt+' your payment has been successfully confirmed.\n\nThank you very much for always choosing Happy Home Care. 🙏\n\n🏠 Your Personal My Page\nYou can conveniently check/use your <service request/booking & pricing & service info> anytime.\n\n'+rowsP+'\n\n📱 My Page\n🔗 '+l+'\n\nThank you once again for your valued trust, and we will continue to serve you even better.\n\nHappy Home Care 📞 +60 17-247 2774')
-        :('안녕하세요, '+nm+' 고객님 😊\n\n✅ [결제 완료확인]\n\n'+dt+' 고객님의 결제내역 정상적으로 확인되었습니다.\n\n항상 Happy Home Care를 이용해 주셔서 진심으로 감사드립니다. 🙏\n\n🏠 고객 전용 마이페이지\n<의뢰/예약 신청 및 가격&서비스 관련 정보>를 언제든지 편리하게 확인/이용 하실 수 있습니다.\n\n'+rowsP+'\n\n📱 My Page\n🔗 '+l+'\n\n고객님의 소중한 선택에 다시 한번 감사드리며, 앞으로도 더욱 만족스러운 서비스로 보답하겠습니다.\n\nHappy Home Care 📞 +60 17-247 2774');
+        ?('Hello, '+nm+' 😊\n\nYour payment for this service has been confirmed. Thank you.\n\n[Full invoice details]\n\nare available on your personal [MY PAGE] below.'+msgTail(en))
+        :('안녕하세요, '+nm+' 고객님 😊\n\n고객님의 금차 서비스청구 [결제내역] 확인되었습니다. 감사합니다.\n\n[인보이스 상세내역]은\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.'+msgTail(en));
     }
     if(state.tpl==='install'){
       const rowsI=msgRows(en);
@@ -2862,15 +2578,13 @@ window.caSendModal=async function(idx){
         :('안녕하세요, '+nm+' 고객님 😊\n\n고객님의 서비스 의뢰가 정상적으로 접수되었습니다.\nHappy Home Care를 이용해 주셔서 감사합니다.\n'+SEP2+'\n📝 접수 정보\n'+head+SEP2+'\n📅 방문 일정 안내\n담당자가 접수 내용을 확인한 후,\n방문 가능한 날짜와 시간을 안내드리겠습니다.\n'+SEP2+'\n🏠 고객 전용 마이페이지\n언제든지 아래 페이지에서 편리하게 확인하실 수 있습니다.\n'+rowsR+'\n📱 My Page\n🔗 '+l+'\n'+SEP2+'\n📢 접수 내용에 변경사항이 있으시면 My Page에서 수정 또는 편하게 알려주세요.\n감사합니다. 🙏\nHappy Home Care\n📞 +60 17-247 2774');
     }
     if(state.tpl==='revisit'){
-      const rowsV=msgRows(en,[en?'🛠️ Services & prices':'🛠️ 서비스 및 가격 확인',en?'📅 Book a service':'📅 서비스 예약 신청']);
       return en
-        ?('Hello '+nm+' 😊\n\nThank you very much for choosing Happy Home Care again.\n\n[ Service Booking Request]\nFor a faster booking, please submit your service request\non your personal My Page below and we will arrange it right away.\n\n🏠 Your Personal My Page\nYou can conveniently check/use your <service request/booking & pricing & service info> anytime.\n\n'+rowsV+'\n\n📱 My Page\n🔗 '+l+'\n\n📌 Once you submit your [service request] on My Page, our team will arrange your booking promptly.\n\nThank you. 🙏 Happy Home Care 📞 +60 17-247 2774')
-        :('안녕하세요, '+nm+' 고객님 😊\n\nHappy Home Care를 다시 찾아주셔서 진심으로 감사합니다.\n\n[ 서비스 예약 신청 안내]\n보다 빠른 예약을 위해 아래 고객님 전용 마이페이지에서\n서비스 의뢰를 신청해 주시면 신속하게 예약을 도와드리겠습니다.\n\n🏠 고객 전용 마이페이지\n<의뢰/예약 신청 및 가격&서비스 관련 정보>를 언제든지 편리하게 확인/이용 하실 수 있습니다.\n\n'+rowsV+'\n\n📱 My Page\n🔗 '+l+'\n\n📌 마이페이지를 통해 [서비스 의뢰]를 접수해 주시면 담당자가 신속하게 예약을 도와드리겠습니다.\n\n감사합니다. 🙏 Happy Home Care 📞 +60 17-247 2774');
+        ?('Hello, '+nm+' 😊\n\nThank you very much for choosing us again.\n\n[Service booking request]\n\ncan be submitted on your personal [MY PAGE] below.'+msgTail(en))
+        :('안녕하세요, '+nm+' 고객님 😊\n\n다시 찾아주셔서 진심으로 감사합니다.\n\n[서비스 예약 의뢰]는\n\n아래 고객님 [전용 MY PAGE] 에서 신청하실수 있습니다.'+msgTail(en));
     }
-    const rowsD=msgRows(en);
     return en
-      ?('Hello '+nm+' 😊\n\nOn your personal My Page below\nyou can conveniently check/use your <service request/booking & pricing & service info> anytime.\n\n🏠 Your Personal My Page\n'+rowsD+'\n\n📱 My Page\n🔗 '+l+'\n\nThank you. Happy Home Care 📞 +60 17-247 2774')
-      :('안녕하세요, '+nm+' 고객님 😊\n\n아래 고객님 전용 마이페이지에서\n<의뢰/예약신청 및 가격&서비스 관련 정보>를 언제든지 편리하게 확인/이용 하실 수 있습니다.\n\n🏠 고객 전용 마이페이지\n'+rowsD+'\n\n📱 My Page\n🔗 '+l+'\n\n감사합니다. Happy Home Care 📞 +60 17-247 2774');
+      ?('Hello, '+nm+' 😊\n\nOn your personal MY PAGE you can conveniently use everything in one place — [Booking][Prices][Invoices][Inspection Reports][Reward Points] and more.'+msgTail(en))
+      :('안녕하세요. '+nm+'님 😊\n\n고객 전용 MY PAGE에서 [예약 신청][가격정보][인보이스][점검보고서][적립포인트]등 필요하신 정보 한곳에서 편리하게 이용할수 있습니다.'+msgTail(en));
   }
   // 미리보기 전용 렌더러 (실제 발송 텍스트는 msg() 원문 그대로 사용)
   function msgHtml(txt){
