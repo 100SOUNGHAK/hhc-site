@@ -669,8 +669,27 @@ function kkText(m){
   }
   t=t.replace(/\n{3,}/g,'\n\n').trim();
   const MAX=195;                                  // 카카오 제한 200자 — 여유 5자
-  const a=Array.from(t);
-  if(a.length>MAX)t=a.slice(0,MAX-1).join('').replace(/\s+\S*$/,'')+'…';
+  const len=x=>Array.from(x).length;
+  // ① 200자를 넘으면 「MY PAGE 설치 안내」 줄부터 뺍니다 (가장 부가적인 문장)
+  if(len(t)>MAX){
+    t=t.split('\n').filter(x=>!/MY ?PAGE ?설치하시면|Once you install MY ?PAGE/i.test(x))
+       .join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  }
+  // ② 그래도 넘치면 맨 끝 서명(회사명·연락처)은 반드시 남기고 본문만 줄입니다
+  if(len(t)>MAX){
+    const L2=t.split('\n');
+    let si=-1;
+    for(let k=L2.length-1;k>=0;k--){if(/Happy Home Care/i.test(L2[k])){si=k;break;}}
+    if(si>=0){
+      const sign=L2.slice(si).join('\n');
+      let body=L2.slice(0,si).join('\n').replace(/\s+$/,'');
+      const budget=MAX-len(sign)-2;
+      if(len(body)>budget)body=Array.from(body).slice(0,Math.max(0,budget-1)).join('').replace(/\s+\S*$/,'')+'…';
+      t=body+'\n\n'+sign;
+    }else{
+      t=Array.from(t).slice(0,MAX-1).join('').replace(/\s+\S*$/,'')+'…';
+    }
+  }
   return t;
 }
 async function kkSend(title,desc,url){
@@ -2555,9 +2574,13 @@ window.caSendModal=async function(idx){
     if(state.tpl==='bk'){
       let bi=BKP[0]&&BKP[0].booking_items?String(BKP[0].booking_items):'';
       if(en&&bi)bi=trItemsEn(bi);
+      const inst=en?'\n\nOnce you install MY PAGE, you can check it anytime with a single tap.'
+                  :'\n\nMY PAGE 설치하시면 클릭 한번으로 언제든 확인 가능합니다.';
       return en
-        ?('Hello '+nm+' 😊\nThis is Happy Home Care.\n\n\u{1F449} A booking request is ready for you. Please choose your visit date & time on your My Page below to complete the booking.\n'+CS_SEP+'\n🏠 Open your personal My Page below — the \u300C📅 Booking Request\u300D screen appears right at the top.'+(bi?'\n\n* Service: '+bi:'')+'\nAnd anytime:\n\n'+list+'\n\nall in one place.\n'+CS_SEP+'\n📱 My Page\n🔗 '+l+'\n'+CS_SEP+'\nOnce you submit, we will confirm your booking and let you know right away.\nThank you. 🙏\nHappy Home Care\n📞 +60 17-247 2774')
-        :('안녕하세요, '+nm+' 고객님 😊\nHappy Home Care입니다.\n\n\u{1F449} 예약 신청서가 준비되었습니다. 아래 마이페이지에서 방문 날짜와 시간을 선택해 예약 신청을 완료해 주세요.\n'+CS_SEP+'\n🏠 아래 고객님 전용 마이페이지를 열면 상단에 \u300C📅 예약 신청\u300D 화면이 바로 표시됩니다.'+(bi?'\n\n* 신청 품목: '+bi:'')+'\n또한 언제나\n\n'+list+'\n\n모두 편리하게 이용/조회 하실 수 있습니다.\n'+CS_SEP+'\n📱 마이페이지\n🔗 '+l+'\n'+CS_SEP+'\n신청이 완료되면 확인 후 바로 확정 안내를 드리겠습니다.\n감사합니다. 🙏\nHappy Home Care\n📞 +60 17-247 2774');
+        ?('Hello, '+nm+' 😊\n\nYour service request has been completed. Thank you.\n\nOpen your personal MY PAGE below and the \u300C📅 Booking Request\u300D screen appears right at the top. Please choose a date that suits you.'+
+          (bi?'\n\n●Service: '+bi:'')+inst+msgTail(en))
+        :('안녕하세요, '+nm+' 고객님 😊\n\n의뢰신청 완료되었습니다. 감사합니다.\n\n아래 고객님 전용 마이페이지를 열면 상단에 \u300C📅 예약 신청\u300D 화면이 바로 표시됩니다. 가능하신 일정 선택해주시면 감사합니다.'+
+          (bi?'\n\n●신청 품목: '+bi:'')+inst+msgTail(en));
     }
     if(state.tpl==='bkc'){
       // 매니지먼트 작업방문등록 정보 · 방문일시/품목 상세는 마이페이지에서 확인하도록 안내만 하고,
@@ -2568,14 +2591,19 @@ window.caSendModal=async function(idx){
     }
     if(state.tpl==='rq'){
       const r=RQP[0]||{};
-      const rd=String(r.submitted_at||r.created_at||'').slice(0,10);
-      const when=rd?((en?'📥 Received\n':'📥 접수일\n')+dTxt(rd,en)+'\n'):'';
-      const ri=rqItemLines2(r,en);
-      const head=when+(ri?ri+'\n':'');
-      const rowsR=msgRows(en);
+      const ri=rqItemLines2(r,en);                  // 품목 한 줄에 하나
+      const items=String(ri||'').split('\n').filter(Boolean);
+      // 품목이 하나면 「접수 정보」 제목과 같은 줄에, 여러 개면 다음 줄부터 나열합니다.
+      const head=(en?'📝 Request':'📝 접수 정보')+
+        (items.length===1?('      '+items[0])
+         :(items.length?('\n'+items.join('\n')):''));
+      const inst=en?'\n\nOnce you install MY PAGE, you can check it anytime with a single tap.'
+                  :'\n\nMY PAGE 설치하시면 클릭 한번으로 언제든 확인 가능합니다.';
       return en
-        ?('Hello '+nm+' 😊\n\nYour service request has been received.\nThank you for choosing Happy Home Care.\n'+SEP2+'\n📝 Request Details\n'+head+SEP2+'\n📅 Visit Schedule\nOnce our team has reviewed your request,\nwe will let you know the available visit date & time.\n'+SEP2+'\n🏠 Your Personal My Page\nYou can check the following anytime.\n'+rowsR+'\n📱 My Page\n🔗 '+l+'\n'+SEP2+'\n📢 If anything needs to be changed, please update it on My Page or let us know.\nThank you. 🙏\nHappy Home Care\n📞 +60 17-247 2774')
-        :('안녕하세요, '+nm+' 고객님 😊\n\n고객님의 서비스 의뢰가 정상적으로 접수되었습니다.\nHappy Home Care를 이용해 주셔서 감사합니다.\n'+SEP2+'\n📝 접수 정보\n'+head+SEP2+'\n📅 방문 일정 안내\n담당자가 접수 내용을 확인한 후,\n방문 가능한 날짜와 시간을 안내드리겠습니다.\n'+SEP2+'\n🏠 고객 전용 마이페이지\n언제든지 아래 페이지에서 편리하게 확인하실 수 있습니다.\n'+rowsR+'\n📱 My Page\n🔗 '+l+'\n'+SEP2+'\n📢 접수 내용에 변경사항이 있으시면 My Page에서 수정 또는 편하게 알려주세요.\n감사합니다. 🙏\nHappy Home Care\n📞 +60 17-247 2774');
+        ?('Hello, '+nm+' 😊\n\nYour service request has been received successfully.\n\n'+head+
+          '\n\n📅 Visit Schedule\nOnce our team has reviewed your request,\nwe will let you know the available visit date & time.'+inst+msgTail(en))
+        :('안녕하세요, '+nm+' 고객님 😊\n\n의뢰신청 정상적으로 접수되었습니다.\n\n'+head+
+          '\n\n📅 방문 일정 안내\n담당자가 접수 내용을 확인한 후,\n방문 가능한 날짜와 시간을 안내드리겠습니다.'+inst+msgTail(en));
     }
     if(state.tpl==='revisit'){
       return en
