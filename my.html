@@ -248,6 +248,9 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .a2hs .s{font-size:11.5px;color:#aebadb;margin-top:4px;line-height:1.65;position:relative;word-break:keep-all}
 .a2hs-btn{position:relative;margin-top:12px;width:100%;border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:900;padding:12px;border-radius:12px;background:linear-gradient(135deg,var(--indigo),var(--teal));color:#fff;box-shadow:0 8px 18px -6px rgba(79,110,247,.55)}
 .a2hs-btn:active{transform:scale(.985)}
+.a2hs-btn.big{font-size:15px;padding:14px;border-radius:13px;letter-spacing:-.01em}
+.a2hs-btn[disabled]{opacity:.6}
+.a2hs-go{position:relative;margin-top:9px;font-size:11px;line-height:1.6;color:#9fd9c9;font-weight:700;word-break:keep-all}
 .a2hs-how{position:relative;margin-top:12px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:11px 13px;display:flex;flex-direction:column;gap:7px}
 .a2hs-st{display:flex;align-items:baseline;gap:9px;font-size:12px;line-height:1.6;color:#dbe3f5;font-weight:700}
 .a2hs-st .n{flex:none;width:17px;height:17px;border-radius:50%;background:linear-gradient(135deg,var(--indigo),var(--teal));color:#fff;font-size:10px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;transform:translateY(2px)}
@@ -671,6 +674,26 @@ body,.page{background:#F1F3F8}
 @media(max-width:372px){.fb .tx i{display:none}.fb .tx b{font-size:12px}.fb.wa{width:46px}}
 /* 고정 바에 본문이 가리지 않도록 아래 여백 확보 */
 .body{padding-bottom:calc(92px + env(safe-area-inset-bottom))!important}
+/* ═══ 문서 뷰어 : 인보이스·점검보고서·계약서·상품권·견적서를 앱 안에서 열기 ═══
+   새 탭으로 띄우면 카카오톡·왓츠앱 인앱 브라우저나 설치형 앱(PWA)에서
+   「닫기」를 눌렀을 때 앱 전체가 함께 닫혀 버리므로, 이 화면 위에 겹쳐서 엽니다. */
+#mv-wrap{position:fixed;inset:0;z-index:99999;background:#fff;display:none;flex-direction:column}
+#mv-wrap.open{display:flex}
+#mv-bar{flex-shrink:0;display:flex;align-items:center;gap:7px;
+  padding:calc(9px + env(safe-area-inset-top)) 11px 9px;
+  background:linear-gradient(120deg,#0B1833,#16264a);box-shadow:0 2px 12px rgba(11,24,51,.22)}
+#mv-bar button{font-family:inherit;font-size:12.5px;font-weight:900;border-radius:9px;padding:8px 13px;
+  cursor:pointer;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.13);color:#fff;white-space:nowrap}
+#mv-bar #mv-back{background:#fff;color:#0B1833;border-color:#fff;display:none}
+#mv-bar #mv-back.on{display:block}
+#mv-bar #mv-x{background:#fff;color:#0B1833;border-color:#fff}
+#mv-ttl{flex:1;min-width:0;font-size:12.5px;font-weight:900;color:#dbe4fb;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mv-body{flex:1;min-height:0;position:relative;background:#f4f6fb}
+#mv-body iframe{position:absolute;inset:0;width:100%;height:100%;border:none;display:block;background:#fff}
+#mv-load{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:12.5px;color:#7b8698;background:#f4f6fb;z-index:2}
+#mv-load.off{display:none}
 </style>
 </head>
 <body>
@@ -694,14 +717,26 @@ const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
 // 삼성 인터넷은 자체 패키징으로 앱을 설치해 Google 서명이 없어
 // Play 프로텍트 경고가 뜨는 문제가 있음 → Chrome 으로 열도록 유도
 const IS_SAMSUNG=/SamsungBrowser/i.test(navigator.userAgent);
+const IS_AND=/Android/i.test(navigator.userAgent);
+// 카카오톡·라인·페이스북 등 「앱 안 브라우저」 — PWA 설치가 제한되어 기본 브라우저로 열도록 안내
+const IS_KAKAO=/KAKAOTALK/i.test(navigator.userAgent);
+const IS_INAPP=IS_KAKAO||/Line\/|FBAN|FBAV|FB_IAB|Instagram|NAVER\(inapp|; wv\)/i.test(navigator.userAgent);
 let _a2hsEv=null;   // Android Chrome 의 설치 프롬프트 이벤트 보관
 window.addEventListener('beforeinstallprompt',e=>{
   e.preventDefault();_a2hsEv=e;
   if(IS_SAMSUNG)return;   // 삼성 인터넷 설치는 Play 프로텍트가 차단 → Chrome 안내로 대체
-  const b=document.getElementById('a2hs-btn'),hw=document.getElementById('a2hs-how');
+  const b=document.getElementById('a2hs-btn'),hw=document.getElementById('a2hs-how'),go=document.getElementById('a2hs-go');
   if(b)b.style.display='';
+  if(go)go.style.display='';
   if(hw)hw.style.display='none';
 });
+// 설치가 끝나면 설치 카드를 「설치 완료」 안내로 바꾸고, 다음 방문부터도 버튼 대신 완료 안내를 보여준다
+function a2hsDone(){
+  try{localStorage.setItem('hhc_a2hs_done','1');}catch(e){}
+  const c=document.getElementById('a2hs-card');
+  if(c){const Lx=T[LANG];c.innerHTML='<div class="t">'+Lx.a2dT+'</div><div class="s">'+Lx.a2dS+'</div>';}
+}
+window.addEventListener('appinstalled',a2hsDone);
 // 고객ID 기억 : 주소에 c 없이 열려도(설치된 앱 아이콘 등) 마지막 고객 페이지로 자동 복원
 try{
   if(CID)localStorage.setItem('hhc_my_last',JSON.stringify({c:CID,v:P.get('v')||'',lang:P.get('lang')||''}));
@@ -763,7 +798,10 @@ const T={
       noIssue:'✅ 이상 없음',needAct:'⚠️ 조치 필요',caution:'🔧 주의',dpDone:'✅ 완료',dpRevisit:'⏳ 재방문 필요',
       remainLb:'잔여 금액 · REMAINING',closedLb:'최종 잔여 · CLOSED',leftPct:'남음',allUsed:'전액 사용',inUse:'✅ 사용중',
       validN:'유효',endedN:'종료',totalN:'총',ctEndOpen:'⏹ 종료된 계약 {n}건 보기',ctEndClose:'⏹ 종료된 계약 접기',kGift:'GIFT VOUCHER',kDisc:'DISCOUNT',expiredB:'기간 만료',dayAgo:'일 경과',
-      a2T:'📲 홈 화면에 설치하기',a2S:'한 번 설치해 두면 링크 없이도 홈 화면 아이콘으로 언제든 내 페이지를 열 수 있습니다.',a2Btn:'📲 앱으로 설치',
+      a2T:'📱 Happy HomeCare 앱 설치',a2S:'한 번 설치하면 링크 없이 홈 화면 아이콘으로 언제든 바로 열 수 있습니다.',a2Btn:'📱 지금 설치하기',
+      a2go:'버튼을 누르면 휴대폰에 설치창이 뜹니다 — 「설치」를 누르면 홈 화면에 아이콘이 생겨요!',
+      a2kBtn:'🌐 기본 브라우저(Chrome)에서 열기',a2k1:'카카오톡 안에서는 앱 설치가 제한되어 기본 브라우저로 엽니다',a2k2:'열린 화면에서 「📱 지금 설치하기」를 누르면 완료!',
+      a2dT:'✅ 앱 설치가 완료되었습니다',a2dS:'홈 화면의 Happy HomeCare 아이콘으로 언제든 바로 열 수 있습니다.',
       a2i1:'Safari 하단의 공유 버튼(네모에 ↑ 화살표)을 누르세요',a2i2:'"홈 화면에 추가"를 선택하세요',a2i3:'오른쪽 위 "추가"를 누르면 완료!',
       a2a1:'브라우저 메뉴( ⋮ )를 여세요',a2a2:'"홈 화면에 추가" 또는 "앱 설치"를 선택하세요',
       mmT:'🛠️ 수리요청 처리내역',mmS:'REPAIR REQUEST & RESULT',mmCap:'수리요청 내역',
@@ -772,7 +810,7 @@ const T={
       mmWait:'방문 후 결과가 입력될 예정입니다',mmNoVisit:'일정 조율 중입니다',
       mmStP:'🕐 접수 대기',mmStC:'📞 방문 예정',mmStD:'✅ 처리 완료',
       mmChipOpen:'진행 중',mmChipDone:'처리 완료',mmAlUp:'📅 방문 예정',mmAlPend:'🕐 접수 대기',mmCase:'건',
-      a2sBtn:'🌐 Chrome에서 열어 설치하기',a2s1:'위 버튼을 눌러 이 페이지를 Chrome으로 열어주세요',a2s2:'Chrome 페이지 하단의 "📲 앱으로 설치" 버튼을 누르면 완료!',a2s3:'삼성 인터넷에서 바로 설치하면 보안 알림이 떠서 Chrome 설치를 권장합니다'},
+      a2sBtn:'🌐 Chrome에서 열어 설치하기',a2s1:'위 버튼을 눌러 이 페이지를 Chrome으로 열어주세요',a2s2:'Chrome 으로 열린 화면에서 「📱 지금 설치하기」를 누르면 완료!',a2s3:'삼성 인터넷에서 바로 설치하면 보안 알림이 떠서 Chrome 설치를 권장합니다'},
   en:{my:'My Service Overview',asof:'as of',bal:'MEMBERSHIP BALANCE',used:'Used',paid:'Paid',cdate:'Contract',cnt:'Services',bonus:'Bonus',
       inv:'💳 Invoices',ins:'🔧 Inspection Reports',ct:'📑 Contracts',cp:'🎫 Gift Vouchers',see:'View ↗',ea:'',vch:'',
       st:{paid:'Paid',billing:'Billed',overdue:'Overdue',draft:'Draft'},valid:'Active',usageN:'entries',start:'started',
@@ -811,7 +849,10 @@ const T={
       noIssue:'✅ No issues',needAct:'⚠️ Action needed',caution:'🔧 Caution',dpDone:'✅ Completed',dpRevisit:'⏳ Revisit needed',
       remainLb:'REMAINING BALANCE',closedLb:'FINAL BALANCE · CLOSED',leftPct:'left',allUsed:'fully used',inUse:'✅ Active',
       validN:'active',endedN:'ended',totalN:'',ctEndOpen:'⏹ View {n} ended contracts',ctEndClose:'⏹ Hide ended contracts',kGift:'GIFT VOUCHER',kDisc:'DISCOUNT',expiredB:'Expired',dayAgo:' days overdue',
-      a2T:'📲 Install on Home Screen',a2S:'Install once and open your page anytime from a home-screen icon — no link needed.',a2Btn:'📲 Install as App',
+      a2T:'📱 Install the Happy HomeCare App',a2S:'Install once and open your page anytime from a home-screen icon — no link needed.',a2Btn:'📱 Install Now',
+      a2go:'Tap the button and your phone will show an install dialog — tap "Install" and the icon appears on your home screen!',
+      a2kBtn:'🌐 Open in Default Browser (Chrome)',a2k1:'App installation is limited inside KakaoTalk, so we open your default browser',a2k2:'On the opened page, tap "📱 Install Now" — done!',
+      a2dT:'✅ App installed',a2dS:'Open it anytime from the Happy HomeCare icon on your home screen.',
       a2i1:'Tap the Share button at the bottom of Safari',a2i2:'Choose "Add to Home Screen"',a2i3:'Tap "Add" at the top right — done!',
       a2a1:'Open the browser menu ( ⋮ )',a2a2:'Choose "Add to Home screen" or "Install app"',
       mmT:'🛠️ Repair Requests',mmS:'REPAIR REQUEST & RESULT',mmCap:'Request History',
@@ -820,7 +861,7 @@ const T={
       mmWait:'The result will be filled in after our visit',mmNoVisit:'Scheduling in progress',
       mmStP:'🕐 Received',mmStC:'📞 Visit Scheduled',mmStD:'✅ Completed',
       mmChipOpen:'In Progress',mmChipDone:'All Completed',mmAlUp:'📅 Upcoming Visit',mmAlPend:'🕐 Pending',mmCase:'',
-      a2sBtn:'🌐 Open in Chrome to Install',a2s1:'Tap the button above to open this page in Chrome',a2s2:'In Chrome, tap "📲 Install as App" at the bottom — done!',a2s3:'Installing directly from Samsung Internet triggers a security warning, so Chrome is recommended'}
+      a2sBtn:'🌐 Open in Chrome to Install',a2s1:'Tap the button above to open this page in Chrome',a2s2:'On the page opened in Chrome, tap "📱 Install Now" — done!',a2s3:'Installing directly from Samsung Internet triggers a security warning, so Chrome is recommended'}
 };
 
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -1630,26 +1671,43 @@ function render(){
   // ⬇ 서비스 의뢰 · 가격/서비스 · WhatsApp 문의는 화면 맨 아래 「고정 액션바」로 이동했습니다.
   // ── 홈 화면 설치 안내 (이미 앱으로 열었으면 표시하지 않음) ──
   if(!IS_APP){
-    h+='<div class="a2hs"><div class="t">'+L.a2T+'</div><div class="s">'+L.a2S+'</div>';
-    if(IS_IOS){
-      h+='<div class="a2hs-how">'+
-         '<div class="a2hs-st"><span class="n">1</span><span>'+L.a2i1+'</span></div>'+
-         '<div class="a2hs-st"><span class="n">2</span><span>'+L.a2i2+'</span></div>'+
-         '<div class="a2hs-st"><span class="n">3</span><span>'+L.a2i3+'</span></div></div>';
-    }else if(IS_SAMSUNG&&/^https?:$/.test(location.protocol)){
-      // 삼성 인터넷 → Chrome 으로 열어 설치 (intent: 링크, Chrome 미설치 시 원래 주소로 폴백)
-      const chr='intent://'+location.host+location.pathname+location.search+
-        '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(location.href)+';end';
-      h+='<a class="a2hs-btn" style="display:block;text-align:center;text-decoration:none" href="'+esc(chr)+'">'+L.a2sBtn+'</a>'+
-         '<div class="a2hs-how">'+
-         '<div class="a2hs-st"><span class="n">1</span><span>'+L.a2s1+'</span></div>'+
-         '<div class="a2hs-st"><span class="n">2</span><span>'+L.a2s2+'</span></div>'+
-         '<div class="a2hs-st"><span class="n">3</span><span>'+L.a2s3+'</span></div></div>';
+    // 이미 설치한 적이 있으면 버튼 대신 「설치 완료」 안내를 보여준다
+    let _a2dn=false;try{_a2dn=localStorage.getItem('hhc_a2hs_done')==='1';}catch(e){}
+    h+='<div class="a2hs" id="a2hs-card">';
+    if(_a2dn){
+      h+='<div class="t">'+L.a2dT+'</div><div class="s">'+L.a2dS+'</div>';
     }else{
-      h+='<button type="button" class="a2hs-btn" id="a2hs-btn"'+(_a2hsEv?'':' style="display:none"')+'>'+L.a2Btn+'</button>'+
-         '<div class="a2hs-how" id="a2hs-how"'+(_a2hsEv?' style="display:none"':'')+'>'+
-         '<div class="a2hs-st"><span class="n">1</span><span>'+L.a2a1+'</span></div>'+
-         '<div class="a2hs-st"><span class="n">2</span><span>'+L.a2a2+'</span></div></div>';
+      h+='<div class="t">'+L.a2T+'</div><div class="s">'+L.a2S+'</div>';
+      if(IS_KAKAO&&/^https?:$/.test(location.protocol)){
+        // 카카오톡 인앱 브라우저 → 기본 브라우저로 열어 설치 (카카오 공식 외부열기 주소)
+        const ext='kakaotalk://web/openExternal?url='+encodeURIComponent(location.href);
+        h+='<a class="a2hs-btn big" style="display:block;text-align:center;text-decoration:none" href="'+esc(ext)+'">'+(IS_IOS?(LANG==='en'?'🌐 Open in Safari':'🌐 Safari에서 열기'):L.a2kBtn)+'</a>'+
+           '<div class="a2hs-how">'+
+           '<div class="a2hs-st"><span class="n">1</span><span>'+L.a2k1+'</span></div>'+
+           '<div class="a2hs-st"><span class="n">2</span><span>'+(IS_IOS?L.a2i2+' → '+L.a2i3:L.a2k2)+'</span></div></div>';
+      }else if(IS_IOS){
+        h+='<div class="a2hs-how">'+
+           '<div class="a2hs-st"><span class="n">1</span><span>'+L.a2i1+'</span></div>'+
+           '<div class="a2hs-st"><span class="n">2</span><span>'+L.a2i2+'</span></div>'+
+           '<div class="a2hs-st"><span class="n">3</span><span>'+L.a2i3+'</span></div></div>';
+      }else if((IS_SAMSUNG||IS_INAPP)&&/^https?:$/.test(location.protocol)){
+        // 삼성 인터넷·기타 인앱 브라우저 → Chrome 으로 열어 설치 (intent: 링크, Chrome 미설치 시 원래 주소로 폴백)
+        const chr='intent://'+location.host+location.pathname+location.search+
+          '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url='+encodeURIComponent(location.href)+';end';
+        h+='<a class="a2hs-btn big" style="display:block;text-align:center;text-decoration:none" href="'+esc(chr)+'">'+L.a2sBtn+'</a>'+
+           '<div class="a2hs-how">'+
+           '<div class="a2hs-st"><span class="n">1</span><span>'+L.a2s1+'</span></div>'+
+           '<div class="a2hs-st"><span class="n">2</span><span>'+L.a2s2+'</span></div>'+
+           '<div class="a2hs-st"><span class="n">3</span><span>'+L.a2s3+'</span></div></div>';
+      }else{
+        // Android Chrome 등 : 버튼 → 휴대폰 설치창 → 「설치」 = 2단계 설치
+        // (버튼은 항상 보여주고, 설치창을 지원하지 않는 브라우저에서 누르면 수동 안내를 펼친다)
+        h+='<button type="button" class="a2hs-btn big" id="a2hs-btn">'+L.a2Btn+'</button>'+
+           '<div class="a2hs-go" id="a2hs-go"'+(_a2hsEv?'':' style="display:none"')+'>'+L.a2go+'</div>'+
+           '<div class="a2hs-how" id="a2hs-how"'+(_a2hsEv?' style="display:none"':'')+'>'+
+           '<div class="a2hs-st"><span class="n">1</span><span>'+L.a2a1+'</span></div>'+
+           '<div class="a2hs-st"><span class="n">2</span><span>'+L.a2a2+'</span></div></div>';
+      }
     }
     h+='</div>';
   }
@@ -1741,12 +1799,19 @@ function render(){
     };
   });
   // 앱 설치 버튼 (Android Chrome 등 beforeinstallprompt 지원 브라우저)
+  //  ① 「지금 설치하기」 클릭 → ② 휴대폰 설치창에서 「설치」 클릭 = 설치 완료 (2단계)
   const ab=document.getElementById('a2hs-btn');
   if(ab)ab.onclick=async()=>{
-    if(!_a2hsEv)return;
+    if(!_a2hsEv){
+      // 설치창을 지원하지 않는 브라우저 → 수동 설치 안내를 펼쳐 보여준다
+      const hw=document.getElementById('a2hs-how');if(hw)hw.style.display='';
+      return;
+    }
+    ab.disabled=true;
     _a2hsEv.prompt();
-    try{await _a2hsEv.userChoice;}catch(e){}
-    _a2hsEv=null;
+    let ch=null;try{ch=await _a2hsEv.userChoice;}catch(e){}
+    _a2hsEv=null;ab.disabled=false;
+    if(ch&&ch.outcome==='accepted')a2hsDone();
   };
 }
 
@@ -1759,6 +1824,174 @@ function render(){
   }catch(e){
     document.getElementById('page').innerHTML='<div class="empty-page"><div style="font-size:34px">🔎</div><div>'+T[LANG].notfound+'</div></div>';
   }
+})();
+</script>
+
+<!-- ═══ 문서 뷰어 오버레이 — 닫으면 마이페이지로 그대로 복귀 ═══ -->
+<div id="mv-wrap">
+  <div id="mv-bar">
+    <button id="mv-back">←</button>
+    <span id="mv-ttl">문서</span>
+    <button id="mv-x">✕ 닫기</button>
+  </div>
+  <div id="mv-body"><div id="mv-load">불러오는 중...</div></div>
+</div>
+
+<script>
+/* ─────────────────────────────────────────────────────────────
+   앱 안에서 문서 열기 (새 탭 금지)
+
+   왜 필요한가 :
+    · 카카오톡·왓츠앱의 인앱 브라우저는 target="_blank" 로 열린 창의 「✕」를 누르면
+      새로 열린 문서뿐 아니라 인앱 브라우저 전체가 닫힙니다 → 마이페이지까지 사라짐
+    · 홈 화면에 설치한 앱(PWA)에서도 새 탭이 앱 밖으로 나가 버려 돌아올 수 없습니다
+   그래서 같은 사이트 주소는 모두 이 오버레이(iframe) 안에서 열고,
+   「✕ 닫기」 · 「←」 · 휴대폰 뒤로가기 로 항상 마이페이지로 돌아옵니다.
+   ───────────────────────────────────────────────────────────── */
+(function(){
+  var EN=(new URLSearchParams(location.search).get('lang')==='en');
+  var stack=[];             // 문서 이동 기록 (문서 안에서 또 문서를 열 때)
+  var isOpen=false, pushed=false;
+  var wrap,bar,body,ttlEl,backEl;
+
+  function g(id){return document.getElementById(id);}
+  function T(ko,en){return EN?en:ko;}
+
+  // 문서 종류별 제목
+  function titleOf(url){
+    var f=String(url).split('?')[0].split('#')[0].split('/').pop().toLowerCase();
+    var M={
+      'hhc-invoice.html':T('🧾 인보이스','🧾 Invoice'),
+      'hhcinvoice.html' :T('🧾 인보이스','🧾 Invoice'),
+      'inspect.html'    :T('🔧 점검 보고서','🔧 Inspection Report'),
+      'install.html'    :T('🔩 설치 보고서','🔩 Installation Report'),
+      'washer.html'     :T('🧺 세탁기 보고서','🧺 Washer Report'),
+      'admin.html'      :T('📑 계약서 · 이용내역','📑 Contract · Usage'),
+      'coupon.html'     :T('🎫 상품권 · 할인권','🎫 Voucher'),
+      'quote.html'      :T('🧾 견적서','🧾 Quotation'),
+      'booking.html'    :T('📅 예약 확인','📅 Booking'),
+      'request.html'    :T('📝 서비스 의뢰','📝 Service Request'),
+      'home.html'       :T('🏠 가격 · 서비스 안내','🏠 Prices & Services'),
+      'home'            :T('🏠 가격 · 서비스 안내','🏠 Prices & Services')
+    };
+    return M[f]||T('📄 문서','📄 Document');
+  }
+
+  // 이 사이트 안의 주소인지 (외부 링크 · 전화 · 왓츠앱은 그대로 둔다)
+  function internal(href){
+    if(!href)return false;
+    if(/^(tel:|mailto:|sms:|javascript:|blob:|data:)/i.test(href))return false;
+    if(href.charAt(0)==='#')return false;
+    var u;
+    try{u=new URL(href,location.href);}catch(e){return false;}
+    if(u.protocol!=='http:'&&u.protocol!=='https:')return false;
+    if(u.origin===location.origin)return true;
+    return /(^|\.)hhc-3p8\.pages\.dev$/i.test(u.hostname);
+  }
+
+  function paint(){
+    ttlEl.textContent=stack.length?stack[stack.length-1].t:T('문서','Document');
+    backEl.classList.toggle('on',stack.length>1);
+    g('mv-x').textContent=T('✕ 닫기','✕ Close');
+  }
+
+  function load(url){
+    body.innerHTML='<div id="mv-load">'+T('불러오는 중...','Loading...')+'</div>';
+    var f=document.createElement('iframe');
+    f.setAttribute('title',T('문서 보기','Document'));
+    f.setAttribute('allow','clipboard-write; clipboard-read');
+    f.onload=function(){
+      var l=g('mv-load');if(l)l.classList.add('off');
+      hook(f);
+    };
+    f.src=url;
+    body.appendChild(f);
+  }
+
+  // 문서 페이지가 스스로 창을 닫거나 새 탭을 열려고 하면 가로채서
+  // 앱이 아니라 이 오버레이 안에서만 처리되도록 한다
+  function hook(f){
+    var cw;
+    try{cw=f.contentWindow;}catch(e){return;}
+    if(!cw)return;
+    try{cw.close=function(){window.mvClose();};}catch(e){}
+    try{cw.history.back=function(){window.mvBack();};}catch(e){}
+    try{cw.open=function(u){ if(internal(u))mvPush(String(u)); else try{window.open(u,'_blank','noopener');}catch(e){} return null; };}catch(e){}
+    try{
+      cw.document.addEventListener('click',function(ev){
+        var a=ev.target&&ev.target.closest?ev.target.closest('a[href]'):null;
+        if(!a)return;
+        var href=a.getAttribute('href')||'';
+        if(!internal(href))return;                 // 왓츠앱·전화 링크는 그대로
+        if(a.target!=='_blank')return;             // 같은 화면 안 이동은 그대로
+        ev.preventDefault();ev.stopPropagation();
+        mvPush(a.href);
+      },true);
+      cw.document.addEventListener('keydown',function(k){if(k.key==='Escape')window.mvClose();});
+    }catch(e){}
+  }
+
+  function mvPush(url){
+    stack.push({u:url,t:titleOf(url)});
+    paint();load(url);
+  }
+
+  window.mvOpen=function(url,title){
+    wrap=g('mv-wrap');if(!wrap)return false;
+    bar=g('mv-bar');body=g('mv-body');ttlEl=g('mv-ttl');backEl=g('mv-back');
+    stack=[{u:url,t:title||titleOf(url)}];
+    paint();load(url);
+    wrap.classList.add('open');
+    isOpen=true;
+    document.body.style.overflow='hidden';
+    // 휴대폰 뒤로가기로도 닫히도록 기록을 하나 남긴다
+    try{history.pushState({mv:1},'');pushed=true;}catch(e){pushed=false;}
+    return false;
+  };
+  window.mvBack=function(){
+    if(stack.length>1){stack.pop();paint();load(stack[stack.length-1].u);}
+    else window.mvClose();
+  };
+  window.mvClose=function(fromPop){
+    if(!isOpen)return;
+    isOpen=false;stack=[];
+    if(wrap)wrap.classList.remove('open');
+    if(body)body.innerHTML='<div id="mv-load">'+T('불러오는 중...','Loading...')+'</div>';
+    document.body.style.overflow='';
+    // 남겨 둔 기록은 우리가 만든 것이 확실할 때만 되돌린다.
+    // (문서가 기록을 더 쌓은 경우 무리하게 뒤로 가면 앱 밖으로 나가 버린다)
+    if(!fromPop&&pushed){
+      pushed=false;
+      try{if(history.state&&history.state.mv)history.back();}catch(e){}
+    }else pushed=false;
+  };
+  window.addEventListener('popstate',function(){if(isOpen)window.mvClose(true);});
+  document.addEventListener('keydown',function(k){if(k.key==='Escape'&&isOpen)window.mvClose();});
+
+  // 마이페이지 안의 모든 「새 탭」 링크를 오버레이로 돌린다
+  document.addEventListener('click',function(ev){
+    if(ev.defaultPrevented)return;
+    if(ev.metaKey||ev.ctrlKey||ev.shiftKey||ev.button===1)return;   // PC의 새 탭 열기는 그대로 허용
+    var a=ev.target&&ev.target.closest?ev.target.closest('a[href]'):null;
+    if(!a)return;
+    if(a.getAttribute('target')!=='_blank')return;
+    var href=a.getAttribute('href')||'';
+    if(!internal(href))return;                                       // 왓츠앱 등 외부는 그대로 새 탭
+    ev.preventDefault();
+    window.mvOpen(a.href,a.getAttribute('data-mvt')||'');
+  },true);
+
+  // 버튼 연결
+  document.addEventListener('DOMContentLoaded',function(){
+    var b=document.getElementById('mv-back'),x=document.getElementById('mv-x');
+    if(b)b.onclick=function(){window.mvBack();};
+    if(x)x.onclick=function(){window.mvClose();};
+  });
+  (function bind(){
+    var b=document.getElementById('mv-back'),x=document.getElementById('mv-x');
+    if(b)b.onclick=function(){window.mvBack();};
+    if(x)x.onclick=function(){window.mvClose();};
+  })();
 })();
 </script>
 </body>

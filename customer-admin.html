@@ -514,7 +514,7 @@ textarea.fi{resize:vertical;min-height:60px;line-height:1.6}
 <!-- 문서 뷰어 오버레이 — 닫으면 고객 상세 화면으로 복귀 -->
 <div id="dv-wrap">
   <div id="dv-bar">
-    <button id="dv-back" onclick="caViewClose()">← 뒤로</button>
+    <button id="dv-back" onclick="caViewBack()">← 뒤로</button>
     <span id="dv-ttl">문서</span>
     <a id="dv-new" href="#" target="_blank" rel="noopener">↗ 새 탭</a>
     <button id="dv-x" onclick="caViewClose()">✕ 닫기</button>
@@ -1713,12 +1713,37 @@ window.closeDrawer=function(){
 
 // ═══ 문서 뷰어 오버레이 ═══
 // 인보이스·점검보고서·계약서·상품권을 앱 안에서 열고, 닫으면 고객 상세 화면으로 그대로 복귀한다.
-let dvOpen=false, dvPushed=false;
-window.caView=function(url,title,ev){
-  if(ev&&(ev.metaKey||ev.ctrlKey||ev.shiftKey||ev.button===1))return true; // 새 탭으로 열기는 그대로 허용
-  const w=document.getElementById('dv-wrap');if(!w)return true;
-  document.getElementById('dv-ttl').textContent=title||'문서';
-  const nb=document.getElementById('dv-new');if(nb)nb.href=url;
+//  · 문서 안에서 또 다른 문서를 「↗ 새 탭」으로 여는 링크도 모두 이 오버레이 안에서 열어
+//    모바일(카카오·왓츠앱 인앱 브라우저, 설치형 앱)에서 닫을 때 프로그램 전체가 닫히는 것을 막는다.
+//  · 「← 뒤로」는 오버레이 안에서 거쳐온 문서로 돌아가고, 첫 문서에서는 오버레이를 닫는다.
+let dvOpen=false, dvPushed=false, dvStack=[];
+function dvInternal(href){
+  if(!href)return false;
+  if(/^(tel:|mailto:|sms:|javascript:|blob:|data:)/i.test(href))return false;
+  if(String(href).charAt(0)==='#')return false;
+  let u;try{u=new URL(href,location.href);}catch(_){return false;}
+  if(u.protocol!=='http:'&&u.protocol!=='https:')return false;
+  if(u.origin===location.origin)return true;
+  return /(^|\.)hhc-3p8\.pages\.dev$/i.test(u.hostname);
+}
+function dvTitleOf(url){
+  const f=String(url).split('?')[0].split('#')[0].split('/').pop().toLowerCase();
+  const M={'hhc-invoice.html':'🧾 인보이스','hhcinvoice.html':'🧾 인보이스',
+    'inspect.html':'🔧 점검 보고서','inspect-admin.html':'🔧 점검 보고서','inspectadmin.html':'🔧 점검 보고서',
+    'install.html':'🔩 설치 보고서','washer.html':'🧺 세탁기 보고서',
+    'admin.html':'📑 계약서 · 이용내역','coupon.html':'🎫 상품권','coupon-admin.html':'🎫 상품권','couponadmin.html':'🎫 상품권',
+    'quote.html':'🧾 견적서','quote-admin.html':'🧾 견적서','quoteadmin.html':'🧾 견적서',
+    'booking.html':'📅 예약 확인','request.html':'📝 서비스 의뢰','my.html':'📱 고객 마이페이지'};
+  return M[f]||'📄 문서';
+}
+function dvPaint(){
+  const t=dvStack.length?dvStack[dvStack.length-1]:null;
+  const te=document.getElementById('dv-ttl');if(te)te.textContent=t?t.t:'문서';
+  const nb=document.getElementById('dv-new');if(nb&&t)nb.href=t.u;
+  const bk=document.getElementById('dv-back');
+  if(bk)bk.textContent=dvStack.length>1?'← 뒤로':'← 닫기';
+}
+function dvLoad(url){
   // iframe은 열 때마다 새로 만든다 — src 교체는 브라우저 히스토리를 오염시켜 뒤로가기가 어긋난다.
   const host=document.getElementById('dv-body');
   host.innerHTML='';
@@ -1726,22 +1751,45 @@ window.caView=function(url,title,ev){
   f.id='dv-frame';
   f.setAttribute('title','문서 보기');
   f.setAttribute('allow','clipboard-write; clipboard-read');
-  f.onload=function(){
-    // 문서 페이지가 스스로 창을 닫으려 하면(×·뒤로) 앱이 아니라 오버레이만 닫히도록 가로챈다.
-    try{
-      const cw=f.contentWindow;
-      cw.close=function(){window.caViewClose();};
-      cw.history.back=function(){window.caViewClose();};
-      cw.addEventListener('keydown',function(k){if(k.key==='Escape')window.caViewClose();});
-    }catch(_){ }
-  };
+  f.onload=function(){dvHook(f);};
   f.src=url;
   host.appendChild(f);
+}
+// 문서 페이지가 스스로 창을 닫거나 새 탭을 열려고 하면 가로채서 오버레이 안에서만 처리한다
+function dvHook(f){
+  let cw;try{cw=f.contentWindow;}catch(_){return;}
+  if(!cw)return;
+  try{cw.close=function(){window.caViewClose();};}catch(_){}
+  try{cw.history.back=function(){window.caViewBack();};}catch(_){}
+  try{cw.open=function(u){ if(dvInternal(u)){dvPush(String(u));return null;} try{return window.open(u,'_blank','noopener');}catch(_){return null;} };}catch(_){}
+  try{
+    cw.document.addEventListener('click',function(ev){
+      const a=ev.target&&ev.target.closest?ev.target.closest('a[href]'):null;
+      if(!a)return;
+      const href=a.getAttribute('href')||'';
+      if(!dvInternal(href))return;          // 전화·왓츠앱 등 외부 링크는 그대로
+      if(a.target!=='_blank')return;        // 같은 화면 안에서의 이동은 그대로
+      ev.preventDefault();ev.stopPropagation();
+      dvPush(a.href);
+    },true);
+    cw.document.addEventListener('keydown',function(k){if(k.key==='Escape')window.caViewClose();});
+  }catch(_){}
+}
+function dvPush(url){dvStack.push({u:url,t:dvTitleOf(url)});dvPaint();dvLoad(url);}
+window.caView=function(url,title,ev){
+  if(ev&&(ev.metaKey||ev.ctrlKey||ev.shiftKey||ev.button===1))return true; // 새 탭으로 열기는 그대로 허용
+  const w=document.getElementById('dv-wrap');if(!w)return true;
+  dvStack=[{u:url,t:title||dvTitleOf(url)}];
+  dvPaint();dvLoad(url);
   w.classList.add('open');
   dvOpen=true;
   document.body.style.overflow='hidden';
   try{history.pushState({dv:1},'');dvPushed=true;}catch(_){dvPushed=false;}
   return false;
+};
+window.caViewBack=function(){
+  if(dvStack.length>1){dvStack.pop();dvPaint();dvLoad(dvStack[dvStack.length-1].u);}
+  else window.caViewClose();
 };
 window.caViewClose=function(fromPop){
   const w=document.getElementById('dv-wrap');
@@ -1749,13 +1797,36 @@ window.caViewClose=function(fromPop){
   w.classList.remove('open');
   const host=document.getElementById('dv-body');
   if(host)host.innerHTML='';
-  dvOpen=false;
+  dvOpen=false;dvStack=[];
   document.body.style.overflow='';
-  if(!fromPop&&dvPushed){dvPushed=false;try{history.back();}catch(_){ }}
+  // 남겨 둔 기록은 우리가 만든 것이 확실할 때만 되돌린다.
+  // (문서가 기록을 더 쌓았는데 무리하게 뒤로 가면 프로그램 밖으로 나가 버린다)
+  if(!fromPop&&dvPushed){dvPushed=false;try{if(history.state&&history.state.dv)history.back();}catch(_){ }}
   else dvPushed=false;
 };
+// 문서 화면이 top.close() 등으로 프로그램 창 자체를 닫으려는 경우에도 오버레이만 닫는다
+(function(){
+  const _close=window.close;
+  window.close=function(){
+    if(dvOpen){window.caViewClose();return;}
+    try{_close.call(window);}catch(_){ }
+  };
+})();
 window.addEventListener('popstate',function(){if(dvOpen)window.caViewClose(true);});
 document.addEventListener('keydown',function(k){if(k.key==='Escape'&&dvOpen)window.caViewClose();});
+// 혹시 빠뜨린 「새 탭」 링크가 있어도 우리 사이트 주소면 뷰어로 돌린다 (모바일 안전장치)
+document.addEventListener('click',function(ev){
+  if(ev.defaultPrevented)return;
+  if(ev.metaKey||ev.ctrlKey||ev.shiftKey||ev.button===1)return;   // PC의 새 탭 열기는 그대로 허용
+  const a=ev.target&&ev.target.closest?ev.target.closest('a[href]'):null;
+  if(!a||a.getAttribute('target')!=='_blank')return;
+  if(a.id==='dv-new')return;                                       // 뷰어 상단의 「↗ 새 탭」은 그대로
+  if(/caView/.test(a.getAttribute('onclick')||''))return;          // 이미 뷰어로 열리는 링크
+  const href=a.getAttribute('href')||'';
+  if(!dvInternal(href))return;                                     // 전화·왓츠앱 등 외부는 그대로
+  ev.preventDefault();
+  window.caView(a.href,'');
+},true);
 
 // ═══ 신규/수정 ═══
 function fillMemberSel(v){

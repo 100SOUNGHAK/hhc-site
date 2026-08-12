@@ -185,6 +185,28 @@ setInterval(function(){
   }else ld._t=null;
 },1000);
 
+// ── 👤 다른 화면에서 「고객상세」 요청이 오면 고객관리 탭으로 전환해서 연다 ──
+//    (메모장·스케줄·인보이스 등이 postMessage({hhcOpenCustomer:'<연락처|이름>'}) 를 보냄)
+window.addEventListener('message',function(e){
+  var d=e&&e.data;
+  if(!d||!d.hhcOpenCustomer)return;
+  try{if(e.source&&e.source.postMessage)e.source.postMessage({hhcOpenCustomerOk:1},'*');}catch(err){}
+  var key=String(d.hhcOpenCustomer);
+  var url='customer-admin.html?open='+encodeURIComponent(key);
+  var f=gid('frame');
+  if(cur==='customers'){
+    // 이미 고객관리 화면 → 화면을 다시 불러오지 않고 메시지로만 해당 고객을 연다
+    var ok=false;
+    var ack=function(ev){if(ev&&ev.data&&ev.data.hhcOpenCustomerDone){ok=true;window.removeEventListener('message',ack);}};
+    window.addEventListener('message',ack);
+    try{f.contentWindow.postMessage({hhcOpenCustomer:key},'*');}catch(x){}
+    setTimeout(function(){window.removeEventListener('message',ack);if(!ok)f.src=url;},600);
+  }else{
+    go('customers');
+    f.src=url;   // 탭 전환 직후 해당 고객 주소로 바로 연다
+  }
+});
+
 build();
 var start=(location.hash||'').replace('#','');
 if(!FLAT.some(function(m){return m.id===start;})){

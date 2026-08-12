@@ -54,6 +54,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Pretendard",'Noto Sans KR',sa
 .modal-h{padding:13px 16px;font-size:14px;font-weight:900;border-bottom:1px solid var(--bdr);display:flex;align-items:center;gap:7px;flex-shrink:0}
 .modal-h .x{margin-left:auto;cursor:pointer;border:none;background:none;font-size:16px;color:var(--ink3)}
 .modal-b{padding:14px 16px;overflow-y:auto;flex:1}
+/* 고객 항목 : 눌러서 총괄 고객관리 상세로 이동 */
+.cust-go{cursor:pointer;color:#1D4ED8;border-bottom:1.5px dotted rgba(29,78,216,.45)}
+.cust-go:active{opacity:.55}
 .modal-f{padding:12px 16px;border-top:1px solid var(--bdr);display:flex;gap:8px;flex-shrink:0}
 .modal-f .btn{flex:1;padding:11px}
 .fl{font-size:11px;font-weight:800;color:var(--ink2);margin:11px 0 5px}
@@ -179,6 +182,7 @@ textarea.fi{resize:vertical;line-height:1.6}
       <textarea class="fi" id="mm-memo" rows="2" placeholder="예) 부품 주문 필요 · 관리실 통해 출입"></textarea>
     </div>
     <div class="modal-f">
+      <button class="btn" id="mm-cust" style="flex:0 0 auto;padding:11px 12px" title="총괄 고객관리에서 이 고객 상세 보기">👤 고객상세</button>
       <button class="btn" onclick="closeMemo()">취소</button>
       <button class="btn p" id="mm-save">💾 저장</button>
       <button class="btn s" id="mm-save-send">💾 저장 후 발송</button>
@@ -189,7 +193,7 @@ textarea.fi{resize:vertical;line-height:1.6}
 <!-- 발송 -->
 <div class="mask" id="sd-mask">
   <div class="modal">
-    <div class="modal-h"><span>💬 방문 확인 메시지</span><span id="sd-who" style="margin-left:8px;font-size:10.5px;font-weight:700;color:var(--ink3)"></span><button class="x" onclick="closeSend()">✕</button></div>
+    <div class="modal-h"><span>💬 방문 확인 메시지</span><span id="sd-who" class="cust-go" style="margin-left:8px;font-size:10.5px;font-weight:700;color:var(--ink3)" onclick="sdOpenCust()"></span><button class="x" onclick="closeSend()">✕</button></div>
     <div class="modal-b" id="sd-body"></div>
     <div class="modal-f"><button class="btn" onclick="closeSend()">닫기</button></div>
   </div>
@@ -378,7 +382,7 @@ window.renderList=function(){
     const urgent=(m.status!=='done')&&m.visit_date&&m.visit_date<=td;
     const last=(m.sent_log||[]).slice(-1)[0];
     return '<div class="it'+(urgent?' urg':'')+(m.status==='done'?' done':'')+'">'+
-      '<div class="it-t"><b>'+esc(m.condo||m.name||'(콘도명 없음)')+'</b>'+
+      '<div class="it-t"><b class="cust-go" data-act="cust" data-id="'+m.__id+'" title="총괄 고객관리에서 이 고객 상세 보기">'+esc(m.condo||m.name||'(콘도명 없음)')+'</b>'+
         '<span class="pill '+st[1]+'">'+st[0]+'</span>'+
         '<span class="pill '+ch[1]+'">'+ch[0]+'</span>'+
         (urgent?'<span class="pill w">'+(m.visit_date===td?'오늘 방문예정':'방문일 지남')+'</span>':'')+'</div>'+
@@ -387,7 +391,7 @@ window.renderList=function(){
                :(m.status==='done'?'<div class="imemo" style="background:#FFF7E6;color:#B45309">⚠️ 진단·결과 미입력 — 고객 마이페이지에 표시되지 않습니다</div>':''))+
       (m.memo?'<div class="imemo">🔒 '+esc(m.memo)+'</div>':'')+
       '<div class="meta">'+
-        '<span>👤 '+esc(m.name||'-')+(m.phone?' · '+esc(m.phone):'')+'</span>'+
+        '<span class="cust-go" data-act="cust" data-id="'+m.__id+'" title="총괄 고객관리에서 이 고객 상세 보기">👤 '+esc(m.name||'-')+(m.phone?' · '+esc(m.phone):'')+' ↗</span>'+
         '<span>📅 요청 '+esc(m.req_date||'-')+'</span>'+
         '<span>🚗 방문예정 <b>'+(m.visit_date?esc(m.visit_date)+(m.visit_time?' '+esc(m.visit_time):''):'미정')+'</b>'+(m.visit_date&&m.schedule_id?' <span style="font-size:10px;color:#5B21B6;background:#EDE9FE;border-radius:5px;padding:1px 6px;font-weight:800">📅 캘린더 반영됨</span>':'')+'</span>'+
       '</div>'+
@@ -460,6 +464,18 @@ window.openMemo=function(id){
   document.getElementById('mm-res-en').value=m.result_en||'';
   document.getElementById('mm-memo').value=m.memo||'';
   setCh(m.channel||'kakao');
+  // 👤 고객상세 : 저장된 요청일 때만 의미가 있으므로 신규 등록 화면에서는 숨긴다
+  const _cb=document.getElementById('mm-cust');
+  if(_cb){
+    _cb.style.display=id?'':'none';
+    _cb.onclick=function(){
+      const cur=MEMOS.find(x=>x.__id===editId);
+      window.hhcOpenCust(
+        (document.getElementById('mm-phone').value||'').trim()||(cur&&cur.phone)||'',
+        (document.getElementById('mm-name').value||'').trim()||(cur&&cur.name)||''
+      );
+    };
+  }
   renderSnips();
   document.getElementById('mm-ac').classList.remove('open');
   document.getElementById('mm-mask').classList.add('open');
@@ -642,6 +658,8 @@ window.openSend=function(id){
   document.getElementById('sd-mask').classList.add('open');
 };
 window.closeSend=function(){document.getElementById('sd-mask').classList.remove('open');sendId=null;};
+// 발송 화면 상단의 고객명 → 총괄 고객관리 상세
+window.sdOpenCust=function(){const m=MEMOS.find(x=>x.__id===sendId);if(m)window.hhcOpenCust(m.phone,m.name);};
 
 function paintSend(){
   const m=MEMOS.find(x=>x.__id===sendId);if(!m)return;

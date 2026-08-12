@@ -137,6 +137,10 @@ body{font-family:'Pretendard',-apple-system,'Noto Sans KR',sans-serif;background
 .sch-body{flex:1;min-width:0}
 .sch-type{display:inline-flex;padding:2px 9px;border-radius:8px;font-size:9.5px;font-weight:800;margin-bottom:5px;letter-spacing:.02em}
 .sch-ttl{font-size:14px;font-weight:600;color:var(--tx);margin-bottom:4px;line-height:1.4}
+/* 고객이 있는 일정 : 제목(고객명)을 눌러 총괄 고객관리 상세로 이동 */
+.sch-cn{cursor:pointer;border-bottom:1.5px dotted rgba(29,78,216,.45)}
+.sch-cn:active{opacity:.55}
+.sch-ca{background:#E7EEFF!important}
 .mg-badge{display:inline-block;margin-left:6px;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:800;vertical-align:middle;letter-spacing:-.01em;white-space:nowrap}
 .mg-vvip{background:#fef9c3;color:#a16207}
 .mg-pkg{background:#eff6ff;color:#2563eb}
@@ -1049,13 +1053,15 @@ async function renderDay(ds){
     const isAuto=s.source==='booking';
     // 액션 버튼 (최대 4개 → 2열로 접힘)
     const acts=(!isAuto?`<button class="sch-edit" onclick="editItem('${s._id}')">✏️</button><button class="sch-del" onclick="deleteItem('${s._id}')">×</button>`:'')
-      +(schIsBk(s.type)?`<button class="sch-edit" style="color:#085048" onclick="sendVisitReminder('${s._id}')" title="방문 안내 메시지 발송">💬</button><button class="sch-edit" style="color:#1d4ed8" onclick="openCustomerAdmin('${s._id}')" title="이 고객의 총괄 고객관리 열기">👤</button>`:'');
+      +(schIsBk(s.type)?`<button class="sch-edit" style="color:#085048" onclick="sendVisitReminder('${s._id}')" title="방문 안내 메시지 발송">💬</button>`:'')
+      // 👤 총괄 고객관리 바로가기 — 예약 일정뿐 아니라 고객정보가 들어있는 직접입력·수리 일정에도 표시한다
+      +(schHasCust(s)?`<button class="sch-edit sch-ca" style="color:#1d4ed8" onclick="openCustomerAdmin('${s._id}')" title="이 고객의 총괄 고객관리 상세 열기">👤</button>`:'');
     html+=`<div class="sch-item">
       <div class="sch-bar" style="background:${barColor}"></div>
       <div class="sch-time-col"><div class="sch-ts">${s.time_s||'—'}</div>${s.time_e?`<div class="sch-te">~${s.time_e}</div>`:''}</div>
       <div class="sch-body">
         <div class="sch-type" style="${typeBg}">${typeLabel}</div>
-        <div class="sch-ttl${isAuto?' sch-ttl-condo':''}">${ds2.title}${schCh(s)}${schGrade(s)}</div>
+        <div class="sch-ttl${isAuto?' sch-ttl-condo':''}">${schHasCust(s)?`<span class="sch-cn" onclick="openCustomerAdmin('${s._id}')" title="총괄 고객관리에서 이 고객 상세 보기">${ds2.title}</span>`:ds2.title}${schCh(s)}${schGrade(s)}</div>
         ${ds2.memo?`<div class="sch-sub">${ds2.memo.replace(/\n/g,'<br>')}</div>`:''}
         ${isAuto?`<div class="sch-auto">📋 ${curLang==='en'?'Auto from booking':'예약시스템 자동반영'}</div>`:''}
       </div>
@@ -1701,13 +1707,28 @@ window.setLang=async function(lang){
 // ── 유틸
 function showLoading(v){document.getElementById('loading').classList.toggle('on',v);}
 // 📅 일정의 예약 고객 → 총괄 고객관리(customer-admin.html) 해당 고객 상세로 이동
+// 관리자 허브(staff-app) 안에서 열려 있으면 허브의 「고객관리」 탭으로 전환해서 열고,
+// 단독 창으로 열려 있으면 새 탭으로 엽니다. (모바일에서 새 탭이 쌓이지 않도록)
 window.openCustomerAdmin=function(id){
   const list=getMerged(selDate);
   const it=list.find(x=>x._id===id);
   if(!it){showToast('일정 정보를 찾을 수 없습니다');return;}
-  const key=it.customer_phone||it.customer_name||'';
+  const key=(it.customer_phone||'').trim()||schName(it)||(it.customer_name||'').trim();
   if(!key){showToast('고객 정보가 없는 일정입니다');return;}
-  window.open('customer-admin.html?open='+encodeURIComponent(key),'_blank');
+  const url='customer-admin.html?open='+encodeURIComponent(key);
+  let done=false;
+  const fallback=function(){if(done)return;done=true;window.open(url,'_blank');};
+  try{
+    if(window.parent&&window.parent!==window){
+      const ack=function(ev){if(ev&&ev.data&&ev.data.hhcOpenCustomerOk){done=true;window.removeEventListener('message',ack);}};
+      window.addEventListener('message',ack);
+      window.parent.postMessage({hhcOpenCustomer:key},'*');
+      showToast('👤 고객관리에서 여는 중...');
+      setTimeout(function(){window.removeEventListener('message',ack);fallback();},600);
+      return;
+    }
+  }catch(e){}
+  fallback();
 };
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2000);}
 
