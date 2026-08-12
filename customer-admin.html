@@ -740,6 +740,11 @@ function kkText(m){
     t=t.split('\n').filter(x=>!/MY ?PAGE ?설치하시면|Once you install MY ?PAGE/i.test(x))
        .join('\n').replace(/\n{3,}/g,'\n\n').trim();
   }
+  // ③ 그래도 넘치면 인사말 줄을 뺍니다 (정보량이 가장 적은 줄)
+  if(len(t)>MAX){
+    t=t.split('\n').filter(x=>!/^\s*(안녕하세요|Hello)\s*[,\s]/.test(x))
+       .join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  }
   if(len(t)>MAX)t=Array.from(t).slice(0,MAX-1).join('').replace(/\s+\S*$/,'')+'…';
   return t;
 }
@@ -2306,6 +2311,7 @@ window.caSendModal=async function(idx){
     {t:'revisit', lb:'🔄 재방문 · 예약', n:0, need:false},
     {t:'bill',    lb:'🧾 청구 안내',    n:0, need:false},
     {t:'pay',     lb:'💳 결제 확인',    n:0, need:false},
+    {t:'wp',      lb:'🪪 워크퍼밋 등록', n:0, need:false},
     {t:'install', lb:'📲 앱 설치 안내', n:0, need:false}
   ];
   const _cpSpan=(CPG.length&&CPD.length)?'':'grid-column:1/-1;';
@@ -2625,6 +2631,16 @@ window.caSendModal=async function(idx){
       return en
         ?('Hello, '+nm+' 😊\n\nYour payment for this service has been confirmed. Thank you.\n\n[Full invoice details]\n\nare available on your personal [MY PAGE] below.'+msgTail(en))
         :('안녕하세요, '+nm+' 고객님 😊\n\n고객님의 금차 서비스청구 [결제내역] 확인되었습니다. 감사합니다.\n\n[인보이스 상세내역]은\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.'+msgTail(en));
+    }
+    if(state.tpl==='wp'){
+      // 매니지먼트 작업방문등록(워크퍼밋)에 필요한 회사·차량·직원 정보
+      //  · 직원 명단이 반드시 다 들어가야 하므로, 카카오 200자 안에 담기도록
+      //    라벨(회사명/차량/직원)은 아이콘으로 대신하고 문장을 짧게 씁니다.
+      const V=CS_VISIT;
+      const staff=V.staff.map(function(a){return a[0]+' '+a[1];}).join('\n');
+      return en
+        ?('Hello, '+nm+' 😊\n\n⚠️ Work-permit registration required before our visit.\n\n🏢 '+V.company+'\n🚗 '+V.cars+'\n👷 '+staff+msgTail(en))
+        :('안녕하세요, '+nm+' 고객님 😊\n\n방문 전까지 매니지먼트에 작업방문등록(워크퍼밋) 완료 부탁드립니다.\n\n📋 작업방문등록 필요 정보\n🏢 '+V.company+'\n🚗 '+V.cars+'\n👷 '+staff+msgTail(en));
     }
     if(state.tpl==='install'){
       const rowsI=msgRows(en);
