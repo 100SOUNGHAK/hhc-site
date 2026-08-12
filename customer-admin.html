@@ -398,6 +398,7 @@ html.sa body{padding-left:222px}
 .mr2 .v.wait{color:#b45309;background:var(--warn-bg);border-radius:7px;padding:5px 8px;font-weight:800}
 .mr2 .v.int{color:#6b7280;background:#F3F4F6;border-radius:7px;padding:5px 8px}
 .rb.ed{background:var(--pri-bg);color:var(--pri)}
+.pill.det{background:#FFF7ED;color:#C2410C;border:1px solid #FDBA74}
 .eye-c{display:inline-block;font-size:9.5px;font-weight:900;border-radius:5px;padding:2px 6px;background:var(--vio-bg);color:var(--vio);margin-left:5px}
 .eye-i{display:inline-block;font-size:9.5px;font-weight:900;border-radius:5px;padding:2px 6px;background:#F3F4F6;color:#6b7280;margin-left:5px}
 .eye-e{display:inline-block;font-size:9.5px;font-weight:900;border-radius:5px;padding:2px 6px;background:#DBEAFE;color:#1D4ED8;margin-left:5px}
@@ -961,6 +962,18 @@ function entryKey(e){
 //  · ca_link  (기존·1명)   = 이 문서의 소속 고객 자체를 바꾸는 「이관 연결」
 //  · ca_links (신규·여러명) = 원래 고객은 그대로 두고 추가로 함께 보여줄 고객들
 function docExtraKeys(x){const a=(x&&x.ca_links);return Array.isArray(a)?a.filter(Boolean):[];}
+// 🔓 자동 연결 해제 : 이름·연락처가 같아도 이 고객에게는 붙이지 않도록 지정한 목록
+//    (문서 내용은 전혀 바뀌지 않고 ca_off 표시만 붙습니다)
+function docOffKeys(x){const a=(x&&x.ca_off);return Array.isArray(a)?a.filter(Boolean):[];}
+function entryKeys(e){
+  if(!e)return [];
+  const a=[entryKey(e),'k:'+nn(e.name)+'#'+pn(e.phone)];
+  return a.filter(function(v,i){return v&&a.indexOf(v)===i;});
+}
+function docOffFor(x,e){
+  const ks=docOffKeys(x); if(!ks.length||!e)return false;
+  return entryKeys(e).some(function(k){return ks.indexOf(k)>=0;});
+}
 function docLinkedTo(x,key){return !!key&&((x&&x.ca_link===key)||docExtraKeys(x).indexOf(key)>=0);}
 function buildEntries(){
   entries=[];const byP={},byN={};
@@ -980,6 +993,11 @@ function buildEntries(){
     if(x.ca_link){pending.push({coll,x,name,phone});return newEntry(name,phone);}
     const pk=pn(phone),nk=nn(name);
     let e=(pk&&byP[pk])||(nk&&byN[nk])||null;
+    // 🔓 이 고객에서 자동연결을 해제한 문서 → 붙이지 않고 별도 항목으로 떼어 둡니다
+    if(e&&docOffFor(x,e)){
+      const d=newEntry(name,phone); d.detached=true; entries.push(d);
+      d.docs[coll].push(x); return d;
+    }
     if(!e){
       e=newEntry(name,phone);entries.push(e);
       if(pk)byP[pk]=e;if(nk&&!byN[nk])byN[nk]=e;
@@ -1004,6 +1022,7 @@ function buildEntries(){
     if(x.ca_link){pending.push({coll:'coupons',x,name:x.name||x.receiver,phone:''});return;}
     const k1=nn(x.name),k2=nn(x.receiver);
     let e=(k1&&byN[k1])||(k2&&byN[k2])||null;
+    if(e&&docOffFor(x,e)){const d=newEntry(x.name||x.receiver,'');d.detached=true;entries.push(d);d.docs.coupons.push(x);return;}
     if(!e){e=newEntry(x.name||x.receiver,'');entries.push(e);if(k1&&!byN[k1])byN[k1]=e;}
     e.docs.coupons.push(x);
   });
@@ -1304,7 +1323,7 @@ function renderList(){
       '<div class="cmain"><div class="cnm">'+esc(e.name||'(이름 없음)')+chBadge(e,idx)+memberBadge(e)+
         (_pt.bal>0?'<span class="pill pt">💎 RM '+_pt.bal.toLocaleString()+'</span>':'')+
         (e.inactive?'<span class="pill mut">⏸ 비활성</span>':'')+
-        (e.master?'':'<span class="pill vio">미등록</span>')+'</div>'+
+        (e.detached?'<span class="pill det" title="이 고객에서 자동연결을 해제한 문서입니다. 상세보기 ⋮ 메뉴에서 복구하거나 다른 고객에게 연결할 수 있습니다.">🔓 연결 해제된 문서</span>':(e.master?'':'<span class="pill vio">미등록</span>'))+'</div>'+
       '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음 <span class="pill warn">보완 필요</span>')+(e.addr?' · '+esc(e.addr):'')+
         (e.aliases.length?'<span class="alias"> · 별칭 '+esc(e.aliases.join(', '))+'</span>':'')+
         ((e.linkNames||[]).length?'<span class="alias lk"> · 🔗 '+esc(e.linkNames.join(', '))+'</span>':'')+'</div></div>'+
@@ -1436,6 +1455,8 @@ window.caDocMenu=function(ev,btn,coll,id,idx,un){
   let h='';
   if(un==='dup')h+='<button onclick="caMenuClose();caDocUnlink(\''+coll+'\',\''+id+'\','+idx+')"><i>🔗</i>중복연결 해제</button><div class="sep"></div>';
   else if(un==='move')h+='<button onclick="caMenuClose();caDocUnlink(\''+coll+'\',\''+id+'\','+idx+')"><i>🔗</i>연결 해제</button><div class="sep"></div>';
+  else if(un==='auto')h+='<button onclick="caMenuClose();caDocDetach(\''+coll+'\',\''+id+'\','+idx+')"><i>🔓</i>자동연결 해제</button><div class="sep"></div>';
+  else if(un==='back')h+='<button onclick="caMenuClose();caDocReattach(\''+coll+'\',\''+id+'\','+idx+')"><i>↩️</i>자동연결 복구</button><div class="sep"></div>';
   const _dx=(RAW[coll]||[]).find(d=>d.__id===id);
   const _vu=window.caViewUrl(coll,_dx);
   if(_vu)h+='<button onclick="caMenuClose();caView(\''+_vu.replace(/'/g,"\\'")+'\',\'👁 '+COLL_LB[coll].replace(/[^가-힣A-Za-z ]/g,'').trim()+'\')"><i>👁</i>고객 화면 보기</button>';
@@ -1456,7 +1477,9 @@ window.openDrawer=function(idx){
   const init=(e.name||'?').trim().charAt(0).toUpperCase();
   let h='<div class="dhead"><div class="avatar">'+esc(init)+'</div><div class="dinfo"><b>'+esc(e.name)+chBadge(e,idx)+'</b>'+
     '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음')+(e.addr?' · '+esc(e.addr):'')+'</div>'+
-    '<div class="tagrow">'+memberBadge(e)+(e.inactive?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏸ 비활성 고객</span>':'')+(e.aliases.length?'<span class="pill vio">별칭 '+esc(e.aliases.join(', '))+'</span>':'')+((e.linkNames||[]).length?'<span class="pill vio" title="수동 연결된 문서에 적힌 이름입니다. 원본 그대로 유지됩니다.">🔗 연결문서 '+esc(e.linkNames.join(', '))+'</span>':'')+'</div></div>'+
+    '<div class="tagrow">'+memberBadge(e)+
+    (e.detached?'<span class="pill det">🔓 연결 해제된 문서 — ⋮ 메뉴에서 복구하거나 다른 고객에게 연결하세요</span>':'')+
+    (e.inactive?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏸ 비활성 고객</span>':'')+(e.aliases.length?'<span class="pill vio">별칭 '+esc(e.aliases.join(', '))+'</span>':'')+((e.linkNames||[]).length?'<span class="pill vio" title="수동 연결된 문서에 적힌 이름입니다. 원본 그대로 유지됩니다.">🔗 연결문서 '+esc(e.linkNames.join(', '))+'</span>':'')+'</div></div>'+
     '<div class="dbtns" style="flex-basis:100%;margin-left:0;flex-direction:column;gap:7px">'+
     '<div class="dbg"><span class="dbg-t">발송 · 안내</span>'+
       '<button class="btn sm" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="caSendModal('+idx+')">📤 고객 발송</button>'+
@@ -1579,7 +1602,7 @@ window.openDrawer=function(idx){
     if(isDup)btn='<button class="rb" style="color:#92400E;border-color:#FCD34D;background:#FFFBEB" title="이 고객에게 「중복 연결」된 문서입니다. 눌러서 이 고객에서만 연결 해제" onclick="caDocUnlink(\''+coll+'\',\''+id+'\','+idx0+')">🔗 중복연결 해제</button>';
     else if(isMove)btn='<button class="rb" style="color:#5B21B6;border-color:#c4b5fd;background:#f5f3ff" title="수동으로 연결된 문서입니다. 눌러서 해제" onclick="caDocUnlink(\''+coll+'\',\''+id+'\','+idx0+')">🔗 연결해제</button>';
     // 수정·삭제·연결해제는 ⋮ 메뉴로 모아 오조작을 막고 행을 간결하게 유지합니다
-    const un=isDup?'dup':(isMove?'move':'');
+    const un=isDup?'dup':(isMove?'move':(e.detached?'back':'auto'));
     return '<button class="rb mor" title="더보기" onclick="caDocMenu(event,this,\''+coll+'\',\''+id+'\','+idx0+',\''+un+'\')">⋮</button>';
   };
   const hdrLink=(coll)=>'<button class="rb hd" onclick="caDocLink(\''+coll+'\','+idx0+')">+ 연결</button>';
@@ -2913,7 +2936,7 @@ function ownerPhoneKey(coll){
 //  · 옵션1 : 고객명도 이 고객으로 변경
 //  · 옵션2 : 연락처도 이 고객 것으로 변경
 function linkFieldsFor(coll,e,renameToo,rephoneToo){
-  const f={ca_link:entryKey(e),ca_link_name:e.name||'',ca_link_at:new Date().toISOString()};
+  const f={ca_link:entryKey(e),ca_link_name:e.name||'',ca_link_at:new Date().toISOString(),ca_off:[]};
   if(renameToo)f[ownerNameKey(coll)]=e.name;
   const pk=ownerPhoneKey(coll);
   if(rephoneToo&&pk)f[pk]=e.phone||'';
@@ -3018,6 +3041,7 @@ window.caDocLink=function(coll,idx){
   const myKey=entryKey(e);
   const mine=x=>{
     if(docExtraKeys(x).indexOf(myKey)>=0)return true;   // 이미 중복 연결된 문서
+    if(docOffFor(x,e))return false;             // 🔓 이 고객에서 해제한 문서는 「연결 안 됨」으로 봅니다
     if(x.ca_link)return x.ca_link===myKey;      // 수동 연결이 우선입니다
     const on=nn(docOwnerName(coll,x)),op=pn(docOwnerPhone(coll,x));
     return (myP&&op===myP)||(on&&myKeys.includes(on));
@@ -3105,6 +3129,9 @@ function caLinkConfirm(coll,x,e,onDone){
       const ks=docExtraKeys(x).slice();
       if(ks.indexOf(key)<0)ks.push(key);
       f={ca_links:ks,ca_links_at:new Date().toISOString()};
+      // 이 고객에서 자동연결을 해제해 둔 문서라면 해제 표시를 지웁니다
+      const off=docOffKeys(x).filter(k=>entryKeys(e).indexOf(k)<0);
+      if(off.length!==docOffKeys(x).length)f.ca_off=off;
     }else{
       f=linkFieldsFor(coll,e,renameToo,rephoneToo);
       // 이관 대상 고객이 중복 연결에도 들어 있으면 중복 쪽에서 빼 준다 (중복 표시 방지)
@@ -3140,6 +3167,34 @@ window.caDocUnlink=async function(coll,id,idx){
     else await updateDoc(doc(db,coll,id),{ca_link:'',ca_link_name:''});
     toast('✓ 연결이 해제되었습니다');loadAll(true);
   }catch(err){toast('해제 실패: '+err.message);}
+};
+
+// ── 🔓 자동연결 해제 : 이름·연락처가 같아서 자동으로 붙은 문서를 이 고객에서 떼어냅니다 ──
+//     문서 자체는 지워지지 않고, 목록에 「🔓 연결 해제된 문서」 항목으로 따로 남습니다.
+//     다른 고객에게 「+ 연결」로 붙이거나, ⋮ 메뉴에서 복구할 수 있습니다.
+window.caDocDetach=async function(coll,id,idx){
+  const x=RAW[coll].find(d=>d.__id===id);if(!x)return;
+  const e=entries[idx];if(!e)return;
+  if(!confirm('이 '+COLL_LB[coll]+' 문서를 「'+(e.name||'')+'」 고객에서 떼어낼까요?\n\n'+docSummary(coll,x)+
+    '\n\n· 문서는 삭제되지 않습니다.\n· 목록에 「🔓 연결 해제된 문서」로 따로 표시되며, 다른 고객에게 연결하거나 되돌릴 수 있습니다.'))return;
+  try{
+    const ks=docOffKeys(x).slice();
+    entryKeys(e).forEach(k=>{if(ks.indexOf(k)<0)ks.push(k);});
+    await updateDoc(doc(db,coll,id),{ca_off:ks});
+    toast('🔓 이 고객에서 연결이 해제되었습니다');
+    loadAll(true);
+  }catch(err){toast('해제 실패: '+err.message);}
+};
+// ── ↩️ 자동연결 복구 : 떼어냈던 문서를 다시 이름·연락처 기준으로 붙입니다 ──
+window.caDocReattach=async function(coll,id,idx){
+  const x=RAW[coll].find(d=>d.__id===id);if(!x)return;
+  if(!confirm('이 '+COLL_LB[coll]+' 문서의 자동연결을 복구할까요?\n\n'+docSummary(coll,x)+
+    '\n\n문서에 적힌 고객명·연락처와 일치하는 고객에게 다시 표시됩니다.'))return;
+  try{
+    await updateDoc(doc(db,coll,id),{ca_off:[]});
+    toast('↩️ 자동연결이 복구되었습니다');
+    loadAll(true);
+  }catch(err){toast('복구 실패: '+err.message);}
 };
 
 // ── 🔗 연결 관리 : 이 고객에게 연결된 문서를 한눈에 보고 선택 해제 (F27-c) ──
