@@ -2288,6 +2288,7 @@ function renderList(){
 
       <div class="ci-actions" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:7px">
         ${b.status==='booked'?`<button class="btn-sm btn-sm-green" style="width:100%" onclick="confirmBooking('${b.__id}')">✓ 예약 확정</button>`:''}
+        ${b.status==='waiting'?`<button class="btn-sm btn-sm-green" style="width:100%" onclick="confirmBookingManual('${b.__id}')">✅ 확정완료로 변경 (수기)</button>`:''}
         ${b.status==='confirmed'?`<div style="display:grid;grid-template-columns:1.4fr 1fr;gap:7px">
           <button class="btn-sm btn-inv" onclick="toInvoice('${b.__id}')">🧾 인보이스 작성</button>
           <button class="btn-sm btn-sm-amber" onclick="unconfirmBooking('${b.__id}')">↩ 확정 취소</button>
@@ -2300,6 +2301,7 @@ function renderList(){
               <button onclick="openCustomerAdminById('${b.__id}')"><i>👤</i>고객정보 보기</button>
               <button onclick="sendKakao('${b.__id}')"><i>📋</i>카카오톡 복사</button>
               <div class="sep"></div>
+              ${b.status!=='waiting'?`<button onclick="toWaitingBooking('${b.__id}')"><i>⏳</i>대기중으로 변경</button><div class="sep"></div>`:''}
               <button class="dgr" onclick="deleteBooking('${b.__id}')"><i>🗑</i>예약 삭제</button>
             </div>
           </details>
@@ -2778,6 +2780,40 @@ window.confirmBooking=async function(id){
     setTimeout(()=>showConfirmMsgModal(b),600);
   }
   catch(e){showLoading(false);showModal('오류',e.message,false);}
+};
+
+// ── 수기 확정: 대기중(고객이 아직 신청하지 않은 건)도 관리자가 바로 확정완료로 바꿀 수 있다 ──
+//    날짜가 없으면 캘린더에 일정을 만들 수 없으므로 먼저 알려 준다.
+window.confirmBookingManual=function(id){
+  const b=allBookings.find(x=>x.__id===id);
+  if(!b)return;
+  if(!b.booking_date){
+    showModal('예약 확정',
+      `'${b.customer_name||''}' 예약에 방문 날짜가 없습니다.\n\n· 이대로 확정하면 캘린더에는 일정이 등록되지 않습니다\n· 「✏️ 수정」에서 날짜·시간을 먼저 넣으면 캘린더에도 자동 반영됩니다\n\n이대로 확정완료로 변경하시겠습니까?`,
+      true,()=>window.confirmBooking(id));
+    return;
+  }
+  showModal('예약 확정',
+    `'${b.customer_name||''}' 예약을 확정완료로 변경하시겠습니까?\n\n· 캘린더에 방문 일정이 자동 등록됩니다\n· 확정 안내 메시지 화면이 이어서 표시됩니다`,
+    true,()=>window.confirmBooking(id));
+};
+
+// ── 대기중으로 변경: 확정완료·신청완료 예약을 곧바로 대기중으로 되돌린다 ──
+//    캘린더에 자동 등록된 일정도 함께 지워 일정표에 남지 않는다.
+window.toWaitingBooking=function(id){
+  const b=allBookings.find(x=>x.__id===id);
+  if(!b)return;
+  showModal('대기중으로 변경',
+    `'${b.customer_name||''}' 예약을 대기중으로 변경하시겠습니까?\n\n· 캘린더에 자동 등록된 일정이 삭제됩니다\n· 예약 내용(날짜·시간·품목·요청사항)은 그대로 유지됩니다\n· 고객이 예약 링크에서 다시 신청·수정할 수 있게 됩니다`,
+    true,async()=>{
+      showLoading(true);
+      try{
+        await updateDoc(doc(db,'bookings',id),{status:'waiting',unconfirmed_at:new Date().toISOString()});
+        await removeBookingMirror(id);
+        showToast('⏳ 대기중으로 변경되었습니다');
+      }catch(e){showModal('오류',e.message,false);}
+      showLoading(false);
+    });
 };
 
 // ── 확정 취소: 확정완료(작업완료 포함) 예약을 다시 이전 상태로 되돌림 ──
