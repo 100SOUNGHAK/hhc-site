@@ -1014,6 +1014,20 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 .cxa .c-rem{margin:0 15px 14px;background:var(--cx-ok-bg);border:1px solid #B7E7D2;border-radius:12px;padding:11px;text-align:center}
 .cxa .c-rem .k{font-size:11px;font-weight:800;color:#0B7A50}
 .cxa .c-rem .v{font-size:19px;font-weight:900;color:#0B7A50;margin-top:3px;font-variant-numeric:tabular-nums}
+/* 계약서 내용 상세보기 — 총 계약금액 아래 접이식 버튼 */
+.cxa .c-more{margin-bottom:11px}
+.cxa .c-more>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;justify-content:center;
+  background:linear-gradient(180deg,#fff,#F7F9FE);border:1px solid var(--cx-line);border-radius:14px;padding:14px 15px;
+  font-size:13.5px;font-weight:800;letter-spacing:-.02em;color:var(--cx-blue);
+  box-shadow:0 1px 2px rgba(16,26,51,.06),0 8px 18px -8px rgba(16,26,51,.16)}
+.cxa .c-more>summary::-webkit-details-marker{display:none}
+.cxa .c-more>summary:active{transform:translateY(2px)}
+.cxa .c-more>summary .ar{font-size:10px;transition:transform .2s;color:var(--cx-ink3)}
+.cxa .c-more[open]>summary{border-bottom-left-radius:0;border-bottom-right-radius:0;margin-bottom:0;
+  box-shadow:0 1px 2px rgba(16,26,51,.06)}
+.cxa .c-more[open]>summary .ar{transform:rotate(180deg)}
+.cxa .c-moreb{padding-top:11px;animation:cxaIn .26s cubic-bezier(.22,.8,.28,1)}
+@keyframes cxaIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 /* 접이식 약관 */
 .cxa .c-acc{border-top:1px solid #F1F4FA}
 .cxa .c-acc:first-child{border-top:none}
@@ -3568,8 +3582,10 @@ function buildCustomerAppHTML(c,L,mode,id){
   }
 
   if(showContract){
+    // ── 「계약서 내용 상세보기」 : 계약 정보 · 계약 상품 · 제공 서비스를 접어 둔다
+    var det='';
     // ── 계약 정보
-    h+='<div class="c-card"><div class="c-h"><span class="hi">\u{1F464}</span>'+(isEn?'Contract Information':'계약 정보')+'</div>'+
+    det+='<div class="c-card"><div class="c-h"><span class="hi">\u{1F464}</span>'+(isEn?'Contract Information':'계약 정보')+'</div>'+
        '<div class="c-row"><div class="k">'+T.lbl_name+'</div><div class="v">'+ncEsc(c.name||'—')+'</div></div>'+
        '<div class="c-row"><div class="k">'+T.lbl_phone+'</div><div class="v">'+ncEsc(c.phone||'—')+'</div></div>'+
        '<div class="c-row"><div class="k">'+T.lbl_pkg+'</div><div class="v">'+ncEsc(pkg?pkg.label:'—')+'</div></div>'+
@@ -3581,7 +3597,7 @@ function buildCustomerAppHTML(c,L,mode,id){
 
     // ── 계약 상품
     var crown=(NC_TIER_CROWN[(c.package_id||'').replace('-biz','')]||'\u{1F4E6}');
-    h+='<div class="c-card"><div class="c-h"><span class="hi">\u{1F48E}</span>'+T.sec_pkg+'</div>'+
+    det+='<div class="c-card"><div class="c-h"><span class="hi">\u{1F48E}</span>'+T.sec_pkg+'</div>'+
        '<div class="c-pkg"><div class="pn">'+crown+' '+ncEsc(pkg?pkg.label:'—')+'</div>'+
        '<div class="c-chips">'+
          '<div class="c-chip"><b>RM '+fmt(b.paid)+'</b><span>'+T.paid+'</span></div>'+
@@ -3591,15 +3607,18 @@ function buildCustomerAppHTML(c,L,mode,id){
        '<div class="c-rem"><div class="k">'+(isEn?'Remaining Balance':'잔여금액')+'</div><div class="v">RM '+fmt(b.remain)+'</div></div>'+
        '</div>';
 
-    // ── 접이식 약관
+    // ── 제공 서비스 (상세보기 안에 함께 넣는다)
     var svcLine=isEn?(SERVICES[c.service_type||0].split('\n')[1]||SERVICES[0]):(SERVICES[c.service_type||0].split('\n')[0]);
+    det+='<div class="c-card"><div class="c-h"><span class="hi">\u{1F4CB}</span>'+T.sec_svc+'</div>'+
+         '<div class="c-accb" style="padding-top:12px">'+ncEsc(svcLine)+'</div></div>';
+
+    // ── 접이식 약관 (상세보기 안에 함께 들어갑니다)
     var bens=typeof c.benefits==='string'?JSON.parse(c.benefits||'{}'):(c.benefits||{});
     var benList=BENEFITS.filter(function(x){return bens[x.key];});
     var benHtml=benList.length
       ?'<ul>'+benList.map(function(x){return '<li><b>'+ncEsc(isEn?x.en:x.ko)+'</b><br><span style="color:#9AA3B5">'+ncEsc(isEn?x.den:x.dko)+'</span></li>';}).join('')+'</ul>'
       :'<div style="color:#9AA3B5">'+T.ben_none+'</div>';
     var acc='';
-    acc+=cxaAcc('\u{1F4CB}',T.sec_svc,'<div>'+ncEsc(svcLine)+'</div>',true);
     acc+=cxaAcc('\u{1F4A1}',T.sec_how,'<div>'+T.how+'</div>');
     acc+=cxaAcc('\u{1F5D3}',T.sec_valid,'<div>'+T.valid+'</div>');
     acc+=cxaAcc('⚖️',T.sec_effect,'<div>'+T.effect+'</div>');
@@ -3608,7 +3627,13 @@ function buildCustomerAppHTML(c,L,mode,id){
       acc+=cxaAcc('\u{1F4DD}',T.sec_terms,'<div class="warn">'+ncEsc(tt)+'</div>');
     }
     acc+=cxaAcc('\u{1F381}',T.sec_ben,benHtml);
-    h+='<div class="c-card">'+acc+'</div>';
+    det+='<div class="c-card">'+acc+'</div>';
+
+    // 버튼으로 감싸기 — 기본은 접힘, 누르면 계약 정보·계약 상품·제공 서비스와
+    // 약관(사용 방법·계약 유효 및 종료·계약 효력 및 소멸·특약사항·부가 서비스)이 함께 펼쳐집니다.
+    h+='<details class="c-more"><summary><span class="hi">\u{1F4D1}</span>'+
+       (isEn?'View contract details':'계약서 내용 상세보기')+'<span class="ar">\u25BC</span></summary>'+
+       '<div class="c-moreb">'+det+'</div></details>';
   }
 
   if(showUsage){
