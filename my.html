@@ -839,6 +839,34 @@ body{background:#E7EBF4}
 .body{line-height:1.6}
 .hub2,.duo{gap:10px}
 
+/* ══ 📤 문서 PDF 공유 버튼 ══ */
+.dcw{position:relative;margin-bottom:10px}
+.dcw>.ncard,.dcw>.icard{margin-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0}
+.shb{width:100%;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;
+  font-family:inherit;font-size:12px;font-weight:900;letter-spacing:-.02em;color:#1D4ED8;
+  background:linear-gradient(180deg,#F4F7FF,#EAF1FF);border:1px solid var(--line,#E7EBF3);border-top:none;
+  border-radius:0 0 15px 15px;padding:11px 10px;transition:transform .14s ease,box-shadow .14s ease;
+  box-shadow:0 1px 2px rgba(11,24,51,.07),0 8px 16px -8px rgba(11,24,51,.20)}
+.shb:active{transform:translateY(2px);box-shadow:0 1px 2px rgba(11,24,51,.12)}
+.shb .si{font-size:13px}
+.shb[disabled]{opacity:.55}
+#sh-ov{position:fixed;inset:0;z-index:99998;display:none;align-items:center;justify-content:center;
+  background:rgba(9,16,34,.62);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);padding:24px}
+#sh-ov.on{display:flex}
+#sh-bx{background:#fff;border-radius:18px;padding:22px 20px;max-width:320px;width:100%;text-align:center;
+  box-shadow:0 24px 60px -18px rgba(9,16,34,.7)}
+#sh-bx .sp{width:34px;height:34px;margin:0 auto 13px;border:3px solid #DDE4F2;border-top-color:#1D4ED8;
+  border-radius:50%;animation:shsp .8s linear infinite}
+@keyframes shsp{to{transform:rotate(360deg)}}
+#sh-bx .t1{font-size:14px;font-weight:900;letter-spacing:-.02em}
+#sh-bx .t2{font-size:11.5px;color:#8a94a6;font-weight:700;margin-top:6px;line-height:1.6;word-break:keep-all}
+#sh-bx .acts{display:flex;flex-direction:column;gap:8px;margin-top:15px}
+#sh-bx .acts a,#sh-bx .acts button{display:flex;align-items:center;justify-content:center;gap:7px;
+  font-family:inherit;font-size:13px;font-weight:900;border-radius:12px;padding:12px;cursor:pointer;
+  text-decoration:none;border:1px solid #DDE4F2;background:#fff;color:#0B1833}
+#sh-bx .acts .wa{background:linear-gradient(145deg,#2ee06a,#1eb055);color:#fff;border-color:transparent}
+#sh-bx .acts .pv{background:linear-gradient(140deg,#2563EB,#1740B8);color:#fff;border-color:transparent}
+
 /* ── 접힌 목록이 열릴 때 부드럽게 ── */
 .hubls.open,.ecls.open,.ptc-more.open{animation:dpIn .28s cubic-bezier(.22,.8,.28,1)}
 @keyframes dpIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
@@ -1462,6 +1490,11 @@ function render(){
   //  · waiting  : 고객이 아직 신청서를 작성하지 않음 → 큰 안내 카드 (버튼 → 예약 신청 화면)
   //  · booked   : 신청 완료, 확정 대기 → 확인 중 카드 (확정 전까지 수정 가능)
   //  · confirmed: 확정 — 예약 시각이 되면 즉시 사라짐 (시간 정보가 없으면 예약 당일까지 표시)
+  // 📤 문서(인보이스·점검보고서·견적서) PDF 공유 버튼
+  //    지금 보고 있는 언어(LANG)를 그대로 문서에 넘겨 그 언어로 PDF를 만듭니다.
+  const shLb=LANG==='en'?'Share PDF':'PDF 공유';
+  const shBtn=(kind,id,title,url)=>'<button type="button" class="shb" data-shk="'+kind+'" data-shi="'+esc(id)+
+    '" data-sht="'+esc(title)+'" data-shu="'+esc(url)+'"><span class="si">📤</span>'+shLb+'</button>';
   const bkList=(DATA.bookings||[]).filter(x=>{
     if(x.status==='confirmed'){const at=bkHideAt(x);return at!=null&&Date.now()<at;}
     return true;
@@ -1668,7 +1701,8 @@ function render(){
       const _cu=parseFloat(x.creditUse)||0;
       const _shown=x.status==='paid'?invTotal(x):xDue;
       const cuTag=(_cu>0&&_shown<0.005)?'<span class="ncu">( '+L.crUsed+' RM '+fmt(_cu)+L.crUsedSuf+' )</span>':'';
-      h+='<a class="ncard" target="_blank" rel="noopener" href="'+BASE+'/hhc-invoice.html?view='+encodeURIComponent(x.id||x.__id)+'&lang='+LANG+'">'+
+      const _ivU=BASE+'/hhc-invoice.html?view='+encodeURIComponent(x.id||x.__id)+'&lang='+LANG;
+      h+='<div class="dcw"><a class="ncard" target="_blank" rel="noopener" href="'+_ivU+'">'+
          '<span class="stripe '+stc+'"></span><div class="nbody">'+
          '<div class="nrow1"><div class="ntile '+stc+'">'+ico+'</div>'+
          '<div style="flex:1;min-width:0"><div class="nid">'+esc(dfmt(x.date))+'</div>'+
@@ -1677,7 +1711,8 @@ function render(){
          (part?'<div class="npd"><span class="t">'+L.ofTot+' RM '+fmt(invTotal(x))+'</span><span class="p">'+L.paidPre+' \u2212RM '+fmt(xPd)+'</span></div>':'')+
          '<div class="nfoot"><div><div class="nlb">'+amLb+'</div>'+
          '<div class="nam'+(x.status==='overdue'?' bad':'')+'"><span class="cu">RM</span>'+rs[0]+'.'+(rs[1]||'00')+cuTag+'</div></div>'+
-         '<span class="nbtn">'+L.ivGo+'</span></div></div></a>';
+         '<span class="nbtn">'+L.ivGo+'</span></div></div></a>'+
+         shBtn('iv',(x.id||x.__id),(LANG==='en'?'Invoice ':'인보이스 ')+(x.id||x.__id),_ivU)+'</div>';
     });
     h+='<button type="button" class="hubcls" id="hub-cls-iv"><span class="up">\u25B2</span>'+esc(L.ivClose)+'</button>';
     h+='</div></div>';
@@ -1724,14 +1759,16 @@ function render(){
       else if(bd>0){ chip=L.needAct; ccl='bad'; }
       else if(wn>0){ chip=L.caution; ccl='warn'; }
       else if(hasStat){ chip=L.noIssue; ccl='ok'; }
-      h+='<a class="icard" target="_blank" rel="noopener" href="'+BASE+'/'+inspPage(x.type)+'?id='+encodeURIComponent(x.__id)+'&lang='+LANG+'">'+
+      const _ipU=BASE+'/'+inspPage(x.type)+'?id='+encodeURIComponent(x.__id)+'&lang='+LANG;
+      h+='<div class="dcw"><a class="icard" target="_blank" rel="noopener" href="'+_ipU+'">'+
          '<div class="ihd"><div class="itile '+inspTile(x.type)+'">'+inspIco(x.type)+'</div>'+
          '<div style="flex:1;min-width:0"><div class="iname">'+esc(L.insp[x.type]||L.insp.inspect)+'</div>'+
          (x.addr?'<div class="iaddr">📍 '+esc(x.addr)+'</div>':'')+'</div>'+
          '<div class="idate">'+dtxt+'</div></div>'+sb+
          '<div class="ifoot">'+(chip?'<span class="nst '+ccl+'">'+chip+'</span>':'')+
          (x.invoice_id?'<span class="nst" style="background:var(--pri-bg);color:var(--pri)">'+L.linked+'</span>':'')+
-         '<span class="nbtn">'+L.ipGo+'</span></div></a>';
+         '<span class="nbtn">'+L.ipGo+'</span></div></a>'+
+         shBtn('ip',x.__id,(L.insp[x.type]||L.insp.inspect)+' '+(dfmt(x.date)||''),_ipU)+'</div>';
     });
     h+='<button type="button" class="hubcls" id="hub-cls-ip"><span class="up">\u25B2</span>'+esc(L.ipClose)+'</button>';
     h+='</div></div>';
@@ -1836,7 +1873,8 @@ function render(){
     DATA.quotes.slice(0,20).forEach(x=>{
       const exp=_qexp(x);
       const rs=fmt(qtTotal(x)).split('.');
-      h+='<a class="ncard" target="_blank" rel="noopener"'+(exp?' style="opacity:.62"':'')+' href="'+BASE+'/quote.html?id='+encodeURIComponent(x.__id)+'&lang='+LANG+'">'+
+      const _qtU=BASE+'/quote.html?id='+encodeURIComponent(x.__id)+'&lang='+LANG;
+      h+='<div class="dcw"><a class="ncard" target="_blank" rel="noopener"'+(exp?' style="opacity:.62"':'')+' href="'+_qtU+'">'+
          '<span class="stripe '+(exp?'warn':'ok')+'"></span><div class="nbody">'+
          '<div class="nrow1"><div class="ntile '+(exp?'warn':'ok')+'">\uD83E\uDDFE</div>'+
          '<div style="flex:1;min-width:0"><div class="nid">'+esc(x.qno||dfmt(x.issueDate)||'')+'</div>'+
@@ -1845,7 +1883,8 @@ function render(){
          (x.validUntil?'<div class="npd"><span class="t">'+qL.until+' '+esc(dfmt(x.validUntil))+'</span></div>':'')+
          '<div class="nfoot"><div><div class="nlb">'+qL.amt+'</div>'+
          '<div class="nam"><span class="cu">RM</span>'+rs[0]+'.'+(rs[1]||'00')+'</div></div>'+
-         '<span class="nbtn">'+qL.go+'</span></div></div></a>';
+         '<span class="nbtn">'+qL.go+'</span></div></div></a>'+
+         shBtn('qt',x.__id,(LANG==='en'?'Quotation ':'견적서 ')+(x.qno||dfmt(x.issueDate)||''),_qtU)+'</div>';
     });
     h+='</div>';
   }
@@ -2190,6 +2229,149 @@ function render(){
     if(b)b.onclick=function(){window.mvBack();};
     if(x)x.onclick=function(){window.mvClose();};
   })();
+})();
+</script>
+
+<div id="sh-ov"><div id="sh-bx"></div></div>
+<script>
+/* ─────────────────────────────────────────────────────────────
+   📤 문서 PDF 공유
+    인보이스·점검보고서·견적서 카드의 「PDF 공유」 버튼을 누르면
+     ① 해당 문서를 보이지 않는 화면에서 지금 언어 그대로 그려서
+     ② PDF 파일로 만든 뒤
+     ③ 휴대폰 공유창(왓츠앱·카카오톡·메일 등)으로 바로 보냅니다.
+    파일 공유를 지원하지 않는 브라우저(PC 등)에서는 PDF를 내려받은 뒤
+    왓츠앱 링크·문서 링크를 함께 안내합니다.
+   ───────────────────────────────────────────────────────────── */
+(function(){
+  var EN=(new URLSearchParams(location.search).get('lang')==='en');
+  function T(ko,en){return EN?en:ko;}
+  function ov(){return document.getElementById('sh-ov');}
+  function box(){return document.getElementById('sh-bx');}
+  function shShow(html){box().innerHTML=html;ov().classList.add('on');}
+  function shHide(){ov().classList.remove('on');box().innerHTML='';}
+  window.shHide=shHide;
+  ov().addEventListener('click',function(e){if(e.target===ov())shHide();});
+
+  function busy(msg,sub){
+    shShow('<div class="sp"></div><div class="t1">'+msg+'</div><div class="t2">'+(sub||'')+'</div>');
+  }
+  // 외부 스크립트를 특정 창(iframe) 안에 넣는다
+  function loadIn(w,src){
+    return new Promise(function(res,rej){
+      var s=w.document.createElement('script');s.src=src;s.onload=res;
+      s.onerror=function(){rej(new Error('load fail'));};
+      w.document.head.appendChild(s);
+    });
+  }
+  function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+
+  // 숨긴 화면에서 문서를 그려 PDF(Blob)로 만든다
+  async function makePdf(url){
+    var fr=document.createElement('iframe');
+    fr.setAttribute('aria-hidden','true');
+    fr.style.cssText='position:fixed;left:-10000px;top:0;width:560px;height:1200px;border:0;opacity:0;pointer-events:none';
+    document.body.appendChild(fr);
+    try{
+      await new Promise(function(res,rej){
+        var done=false;
+        fr.onload=function(){if(!done){done=true;res();}};
+        setTimeout(function(){if(!done){done=true;res();}},15000);
+        fr.src=url;
+      });
+      var w=fr.contentWindow;
+      await sleep(2600);                                   // 문서가 데이터를 불러올 시간
+      // 화면 전용 요소(상단바·하단바 등 고정 배치)는 PDF에서 제외
+      try{
+        var d=w.document;
+        Array.prototype.forEach.call(d.querySelectorAll('*'),function(el){
+          var cs=w.getComputedStyle(el);
+          if(cs.position==='fixed'||cs.position==='sticky')el.style.display='none';
+        });
+        d.body.style.background='#fff';
+        var pad=d.querySelector('.iva,.cxa');if(pad)pad.style.paddingBottom='8px';
+      }catch(e){}
+      await sleep(400);
+      await loadIn(w,'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+      await loadIn(w,'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+      var body=w.document.body;
+      var cv=await w.html2canvas(body,{scale:2,useCORS:true,allowTaint:false,backgroundColor:'#ffffff',
+        windowWidth:560,width:560,height:body.scrollHeight,scrollX:0,scrollY:0,logging:false});
+      var JS=(w.jspdf&&w.jspdf.jsPDF)||w.jsPDF;
+      var pdf=new JS('p','mm','a4');
+      var pw=210,ph=297,mg=8,iw=pw-mg*2;
+      var ratio=iw/cv.width;                                // 캔버스 px → mm
+      var pageH=Math.floor((ph-mg*2)/ratio);                // 한 쪽에 담기는 캔버스 높이(px)
+      var y=0,first=true;
+      while(y<cv.height){
+        var hh=Math.min(pageH,cv.height-y);
+        var pc=w.document.createElement('canvas');
+        pc.width=cv.width;pc.height=hh;
+        pc.getContext('2d').drawImage(cv,0,y,cv.width,hh,0,0,cv.width,hh);
+        if(!first)pdf.addPage();
+        pdf.addImage(pc.toDataURL('image/jpeg',0.92),'JPEG',mg,mg,iw,hh*ratio);
+        first=false;y+=hh;
+      }
+      return pdf.output('blob');
+    }finally{
+      setTimeout(function(){try{fr.remove();}catch(e){}},300);
+    }
+  }
+
+  function fname(kind,id){
+    var k={iv:'Invoice',ip:'Report',qt:'Quotation'}[kind]||'Document';
+    return 'HHC_'+k+'_'+String(id||'').replace(/[^A-Za-z0-9_-]/g,'')+'_'+(EN?'EN':'KO')+'.pdf';
+  }
+
+  document.addEventListener('click',function(ev){
+    var b=ev.target&&ev.target.closest?ev.target.closest('.shb'):null;
+    if(!b)return;
+    ev.preventDefault();ev.stopPropagation();
+    var kind=b.getAttribute('data-shk'),id=b.getAttribute('data-shi'),
+        title=b.getAttribute('data-sht'),url=b.getAttribute('data-shu');
+    shareDoc(kind,id,title,url);
+  },true);
+
+  async function shareDoc(kind,id,title,url){
+    var nm=fname(kind,id);
+    var txt=T('Happy Home Care · '+title,'Happy Home Care · '+title);
+    busy(T('PDF 만드는 중...','Creating PDF...'),T('문서를 불러와 PDF로 변환하고 있습니다. 잠시만 기다려 주세요.','Loading the document and converting it to PDF. This may take a few seconds.'));
+    var blob=null;
+    try{blob=await makePdf(url);}catch(e){blob=null;}
+    if(blob){
+      var file=null;
+      try{file=new File([blob],nm,{type:'application/pdf'});}catch(e){}
+      if(file&&navigator.canShare&&navigator.canShare({files:[file]})){
+        try{
+          shHide();
+          await navigator.share({files:[file],title:title,text:txt});
+          return;
+        }catch(e){ if(e&&e.name==='AbortError')return; }
+      }
+      // 파일 공유 미지원 → 내려받은 뒤 안내
+      try{
+        var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nm;
+        document.body.appendChild(a);a.click();
+        setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},4000);
+      }catch(e){}
+      shShow('<div class="t1">'+T('✅ PDF가 저장되었습니다','✅ PDF saved')+'</div>'+
+        '<div class="t2">'+T('저장된 PDF를 왓츠앱·카카오톡에서 첨부해 보내실 수 있습니다.','You can now attach the saved PDF in WhatsApp, email or any app.')+'</div>'+
+        '<div class="acts">'+
+        '<a class="wa" href="https://wa.me/?text='+encodeURIComponent(txt+'\n'+url)+'" target="_blank" rel="noopener">💬 '+T('왓츠앱으로 링크 보내기','Send link on WhatsApp')+'</a>'+
+        '<button onclick="shHide()">'+T('닫기','Close')+'</button></div>');
+      return;
+    }
+    // PDF 변환 실패 → 링크 공유로 대체
+    if(navigator.share){
+      try{shHide();await navigator.share({title:title,text:txt,url:url});return;}catch(e){ if(e&&e.name==='AbortError')return; }
+    }
+    shShow('<div class="t1">'+T('링크로 공유하기','Share by link')+'</div>'+
+      '<div class="t2">'+T('PDF 변환이 지원되지 않는 환경입니다. 아래 링크를 보내시면 상대방이 문서를 열어 PDF로 저장할 수 있습니다.','PDF conversion is unavailable here. Send the link below — the recipient can open the document and save it as PDF.')+'</div>'+
+      '<div class="acts">'+
+      '<a class="wa" href="https://wa.me/?text='+encodeURIComponent(txt+'\n'+url)+'" target="_blank" rel="noopener">💬 '+T('왓츠앱으로 보내기','Send on WhatsApp')+'</a>'+
+      '<a class="pv" href="'+url+'" target="_blank" rel="noopener">📄 '+T('문서 열기','Open document')+'</a>'+
+      '<button onclick="shHide()">'+T('닫기','Close')+'</button></div>');
+  }
 })();
 </script>
 </body>
