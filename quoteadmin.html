@@ -396,6 +396,68 @@ var CLEAN_FALLBACK=[
   {n:'통돌이 세탁기 청소',en:'Top-load Washing Machine Cleaning',p:120,note:'대당',noteEn:'Per unit'},
   {n:'드럼 세탁기 청소',en:'Drum Washing Machine Cleaning',p:150,note:'대당',noteEn:'Per unit'}
 ];
+// 에어컨 형태 — 인보이스 항목설정의 에어컨 소분류(벽걸이형·카세트형·매립형)와 같은 구분입니다.
+//  · 기본 단가표(AC_PRICES)는 벽걸이형 기준이며, 다른 형태는 아래 배수로 초기 단가를 채운 뒤
+//    각 옵션의 단가 칸에서 이 견적에 맞게 바로 고칠 수 있습니다.
+var AC_FORMS=[
+  {id:'wall',    ko:'벽걸이형',      en:'Wall-mounted',    mul:1},
+  {id:'cassette',ko:'천정형 (카세트)',en:'Ceiling Cassette',mul:1},
+  {id:'duct',    ko:'매립형 (덕트)',  en:'Ducted',          mul:1}
+];
+function acForm(id){for(var i=0;i<AC_FORMS.length;i++)if(AC_FORMS[i].id===id)return AC_FORMS[i];return AC_FORMS[0];}
+
+// ── 🔗 인보이스 「항목설정 › 에어컨구매비용(신품)」 단가표 읽기 ─────────────
+//  품목 이름에서 형태(카세트·매립·벽걸이) · 마력(HP) · 브랜드 · 인버터 여부를 읽어
+//  선택형 견적의 모델 목록을 자동으로 만듭니다. (인보이스에서 단가를 고치면 그대로 따라옵니다)
+var AC_BRANDS=['DAIKIN','PANASONIC','HISENSE','MIDEA','ACSON','YORK','SHARP','LG','SAMSUNG',
+  'TOSHIBA','GREE','HAIER','ELBA','TCL','HITACHI','MITSUBISHI','CARRIER','TRANE'];
+function acParseItem(it){
+  if(!it)return null;
+  var s=[it.n||'',it.alt||'',it.en||'',(it._svc&&it._svc.subcat)||'',(it._svc&&it._svc.cat)||''].join(' ');
+  if(/중고|USED|REFURB/i.test(s))return null;                      // 신품 단가표만 사용
+  var form=/카세트|CASSETTE|천정|천장/i.test(s)?'cassette'
+          :(/매립|덕트|DUCT|CONCEAL|FCU/i.test(s)?'duct'
+          :(/벽걸이|WALL/i.test(s)?'wall':''));
+  var m=s.match(/(\d+(?:\.\d+)?)\s*(?:HP|마력)/i);
+  var hp=m?parseFloat(m[1]).toFixed(1):'';
+  var tp=/인버터|INVERTER/i.test(s)?'inv':(/일반형|일반|NON[\s-]*INV/i.test(s)?'non':'inv');
+  var up=s.toUpperCase(),brand='';
+  for(var i=0;i<AC_BRANDS.length;i++){if(up.indexOf(AC_BRANDS[i])>=0){brand=AC_BRANDS[i];break;}}
+  if(!brand){var w=(up.replace(/[^A-Z ]/g,' ').trim().split(/\s+/)[0]||'');if(w.length>=2)brand=w;}
+  var price=parseFloat(it.p)||0;
+  if(!form||!hp||!brand||!price)return null;
+  return {form:form,hp:hp,tp:tp,brand:brand,price:price};
+}
+// 인보이스 단가표에서 (형태, 마력)에 맞는 모델 목록
+function acLinkedOptions(form,hp){
+  var out=[],seen={};
+  ((LINKED&&LINKED.product)||[]).forEach(function(it){
+    var r=acParseItem(it);
+    if(!r||r.form!==form)return;
+    if(hp&&r.hp!==hp)return;
+    var k=r.brand+'|'+r.tp;
+    if(seen[k])return;seen[k]=1;
+    out.push(r);
+  });
+  out.sort(function(a,b){
+    var ia=AC_BRANDS.indexOf(a.brand),ib=AC_BRANDS.indexOf(b.brand);
+    if(ia<0)ia=99;if(ib<0)ib=99;
+    if(ia!==ib)return ia-ib;
+    return (a.tp==='non'?0:1)-(b.tp==='non'?0:1);
+  });
+  return out;
+}
+// 형태별로 고를 수 있는 마력 목록 — 인보이스 단가표가 있으면 그것을 따른다
+function acHpList(form){
+  var hs={};
+  ((LINKED&&LINKED.product)||[]).forEach(function(it){
+    var r=acParseItem(it);
+    if(r&&r.form===form)hs[r.hp]=1;
+  });
+  // 벽걸이형은 내장 단가표의 마력도 함께 보여준다 (인보이스 표가 일부만 있어도 선택 폭을 유지)
+  if(form==='wall'||!Object.keys(hs).length)AC_PRICES.forEach(function(a){hs[a.hp]=1;});
+  return Object.keys(hs).sort(function(a,b){return parseFloat(a)-parseFloat(b);});
+}
 var AC_PRICES=[
   {hp:'1.0',brand:'DAIKIN',non:1280,inv:1650},
   {hp:'1.0',brand:'PANASONIC',non:1250,inv:1650},
@@ -566,10 +628,11 @@ function addAcGroup(init){
   box.style.cssText='border:1px solid var(--bdr);border-radius:12px;padding:10px;margin-bottom:9px;background:#fbfcff';
   box.innerHTML=
     '<div style="display:flex;gap:7px;align-items:flex-end;margin-bottom:8px">'+
-      '<div style="flex:1"><span class="fl">마력(HP)</span><select class="ag-hp">'+
-        ['1.0','1.5','2.0','2.5'].map(function(h){return '<option value="'+h+'"'+(init.hp===h?' selected':'')+'>'+h+'HP</option>';}).join('')+
+      '<div style="flex:1.25"><span class="fl">형태</span><select class="ag-form">'+
+        AC_FORMS.map(function(f){return '<option value="'+f.id+'"'+((init.form||'wall')===f.id?' selected':'')+'>'+f.ko+'</option>';}).join('')+
       '</select></div>'+
-      '<div style="width:82px"><span class="fl">수량(대)</span><input type="number" class="ag-qty" min="1" value="'+(init.qty||1)+'"></div>'+
+      '<div style="flex:1"><span class="fl">마력(HP)</span><select class="ag-hp"></select></div>'+
+      '<div style="width:78px"><span class="fl">수량(대)</span><input type="number" class="ag-qty" min="1" value="'+(init.qty||1)+'"></div>'+
       '<button class="ag-del" style="padding:9px 12px;border-radius:9px;border:none;background:var(--rbg);color:#c0392b;font-size:12px;font-weight:700">삭제</button>'+
     '</div>'+
     '<div class="ag-opts"></div>'+
@@ -578,7 +641,9 @@ function addAcGroup(init){
       '이 그룹에 "구입 없음" 옵션 포함</label>';
   gid('ac-groups').appendChild(box);
   var hpSel=box.querySelector('.ag-hp');
+  syncAcHp(box,init.hp);
   hpSel.onchange=function(){renderAcGroupOptions(box);renderTotals();};
+  box.querySelector('.ag-form').onchange=function(){syncAcHp(box);renderAcGroupOptions(box);renderTotals();};
   box.querySelector('.ag-qty').oninput=renderTotals;
   box.querySelector('.ag-del').onclick=function(){
     if(document.querySelectorAll('#ac-groups .acgroup').length<=1){toast('그룹은 최소 1개 필요합니다 (선택형을 끄려면 스위치를 사용)');return;}
@@ -587,14 +652,40 @@ function addAcGroup(init){
   renderAcGroupOptions(box,init);
   return box;
 }
+// 형태에 맞는 마력 목록으로 select 를 다시 채운다 (가능하면 기존 선택 유지)
+function syncAcHp(box,want){
+  var sel=box.querySelector('.ag-hp');
+  var fm=box.querySelector('.ag-form').value;
+  var cur=want||sel.value||'';
+  var list=acHpList(fm);
+  if(!list.length)list=['1.0','1.5','2.0','2.5'];
+  if(list.indexOf(cur)<0)cur=list[0];
+  sel.innerHTML=list.map(function(h){return '<option value="'+h+'"'+(h===cur?' selected':'')+'>'+h+'HP</option>';}).join('');
+}
 function renderAcGroupOptions(box,init){
   var hp=box.querySelector('.ag-hp').value;
+  var fm=acForm(box.querySelector('.ag-form').value);
   var gidx=box.dataset.g;
   var host=box.querySelector('.ag-opts');host.innerHTML='';
   var initKeys=init&&init.options?init.options.map(function(o){return o.key||o.brand+'|'+o.type;}):null;
-  AC_PRICES.filter(function(a){return a.hp===hp;}).forEach(function(a){
-    ['non','inv'].forEach(function(t){
-      var price=a[t];if(!price)return;
+  // ① 인보이스 「에어컨구매비용」 단가표에 해당 형태·마력이 있으면 그것을 그대로 쓴다
+  var linked=acLinkedOptions(fm.id,hp);
+  var rows=[],have={};
+  linked.forEach(function(r){rows.push({brand:r.brand,tp:r.tp,price:r.price});have[r.brand+'|'+r.tp]=1;});
+  // ② 인보이스에 없는 모델은 내장 단가표(벽걸이형 기준)로 보충한다.
+  //    단, 인보이스에 이 형태·마력 표가 이미 있으면 그 표만 쓴다(다른 형태 단가가 섞이지 않도록).
+  if(!linked.length){
+    AC_PRICES.filter(function(a){return a.hp===hp;}).forEach(function(a){
+      ['non','inv'].forEach(function(t){
+        var pv=Math.round((a[t]||0)*fm.mul);
+        if(pv&&!have[a.brand+'|'+t])rows.push({brand:a.brand,tp:t,price:pv});
+      });
+    });
+  }
+  box._acLinked=linked.length>0;
+  rows.forEach(function(r){
+    (function(a,t){
+      var price=r.price;
       var key=a.brand+'|'+t;
       var row=document.createElement('div');row.className='acopt';
       var chk=document.createElement('input');chk.type='checkbox';
@@ -614,8 +705,18 @@ function renderAcGroupOptions(box,init){
       rec.appendChild(rrad);rec.appendChild(document.createTextNode('추천'));
       row.appendChild(chk);row.appendChild(nm);row.appendChild(pr);row.appendChild(rec);
       host.appendChild(row);
-    });
+    })({brand:r.brand},r.tp);
   });
+  var tip=document.createElement('div');
+  if(linked.length){
+    tip.style.cssText='margin-top:6px;font-size:10.5px;font-weight:700;color:#0f766e;background:#ecfdf5;border:1px solid #a7e8cd;border-radius:9px;padding:7px 9px;line-height:1.55';
+    tip.textContent='🔗 인보이스 「항목설정 · 에어컨구매비용」의 '+fm.ko+' '+hp+'HP 단가표에서 '+linked.length+'개 모델을 불러왔습니다.';
+    host.appendChild(tip);
+  }else if(fm.id!=='wall'){
+    tip.style.cssText='margin-top:6px;font-size:10.5px;font-weight:700;color:#b45309;background:#fff7e6;border:1px solid #fde3b0;border-radius:9px;padding:7px 9px;line-height:1.55';
+    tip.textContent='⚠️ 인보이스 「항목설정」에 '+fm.ko+' '+hp+'HP 단가표가 없어 벽걸이형 단가로 채웠습니다 — 각 단가를 확인·수정해 주세요.';
+    host.appendChild(tip);
+  }
 }
 function collectAcSelect(){
   if(!acEnabled)return null;
@@ -628,7 +729,9 @@ function collectAcSelect(){
     });
     if(!options.length)return;
     var rec=box.querySelector('input[name="ac-rec-'+box.dataset.g+'"]:checked');
+    var _fm=acForm(box.querySelector('.ag-form').value);
     groups.push({
+      form:_fm.id,formKo:_fm.ko,formEn:_fm.en,
       hp:box.querySelector('.ag-hp').value,
       qty:Math.max(1,parseInt(box.querySelector('.ag-qty').value,10)||1),
       options:options,
@@ -677,6 +780,13 @@ window.applyInvCatalog=function(svcs){
   });
   LINKED=byG;
   renderPriceList();
+  // 에어컨 선택형이 열려 있으면 인보이스 단가표 기준으로 모델 목록을 다시 만든다
+  document.querySelectorAll('#ac-groups .acgroup').forEach(function(box){
+    var st=captureGroupState(box);
+    syncAcHp(box,box.querySelector('.ag-hp').value);
+    renderAcGroupOptions(box,st);
+  });
+  if(typeof renderTotals==='function')renderTotals();
 };
 // 탭별 표시 목록 = 연동 품목(앞) + 내장 가격표(이름이 겹치지 않는 것만)
 function listForCat(cat){

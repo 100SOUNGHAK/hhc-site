@@ -244,6 +244,17 @@ else{
 function groupOpt(g,key){
   return (g.options||[]).find(x=>(x.key||x.brand+'|'+x.type)===key)||null;
 }
+// 그룹의 에어컨 형태 이름 — 관리자 화면에서 고른 값(벽걸이형·천정형·매립형)을 그대로 보여줍니다.
+// 예전에 저장된 견적(형태 없음)은 지금까지처럼 벽걸이형으로 표시합니다.
+function acFormLb(g){
+  const t=T[lang]||T.ko;
+  if(!g)return t.wall;
+  const v=(lang==='en')?(g.formEn||''):(g.formKo||'');
+  if(v)return v;
+  const M={wall:[t.wall,t.wall],cassette:['천정형 (카세트)','Ceiling Cassette'],duct:['매립형 (덕트)','Ducted']};
+  const e=M[g.form||'wall'];
+  return e?(lang==='en'?e[1]:e[0]):t.wall;
+}
 function groupSel(i){
   // 그룹 i의 선택 결과 {key,label,price,qty,amount} (미선택/구입없음 → price 0)
   const g=acGroups[i];const key=selArr[i];
@@ -335,7 +346,7 @@ function render(){
       const s=groupSel(i);
       const qty=g.qty||1;
       const num=acGroups.length>1?(circled[i]||(i+1))+' ':'';
-      const gLabel=num+g.hp+'HP'+(qty>1?' × '+qty+(isEn?' units':'대'):'');
+      const gLabel=num+g.hp+'HP '+acFormLb(g)+(qty>1?' × '+qty+(isEn?' units':'대'):'');
       let row;
       if(selArr[i]==='__none__'){
         row='<div class="opt on none"><div class="rad"></div><div class="oi"><div class="bn2">'+t.noneOpt+'</div><div class="sub2">'+t.noneSub+'</div></div><div class="op" style="color:#aab">—</div></div>';
@@ -344,7 +355,7 @@ function render(){
         row='<div class="opt on"><div class="rad"></div><div class="oi"><div class="bn2">'+esc(o.brand||'')+
           '<span class="tag '+(o.type==='inv'?'inv':'non')+'">'+(o.type==='inv'?'INVERTER':'NON-INV')+'</span>'+
           '<span class="tag rec" style="background:#d9f7e8;color:#0a7a4a">✓ '+t.confirmedTag+'</span>'+
-          '</div><div class="sub2">'+esc(g.hp)+'HP · '+t.wall+(qty>1?' · '+fmtN(o.price||0)+' × '+qty:'')+'</div></div>'+
+          '</div><div class="sub2">'+esc(g.hp)+'HP · '+esc(acFormLb(g))+(qty>1?' · '+fmtN(o.price||0)+' × '+qty:'')+'</div></div>'+
           '<div class="op">'+fmtN(s.amount)+'</div></div>';
       }
       groupsHtml+='<div class="ahd2">❄️ <b>'+(isEn?'AC Unit ':'에어컨 ')+esc(gLabel)+'</b><span style="background:#d9f7e8;color:#0a7a4a">✓ '+t.confirmedTag+'</span></div>'+row;
@@ -360,7 +371,7 @@ function render(){
     acGroups.forEach((g,i)=>{
       const recKey=g.recommended||'';
       const qty=g.qty||1;
-      const gLabel=(acGroups.length>1?((circled[i]||(i+1))+' '):'')+g.hp+'HP'+(qty>1?' × '+qty+(isEn?' units':'대'):'');
+      const gLabel=(acGroups.length>1?((circled[i]||(i+1))+' '):'')+g.hp+'HP '+acFormLb(g)+(qty>1?' × '+qty+(isEn?' units':'대'):'');
       let opts='';
       (g.options||[]).forEach(o=>{
         const key=o.key||o.brand+'|'+o.type;
@@ -369,7 +380,7 @@ function render(){
           '<div class="rad"></div><div class="oi"><div class="bn2">'+esc(o.brand)+
           '<span class="tag '+(o.type==='inv'?'inv':'non')+'">'+(o.type==='inv'?'INVERTER':'NON-INV')+'</span>'+
           (recKey===key?'<span class="tag rec">'+t.rec+'</span>':'')+
-          '</div><div class="sub2">'+esc(g.hp)+'HP · '+t.wall+(qty>1?' · '+fmtN(o.price)+' × '+qty:'')+'</div></div>'+
+          '</div><div class="sub2">'+esc(g.hp)+'HP · '+esc(acFormLb(g))+(qty>1?' · '+fmtN(o.price)+' × '+qty:'')+'</div></div>'+
           '<div class="op">'+fmtN(o.price*qty)+'</div></div>';
       });
       if(g.includeNone!==false){
