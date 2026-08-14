@@ -1715,7 +1715,7 @@ function render(){
          '<div class="nfoot"><div><div class="nlb">'+amLb+'</div>'+
          '<div class="nam'+(x.status==='overdue'?' bad':'')+'"><span class="cu">RM</span>'+rs[0]+'.'+(rs[1]||'00')+cuTag+'</div></div>'+
          '<span class="nbtn">'+L.ivGo+'</span></div></div></a>'+
-         shBtn('iv',(x.id||x.__id),(LANG==='en'?'Invoice ':'인보이스 ')+(x.id||x.__id),_ivU)+'</div>';
+         shBtn('iv',(x.id||x.__id),'Invoice '+(x.id||x.__id),_ivU)+'</div>';
     });
     h+='<button type="button" class="hubcls" id="hub-cls-iv"><span class="up">\u25B2</span>'+esc(L.ivClose)+'</button>';
     h+='</div></div>';
@@ -1771,7 +1771,7 @@ function render(){
          '<div class="ifoot">'+(chip?'<span class="nst '+ccl+'">'+chip+'</span>':'')+
          (x.invoice_id?'<span class="nst" style="background:var(--pri-bg);color:var(--pri)">'+L.linked+'</span>':'')+
          '<span class="nbtn">'+L.ipGo+'</span></div></a>'+
-         shBtn('ip',x.__id,(L.insp[x.type]||L.insp.inspect)+' '+(dfmt(x.date)||''),_ipU)+'</div>';
+         shBtn('ip',x.__id,(T.en.insp[x.type]||T.en.insp.inspect)+' '+(dfmt(x.date)||''),_ipU)+'</div>';
     });
     h+='<button type="button" class="hubcls" id="hub-cls-ip"><span class="up">\u25B2</span>'+esc(L.ipClose)+'</button>';
     h+='</div></div>';
@@ -2321,9 +2321,25 @@ function render(){
     }
   }
 
-  function fname(kind,id){
+  /* 📄 PDF 공유 언어
+     인보이스·점검보고서는 받는 쪽(고객·업체·보험사 등)이 열어보는 문서이므로
+     내 화면이 한국어여도 **영어를 기본값**으로 만들어 보냅니다.
+     견적서(qt)는 지금처럼 화면 언어를 그대로 따릅니다. */
+  var PDF_EN_ALWAYS={iv:1,ip:1};
+  function shLang(kind){ return PDF_EN_ALWAYS[kind]?'en':(EN?'en':'ko'); }
+  // 주소의 lang 값을 원하는 언어로 바꿔준다
+  function withLang(url,lg){
+    try{ var u=new URL(url,location.href); u.searchParams.set('lang',lg); return u.toString(); }
+    catch(e){
+      return /[?&]lang=/.test(url) ? url.replace(/([?&]lang=)[^&]*/,'$1'+lg)
+                                   : url+(url.indexOf('?')>=0?'&':'?')+'lang='+lg;
+    }
+  }
+
+  function fname(kind,id,lg){
     var k={iv:'Invoice',ip:'Report',qt:'Quotation'}[kind]||'Document';
-    return 'HHC_'+k+'_'+String(id||'').replace(/[^A-Za-z0-9_-]/g,'')+'_'+(EN?'EN':'KO')+'.pdf';
+    var sfx=(String(lg||(EN?'en':'ko')).toLowerCase()==='ko')?'KO':'EN';
+    return 'HHC_'+k+'_'+String(id||'').replace(/[^A-Za-z0-9_-]/g,'')+'_'+sfx+'.pdf';
   }
 
   document.addEventListener('click',function(ev){
@@ -2336,8 +2352,10 @@ function render(){
   },true);
 
   async function shareDoc(kind,id,title,url){
-    var nm=fname(kind,id);
-    var txt=T('Happy Home Care · '+title,'Happy Home Care · '+title);
+    var lg=shLang(kind);          // iv·ip = 항상 en
+    url=withLang(url,lg);         // PDF 원본·대체 링크 모두 이 언어로
+    var nm=fname(kind,id,lg);
+    var txt='Happy Home Care · '+title;
     busy(T('PDF 만드는 중...','Creating PDF...'),T('문서를 불러와 PDF로 변환하고 있습니다. 잠시만 기다려 주세요.','Loading the document and converting it to PDF. This may take a few seconds.'));
     var blob=null;
     try{blob=await makePdf(url);}catch(e){blob=null;}
