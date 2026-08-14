@@ -39,7 +39,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--indigo)}
 .pitem .pr{font-size:12.5px;font-weight:800;color:var(--indigo);white-space:nowrap}
 .pitem .addb{width:30px;height:30px;border-radius:9px;background:var(--il);color:var(--indigo);border:none;font-weight:800;font-size:17px;flex-shrink:0}
 .pitem .editb{width:26px;height:26px;border-radius:8px;background:#f0f2f8;color:var(--gray);border:none;font-size:12px;flex-shrink:0}
-.sel{display:flex;align-items:center;gap:6px;padding:8px 9px;background:#f8fafc;border-left:3px solid var(--indigo);border-radius:8px;margin-bottom:6px}
+.sel{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 9px;background:#f8fafc;border-left:3px solid var(--indigo);border-radius:8px;margin-bottom:6px}
+/* 비고 입력칸 — 고객 견적서 항목 아래에 표시됩니다 (비우면 표시 안 함) */
+.sel input.nt{flex:0 0 100%;width:100%;padding:6px 9px;font-size:13px;font-weight:600;border:1px dashed #c6cbe0;border-radius:8px;background:#fff;color:var(--txt2)}
+.sel input.nt::placeholder{color:#aeb6c9;font-weight:500}
+.sel input.nt.has{border-style:solid;border-color:var(--indigo);background:#f6f8ff;color:var(--txt)}
 .sel.g-material{border-left-color:#d97706}
 .sel.g-product{border-left-color:#0ea5e9}
 .sel.g-clean{border-left-color:#10b981}
@@ -229,6 +233,9 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
     </div>
     <div class="row2">
       <div><span class="fl">대상 작업</span><input id="f-subject" placeholder="예: 에어컨 재설치 (냉매·드레인 배관 교체)"></div>
+    </div>
+    <div class="row2">
+      <div><span class="fl">대상 작업 (영문) — 비우면 자동 번역됩니다</span><input id="f-subject-en" placeholder="e.g. AC Reinstallation (refrigerant &amp; drain piping replacement)"></div>
     </div>
     <div class="row2" style="margin-bottom:0">
       <div><span class="fl">발행일</span><input type="date" id="f-date"></div>
@@ -1073,7 +1080,19 @@ function renderSelList(){
     var amt=document.createElement('div');amt.className='amt';amt.innerHTML=amtHtml();
     var x=document.createElement('button');x.className='x';x.textContent='×';
     x.onclick=function(){selItems.splice(i,1);renderSelList();};
+    // 비고 — 고객 견적서 해당 항목 아래에 표시됩니다. 비워두면 표시되지 않습니다.
+    var nt=document.createElement('input');nt.className='nt'+(s.note?' has':'');nt.type='text';
+    nt.placeholder='\uD83D\uDCAC \uBE44\uACE0 (\uC120\uD0DD) \u00B7 \uACE0\uAC1D \uACAC\uC801\uC11C\uC5D0 \uD45C\uC2DC\uB429\uB2C8\uB2E4';
+    nt.title='\uBE44\uACE0 \u2014 \uACE0\uAC1D \uACAC\uC801\uC11C \uD56D\uBAA9 \uC544\uB798\uC5D0 \uD45C\uC2DC (\uBE44\uC6B0\uBA74 \uD45C\uC2DC \uC548 \uD568)';
+    nt.value=s.note||'';
+    nt.oninput=function(){
+      s.note=nt.value;
+      // 직접 입력한 비고는 영문 견적서에도 그대로 보여줍니다 (가격표의 기존 영문 비고는 해제)
+      s.noteEn='';
+      nt.className='nt'+(s.note?' has':'');
+    };
     row.appendChild(ord);row.appendChild(nm);row.appendChild(q);row.appendChild(un);row.appendChild(pq);row.appendChild(amt);row.appendChild(x);
+    row.appendChild(nt);
     host.appendChild(row);
   });
   renderTotals();
@@ -1124,6 +1143,7 @@ function collectQuote(){
     client:client,
     phone:gid('f-phone').value.trim(),
     subject:gid('f-subject').value.trim(),
+    subjectEn:gid('f-subject-en').value.trim(),
     issueDate:issue,
     validDays:vd,
     validUntil:addDays(issue,vd),
@@ -1137,7 +1157,7 @@ function collectQuote(){
 function resetForm(confirmAsk){
   if(confirmAsk&&(selItems.length||gid('f-client').value)&&!confirm('작성 중인 내용을 지우고 새로 작성할까요?'))return;
   selItems=[];currentEditId=null;
-  gid('f-client').value='';gid('f-phone').value='+60 ';gid('f-subject').value='';
+  gid('f-client').value='';gid('f-phone').value='+60 ';gid('f-subject').value='';gid('f-subject-en').value='';
   gid('f-date').value=todayStr();gid('f-valid').value='7';gid('f-discount').value='0';
   if(acEnabled)toggleAcSelect();
   refreshNotices();renderSelList();
@@ -1150,6 +1170,7 @@ window.loadQuoteToForm=function(q,id){
   gid('f-client').value=q.client||'';
   gid('f-phone').value=q.phone||'+60 ';
   gid('f-subject').value=q.subject||'';
+  gid('f-subject-en').value=q.subjectEn||'';
   gid('f-date').value=q.issueDate||todayStr();
   gid('f-valid').value=q.validDays||7;
   gid('f-discount').value=q.discount||0;
