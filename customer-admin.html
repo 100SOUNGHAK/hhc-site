@@ -705,6 +705,7 @@ function kkText(m){
     .replace(/^.*https?:\/\/\S+.*$/gm,'')        // 링크가 들어간 줄 통째로 제거
     .replace(/^\s*[-=─━_·]{3,}\s*$/gm,'')        // 구분선 줄 제거
     .replace(/^\s*📱\s*(MY ?PAGE|My Page|마이페이지)\s*$/gim,'')   // 주소 줄과 짝인 제목 줄
+    .replace(/^\s*👑\s*(MEMBERSHIP|멤버십 안내장)\s*$/gim,'')      // 안내장 주소 줄과 짝인 제목 줄
     .replace(/[ \t]+$/gm,'')
     .trim();
   // 「🏠 마이페이지 소개 ~ 📱 My Page」 구간은 아래 「마이페이지 열기」 버튼이 대신하므로
@@ -758,7 +759,7 @@ function kkText(m){
   if(len(t)>MAX)t=Array.from(t).slice(0,MAX-1).join('').replace(/\s+\S*$/,'')+'…';
   return t;
 }
-async function kkSend(title,desc,url,en){
+async function kkSend(title,desc,url,en,btn){
   const key=await kkKey(false);
   if(!key){toast('카카오 JavaScript 키가 등록되지 않았습니다');return false;}
   let K;
@@ -772,7 +773,7 @@ async function kkSend(title,desc,url,en){
       objectType:'text',
       text:desc,                                   // 안내문 전문 (최대 200자)
       link:{mobileWebUrl:url,webUrl:url},
-      buttons:[{title:(en?'Open MY PAGE':'마이페이지 열기'),link:{mobileWebUrl:url,webUrl:url}}]
+      buttons:[{title:(btn||(en?'Open MY PAGE':'마이페이지 열기')),link:{mobileWebUrl:url,webUrl:url}}]
     });
     return true;
   }catch(err){toast('카카오톡 공유 실패 · 메시지 복사를 이용해 주세요');return false;}
@@ -780,12 +781,12 @@ async function kkSend(title,desc,url,en){
 // 발송 버튼 공통 처리 (전체 메시지를 먼저 클립보드에 복사 + 안내 표시 → 그 다음 카카오톡 공유창 열기)
 // 순서가 중요합니다: 공유창을 먼저 열면 화면이 곧바로 카카오톡 앱으로 전환되어
 // 안내 문구가 뜰 틈도 없이 화면이 넘어가 버립니다. 그래서 안내부터 띄운 뒤 공유를 시작합니다.
-async function kkShareMsg(name,message,url,en){
+async function kkShareMsg(name,message,url,en,title){
   try{await navigator.clipboard.writeText(message);}catch(_){}
   toast('💛 카카오톡 공유창을 엽니다 · 전체 메시지도 복사되었습니다');
-  const ok=await kkSend(en?('[Happy Home Care] Notice for '+(name||'Customer'))
-                          :('[Happy Home Care] '+(name||'고객')+'님 안내'),
-                        kkText(message),url,en);
+  const ok=await kkSend((title&&title.t)||(en?('[Happy Home Care] Notice for '+(name||'Customer'))
+                          :('[Happy Home Care] '+(name||'고객')+'님 안내')),
+                        kkText(message),url,en,(title&&title.btn)||'');
   return ok;
 }
 async function kkResetKey(){
@@ -2395,6 +2396,7 @@ window.caSendModal=async function(idx){
     {t:'bill',    lb:'🧾 청구 안내',    n:0, need:false},
     {t:'rebill',  lb:'🔔 청구 재요청',  n:0, need:false},
     {t:'pay',     lb:'💳 결제 확인',    n:0, need:false},
+    {t:'mem',     lb:'👑 멤버십 안내',  n:0, need:false},
     {t:'wp',      lb:'🪪 워크퍼밋 등록', n:0, need:false},
     {t:'install', lb:'📲 앱 설치 안내', n:0, need:false}
   ];
@@ -2434,7 +2436,7 @@ window.caSendModal=async function(idx){
           '<div id="cs-bwarn" style="display:none;background:var(--warn-bg);color:var(--warn);border-radius:9px;padding:8px 11px;font-size:10.5px;font-weight:800;margin-top:7px">⚠️ 잔여 결제금액이 남은 청구중 · 연체 인보이스가 없어 청구금액이 0 입니다</div>'+
           '<div id="cs-binfo" style="display:none;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:9px 11px;margin-top:7px"></div>'+
         '</div>'+
-        '<div class="sm-sec">'+
+        '<div class="sm-sec" id="cs-optsec">'+
           '<div class="sm-h"><span class="no">2</span>마이페이지에 노출할 항목</div>'+
           '<div class="sm-opts" id="cs-opts">'+
             OPT.map(o=>{
@@ -2483,6 +2485,8 @@ window.caSendModal=async function(idx){
     // (마이페이지에 해당 섹션이 없으면 강조 없이 평소처럼 열립니다)
   };
   function link(){
+    // 👑 멤버십 안내 — 고객 마이페이지가 아니라 패키지 상품 안내장을 보냅니다.
+    if(state.tpl==='mem')return BASE+'/membership'+(state.en?'?lang=en':'');
     const v=['iv','ip','ct','cp'].filter(k=>state[k]);
     const f=FOCUS_OF[state.tpl]||'';
     // 영문 발송은 영문 전용 미리보기 페이지(my-en.html)로 보냅니다.
@@ -2658,6 +2662,9 @@ window.caSendModal=async function(idx){
   //  · WhatsApp : 아래 🔗 주소가 그대로 발송됩니다.
   //  · 카카오톡 : kkText 가 주소 줄을 걷어내고 「마이페이지 열기」 버튼이 대신합니다.
   function msgTail(en){
+    if(state.tpl==='mem'){
+      return '\n\n'+(en?'👑 MEMBERSHIP':'👑 멤버십 안내장')+'\n🔗 '+link()+'\n\nHappy Home Care 📞 +60 17-247 2774';
+    }
     return '\n\n📱 MY PAGE\n🔗 '+link()+'\n\nHappy Home Care 📞 +60 17-247 2774';
   }
   // ── 🔧 점검보고서 발송 ──────────────────────
@@ -2743,6 +2750,12 @@ window.caSendModal=async function(idx){
       return en
         ?('Hello, '+nm+' 😊\n\nYour payment for this service has been confirmed. Thank you.\n\n[Full invoice details]\n\nare available on your personal [MY PAGE] below.'+msgTail(en))
         :('안녕하세요, '+nm+' 고객님 😊\n\n고객님의 금차 서비스청구 [결제내역] 확인되었습니다. 감사합니다.\n\n[인보이스 상세내역]은\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.'+msgTail(en));
+    }
+    if(state.tpl==='mem'){
+      // 패키지(멤버십) 상품 안내 — 안내장 한 장으로 등급·혜택을 모두 볼 수 있게 안내합니다.
+      return en
+        ?('Hello, '+nm+' 😊\n\nOur [Happy Membership Package]:\nNo expiry \u00B7 spend more than you pay.\nUp to RM 15,000 bonus credit.\n\n\uD83C\uDF81 New sign-ups: double bonus.'+msgTail(en))
+        :('안녕하세요, '+nm+' 고객님 😊\n\n[해피 멤버십 패키지] 안내드립니다.\n\n유효기간 없이 가입 금액보다 더 큰 이용 한도로 사용하실 수 있습니다.\n최대 RM 15,000 무상적립.\n\n\uD83C\uDF81 지금 신규가입 시 무상적립금 2배 (기간 한정)'+msgTail(en));
     }
     if(state.tpl==='wp'){
       // 매니지먼트 작업방문등록(워크퍼밋)에 필요한 회사·차량·직원 정보
@@ -2840,8 +2853,12 @@ window.caSendModal=async function(idx){
       el.classList.toggle('on',el.dataset.t===state.tpl);
     });
     const v=['iv','ip','ct','cp'].filter(k=>state[k]);
+    // 👑 멤버십 안내는 안내장 주소를 보내므로 마이페이지 노출 항목과 무관합니다.
+    const _isMem=(state.tpl==='mem');
+    const os=mk.querySelector('#cs-optsec');
+    if(os)os.style.display=_isMem?'none':'';
     const w=mk.querySelector('#cs-warn');
-    if(w)w.style.display=v.length?'none':'block';
+    if(w)w.style.display=(!_isMem&&!v.length)?'block':'none';
     mk.querySelector('#cs-link').textContent=link();
     const pw=mk.querySelector('#cs-pay');
     if(pw)pw.style.display=(state.tpl==='pay')?'flex':'none';
@@ -2915,11 +2932,18 @@ window.caSendModal=async function(idx){
     if(ph)wa+='60'+ph;
     window.open(wa+'?text='+encodeURIComponent(msg()),'_blank');
   });
-  mk.querySelector('#cs-kk').addEventListener('click',()=>{kkShareMsg(e.name,msg(),link(),!!state.en);});
+  mk.querySelector('#cs-kk').addEventListener('click',()=>{
+    const en=!!state.en;
+    const kkT=(state.tpl==='mem')
+      ?{t:(en?'[Happy Home Care] Membership Packages':'[Happy Home Care] 해피 멤버십 패키지 안내'),
+        btn:(en?'View membership':'멤버십 안내 보기')}
+      :null;
+    kkShareMsg(e.name,msg(),link(),en,kkT);
+  });
   mk.querySelector('#cs-kkset').addEventListener('click',()=>{kkResetKey();});
   mk.querySelector('#cs-pv').addEventListener('click',()=>{window.caView(link(),'👁 고객 발송 화면 미리보기 — '+(e.name||''));});
   mk.querySelector('#cs-copylink').addEventListener('click',()=>{
-    navigator.clipboard.writeText(link()).then(()=>toast('🔗 마이페이지 주소가 복사되었습니다'))
+    navigator.clipboard.writeText(link()).then(()=>toast(state.tpl==='mem'?'🔗 멤버십 안내장 주소가 복사되었습니다':'🔗 마이페이지 주소가 복사되었습니다'))
       .catch(()=>prompt('복사해서 사용하세요:',link()));
   });
   mk.querySelector('#cs-cp').addEventListener('click',()=>{
