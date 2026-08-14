@@ -106,10 +106,57 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Pretendard','Noto Sans KR',sa
   box-shadow:0 10px 26px rgba(11,24,51,.4);white-space:nowrap}
 .skel{padding:26px 0;text-align:center;font-size:11.5px;color:var(--ink3);font-weight:800}
 @media (min-width:521px){body{padding-top:8px}}
+
+/* ══ 📌 위젯 모드 (?w=1) ══════════════════════════════════════
+   폰 홈 화면의 「웹페이지 위젯」 앱에 넣기 위한 초압축 화면입니다.
+   · 헤더·월 달력·버튼을 모두 감추고 이번 주 + 오늘·내일 일정만 보여줍니다.
+   · 화면을 누르면 전체 위젯 화면이 열립니다.                          */
+body.wmode{background:#fff;padding-bottom:0}
+body.wmode .wrap{max-width:none;padding:9px 11px 10px}
+body.wmode .hdr,body.wmode .nav,body.wmode .cal,body.wmode .sec-t,
+body.wmode .card,body.wmode .foot{display:none!important}
+#wbox{display:none;cursor:pointer}
+body.wmode #wbox{display:block}
+.wtop{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.wtop .wmk{width:21px;height:21px;border-radius:7px;flex:none;display:flex;align-items:center;justify-content:center;
+  font-size:8px;font-weight:900;color:#fff;letter-spacing:-.04em;
+  background:linear-gradient(145deg,#14958a,#0b5f59)}
+.wtop .wd1{font-size:13.5px;font-weight:900;letter-spacing:-.02em}
+.wtop .wcnt{margin-left:auto;font-size:9.5px;font-weight:900;color:var(--teal);background:var(--teal-bg);
+  border-radius:20px;padding:2px 8px;white-space:nowrap}
+.wweek{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:8px}
+.wdy{text-align:center;border-radius:9px;padding:4px 0 3px;background:var(--gray-bg)}
+.wdy .n2{display:block;font-size:8px;font-weight:900;color:var(--ink3)}
+.wdy .d2{display:block;font-size:11.5px;font-weight:900;margin-top:1px;line-height:1.2}
+.wdy.sun .d2,.wdy.sun .n2{color:#e11d48}
+.wdy.sat .d2,.wdy.sat .n2{color:#2563eb}
+.wdy.tdy{background:var(--navy)}
+.wdy.tdy .n2,.wdy.tdy .d2{color:#fff}
+.wdy .wdd{display:flex;gap:2px;justify-content:center;margin-top:2px;min-height:5px}
+.wdy .wdd i{width:4.5px;height:4.5px;border-radius:50%}
+.wsec{font-size:9.5px;font-weight:900;color:var(--ink3);margin:7px 2px 4px;letter-spacing:.02em}
+.wev{display:flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--bdr);
+  border-radius:10px;padding:6px 9px;margin-bottom:4px}
+.wev .bar{width:3.5px;border-radius:3px;align-self:stretch;flex:none;min-height:18px}
+.wev.bk .bar{background:#14958a}.wev.rp .bar{background:#f59e0b}.wev.mn .bar{background:#8b5cf6}
+.wev.hd .bar{background:#fb7185}.wev.gg .bar{background:#94a3b8}
+.wev .tm2{font-size:10.5px;font-weight:900;flex:none;width:36px;color:var(--ink)}
+.wev .ti2{flex:1;min-width:0;font-size:11.5px;font-weight:800;letter-spacing:-.01em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wev .tg2{font-size:8px;font-weight:900;border-radius:5px;padding:2px 5px;white-space:nowrap;flex:none}
+.wev.bk .tg2{background:var(--teal-bg);color:var(--teal)}.wev.rp .tg2{background:var(--amber-bg);color:var(--amber)}
+.wev.mn .tg2{background:var(--purple-bg);color:var(--purple)}.wev.hd .tg2{background:var(--red-bg);color:var(--red)}
+.wev.gg .tg2{background:var(--gray-bg);color:var(--gray)}
+.wnone{font-size:10.5px;font-weight:700;color:var(--ink3);text-align:center;padding:8px 0;
+  background:var(--gray-bg);border-radius:10px;margin-bottom:4px}
+.wmore{font-size:9.5px;font-weight:900;color:var(--ink3);text-align:center;padding:2px 0 0}
 </style>
 </head>
 <body>
 <div class="wrap">
+
+  <!-- 📌 위젯 모드(?w=1) 전용 화면 — 평소에는 숨겨져 있습니다 -->
+  <div id="wbox" onclick="location.href='schedule-widget.html'"></div>
 
   <div class="hdr">
     <div class="mark">HHC</div>
@@ -278,7 +325,55 @@ function renderUpcoming(){
     :'<div class="none">내일 일정이 없습니다</div>';
 }
 
-function refresh(){renderNav();renderCal();renderDay();renderUpcoming();}
+function refresh(){
+  if(WMODE){wRender();return;}
+  renderNav();renderCal();renderDay();renderUpcoming();
+}
+
+/* ══ 📌 위젯 모드 — 이번 주 + 오늘·내일 일정 초압축 렌더 ══ */
+const WMODE=new URLSearchParams(location.search).get('w')==='1';
+if(WMODE)document.body.classList.add('wmode');
+function wRender(){
+  const now=myNow();
+  const tEvs=merged(TODAY).filter(e=>e.type!=='holiday');
+  // 이번 주 (일~토) 스트립
+  const ws=new Date(now); ws.setDate(now.getDate()-now.getDay());
+  let week='';
+  for(let i=0;i<7;i++){
+    const d=new Date(ws); d.setDate(ws.getDate()+i);
+    const ds=fmt(d), evs=merged(ds);
+    week+='<span class="wdy'+(ds===TODAY?' tdy':(i===0?' sun':i===6?' sat':''))+'">'
+      +'<span class="n2">'+WD[i]+'</span><span class="d2">'+d.getDate()+'</span>'
+      +'<span class="wdd">'+evs.slice(0,3).map(e=>'<i class="dot '+cls(e.type)+'"></i>').join('')+'</span>'
+      +'</span>';
+  }
+  const row=e=>'<div class="wev '+cls(e.type)+'"><span class="bar"></span>'
+    +'<span class="tm2">'+(e.time_s?esc(e.time_s):'—')+'</span>'
+    +'<span class="ti2">'+esc(e.title||'(제목 없음)')+'</span>'
+    +'<span class="tg2">'+typeLb(e.type)+'</span></div>';
+  // 내일
+  const td=new Date(now); td.setDate(now.getDate()+1);
+  const tmEvs=merged(fmt(td)).filter(e=>e.type!=='holiday');
+  document.getElementById('wbox').innerHTML=
+    '<div class="wtop"><span class="wmk">HHC</span>'
+    +'<span class="wd1">'+(now.getMonth()+1)+'월 '+now.getDate()+'일 ('+WD[now.getDay()]+')</span>'
+    +'<span class="wcnt">오늘 '+tEvs.length+'건</span></div>'
+    +'<div class="wweek">'+week+'</div>'
+    +(tEvs.length
+      ?tEvs.slice(0,4).map(row).join('')+(tEvs.length>4?'<div class="wmore">+'+(tEvs.length-4)+'건 더</div>':'')
+      :'<div class="wnone">오늘 일정이 없습니다</div>')
+    +(tmEvs.length
+      ?'<div class="wsec">내일 · '+tmEvs.length+'건</div>'+tmEvs.slice(0,2).map(row).join('')
+        +(tmEvs.length>2?'<div class="wmore">+'+(tmEvs.length-2)+'건 더</div>':'')
+      :'');
+}
+// 날짜가 바뀌면(자정) 새 날짜 기준으로 다시 그립니다 · 화면 캡처형 위젯 앱 대비 1시간마다 새로고침
+if(WMODE){
+  const now=myNow();
+  const mid=new Date(now); mid.setHours(24,0,10,0);
+  setTimeout(()=>location.reload(),Math.max(60000,mid-now));
+  setInterval(()=>location.reload(),60*60*1000);
+}
 
 /* ══ 조작 ══ */
 window.mv=function(d){curM+=d;if(curM<0){curM=11;curY--;}if(curM>11){curM=0;curY++;}renderNav();renderCal();};
