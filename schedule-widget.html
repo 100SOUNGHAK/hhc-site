@@ -124,16 +124,23 @@ body.wmode #wbox{display:block}
 .wtop .wd1{font-size:13.5px;font-weight:900;letter-spacing:-.02em}
 .wtop .wcnt{margin-left:auto;font-size:9.5px;font-weight:900;color:var(--teal);background:var(--teal-bg);
   border-radius:20px;padding:2px 8px;white-space:nowrap}
-.wweek{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:8px}
-.wdy{text-align:center;border-radius:9px;padding:4px 0 3px;background:var(--gray-bg)}
-.wdy .n2{display:block;font-size:8px;font-weight:900;color:var(--ink3)}
-.wdy .d2{display:block;font-size:11.5px;font-weight:900;margin-top:1px;line-height:1.2}
-.wdy.sun .d2,.wdy.sun .n2{color:#e11d48}
-.wdy.sat .d2,.wdy.sat .n2{color:#2563eb}
-.wdy.tdy{background:var(--navy)}
-.wdy.tdy .n2,.wdy.tdy .d2{color:#fff}
-.wdy .wdd{display:flex;gap:2px;justify-content:center;margin-top:2px;min-height:5px}
-.wdy .wdd i{width:4.5px;height:4.5px;border-radius:50%}
+/* 월 달력 (위젯용 축소판) */
+.wmlbl{text-align:center;font-size:11px;font-weight:900;color:var(--ink2);margin-bottom:4px;letter-spacing:-.02em}
+.wmon{background:#fff;border:1px solid var(--bdr);border-radius:11px;overflow:hidden;margin-bottom:8px}
+.wmg{display:grid;grid-template-columns:repeat(7,1fr)}
+.wmn{font-size:8px;font-weight:900;color:var(--ink3);text-align:center;padding:4px 0 3px;background:#FAFBFD;
+  border-bottom:1px solid var(--bdr)}
+.wmn:first-child{color:#e11d48}.wmn:last-child{color:#2563eb}
+.wc{min-height:25px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  border-bottom:1px solid #f4f6fa;border-right:1px solid #f4f6fa;padding:2px 0 3px}
+.wc:nth-child(7n){border-right:none}
+.wc.out{opacity:.3}
+.wc b{font-size:10px;font-weight:800;line-height:1;width:16px;height:16px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center}
+.wc.sun b{color:#e11d48}.wc.sat b{color:#2563eb}
+.wc.tdy b{background:var(--navy);color:#fff;font-weight:900}
+.wc .wdd{display:flex;gap:1.5px;justify-content:center;min-height:4px}
+#wbox .wdd .dot{width:4px;height:4px}
 .wsec{font-size:9.5px;font-weight:900;color:var(--ink3);margin:7px 2px 4px;letter-spacing:.02em}
 .wev{display:flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--bdr);
   border-radius:10px;padding:6px 9px;margin-bottom:4px}
@@ -336,36 +343,58 @@ if(WMODE)document.body.classList.add('wmode');
 function wRender(){
   const now=myNow();
   const tEvs=merged(TODAY).filter(e=>e.type!=='holiday');
-  // 이번 주 (일~토) 스트립
-  const ws=new Date(now); ws.setDate(now.getDate()-now.getDay());
-  let week='';
-  for(let i=0;i<7;i++){
-    const d=new Date(ws); d.setDate(ws.getDate()+i);
+
+  // ── 이번 달 달력 (오늘이 속한 달 · 일정 있는 날은 색 점) ──
+  const cy=now.getFullYear(), cm=now.getMonth();
+  const first=new Date(cy,cm,1);
+  const st=new Date(first); st.setDate(1-first.getDay());
+  let cells='';
+  for(let i=0;i<42;i++){
+    const d=new Date(st); d.setDate(st.getDate()+i);
+    if(i===35&&d.getMonth()!==cm)break;      // 마지막 줄이 전부 다음달이면 생략
     const ds=fmt(d), evs=merged(ds);
-    week+='<span class="wdy'+(ds===TODAY?' tdy':(i===0?' sun':i===6?' sat':''))+'">'
-      +'<span class="n2">'+WD[i]+'</span><span class="d2">'+d.getDate()+'</span>'
+    cells+='<span class="wc'
+      +(d.getMonth()!==cm?' out':'')
+      +(d.getDay()===0?' sun':d.getDay()===6?' sat':'')
+      +(ds===TODAY?' tdy':'')+'">'
+      +'<b>'+d.getDate()+'</b>'
       +'<span class="wdd">'+evs.slice(0,3).map(e=>'<i class="dot '+cls(e.type)+'"></i>').join('')+'</span>'
       +'</span>';
   }
+  const monHtml='<div class="wmlbl">'+cy+'년 '+(cm+1)+'월</div>'
+    +'<div class="wmon"><div class="wmg">'
+    +WD.map((w,i)=>'<span class="wmn">'+w+'</span>').join('')
+    +cells+'</div></div>';
+
   const row=e=>'<div class="wev '+cls(e.type)+'"><span class="bar"></span>'
     +'<span class="tm2">'+(e.time_s?esc(e.time_s):'—')+'</span>'
     +'<span class="ti2">'+esc(e.title||'(제목 없음)')+'</span>'
     +'<span class="tg2">'+typeLb(e.type)+'</span></div>';
-  // 내일
-  const td=new Date(now); td.setDate(now.getDate()+1);
-  const tmEvs=merged(fmt(td)).filter(e=>e.type!=='holiday');
+
+  // ── 다가오는 3일 (내일 · 모레 · 글피) ──
+  let up='', upN=0, shown=0;
+  for(let k=1;k<=3;k++){
+    const d=new Date(now); d.setDate(now.getDate()+k);
+    const evs=merged(fmt(d)).filter(e=>e.type!=='holiday');
+    if(!evs.length)continue;
+    upN+=evs.length;
+    const cap=Math.max(0,Math.min(evs.length,5-shown));   // 전체 5줄까지만 표시
+    up+='<div class="wsec">'+(d.getMonth()+1)+'/'+d.getDate()+' ('+WD[d.getDay()]+') · '+evs.length+'건</div>';
+    if(cap>0){up+=evs.slice(0,cap).map(row).join('');shown+=cap;}
+    if(evs.length>cap)up+='<div class="wmore">+'+(evs.length-cap)+'건 더</div>';
+  }
+
   document.getElementById('wbox').innerHTML=
     '<div class="wtop"><span class="wmk">HHC</span>'
     +'<span class="wd1">'+(now.getMonth()+1)+'월 '+now.getDate()+'일 ('+WD[now.getDay()]+')</span>'
     +'<span class="wcnt">오늘 '+tEvs.length+'건</span></div>'
-    +'<div class="wweek">'+week+'</div>'
+    +monHtml
+    +'<div class="wsec">📌 오늘'+(tEvs.length?' · '+tEvs.length+'건':'')+'</div>'
     +(tEvs.length
       ?tEvs.slice(0,4).map(row).join('')+(tEvs.length>4?'<div class="wmore">+'+(tEvs.length-4)+'건 더</div>':'')
       :'<div class="wnone">오늘 일정이 없습니다</div>')
-    +(tmEvs.length
-      ?'<div class="wsec">내일 · '+tmEvs.length+'건</div>'+tmEvs.slice(0,2).map(row).join('')
-        +(tmEvs.length>2?'<div class="wmore">+'+(tmEvs.length-2)+'건 더</div>':'')
-      :'');
+    +'<div class="wsec">🔜 다가오는 3일'+(upN?' · '+upN+'건':'')+'</div>'
+    +(up||'<div class="wnone">예정된 일정이 없습니다</div>');
 }
 // 날짜가 바뀌면(자정) 새 날짜 기준으로 다시 그립니다 · 화면 캡처형 위젯 앱 대비 1시간마다 새로고침
 if(WMODE){
