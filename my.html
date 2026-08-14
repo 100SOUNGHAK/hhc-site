@@ -873,6 +873,34 @@ body{background:#E7EBF4}
 /* ── 접힌 목록이 열릴 때 부드럽게 ── */
 .hubls.open,.ecls.open,.ptc-more.open{animation:dpIn .28s cubic-bezier(.22,.8,.28,1)}
 @keyframes dpIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+/* ══ 📌 발송 메시지가 가리키는 섹션 강조 ═══════════════════════
+   관리자가 「청구 안내」로 보내면 인보이스가, 「점검보고서」로 보내면
+   점검보고서가 화면 가운데로 오면서 테두리가 파랑↔금색으로 깜빡입니다.
+   깜빡임이 끝난 뒤에도 금색 테두리가 남아 있다가 화면을 한 번 누르면 사라집니다. */
+@keyframes hiPulse{
+  0%  {box-shadow:0 0 0 2px rgba(224,158,20,.85),0 12px 30px -12px rgba(224,158,20,.55)}
+  35% {box-shadow:0 0 0 4px rgba(37,99,235,.85),0 0 30px 8px rgba(37,99,235,.45)}
+  70% {box-shadow:0 0 0 2px rgba(224,158,20,.9),0 0 26px 6px rgba(224,158,20,.5)}
+  100%{box-shadow:0 0 0 2px rgba(224,158,20,.85),0 12px 30px -12px rgba(224,158,20,.55)}
+}
+@keyframes hiChip{
+  0%,100%{opacity:1;box-shadow:0 4px 12px -3px rgba(184,124,10,.7),inset 0 1px 0 rgba(255,255,255,.7)}
+  50%{opacity:.72;box-shadow:0 3px 9px -3px rgba(37,99,235,.6),inset 0 1px 0 rgba(255,255,255,.7)}
+}
+.hi-focus{position:relative;z-index:3;border-radius:20px;
+  box-shadow:0 0 0 2px rgba(224,158,20,.8),0 12px 30px -12px rgba(224,158,20,.5);
+  animation:hiPulse 1.35s ease-in-out 6}
+.hi-focus.done{animation:none}
+.hi-chip{position:absolute;top:-13px;left:50%;transform:translateX(-50%);z-index:6;pointer-events:none;
+  display:inline-flex;align-items:center;gap:5px;white-space:nowrap;max-width:94%;
+  font-size:11px;font-weight:900;letter-spacing:-.01em;color:#4A3200;
+  background:linear-gradient(140deg,#FFD873,#E8A838);border-radius:999px;padding:5px 11px;
+  box-shadow:0 4px 12px -3px rgba(184,124,10,.65),inset 0 1px 0 rgba(255,255,255,.7);
+  animation:hiChip 1.35s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){
+  .hi-focus{animation:none}.hi-chip{animation:none}
+}
 </style>
 </head>
 <body>
@@ -888,6 +916,10 @@ const BASE='https://hhc-3p8.pages.dev';
 const P=new URLSearchParams(location.search);
 const CID=P.get('c')||'';
 const VIS=(P.get('v')||'iv,ip,ct,cp').split(',');
+// 📌 발송 메시지에 맞춰 「지금 봐 주셔야 할 곳」을 지정합니다 (f=iv · ip · ct · cp · qt · bk · mm · pt)
+const FOCUS=(P.get('f')||'').trim();
+// 안내한 섹션이 꺼져 있으면 그 섹션만 자동으로 켭니다 (안내와 화면이 어긋나지 않도록)
+if(FOCUS&&['iv','ip','ct','cp'].indexOf(FOCUS)>=0&&VIS.indexOf(FOCUS)<0)VIS.push(FOCUS);
 let LANG=(P.get('lang')==='en')?'en':'ko';
 
 // ── PWA : 홈 화면 설치 ──
@@ -1564,7 +1596,7 @@ function render(){
     const vN=DATA.contracts.filter(x=>x.status!=='ended').length;
     const eN=DATA.contracts.length-vN;
     let _ecWrapped=false;   // 종료 계약 구간 시작 여부
-    h+='<div class="sec">'+(_ecOnly?'':'<div class="sh">'+L.ct+'<span class="n">'+L.validN+' '+vN+' · '+L.endedN+' '+(DATA.contracts.length-vN)+'</span></div>');
+    h+='<div class="sec" id="sec-ct">'+(_ecOnly?'':'<div class="sh">'+L.ct+'<span class="n">'+L.validN+' '+vN+' · '+L.endedN+' '+(DATA.contracts.length-vN)+'</span></div>');
     DATA.contracts.slice().sort((a,b)=>((a.status==='ended')?1:0)-((b.status==='ended')?1:0)).forEach(x=>{
       const ended=x.status==='ended';
       if(_ecOnly&&!ended)return;   // 유효 계약은 위 요약 카드가 대신합니다
@@ -1668,14 +1700,14 @@ function render(){
   const _h2one=!(VIS.includes('iv')&&VIS.includes('ip'));   // 한쪽만 노출이면 1열 전체 폭
   if(_h2open)h+='<div class="hub2'+(_h2one?' one':'')+'">';
   if(VIS.includes('iv')&&!DATA.invoices.length){
-    h+='<div class="sec">'+hubEmpty('iv','\u{1F4B3}',L.hubIvT,L.hubIvS,L.ivEmpty,L.emptyS,L.emptyB)+'</div>';
+    h+='<div class="sec" id="sec-iv">'+hubEmpty('iv','\u{1F4B3}',L.hubIvT,L.hubIvS,L.ivEmpty,L.emptyS,L.emptyB)+'</div>';
   }
   if(VIS.includes('iv')&&DATA.invoices.length){
     const ivSum=DATA.invoices.reduce((a,x)=>a+invTotal(x),0);
     const ivDueList=DATA.invoices.filter(x=>x.status&&x.status!=='paid'&&x.status!=='draft'&&invDue(x)>0.005);
     const ivDue=ivDueList.reduce((a,x)=>a+invDue(x),0);   // 기결제 차감된 잔여 합계
     const ivLast=DATA.invoices[0]||{};
-    h+='<div class="sec">';
+    h+='<div class="sec" id="sec-iv">';
     h+=hubBox('iv',{
       ic:'\u{1F4B3}',title:L.hubIvT,sub:L.hubIvS,
       chip:ivDueList.length?L.hasDueB:L.paidAllB,chipCls:ivDueList.length?'bad':'ok',
@@ -1722,7 +1754,7 @@ function render(){
   }
   // ── inspections ──
   if(VIS.includes('ip')&&!DATA.inspections.length){
-    h+='<div class="sec">'+hubEmpty('ip','\u{1F527}',L.hubIpT,L.hubIpS,L.ipEmpty,L.emptyS,L.emptyB)+'</div>';
+    h+='<div class="sec" id="sec-ip">'+hubEmpty('ip','\u{1F527}',L.hubIpT,L.hubIpS,L.ipEmpty,L.emptyS,L.emptyB)+'</div>';
   }
   if(VIS.includes('ip')&&DATA.inspections.length){
     let ipAct=0,ipUnits=0;
@@ -1731,7 +1763,7 @@ function render(){
       ipUnits+=(parseFloat(x.units)||0)||((x.equipments||[]).length)||(parseFloat(x.statTotal)||0);
     });
     const ipLast=DATA.inspections[0]||{};
-    h+='<div class="sec">';
+    h+='<div class="sec" id="sec-ip">';
     h+=hubBox('ip',{
       ic:'\u{1F527}',title:L.hubIpT,sub:L.hubIpS,
       chip:ipAct>0?L.hasActB:L.allOkB,chipCls:ipAct>0?'warn':'ok',
@@ -1790,7 +1822,7 @@ function render(){
     const mmUp=MM.filter(x=>x.visit_date&&x.status!=='done')
                  .sort((a,b)=>String(a.visit_date).localeCompare(String(b.visit_date)))[0];
     const mmPend=MM.filter(x=>x.status==='pending').length;
-    h+='<div class="sec'+(OPEN.mm?' wide':'')+'"><div class="hub mm"><div class="hubbg"></div><div class="hubw">'+
+    h+='<div class="sec'+(OPEN.mm?' wide':'')+'" id="sec-mm"><div class="hub mm"><div class="hubbg"></div><div class="hubw">'+
       '<div class="hubt"><div class="hubic">🛠️</div>'+
       '<div style="flex:1;min-width:0"><div class="hubtt">'+esc(L.mmT)+'</div>'+
       '<div class="hubts">'+esc(L.mmS)+'</div></div>'+
@@ -1840,7 +1872,7 @@ function render(){
   if(VIS.includes('cp')&&DATA.coupons.length){
     const isLive=x=>{const dl=daysLeft(x.expiry);return x.status==='active'&&!(dl!=null&&dl<0);};
     const okN=DATA.coupons.filter(isLive).length;
-    h+='<div class="sec"><div class="sh">'+L.cp+'<span class="n">'+L.okCnt+' '+okN+' · '+L.usedCnt+' '+(DATA.coupons.length-okN)+'</span></div>';
+    h+='<div class="sec" id="sec-cp"><div class="sh">'+L.cp+'<span class="n">'+L.okCnt+' '+okN+' · '+L.usedCnt+' '+(DATA.coupons.length-okN)+'</span></div>';
     DATA.coupons.slice().sort((a,b)=>(isLive(a)?0:1)-(isLive(b)?0:1)).forEach(x=>{
       const dl=daysLeft(x.expiry);
       const exp=(dl!=null&&dl<0);
@@ -1872,7 +1904,7 @@ function render(){
     const _qtd=(function(){const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());})();
     const _qexp=x=>!!(x.validUntil&&String(x.validUntil)<_qtd);
     const vN=DATA.quotes.filter(x=>!_qexp(x)).length;
-    h+='<div class="sec"><div class="sh">\uD83E\uDDFE '+qL.t+'<span class="n">'+qL.validN+' '+vN+' \u00b7 '+qL.expN+' '+(DATA.quotes.length-vN)+'</span></div>';
+    h+='<div class="sec" id="sec-qt"><div class="sh">\uD83E\uDDFE '+qL.t+'<span class="n">'+qL.validN+' '+vN+' \u00b7 '+qL.expN+' '+(DATA.quotes.length-vN)+'</span></div>';
     DATA.quotes.slice(0,20).forEach(x=>{
       const exp=_qexp(x);
       const rs=fmt(qtTotal(x)).split('.');
@@ -2055,12 +2087,70 @@ function render(){
   };
 }
 
+
+// ══ 📌 발송 메시지가 가리키는 섹션으로 데려가 강조합니다 ═══════════
+//  · 주소의 f= 값(iv·ip·ct·cp·qt·bk·mm·pt)에 해당하는 섹션을 화면 가운데로 옮기고
+//    테두리를 깜빡여 눈에 띄게 합니다. 화면을 한 번 누르면 표시가 사라집니다.
+var FOCUS_SEC={iv:'sec-iv',ip:'sec-ip',ct:'sec-ct',cp:'sec-cp',qt:'sec-qt',
+               bk:'bk-sec',mm:'sec-mm',pt:'pyx-sec'};
+var _hiDone=false;
+function hiClear(){
+  document.querySelectorAll('.hi-focus').forEach(function(el){el.classList.remove('hi-focus','done');});
+  document.querySelectorAll('.hi-chip').forEach(function(el){el.remove();});
+}
+function _hiOff(){
+  hiClear();
+  ['pointerdown','click','touchstart'].forEach(function(ev){window.removeEventListener(ev,_hiOff,true);});
+}
+function focusSection(){
+  if(!FOCUS||_hiDone)return;
+  var id=FOCUS_SEC[FOCUS];if(!id)return;
+  var el=document.getElementById(id);
+  if(!el){                       // ① 계약서 요약 카드만 있는 경우 등 대체 위치
+    if(FOCUS==='ct')el=document.getElementById('duo')||document.querySelector('.mbx');
+    if(FOCUS==='pt')el=document.querySelector('.ptc');
+    if(!el)return;
+  }
+  // 예약·상품권·청구 안내 팝업이 떠 있으면 그것을 먼저 보시게 하고, 닫은 뒤에 강조합니다.
+  if(document.querySelector('.pmx-ov.on')){setTimeout(focusSection,600);return;}
+  _hiDone=true;
+  // 인보이스·점검보고서·수리요청은 내역까지 펼쳐 바로 보이게 합니다.
+  if(FOCUS==='iv'||FOCUS==='ip'||FOCUS==='mm'){
+    var b=document.getElementById('hub-btn-'+FOCUS);
+    if(b&&!OPEN[FOCUS]){OPEN[FOCUS]=true;b.click();OPEN[FOCUS]=true;}
+  }
+  var _center=function(){
+    var t=document.getElementById(id)||el;if(!t)return;
+    var r=t.getBoundingClientRect();
+    var y=r.top+window.scrollY-Math.max(60,(window.innerHeight-r.height)/2);
+    try{window.scrollTo({top:y<0?0:y,behavior:'smooth'});}catch(e){window.scrollTo(0,y<0?0:y);}
+  };
+  setTimeout(function(){
+    var t=document.getElementById(id)||el;
+    _center();
+    setTimeout(_center,650);      // 내역이 펼쳐지며 높이가 바뀐 경우 한 번 더 맞춥니다
+    t.classList.add('hi-focus');
+    var chip=document.createElement('span');
+    chip.className='hi-chip';
+    chip.textContent=(LANG==='en'?'\uD83D\uDCCC Please check here':'\uD83D\uDCCC \uC5EC\uAE30\uB97C \uD655\uC778\uD574 \uC8FC\uC138\uC694');
+    t.appendChild(chip);
+    // 깜빡임이 끝나면 금색 테두리만 남깁니다.
+    setTimeout(function(){t.classList.add('done');},8300);
+  },620);
+  // 화면을 한 번 누르면 강조를 지웁니다 (20초가 지나면 저절로 사라집니다).
+  setTimeout(function(){
+    ['pointerdown','click','touchstart'].forEach(function(ev){window.addEventListener(ev,_hiOff,true);});
+    setTimeout(_hiOff,20000);
+  },1200);
+}
+
 (async()=>{
   try{
     if(!CID)throw new Error('no-id');
     await load();
     render();
     showBkPopup();    // 작성 대기 예약 신청이 있으면 먼저 안내 → 닫으면 청구 금액 팝업 (각 1회)
+    setTimeout(focusSection,400);   // 발송 메시지가 가리키는 곳으로 이동·강조 (팝업이 있으면 닫힌 뒤)
   }catch(e){
     document.getElementById('page').innerHTML='<div class="empty-page"><div style="font-size:34px">🔎</div><div>'+T[LANG].notfound+'</div></div>';
   }
