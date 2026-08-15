@@ -892,6 +892,13 @@ body{background:#E7EBF4}
   box-shadow:0 0 0 2px rgba(224,158,20,.8),0 12px 30px -12px rgba(224,158,20,.5);
   animation:hiPulse 1.35s ease-in-out 6}
 .hi-focus.done{animation:none}
+/* 설치 안내 카드처럼 넘치는 부분을 잘라내는(overflow:hidden) 상자는
+   배지가 위로 튀어나가면 잘려 보입니다. 그럴 때는 배지를 상자 안쪽에 두고
+   그만큼 위 여백을 넓혀 글자와 겹치지 않게 합니다. */
+.hi-focus.hi-inset{padding-top:38px}
+.hi-chip.inset{top:11px}
+/* 문서가 짧아 마지막 카드가 화면 가운데까지 올라오지 못할 때 쓰는 임시 여백 */
+#hi-spacer{height:0;transition:height .35s ease}
 .hi-chip{position:absolute;top:-13px;left:50%;transform:translateX(-50%);z-index:6;pointer-events:none;
   display:inline-flex;align-items:center;gap:5px;white-space:nowrap;max-width:94%;
   font-size:11px;font-weight:900;letter-spacing:-.01em;color:#4A3200;
@@ -2148,11 +2155,13 @@ function render(){
 //  · 주소의 f= 값(iv·ip·ct·cp·qt·bk·mm·pt)에 해당하는 섹션을 화면 가운데로 옮기고
 //    테두리를 깜빡여 눈에 띄게 합니다. 화면을 한 번 누르면 표시가 사라집니다.
 var FOCUS_SEC={iv:'sec-iv',ip:'sec-ip',ct:'sec-ct',cp:'sec-cp',qt:'sec-qt',
-               bk:'bk-sec',mm:'sec-mm',pt:'pyx-sec'};
+               bk:'bk-sec',mm:'sec-mm',pt:'pyx-sec',ap:'a2hs-card'};
 var _hiDone=false;
 function hiClear(){
-  document.querySelectorAll('.hi-focus').forEach(function(el){el.classList.remove('hi-focus','done');});
+  document.querySelectorAll('.hi-focus').forEach(function(el){el.classList.remove('hi-focus','done','hi-inset');});
   document.querySelectorAll('.hi-chip').forEach(function(el){el.remove();});
+  var sp=document.getElementById('hi-spacer');
+  if(sp){sp.style.height='0px';setTimeout(function(){if(sp.parentNode)sp.parentNode.removeChild(sp);},420);}
 }
 function _hiOff(){
   hiClear();
@@ -2165,7 +2174,7 @@ function focusSection(){
   if(!el){                       // ① 계약서 요약 카드만 있는 경우 등 대체 위치
     if(FOCUS==='ct')el=document.getElementById('duo')||document.querySelector('.mbx');
     if(FOCUS==='pt')el=document.querySelector('.ptc');
-    if(!el)return;
+    if(!el)return;               // 설치 안내(ap)는 이미 설치한 고객에게 카드가 없어 그냥 지나갑니다
   }
   // 예약·상품권·청구 안내 팝업이 떠 있으면 그것을 먼저 보시게 하고, 닫은 뒤에 강조합니다.
   if(document.querySelector('.pmx-ov.on')){setTimeout(focusSection,600);return;}
@@ -2179,6 +2188,17 @@ function focusSection(){
     var t=document.getElementById(id)||el;if(!t)return;
     var r=t.getBoundingClientRect();
     var y=r.top+window.scrollY-Math.max(60,(window.innerHeight-r.height)/2);
+    if(y>0){
+      // 설치 안내처럼 맨 아래에 있는 카드는 더 내릴 곳이 없어 가운데까지 오지 못합니다.
+      // 부족한 만큼만 페이지 끝에 빈 여백을 두었다가, 강조가 끝나면 부드럽게 없앱니다.
+      var max=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
+      var gap=Math.ceil(y-max);
+      if(gap>0){
+        var sp=document.getElementById('hi-spacer');
+        if(!sp){sp=document.createElement('div');sp.id='hi-spacer';document.body.appendChild(sp);}
+        sp.style.height=((parseFloat(sp.style.height)||0)+gap)+'px';
+      }
+    }
     try{window.scrollTo({top:y<0?0:y,behavior:'smooth'});}catch(e){window.scrollTo(0,y<0?0:y);}
   };
   setTimeout(function(){
@@ -2189,6 +2209,8 @@ function focusSection(){
     var chip=document.createElement('span');
     chip.className='hi-chip';
     chip.textContent=(LANG==='en'?'\uD83D\uDCCC Please check here':'\uD83D\uDCCC \uC5EC\uAE30\uB97C \uD655\uC778\uD574 \uC8FC\uC138\uC694');
+    var _ovf='';try{_ovf=getComputedStyle(t).overflow;}catch(e){}
+    if(_ovf==='hidden'||_ovf==='clip'){t.classList.add('hi-inset');chip.classList.add('inset');}
     t.appendChild(chip);
     // 깜빡임이 끝나면 금색 테두리만 남깁니다.
     setTimeout(function(){t.classList.add('done');},8300);
