@@ -191,6 +191,9 @@ html.sa body{padding-left:222px}
 .st .tx span{font-size:10.5px;font-weight:800;color:var(--ink3);white-space:nowrap}
 .st.blue .ic{background:var(--pri-bg)}.st.green .ic{background:var(--ok-bg)}.st.gold .ic{background:var(--gold-bg)}
 .st.vio .ic{background:var(--vio-bg)}.st.red .ic{background:var(--bad-bg)}.st.gray .ic{background:#f1f5f9}
+.st.care3 .ic{background:#ECFDF5}.st.care6 .ic{background:#FFF7ED}
+.st.care3.on{border-color:#059669;box-shadow:0 0 0 2.5px #D1FAE5}
+.st.care6.on{border-color:#EA580C;box-shadow:0 0 0 2.5px #FFEDD5}
 @media(max-width:900px){.stats{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:540px){
   .stats{grid-template-columns:repeat(3,1fr);gap:6px}
@@ -1207,6 +1210,9 @@ function renderStats(){
   const nIp=act.filter(x=>x.docs.inspections.length>0).length;
   const nCp=act.filter(x=>x.docs.coupons.length>0).length;
   const nQt=act.filter(x=>x.docs.quotes.length>0).length;
+  // 🌿 정기관리 도래 — 에어컨 인보이스 기준 3개월(3~5개월) · 6개월 이상
+  const nC3=act.filter(x=>{const c=careDue(x);return c&&c.k===3;}).length;
+  const nC6=act.filter(x=>{const c=careDue(x);return c&&c.k===6;}).length;
   document.getElementById('stats').innerHTML=
     card('all','blue','👥',total,'전체 고객')+
     card('contract','blue','📑',nCt,'계약')+
@@ -1216,11 +1222,13 @@ function renderStats(){
     card('inspect','vio','🔧',nIp,'점검')+
     card('coupon','gold','🎫',nCp,'상품권')+
     card('quote','blue','🧾',nQt,'견적')+
+    card('care3','care3','🌿',nC3,'3개월 경과')+
+    card('care6','care6','🔧',nC6,'6개월 경과')+
     card('','vio','🔗',mergeSug.length,'병합 제안')+
     card('nophone','red','📵',noph,'연락처 없음')+
     card('inactive','gray','⏸',inact,'비활성');
 }
-const FILTERS=[['all','전체'],['contract','📑 계약'],['package','📦 패키지'],['vvip','👑 VVIP'],['invoice','💳 인보이스'],['inspect','🔧 점검'],['coupon','🎫 상품권'],['quote','🧾 견적'],['nophone','연락처 없음'],['inactive','⏸ 비활성']];
+const FILTERS=[['all','전체'],['contract','📑 계약'],['package','📦 패키지'],['vvip','👑 VVIP'],['invoice','💳 인보이스'],['inspect','🔧 점검'],['coupon','🎫 상품권'],['quote','🧾 견적'],['care3','🌿 3개월 경과'],['care6','🔧 6개월 경과'],['nophone','연락처 없음'],['inactive','⏸ 비활성']];
 function renderChips(){
   // 필터 칩 줄은 제거됨 — 상단 요약 카드가 같은 필터 역할을 합니다 (요소가 있으면 기존대로 표시)
   const el=document.getElementById('chips');
@@ -1241,6 +1249,8 @@ function passFilter(e){
     case 'inspect':return e.docs.inspections.length>0;
     case 'coupon':return e.docs.coupons.length>0;
     case 'quote':return e.docs.quotes.length>0;
+    case 'care3':{const c=careDue(e);return !!c&&c.k===3;}   // 에어컨 청소 후 3~5개월
+    case 'care6':{const c=careDue(e);return !!c&&c.k===6;}   // 에어컨 청소 후 6개월 이상
     case 'nophone':return !pn(e.phone);
     default:return true;
   }
