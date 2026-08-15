@@ -3437,6 +3437,60 @@ function linkFieldsFor(coll,e,renameToo,rephoneToo){
 // memo-admin.html 과 같은 'memos' 컬렉션을 사용합니다.
 // 고객 마이페이지에는 req_date · name · symptom · visit_date · result 만 표시되고,
 // 내부 메모(memo) 와 발송이력(sent_log) 은 고객에게 보이지 않습니다.
+// ═══ 📅 스케줄 캘린더 자동 반영 ═══════════════════════════════
+// memo-admin.html 의 syncSchedule 과 똑같은 규칙입니다. 어느 화면에서 고쳐도
+// 방문 예정일이 캘린더(schedules · type:'repair')에 같은 방식으로 반영되도록
+// 두 화면의 동작을 맞춰 둡니다. (메모 문서의 schedule_id 로 1:1 관리)
+function caSchedTitle(m){
+  const who=String(m.condo||'').trim(), nm=String(m.name||'').trim();
+  const base=who&&nm?(who+' ('+nm+')'):(who||nm||'수리 방문');
+  return '🛠 '+base;
+}
+function caSchedMemo(m){
+  return [
+    m.symptom?'🔧 '+m.symptom:'',
+    m.phone?'📞 '+m.phone:'',
+    m.memo?'📝 '+m.memo:'',
+    '※ 메모장(수리요청)에서 자동 등록된 일정입니다.'
+  ].filter(Boolean).join('\n');
+}
+async function caSyncSchedule(memoId,d,prevSchedId){
+  if(!db||!memoId)return prevSchedId||'';
+  const sid=prevSchedId||'';
+  const now=new Date().toISOString();
+  try{
+    if(!d.visit_date){                       // 방문 예정일이 없어짐 → 캘린더에서 제거
+      if(sid){
+        try{await deleteDoc(doc(db,'schedules',sid));}catch(e){}
+        await updateDoc(doc(db,'memos',memoId),{schedule_id:''});
+      }
+      return '';
+    }
+    const fields={
+      date:d.visit_date,
+      title:caSchedTitle(d),
+      time_s:d.visit_time||'',
+      time_e:'',
+      type:'repair',
+      memo:caSchedMemo(d),
+      memo_id:memoId,
+      customer_name:d.name||d.condo||'',
+      customer_phone:d.phone||'',
+      updated_at:now
+    };
+    if(sid){
+      try{await updateDoc(doc(db,'schedules',sid),fields);return sid;}
+      catch(e){/* 캘린더에서 이미 지워진 경우 → 아래에서 새로 만듭니다 */}
+    }
+    fields.created_at=now;
+    const r=await addDoc(collection(db,'schedules'),fields);
+    await updateDoc(doc(db,'memos',memoId),{schedule_id:r.id});
+    return r.id;
+  }catch(e){
+    toast('⚠ 캘린더 반영 실패: '+e.message);
+    return sid;
+  }
+}
 window.caMemoEdit=function(idx,mid){
   const e=entries[idx];if(!e)return;
   const m=mid?(e.docs.memos||[]).filter(x=>x.__id===mid)[0]:null;
@@ -3461,6 +3515,10 @@ window.caMemoEdit=function(idx,mid){
       '<div><div class="fl">방문 예정일 '+EC+'</div><input type="date" class="fi" id="cm-vd" value="'+v(m?m.visit_date:'')+'"></div>'+
       '<div><div class="fl">방문 시각</div><input type="time" class="fi" id="cm-vt" value="'+v(m?m.visit_time:'')+'"></div>'+
     '</div>'+
+    '<div style="font-size:10.5px;font-weight:800;color:#5B21B6;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;padding:7px 10px;margin-top:6px;line-height:1.6">'+
+      '📅 방문 예정일을 입력하면 <b>스케줄 캘린더</b>에 「🛠 수리」 일정으로 자동 등록됩니다.'+
+      (m&&m.schedule_id?' <b>(현재 캘린더에 등록되어 있습니다)</b>':'')+
+      '<br>메모장(memo-admin) 화면과 같은 자료를 쓰므로 어느 쪽에서 고쳐도 서로 즉시 반영됩니다.</div>'+
     '<div class="fl">진단 및 결과 '+EC+'</div><textarea class="fi" id="cm-res" placeholder="방문 후 진단 내용과 처리 결과를 입력하세요 (나중에 입력 가능)">'+v(m?m.result:'')+'</textarea>'+
     '<div class="fl">진단 및 결과 (English) '+EN+'</div><textarea class="fi" id="cm-res-en" placeholder="Diagnosis &amp; result in English — 비워 두면 한국어가 그대로 표시됩니다">'+v(m?m.result_en:'')+'</textarea>'+
     '<div class="fl">내부 메모 '+EI+'</div><textarea class="fi" id="cm-memo" placeholder="관리자만 보는 메모 — 고객에게 표시되지 않습니다">'+v(m?m.memo:'')+'</textarea>';
@@ -3489,28 +3547,40 @@ window.caMemoSave=async function(idx,mid){
     memo:g('cm-memo').trim(),
     updated_at:now
   };
-  if(!d.name&&!d.symptom){toast('고객명 또는 증상을 입력해 주세요');return;}
+  if(!d.condo&&!d.name){toast('콘도명 또는 고객명을 입력해 주세요');return;}
+  const prev=mid?((e.docs.memos||[]).filter(x=>x.__id===mid)[0]||{}):{};
+  const prevSchedId=prev.schedule_id||'';
+  const hadDate=!!prev.visit_date;
   try{
+    let id=mid;
     if(mid){
       await updateDoc(doc(db,'memos',mid),d);
-      toast('✓ 메모가 수정되었습니다');
     }else{
       d.created_at=now;d.channel=CH_OK(e.ch)==='K'?'kakao':(CH_OK(e.ch)==='W'?'whatsapp':'other');d.sent_log=[];
-      await addDoc(collection(db,'memos'),d);
-      toast('✓ 메모가 등록되었습니다');
+      const r=await addDoc(collection(db,'memos'),d);
+      id=r.id;
     }
     const mk=document.getElementById('ca-doc-mask');if(mk)mk.remove();
+    // 📅 방문 예정일 → 스케줄 캘린더(🛠 수리) 자동 반영 — 메모장 화면과 똑같이 동작합니다
+    await caSyncSchedule(id,d,prevSchedId);
+    toast(d.visit_date
+      ? (hadDate&&prevSchedId?'✓ 저장 — 캘린더 일정도 수정되었습니다':'✓ 저장 — 캘린더에 🛠 수리 일정으로 등록했습니다')
+      : (prevSchedId?'✓ 저장 — 방문 예정일이 없어 캘린더에서 제거했습니다':(mid?'✓ 메모가 수정되었습니다':'✓ 메모가 등록되었습니다')));
     await loadAll(true);
     if(typeof openDrawer==='function')openDrawer(idx);
   }catch(err){toast('저장 실패: '+err.message);}
 };
 window.caMemoDel=async function(idx,mid){
   if(!db){toast('Firebase 연결 중입니다');return;}
-  if(!confirm('이 메모를 삭제할까요?\n\n· 메모장(memo-admin) 목록에서도 삭제됩니다.\n· 고객 마이페이지의 수리요청 처리내역에서도 사라집니다.'))return;
+  const e=entries[idx]||{docs:{}};
+  const _m=((e.docs&&e.docs.memos)||[]).filter(x=>x.__id===mid)[0]||{};
+  const sid=_m.schedule_id||'';
+  if(!confirm('이 메모를 삭제할까요?\n\n· 메모장(memo-admin) 목록에서도 삭제됩니다.\n· 고객 마이페이지의 수리요청 처리내역에서도 사라집니다.'+(sid?'\n· 연결된 캘린더 일정도 함께 삭제됩니다.':'')))return;
   try{
     await deleteDoc(doc(db,'memos',mid));
+    if(sid){try{await deleteDoc(doc(db,'schedules',sid));}catch(_){}}
     const mk=document.getElementById('ca-doc-mask');if(mk)mk.remove();
-    toast('삭제되었습니다');
+    toast(sid?'삭제되었습니다 (캘린더 일정 포함)':'삭제되었습니다');
     await loadAll(true);
     if(typeof openDrawer==='function')openDrawer(idx);
   }catch(err){toast('삭제 실패: '+err.message);}
