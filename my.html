@@ -1113,7 +1113,63 @@ function trItemsEn(s){
 function trIt(s){return LANG==='en'?trItemsEn(s):s;}   // EN 화면에서만 변환
 // 메모장(수리요청)의 자유 문장 : EN 화면에서 관리자가 넣어 둔 영문이 있으면 그것을,
 // 없으면 한국어 원문을 그대로 보여 줍니다.
-function mmTx(ko,en){return (LANG==='en'&&String(en||'').trim())?String(en).trim():(ko||'');}
+// ══ 수리요청 문장 영문 변환 ══════════════════════════════
+// 관리자가 영문을 따로 적지 않은 경우에도 영문 고객이 한국어를 보지 않도록
+// 메모장(memo-admin)과 똑같은 사전으로 변환합니다.
+const RP_EN={
+  '에어컨 냉방이 안됨':'air-con is not cooling','냉방이 안됨':'not cooling','냉방 안됨':'not cooling',
+  '바람이 안나옴':'no air coming out','바람이 약함':'weak airflow','풍량이 약함':'weak airflow',
+  '물이 샘':'water leaking','물 샘':'water leaking','물이 떨어짐':'water dripping','물떨어짐':'water dripping',
+  '누수':'water leak','소음이 남':'making noise','소음':'noise','시끄러움':'noisy',
+  '냄새가 남':'bad smell','냄새':'smell','곰팡이':'mould','얼음이 얼음':'icing up','결빙':'icing up',
+  '리모컨':'remote control','작동 안함':'not working','작동안함':'not working','작동이 안됨':'not working',
+  '전원이 안들어옴':'no power','전원':'power','실외기':'outdoor unit','실내기':'indoor unit',
+  '에어컨':'air-con','세탁기':'washing machine','건조기':'dryer','냉장고':'refrigerator',
+  '공기청정기':'air purifier','실링팬':'ceiling fan','주방후드':'kitchen hood',
+  '필터':'filter','청소':'cleaning','세척':'cleaning','점검':'inspection','수리':'repair',
+  '교체 완료':'replaced','교체':'replacement','냉매 보충':'refrigerant top-up','냉매':'refrigerant',
+  '가스 충전':'gas charging','가스':'gas','충전':'charging','보충':'top-up','누설':'leak',
+  '배관':'piping','드레인 배관':'drain piping','드레인':'drain','배수':'drainage','급수':'water supply',
+  '탈수':'spin','팬모터':'fan motor','컴프레서':'compressor','콘덴서':'condenser',
+  '기판':'PCB','캐패시터':'capacitor','센서':'sensor','온도':'temperature','습도':'humidity',
+  '진동':'vibration','떨림':'shaking','차단기':'breaker','누전':'electrical leakage',
+  '배선':'wiring','콘센트':'socket','전등':'light','타공':'drilling','거치대':'bracket',
+  '부품 주문':'part ordered','부품':'part','재방문':'revisit','방문':'visit',
+  '정상 작동':'working normally','정상':'normal','이상 없음':'no issue found','이상없음':'no issue found',
+  '완료':'completed','확인':'checked','조치':'action taken','처리':'handled',
+  '설치':'installation','철거':'removal','이전':'relocation','재설치':'reinstallation',
+  '분해':'disassembly','조립':'reassembly','약품':'chemical','스팀':'steam','고압':'high-pressure',
+  '벽걸이형':'wall-mounted','천정형':'ceiling cassette','매립형':'ducted',
+  '및':'and','또는':'or','후':'after','전':'before','필요':'needed','예정':'scheduled',
+  '요청':'request','고객':'customer','대기':'pending','완료됨':'completed',
+  '거실':'living room','안방':'master bedroom','침실':'bedroom','작은방':'small room','방':'room',
+  '주방':'kitchen','화장실':'bathroom','욕실':'bathroom','베란다':'balcony','사무실':'office',
+  '매장':'shop','위층':'upstairs','아래층':'downstairs','전체':'all','일부':'some',
+  '심함':'severe','약간':'slight','가끔':'intermittent','계속':'continuous','간헐적':'intermittent',
+  '발생':'occurring','되지 않음':'not working','안 됨':'not working','안됨':'not working',
+  '재발':'recurring','임시':'temporary','영구':'permanent','견적':'quotation','추가':'additional'
+};
+const _RPK=Object.keys(RP_EN).sort(function(a,b){return b.length-a.length;});
+function toEn(t){
+  t=String(t||'');
+  if(!/[\uAC00-\uD7A3]/.test(t))return t;      // 이미 영문이면 그대로
+  for(var i=0;i<_RPK.length;i++){if(t.indexOf(_RPK[i])>=0)t=t.split(_RPK[i]).join(RP_EN[_RPK[i]]);}
+  t=t.replace(/(\d+)\s*\uB300(?![\uAC00-\uD7A3])/g,function(m,q){return q+(q==='1'?' unit':' units');});
+  t=t.replace(/(\d+)\s*\uAC1C(?![\uAC00-\uD7A3])/g,function(m,q){return q+(q==='1'?' item':' items');});
+  // 남은 한국어 조사·어미를 정리합니다
+  t=t.replace(/[\uAC00-\uD7A3]+/g,' ')
+     .replace(/\s{2,}/g,' ')
+     .replace(/\s+([,.])/g,'$1')
+     .replace(/\s*·\s*/g,' · ')
+     .replace(/^[\s·,]+|[\s·,]+$/g,'')
+     .trim();
+  return t;
+}
+function mmTx(ko,en){
+  if(LANG!=='en')return ko||'';
+  var e=String(en||'').trim();
+  return e?e:toEn(ko||'');       // 관리자가 적어 둔 영문이 있으면 그것을 우선합니다
+}
 
 const PKG_LB={silver:['실버 Silver','Silver'],royal:['로얄 Royal','Royal'],gold:['골드 Gold','Gold'],diamond:['다이아 Diamond','Diamond'],titanium:['티타늄 Titanium','Titanium'],special:['스페셜 Special','Special']};
 function pkgLb(pid){pid=String(pid||'');const biz=/-biz$/.test(pid);const e=PKG_LB[pid.replace(/-biz$/,'')];const b=e?(LANG==='en'?e[1]:e[0]):pid;return b+(biz?' (Biz)':'');}
