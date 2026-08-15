@@ -140,6 +140,7 @@ select.fi{appearance:auto}
 .pill.pt{background:#F5F3FF;color:#6D28D9}
 .pill.c3{background:#ECFDF5;color:#047857;border:1px solid #A7F3D0}
 .pill.c6{background:#FFF7ED;color:#C2410C;border:1px solid #FDBA74}
+.pill.cdone{background:#F1F5F9;color:#64748B;border:1px solid #E2E8F0}
 .ptcard .pt-cfg{font-size:10px;font-weight:900;background:rgba(255,255,255,.12);border:1px dashed rgba(255,255,255,.45);color:#fff;border-radius:999px;padding:3px 9px;cursor:pointer;font-family:inherit}
 .ptcard .pt-cfg:hover{background:rgba(255,255,255,.22)}
 .pt-hx{width:100%;background:none;border:none;cursor:pointer;font-family:inherit;text-align:left}
@@ -1021,6 +1022,7 @@ function buildEntries(){
     e.master=m;e.aliases=m.aliases||[];e.member=m.member||'';e.email=m.email||'';e.addr=m.addr||'';e.memo=m.memo||'';
     e.inactive=!!m.ca_inactive;   // ⏸ 비활성 고객 (기본 목록에서 숨김)
     e.ch=CH_OK(m.ca_ch);          // 📞 연락 경로 표시 (W · K · O · 없음)
+    e.careLog=Array.isArray(m.care_log)?m.care_log.slice():[];   // 🌿 정기관리 안내 발송 이력
     entries.push(e);
     const k=pn(m.phone);if(k&&!byP[k])byP[k]=e;
     idxName(e,m.name);(m.aliases||[]).forEach(a=>idxName(e,a));
@@ -1211,8 +1213,8 @@ function renderStats(){
   const nCp=act.filter(x=>x.docs.coupons.length>0).length;
   const nQt=act.filter(x=>x.docs.quotes.length>0).length;
   // 🌿 정기관리 도래 — 에어컨 인보이스 기준 3개월(3~5개월) · 6개월 이상
-  const nC3=act.filter(x=>{const c=careDue(x);return c&&c.k===3;}).length;
-  const nC6=act.filter(x=>{const c=careDue(x);return c&&c.k===6;}).length;
+  const nC3=act.filter(x=>{const c=careDue(x);return c&&c.k===3&&!c.sent;}).length;
+  const nC6=act.filter(x=>{const c=careDue(x);return c&&c.k===6&&!c.sent;}).length;
   document.getElementById('stats').innerHTML=
     card('all','blue','👥',total,'전체 고객')+
     card('contract','blue','📑',nCt,'계약')+
@@ -1249,8 +1251,9 @@ function passFilter(e){
     case 'inspect':return e.docs.inspections.length>0;
     case 'coupon':return e.docs.coupons.length>0;
     case 'quote':return e.docs.quotes.length>0;
-    case 'care3':{const c=careDue(e);return !!c&&c.k===3;}   // 에어컨 청소 후 3~5개월
-    case 'care6':{const c=careDue(e);return !!c&&c.k===6;}   // 에어컨 청소 후 6개월 이상
+    // 이미 안내를 보낸 고객은 목록에서 빠집니다 (중복 발송 방지)
+    case 'care3':{const c=careDue(e);return !!c&&c.k===3&&!c.sent;}   // 에어컨 청소 후 3~5개월
+    case 'care6':{const c=careDue(e);return !!c&&c.k===6&&!c.sent;}   // 에어컨 청소 후 6개월 이상
     case 'nophone':return !pn(e.phone);
     default:return true;
   }
@@ -1335,6 +1338,19 @@ function careAcInv(x){
     return CARE_AC.test(String((it&&it.cat)||'')+' '+String((it&&it.subcat)||'')+' '+String((it&&it.name)||''));
   });
 }
+// 같은 청소분(마지막 에어컨 인보이스) 이후에 그 주기의 안내를 이미 보냈는지 찾습니다.
+//  · 새 인보이스가 발행되면 기준일이 바뀌어 이력이 자동으로 초기화됩니다.
+function careSentOf(e,k,since){
+  const L=(e&&e.careLog)||[];
+  for(let i=0;i<L.length;i++){
+    const r=L[i];
+    if(!r||parseInt(r.k,10)!==k)continue;
+    const at=String(r.at||'').slice(0,10);
+    if(at&&since&&at<since)continue;              // 이 청소 이전에 보낸 안내는 세지 않습니다
+    return r;
+  }
+  return null;
+}
 function careDue(e){
   const ds=((e.docs&&e.docs.invoices)||[]).filter(x=>x.status!=='draft'&&careAcInv(x))
     .map(x=>String(x.date||'').slice(0,10)).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x)).sort();
@@ -1343,16 +1359,63 @@ function careDue(e){
   const t=new Date(),y=parseInt(last.slice(0,4),10),m=parseInt(last.slice(5,7),10),d=parseInt(last.slice(8,10),10);
   let mo=(t.getFullYear()-y)*12+(t.getMonth()+1-m);
   if(t.getDate()<d)mo--;                          // 같은 날짜가 되어야 한 달로 셉니다
-  if(mo>=6)return {k:6,last:last,mo:mo};
-  if(mo>=3)return {k:3,last:last,mo:mo};
-  return null;
+  const k=(mo>=6)?6:((mo>=3)?3:0);
+  if(!k)return null;
+  return {k:k,last:last,mo:mo,sent:careSentOf(e,k,last)};
+}
+// 발송 이력 표시용 — 「08/15 · WhatsApp」
+const CARE_CH={wa:'WhatsApp',kk:'카카오톡',cp:'메시지 복사'};
+function careWhen(r){
+  const at=String((r&&r.at)||'');
+  const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(at);
+  return m?(m[2]+'/'+m[3]):at.slice(0,10);
+}
+function careLogLine(r){
+  return (parseInt(r&&r.k,10)===6?'6개월':'3개월')+' 안내 · '+careWhen(r)+' · '+(CARE_CH[r&&r.ch]||'발송');
 }
 function careBadge(e){
   const c=careDue(e);if(!c)return '';
+  if(c.sent){
+    const tt='마지막 에어컨 인보이스 '+c.last+' 이후 '+careLogLine(c.sent)+' 로 이미 발송했습니다';
+    return '<span class="pill cdone" title="'+tt+'">✅ '+(c.k===6?'6개월':'3개월')+' 안내 '+careWhen(c.sent)+'</span>';
+  }
   const tt='마지막 에어컨 인보이스 '+c.last+' · '+c.mo+'개월 경과 — '+(c.k===6?'6개월 정기관리':'3개월 건강관리')+' 안내 발송 시기입니다';
   return '<span class="pill '+(c.k===6?'c6':'c3')+'" title="'+tt+'">'+
     (c.k===6?('🔧 청소 후 6개월'+(c.mo>6?'+':'')):'🌿 청소 후 3개월')+'</span>';
 }
+// ═══ 🌿 정기관리 안내 발송 이력 저장 ═══
+// WhatsApp · 카카오톡 · 메시지 복사 중 무엇으로 보내든 기록해 두고, 같은 청소분에
+// 같은 주기의 안내를 다시 보내지 않도록 목록·요약 카드에서 빼 줍니다.
+window.caCareLog=async function(idx,k,ch){
+  const e=entries[idx];if(!e)return;
+  const rec={k:k,at:new Date().toISOString(),ch:ch};
+  e.careLog=[rec].concat(e.careLog||[]).slice(0,40);
+  if(e.master)e.master.care_log=e.careLog;
+  renderAll();
+  try{
+    let mid=e.master&&e.master.__id;
+    if(!mid||!db)return;                          // 마스터가 없으면 화면 표시만 (발송 화면에서 자동 등록됩니다)
+    await updateDoc(doc(db,'customers',mid),{care_log:e.careLog,updated_at:new Date().toISOString()});
+  }catch(err){toast('발송 이력 저장 실패: '+err.message);}
+};
+window.caCareUndo=async function(idx,k){
+  const e=entries[idx];if(!e)return;
+  const c=careDue(e);
+  const since=c?c.last:'';
+  const L=(e.careLog||[]).slice();
+  const i=L.findIndex(r=>r&&parseInt(r.k,10)===k&&(!since||String(r.at||'').slice(0,10)>=since));
+  if(i<0){toast('지울 발송 기록이 없습니다');return;}
+  L.splice(i,1);
+  e.careLog=L;
+  if(e.master)e.master.care_log=L;
+  renderAll();
+  toast('🌿 발송 기록을 지웠습니다 — 다시 안내 대상으로 표시됩니다');
+  try{
+    const mid=e.master&&e.master.__id;
+    if(!mid||!db)return;
+    await updateDoc(doc(db,'customers',mid),{care_log:L,updated_at:new Date().toISOString()});
+  }catch(err){toast('저장 실패: '+err.message);}
+};
 function memberBadge(e){
   if(isVVIP(e))return '<span class="pill gold">👑 VVIP</span>';
   if(/^패키지/.test(e.member||''))return '<span class="pill blue">📦 '+esc(e.member)+'</span>';
@@ -1581,6 +1644,33 @@ window.openDrawer=function(idx){
                ['etc','📂','기타',e.docs.requests.length+e.docs.bookings.length+e.docs.schedules.length]];
     h+='<div class="dsum">'+_sm.map(o=>'<button type="button" class="dsm'+(o[3]?'':' z')+'" onclick="caGoCard(\''+o[0]+'\')">'+
       '<span class="i">'+o[1]+'</span><span class="n">'+o[2]+'</span><span class="c">'+o[3]+'</span></button>').join('')+'</div>';
+  }
+  // ── 🌿 정기관리 안내 (도래 상태 · 발송 이력) ──
+  {
+    const c=careDue(e);
+    const L=(e.careLog||[]).slice(0,8);
+    if(c||L.length){
+      const _hd=c
+        ?(c.sent
+            ?{bg:'#F8FAFC',bd:'#E2E8F0',fg:'#475569',tx:'✅ '+(c.k===6?'6개월':'3개월')+' 안내 발송 완료 · 마지막 에어컨 인보이스 '+c.last+' ('+c.mo+'개월 경과)'}
+            :(c.k===6
+               ?{bg:'#FFF7ED',bd:'#FDBA74',fg:'#9A3412',tx:'🔧 6개월 정기관리 안내 대상 · 마지막 에어컨 인보이스 '+c.last+' ('+c.mo+'개월 경과)'}
+               :{bg:'#ECFDF5',bd:'#6EE7B7',fg:'#065F46',tx:'🌿 3개월 건강관리 안내 대상 · 마지막 에어컨 인보이스 '+c.last+' ('+c.mo+'개월 경과)'}))
+        :{bg:'#F8FAFC',bd:'#E2E8F0',fg:'#475569',tx:'🌿 현재는 안내 대상이 아닙니다'};
+      h+='<div class="dcard"><div class="dcard-h dch"><span class="chv">▾</span>🌿 정기관리 안내'+
+         '<span class="cnt">발송 '+(e.careLog||[]).length+'회</span></div>'+
+         '<div style="padding:11px 13px">'+
+         '<div style="background:'+_hd.bg+';border:1.5px solid '+_hd.bd+';color:'+_hd.fg+';border-radius:10px;padding:9px 12px;font-size:11.5px;font-weight:800;line-height:1.6">'+esc(_hd.tx)+'</div>'+
+         (L.length
+           ?'<div style="margin-top:9px">'+L.map(r=>
+              '<div style="display:flex;align-items:baseline;gap:8px;font-size:11.5px;font-weight:700;color:var(--ink2);padding:4px 0;border-bottom:1px dashed var(--bdr)">'+
+              '<span style="font-weight:900;color:var(--ink)">'+esc(String(r.at||'').slice(0,10))+'</span>'+
+              '<span>'+(parseInt(r.k,10)===6?'🔧 6개월 안내':'🌿 3개월 안내')+'</span>'+
+              '<span style="margin-left:auto;color:var(--ink3)">'+esc(CARE_CH[r.ch]||'발송')+'</span></div>').join('')+'</div>'
+           :'<div style="margin-top:9px;font-size:11.5px;font-weight:700;color:var(--ink3)">아직 발송한 안내가 없습니다.</div>')+
+         (c&&c.sent?'<button class="btn sm" style="margin-top:9px" onclick="caCareUndo('+idx0+','+c.k+')">↩︎ 이번 발송 기록 지우기</button>':'')+
+         '</div></div>';
+    }
   }
   // ── 📦 패키지 계약 잔액 현황 (패키지 고객만 · 표시 전용) ──
   if(e.docs.contracts.length){
@@ -2481,10 +2571,7 @@ window.caSendModal=async function(idx){
     // ── 상황 알림 ──
     (BKP.length?'<div class="sm-note" style="background:linear-gradient(135deg,#EEF2FF,#E0E7FF);border:1.5px solid #A5B4FC;border-left:5px solid #4F6EF7;color:#3730A3">📅 작성 대기중인 예약 신청서 <b>'+BKP.length+'건</b> — 고객 마이페이지 상단에 예약 신청 화면이 표시됩니다.</div>':'')+
     (!BKP.length&&BKCU.length?'<div class="sm-note" style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border:1.5px solid #6EE7B7;border-left:5px solid #10B981;color:#065F46">✅ 방문 예정인 확정 예약 <b>'+BKCU.length+'건</b> — 「예약 확정」 메시지에 방문일시·품목이 자동으로 들어갑니다.</div>':'')+
-    (function(){const c=careDue(e);if(!c)return '';
-      return c.k===6
-        ?'<div class="sm-note" style="background:linear-gradient(135deg,#FFF7ED,#FFEDD5);border:1.5px solid #FDBA74;border-left:5px solid #EA580C;color:#9A3412">🔧 마지막 에어컨 인보이스 <b>'+c.last+'</b> — <b>'+c.mo+'개월 경과</b> · 「🔧 6개월 안내」 발송을 권장합니다.</div>'
-        :'<div class="sm-note" style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border:1.5px solid #6EE7B7;border-left:5px solid #059669;color:#065F46">🌿 마지막 에어컨 인보이스 <b>'+c.last+'</b> — <b>'+c.mo+'개월 경과</b> · 「🌿 3개월 안내」 발송을 권장합니다.</div>';})()+
+    '<div id="cs-carenote"></div>'+
     '<div class="sm-grid">'+
       // ══ 왼쪽 : 설정 ══
       '<div class="sm-left">'+
@@ -2995,6 +3082,33 @@ window.caSendModal=async function(idx){
           (bp>0.005?'<div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--bdr);font-size:11px;font-weight:800;color:var(--ok)">✔️ 기결제 '+fmtRM(bp)+' 이 차감된 잔여 금액입니다</div>':'');
       }else bi.style.display='none';
     }
+    // 🌿 정기관리 안내 — 도래 여부와 발송 이력을 매번 다시 그립니다 (발송 직후 바로 반영)
+    const cn=mk.querySelector('#cs-carenote');
+    if(cn){
+      const c=careDue(e);
+      const _isCare=(state.tpl==='care3'||state.tpl==='care6');
+      const _k=state.tpl==='care6'?6:3;
+      const _sentK=careSentOf(e,_k,c?c.last:'');
+      let hh='';
+      if(_isCare&&_sentK){
+        hh='<div class="sm-note" style="background:linear-gradient(135deg,#FEF2F2,#FEE2E2);border:1.5px solid #FCA5A5;border-left:5px solid #DC2626;color:#991B1B">'+
+           '⚠️ 이 고객에게는 <b>'+careLogLine(_sentK)+'</b> 로 이미 발송했습니다 — 중복 발송에 주의해 주세요.'+
+           '<button class="btn sm" style="margin-left:9px;padding:3px 9px;font-size:10.5px" onclick="caCareUndo('+idx+','+_k+')">기록 지우기</button></div>';
+      }else if(c&&!c.sent){
+        hh=(c.k===6)
+          ?'<div class="sm-note" style="background:linear-gradient(135deg,#FFF7ED,#FFEDD5);border:1.5px solid #FDBA74;border-left:5px solid #EA580C;color:#9A3412">🔧 마지막 에어컨 인보이스 <b>'+c.last+'</b> — <b>'+c.mo+'개월 경과</b> · 「🔧 6개월 안내」 발송을 권장합니다.</div>'
+          :'<div class="sm-note" style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border:1.5px solid #6EE7B7;border-left:5px solid #059669;color:#065F46">🌿 마지막 에어컨 인보이스 <b>'+c.last+'</b> — <b>'+c.mo+'개월 경과</b> · 「🌿 3개월 안내」 발송을 권장합니다.</div>';
+      }else if(c&&c.sent){
+        hh='<div class="sm-note" style="background:#F8FAFC;border:1.5px solid #E2E8F0;border-left:5px solid #94A3B8;color:#475569">✅ 마지막 에어컨 인보이스 <b>'+c.last+'</b> — '+careLogLine(c.sent)+' 발송 완료</div>';
+      }
+      const _lg=(e.careLog||[]).slice(0,5);
+      if(_lg.length){
+        hh+='<div class="sm-note" style="background:#fff;border:1.5px solid var(--bdr);border-left:5px solid #0F766E;color:var(--ink2)">'+
+            '🌿 <b>정기관리 안내 발송 이력</b><span style="display:block;margin-top:4px;font-weight:700;line-height:1.8">'+
+            _lg.map(r=>'· '+careLogLine(r)).join('<br>')+'</span></div>';
+      }
+      cn.innerHTML=hh;
+    }
     const raw=msg();
     mk.querySelector('#cs-msg').innerHTML=msgHtml(raw);
     const ln=mk.querySelector('#cs-len');
@@ -3024,11 +3138,18 @@ window.caSendModal=async function(idx){
   if(_cps)_cps.addEventListener('change',()=>{state.cpi[state.tpl]=parseInt(_cps.value,10)||0;paint();});
   const _pd=mk.querySelector('#cs-paydate');
   if(_pd){_pd.value=state.payDate;_pd.addEventListener('change',()=>{state.payDate=_pd.value;paint();});}
+  // 🌿 정기관리 안내를 보냈으면 이력을 남깁니다 (중복 발송 방지용)
+  function careMark(ch){
+    if(state.tpl!=='care3'&&state.tpl!=='care6')return;
+    caCareLog(idx,state.tpl==='care6'?6:3,ch);
+    setTimeout(paint,60);
+  }
   mk.querySelector('#cs-wa').addEventListener('click',()=>{
     let wa='https://wa.me/';
     const ph=pn(e.phone);
     if(ph)wa+='60'+ph;
     window.open(wa+'?text='+encodeURIComponent(msg()),'_blank');
+    careMark('wa');
   });
   mk.querySelector('#cs-kk').addEventListener('click',()=>{
     const en=!!state.en;
@@ -3040,6 +3161,7 @@ window.caSendModal=async function(idx){
         btn:(en?'Open My Page':'마이페이지 열기')}
       :null;
     kkShareMsg(e.name,msg(),link(),en,kkT);
+    careMark('kk');
   });
   mk.querySelector('#cs-kkset').addEventListener('click',()=>{kkResetKey();});
   mk.querySelector('#cs-pv').addEventListener('click',()=>{window.caView(link(),'👁 고객 발송 화면 미리보기 — '+(e.name||''));});
@@ -3052,6 +3174,7 @@ window.caSendModal=async function(idx){
   mk.querySelector('#cs-cp').addEventListener('click',()=>{
     navigator.clipboard.writeText(msg()).then(()=>toast('✓ 메시지가 복사되었습니다'))
       .catch(()=>prompt('복사해서 사용하세요:',msg()));
+    careMark('cp');
   });
 
   paint();
