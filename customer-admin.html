@@ -138,6 +138,8 @@ select.fi{appearance:auto}
 .pt-hist .ph.earn .amt{color:#047857}
 .pt-hist .ph.use .amt{color:#DC2626}
 .pill.pt{background:#F5F3FF;color:#6D28D9}
+.pill.c3{background:#ECFDF5;color:#047857;border:1px solid #A7F3D0}
+.pill.c6{background:#FFF7ED;color:#C2410C;border:1px solid #FDBA74}
 .ptcard .pt-cfg{font-size:10px;font-weight:900;background:rgba(255,255,255,.12);border:1px dashed rgba(255,255,255,.45);color:#fff;border-radius:999px;padding:3px 9px;cursor:pointer;font-family:inherit}
 .ptcard .pt-cfg:hover{background:rgba(255,255,255,.22)}
 .pt-hx{width:100%;background:none;border:none;cursor:pointer;font-family:inherit;text-align:left}
@@ -1305,6 +1307,34 @@ window.caChSet=async function(idx,v){
     toast('저장 실패: '+err.message);
   }
 };
+// ═══ 🌿 정기관리 도래 표시 ═══
+// 에어컨 품목이 담긴 최종 인보이스 일자(임시저장 제외) 기준으로 3개월·6개월이 지나면
+// 고객 목록과 마이페이지 발송 화면에 알려줍니다.
+//  · 매트리스·세탁기 등 에어컨이 아닌 서비스만 받은 고객에게는 표시하지 않습니다.
+const CARE_AC=/에어컨|벽걸이|천정|천장|카세트|스탠드|매립|덕트|실외기|FCU|air[- ]?con|cassette|ceiling(?!\s*fan)|wall[- ]?mount|duct|outdoor/i;
+function careAcInv(x){
+  return (x.items||[]).some(function(it){
+    return CARE_AC.test(String((it&&it.cat)||'')+' '+String((it&&it.subcat)||'')+' '+String((it&&it.name)||''));
+  });
+}
+function careDue(e){
+  const ds=((e.docs&&e.docs.invoices)||[]).filter(x=>x.status!=='draft'&&careAcInv(x))
+    .map(x=>String(x.date||'').slice(0,10)).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x)).sort();
+  if(!ds.length)return null;
+  const last=ds[ds.length-1];
+  const t=new Date(),y=parseInt(last.slice(0,4),10),m=parseInt(last.slice(5,7),10),d=parseInt(last.slice(8,10),10);
+  let mo=(t.getFullYear()-y)*12+(t.getMonth()+1-m);
+  if(t.getDate()<d)mo--;                          // 같은 날짜가 되어야 한 달로 셉니다
+  if(mo>=6)return {k:6,last:last,mo:mo};
+  if(mo>=3)return {k:3,last:last,mo:mo};
+  return null;
+}
+function careBadge(e){
+  const c=careDue(e);if(!c)return '';
+  const tt='마지막 에어컨 인보이스 '+c.last+' · '+c.mo+'개월 경과 — '+(c.k===6?'6개월 정기관리':'3개월 건강관리')+' 안내 발송 시기입니다';
+  return '<span class="pill '+(c.k===6?'c6':'c3')+'" title="'+tt+'">'+
+    (c.k===6?('🔧 청소 후 6개월'+(c.mo>6?'+':'')):'🌿 청소 후 3개월')+'</span>';
+}
 function memberBadge(e){
   if(isVVIP(e))return '<span class="pill gold">👑 VVIP</span>';
   if(/^패키지/.test(e.member||''))return '<span class="pill blue">📦 '+esc(e.member)+'</span>';
@@ -1345,7 +1375,7 @@ function renderList(){
     return '<div class="crow'+(e.inactive?' inact':'')+'">'+
       '<div class="avatar">'+esc(init)+'</div>'+
       '<div class="cmain"><div class="cnm">'+esc(e.name||'(이름 없음)')+chBadge(e,idx)+memberBadge(e)+
-        (_pt.bal>0?'<span class="pill pt">💎 RM '+_pt.bal.toLocaleString()+'</span>':'')+
+        (_pt.bal>0?'<span class="pill pt">💎 RM '+_pt.bal.toLocaleString()+'</span>':'')+careBadge(e)+
         (e.inactive?'<span class="pill mut">⏸ 비활성</span>':'')+
         (e.detached?'<span class="pill det" title="이 고객에서 자동연결을 해제한 문서입니다. 상세보기 ⋮ 메뉴에서 복구하거나 다른 고객에게 연결할 수 있습니다.">🔓 연결 해제된 문서</span>':(e.master?'':'<span class="pill vio">미등록</span>'))+'</div>'+
       '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음 <span class="pill warn">보완 필요</span>')+(e.addr?' · '+esc(e.addr):'')+
@@ -2381,10 +2411,10 @@ window.caSendModal=async function(idx){
   const QTS=(D.quotes||[]).slice().sort((a,b)=>String(b.issueDate||'').localeCompare(String(a.issueDate||'')));
   // 인보이스·점검보고서는 기록이 아직 없어도 기본 노출 — 고객 화면에서 「내역 없음」 안내 카드로
   // 자리를 지켜 주므로 한쪽만 남아 빈 자리가 생기지 않습니다. (필요하면 아래에서 해제 가능)
-  const state={iv:true,ip:true,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:BKP.length?'bk':(BKCU.length?'bkc':'basic'),
+  const state={iv:true,ip:true,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:BKP.length?'bk':(BKCU.length?'bkc':(careDue(e)?(careDue(e).k===6?'care6':'care3'):'basic')),
     cpi:{cpg:0,cpd:0,ins:0,ct:0,qt:0},
     payDate:_td.getFullYear()+'-'+_p2(_td.getMonth()+1)+'-'+_p2(_td.getDate())};
-  // 발송 메시지 종류 — 14가지를 항상 표시합니다.
+  // 발송 메시지 종류를 항상 모두 표시합니다.
   //  need:true 인 항목은 해당 자료(예약·상품권·점검보고서 등)가 있어야 발송할 수 있어
   //  0건이면 흐리게 표시하고 선택을 막습니다.
   const TPLS=[
@@ -2402,6 +2432,8 @@ window.caSendModal=async function(idx){
     {t:'bill',    lb:'🧾 청구 안내',    n:0, need:false},
     {t:'rebill',  lb:'🔔 청구 재요청',  n:0, need:false},
     {t:'pay',     lb:'💳 결제 확인',    n:0, need:false},
+    {t:'care3',   lb:'🌿 3개월 안내',   n:0, need:false},
+    {t:'care6',   lb:'🔧 6개월 안내',   n:0, need:false},
     {t:'rqf',     lb:'📨 의뢰 요청서',  n:0, need:false},
     {t:'mem',     lb:'👑 멤버십 안내',  n:0, need:false},
     {t:'wp',      lb:'🪪 워크퍼밋 등록', n:0, need:false},
@@ -2412,6 +2444,7 @@ window.caSendModal=async function(idx){
     {g:'📄 문서 보내기', ts:['ins','ct','qt','cpg','cpd']},
     {g:'💰 청구 · 결제',  ts:['bill','rebill','pay']},
     {g:'📅 예약 · 의뢰',  ts:['bk','bkc','rq','rqf','revisit']},
+    {g:'🌿 정기관리 알림', ts:['care3','care6']},
     {g:'📢 안내 · 소개',  ts:['basic','aw','mem','wp','install']}
   ];
   const _cpSpan=(CPG.length&&CPD.length)?'':'grid-column:1/-1;';
@@ -2430,6 +2463,10 @@ window.caSendModal=async function(idx){
     // ── 상황 알림 ──
     (BKP.length?'<div class="sm-note" style="background:linear-gradient(135deg,#EEF2FF,#E0E7FF);border:1.5px solid #A5B4FC;border-left:5px solid #4F6EF7;color:#3730A3">📅 작성 대기중인 예약 신청서 <b>'+BKP.length+'건</b> — 고객 마이페이지 상단에 예약 신청 화면이 표시됩니다.</div>':'')+
     (!BKP.length&&BKCU.length?'<div class="sm-note" style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border:1.5px solid #6EE7B7;border-left:5px solid #10B981;color:#065F46">✅ 방문 예정인 확정 예약 <b>'+BKCU.length+'건</b> — 「예약 확정」 메시지에 방문일시·품목이 자동으로 들어갑니다.</div>':'')+
+    (function(){const c=careDue(e);if(!c)return '';
+      return c.k===6
+        ?'<div class="sm-note" style="background:linear-gradient(135deg,#FFF7ED,#FFEDD5);border:1.5px solid #FDBA74;border-left:5px solid #EA580C;color:#9A3412">🔧 마지막 에어컨 인보이스 <b>'+c.last+'</b> — <b>'+c.mo+'개월 경과</b> · 「🔧 6개월 안내」 발송을 권장합니다.</div>'
+        :'<div class="sm-note" style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5);border:1.5px solid #6EE7B7;border-left:5px solid #059669;color:#065F46">🌿 마지막 에어컨 인보이스 <b>'+c.last+'</b> — <b>'+c.mo+'개월 경과</b> · 「🌿 3개월 안내」 발송을 권장합니다.</div>';})()+
     '<div class="sm-grid">'+
       // ══ 왼쪽 : 설정 ══
       '<div class="sm-left">'+
@@ -2783,6 +2820,18 @@ window.caSendModal=async function(idx){
       return en
         ?('Hello, '+nm+' 😊\n\nYour payment for this service has been confirmed. Thank you.\n\n[Full invoice details]\n\nare available on your personal [MY PAGE] below.'+msgTail(en))
         :('안녕하세요, '+nm+' 고객님 😊\n\n고객님의 금차 서비스청구 [결제내역] 확인되었습니다. 감사합니다.\n\n[인보이스 상세내역]은\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.'+msgTail(en));
+    }
+    if(state.tpl==='care3'||state.tpl==='care6'){
+      // 🌿 정기관리 알림 — 최종 인보이스(청소) 후 3·6개월이 지난 고객에게 정기 청소를 권합니다.
+      //  · 문구 끝의 「Happy HomeCare」 서명은 공통 꼬리(msgTail)의 회사명·연락처 줄이 대신합니다.
+      const six=(state.tpl==='care6');
+      return en
+        ?(six
+          ?('🔧 [Aircon Maintenance Reminder \u00B7 6 Months]\n\nHello, '+nm+' 😊\nIt has been 6 months since your last aircon cleaning.\nTo keep the cooling performance and protect your aircon, we recommend a regular cleaning.'+msgTail(en))
+          :('🌿 [Aircon Health Care Reminder \u00B7 3 Months]\n\nHello, '+nm+' 😊\nIt has been 3 months since your last aircon cleaning.\nFor fresh indoor air and your respiratory health, we recommend a regular cleaning.'+msgTail(en)))
+        :(six
+          ?('🔧[ 에어컨 정기관리 알림 · 6개월]\n\n'+nm+' 고객님, 에어컨 청소 후 6개월이 경과되었습니다.\n냉방성능 유지와 에어컨 보호·관리를 위해 정기 청소를 권장드립니다.'+msgTail(en))
+          :('🌿[ 에어컨 건강관리 알림 · 3개월]\n\n'+nm+' 고객님. 에어컨 청소 후 3개월이 경과되었습니다.\n쾌적한 실내공기와 호흡기 건강관리를 위해 정기 청소를 권장드립니다.'+msgTail(en)));
     }
     if(state.tpl==='rqf'){
       // 서비스 의뢰 요청서 안내 — 고객이 직접 품목을 고르고 접수하도록 안내합니다.
