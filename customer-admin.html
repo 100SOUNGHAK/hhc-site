@@ -2440,6 +2440,58 @@ window.caPtUseDel=async function(idx,ui){
 // ══ 품목명 KO→EN 사전 — 고객용 영문 메시지 전용 (관리화면 표시는 한글 그대로 유지) ══
 var ITEM_EN={"기타 (직접 입력)":"Other (Custom)","천정형 (카세트)":"Ceiling Cassette","FCU · 덕트형":"FCU / Duct","기타(직접 입력)":"Other (Custom)","에어컨(가정용)":"AC (Home)","매립형 (덕트)":"Ducted (Concealed)","공기청정기 청소":"Air Purifier Clean","에어컨(매장용)":"AC (Commercial)","스팀살균세척":"Steam Sterilize Clean","전체분해세척":"Full Disassembly Clean","스팀그릴세척":"Steam Grill Clean","통돌이세탁기":"Top Load","습식살균방식":"Wet Sterilize Method","완전분해세척":"Full Disassembly Clean","카페트 세탁":"Carpet Clean","콘센트 교체":"Socket/Outlet Replacement","드럼세탁기":"Front Load (Drum)","공기청정기":"Air Purifier","기타서비스":"Other Services","벽걸이형":"Wall-mounted","기본세척":"Basic Clean","약품세척":"Chemical Clean","분해세척":"Disassembly Clean","매트리스":"Mattress","건식방식":"Dry Method","현장세탁":"On-site Wash","수거세탁":"Take-away Wash","주방후드":"Kitchen Hood","간이청소":"Quick Clean","분해청소":"Disassembly Clean","식탁의자":"Dining Chair","스팀세탁":"Steam Clean","전등교체":"Light Replacement","화학세척":"Chemical Clean","실외기":"Outdoor Unit","세탁기":"Washing Machine","I 형":"I-Shape","L 형":"L-Shape","건조기":"Dryer","냉장고":"Refrigerator","단문형":"Single Door","양문형":"Double Door","실링팬":"Ceiling Fan","카페트":"Carpet","서비스":"Service","쇼파":"Sofa","커튼":"Curtain"};
 var _IEK=Object.keys(ITEM_EN).sort(function(a,b){return b.length-a.length;});
+// ═══ 📝 메모장 문장 영문 변환 ═══
+// 관리자가 영문(증상 English)을 적지 않은 메모라도 영문 발송 시 한국어가 그대로 나가지 않도록,
+// 메모장(memo-admin) · 고객 마이페이지(my.html)와 똑같은 사전으로 변환합니다.
+const RP_EN={
+  '에어컨 냉방이 안됨':'air-con is not cooling','냉방이 안됨':'not cooling','냉방 안됨':'not cooling',
+  '바람이 안나옴':'no air coming out','바람이 약함':'weak airflow','풍량이 약함':'weak airflow',
+  '물이 샘':'water leaking','물 샘':'water leaking','물이 떨어짐':'water dripping','물떨어짐':'water dripping',
+  '누수':'water leak','소음이 남':'making noise','소음':'noise','시끄러움':'noisy',
+  '냄새가 남':'bad smell','냄새':'smell','곰팡이':'mould','얼음이 얼음':'icing up','결빙':'icing up',
+  '리모컨':'remote control','작동 안함':'not working','작동안함':'not working','작동이 안됨':'not working',
+  '전원이 안들어옴':'no power','전원':'power','실외기':'outdoor unit','실내기':'indoor unit',
+  '에어컨':'air-con','세탁기':'washing machine','건조기':'dryer','냉장고':'refrigerator',
+  '공기청정기':'air purifier','실링팬':'ceiling fan','주방후드':'kitchen hood',
+  '필터':'filter','청소':'cleaning','세척':'cleaning','점검':'inspection','수리':'repair',
+  '교체 완료':'replaced','교체':'replacement','냉매 보충':'refrigerant top-up','냉매':'refrigerant',
+  '가스 충전':'gas charging','가스':'gas','충전':'charging','보충':'top-up','누설':'leak',
+  '배관':'piping','드레인 배관':'drain piping','드레인':'drain','배수':'drainage','급수':'water supply',
+  '탈수':'spin','팬모터':'fan motor','컴프레서':'compressor','콘덴서':'condenser',
+  '기판':'PCB','캐패시터':'capacitor','센서':'sensor','온도':'temperature','습도':'humidity',
+  '진동':'vibration','떨림':'shaking','차단기':'breaker','누전':'electrical leakage',
+  '배선':'wiring','콘센트':'socket','전등':'light','타공':'drilling','거치대':'bracket',
+  '부품 주문':'part ordered','부품':'part','재방문':'revisit','방문':'visit',
+  '정상 작동':'working normally','정상':'normal','이상 없음':'no issue found','이상없음':'no issue found',
+  '완료':'completed','확인':'checked','조치':'action taken','처리':'handled',
+  '설치':'installation','철거':'removal','이전':'relocation','재설치':'reinstallation',
+  '분해':'disassembly','조립':'reassembly','약품':'chemical','스팀':'steam','고압':'high-pressure',
+  '벽걸이형':'wall-mounted','천정형':'ceiling cassette','매립형':'ducted',
+  '및':'and','또는':'or','후':'after','전':'before','필요':'needed','예정':'scheduled',
+  '요청':'request','고객':'customer','대기':'pending','완료됨':'completed',
+  '거실':'living room','안방':'master bedroom','침실':'bedroom','작은방':'small room','방':'room',
+  '주방':'kitchen','화장실':'bathroom','욕실':'bathroom','베란다':'balcony','사무실':'office',
+  '매장':'shop','위층':'upstairs','아래층':'downstairs','전체':'all','일부':'some',
+  '심함':'severe','약간':'slight','가끔':'intermittent','계속':'continuous','간헐적':'intermittent',
+  '발생':'occurring','되지 않음':'not working','안 됨':'not working','안됨':'not working',
+  '재발':'recurring','임시':'temporary','영구':'permanent','견적':'quotation','추가':'additional'
+};
+const _RPK=Object.keys(RP_EN).sort(function(a,b){return b.length-a.length;});
+function toEn(t){
+  t=String(t||'');
+  if(!/[\uAC00-\uD7A3]/.test(t))return t;      // 이미 영문이면 그대로
+  for(var i=0;i<_RPK.length;i++){if(t.indexOf(_RPK[i])>=0)t=t.split(_RPK[i]).join(RP_EN[_RPK[i]]);}
+  t=t.replace(/(\d+)\s*\uB300(?![\uAC00-\uD7A3])/g,function(m,q){return q+(q==='1'?' unit':' units');});
+  t=t.replace(/(\d+)\s*\uAC1C(?![\uAC00-\uD7A3])/g,function(m,q){return q+(q==='1'?' item':' items');});
+  // 남은 한국어 조사·어미를 정리합니다
+  t=t.replace(/[\uAC00-\uD7A3]+/g,' ')
+     .replace(/\s{2,}/g,' ')
+     .replace(/\s+([,.])/g,'$1')
+     .replace(/\s*·\s*/g,' · ')
+     .replace(/^[\s·,]+|[\s·,]+$/g,'')
+     .trim();
+  return t;
+}
 function trItemsEn(s){
   if(s==null)return s;
   s=String(s);
@@ -2518,10 +2570,14 @@ window.caSendModal=async function(idx){
   const CTS=(D.contracts||[]).slice().sort((a,b)=>String(b.contract_date||'').localeCompare(String(a.contract_date||'')));
   // 견적서 발송용 — 최근 작성 순 (기한이 지난 견적서도 다시 보낼 수 있도록 모두 포함)
   const QTS=(D.quotes||[]).slice().sort((a,b)=>String(b.issueDate||'').localeCompare(String(a.issueDate||'')));
+  // 🚗 점검·출장 방문 안내용 메모 — 방문 예정일이 잡힌 건만, 방문일이 가까운 순
+  //    (방문이 끝난 건은 방문일 다음 날부터 목록에서 빠집니다)
+  const MMV=(D.memos||[]).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(String(x.visit_date||''))&&String(x.visit_date)>=_tdy)
+    .sort((a,b)=>String(a.visit_date||'').localeCompare(String(b.visit_date||'')));
   // 인보이스·점검보고서는 기록이 아직 없어도 기본 노출 — 고객 화면에서 「내역 없음」 안내 카드로
   // 자리를 지켜 주므로 한쪽만 남아 빈 자리가 생기지 않습니다. (필요하면 아래에서 해제 가능)
   const state={iv:true,ip:true,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:BKP.length?'bk':(BKCU.length?'bkc':(careDue(e)?(careDue(e).k===6?'care6':'care3'):'basic')),
-    cpi:{cpg:0,cpd:0,ins:0,ct:0,qt:0},
+    cpi:{cpg:0,cpd:0,ins:0,ct:0,qt:0,mmv:0},
     payDate:_td.getFullYear()+'-'+_p2(_td.getMonth()+1)+'-'+_p2(_td.getDate())};
   // 발송 메시지 종류를 항상 모두 표시합니다.
   //  need:true 인 항목은 해당 자료(예약·상품권·점검보고서 등)가 있어야 발송할 수 있어
@@ -2530,6 +2586,7 @@ window.caSendModal=async function(idx){
     {t:'bk',      lb:'📅 예약 신청',    n:BKP.length,  need:true},
     {t:'bkc',     lb:'✅ 예약 확정',    n:BKCU.length, need:true},
     {t:'rq',      lb:'📥 의뢰 접수',    n:RQP.length,  need:true},
+    {t:'mmv',     lb:'🚗 점검 출장방문', n:MMV.length,  need:true},
     {t:'cpg',     lb:'🎁 상품권 발송',  n:CPG.length,  need:true},
     {t:'cpd',     lb:'🏷️ 할인권 발송',  n:CPD.length,  need:true},
     {t:'ins',     lb:'🔧 점검보고서',   n:IPS.length,  need:true},
@@ -2552,7 +2609,7 @@ window.caSendModal=async function(idx){
   const TGRP=[
     {g:'📄 문서 보내기', ts:['ins','ct','qt','cpg','cpd']},
     {g:'💰 청구 · 결제',  ts:['bill','rebill','pay']},
-    {g:'📅 예약 · 의뢰',  ts:['bk','bkc','rq','rqf','revisit']},
+    {g:'📅 예약 · 의뢰',  ts:['bk','bkc','rq','mmv','rqf','revisit']},
     {g:'🌿 정기관리 알림', ts:['care3','care6']},
     {g:'📢 안내 · 소개',  ts:['basic','aw','mem','wp','install']}
   ];
@@ -2642,6 +2699,7 @@ window.caSendModal=async function(idx){
     qt:'qt',                                   // 견적서 → 견적서
     bk:'bk',   bkc:'bk',                       // 예약 신청 · 확정 → 예약
     rq:'mm',                                   // 의뢰 접수 → 수리요청 처리내역
+    mmv:'mm',                                  // 점검 출장방문 → 수리요청 처리내역
     revisit:'bk',                              // 재방문 · 예약 → 예약 안내
     install:'ap',                              // 앱 설치 안내 → 마이페이지 하단 설치 카드
     rqf:'sv',                                  // 의뢰 요청서 → 마이페이지 서비스 의뢰 카드
@@ -2790,8 +2848,9 @@ window.caSendModal=async function(idx){
   // 청구금액 = 「청구중」+「연체」 인보이스의 **잔여 결제금액** 합계
   //            (기결제/일부 결제가 있으면 그만큼 차감된다 · 마이페이지와 동일 규칙)
   // ── 쿠폰(상품권 · 할인권) 발송 ──────────────────────
-  const PICK_TPLS=['cpg','cpd','ins','ct','qt','aw'];
+  const PICK_TPLS=['cpg','cpd','ins','ct','qt','aw','mmv'];
   function curCPList(){
+    if(state.tpl==='mmv')return MMV;
     if(state.tpl==='cpd')return CPD;
     if(state.tpl==='ins')return IPS;
     if(state.tpl==='ct'||state.tpl==='aw')return CTS;
@@ -2801,12 +2860,14 @@ window.caSendModal=async function(idx){
   function curCoupon(){const a=curCPList();return a[state.cpi[state.tpl]||0]||a[0]||null;}
   // 드롭다운 옵션 문구
   function pickLb(x){
+    if(state.tpl==='mmv')return (x.visit_date||'')+(x.visit_time?' '+x.visit_time:'')+' · '+(String(x.symptom||'').split('\n')[0]||'점검 방문').slice(0,28);
     if(state.tpl==='ins')return inspLabel(x.type)+' · '+(x.date||'')+(x.addr?' · '+x.addr:'');
     if(state.tpl==='ct'||state.tpl==='aw')return (pkgLabel(x.package_id)||'패키지')+' · '+(x.contract_date||'')+' · 납입 '+fmtRM(x.amount_paid);
     if(state.tpl==='qt')return (x.qno||'견적')+' · '+(x.issueDate||'')+' · '+fmtRM(qtTotal(x))+(x.subject?' · '+x.subject:'');
     return (x.code||'')+' · '+(x.value||'')+(x.expiry?' · ~'+x.expiry:'');
   }
   function pickLbTitle(){
+    if(state.tpl==='mmv')return '방문 안내할 메모';
     if(state.tpl==='ins')return '발송할 보고서';
     if(state.tpl==='ct'||state.tpl==='aw')return '발송할 계약서';
     if(state.tpl==='qt')return '발송할 견적서';
@@ -2890,8 +2951,48 @@ window.caSendModal=async function(idx){
   function billList(){return (D.invoices||[]).filter(x=>(x.status==='billing'||x.status==='overdue')&&invDue(x)>0.005);}
   function billAmt(){return billList().reduce((a,x)=>a+invDue(x),0);}
   function billPaid(){return billList().reduce((a,x)=>a+invPaid(x),0);}
+  // 🚗 점검·출장 방문 안내 — 메모장(수리요청)에 잡아 둔 방문 일정을 고객에게 확인해 드립니다.
+  const CS_DOW=[['일','Sun'],['월','Mon'],['화','Tue'],['수','Wed'],['목','Thu'],['금','Fri'],['토','Sat']];
+  function mmvWhen(x,en){
+    const d=String(x.visit_date||'');
+    const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+    let out=d;
+    if(m){
+      const w=CS_DOW[new Date(+m[1],+m[2]-1,+m[3]).getDay()];
+      out=en?(CS_MN[parseInt(m[2],10)-1]+' '+m[3]+', '+m[1]+' ('+w[1]+')'):(m[1]+'년 '+m[2]+'월 '+m[3]+'일 ('+w[0]+')');
+    }
+    const t=String(x.visit_time||'').trim();
+    if(t){
+      const tm=/^(\d{1,2}):(\d{2})/.exec(t);
+      if(tm&&en){
+        const hh=parseInt(tm[1],10);
+        out+=' '+((hh%12)||12)+':'+tm[2]+' '+(hh<12?'AM':'PM');
+      }else if(tm){
+        const hh=parseInt(tm[1],10);
+        out+=' '+(hh<12?'오전 ':'오후 ')+((hh%12)||12)+':'+tm[2];
+      }else out+=' '+t;
+    }
+    return out;
+  }
+  function mmvMsg(en){
+    const x=curCoupon();
+    if(!x)return en?'No scheduled visit to send.':'방문 예정일이 잡힌 메모가 없습니다.';
+    const nm=e.name||'';
+    const when=mmvWhen(x,en);
+    const symKo=String(x.symptom||'').trim();
+    const sym=en?(String(x.symptom_en||'').trim()||toEn(symKo)):symKo;
+    const symLine=sym?('\n🔧 '+(en?'Request':'요청 내용')+' : '+sym.split('\n')[0]):'';
+    const addr=String(x.condo||e.addr||'').trim();
+    const adLine=addr?('\n📍 '+(en?'Address':'방문 장소')+' : '+addr):'';
+    return en
+      ?('🚗[ Service Visit Confirmation]\n\nHello, '+nm+' 😊\nYour service visit is scheduled as below.\n\n📅 Visit : '+when+symLine+adLine+
+        '\n\nWe will call you before we arrive.\nThe diagnosis and result will be posted on your My Page after the visit.'+msgTail(en))
+      :('🚗[ 점검 · 출장 방문 안내]\n\n안녕하세요, '+nm+' 고객님 😊\n요청하신 방문 일정 안내드립니다.\n\n📅 방문일시 : '+when+symLine+adLine+
+        '\n\n방문 전 미리 연락드리겠습니다.\n방문 후 진단 및 처리 결과는 아래 마이페이지에서 확인하실 수 있습니다.'+msgTail(en));
+  }
   function msg(){
     const l=link(),en=!!state.en,nm=e.name||'',list=msgList();
+    if(state.tpl==='mmv')return mmvMsg(en);
     if(state.tpl==='cpg'||state.tpl==='cpd')return cpMsg(en);
     if(state.tpl==='ins')return insMsg(en);
     if(state.tpl==='ct')return ctMsg(en);
@@ -3107,6 +3208,14 @@ window.caSendModal=async function(idx){
         hh+='<div class="sm-note" style="background:#fff;border:1.5px solid var(--bdr);border-left:5px solid #0F766E;color:var(--ink2)">'+
             '🌿 <b>정기관리 안내 발송 이력</b><span style="display:block;margin-top:4px;font-weight:700;line-height:1.8">'+
             _lg.map(r=>'· '+careLogLine(r)).join('<br>')+'</span></div>';
+      }
+      // 🚗 점검·출장 방문 — 영문 발송인데 메모에 영문 증상이 없으면 알려 줍니다.
+      if(state.tpl==='mmv'&&state.en){
+        const _mv=curCoupon();
+        if(_mv&&String(_mv.symptom||'').trim()&&!String(_mv.symptom_en||'').trim()){
+          hh+='<div class="sm-note" style="background:var(--warn-bg);border:1.5px solid #FCD34D;border-left:5px solid #F59E0B;color:#92400E">'+
+              '⚠️ 이 메모에는 <b>영문 증상</b>이 없어 자동 변환된 문장이 나갑니다 — 메모장에서 「증상 (English)」을 입력하면 정확하게 전달됩니다.</div>';
+        }
       }
       cn.innerHTML=hh;
     }
