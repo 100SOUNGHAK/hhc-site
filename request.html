@@ -187,6 +187,34 @@ body.pk-lock{overflow:hidden}
 .nxbar .go{border:none;background:linear-gradient(120deg,var(--teal),var(--teal-deep));color:#fff;font-size:14px;font-weight:800;padding:13px 22px;border-radius:12px;cursor:pointer;white-space:nowrap;box-shadow:0 8px 18px -8px rgba(15,181,164,.7)}
 .nxbar .go:active{transform:scale(.97)}
 .nxbar .go:disabled{opacity:.55}
+/* 가격·서비스 홈페이지 보기 — 제출 버튼 옆 보조 버튼 */
+.nxbar .hm{border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.10);color:#e6edfa;
+  font-family:inherit;font-size:11.5px;font-weight:800;line-height:1.15;letter-spacing:-.02em;
+  padding:9px 12px;border-radius:11px;cursor:pointer;white-space:nowrap;flex:none;
+  display:flex;flex-direction:column;align-items:center;gap:2px}
+.nxbar .hm i{font-style:normal;font-size:14px;line-height:1}
+.nxbar .hm:active{transform:scale(.97)}
+@media(max-width:400px){
+  .nxbar{padding-left:12px;padding-right:12px;gap:8px}
+  .nxbar .in{gap:8px}
+  .nxbar .s{display:none}          /* 좁은 화면에서는 담은 품목 수를 접고 버튼을 살립니다 */
+  .nxbar .go{flex:1;padding:13px 12px}
+}
+
+/* ══ 홈페이지 내장 뷰어 ══════════════════════════════════════
+   새 창으로 열면 인앱 브라우저에서 「닫기」가 요청서까지 닫아 버리므로
+   화면 위에 덮어 씌워 보여 주고, 닫으면 작성하던 요청서로 그대로 돌아옵니다.
+   (작성 중이던 내용은 그대로 남아 있습니다)                        */
+#hv-wrap{position:fixed;inset:0;z-index:400;background:#fff;display:none;flex-direction:column}
+#hv-wrap.on{display:flex}
+#hv-bar{flex:none;display:flex;align-items:center;gap:10px;background:var(--navy);color:#fff;
+  padding:calc(10px + env(safe-area-inset-top,0)) 13px 10px}
+#hv-bar .ti{flex:1;min-width:0;font-size:14px;font-weight:800;letter-spacing:-.02em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#hv-bar button{border:none;font-family:inherit;font-size:12.5px;font-weight:800;border-radius:10px;
+  padding:9px 14px;cursor:pointer;background:#fff;color:var(--navy);white-space:nowrap}
+#hv-bar .bk{background:rgba(255,255,255,.14);color:#fff;padding:9px 12px;font-size:15px}
+#hv-frame{flex:1;width:100%;border:0;background:#fff}
 
 /* COMPLETE */
 .complete-card{background:linear-gradient(130deg,var(--navy),var(--teal-deep));border-radius:var(--radius-xl);padding:28px 24px;text-align:center;margin-bottom:16px;display:none;box-shadow:var(--shadow-lg)}
@@ -509,8 +537,19 @@ body.pk-lock{overflow:hidden}
 <div class="nxbar" id="nxbar">
   <div class="in">
     <div class="s"><span id="nx-lbl">담은 품목</span><b id="nx-cnt">0개</b></div>
+    <button class="hm" id="btn-home" type="button"><i>🏠</i><span id="home-text">가격 · 서비스</span></button>
     <button class="go" id="btn-submit"><span id="submit-text">의뢰 요청서 제출</span></button>
   </div>
+</div>
+
+<!-- 홈페이지 내장 뷰어 — 닫으면 작성하던 요청서로 돌아옵니다 -->
+<div id="hv-wrap" role="dialog" aria-modal="true">
+  <div id="hv-bar">
+    <button class="bk" id="hv-back" type="button" aria-label="뒤로">‹</button>
+    <span class="ti" id="hv-title">가격 · 서비스 안내</span>
+    <button id="hv-close" type="button">✕ <span id="hv-close-t">닫기</span></button>
+  </div>
+  <iframe id="hv-frame" title="가격 · 서비스 안내" src="about:blank"></iframe>
 </div>
 
 <!-- 품목 피커 시트 -->
@@ -597,6 +636,7 @@ const L={
     cnt:function(n){return n+'개';},
     nxLbl:'담은 품목',
     submitText:'의뢰 요청서 제출',
+    homeText:'가격 · 서비스',homeTitle:'가격 · 서비스 안내',homeClose:'닫기',
     errReq:'필수 입력 항목입니다',
     errCondoEn:'콘도명(상호)은 영문으로 기재해주세요.',
     errItems:'품목을 최소 1개 담아주세요',
@@ -643,6 +683,7 @@ const L={
     cnt:function(n){return String(n);},
     nxLbl:'Items added',
     submitText:'Submit Service Request',
+    homeText:'Prices',homeTitle:'Prices & Services',homeClose:'Close',
     errReq:'This field is required',
     errCondoEn:'Please enter the condo (business) name in English.',
     errItems:'Please add at least one item',
@@ -717,6 +758,9 @@ function applyLang(){
   if($('ph-hint')&&l.phoneHint)$('ph-hint').textContent=l.phoneHint;
   $('submit-text').textContent=l.submitText;
   $('nx-lbl').textContent=l.nxLbl;
+  if($('home-text'))$('home-text').textContent=l.homeText||'가격 · 서비스';
+  if($('hv-title'))$('hv-title').textContent=l.homeTitle||'가격 · 서비스 안내';
+  if($('hv-close-t'))$('hv-close-t').textContent=l.homeClose||'닫기';
   $('err-items').textContent=l.errItems;
   $('pk-title').textContent=l.pkTitle;
   $('pk-q').placeholder=l.pkSearch;
@@ -1325,6 +1369,45 @@ function buildMsg(condoName,condoUnit,phone,remarks){
 }
 
 // ══ SUBMIT ══
+/* ══ 가격 · 서비스 홈페이지 보기 ══════════════════════════════
+   새 창이 아니라 화면 위에 덮어 씌워 보여 줍니다.
+   「✕ 닫기」를 누르면 작성하던 요청서로 그대로 돌아오고, 담은 품목·입력 내용은 유지됩니다.
+   기기의 뒤로가기로도 닫히도록 방문 기록을 하나 쌓아 둡니다.        */
+(function(){
+  var wrap=$('hv-wrap'),fr=$('hv-frame');
+  if(!wrap||!fr)return;
+  var open=false;
+  function homeUrl(){return 'https://hhc-3p8.pages.dev/home'+(isEn()?'?lang=en':'');}
+  function nav(u){
+    // location.replace 는 방문 기록을 남기지 않아 기기 뒤로가기가 뷰어를 바로 닫습니다
+    try{ if(fr.contentWindow){fr.contentWindow.location.replace(u);return;} }catch(e){}
+    fr.src=u;
+  }
+  function show(){
+    if(open)return; open=true;
+    wrap.classList.add('on');
+    document.body.style.overflow='hidden';
+    try{history.pushState({hv:1},'','');}catch(e){}
+    nav(homeUrl());
+  }
+  function hide(fromPop){
+    if(!open)return; open=false;
+    wrap.classList.remove('on');
+    document.body.style.overflow='';
+    setTimeout(function(){nav('about:blank');},250);   // 소리·영상이 남지 않게 비웁니다
+    if(!fromPop){try{if(history.state&&history.state.hv)history.back();}catch(e){}}
+  }
+  var hb=$('btn-home'); if(hb)hb.addEventListener('click',show);
+  var hc=$('hv-close'); if(hc)hc.addEventListener('click',function(){hide(false);});
+  var hbk=$('hv-back'); if(hbk)hbk.addEventListener('click',function(){
+    // 홈페이지 안에서 이동했으면 그 안에서 뒤로, 아니면 요청서로 돌아옵니다
+    try{if(fr.contentWindow&&fr.contentWindow.history.length>1){fr.contentWindow.history.back();return;}}catch(e){}
+    hide(false);
+  });
+  window.addEventListener('popstate',function(){if(open)hide(true);});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&open)hide(false);});
+})();
+
 $('btn-submit').addEventListener('click',async()=>{
   if(!validate())return;
   const l=L[currentLang];
