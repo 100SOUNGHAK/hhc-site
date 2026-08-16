@@ -148,6 +148,11 @@ input,select,textarea,button{font-family:inherit;font-size:15px}
 .rc-status{padding:4px 11px;border-radius:20px;font-size:11px;font-weight:800;white-space:nowrap;flex-shrink:0}
 .rc-status.pending{background:var(--amber-bg);color:var(--amber)}
 .rc-status.completed{background:var(--green-bg);color:var(--green)}
+/* 접수완료 배지 — 누르면 총괄 고객관리의 해당 고객 상세보기가 열립니다 */
+.rc-status.go{cursor:pointer;transition:box-shadow .14s,transform .14s}
+.rc-status.go:hover{box-shadow:0 0 0 2px rgba(16,185,129,.35)}
+.rc-status.go:active{transform:translateY(1px)}
+.rc-status .gi{font-size:10px;opacity:.75;margin-left:2px}
 .rc-items{background:var(--surface2);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:9px;font-size:12.5px;color:var(--text2);line-height:1.8}
 .rc-item-row{display:flex;align-items:baseline;gap:6px}
 .rc-item-dot{color:var(--teal);font-size:15px;line-height:1}
@@ -1044,6 +1049,7 @@ async function connectFirebase(){
       allRequests=snap.docs.map(d=>({...d.data(),__id:d.id}));
       renderList();
       updateStats();
+      if(window._rqOpenId)setTimeout(rqTryOpen,150);   // 「열기·수정」으로 들어온 의뢰로 이동
     },(err)=>console.error(err));
     document.getElementById('fb-dot').classList.add('on');
     return true;
@@ -1204,7 +1210,7 @@ function renderList(){
           <div class="rc-name"><span class="ca-open" data-caopen="${r.__id}" title="총괄 고객관리에서 이 고객 상세 열기">${r.condo_name||r.condo||'—'}${r.condo_unit?' '+r.condo_unit:''}<span class="cai">👤</span></span>${gradeBadge(rqCustName(r),r.phone)}${langBadge}${urgentBadge}</div>
           <div class="rc-phone">📞 ${r.phone||'—'}</div>
         </div>
-        <span class="rc-status ${statusCls}">${statusLabel}</span>
+        <span class="rc-status ${statusCls}${isPending?'':' go'}"${isPending?'':` data-caopen="${r.__id}" title="총괄 고객관리에서 이 고객 상세 열기"`}>${statusLabel}${isPending?'':' <span class="gi">👤</span>'}</span>
       </div>
       <div class="rc-items">
         <div class="rc-items-hd"><span>🛒 의뢰 품목</span><span class="n">${items.reduce((a,it)=>a+(parseInt(it.qty,10)||1),0)}개</span></div>
@@ -1478,6 +1484,20 @@ document.getElementById('req-list').addEventListener('click',async e=>{
 });
 
 // 검색/필터 이벤트
+// ── 📎 총괄 고객관리 등에서 「열기·수정」으로 들어온 경우 ──
+//    해당 의뢰 카드로 스크롤해 잠시 강조합니다. (그 자리에서 ✏️ 수정 버튼을 바로 쓸 수 있습니다)
+window._rqOpenId=(function(){try{return new URLSearchParams(location.search).get('open')||'';}catch(e){return '';}})();
+function rqTryOpen(){
+  const k=window._rqOpenId;if(!k)return;
+  const card=document.querySelector('.req-card[data-id="'+k.replace(/"/g,'')+'"]');
+  if(!card)return;                       // 아직 목록에 없으면 다음 갱신 때 다시 시도
+  window._rqOpenId='';
+  // 상태 필터 때문에 숨겨져 있으면 「전체」로 되돌립니다
+  try{card.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){}
+  card.style.transition='box-shadow .3s';
+  card.style.boxShadow='0 0 0 3px rgba(37,99,235,.55)';
+  setTimeout(function(){card.style.boxShadow='';},4000);
+}
 document.getElementById('search-inp').addEventListener('input',renderList);
 document.getElementById('filter-status').addEventListener('change',renderList);
 document.getElementById('filter-sort').addEventListener('change',renderList);

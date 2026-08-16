@@ -710,6 +710,7 @@ async function initApp(){
       });
       sortAll(schedules);
       refresh();findOrphans();
+      if(window._schOpenId)setTimeout(schTryOpen,200);
     });
 
     onSnapshot(collection(db,'bookings'),snap=>{
@@ -750,6 +751,7 @@ async function initApp(){
     const t=myNow();
     selDate=fmt(t);
     renderNav();renderCal();renderDay(selDate);
+    setTimeout(schTryOpen,400);   // 「열기·수정」으로 들어온 일정이 있으면 그 날짜로 이동
   }catch(e){showLoading(false);alert('Firebase 오류: '+e.message);}
 }
 
@@ -804,6 +806,32 @@ function schIsBk(t){return t==='booking'||t==='reserve';}
 function getMerged(ds){return [...(bookings[ds]||[]),...(schedules[ds]||[])].sort((a,b)=>(a.time_s||'').localeCompare(b.time_s||''));}
 function fmt(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function getWeekStart(d){const day=d.getDay();const s=new Date(d);s.setDate(d.getDate()-day);return s;}
+
+// ── 📎 총괄 고객관리 등에서 「열기·수정」으로 들어온 경우 ──
+//    해당 일정의 날짜로 이동해 목록에서 잠시 강조합니다. (그 자리에서 ✏️ 수정 가능)
+window._schOpenId=(function(){try{return new URLSearchParams(location.search).get('open')||'';}catch(e){return '';}})();
+async function schTryOpen(){
+  const k=window._schOpenId;if(!k)return;
+  const hit=RAW_SCH.find(function(s2){return s2._id===k;});
+  if(!hit)return;                        // 아직 못 불러왔으면 다음 갱신 때 다시 시도
+  window._schOpenId='';
+  const ds=String(hit.date||'').slice(0,10);
+  if(ds){
+    const d=new Date(ds+'T00:00:00');
+    if(!isNaN(d.getTime())){curY=d.getFullYear();curM=d.getMonth();weekStart=getWeekStart(d);}
+    selDate=ds;
+    renderNav();renderCal();
+    await renderDay(ds);
+  }
+  setTimeout(function(){
+    const el=document.querySelector('.sch-item[data-id="'+k.replace(/"/g,'')+'"]');
+    if(!el)return;
+    try{el.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){}
+    el.style.transition='box-shadow .3s';
+    el.style.boxShadow='0 0 0 3px rgba(37,99,235,.55)';
+    setTimeout(function(){el.style.boxShadow='';},4000);
+  },300);
+}
 
 function refresh(){
   renderNav();
@@ -1121,7 +1149,7 @@ async function renderDay(ds){
       +(schIsBk(s.type)?`<button class="sch-edit" style="color:#085048" onclick="sendVisitReminder('${s._id}')" title="방문 안내 메시지 발송">💬</button>`:'')
       // 👤 총괄 고객관리 바로가기 — 예약 일정뿐 아니라 고객정보가 들어있는 직접입력·수리 일정에도 표시한다
       +(schHasCust(s)?`<button class="sch-edit sch-ca" style="color:#1d4ed8" onclick="openCustomerAdmin('${s._id}')" title="이 고객의 총괄 고객관리 상세 열기">👤</button>`:'');
-    html+=`<div class="sch-item">
+    html+=`<div class="sch-item" data-id="${s._id}">
       <div class="sch-bar" style="background:${barColor}"></div>
       <div class="sch-time-col"><div class="sch-ts">${s.time_s||'—'}</div>${s.time_e?`<div class="sch-te">~${s.time_e}</div>`:''}</div>
       <div class="sch-body">

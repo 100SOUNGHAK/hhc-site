@@ -209,6 +209,11 @@ select.field-input{cursor:pointer}
 .ci-status.booked{background:#E0EDFF;color:#1D4ED8}
 .ci-status.confirmed{background:var(--green-bg);color:var(--green)}
 .ci-status.done{background:#EEF1F7;color:#5A6580}
+/* 확정완료 배지 — 누르면 총괄 고객관리의 해당 고객 상세보기가 열립니다 */
+.ci-status.go{cursor:pointer;transition:box-shadow .14s,transform .14s}
+.ci-status.go:hover{box-shadow:0 0 0 2px rgba(16,185,129,.4)}
+.ci-status.go:active{transform:translateY(1px)}
+.ci-status .gi{font-size:10px;opacity:.75;margin-left:2px}
 /* 상태별 카드 좌측 컬러바 — 목록에서 한눈에 구분 */
 .customer-item.st-waiting{border-left:5px solid var(--amber)}
 .customer-item.st-booked{border-left:5px solid #3B82F6}
@@ -1570,6 +1575,7 @@ async function connectFirebase(){
       renderList();
       updateStats();
       updateSendSelects();
+      if(window._bkOpenId)setTimeout(bkTryOpen,150);   // 「열기·수정」으로 들어온 예약으로 이동
       if(typeof renderCalendar==='function'&&document.getElementById('cal-grid'))renderCalendar();
     });
     document.getElementById('fb-status').classList.add('connected');
@@ -1650,6 +1656,24 @@ document.getElementById('login-pw').addEventListener('keydown',e=>{if(e.key==='E
 document.getElementById('btn-logout').addEventListener('click',()=>{setAuth(false);if(unsub)unsub();showScreen('login');});
 
 // ── TABS ──
+// ── 📎 총괄 고객관리 등에서 「열기·수정」으로 들어온 경우 ──
+//    예약 목록 탭으로 전환하고 해당 예약 카드로 이동해 잠시 강조합니다.
+window._bkOpenId=(function(){try{return new URLSearchParams(location.search).get('open')||'';}catch(e){return '';}})();
+function bkTryOpen(){
+  const k=window._bkOpenId;if(!k)return;
+  if(!allBookings.some(function(x){return x.__id===k;}))return;   // 아직 목록에 없으면 다음 갱신 때
+  window._bkOpenId='';
+  try{setListFilter('all');}catch(e){}
+  switchTab('list');
+  setTimeout(function(){
+    const card=document.querySelector('.customer-item[data-id="'+k.replace(/"/g,'')+'"]');
+    if(!card)return;
+    try{card.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){}
+    card.style.transition='box-shadow .3s';
+    card.style.boxShadow='0 0 0 3px rgba(37,99,235,.55)';
+    setTimeout(function(){card.style.boxShadow='';},4000);
+  },250);
+}
 function switchTab(tab){
   document.querySelectorAll('#tab-nav .nav-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
   ['new','list','schedule'].forEach(t=>{const el=document.getElementById('tab-'+t);if(el)el.classList.toggle('active',t===tab);});
@@ -2272,13 +2296,13 @@ function renderList(){
         ${b.booking_items?`🔧 품목: ${b.booking_items}<br>`:''}
         ${b.booking_memo?`📝 요청사항: ${b.booking_memo}`:''}
       </div>`:'' ;
-    return `<div class="customer-item st-${statusCls}">
+    return `<div class="customer-item st-${statusCls}" data-id="${b.__id}">
       <div class="ci-top">
         <div>
           <div class="ci-name"><span class="ca-open" onclick="openCustomerAdminById('${b.__id}')" title="총괄 고객관리에서 이 고객 상세 열기">${b.customer_name||'—'}<span class="cai">👤</span></span>${gradeBadge(b.customer_name,b.customer_phone)}${langBadge}</div>
           <div class="ci-phone">${b.customer_phone||''} ${b.customer_address?'· '+b.customer_address:''}</div>
         </div>
-        <span class="ci-status ${statusCls}">${statusLabel}</span>
+        <span class="ci-status ${statusCls}${b.status==='confirmed'?' go':''}"${b.status==='confirmed'?` onclick="openCustomerAdminById('${b.__id}')" title="총괄 고객관리에서 이 고객 상세 열기"`:''}>${statusLabel}${b.status==='confirmed'?' <span class="gi">👤</span>':''}</span>
       </div>
       ${bookingInfo}
       ${(dateTags||b.customer_memo)?`<details class="ci-more"><summary>예약 일정 · 메모 보기</summary>
