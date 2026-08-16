@@ -1995,7 +1995,7 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
         booking_id:docId,
         created_at:new Date().toISOString()
       };
-      await removeBookingMirror(docId);
+      await removeBookingMirror(docId,{customer_name:name,booking_date:bDate});
       await addDoc(collection(db,'schedules'),schData);
     }
 
@@ -2733,19 +2733,46 @@ window.editBooking=function(id){
   window.scrollTo({top:0,behavior:'smooth'});
 };
 
-// 특정 예약의 기존 자동 미러 일정 삭제 (중복 방지)
-async function removeBookingMirror(bookingId){
+// 특정 예약의 자동 등록 일정(미러) 삭제 — 중복·잔재 방지
+//  ① booking_id 로 연결된 일정을 지웁니다.
+//  ② booking_id 가 없던 시절에 만들어진 옛 일정은 ①로 찾히지 않아 캘린더에 남았습니다.
+//     → 화면에 이미 불러와 둔 일정(schedules) 중 「예약에서 자동 등록된 것」이면서
+//       같은 고객·같은 날짜인 것을 함께 지웁니다. (직접 만든 일정은 건드리지 않습니다)
+async function removeBookingMirror(bookingId,bk){
+  const ids=new Set();
   try{
     const snap=await getDocs(query(collection(db,'schedules'),where('booking_id','==',bookingId)));
-    await Promise.all(snap.docs.map(d=>deleteDoc(doc(db,'schedules',d.id))));
+    snap.docs.forEach(d=>ids.add(d.id));
+  }catch(e){console.warn('미러 일정 조회 실패:',e&&e.message);}
+  try{
+    const b=bk||allBookings.find(x=>x.__id===bookingId)||null;
+    const nm=String((b&&b.customer_name)||'').trim();
+    const dt=String((b&&b.booking_date)||'').slice(0,10);
+    if(nm||dt){
+      Object.keys(schedules||{}).forEach(function(k){
+        (schedules[k]||[]).forEach(function(s2){
+          if(!s2||!s2._id)return;
+          if(s2.booking_id===bookingId){ids.add(s2._id);return;}
+          if(String(s2.type||'')!=='booking')return;              // 예약에서 만든 일정만
+          if(s2.booking_id)return;                                 // 다른 예약에 연결된 건 제외
+          const sameDate=dt&&String(s2.date||'').slice(0,10)===dt;
+          const sameName=nm&&(String(s2.customer_name||'').trim()===nm||String(s2.title||'').indexOf(nm)===0);
+          if(sameDate&&sameName)ids.add(s2._id);
+        });
+      });
+    }
+  }catch(e){}
+  try{
+    await Promise.all([...ids].map(id2=>deleteDoc(doc(db,'schedules',id2)).catch(()=>{})));
   }catch(e){console.warn('미러 일정 정리 실패:',e&&e.message);}
+  return ids.size;
 }
 
 // 확정된 예약의 일정 미러(schedules 컬렉션)를 최신 예약일/시간/품목 기준으로 재생성.
 // 예약일이 변경된 경우 기존(변경 전) 날짜에 남아있던 미러를 지우고 새 날짜에 다시 만들어,
 // 캘린더에 수정 전·후 일정이 동시에 남지 않도록 한다.
 async function syncBookingMirror(id,b){
-  await removeBookingMirror(id);
+  await removeBookingMirror(id,b);
   if(!b.booking_date)return;
   const schData={
     date:b.booking_date,
@@ -2809,7 +2836,7 @@ window.toWaitingBooking=function(id){
       showLoading(true);
       try{
         await updateDoc(doc(db,'bookings',id),{status:'waiting',unconfirmed_at:new Date().toISOString()});
-        await removeBookingMirror(id);
+        await removeBookingMirror(id,b);
         showToast('⏳ 대기중으로 변경되었습니다');
       }catch(e){showModal('오류',e.message,false);}
       showLoading(false);
@@ -2830,7 +2857,7 @@ window.unconfirmBooking=function(id){
     showLoading(true);
     try{
       await updateDoc(doc(db,'bookings',id),{status:revertTo,unconfirmed_at:new Date().toISOString()});
-      await removeBookingMirror(id);
+      await removeBookingMirror(id,b);
       showToast('↩ 확정이 취소되었습니다 ('+revertLabel+' 상태)');
     }catch(e){showModal('오류',e.message,false);}
     showLoading(false);
@@ -2994,11 +3021,9 @@ window.deleteBooking=function(id){
   showModal('삭제 확인',`'${b?.customer_name||''}' 예약을 삭제하시겠습니까? (연결된 캘린더 일정도 함께 삭제됩니다)`,true,async()=>{
     showLoading(true);
     try{
+      const n=await removeBookingMirror(id,b);   // 삭제 전에 일정부터 정리 (예약 정보가 필요합니다)
       await deleteDoc(doc(db,'bookings',id));
-      const q=query(collection(db,'schedules'),where('booking_id','==',id));
-      const snap=await getDocs(q);
-      await Promise.all(snap.docs.map(d=>deleteDoc(doc(db,'schedules',d.id))));
-      showToast('✓ 삭제되었습니다 (캘린더 일정 포함)');
+      showToast(n?'✓ 삭제되었습니다 (캘린더 일정 '+n+'건 포함)':'✓ 삭제되었습니다');
     }
     catch(e){showModal('오류',e.message,false);}
     showLoading(false);

@@ -3459,7 +3459,7 @@ window.caHomeModal=function(idx){
 };
 
 // ═══ 문서 연결 · 수정 · 삭제 ═══
-const COLL_LB={invoices:'💳 인보이스',inspections:'🔧 점검보고서',contracts:'📑 계약서',coupons:'🎫 상품권',requests:'📥 의뢰',bookings:'🗓️ 예약',quotes:'🧾 견적서',schedules:'📅 스케줄'};
+const COLL_LB={invoices:'💳 인보이스',inspections:'🔧 점검보고서',contracts:'📑 계약서',coupons:'🎫 상품권',requests:'📥 의뢰',bookings:'🗓️ 예약',quotes:'🧾 견적서',schedules:'📅 스케줄',memos:'📝 메모장'};
 function docOwnerName(coll,x){
   if(coll==='invoices')return (x.customer&&x.customer.name)||'';
   if(coll==='inspections')return x.client||'';
@@ -3480,6 +3480,7 @@ function docSummary(coll,x){
   if(coll==='requests')return (reqName(x)||'의뢰')+' · '+String(x.created_at||'').slice(0,10);
   if(coll==='bookings')return (x.customer_name||'예약')+' · '+(x.booking_date||x.created_at&&String(x.created_at).slice(0,10)||'')+(x.status?' · '+x.status:'');
   if(coll==='quotes')return (x.qno||'견적')+' · '+(x.client||'')+' · '+(x.issueDate||'');
+  if(coll==='memos')return (x.name||x.condo||'메모')+' · '+(x.req_date||'')+(x.symptom?' · '+String(x.symptom).split('\n')[0]:'');
   return (x.title||x.customer_name||'일정')+' · '+(x.date||'');
 }
 // 문서 종류별 「고객명 필드」 이름 — 이름을 바꿀 때만 사용
@@ -3917,12 +3918,38 @@ window.caDocEdit=function(coll,id){
   });
 };
 // ── ✕ 삭제 ──
+// 📅 예약·메모를 지우면 캘린더에 자동 등록된 일정도 함께 지웁니다.
+//    (예전에는 문서만 지워져 스케줄 캘린더에 일정이 남아 있었습니다)
+function caLinkedSchedules(coll,id,x){
+  const out=[];
+  (RAW.schedules||[]).forEach(function(s2){
+    if(!s2||!s2.__id)return;
+    if(coll==='bookings'){
+      if(s2.booking_id===id){out.push(s2.__id);return;}
+      // booking_id 가 없던 시절에 만들어진 옛 일정 — 같은 고객·같은 날짜의 「예약 자동등록」만
+      if(String(s2.type||'')!=='booking'||s2.booking_id)return;
+      const nm=String((x&&x.customer_name)||'').trim();
+      const dt=String((x&&x.booking_date)||'').slice(0,10);
+      if(!nm||!dt)return;
+      if(String(s2.date||'').slice(0,10)!==dt)return;
+      if(String(s2.customer_name||'').trim()===nm||String(s2.title||'').indexOf(nm)>=0)out.push(s2.__id);
+    }else if(coll==='memos'){
+      if(s2.memo_id===id||(x&&x.schedule_id&&s2.__id===x.schedule_id))out.push(s2.__id);
+    }
+  });
+  return [...new Set(out)];
+}
 window.caDocDel=async function(coll,id){
   const x=RAW[coll].find(d=>d.__id===id);if(!x)return;
-  if(!confirm(COLL_LB[coll]+' 문서를 삭제할까요?\n\n'+docSummary(coll,x)+'\n\n⚠ 삭제하면 되돌릴 수 없습니다.'))return;
+  const sch=caLinkedSchedules(coll,id,x);
+  if(!confirm(COLL_LB[coll]+' 문서를 삭제할까요?\n\n'+docSummary(coll,x)+
+    (sch.length?'\n\n· 캘린더에 자동 등록된 일정 '+sch.length+'건도 함께 삭제됩니다.':'')+
+    '\n\n⚠ 삭제하면 되돌릴 수 없습니다.'))return;
   try{
     await deleteDoc(doc(db,coll,id));
-    toast('✓ 삭제되었습니다');loadAll(true);
+    for(const sid of sch){try{await deleteDoc(doc(db,'schedules',sid));}catch(_){}}
+    toast(sch.length?('✓ 삭제되었습니다 (캘린더 일정 '+sch.length+'건 포함)'):'✓ 삭제되었습니다');
+    loadAll(true);
   }catch(err){toast('삭제 실패: '+err.message);}
 };
 

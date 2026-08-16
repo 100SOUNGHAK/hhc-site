@@ -335,6 +335,9 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
     <button class="nav-btn" onclick="nextPeriod()">›</button>
   </div>
 
+  <!-- 🧹 원본이 삭제된 자동 일정 정리 안내 -->
+  <div id="orphan-bar" style="display:none"></div>
+
   <!-- 오늘 일정 요약 -->
   <div class="today-summary" id="today-summary">
     <div>
@@ -478,6 +481,15 @@ function myFmtDT(v){if(!v)return '—';const d=new Date(v);if(isNaN(d.getTime())
 let db=null;
 let schedules={};  // Firestore schedules
 let bookings={};   // confirmed bookings
+// ═══ 🧹 「원본이 삭제된 자동 일정」 정리 ═══
+//  · 예약·메모장에서 자동 등록된 일정은 원본을 지우면 함께 지워집니다.
+//  · 예전(연결번호가 없던 시절)에 만들어진 일정은 원본을 지워도 캘린더에 남아 있었습니다.
+//  · 아래에서 「원본이 없는 자동 일정」을 찾아 한 번에 정리할 수 있게 안내합니다.
+let RAW_SCH=[];            // 모든 일정 원본 (숨김 처리된 미러 포함)
+let BK_ALL={};             // 예약 전체 : id → {date,name,status}
+let MEMO_IDS=new Set();    // 메모(수리요청) 문서 id
+let bkReady=false,mmReady=false;
+let orphanIds=[];
 let translCache={};// 번역 캐시
 
 let curY=myNow().getFullYear(),curM=myNow().getMonth();
@@ -688,6 +700,7 @@ async function initApp(){
 
     onSnapshot(collection(db,'schedules'),snap=>{
       schedules={};
+      RAW_SCH=snap.docs.map(d=>Object.assign({},d.data(),{_id:d.id}));
       snap.docs.forEach(d=>{
         const dat=Object.assign({},d.data(),{_id:d.id,source:'manual'});
         // 확정 예약이 자동 생성한 미러 일정(booking_id 보유)은 bookings 컬렉션에서 이미 표시되므로 제외 → 중복 방지
@@ -696,13 +709,15 @@ async function initApp(){
         schedules[dat.date].push(dat);
       });
       sortAll(schedules);
-      refresh();
+      refresh();findOrphans();
     });
 
     onSnapshot(collection(db,'bookings'),snap=>{
-      bookings={};
+      bookings={};BK_ALL={};bkReady=true;
       snap.docs.forEach(d=>{
         const b=Object.assign({},d.data(),{_id:d.id});
+        BK_ALL[d.id]={date:String(b.booking_date||'').slice(0,10),
+                      name:String(b.customer_name||'').trim(),status:String(b.status||'')};
         if(b.status!=='confirmed'||!b.booking_date)return;
         if(!bookings[b.booking_date])bookings[b.booking_date]=[];
         bookings[b.booking_date].push({
@@ -723,8 +738,13 @@ async function initApp(){
         });
       });
       sortAll(bookings);
-      refresh();
+      refresh();findOrphans();
     });
+
+    // 메모장(수리요청) — 자동 등록된 「🛠 수리」 일정의 원본 확인용
+    onSnapshot(collection(db,'memos'),snap=>{
+      MEMO_IDS=new Set(snap.docs.map(d=>d.id));mmReady=true;findOrphans();
+    },()=>{mmReady=true;});
 
     showLoading(false);
     const t=myNow();
@@ -734,6 +754,51 @@ async function initApp(){
 }
 
 function sortAll(map){Object.keys(map).forEach(dt=>{map[dt].sort((a,b)=>(a.time_s||'').localeCompare(b.time_s||''));});}
+
+/* ═══ 🧹 원본이 삭제된 자동 일정 찾기 ═══
+   「예약·메모와 연결된 번호(booking_id · memo_id)를 가지고 있는데 그 원본이 없는」
+   일정만 골라냅니다. 연결 번호가 없는 일정은 직접 만든 일정일 수 있으므로
+   어떤 경우에도 자동 정리 대상에 넣지 않습니다. */
+function findOrphans(){
+  if(!bkReady)return;
+  orphanIds=RAW_SCH.filter(function(s2){
+    if(s2.booking_id)return !BK_ALL[s2.booking_id];
+    if(s2.memo_id)return mmReady&&!MEMO_IDS.has(s2.memo_id);
+    return false;
+  }).map(function(s2){return s2._id;});
+  renderOrphanBar();
+}
+function renderOrphanBar(){
+  const bar=document.getElementById('orphan-bar');
+  if(!bar)return;
+  if(!orphanIds.length||window._orphanHide){bar.style.display='none';bar.innerHTML='';return;}
+  bar.style.display='block';
+  bar.style.cssText='display:block;margin:0 14px 10px;background:#FFF7ED;border:1.5px solid #FDBA74;'+
+    'border-radius:12px;padding:11px 13px;font-size:13px;font-weight:800;color:#9A3412;line-height:1.6';
+  bar.innerHTML='🧹 예약·메모가 삭제되었는데 캘린더에 남아 있는 자동 일정 <b>'+orphanIds.length+'건</b>이 있습니다.'+
+    '<div style="margin-top:8px;display:flex;gap:7px;flex-wrap:wrap">'+
+    '<button type="button" id="orphan-go" style="font-family:inherit;font-size:12.5px;font-weight:900;border:none;'+
+      'background:#EA580C;color:#fff;border-radius:9px;padding:9px 15px;cursor:pointer">🧹 지금 정리하기</button>'+
+    '<button type="button" id="orphan-x" style="font-family:inherit;font-size:12.5px;font-weight:800;border:1.5px solid #FDBA74;'+
+      'background:#fff;color:#9A3412;border-radius:9px;padding:9px 13px;cursor:pointer">나중에</button></div>';
+  bar.querySelector('#orphan-x').onclick=function(){window._orphanHide=true;renderOrphanBar();};
+  bar.querySelector('#orphan-go').onclick=cleanOrphans;
+}
+async function cleanOrphans(){
+  if(!orphanIds.length)return;
+  const names=RAW_SCH.filter(function(s2){return orphanIds.indexOf(s2._id)>=0;})
+    .slice(0,8).map(function(s2){return '· '+String(s2.date||'')+'  '+String(s2.title||'');}).join('\n');
+  if(!confirm('원본이 삭제된 자동 일정 '+orphanIds.length+'건을 정리할까요?\n\n'+names+
+    (orphanIds.length>8?('\n… 외 '+(orphanIds.length-8)+'건'):'')+
+    '\n\n· 직접 만든 일정은 지워지지 않습니다.\n· 되돌릴 수 없습니다.'))return;
+  showLoading(true);
+  let ok=0;
+  for(const id of orphanIds){
+    try{await deleteDoc(doc(db,'schedules',id));ok++;}catch(e){}
+  }
+  showLoading(false);
+  showToast('🧹 자동 일정 '+ok+'건을 정리했습니다');
+}
 // 📅 직접 추가한 「예약」 일정도 예약확정 건과 동일하게 취급 (색상·집계·고객 버튼)
 function schIsBk(t){return t==='booking'||t==='reserve';}
 function getMerged(ds){return [...(bookings[ds]||[]),...(schedules[ds]||[])].sort((a,b)=>(a.time_s||'').localeCompare(b.time_s||''));}
