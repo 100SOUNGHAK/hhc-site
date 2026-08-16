@@ -1174,12 +1174,26 @@ window.toggleIssuer=toggleIssuer;window.cancelIssuer=cancelIssuer;window.saveIss
 // FORM
 // ═══════════════════════════════════════════════════════════
 var App={};
+// ═══ 지금 「수정 중인」 인보이스 문서 id ═══
+//  · 총괄 고객관리·목록에서 기존 인보이스를 불러오면 여기에 문서 id가 들어갑니다.
+//  · 새 인보이스를 시작하면 비워집니다.
+//  · 저장할 때 이 값이 있으면 무조건 그 문서를 덮어쓰므로, 번호가 바뀌어도 새 인보이스가
+//    하나 더 생기지 않습니다.
+window._invEditDocId='';
+function isEditingSaved(){
+  if(window._invEditDocId)return true;
+  var cur=val('inv-num');
+  return !!(cur&&invoices&&invoices.some(function(i){return i.id===cur;}));
+}
 App.onDateChange=function(){
   var d=val('inv-date');
-  if(d){setVal('inv-num',genId(d));setVal('inv-due',addDays(d,3));}
+  // ⚠️ 이미 저장된 인보이스를 수정하는 중이면 번호·만기일을 건드리지 않습니다.
+  //    (예전에는 발행일을 고칠 때마다 번호가 새로 만들어져, 저장하면 인보이스가 하나 더 생겼습니다)
+  if(d&&!isEditingSaved()){setVal('inv-num',genId(d));setVal('inv-due',addDays(d,3));}
   App.upPrev();
 };
 App.resetForm=function(){
+  window._invEditDocId='';   // 새 인보이스 — 수정 중 표시 해제
   var t=today();
   setVal('inv-date',t);setVal('inv-num',genId(t));setVal('inv-due',addDays(t,3));
   setVal('inv-status','billing');setVal('inv-currency','MYR');
@@ -1284,6 +1298,7 @@ function loadInvToForm(inv){
   });
   window._creditAuto=false;updateCreditHint(); // 기존 인보이스: 저장된 차감액 유지 (자동반영 끔)
   window._creditPicked=(parseFloat(inv.creditUse)||0)>0.005; // 저장된 차감액이 있으면 은행·상태 자동선택 안 함
+  window._invEditDocId=inv._docId||'';   // 이 문서를 수정하는 중임을 기억 (저장 시 덮어쓰기)
   showLinkBox(inv.id);renderLI();App.upPrev();Nav('new');Tab('info');
   if(window.refreshInspBox)window.refreshInspBox(inv.id);
   if(window.loadCtLinkFromInv)loadCtLinkFromInv(inv);
@@ -3070,9 +3085,12 @@ async function saveInv(){
   }
   showLoad('저장 중...');
   try{
-    var ex=invoices.find(function(i){return i.id===inv.id;});
-    if(ex&&ex._docId)await DB.collection('invoices').doc(ex._docId).set(inv);
-    else{var ref=await DB.collection('invoices').add(inv);inv._docId=ref.id;}
+    // 수정 중이던 문서가 있으면 그 문서를 덮어쓰고, 없을 때만 새로 만듭니다.
+    //  · 번호(인보이스번호)로만 찾으면 번호가 바뀐 순간 새 인보이스가 하나 더 생깁니다.
+    var ex=(window._invEditDocId&&invoices.find(function(i){return i._docId===window._invEditDocId;}))
+           ||invoices.find(function(i){return i.id===inv.id;});
+    if(ex&&ex._docId){await DB.collection('invoices').doc(ex._docId).set(inv);inv._docId=ex._docId;window._invEditDocId=ex._docId;}
+    else{var ref=await DB.collection('invoices').add(inv);inv._docId=ref.id;window._invEditDocId=ref.id;}
     autoSaveCust(inv.customer);
     clearInvDraft();
     if(window.refreshInspBox)window.refreshInspBox(inv.id);
