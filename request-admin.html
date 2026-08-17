@@ -718,7 +718,10 @@ window.HHCC_check=async function(name,phone){
     var list=await hccLoad();
     if(list.some(function(c){return hccPN(c.phone)===pn;}))return {phone:phone,action:'keep'};
     var nn=hccNN(name);
-    var m=list.find(function(c){return hccPN(c.phone)&&hccNameHit(c,nn);});
+    // ⚠️ 「이미 다른 연락처로 등록되어 있습니다」 안내는 고객마스터의 <이름>이 정확히 같을 때만 띄웁니다.
+    //    별칭(aliases)까지 보면, 예전에 콘도명만으로 등록되며 쌓인 별칭 때문에
+    //    같은 콘도의 전혀 다른 호수 고객이 「같은 사람」으로 잘못 안내되었습니다.
+    var m=list.find(function(c){return hccPN(c.phone)&&hccNN(c.name)===nn;});
     if(!m)return {phone:phone,action:'keep'};
     return await new Promise(function(res){
       hccCSS();
@@ -1374,8 +1377,12 @@ document.getElementById('req-list').addEventListener('click',async e=>{
       return{cat:c?c.ko:'',svc:pkItemTitle(p),qty:String(p.qty)};
     });
     const itemsStruct=editPicked.map(p=>({catId:p.catId,grpKo:p.grp?p.grp[0]:null,svcKo:p.svc?p.svc[0]:null,free:!!p.free,text:p.free?(p.text||''):'',qty:p.qty}));
+    // 👤 고객마스터 확인·등록에 쓰는 이름 — 콘도명만 넘기면 같은 콘도의 다른 호수 고객과
+    //    같은 사람으로 취급되어 「이미 다른 연락처로 등록되어 있습니다」가 잘못 표시됩니다.
+    //    목록·발송에서 쓰는 것과 같은 「콘도명 + 동호수」로 만들어 넘깁니다.
+    const custName=(condo+' '+unit).trim();
     if(window.HHCC_check&&phone){
-      const _ck=await HHCC_check(condo,phone);
+      const _ck=await HHCC_check(custName,phone);
       if(!_ck)return;
       if(_ck.phone&&_ck.phone!==phone){phone=_ck.phone;document.getElementById('edit-phone-'+id).value=phone;}
     }
@@ -1384,7 +1391,7 @@ document.getElementById('req-list').addEventListener('click',async e=>{
       // 품목도 고객용과 동일한 카탈로그 선택기로 편집되므로, 구조화 데이터(items_struct)를 정확하게 저장하여
       // 예약전환 시 고객 화면에 품목이 그대로 자동 반영되게 함
       await updateDoc(doc(db,'requests',id),{condo_name:condo,condo:condo,condo_unit:unit,phone:phone,remarks:remarks,items:JSON.stringify(items),items_struct:JSON.stringify(itemsStruct)});
-      if(window.HHCC_upsert&&phone)HHCC_upsert(condo,phone);
+      if(window.HHCC_upsert&&phone)HHCC_upsert(custName,phone,{addr:custName});
       showToast('✓ 수정되었습니다');
       editingReqId=null;
       editPicked=[];
