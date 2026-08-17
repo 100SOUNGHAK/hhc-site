@@ -1093,6 +1093,10 @@ function buildEntries(){
     e.inactive=!!m.ca_inactive;   // ⏸ 비활성 고객 (기본 목록에서 숨김)
     e.ch=CH_OK(m.ca_ch);          // 📞 연락 경로 표시 (W · K · O · 없음)
     e.careLog=Array.isArray(m.care_log)?m.care_log.slice():[];   // 🌿 정기관리 안내 발송 이력
+    // 👑 회원 구분을 「정보 수정」에서 직접 지정했는지 여부
+    //    지정했다면 계약서·인보이스에 적힌 옛 등급이 이 값을 덮어쓰지 않습니다.
+    //    (이 표시가 없으면 예전처럼 문서에서 등급을 끌어와 보여 줍니다)
+    e.memberFixed=!!m.ca_member_set;
     entries.push(e);
     const k=pn(m.phone);if(k&&!byP[k])byP[k]=e;
     idxName(e,m.name);(m.aliases||[]).forEach(a=>idxName(e,a));
@@ -1118,8 +1122,8 @@ function buildEntries(){
     e.docs[coll].push(x);
     return e;
   }
-  RAW.contracts.forEach(x=>{const e=attach('contracts',x,x.name,x.phone);if(!e.member&&x.package_id)e.member='패키지 - '+pkgLabel(x.package_id);});
-  RAW.invoices.forEach(x=>{const c=x.customer||{};const e=attach('invoices',x,c.name,c.phone);if(!e.member&&c.member)e.member=c.member;});
+  RAW.contracts.forEach(x=>{const e=attach('contracts',x,x.name,x.phone);if(!e.member&&!e.memberFixed&&x.package_id)e.member='패키지 - '+pkgLabel(x.package_id);});
+  RAW.invoices.forEach(x=>{const c=x.customer||{};const e=attach('invoices',x,c.name,c.phone);if(!e.member&&!e.memberFixed&&c.member)e.member=c.member;});
   RAW.inspections.forEach(x=>attach('inspections',x,x.client,x.phone));
   RAW.bookings.forEach(x=>attach('bookings',x,x.customer_name,x.customer_phone));
   RAW.schedules.forEach(x=>{if(x.customer_name||x.customer_phone)attach('schedules',x,x.customer_name,x.customer_phone);});
@@ -1164,8 +1168,8 @@ function buildEntries(){
           e.linkNames=e.linkNames.concat([it.name]);
       }
       e.docs[it.coll].push(it.x);
-      if(it.coll==='contracts'&&!e.member&&it.x.package_id)e.member='패키지 - '+pkgLabel(it.x.package_id);
-      if(it.coll==='invoices'&&!e.member&&it.x.customer&&it.x.customer.member)e.member=it.x.customer.member;
+      if(it.coll==='contracts'&&!e.member&&!e.memberFixed&&it.x.package_id)e.member='패키지 - '+pkgLabel(it.x.package_id);
+      if(it.coll==='invoices'&&!e.member&&!e.memberFixed&&it.x.customer&&it.x.customer.member)e.member=it.x.customer.member;
     });
   }
   // ── 중복 연결(ca_links) 반영 : 원래 고객은 그대로 두고 추가 고객에게도 함께 표시 ──
@@ -1188,8 +1192,8 @@ function buildEntries(){
         const on=docOwnerName(it.coll,it.x),nk=nn(on);
         if(nk&&nn(e.name)!==nk&&!e.aliases.some(a=>nn(a)===nk)&&!e.linkNames.some(a=>nn(a)===nk))
           e.linkNames=e.linkNames.concat([on]);
-        if(it.coll==='contracts'&&!e.member&&it.x.package_id)e.member='패키지 - '+pkgLabel(it.x.package_id);
-        if(it.coll==='invoices'&&!e.member&&it.x.customer&&it.x.customer.member)e.member=it.x.customer.member;
+        if(it.coll==='contracts'&&!e.member&&!e.memberFixed&&it.x.package_id)e.member='패키지 - '+pkgLabel(it.x.package_id);
+        if(it.coll==='invoices'&&!e.member&&!e.memberFixed&&it.x.customer&&it.x.customer.member)e.member=it.x.customer.member;
       });
     });
   })();
@@ -1489,6 +1493,8 @@ window.caCareUndo=async function(idx,k){
 function memberBadge(e){
   if(isVVIP(e))return '<span class="pill gold">👑 VVIP</span>';
   if(/^패키지/.test(e.member||''))return '<span class="pill blue">📦 '+esc(e.member)+'</span>';
+  if(e.member)return '<span class="pill blue">👑 '+esc(e.member)+'</span>';
+  if(e.memberFixed)return '';        // 「(없음)」으로 직접 지정한 고객
   if(e.docs.contracts.length)return '<span class="pill blue">📦 패키지(계약)</span>';
   return '';
 }
@@ -2075,7 +2081,10 @@ document.addEventListener('click',function(ev){
 
 // ═══ 신규/수정 ═══
 function fillMemberSel(v){
-  document.getElementById('em-member').innerHTML=MEMBER_TIERS.map(t=>'<option value="'+esc(t)+'"'+(t===(v||'')?' selected':'')+'>'+(t||'(없음)')+'</option>').join('');
+  v=String(v||'');
+  // 목록에 없는 등급(예전 표기·계약에서 가져온 값)도 그대로 고를 수 있게 맨 위에 넣어 둡니다.
+  const tiers=(v&&MEMBER_TIERS.indexOf(v)<0)?[v].concat(MEMBER_TIERS):MEMBER_TIERS;
+  document.getElementById('em-member').innerHTML=tiers.map(t=>'<option value="'+esc(t)+'"'+(t===v?' selected':'')+'>'+(t||'(없음)')+'</option>').join('');
 }
 window.openNewModal=function(){
   editTarget=null;
@@ -2096,7 +2105,7 @@ window.openEditModal=function(idx){
   document.getElementById('em-email').value=e.email||'';
   document.getElementById('em-addr').value=e.addr||'';
   document.getElementById('em-memo').value=e.memo||'';
-  fillMemberSel(e.member&&MEMBER_TIERS.includes(e.member)?e.member:'');
+  fillMemberSel(e.member||'');     // 지금 화면에 보이는 등급을 그대로 보여 줍니다
   document.getElementById('edit-mask').classList.add('open');
 };
 window.closeEdit=function(){document.getElementById('edit-mask').classList.remove('open');};
@@ -2132,7 +2141,7 @@ window.saveEdit=async function(){
     const dup=entries.find(x=>pn(phone)&&pn(x.phone)===pn(phone));
     if(dup&&!confirm('같은 연락처의 고객('+dup.name+')이 이미 있습니다. 그래도 새로 등록할까요?'))return;
     try{
-      await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name,phone,member,email,addr,memo,aliases,created_at:now,updated_at:now});
+      await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name,phone,member,ca_member_set:true,email,addr,memo,aliases,created_at:now,updated_at:now});
       toast('✓ 신규 고객이 등록되었습니다');
       closeEdit();loadAll(true);
     }catch(err){toast('등록 실패: '+err.message);}
@@ -2155,9 +2164,9 @@ async function applyEdit(e,v,propagate){
     if(v.name!==e.name&&e.name&&!als.some(a=>nn(a)===nn(e.name)))als.push(e.name);
     als=als.filter(a=>nn(a)!==nn(v.name));
     if(e.master&&e.master.__id){
-      await updateDoc(doc(db,'customers',e.master.__id),{name:v.name,phone:v.phone,member:v.member,email:v.email,addr:v.addr,memo:v.memo,aliases:als,updated_at:now});
+      await updateDoc(doc(db,'customers',e.master.__id),{name:v.name,phone:v.phone,member:v.member,ca_member_set:true,email:v.email,addr:v.addr,memo:v.memo,aliases:als,updated_at:now});
     }else{
-      await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name:v.name,phone:v.phone,member:v.member,email:v.email,addr:v.addr,memo:v.memo,aliases:als,created_at:now,updated_at:now});
+      await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name:v.name,phone:v.phone,member:v.member,ca_member_set:true,email:v.email,addr:v.addr,memo:v.memo,aliases:als,created_at:now,updated_at:now});
     }
     if(propagate)await propagateDocs(e,v);
     toast('✓ 저장되었습니다'+(propagate?' — 전 프로그램 반영 완료':''));
