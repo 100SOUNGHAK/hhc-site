@@ -212,6 +212,24 @@ textarea{resize:vertical;line-height:1.6}
 .ocr-status.busy{color:#8a8a9a}
 input.ocr-filled{background:#fff8e0!important;border-color:#f0c040!important}
 .ph-del{position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#c0392b;color:#fff;border:none;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+/* ── 고장/작업 영상 ── */
+.vid-note{font-size:11.5px;color:#5b6478;background:#f6f8fc;border:1px solid #e3e8f4;border-radius:9px;padding:9px 11px;margin-bottom:11px;line-height:1.6}
+.vid-note b{color:#1d3fd6}
+.vid-row{display:flex;flex-direction:column;gap:9px}
+.vd-item{position:relative;border:1px solid #dde1ee;border-radius:11px;overflow:hidden;background:#0e1424}
+.vd-item video{width:100%;max-height:200px;display:block;background:#0e1424}
+.vd-meta{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#fff;font-size:11.5px;color:#6b7280;border-top:1px solid #eef0f7}
+.vd-meta .vd-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;color:#374151}
+.vd-info{font-variant-numeric:tabular-nums;flex-shrink:0}
+.vd-info.vd-warn{color:#c0392b;font-weight:700}
+.vd-del{border:none;background:#fdecea;color:#c0392b;font-weight:700;font-size:11.5px;border-radius:7px;padding:5px 10px;cursor:pointer;flex-shrink:0;transition:transform .15s}
+.vd-del:active{transform:scale(.94)}
+.vid-add-group{display:flex;gap:7px;margin-top:11px}
+.vd-add{flex:1;height:58px;border:1.5px dashed #c0c8e0;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:7px;font-size:18px;color:#9ca3af;cursor:pointer;position:relative}
+.vd-add span{font-size:12.5px;font-weight:700}
+.vd-add input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.vid-add-group.off{opacity:.4;pointer-events:none}
+.vid-cnt{font-size:11.5px;font-weight:800;color:#1d3fd6;font-variant-numeric:tabular-nums}
 /* 사진 순서 이동 버튼 + 순번 */
 .ph-mv{position:absolute;bottom:2px;width:24px;height:20px;border:none;border-radius:5px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;padding:0}
 .ph-mv:disabled{opacity:.25;cursor:default}
@@ -578,6 +596,19 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   <div class="card-body">
     <div class="photo-row" id="work-photos">
       <div class="photo-add-group"><div class="ph-add">📷<span>촬영</span><input type="file" accept="image/*" capture="environment" multiple data-container="work-photos"></div><div class="ph-add">📁<span>앨범</span><input type="file" accept="image/*" multiple data-container="work-photos"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 고장/작업 영상 -->
+<div class="card">
+  <div class="card-hdr"><div class="card-icon">🎬</div><div class="card-title">고장/작업 영상</div><div class="vid-cnt" id="vid-count" style="margin-left:auto">0 / 2</div></div>
+  <div class="card-body">
+    <div class="vid-note">소음·누수·동작 문제처럼 사진으로 설명하기 어려운 내용을 담아 주세요.<br>최대 <b>2개</b> · 1개당 <b>30초 이내 · 50MB 이하</b> — 고객 보고서에서 바로 재생되고, 인쇄물에는 QR코드가 들어갑니다.</div>
+    <div class="vid-row" id="work-videos"></div>
+    <div class="vid-add-group" id="work-videos-add">
+      <div class="vd-add">🎥<span>촬영</span><input type="file" accept="video/*" capture="environment" data-vcontainer="work-videos"></div>
+      <div class="vd-add">📁<span>갤러리</span><input type="file" accept="video/*" data-vcontainer="work-videos"></div>
     </div>
   </div>
 </div>
@@ -954,6 +985,7 @@ function inspInvFields(){
           invoice_status:l.invoice_status||'',invoice_link:l.invoice_link||''};
 }
 var photoData={};
+var videoData={}; // 고장/작업 영상 {key:{file,url,short,name,size,dur}}
 var evalVal='';
 var currentEditId=null;
 var reportType='inspect';
@@ -3396,7 +3428,7 @@ function resetWasherForm(){
   setWasherType('top');
   washerChecklistResult={};
   renderWasherChecklist();
-  photoData={};
+  photoData={};videoData={};if(window.updateVideoUI)updateVideoUI();
   updatePhotoBadges();
 }
 
@@ -3415,7 +3447,7 @@ window.newReport=function(){
   }else if(reportType==='washer'){
     resetWasherForm();
   }else{
-    photoData={};
+    photoData={};videoData={};
     loadIntoForm({});
     var fd=gid('f-date');if(fd)fd.value=new Date().toISOString().split('T')[0];
   }
@@ -3489,7 +3521,7 @@ function resetInstallForm(){
   document.getElementById('if-date').value=new Date().toISOString().split('T')[0];
   testResults={power:true,noise:true};
   setTestBtn('power',true);setTestBtn('noise',true);
-  photoData={};
+  photoData={};videoData={};if(window.updateVideoUI)updateVideoUI();
   updatePhotoBadges();
 }
 
@@ -3910,6 +3942,73 @@ function ingestPhotos(container,files){
 }
 window.ingestPhotos=ingestPhotos;
 
+// ══ 고장/작업 영상 ══
+var VID_MAX=2,VID_MAX_MB=50,VID_MAX_SEC=30;
+function vidMB(b){return (b/1048576).toFixed(1)+'MB';}
+function probeVideo(file){
+  return new Promise(function(res){
+    var v=document.createElement('video');v.preload='metadata';
+    var u=URL.createObjectURL(file),done=false;
+    function fin(d){if(done)return;done=true;try{URL.revokeObjectURL(u);}catch(_){}res(d);}
+    v.onloadedmetadata=function(){fin(isFinite(v.duration)?v.duration:0);};
+    v.onerror=function(){fin(0);};
+    setTimeout(function(){fin(0);},4000);
+    v.src=u;
+  });
+}
+function updateVideoUI(){
+  var n=Object.keys(videoData).length;
+  var g=document.getElementById('work-videos-add');
+  if(g)g.className='vid-add-group'+(n>=VID_MAX?' off':'');
+  var c=document.getElementById('vid-count');
+  if(c)c.textContent=n+' / '+VID_MAX;
+}
+window.updateVideoUI=updateVideoUI;
+function addVideoItem(container,key,src){
+  if(!container)return;
+  var it=videoData[key]||{};
+  var wrap=document.createElement('div');wrap.className='vd-item';wrap.dataset.key=key;
+  var v=document.createElement('video');v.src=src;v.controls=true;v.preload='metadata';
+  v.setAttribute('playsinline','');v.setAttribute('controlsList','nodownload');
+  var meta=document.createElement('div');meta.className='vd-meta';
+  var nm=document.createElement('div');nm.className='vd-name';nm.textContent=it.name||'동영상';
+  var info=document.createElement('div');info.className='vd-info'+((it.dur&&it.dur>VID_MAX_SEC+0.6)?' vd-warn':'');
+  var parts=[];
+  if(it.size)parts.push(vidMB(it.size));
+  if(it.dur)parts.push(Math.round(it.dur)+'초');
+  info.textContent=parts.join(' · ');
+  var del=document.createElement('button');del.type='button';del.className='vd-del';del.textContent='삭제';
+  del.onclick=function(){
+    if(!confirm('이 영상을 삭제할까요?'))return;
+    delete videoData[key];wrap.remove();updateVideoUI();
+    if(window.__scheduleDraft)window.__scheduleDraft();
+  };
+  meta.appendChild(nm);meta.appendChild(info);meta.appendChild(del);
+  wrap.appendChild(v);wrap.appendChild(meta);
+  container.appendChild(wrap);
+}
+window.addVideoItem=addVideoItem;
+async function ingestVideos(container,files){
+  if(!container||!files)return;
+  for(var i=0;i<files.length;i++){
+    var f=files[i];
+    if(!f)continue;
+    if(!f.type||f.type.indexOf('video')!==0){alert('동영상 파일만 첨부할 수 있습니다.');continue;}
+    if(Object.keys(videoData).length>=VID_MAX){alert('영상은 최대 '+VID_MAX+'개까지 첨부할 수 있습니다.\n기존 영상을 삭제한 뒤 다시 추가해 주세요.');break;}
+    if(f.size>VID_MAX_MB*1048576){alert('용량이 너무 큽니다 ('+vidMB(f.size)+').\n1개당 '+VID_MAX_MB+'MB 이하로 짧게 촬영해 주세요.');continue;}
+    var dur=await probeVideo(f);
+    if(dur>VID_MAX_SEC+0.6){
+      if(!confirm('영상 길이가 '+Math.round(dur)+'초입니다. 권장 길이는 '+VID_MAX_SEC+'초 이내입니다.\n\n그대로 첨부할까요? (업로드가 오래 걸릴 수 있습니다)'))continue;
+    }
+    var key='vid-'+Date.now()+'-'+Math.random().toString(36).slice(2,5);
+    videoData[key]={file:f,url:'',short:'',name:f.name||'동영상',size:f.size,dur:dur};
+    addVideoItem(container,key,URL.createObjectURL(f));
+    updateVideoUI();
+  }
+  if(window.__scheduleDraft)window.__scheduleDraft();
+}
+window.ingestVideos=ingestVideos;
+
 function updatePhotoBadges(){
   var el=document.getElementById('photo-summary-count');
   if(!el)return;
@@ -3953,6 +4052,18 @@ document.addEventListener('change',function(e){
   if(!container)return;
   lastPhotoContainer=container;
   ingestPhotos(container,t.files);
+  t.value='';
+});
+
+// 동영상 change 이벤트 (data-vcontainer)
+document.addEventListener('change',function(e){
+  var t=e.target;
+  if(t.type!=='file')return;
+  var vid=t.dataset.vcontainer;
+  if(!vid)return;
+  var vc=document.getElementById(vid);
+  if(!vc)return;
+  ingestVideos(vc,t.files);
   t.value='';
 });
 
@@ -4587,6 +4698,20 @@ async function uploadPhoto(key,dataUrl,rid){
   }catch(e){console.error('upload:',e);return null;}
 }
 
+// ── 동영상 업로드
+async function uploadVideo(item,rid,idx){
+  if(!item||!ST)return null;
+  if(!item.file&&item.url)return item.url; // 이미 업로드된 영상
+  try{
+    var f=item.file;
+    var ext='mp4';
+    if(f.name&&f.name.indexOf('.')>-1){var e2=f.name.split('.').pop().toLowerCase();if(/^[a-z0-9]{2,4}$/.test(e2))ext=e2;}
+    var sref=ref(ST,'inspections/'+rid+'/video-'+idx+'.'+ext);
+    var snap=await uploadBytes(sref,f,{contentType:f.type||'video/mp4'});
+    return await getDownloadURL(snap.ref);
+  }catch(e){console.error('video upload:',e);return null;}
+}
+
 // ── 단축URL
 async function shorten(url){
   if(!DB)return url;
@@ -4827,6 +4952,22 @@ window.saveReport=async function(){
       }
     }
     setSaveProg(1,'완료');
+    // 동영상 업로드
+    var vkeys=Object.keys(videoData);
+    if(vkeys.length){
+      showSaveProg('동영상 업로드 중...','0 / '+vkeys.length);
+      var vlist=[];
+      for(var vi=0;vi<vkeys.length;vi++){
+        setSaveProg(vi/vkeys.length,(vi)+' / '+vkeys.length);
+        var vit=videoData[vkeys[vi]];
+        var vurl=await uploadVideo(vit,rid,vi);
+        if(!vurl)continue;
+        var vsh=vit.short||await shorten(vurl);
+        vlist.push({url:vurl,short:vsh,name:vit.name||'',size:vit.size||0,dur:Math.round(vit.dur||0)});
+      }
+      data.workVideos=vlist;
+      setSaveProg(1,'완료');
+    }else{data.workVideos=[];}
     showSaveProg('링크 생성 중...','');
     await setDoc(doc(DB,'inspections',rid),data);
     if(window.HHCC_upsert)HHCC_upsert(data.client,data.phone||'');
@@ -5337,6 +5478,20 @@ window.loadIntoForm=function(data){
     (data.workPhotos||[]).forEach(function(url,i){
       restorePhoto('work-photos',url,'work-photos-restore-'+i);
     });
+  }
+
+  // 고장/작업 영상 복원
+  var vwRow=document.getElementById('work-videos');
+  if(vwRow){
+    vwRow.innerHTML='';
+    Object.keys(videoData).forEach(function(k){delete videoData[k];});
+    (data.workVideos||[]).forEach(function(v,i){
+      if(!v||!v.url)return;
+      var vk='vid-saved-'+i;
+      videoData[vk]={file:null,url:v.url,short:v.short||'',name:v.name||('동영상 '+(i+1)),size:v.size||0,dur:v.dur||0};
+      addVideoItem(vwRow,vk,v.url);
+    });
+    updateVideoUI();
   }
 
   // 청소 전 사진
