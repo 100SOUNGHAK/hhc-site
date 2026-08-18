@@ -2635,6 +2635,8 @@ window.caSendModal=async function(idx){
   // 작성 대기중인 예약 신청서 (예약등록에서 고객 링크만 만들고 고객이 아직 작성 전인 건)
   // → 마이페이지 상단에 예약 신청 화면이 표시되므로, 발송 템플릿도 자동으로 「예약 신청 안내」를 고른다
   const BKP=(D.bookings||[]).filter(x=>x.status==='waiting');
+  // 🆕 고객이 신청서를 작성해 확정을 기다리는 예약 (중복 생성 방지 안내용)
+  const BKB=(D.bookings||[]).filter(x=>x.status==='booked');
   const _td=new Date();
   const _p2=n=>String(n).padStart(2,'0');
   const _tdy=_td.getFullYear()+'-'+_p2(_td.getMonth()+1)+'-'+_p2(_td.getDate());
@@ -2698,8 +2700,11 @@ window.caSendModal=async function(idx){
   //  need:true 인 항목은 해당 자료(예약·상품권·점검보고서 등)가 있어야 발송할 수 있어
   //  0건이면 흐리게 표시하고 선택을 막습니다.
   const TPLS=[
-    {t:'bk',      lb:'📅 예약 신청',    n:BKP.length,  need:true},
-    {t:'bkc',     lb:'✅ 예약 확정',    n:BKCU.length, need:true},
+    // 📅 예약 신청 : 작성 대기중인 신청서가 없어도 고를 수 있습니다.
+    //    (없으면 고를 때 「지금 하나 만들까요?」 하고 물어본 뒤 만들어 줍니다)
+    {t:'bk',      lb:'📅 예약 신청',    n:BKP.length,  need:false},
+    // ✅ 예약 확정 : 방문이 끝난 예약도 다시 보낼 수 있게 전체 확정 예약을 셉니다
+    {t:'bkc',     lb:'✅ 예약 확정',    n:BKC.length,  need:true},
     {t:'rq',      lb:'📥 의뢰 접수',    n:RQP.length,  need:true},
     {t:'mmv',     lb:'🚗 점검 출장방문', n:MMV.length,  need:true},
     {t:'cpg',     lb:'🎁 상품권 발송',  n:CPG.length,  need:true},
@@ -2760,7 +2765,7 @@ window.caSendModal=async function(idx){
                   const off=o.need&&o.n===0;
                   return '<span data-t="'+o.t+'"'+(off?' data-off="1" class="off"':'')+
                     ' title="'+(off?'이 고객에게는 해당 자료가 없습니다':o.lb)+'">'+o.lb+
-                    (o.need?'<i>'+o.n+'</i>':'')+'</span>';
+                    ((o.need||o.n>0)?'<i>'+o.n+'</i>':'')+'</span>';
                 }).join('')+'</div>';
             }).join('')+
           '</div>'+
@@ -3365,9 +3370,60 @@ window.caSendModal=async function(idx){
     const el=ev.target.closest('[data-l]');if(!el)return;
     state.en=(el.dataset.l==='en');paint();
   });
-  mk.querySelector('#cs-tpl').addEventListener('click',ev=>{
+  // 📅 예약 신청서를 지금 만들기 — 고객 마이페이지 상단에 「예약 신청」 화면이 뜨게 합니다
+  function bkMakeWaiting(){
+    return new Promise(res=>{
+      const _rq=(D.requests||[]).slice().sort((a,b)=>String(b.submitted_at||b.created_at||'').localeCompare(String(a.submitted_at||a.created_at||'')))[0]||null;
+      let itemsTxt='';
+      try{const arr=JSON.parse((_rq&&_rq.items)||'[]');
+        itemsTxt=arr.map(it=>String(it.cat||'')+(it.svc?' - '+it.svc:'')+' × '+(it.qty||1)).join(', ');}catch(_e){}
+      const old2=document.getElementById('bkw-mask');if(old2)old2.remove();
+      const m2=document.createElement('div');m2.id='bkw-mask';m2.className='mask open';
+      m2.style.zIndex='100001';
+      m2.innerHTML='<div class="modal"><div class="modal-h">📅 예약 신청서를 만들까요?<button class="x" id="bkw-x2">✕</button></div>'+
+        '<div class="modal-b">'+
+        '<p style="font-size:12.5px;color:var(--ink2);line-height:1.75;margin:0 0 11px">'+
+        '작성 대기중인 예약 신청서가 없습니다. 지금 하나 만들면 고객 마이페이지 <b>맨 위에 「📅 예약 신청」 화면</b>이 표시되어, 고객이 직접 가능한 날짜를 고를 수 있습니다.</p>'+
+        '<div class="cmp" style="grid-template-columns:1fr"><div><small>고객</small><b>'+esc(e.name||'')+(e.phone?' · '+esc(e.phone):'')+'</b></div></div>'+
+        (itemsTxt?'<div class="cmp" style="grid-template-columns:1fr;margin-top:8px"><div><small>최근 의뢰 품목 — 신청서에 미리 담깁니다</small><b style="font-weight:600;font-size:12px;line-height:1.6">'+esc(itemsTxt)+'</b></div></div>'
+                 :'<p style="font-size:11.5px;color:var(--ink3);line-height:1.6;margin:8px 0 0">※ 최근 의뢰가 없어 품목은 비워 둡니다. 고객이 신청서에서 직접 고릅니다.</p>')+
+        (BKB.length?'<div style="margin-top:9px;background:#FEF3C7;border:1px solid #F2DCA6;border-radius:9px;padding:9px 11px;font-size:11.5px;color:#92600A;line-height:1.6">⚠ 고객이 이미 작성한 예약 신청 <b>'+BKB.length+'건</b>이 확정 대기 중입니다. 새로 만들면 신청서가 하나 더 생깁니다 — 예약관리에서 확정 처리부터 해 주세요.</div>':'')+
+        '</div><div class="modal-f">'+
+        '<button type="button" class="btn" id="bkw-x">취소</button><button type="button" class="btn p" id="bkw-go">📅 만들고 발송 준비</button>'+
+        '</div></div>';
+      document.body.appendChild(m2);
+      m2.addEventListener('click',ev2=>{if(ev2.target===m2){m2.remove();res(false);}});
+      m2.querySelector('#bkw-x2').onclick=()=>{m2.remove();res(false);};
+      m2.querySelector('#bkw-x').onclick=()=>{m2.remove();res(false);};
+      m2.querySelector('#bkw-go').onclick=async()=>{
+        const b2=m2.querySelector('#bkw-go');b2.disabled=true;b2.textContent='만드는 중...';
+        try{
+          const nb={customer_name:e.name||'',customer_phone:e.phone||'',customer_address:caAddrOf(e)||'',
+            customer_lang:(_rq&&_rq.lang)||'ko',customer_memo:'',status:'waiting',
+            schedule_dates:'[]',schedule_times:'{}',
+            booking_date:'',booking_time:'',booking_items:itemsTxt,booking_items_struct:'[]',booking_memo:'',
+            created_at:new Date().toISOString()};
+          if(_rq&&_rq.items_struct)nb.prefill_items_struct=_rq.items_struct;
+          const ref=await addDoc(collection(db,'bookings'),nb);
+          nb.__id=ref.id;
+          BKP.push(nb);
+          if(D.bookings)D.bookings.push(nb);
+          const badge=mk.querySelector('#cs-tpl [data-t="bk"] i');
+          if(badge)badge.textContent=BKP.length;
+          m2.remove();
+          toast('✓ 예약 신청서를 만들었습니다 — 이제 안내를 보내실 수 있습니다');
+          res(true);
+        }catch(err){b2.disabled=false;b2.textContent='📅 만들고 발송 준비';toast('만들기 실패: '+err.message);res(false);}
+      };
+    });
+  }
+  mk.querySelector('#cs-tpl').addEventListener('click',async ev=>{
     const el=ev.target.closest('[data-t]');if(!el)return;
     if(el.dataset.off){toast('이 고객에게는 해당 자료가 없어 이 메시지는 발송할 수 없습니다');return;}
+    if(el.dataset.t==='bk'&&!BKP.length){
+      const made=await bkMakeWaiting();
+      if(!made)return;
+    }
     state.tpl=el.dataset.t;
     // 안내 메시지에 맞는 문서를 마이페이지에서 볼 수 있도록 해당 항목을 자동으로 켠다
     if((state.tpl==='cpg'||state.tpl==='cpd')&&CNT.cp>0)state.cp=true;
