@@ -1166,8 +1166,20 @@ function buildEntries(){
       const alt='k:'+nn(e.name)+'#'+pn(e.phone);
       if(byL[alt]===undefined)byL[alt]=e;
     });
+    // 예전 임시 키(k:이름#번호)로 저장된 연결도 살려 냅니다.
+    //  고객마스터가 생기면 키가 m:<문서id> 로 바뀌는데, 그 전에 저장된 연결이
+    //  끊기면 같은 고객이 목록에 하나 더 생깁니다.
+    const _oldKey=k=>{
+      const m2=/^k:([^#]*)#(.*)$/.exec(String(k||''));
+      if(!m2)return null;
+      const kn=m2[1],kp=m2[2];
+      let f=null;
+      if(kp&&kp.length>=6)f=entries.find(x=>pn(x.phone)===kp)||null;
+      if(!f&&kn)f=entries.find(x=>nn(x.name)===kn||(x.aliases||[]).some(a=>nn(a)===kn)||(x.master&&(x.master.aliases||[]).some(a=>nn(a)===kn)))||null;
+      return f;
+    };
     pending.forEach(it=>{
-      let e=byL[it.x.ca_link];
+      let e=byL[it.x.ca_link]||_oldKey(it.x.ca_link);
       if(!e){
         // 연결 대상 고객이 사라진 경우 → 원래 이름·연락처 기준으로 되돌립니다
         const pk=pn(it.phone),nk=nn(it.name);
@@ -2174,16 +2186,69 @@ window.saveEdit=async function(){
   }
   await applyEdit(e,{name,phone,member,email,addr,memo,aliases},false);
 };
+// 🔑 연결 키 갈아끼우기
+//  고객마스터가 없던 고객은 이름·연락처로 만든 임시 키(k:이름#번호)로 문서와 연결돼 있습니다.
+//  정보를 수정하면 고객마스터가 새로 만들어지면서 키가 m:<문서id> 로 바뀌는데,
+//  이때 예전 키를 그대로 두면 연결·해제·중복연결이 모두 끊겨
+//  같은 고객이 목록에 하나 더 생깁니다. 그래서 예전 키를 새 키로 바꿔 줍니다.
+// 이 고객과 같은 사람인 고객마스터 문서가 이미 있는지 찾습니다 (연락처 → 이름·별칭 순)
+function caFindMaster(e,v){
+  const list=RAW.customers||[];
+  const keys=[v&&v.name,e&&e.name].concat(e&&e.aliases||[]).map(nn).filter(Boolean);
+  const ps=[v&&v.phone,e&&e.phone].map(pn).filter(x=>x&&x.length>=6);
+  for(const p of ps){const m=list.find(c=>pn(c.phone)===p);if(m)return m;}
+  for(const k of keys){
+    const m=list.find(c=>nn(c.name)===k||(c.aliases||[]).some(a=>nn(a)===k));
+    if(m)return m;
+  }
+  return null;
+}
+async function caRekey(oldKey,newKey){
+  if(!oldKey||!newKey||oldKey===newKey)return 0;
+  const COLLS=['contracts','invoices','inspections','bookings','schedules','requests','quotes','coupons','memos'];
+  let n=0;
+  for(const coll of COLLS){
+    for(const x of (RAW[coll]||[])){
+      const upd={};
+      if(x.ca_link===oldKey)upd.ca_link=newKey;
+      const lk=docExtraKeys(x);
+      if(lk.indexOf(oldKey)>=0)upd.ca_links=lk.map(k=>k===oldKey?newKey:k);
+      const off=docOffKeys(x);
+      if(off.indexOf(oldKey)>=0)upd.ca_off=off.map(k=>k===oldKey?newKey:k);
+      if(!Object.keys(upd).length)continue;
+      try{await updateDoc(doc(db,coll,x.__id),upd);Object.assign(x,upd);n++;}catch(err){console.warn('rekey',coll,x.__id,err.message);}
+    }
+  }
+  return n;
+}
 async function applyEdit(e,v,propagate){
   const now=new Date().toISOString();
   try{
     let als=(v.aliases!=null)?v.aliases.slice():(e.master&&e.master.aliases||e.aliases||[]).slice();
     if(v.name!==e.name&&e.name&&!als.some(a=>nn(a)===nn(e.name)))als.push(e.name);
     als=als.filter(a=>nn(a)!==nn(v.name));
+    // 예전 이름·연락처도 별칭으로 남겨 두어야 문서가 계속 이 고객에게 붙습니다
+    if(e.name&&!als.some(a=>nn(a)===nn(e.name))&&nn(e.name)!==nn(v.name))als.push(e.name);
+    const oldKey=entryKey(e);
     if(e.master&&e.master.__id){
       await updateDoc(doc(db,'customers',e.master.__id),{name:v.name,phone:v.phone,member:v.member,ca_member_set:true,email:v.email,addr:v.addr,memo:v.memo,aliases:als,updated_at:now});
     }else{
-      await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name:v.name,phone:v.phone,member:v.member,ca_member_set:true,email:v.email,addr:v.addr,memo:v.memo,aliases:als,created_at:now,updated_at:now});
+      // 같은 고객의 고객마스터가 이미 있는지 한 번 더 확인합니다.
+      //  (다른 프로그램에서 방금 만들어졌거나, 별칭으로만 이어져 있던 경우
+      //   그대로 새로 만들면 목록에 같은 고객이 하나 더 생깁니다)
+      const _ex=caFindMaster(e,v);
+      if(_ex&&_ex.__id){
+        const mergedAls=als.slice();
+        [_ex.name].concat(_ex.aliases||[]).forEach(a=>{
+          if(a&&nn(a)!==nn(v.name)&&!mergedAls.some(z=>nn(z)===nn(a)))mergedAls.push(a);
+        });
+        await updateDoc(doc(db,'customers',_ex.__id),{name:v.name,phone:v.phone,member:v.member,ca_member_set:true,email:v.email,addr:v.addr,memo:v.memo,aliases:mergedAls,updated_at:now});
+        await caRekey(oldKey,'m:'+_ex.__id);
+      }else{
+        const ref=await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name:v.name,phone:v.phone,member:v.member,ca_member_set:true,email:v.email,addr:v.addr,memo:v.memo,aliases:als,created_at:now,updated_at:now});
+        // 고객마스터가 새로 생기면 연결 키가 바뀌므로 문서의 예전 키를 함께 고쳐 줍니다
+        if(ref&&ref.id)await caRekey(oldKey,'m:'+ref.id);
+      }
     }
     if(propagate)await propagateDocs(e,v);
     toast('✓ 저장되었습니다'+(propagate?' — 전 프로그램 반영 완료':''));
