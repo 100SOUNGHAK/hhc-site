@@ -374,6 +374,20 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 .credit-hint-auto{font-size:10.5px;color:#0a7a4a;background:#f2fbf6;border:1px dashed rgba(22,163,74,.4);border-radius:8px;padding:6px 10px;margin:6px 0 2px;line-height:1.6}
 .credit-hint-manual{font-size:10.5px;color:var(--gray);background:var(--bg);border:1px dashed var(--bdr);border-radius:8px;padding:6px 10px;margin:6px 0 2px;display:flex;align-items:center;gap:8px;line-height:1.6;flex-wrap:wrap}
 .credit-hint-manual button{border:none;background:var(--indigo);color:#fff;font-size:10.5px;font-weight:700;padding:4px 10px;border-radius:100px;cursor:pointer;font-family:inherit;flex-shrink:0;width:auto}
+/* 패키지 적립잔액 — 차감 후 남는 잔액 */
+.cbal{background:#F5F3FF;border:1px solid #DDD6FE;border-radius:10px;padding:10px 12px;margin:7px 0 3px}
+.cbal-h{display:flex;align-items:center;gap:5px;font-size:10.5px;font-weight:800;color:#6D28D9;margin-bottom:7px}
+.cbal-h .ct{margin-left:auto;font-weight:700;color:#8B7BC0;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:52%}
+.cbal-r{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:#4C1D95;padding:2.5px 0}
+.cbal-r span{color:#7C6BAE}
+.cbal-r b{font-weight:700;font-variant-numeric:tabular-nums}
+.cbal-r.minus b{color:#DC2626}
+.cbal-fin{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #DDD6FE;margin-top:6px;padding-top:7px}
+.cbal-fin span{font-size:11.5px;font-weight:800;color:#5B21B6}
+.cbal-fin b{font-size:16px;font-weight:800;color:#5B21B6;font-variant-numeric:tabular-nums}
+.cbal-fin b.over{color:#DC2626}
+.cbal-n{font-size:10px;color:#8B7BC0;line-height:1.55;margin-top:6px}
+.cbal-w{font-size:10.5px;font-weight:700;color:#DC2626;background:#FEF2F2;border-radius:7px;padding:5px 8px;margin-top:6px;line-height:1.55}
 </style>
 
 <style>
@@ -535,6 +549,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
       <div class="cr-row"><span class="cr-label">추가비용</span><input type="number" id="extra-fee" value="0" min="0" step="0.5" class="cr-inp" oninput="App.upPrev()"><span style="font-size:12px;color:var(--gray);flex-shrink:0;padding:0 4px">+금액</span></div>
       <div class="cr-row"><span class="cr-label" style="color:var(--red)">회원적립잔액</span><input type="number" id="credit-use" value="0" min="0" step="0.5" class="cr-inp" style="border-color:rgba(239,68,68,.3)" oninput="App.creditManual();App.upPrev()"><span style="font-size:12px;color:var(--red);flex-shrink:0;padding:0 4px">-차감</span></div>
       <div id="credit-auto-hint" style="display:none"></div>
+      <div id="credit-bal-box" style="display:none"></div>
       <div class="cr-row"><span class="cr-label" style="color:var(--amber)">상품/할인권 사용</span><input type="number" id="voucher-amt" value="0" min="0" step="0.5" class="cr-inp" style="border-color:rgba(217,119,6,.35)" oninput="App.upPrev()"><span style="font-size:12px;color:var(--amber);flex-shrink:0;padding:0 4px">-차감</span></div>
       <div class="cr-row"><span class="cr-label" style="color:var(--amber);font-size:10.5px">└ 상품권 번호</span><input id="voucher-code" placeholder="예: HHC-XXXX-XXXX" class="cr-inp" style="border-color:rgba(217,119,6,.25);text-transform:uppercase;font-size:12.5px" oninput="App.upPrev()"></div>
       <div class="cr-row"><span class="cr-label" style="color:#7c3aed">💎 해피포인트 사용</span><input type="number" id="point-use" value="0" min="0" step="1" class="cr-inp" style="border-color:rgba(124,58,237,.35)" oninput="App.upPrev()"><span style="font-size:12px;color:#7c3aed;flex-shrink:0;padding:0 4px">-차감</span></div>
@@ -1242,6 +1257,58 @@ App.onMemberChange=function(){
   updateCreditHint();App.upPrev();
 };
 App.creditManual=function(){window._creditAuto=false;updateCreditHint();};
+
+// ── 📦 패키지 적립잔액 : 현재 잔액 − 이번 차감 = 남는 잔액 ─────────────
+// 인보이스에 연결된 계약서가 있으면 그 계약서, 없으면 연락처·이름으로 찾습니다.
+function cbPN(p){p=String(p||'').replace(/[^0-9]/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');}
+function cbNN(n){return String(n==null?'':n).toLowerCase().replace(/[^0-9a-z가-힣]/g,'');}
+function findCtForInv(){
+  var list=CT_ALL||[];
+  if(!list.length)return null;
+  var l=window._invCtLink||{};
+  if(l.id){var byId=list.find(function(c){return c._id===l.id;});if(byId)return byId;}
+  var ph=cbPN(val('c-phone')),nm=cbNN(val('c-name'));
+  var hit=null;
+  if(ph.length>=6)hit=list.filter(function(c){return cbPN(c.phone)===ph;});
+  if(!hit||!hit.length)hit=nm?list.filter(function(c){return cbNN(c.name)===nm;}):[];
+  if(!hit||!hit.length)return null;
+  // 계약서가 여러 건이면 가장 최근 계약서
+  hit.sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));});
+  return hit[0];
+}
+window._ctLoadTried=false;
+function updateCreditBal(credit){
+  var box=$('credit-bal-box');if(!box)return;
+  if(!isPkgMember()){box.style.display='none';box.innerHTML='';return;}
+  // 계약서 목록이 아직 없으면 한 번만 불러오고 다시 그립니다
+  if(!(CT_ALL&&CT_ALL.length)){
+    if(!window._ctLoadTried&&DB){
+      window._ctLoadTried=true;
+      loadCtAll().then(function(){try{App.upPrev();}catch(e){}});
+    }
+    box.style.display='none';return;
+  }
+  var ct=findCtForInv();
+  if(!ct){
+    box.style.display='block';
+    box.innerHTML='<div class="cbal"><div class="cbal-h">📦 패키지 적립잔액</div>'+
+      '<div class="cbal-n">이 고객의 계약서를 찾지 못했습니다. 위 「📑 계약서」에서 연결하시면 잔액이 표시됩니다.</div></div>';
+    return;
+  }
+  var use=parseFloat(credit)||0;
+  var fin=Math.round((ct.bal-use)*100)/100;
+  var over=fin<-0.005;
+  box.style.display='block';
+  box.innerHTML='<div class="cbal">'+
+    '<div class="cbal-h">📦 패키지 적립잔액<span class="ct">'+ivxEsc(ct.name||'')+(ct.date?' · '+ivxEsc(ct.date):'')+'</span></div>'+
+    '<div class="cbal-r"><span>현재 적립잔액</span><b>'+fmtAmt(ct.bal)+'</b></div>'+
+    '<div class="cbal-r minus"><span>이번 인보이스 차감</span><b>- '+fmtAmt(use)+'</b></div>'+
+    '<div class="cbal-fin"><span>차감 후 남는 잔액</span><b class="'+(over?'over':'')+'">'+fmtAmt(fin)+'</b></div>'+
+    (over?'<div class="cbal-w">⚠ 적립잔액보다 '+fmtAmt(Math.abs(fin))+' 더 많이 차감했습니다. 금액을 확인해 주세요.</div>'
+         :'<div class="cbal-n">※ 계약서 이용내역에 기록하면 실제 잔액에 반영됩니다.</div>')+
+    '</div>';
+}
+window.updateCreditBal=updateCreditBal;
 App.creditAutoOn=function(){window._creditAuto=true;updateCreditHint();App.upPrev();showToast('✓ 비용소계 자동반영 켜짐');};
 window.App=App;
 
@@ -1982,6 +2049,7 @@ function calcTotals(inv){
     sr('min-row',null,'min-d',minC>0,null,'+'+fmtAmt(minC));
     sr('paid-row',null,'paid-d',paidAmount>0,null,'-'+fmtAmt(paidAmount));
     sr('balance-row',null,'balance-d',paidAmount>0,null,fmtAmt(balance));
+    try{updateCreditBal(credit);}catch(e){}
     // 하단 고정 바 (합계 + 다음 단계)
     var nxl=$('nx-lbl'),nxa=$('nx-amt');
     if(nxl&&nxa){
@@ -3179,7 +3247,13 @@ async function loadCtAll(force){
   if(!DB)return [];
   try{
     var snap=await DB.collection('contracts').limit(500).get();
-    CT_ALL=snap.docs.map(function(d){var x=d.data()||{};return {_id:d.id,name:x.name||'',phone:x.phone||'',pkg:x.package_id||'',date:x.contract_date||''};});
+    CT_ALL=snap.docs.map(function(d){var x=d.data()||{};
+      var paid=parseFloat(x.amount_paid)||0,bon=parseFloat(x.bonus_credit)||0,spc=parseFloat(x.special_bonus_credit)||0;
+      var h=[];try{h=typeof x.usage_history==='string'?JSON.parse(x.usage_history||'[]'):(x.usage_history||[]);}catch(e2){h=[];}
+      var used=0,disc=0,carry=0;
+      h.forEach(function(u){used+=parseFloat(u.amount)||0;disc+=parseFloat(u.discount)||0;carry+=parseFloat(u.carryover)||0;});
+      return {_id:d.id,name:x.name||'',phone:x.phone||'',pkg:x.package_id||'',date:x.contract_date||'',
+              total:paid+bon+spc,used:used,bal:Math.round((paid+bon+spc-used+disc+carry)*100)/100};});
   }catch(e){}
   return CT_ALL;
 }
