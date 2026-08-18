@@ -2180,9 +2180,12 @@ window.saveEdit=async function(){
   const e=editTarget;
   const oldName=e.name,oldPhone=e.phone;
   const nameChanged=name!==oldName,phoneChanged=pn(phone)!==pn(e.phone)&&pn(oldPhone);
-  if((nameChanged||phoneChanged)&&docCount(e)>0){
-    showPropModal(e,{name,phone,member,email,addr,memo,aliases});
-    return;
+  // 별칭을 지우면 그 이름으로 된 문서가 떨어져 나가므로, 함께 바꿀지 확인합니다
+  const keepK=aliases.map(nn);
+  const aliasRemoved=(e.aliases||[]).some(a=>nn(a)&&nn(a)!==nn(name)&&keepK.indexOf(nn(a))<0);
+  if((nameChanged||phoneChanged||aliasRemoved)&&docCount(e)>0){
+    const _pl=propPlan(e,{name,phone,member,email,addr,memo,aliases});
+    if(_pl.length){showPropModal(e,{name,phone,member,email,addr,memo,aliases});return;}
   }
   await applyEdit(e,{name,phone,member,email,addr,memo,aliases},false);
 };
@@ -2225,10 +2228,10 @@ async function applyEdit(e,v,propagate){
   const now=new Date().toISOString();
   try{
     let als=(v.aliases!=null)?v.aliases.slice():(e.master&&e.master.aliases||e.aliases||[]).slice();
-    if(v.name!==e.name&&e.name&&!als.some(a=>nn(a)===nn(e.name)))als.push(e.name);
+    // 예전 이름은 「문서를 함께 바꾸지 않을 때만」 별칭으로 남깁니다.
+    //  문서까지 새 이름으로 바꿨다면 예전 이름을 남길 이유가 없어, 별칭이 지저분해지지 않습니다.
+    if(!propagate&&v.name!==e.name&&e.name&&!als.some(a=>nn(a)===nn(e.name)))als.push(e.name);
     als=als.filter(a=>nn(a)!==nn(v.name));
-    // 예전 이름·연락처도 별칭으로 남겨 두어야 문서가 계속 이 고객에게 붙습니다
-    if(e.name&&!als.some(a=>nn(a)===nn(e.name))&&nn(e.name)!==nn(v.name))als.push(e.name);
     const oldKey=entryKey(e);
     if(e.master&&e.master.__id){
       await updateDoc(doc(db,'customers',e.master.__id),{name:v.name,phone:v.phone,member:v.member,ca_member_set:true,email:v.email,addr:v.addr,memo:v.memo,aliases:als,updated_at:now});
@@ -2265,26 +2268,39 @@ function propPlan(e,v){
   const hitP=x=>op&&pn(x)===op;
   const hitN=s=>names.includes(nn(s));
   const nameChanged=v.name!==e.name, phoneChanged=pn(v.phone)!==pn(e.phone);
+  // 📌 「낡은 이름」 판정 : 새 고객명도 아니고, 남겨 두는 별칭도 아닌 이름
+  //    (별칭을 지우면 그 이름으로 된 문서가 떨어져 나가 목록에 항목이 하나 더 생깁니다.
+  //     그래서 지워진 별칭으로 된 문서는 새 고객명으로 함께 바꿔 줍니다)
+  const keepAls=(v.aliases||[]).map(nn).filter(Boolean);
+  const staleName=t=>{const k=nn(t);if(!k)return false;if(k===nn(v.name))return false;return keepAls.indexOf(k)<0;};
+  // 의뢰는 「콘도명 + 동호수」가 합쳐져 고객명이 됩니다 → 새 이름을 두 칸에 알맞게 나눠 담습니다
+  const rqSplit=x=>{
+    const nm=String(v.name||'').trim();
+    const cn=String(x.condo_name||x.condo||'').trim();
+    if(cn&&nm.length>cn.length&&nm.toLowerCase().indexOf(cn.toLowerCase())===0)
+      return {condo_name:cn,condo:cn,condo_unit:nm.slice(cn.length).trim()};
+    return {condo_name:nm,condo:nm,condo_unit:''};
+  };
   const plan=[];
   const add=(coll,label,docs,upd)=>{if(docs.length)plan.push({coll,label,docs,upd});};
   add('contracts','📑 계약서',RAW.contracts.filter(x=>notLinked(x)&&(hitP(x.phone)||hitN(x.name))),
-    x=>{const u={};if(nameChanged)u.name=v.name;if(phoneChanged||!pn(x.phone))u.phone=v.phone;return u;});
+    x=>{const u={};if(staleName(x.name))u.name=v.name;if(phoneChanged||!pn(x.phone))u.phone=v.phone;return u;});
   add('invoices','💳 인보이스',RAW.invoices.filter(x=>{if(!notLinked(x))return false;const c=x.customer||{};return hitP(c.phone)||hitN(c.name);}),
-    x=>{const u={};if(nameChanged)u['customer.name']=v.name;if(phoneChanged||!pn((x.customer||{}).phone))u['customer.phone']=v.phone;return u;});
+    x=>{const u={};if(staleName((x.customer||{}).name))u['customer.name']=v.name;if(phoneChanged||!pn((x.customer||{}).phone))u['customer.phone']=v.phone;return u;});
   add('inspections','🔧 점검보고서',RAW.inspections.filter(x=>notLinked(x)&&(hitP(x.phone)||hitN(x.client))),
-    x=>{const u={};if(nameChanged)u.client=v.name;if(phoneChanged||!pn(x.phone))u.phone=v.phone;return u;});
+    x=>{const u={};if(staleName(x.client))u.client=v.name;if(phoneChanged||!pn(x.phone))u.phone=v.phone;return u;});
   add('bookings','🗓️ 예약',RAW.bookings.filter(x=>notLinked(x)&&(hitP(x.customer_phone)||hitN(x.customer_name))),
-    x=>{const u={};if(nameChanged)u.customer_name=v.name;if(phoneChanged||!pn(x.customer_phone))u.customer_phone=v.phone;return u;});
+    x=>{const u={};if(staleName(x.customer_name))u.customer_name=v.name;if(phoneChanged||!pn(x.customer_phone))u.customer_phone=v.phone;return u;});
   add('schedules','📅 스케줄',RAW.schedules.filter(x=>notLinked(x)&&(hitP(x.customer_phone)||hitN(x.customer_name))),
-    x=>{const u={};if(nameChanged)u.customer_name=v.name;if(phoneChanged||!pn(x.customer_phone))u.customer_phone=v.phone;return u;});
-  add('requests','📥 의뢰',RAW.requests.filter(x=>notLinked(x)&&hitP(x.phone)),
-    x=>{const u={};if(phoneChanged)u.phone=v.phone;return u;});
+    x=>{const u={};if(staleName(x.customer_name))u.customer_name=v.name;if(phoneChanged||!pn(x.customer_phone))u.customer_phone=v.phone;return u;});
+  add('requests','📥 의뢰',RAW.requests.filter(x=>notLinked(x)&&(hitP(x.phone)||hitN(reqName(x)))),
+    x=>{const u={};if(staleName(reqName(x)))Object.assign(u,rqSplit(x));if(phoneChanged||!pn(x.phone))u.phone=v.phone;return u;});
   add('quotes','🧾 견적서',RAW.quotes.filter(x=>notLinked(x)&&(hitP(x.phone)||hitN(x.client))),
-    x=>{const u={};if(nameChanged)u.client=v.name;if(phoneChanged||!pn(x.phone))u.phone=v.phone;return u;});
+    x=>{const u={};if(staleName(x.client))u.client=v.name;if(phoneChanged||!pn(x.phone))u.phone=v.phone;return u;});
   add('memos','📝 메모장',RAW.memos.filter(x=>notLinked(x)&&(hitP(x.phone)||hitN(x.name)||hitN(x.condo))),
-    x=>{const u={};if(nameChanged&&hitN(x.name))u.name=v.name;if(nameChanged&&hitN(x.condo))u.condo=v.name;if(phoneChanged||!pn(x.phone))u.phone=v.phone;return u;});
+    x=>{const u={};if(x.name&&staleName(x.name))u.name=v.name;if(x.condo&&staleName(x.condo))u.condo=v.name;if(phoneChanged||!pn(x.phone))u.phone=v.phone;return u;});
   add('coupons','🎫 상품권',RAW.coupons.filter(x=>notLinked(x)&&(hitN(x.name)||hitN(x.receiver))),
-    x=>{const u={};if(nameChanged){if(hitN(x.name))u.name=v.name;if(hitN(x.receiver))u.receiver=v.name;}return u;});
+    x=>{const u={};if(staleName(x.name))u.name=v.name;if(staleName(x.receiver))u.receiver=v.name;return u;});
   return plan.filter(p=>p.docs.some(x=>Object.keys(p.upd(x)).length));
 }
 let curProp=null;
