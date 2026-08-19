@@ -145,6 +145,10 @@ select.fi{appearance:auto}
 .pill.c3{background:#ECFDF5;color:#047857;border:1px solid #A7F3D0}
 .pill.c6{background:#FFF7ED;color:#C2410C;border:1px solid #FDBA74}
 .pill.cdone{background:#F1F5F9;color:#64748B;border:1px solid #E2E8F0}
+/* 💳 미수금 표시 — 청구중 / 연체중 */
+.pill.bl{background:#FFFBEB;color:#92600A;border:1px solid #FCD34D}
+.pill.od{background:#FEF2F2;color:#B91C1C;border:1px solid #FCA5A5}
+.pill.od b,.pill.bl b{font-weight:800;font-variant-numeric:tabular-nums}
 .ptcard .pt-cfg{font-size:10px;font-weight:900;background:rgba(255,255,255,.12);border:1px dashed rgba(255,255,255,.45);color:#fff;border-radius:999px;padding:3px 9px;cursor:pointer;font-family:inherit}
 .ptcard .pt-cfg:hover{background:rgba(255,255,255,.22)}
 .pt-hx{width:100%;background:none;border:none;cursor:pointer;font-family:inherit;text-align:left}
@@ -1316,6 +1320,9 @@ function renderStats(){
   const nCp=act.filter(x=>x.docs.coupons.length>0).length;
   const nQt=act.filter(x=>x.docs.quotes.length>0).length;
   // 🌿 정기관리 도래 — 에어컨 인보이스 기준 3개월(3~5개월) · 6개월 이상
+  // 💳 미수금 — 청구중(만기 전) · 연체중(만기 지남)
+  const nBl=act.filter(x=>billStat(x).bn>0).length;
+  const nOd=act.filter(x=>billStat(x).on>0).length;
   const nC3=act.filter(x=>{const c=careDue(x);return c&&c.k===3&&!c.sent;}).length;
   const nC6=act.filter(x=>{const c=careDue(x);return c&&c.k===6&&!c.sent;}).length;
   document.getElementById('stats').innerHTML=
@@ -1327,13 +1334,15 @@ function renderStats(){
     card('inspect','vio','🔧',nIp,'점검')+
     card('coupon','gold','🎫',nCp,'상품권')+
     card('quote','blue','🧾',nQt,'견적')+
+    card('bill','gold','🧾',nBl,'청구중')+
+    card('overdue','red','⏰',nOd,'연체중')+
     card('care3','care3','🌿',nC3,'3개월 경과')+
     card('care6','care6','🔧',nC6,'6개월 경과')+
     card('','vio','🔗',mergeSug.length,'병합 제안')+
     card('nophone','red','📵',noph,'연락처 없음')+
     card('inactive','gray','⏸',inact,'비활성');
 }
-const FILTERS=[['all','전체'],['contract','📑 계약'],['package','📦 패키지'],['vvip','👑 VVIP'],['invoice','💳 인보이스'],['inspect','🔧 점검'],['coupon','🎫 상품권'],['quote','🧾 견적'],['care3','🌿 3개월 경과'],['care6','🔧 6개월 경과'],['nophone','연락처 없음'],['inactive','⏸ 비활성']];
+const FILTERS=[['all','전체'],['contract','📑 계약'],['package','📦 패키지'],['vvip','👑 VVIP'],['invoice','💳 인보이스'],['inspect','🔧 점검'],['coupon','🎫 상품권'],['quote','🧾 견적'],['bill','🧾 청구중'],['overdue','⏰ 연체중'],['care3','🌿 3개월 경과'],['care6','🔧 6개월 경과'],['nophone','연락처 없음'],['inactive','⏸ 비활성']];
 function renderChips(){
   // 필터 칩 줄은 제거됨 — 상단 요약 카드가 같은 필터 역할을 합니다 (요소가 있으면 기존대로 표시)
   const el=document.getElementById('chips');
@@ -1357,6 +1366,8 @@ function passFilter(e){
     // 이미 안내를 보낸 고객은 목록에서 빠집니다 (중복 발송 방지)
     case 'care3':{const c=careDue(e);return !!c&&c.k===3&&!c.sent;}   // 에어컨 청소 후 3~5개월
     case 'care6':{const c=careDue(e);return !!c&&c.k===6&&!c.sent;}   // 에어컨 청소 후 6개월 이상
+    case 'bill':{const b=billStat(e);return b.bn>0;}          // 🧾 청구중 (만기 전)
+    case 'overdue':{const b=billStat(e);return b.on>0;}        // ⏰ 연체중 (만기 지남)
     case 'nophone':return !pn(e.phone);
     default:return true;
   }
@@ -1476,6 +1487,32 @@ function careWhen(r){
 function careLogLine(r){
   return (parseInt(r&&r.k,10)===6?'6개월':'3개월')+' 안내 · '+careWhen(r)+' · '+(CARE_CH[r&&r.ch]||'발송');
 }
+// ═══ 💳 미수금(청구중 · 연체중) 판정 ═══
+//  · 결제되지 않고 남은 금액(invDue)이 있는 인보이스만 셉니다
+//  · 「연체」로 표시한 인보이스 + 만기일이 지난 「청구중」 인보이스 = 연체중
+function billStat(e){
+  const t=caToday();
+  let bn=0,ba=0,on=0,oa=0,minDue='';
+  ((e.docs&&e.docs.invoices)||[]).forEach(x=>{
+    const st=String(x.status||'billing');
+    if(st!=='billing'&&st!=='overdue')return;      // 작성중·결제완료는 제외
+    const due=invDue(x);
+    if(due<=0.005)return;
+    const dd=String(x.due||'');
+    const late=(st==='overdue')||(/^\d{4}-\d{2}-\d{2}$/.test(dd)&&dd<t);
+    if(late){on++;oa+=due;if(!minDue||(dd&&dd<minDue))minDue=dd;}
+    else{bn++;ba+=due;}
+  });
+  return {bn:bn,ba:ba,on:on,oa:oa,minDue:minDue};
+}
+function caMoney(n){return 'RM '+Number(n||0).toLocaleString('en-MY',{minimumFractionDigits:0,maximumFractionDigits:0});}
+function billBadge(e){
+  const b=billStat(e);
+  let h='';
+  if(b.on>0)h+='<span class="pill od" title="만기일이 지난 미결제 인보이스 '+b.on+'건'+(b.minDue?' · 가장 오래된 만기일 '+b.minDue:'')+'">⏰ 연체 '+b.on+'건 <b>'+caMoney(b.oa)+'</b></span>';
+  if(b.bn>0)h+='<span class="pill bl" title="아직 만기일 전인 미결제 인보이스 '+b.bn+'건">🧾 청구중 '+b.bn+'건 <b>'+caMoney(b.ba)+'</b></span>';
+  return h;
+}
 function careBadge(e){
   const c=careDue(e);if(!c)return '';
   if(c.sent){
@@ -1561,7 +1598,7 @@ function renderList(){
     return '<div class="crow'+(e.inactive?' inact':'')+'">'+
       '<div class="avatar">'+esc(init)+'</div>'+
       '<div class="cmain"><div class="cnm">'+esc(e.name||'(이름 없음)')+chBadge(e,idx)+memberBadge(e)+
-        (_pt.bal>0?'<span class="pill pt">💎 RM '+_pt.bal.toLocaleString()+'</span>':'')+careBadge(e)+
+        (_pt.bal>0?'<span class="pill pt">💎 RM '+_pt.bal.toLocaleString()+'</span>':'')+billBadge(e)+careBadge(e)+
         (e.inactive?'<span class="pill mut">⏸ 비활성</span>':'')+
         (e.detached?'<span class="pill det" title="이 고객에서 자동연결을 해제한 문서입니다. 상세보기 ⋮ 메뉴에서 복구하거나 다른 고객에게 연결할 수 있습니다.">🔓 연결 해제된 문서</span>':(e.master?'':'<span class="pill vio">미등록</span>'))+'</div>'+
       '<div class="cph">📞 '+(pn(e.phone)?esc(e.phone):'연락처 없음 <span class="pill warn">보완 필요</span>')+(e.addr?' · '+esc(e.addr):'')+
