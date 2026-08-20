@@ -258,6 +258,28 @@ input[data-benefit]{display:none}
 .ivl-pill{font-size:10px;font-weight:700;border-radius:5px;padding:2px 7px;background:var(--surface2);color:var(--text3)}
 .ivl-pill.ok{background:var(--green-bg);color:#14803C}
 .ivl-pill.warn{background:#FEF6E0;color:#B8860B}
+.ivl-pill.who{background:#EEF0FB;color:#3D52A0}
+/* 인보이스 불러오기 — 대상 고객 검색 */
+.ivq-wrap{margin-bottom:10px}
+.ivq-box{position:relative}
+.ivq-in{width:100%;padding:9px 30px 9px 30px;border:1px solid var(--border);border-radius:9px;
+  font-size:12.5px;font-family:inherit;background:var(--surface2);color:var(--text1);box-sizing:border-box}
+.ivq-in:focus{outline:none;border-color:var(--indigo);background:#fff}
+.ivq-ic{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text3);pointer-events:none}
+.ivq-x{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:none;
+  font-size:14px;color:var(--text3);cursor:pointer;padding:3px 6px;line-height:1}
+.ivq-chips{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;max-height:96px;overflow-y:auto}
+.ivq-chip{border:1px solid var(--border);background:#fff;border-radius:14px;padding:5px 11px;cursor:pointer;
+  font-size:11px;font-weight:600;color:var(--text2);font-family:inherit;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:5px;max-width:100%}
+.ivq-chip:hover{border-color:var(--violet)}
+.ivq-chip .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px}
+.ivq-chip .c{font-size:9.5px;font-weight:800;background:var(--surface2);color:var(--text3);border-radius:9px;padding:1px 6px}
+.ivq-chip.on{background:var(--indigo);border-color:var(--indigo);color:#fff}
+.ivq-chip.on .c{background:rgba(255,255,255,.25);color:#fff}
+.ivq-chip.self{border-color:var(--violet);color:var(--violet)}
+.ivq-chip.on.self{background:var(--violet);border-color:var(--violet);color:#fff}
+.ivq-none{font-size:11px;color:var(--text3);padding:4px 2px}
 .ivl-pill.sc{background:var(--sky);color:#fff}
 .ivl-pill.sc.hi{background:var(--indigo)}
 .ivl-d{font-size:11px;color:var(--text2);margin-top:6px;word-break:keep-all}
@@ -2200,6 +2222,7 @@ function invSlim(x){
     status:x.status||'',total:x.total||0,sub:(sub===null?null:sub),
     creditUse:parseFloat(x.creditUse)||0,
     cname:String((x.customer&&x.customer.name)||'').trim(),
+    cphone:String((x.customer&&x.customer.phone)||'').trim(),
     items:Array.isArray(x.items)?x.items.slice(0,12).map(it=>({name:it.name||'',qty:it.qty||1,price:parseFloat(it.price)||0,cat:it.cat||'',subcat:it.subcat||'',svcId:it.svcId||'',discVal:parseFloat(it.discVal)||0,discType:it.discType||'pct'})):[]};
 }
 // 캐시(sub 없음)나 소계 계산이 불가능한 문서는 총액으로 대신한다
@@ -5435,62 +5458,183 @@ function invItemsToPicked(x){
       isMember:isMem};
   });
 }
+function invPhoneOf(x){
+  return String((x&&(x.cphone!==undefined?x.cphone:(x.customer&&x.customer.phone)))||'').trim();
+}
+// 인보이스 전체에서 「고객 목록」을 만든다 (동일인은 invNameKey 로 묶음)
+function invCustomerIndex(){
+  const map=new Map();
+  (allInvoices||[]).forEach(x=>{
+    const nm=invName(x); if(!nm)return;
+    const k=invNameKey(nm);
+    let o=map.get(k);
+    if(!o){o={key:k,name:nm,phone:invPhoneOf(x),n:0,last:''};map.set(k,o);}
+    o.n++;
+    const d=String(x.date||'');
+    if(d>o.last)o.last=d;
+    if(!o.phone)o.phone=invPhoneOf(x);
+  });
+  return [...map.values()].sort((a,b)=>String(b.last||'').localeCompare(String(a.last||'')));
+}
+function invDigits(s){return String(s||'').replace(/\D/g,'');}
+
 function showInvImportModal(){
-  const cust=invCurrentName();
-  if(!cust){showModal('알림','계약자명이 비어 있어 동일 고객 인보이스를 찾을 수 없습니다. 계약자명을 먼저 입력해 주세요.',false);return;}
   if(!allInvoices.length){showModal('알림','인보이스 목록을 아직 불러오지 못했습니다. Firebase 연결 후 다시 시도해 주세요.',false);return;}
+  const cust=invCurrentName();
+  const custKey=invNameKey(cust);
+  const CUSTS=invCustomerIndex();
   const linked=invLinkedIds();
-  const mine=allInvoices.filter(x=>invNameSame(invName(x),cust))
-    .sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
   const ex=document.getElementById('inv-import-modal');if(ex)ex.remove();
+
+  // 화면 상태 : 선택된 고객 키(''=전체) · 검색어 · 선택한 인보이스 (다시 그려도 유지)
+  let selKey = (cust && CUSTS.some(o=>o.key===custKey)) ? custKey : (cust?custKey:'');
+  let q='';
+  const picked=new Set();
+  const keyOf=(x,i)=>String(x.id||x._docId||('#'+i));
+
   const modal=document.createElement('div');
   modal.id='inv-import-modal';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
-  const rows=mine.length?mine.map((x,i)=>{
-    const id=String(x.id||x._docId||'');
-    const isLinked=linked.has(id);
-    const items=invItemsSummary(x);
-    const st=invStatusTxt(x,false);
-    const sub=invCmpAmt(x);
-    return '<label class="ivl-cand" style="display:block'+(isLinked?';opacity:.55':'')+'">'+
-      '<div class="ivl-t"><div style="display:flex;align-items:center;gap:8px;min-width:0">'+
-        '<input type="checkbox" data-imp-i="'+i+'"'+(isLinked?' disabled':'')+' style="width:15px;height:15px;accent-color:var(--indigo);flex-shrink:0">'+
-        '<span class="ivl-id">'+ncEsc(id)+'</span></div>'+
-        '<span class="ivl-amt">RM '+fmt(sub)+'</span></div>'+
-      '<div class="ivl-m">'+
-        '<span class="ivl-pill">&#128197; '+ncEsc(String(x.date||'—'))+'</span>'+
-        (st?'<span class="ivl-pill">'+st+'</span>':'')+
-        (isLinked?'<span class="ivl-pill ok">&#10003; 이미 이용내역에 연결됨</span>':'')+
-      '</div>'+
-      (items?'<div style="font-size:11px;color:var(--text3);margin-top:5px;line-height:1.5">'+ncEsc(items)+'</div>':'')+
-    '</label>';
-  }).join(''):'<div class="ivl-empty">「'+ncEsc(cust)+'」 고객의 인보이스가 없습니다.<br>인보이스의 고객명과 계약자명이 같아야 목록에 나옵니다.</div>';
   modal.innerHTML=
     '<div style="background:#fff;border-radius:16px;padding:20px;max-width:470px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.15)">'+
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
         '<div style="font-family:\'Syne\',sans-serif;font-size:15px;font-weight:700;color:var(--navy)">&#129534; 인보이스 불러오기</div>'+
         '<button type="button" id="ivp-x" style="background:none;border:none;font-size:18px;color:var(--text3);cursor:pointer">&#10005;</button>'+
       '</div>'+
-      '<div style="font-size:11.5px;color:var(--text3);margin-bottom:10px;line-height:1.7">고객 <b style="color:var(--text2)">'+ncEsc(cust)+'</b>의 인보이스 <b style="color:var(--text2)">'+mine.length+'건</b>. '+
-        '선택한 인보이스의 <b>날짜·품목·소계</b>가 이용내역으로 추가되고, 해당 인보이스가 <b>자동으로 연결</b>됩니다.</div>'+
-      '<div id="ivp-list" style="overflow-y:auto;flex:1;min-height:120px">'+rows+'</div>'+
+      '<div class="ivq-wrap">'+
+        '<div class="ivq-box"><span class="ivq-ic">&#128269;</span>'+
+          '<input type="text" id="ivp-q" class="ivq-in" placeholder="대상 고객 검색 — 이름 또는 전화번호" autocomplete="off">'+
+          '<button type="button" id="ivp-qx" class="ivq-x" title="검색어 지우기">&#10005;</button></div>'+
+        '<div class="ivq-chips" id="ivp-chips"></div>'+
+      '</div>'+
+      '<div id="ivp-info" style="font-size:11.5px;color:var(--text3);margin-bottom:10px;line-height:1.7"></div>'+
+      '<div id="ivp-list" style="overflow-y:auto;flex:1;min-height:120px"></div>'+
       '<div style="display:flex;gap:8px;margin-top:12px">'+
         '<button type="button" id="ivp-cancel" style="flex:1;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:transparent;color:var(--text2);font-size:13px;font-weight:500;cursor:pointer">닫기</button>'+
         '<button type="button" id="ivp-ok" style="flex:2;padding:10px;border:none;border-radius:var(--radius-sm);background:var(--indigo);color:#fff;font-size:13px;font-weight:700;cursor:pointer">선택한 인보이스 추가 (<span id="ivp-cnt">0</span>건)</button>'+
       '</div>'+
     '</div>';
   document.body.appendChild(modal);
+
+  const $=id=>modal.querySelector('#'+id);
+  const qIn=$('ivp-q'), chipBox=$('ivp-chips'), listBox=$('ivp-list'), infoBox=$('ivp-info'), cntEl=$('ivp-cnt');
+
+  // ── 고객 칩 : 검색어로 좁혀서 보여 주고, 누르면 그 고객의 인보이스만 표시 ──
+  function renderChips(){
+    const ql=q.trim().toLowerCase(), qd=invDigits(q);
+    let list=CUSTS.filter(o=>{
+      if(!ql)return true;
+      if(o.key.indexOf(ql)>=0)return true;
+      if(String(o.name||'').toLowerCase().indexOf(ql)>=0)return true;
+      return !!(qd && qd.length>=3 && invDigits(o.phone).indexOf(qd)>=0);
+    });
+    // 계약자 본인을 항상 맨 앞에
+    list.sort((a,b)=>(a.key===custKey?-1:0)-(b.key===custKey?-1:0));
+    const cap=ql?40:14;
+    const shown=list.slice(0,cap);
+    let h='<button type="button" class="ivq-chip'+(selKey===''?' on':'')+'" data-ck="">'+
+          '<span class="nm">전체 고객</span><span class="c">'+allInvoices.length+'</span></button>';
+    h+=shown.map(o=>'<button type="button" class="ivq-chip'+(o.key===selKey?' on':'')+(o.key===custKey?' self':'')+'" data-ck="'+ncEsc(o.key)+'">'+
+        (o.key===custKey?'<span>&#128100;</span>':'')+
+        '<span class="nm">'+ncEsc(o.name)+'</span><span class="c">'+o.n+'</span></button>').join('');
+    if(!shown.length&&ql)h+='<span class="ivq-none">검색과 일치하는 고객이 없습니다.</span>';
+    else if(list.length>cap)h+='<span class="ivq-none">외 '+(list.length-cap)+'명 — 검색어를 입력하세요</span>';
+    chipBox.innerHTML=h;
+    chipBox.querySelectorAll('.ivq-chip').forEach(b=>b.addEventListener('click',()=>{
+      selKey=b.dataset.ck||'';
+      renderChips();renderList();
+    }));
+  }
+
+  // ── 현재 조건에 맞는 인보이스 목록 ──
+  function currentList(){
+    const ql=q.trim().toLowerCase(), qd=invDigits(q);
+    let src=(allInvoices||[]).map((x,i)=>({x:x,k:keyOf(x,i)}));
+    if(selKey)src=src.filter(o=>invNameKey(invName(o.x))===selKey);
+    else if(ql){
+      // 「전체 고객」 상태에서는 검색어로 고객명·전화·인보이스번호까지 훑는다
+      src=src.filter(o=>{
+        const nm=String(invName(o.x)||'').toLowerCase();
+        if(nm.indexOf(ql)>=0)return true;
+        if(String(o.k).toLowerCase().indexOf(ql)>=0)return true;
+        return !!(qd && qd.length>=3 && invDigits(invPhoneOf(o.x)).indexOf(qd)>=0);
+      });
+    }
+    return src.sort((a,b)=>String(b.x.date||'').localeCompare(String(a.x.date||'')));
+  }
+
+  function renderList(){
+    const rows=currentList();
+    const who=selKey?((CUSTS.find(o=>o.key===selKey)||{}).name||cust):'';
+    infoBox.innerHTML = rows.length
+      ? ('대상 고객 <b style="color:var(--text2)">'+ncEsc(who||'전체')+'</b> · 인보이스 <b style="color:var(--text2)">'+rows.length+'건</b>. '+
+         '선택한 인보이스의 <b>날짜·품목·소계</b>가 이용내역으로 추가되고, 해당 인보이스가 <b>자동으로 연결</b>됩니다.')
+      : '조건에 맞는 인보이스가 없습니다.';
+    if(!rows.length){
+      listBox.innerHTML='<div class="ivl-empty">'+
+        (selKey?('「'+ncEsc(who)+'」 고객의 인보이스가 없습니다.'):'검색과 일치하는 인보이스가 없습니다.')+
+        '<br>위 검색창에서 <b>다른 고객</b>을 찾아 선택할 수 있습니다.</div>';
+      syncCnt();return;
+    }
+    listBox.innerHTML=rows.map(o=>{
+      const x=o.x, id=String(x.id||x._docId||'');
+      const isLinked=linked.has(id);
+      const items=invItemsSummary(x);
+      const st=invStatusTxt(x,false);
+      const sub=invCmpAmt(x);
+      const nm=invName(x);
+      const other=!!(custKey && invNameKey(nm)!==custKey);   // 계약자와 다른 고객의 인보이스
+      return '<label class="ivl-cand" style="display:block'+(isLinked?';opacity:.55':'')+'">'+
+        '<div class="ivl-t"><div style="display:flex;align-items:center;gap:8px;min-width:0">'+
+          '<input type="checkbox" data-imp-k="'+ncEsc(o.k)+'"'+(isLinked?' disabled':'')+(picked.has(o.k)?' checked':'')+' style="width:15px;height:15px;accent-color:var(--indigo);flex-shrink:0">'+
+          '<span class="ivl-id">'+ncEsc(id||'(번호없음)')+'</span></div>'+
+          '<span class="ivl-amt">RM '+fmt(sub)+'</span></div>'+
+        '<div class="ivl-m">'+
+          '<span class="ivl-pill">&#128197; '+ncEsc(String(x.date||'—'))+'</span>'+
+          (st?'<span class="ivl-pill">'+st+'</span>':'')+
+          (nm?'<span class="ivl-pill'+(other?' who':'')+'">&#128100; '+ncEsc(nm)+'</span>':'')+
+          (isLinked?'<span class="ivl-pill ok">&#10003; 이미 이용내역에 연결됨</span>':'')+
+        '</div>'+
+        (items?'<div style="font-size:11px;color:var(--text3);margin-top:5px;line-height:1.5">'+ncEsc(items)+'</div>':'')+
+      '</label>';
+    }).join('');
+    listBox.querySelectorAll('input[data-imp-k]').forEach(cb=>cb.addEventListener('change',()=>{
+      if(cb.checked)picked.add(cb.dataset.impK); else picked.delete(cb.dataset.impK);
+      syncCnt();
+    }));
+    syncCnt();
+  }
+  function syncCnt(){cntEl.textContent=picked.size;}
+
+  let _t=null;
+  qIn.addEventListener('input',()=>{
+    q=qIn.value;
+    clearTimeout(_t);
+    _t=setTimeout(()=>{
+      // 검색어를 치면 고객 선택을 풀고 전체에서 찾는다 (칩을 누르면 다시 좁혀짐)
+      if(q.trim())selKey='';
+      renderChips();renderList();
+    },140);
+  });
+  $('ivp-qx').addEventListener('click',()=>{
+    qIn.value='';q='';
+    selKey=(cust&&CUSTS.some(o=>o.key===custKey))?custKey:'';
+    renderChips();renderList();qIn.focus();
+  });
+
   const close=()=>modal.remove();
-  modal.querySelector('#ivp-x').addEventListener('click',close);
-  modal.querySelector('#ivp-cancel').addEventListener('click',close);
+  $('ivp-x').addEventListener('click',close);
+  $('ivp-cancel').addEventListener('click',close);
   modal.addEventListener('click',e=>{if(e.target===modal)close();});
-  const cntEl=modal.querySelector('#ivp-cnt');
-  modal.querySelectorAll('input[data-imp-i]').forEach(cb=>cb.addEventListener('change',()=>{
-    cntEl.textContent=modal.querySelectorAll('input[data-imp-i]:checked').length;
-  }));
-  modal.querySelector('#ivp-ok').addEventListener('click',async()=>{
-    const sel=[...modal.querySelectorAll('input[data-imp-i]:checked')].map(cb=>mine[parseInt(cb.dataset.impI)]);
+
+  renderChips();renderList();
+
+  $('ivp-ok').addEventListener('click',async()=>{
+    const byKey=new Map();
+    (allInvoices||[]).forEach((x,i)=>byKey.set(keyOf(x,i),x));
+    const sel=[...picked].map(k=>byKey.get(k)).filter(Boolean);
     if(!sel.length){close();return;}
+    const others=sel.filter(x=>custKey&&invNameKey(invName(x))!==custKey).length;
     sel.forEach((x,k)=>{
       const id=String(x.id||x._docId||'');
       // 직접 기재(품목 빠른 선택)와 동일한 형식으로 내역·금액 생성
@@ -5515,6 +5659,12 @@ function showInvImportModal(){
       const grandTotal=parseFloat(x.total)||0;
       if(creditUsed>0)amount=creditUsed;
       else if(grandTotal>0)amount=grandTotal;
+      // 계약자와 다른 고객의 인보이스는 내역 앞에 고객명을 남겨 구분되게 한다
+      const oNm=invName(x);
+      if(custKey&&invNameKey(oNm)!==custKey&&oNm){
+        desc='['+oNm+'] '+desc;
+        if(descEn)descEn='['+oNm+'] '+descEn;
+      }
       currentUsageHistory.push({
         id:Date.now()+k,
         date:String(x.date||'').slice(0,10),
@@ -5534,6 +5684,7 @@ function showInvImportModal(){
     renderUsage();
     if(currentEditId)await persistUsage(true);
     let msg='인보이스 '+sel.length+'건이 이용내역으로 추가되고 자동 연결되었습니다.';
+    if(others)msg+=' 이 중 '+others+'건은 계약자와 다른 고객의 인보이스라 내역 앞에 [고객명]을 표시했습니다.';
     if(!currentEditId)msg+=' 계약을 저장하면 반영됩니다.';
     msg+=' 필요하면 각 항목의 수정(✏️) 버튼으로 금액·내역을 조정하세요.';
     showModal('인보이스 불러오기 완료',msg,false);
