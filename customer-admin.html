@@ -1771,6 +1771,7 @@ window.openDrawer=function(idx){
     '</div>'+
     '<div class="dgrp"><span class="dgl">만들기</span>'+
       '<button class="dqb" onclick="caMakeInvoice('+idx+')">🧾 인보이스</button>'+
+      '<button class="dqb" onclick="caMakeQuote('+idx+')">🧮 견적서</button>'+
       '<button class="dqb" onclick="caMakeInspect('+idx+')">📄 점검보고서</button>'+
       '<button class="dqb" onclick="caMemoEdit('+idx+',\'\')">📝 메모장</button>'+
       '<button class="dqb" onclick="caMakeCoupon('+idx+')">🎫 상품권</button>'+
@@ -4331,6 +4332,65 @@ window.caMakeInvoice=function(idx){
   window.open('hhc-invoice.html?from=booking','_blank');
   const cnt=struct.length||(itemsText?itemsText.split(/[,\n]/).filter(x=>x.trim()).length:0);
   toast('🧾 인보이스 생성으로 이동'+(src?' · '+src+' 품목 '+cnt+'건 반영':' · 품목 기록 없음 (고객정보만 반영)'));
+};
+// 🧮 견적서 생성 — 고객정보 + 최근 예약(확정 우선)·의뢰 품목을 견적서로 전달
+//    quote-admin.html?from=hhc + localStorage hhc_transfer_quote
+window.caMakeQuote=function(idx){
+  const e=entries[idx];if(!e)return;
+  const pj=raw=>{try{const a=JSON.parse(String(raw||'[]'));return Array.isArray(a)?a.filter(x=>x&&typeof x==='object'):[];}catch(_){return [];}};
+  const bk=caBestSrc(e);
+  let items=[],src='';
+  // ① 예약(확정 우선) 구조화 품목
+  if(bk){
+    const st=pj(bk.struct);
+    if(st.length){
+      items=st.map(o=>{
+        const nm=String((o.free?(o.text||''):(o.svcKo||''))||o.svcKo||o.text||'').trim();
+        const q=parseFloat(o.qty);
+        return nm?{name:nm,qty:(isFinite(q)&&q>0)?q:1}:null;
+      }).filter(Boolean);
+    }
+    // ② 구조화가 없으면 예약 품목 문자열 («이름 x2» 형태) 을 줄 단위로 읽는다
+    if(!items.length&&bk.items){
+      items=String(bk.items).split(/\r?\n|,/).map(l=>{
+        const t2=String(l||'').trim();if(!t2)return null;
+        const m=t2.match(/^(.*?)[\s]*[x×]\s*(\d+(?:\.\d+)?)$/i);
+        return m?{name:m[1].trim(),qty:parseFloat(m[2])||1}:{name:t2,qty:1};
+      }).filter(o=>o&&o.name);
+    }
+    if(items.length)src=bk.kind+(bk.date?' '+bk.date:'');
+  }
+  // ③ 예약이 없으면 가장 최근 의뢰서의 품목
+  if(!items.length){
+    const rqs=(e.docs.requests||[]).slice().sort((a,b)=>String(b.created_at||b.submitted_at||'').localeCompare(String(a.created_at||a.submitted_at||'')));
+    const rq=rqs[0];
+    if(rq){
+      const st=pj(rq.items_struct);
+      if(st.length){
+        items=st.map(o=>{
+          const nm=String((o.free?(o.text||''):(o.svcKo||''))||o.svcKo||o.text||'').trim();
+          const q=parseFloat(o.qty);
+          return nm?{name:nm,qty:(isFinite(q)&&q>0)?q:1}:null;
+        }).filter(Boolean);
+      }
+      if(!items.length){
+        items=pj(rq.items).map(it=>{
+          const nm=String((it&&it.svc)||'').trim();
+          const q=parseFloat(it&&it.qty);
+          return nm?{name:nm,qty:(isFinite(q)&&q>0)?q:1}:null;
+        }).filter(Boolean);
+      }
+      if(items.length)src='의뢰 '+String(rq.created_at||rq.submitted_at||'').slice(0,10);
+    }
+  }
+  // 「대상 작업」 — 품목 이름을 이어 붙여 초안으로 넣어 둡니다 (담당자가 다듬어 사용)
+  const subj=items.slice(0,3).map(o=>o.name+(o.qty>1?(' x'+o.qty):'')).join(' · ')+
+             (items.length>3?(' 외 '+(items.length-3)+'건'):'');
+  const t={name:e.name||'',phone:e.phone||'',addr:caAddrOf(e),
+           subject:subj,items:items,memo:(bk&&bk.memo)||'',ts:Date.now()};
+  try{localStorage.setItem('hhc_transfer_quote',JSON.stringify(t));}catch(_){}
+  window.open('quote-admin.html?from=hhc','_blank');
+  toast('🧮 견적서 작성으로 이동'+(src?(' · '+src+' 품목 '+items.length+'건 반영 (금액 입력 필요)'):' · 고객정보만 반영'));
 };
 // 📄 점검보고서 생성 — 기본정보(고객명·연락처·주소·오늘 날짜) 전달
 window.caMakeInspect=function(idx){

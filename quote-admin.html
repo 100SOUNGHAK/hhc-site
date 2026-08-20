@@ -1756,6 +1756,41 @@ window.__editQuote=async function(id){
   const q=quoteList.find(x=>x._id===id);
   if(q)window.loadQuoteToForm(q,id);
 };
+// 📎 총괄 고객관리 「만들기 › 견적서」에서 열기 : quote-admin.html?from=hhc
+//    고객명·연락처·대상작업·예약 품목을 미리 채워 둡니다 (금액은 담당자가 입력)
+(function(){
+  var from='';
+  try{from=new URLSearchParams(location.search).get('from')||'';}catch(e){}
+  if(from!=='hhc')return;
+  var t=null;
+  try{t=JSON.parse(localStorage.getItem('hhc_transfer_quote')||'null');}catch(e){}
+  try{localStorage.removeItem('hhc_transfer_quote');}catch(e){}
+  if(!t)return;
+  setTimeout(function(){
+    try{
+      if(typeof switchView==='function')switchView('write');
+      if(t.name)gid('f-client').value=String(t.name);
+      if(t.phone)gid('f-phone').value=String(t.phone);
+      if(t.subject&&!gid('f-subject').value)gid('f-subject').value=String(t.subject);
+      if(t.date)gid('f-date').value=String(t.date).slice(0,10);
+      // 예약·의뢰 품목을 견적 항목으로 담아 둡니다 (금액 0 — 담당자가 채워 넣습니다)
+      var added=0;
+      var list=Array.isArray(t.items)?t.items:[];
+      list.forEach(function(it){
+        var nm=String((it&&(it.name||it.svc))||'').trim();
+        if(!nm)return;
+        var q=parseFloat(it&&it.qty);if(!isFinite(q)||q<=0)q=1;
+        selItems.push({name:nm,nameEn:String((it&&it.nameEn)||nm),qty:q,unit:String((it&&it.unit)||''),
+          price:parseFloat(it&&it.price)||0,group:'custom',note:'',noteEn:'',
+          discType:'pct',discVal:0,sect:'etc'});
+        added++;
+      });
+      if(added)renderSelList();
+      if(typeof toast==='function')
+        toast('🧾 '+(t.name||'고객')+' 견적서 작성'+(added?(' · 품목 '+added+'건 반영 (금액 입력 필요)'):' · 고객정보 반영'));
+    }catch(e){}
+  },600);
+})();
 // 📎 총괄 고객관리에서 「수정」으로 열기 : quote-admin.html?edit=<견적서 문서ID>
 (function(){
   let k='';
