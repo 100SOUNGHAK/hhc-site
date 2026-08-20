@@ -135,6 +135,8 @@ textarea{resize:vertical;line-height:1.6}
 .ip-st button.on-bad{border-color:#ef4444;background:#fef2f2;color:#b91c1c}
 .ip-nt{width:100%;padding:8px 10px;border:1px solid #e6e5f0;border-radius:7px;font-size:12px;background:#fff;box-sizing:border-box}
 .ip-nt:focus{outline:none;border-color:#4F46E5}
+.ip-ph .ph-chips{margin-top:5px;gap:4px}
+.ip-ph .ph-chip{font-size:10.5px;padding:4px 9px;border-radius:13px}
 .ip-empty{text-align:center;padding:34px 12px;color:#9aa0b4;font-size:12.5px}
 .ip-f{flex-shrink:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid #eceaf5;background:#fff;padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .ip-f .s{flex:1;min-width:0;line-height:1.35}
@@ -1560,8 +1562,22 @@ function ipRowHtml(it,i){
         '<button type="button" class="'+(s==='warn'?'on-warn':'')+'" onclick="ipSet('+i+",'warn')\">⚠️ 주의</button>"+
         '<button type="button" class="'+(s==='bad'?'on-bad':'')+'" onclick="ipSet('+i+",'bad')\">❌ 정비필요</button>"+
       '</div>'+
-      '<input class="ip-nt" list="dl-note" placeholder="비고 (선택)" value="'+String(note).replace(/"/g,'&quot;')+'" oninput="ipNote('+i+',this.value)">'+
+      '<input class="ip-nt" list="dl-note" data-ipn="'+String(it.name).replace(/"/g,'&quot;')+'" placeholder="비고 (선택)" value="'+String(note).replace(/"/g,'&quot;')+'" oninput="ipNote('+i+',this.value)">'+
     '</div></div>';
+}
+
+// 빠른 선택 시트의 비고칸에도 「항목별 자동문구」 칩을 붙입니다 (본문 카드와 같은 저장소 공유)
+function ipNoteChips(){
+  if(typeof attachPhraseChips!=='function')return;
+  var box=gid('ip-list'); if(!box)return;
+  Array.prototype.slice.call(box.querySelectorAll('.ip-nt')).forEach(function(inp){
+    if(inp._phAttached)return;
+    inp._phAttached=true;
+    var nm=inp.getAttribute('data-ipn')||'';
+    var wrap=document.createElement('div');wrap.className='ip-ph';
+    if(inp.parentNode)inp.parentNode.insertBefore(wrap,inp.nextSibling);
+    attachPhraseChips(nm?('note:'+nm):'',inp,{mode:'replace',compact:true,parent:wrap,extraKey:'note'});
+  });
 }
 
 function ipRender(){
@@ -1576,7 +1592,7 @@ function ipRender(){
   ipRendered=src;
   if(!src.length){
     box.innerHTML='<div class="ip-empty">일치하는 항목이 없습니다.<br>＋ 직접 입력으로 추가할 수 있어요.</div>';
-    ipFoot(); return;
+    ipNoteChips();ipFoot(); return;
   }
   var html='',last=null,showGrp=(ipQ||ipCat==='전체');
   src.forEach(function(it,i){
@@ -1584,11 +1600,13 @@ function ipRender(){
     html+=ipRowHtml(it,i);
   });
   box.innerHTML=html;
+  ipNoteChips();
   ipFoot();
 }
 function ipRefreshRow(i){
   var row=gid('ip-row-'+i);
   if(row&&ipRendered[i]){ row.outerHTML=ipRowHtml(ipRendered[i],i); }
+  ipNoteChips();
   ipRail();ipFoot();
 }
 function ipFoot(){
@@ -1627,6 +1645,7 @@ function ipNote(i,v){
   var card=ipFind(it.name); if(!card||!card._getNoteInp)return;
   var inp=card._getNoteInp(); inp.value=v;
   inp.dispatchEvent(new Event('input'));
+  if(window.__scheduleDraft)window.__scheduleDraft();
 }
 window.ipAdd=ipAdd;window.ipRemove=ipRemove;window.ipSet=ipSet;window.ipNote=ipNote;
 
