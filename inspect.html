@@ -265,6 +265,36 @@ body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;back
 .r.warn .r-nt{color:#6B5530}
 .r.ok .r-ic{color:var(--ok);font-size:13px}
 .rl-mini{display:grid;grid-template-columns:1fr 1fr;gap:1px 10px;padding:8px 14px 10px 13px;border-top:1px solid var(--hair)}
+/* ══ 부위별 상태 다이어그램 (irx-) ══ */
+.irx-map{padding:13px 16px 15px;border-bottom:1px solid var(--line-2);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.irx-t{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
+.irx-t b{font-size:13px;font-weight:800;letter-spacing:-.02em;color:var(--ink)}
+.irx-t span{font-size:10.5px;font-weight:600;color:var(--ink-mute)}
+.irx-stage{position:relative;width:100%;aspect-ratio:520/242;background:linear-gradient(180deg,#FBFCFE,#F3F6FB);border:1px solid var(--line-2);border-radius:14px;overflow:hidden}
+.irx-stage svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.irx-pin{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:2px;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;z-index:2}
+.irx-pin .d{width:23px;height:23px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#fff;border:2px solid #fff;box-shadow:0 1px 2px rgba(11,24,51,.25),0 4px 9px -2px rgba(11,24,51,.3)}
+.irx-pin .l{font-size:9px;font-weight:800;letter-spacing:-.02em;color:var(--ink-soft);background:rgba(255,255,255,.92);border:1px solid var(--line-2);border-radius:999px;padding:1.5px 7px;white-space:nowrap;line-height:1.4}
+.irx-pin.ok .d{background:var(--ok)}
+.irx-pin.warn .d{background:var(--warn)}
+.irx-pin.bad .d{background:var(--bad)}
+.irx-pin.bad .l{color:#8E2A2A;border-color:#F2C4C4;font-weight:900}
+.irx-pin.warn .l{color:#8E5A10;border-color:#EED9AC}
+.irx-pin.off{cursor:default}
+.irx-pin.off .d{background:#fff;color:#B9C3D6;border:1.5px dashed #C9D3E4;box-shadow:none;font-size:10px}
+.irx-pin.off .l{color:#A6B0C2}
+.irx-pin:not(.off):active{transform:translate(-50%,-50%) scale(.93)}
+@keyframes irxPulse{0%{box-shadow:0 1px 2px rgba(11,24,51,.25),0 0 0 0 rgba(220,38,38,.45)}70%{box-shadow:0 1px 2px rgba(11,24,51,.25),0 0 0 9px rgba(220,38,38,0)}100%{box-shadow:0 1px 2px rgba(11,24,51,.25),0 0 0 0 rgba(220,38,38,0)}}
+.irx-pin.bad .d{animation:irxPulse 2.2s ease-out infinite}
+@media (prefers-reduced-motion:reduce){.irx-pin.bad .d{animation:none}}
+.irx-key{display:flex;flex-wrap:wrap;gap:5px 12px;margin-top:9px}
+.irx-key span{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:var(--ink-mute)}
+.irx-key i{font-style:normal;width:15px;height:15px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8.5px;font-weight:900;color:#fff}
+.irx-key .ok i{background:var(--ok)} .irx-key .warn i{background:var(--warn)} .irx-key .bad i{background:var(--bad)}
+.irx-key .off i{background:#fff;color:#B9C3D6;border:1.2px dashed #C9D3E4}
+@keyframes irxHit{0%,60%{background:#FEF3C7}100%{background:transparent}}
+.irx-hit{animation:irxHit 1.8s ease-out}
+@media print{.irx-map{break-inside:avoid;page-break-inside:avoid}.irx-pin.bad .d{animation:none}}
 .rm{display:flex;align-items:flex-start;gap:9px;padding:4px 0;min-width:0}
 .rm i{font-style:normal;width:20px;flex:0 0 20px;text-align:center;color:var(--ok);font-size:12px;font-weight:900;line-height:1.5}
 .rm b{font-size:12.5px;font-weight:600;color:#3D3D47;line-height:1.5;letter-spacing:-.03em;word-break:keep-all;min-width:0}
@@ -646,6 +676,7 @@ body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;back
   <div class="sec" id="jump-results">
     <div class="sec-hdr"><div class="sec-num">02</div><div class="sec-title" id="sec-results">항목별 점검 결과</div><div class="sec-hint cnt" id="res-count" style="display:none"></div></div>
     <div id="res-head"></div>
+    <div id="res-map"></div>
     <div id="res-focus"></div>
     <div class="v-tools" id="res-tools" style="display:none">
       <button type="button" class="v-expand" id="res-exp"><span>▼</span><em id="res-exp-t" style="font-style:normal"></em></button>
@@ -1201,7 +1232,7 @@ window.renderReport=function renderReport(data){
         }).join('')+'</div>';
       }
 
-      resHtml+='<div class="v-cat an'+(ct.bad?' has-bad':(ct.warn?' has-warn':''))+(clean?' shut':' open')+'">'+
+      resHtml+='<div class="v-cat an'+(ct.bad?' has-bad':(ct.warn?' has-warn':''))+(clean?' shut':' open')+'" data-cat="'+String(c).replace(/"/g,'&quot;')+'">'+
         '<div class="v-cat-h"><span class="rail" style="background:'+(CAT_BAR[c]||'#6B7280')+'"></span>'+
         '<span class="nm">'+trSpan(c,catEn)+' <span class="n">'+cn+'</span></span>'+
         '<span class="sp">'+(clean?'<span class="allok">'+t.allOkTag+'</span>':'<span class="dots">'+dots+'</span>')+
@@ -1210,6 +1241,123 @@ window.renderReport=function renderReport(data){
         '<div class="v-fold"><div>'+body+'</div></div></div>';
     });
     resList.innerHTML=resHtml;
+  }
+
+  // 3.5) 🗺️ 부위별 상태 다이어그램 — 점검 결과를 에어컨 그림 위에 표시
+  var rMap=G('res-map');
+  if(rMap){
+    var IRX_PARTS=[
+      {k:'panel',x:30,  y:18,  ko:'패널·필터', en:'Filter'},
+      {k:'coil', x:49,  y:31,  ko:'열교환기',  en:'Coil'},
+      {k:'fan',  x:17.5,y:46,  ko:'송풍팬',    en:'Fan'},
+      {k:'drain',x:33,  y:58,  ko:'드레인',    en:'Drain'},
+      {k:'pipe', x:61.5,y:41,  ko:'배관·냉매', en:'Piping'},
+      {k:'out',  x:82,  y:45,  ko:'실외기',    en:'Outdoor'},
+      {k:'power',x:64.5,y:81,  ko:'전기',      en:'Power'},
+      {k:'ctl',  x:10.5,y:84,  ko:'운전·리모컨',en:'Remote'},
+      {k:'body', x:8.5, y:13,  ko:'본체',      en:'Body'}
+    ];
+    var IRX_RULES=[
+      ['drain',/드레인|드래인|배수|펌프|누수|drain|pump/i],
+      ['out',/실외기|응축기|outdoor|condens/i],
+      ['fan',/송풍|시로코|풍량|blower|airflow|fan/i],
+      ['coil',/열교환|코일|coil|heat/i],
+      ['pipe',/배관|냉매|밸브|압력|누설|pipe|refrig|valve|pressure|leak/i],
+      ['panel',/패널|필터|panel|filter/i],
+      ['power',/전기|전원|절연|전류|차단|케이블|electric|power|insul|current|breaker|cable/i],
+      ['ctl',/소음|진동|리모컨|루버|운전|기동|모드|컨트롤|noise|vibrat|remote|louver|operat|mode|start|control/i],
+      ['body',/본체|외관|고정|수평|브래킷|설치|body|exterior|mount|level|install/i]
+    ];
+    var irxAgg={};
+    var irxRank={ok:0,warn:1,bad:2};
+    results.forEach(function(r){
+      var nm=String(r.name||'')+' '+String(r.name_en||'');
+      for(var i=0;i<IRX_RULES.length;i++){
+        if(IRX_RULES[i][1].test(nm)){
+          var k=IRX_RULES[i][0];
+          var a=irxAgg[k]||(irxAgg[k]={st:'ok',id:'',cat:''});
+          var st=(r.status==='bad'||r.status==='warn')?r.status:'ok';
+          if(irxRank[st]>irxRank[a.st])a.st=st;
+          // 이동 대상 : 문제 항목의 앵커 우선, 없으면 구분 카드
+          if(r.__anchor&&(!a.id||irxRank[st]>=irxRank.warn&&st==='bad'))a.id=a.id&&a.st==='bad'?a.id:r.__anchor;
+          if(!a.cat)a.cat=r.cat||'기타';
+          break;
+        }
+      }
+    });
+    var irxMapped=Object.keys(irxAgg).length;
+    if(!results.length||!irxMapped){rMap.innerHTML='';}
+    else{
+      var IRX_SVG='<svg viewBox="0 0 520 242" aria-hidden="true">'+
+        // 실내기 본체
+        '<rect x="28" y="34" width="256" height="112" rx="16" fill="#FFFFFF" stroke="#C7D2E8" stroke-width="2"/>'+
+        '<path d="M40 58 H272" stroke="#DCE4F2" stroke-width="2" stroke-linecap="round"/>'+
+        // 필터 빗금
+        '<g stroke="#C7D2E8" stroke-width="2" stroke-linecap="round"><path d="M120 44 l-8 9"/><path d="M140 44 l-8 9"/><path d="M160 44 l-8 9"/><path d="M180 44 l-8 9"/><path d="M200 44 l-8 9"/></g>'+
+        // 열교환 코일
+        '<polyline points="120,90 138,72 156,90 174,72 192,90 210,72 228,90 246,72 262,88" fill="none" stroke="#0F766E" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" opacity=".85"/>'+
+        // 송풍팬
+        '<circle cx="92" cy="112" r="17" fill="#F6F8FC" stroke="#9DB0D0" stroke-width="2"/>'+
+        '<g stroke="#9DB0D0" stroke-width="2" stroke-linecap="round"><path d="M92 112 L92 99"/><path d="M92 112 L103 119"/><path d="M92 112 L81 119"/></g>'+
+        '<circle cx="92" cy="112" r="3.2" fill="#9DB0D0"/>'+
+        // 드레인 판 + 배관 + 물방울
+        '<rect x="122" y="132" width="140" height="9" rx="4.5" fill="#EAF0F9" stroke="#C7D2E8" stroke-width="1.6"/>'+
+        '<path d="M262 136 H292 V168" fill="none" stroke="#6BA3E8" stroke-width="2.6" stroke-linecap="round"/>'+
+        '<path d="M292 178 c-3.4 0 -5.4 -3.6 -3.2 -6.4 l3.2 -4 3.2 4 c2.2 2.8 .2 6.4 -3.2 6.4z" fill="#6BA3E8" opacity=".8"/>'+
+        // 냉매 배관 (구리)
+        '<path d="M284 106 C320 106 318 116 352 118" fill="none" stroke="#B98A16" stroke-width="2.6" stroke-linecap="round" opacity=".85"/>'+
+        '<path d="M284 120 C318 122 316 136 352 138" fill="none" stroke="#B98A16" stroke-width="2.2" stroke-linecap="round" opacity=".55"/>'+
+        // 실외기
+        '<rect x="352" y="88" width="146" height="118" rx="12" fill="#FFFFFF" stroke="#C7D2E8" stroke-width="2"/>'+
+        '<circle cx="402" cy="147" r="27" fill="#F6F8FC" stroke="#9DB0D0" stroke-width="2"/>'+
+        '<g stroke="#9DB0D0" stroke-width="2" stroke-linecap="round"><path d="M402 147 L402 126"/><path d="M402 147 L420 158"/><path d="M402 147 L384 158"/></g>'+
+        '<circle cx="402" cy="147" r="4" fill="#9DB0D0"/>'+
+        '<g stroke="#DCE4F2" stroke-width="2.4" stroke-linecap="round"><path d="M448 102 V192"/><path d="M458 102 V192"/><path d="M468 102 V192"/><path d="M478 102 V192"/><path d="M488 102 V192"/></g>'+
+        '<rect x="362" y="206" width="18" height="7" rx="2.5" fill="#C7D2E8"/><rect x="470" y="206" width="18" height="7" rx="2.5" fill="#C7D2E8"/>'+
+        // 전기 (플러그 칩)
+        '<rect x="322" y="182" width="27" height="27" rx="8" fill="#FFFFFF" stroke="#C7D2E8" stroke-width="2"/>'+
+        '<path d="M338 187 l-7 10 h5 l-3 8 8 -11 h-5 l2 -7z" fill="#B98A16"/>'+
+        // 리모컨
+        '<rect x="36" y="178" width="34" height="52" rx="9" fill="#FFFFFF" stroke="#C7D2E8" stroke-width="2"/>'+
+        '<rect x="43" y="186" width="20" height="13" rx="3" fill="#EAF0F9"/>'+
+        '<circle cx="47" cy="210" r="3" fill="#C7D2E8"/><circle cx="59" cy="210" r="3" fill="#C7D2E8"/><circle cx="47" cy="220" r="3" fill="#C7D2E8"/><circle cx="59" cy="220" r="3" fill="#C7D2E8"/>'+
+        '</svg>';
+      var irxIco={ok:'✓',warn:'!',bad:'✕'};
+      var pinsH=IRX_PARTS.map(function(p){
+        var a=irxAgg[p.k];
+        var st=a?a.st:'off';
+        var lb=isEn?p.en:p.ko;
+        return '<button type="button" class="irx-pin '+st+'"'+(a?' data-irx="'+p.k+'"':'')+' style="left:'+p.x+'%;top:'+p.y+'%"'+(a?'':' tabindex="-1"')+'>'+
+          '<span class="d">'+(a?irxIco[st]:'–')+'</span><span class="l">'+lb+'</span></button>';
+      }).join('');
+      rMap.innerHTML='<div class="irx-map an">'+
+        '<div class="irx-t"><b>'+(isEn?'Inspection map':'한눈에 보는 점검 부위')+'</b>'+
+        '<span>'+(isEn?'Tap a part to see its result':'부위를 누르면 해당 결과로 이동합니다')+'</span></div>'+
+        '<div class="irx-stage">'+IRX_SVG+pinsH+'</div>'+
+        '<div class="irx-key">'+
+          '<span class="ok"><i>✓</i>'+t.statusOk+'</span>'+
+          '<span class="warn"><i>!</i>'+t.statusWarn+'</span>'+
+          '<span class="bad"><i>✕</i>'+t.statusBad+'</span>'+
+          '<span class="off"><i>–</i>'+(isEn?'Not in this inspection':'이번 점검 제외')+'</span>'+
+        '</div></div>';
+      rMap.onclick=function(ev){
+        var b=ev.target.closest?ev.target.closest('[data-irx]'):null;
+        if(!b)return;
+        var a=irxAgg[b.getAttribute('data-irx')];
+        if(!a)return;
+        var el=a.id?document.getElementById(a.id):null;
+        if(!el&&a.cat){
+          el=document.querySelector('.v-cat[data-cat="'+String(a.cat).replace(/"/g,'\\"')+'"]');
+          if(el){el.classList.add('open');el.classList.remove('shut');}
+        }
+        if(!el)return;
+        var host=el.classList.contains('v-cat')?el:el.closest('.v-cat');
+        if(host){host.classList.add('open');host.classList.remove('shut');}
+        try{el.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){el.scrollIntoView();}
+        el.classList.remove('irx-hit');void el.offsetWidth;el.classList.add('irx-hit');
+        setTimeout(function(){el.classList.remove('irx-hit');},1900);
+      };
+    }
   }
   if(window.insResInit)window.insResInit(t);
 
