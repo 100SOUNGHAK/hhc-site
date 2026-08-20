@@ -4864,7 +4864,7 @@ window.saveReport=async function(){
 window.loadList=async function(){
   if(!DB)return;
   try{
-    var snap=await getDocs(query(collection(DB,'inspections'),orderBy('createdAt','desc'),limit(50)));
+    var snap=await getDocs(query(collection(DB,'inspections'),orderBy('createdAt','desc'),limit(300)));
     allReports=snap.docs.map(function(d){return Object.assign({_id:d.id},d.data());});
     filterList();
   }catch(e){document.getElementById('list-container').innerHTML='<div style="text-align:center;padding:30px;color:#c0392b">로딩 실패: '+e.message+'</div>';}
@@ -4874,7 +4874,7 @@ window.loadList=async function(){
 window.loadCustomers=async function(){
   if(DB){
     try{
-      var snap=await getDocs(query(collection(DB,'inspections'),orderBy('createdAt','desc'),limit(50)));
+      var snap=await getDocs(query(collection(DB,'inspections'),orderBy('createdAt','desc'),limit(300)));
       allReports=snap.docs.map(function(d){return Object.assign({_id:d.id},d.data());});
     }catch(e){
       var el=document.getElementById('cust-list-container');
@@ -5216,10 +5216,29 @@ window.openSendModalFor=async function(id){
 window.sendFromList=function(id){window.openSendModalFor(id);};
 window.kakaoFromList=function(id){window.openSendModalFor(id);};
 window.editReport=async function(id){
-  if(!DB)return;
+  // Firebase 연결이 아직이면 잠깐 기다렸다가 다시 시도합니다 (링크로 바로 들어온 경우)
+  if(!DB){
+    if(!window.__edWait){window.__edWait=0;}
+    if(window.__edWait<20){window.__edWait++;setTimeout(function(){window.editReport(id);},250);}
+    return;
+  }
+  window.__edWait=0;
   try{
-    var snap2=await getDocs(query(collection(DB,'inspections'),limit(100)));
-    var data=null;snap2.docs.forEach(function(d){if(d.id===id)data=Object.assign({_id:id},d.data());});
+    // 📎 보고서를 「문서번호로 직접」 읽어 옵니다.
+    //    예전에는 최근 목록 100건만 훑어서, 보고서가 많아지면 오래된 보고서를
+    //    「찾을 수 없습니다」라고 안내했습니다. (보기는 되는데 수정만 안 되던 원인)
+    var data=null;
+    try{
+      var ds=await getDoc(doc(DB,'inspections',id));
+      if(ds&&ds.exists&&ds.exists())data=Object.assign({_id:id},ds.data());
+    }catch(e1){}
+    // 혹시 문서번호가 아닌 값으로 들어온 경우에 대비한 예비 조회
+    if(!data){
+      try{
+        var snap2=await getDocs(query(collection(DB,'inspections'),limit(300)));
+        snap2.docs.forEach(function(d){if(d.id===id)data=Object.assign({_id:id},d.data());});
+      }catch(e2){}
+    }
     if(!data){toast('보고서를 찾을 수 없습니다.');return;}
     currentEditId=id; // 수정 모드 확정 (로드 중 오류나 타이밍과 무관하게 신규 저장 중복 방지)
     updateEditTag();
