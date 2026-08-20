@@ -529,6 +529,26 @@ body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;back
 .inv-open{display:block;width:100%;text-align:center;padding:12px;border-radius:12px;background:#1C1C22;color:#fff;font-size:13.5px;font-weight:800;text-decoration:none;box-sizing:border-box}
 @media print{.inv-open{display:none}}
 </style>
+<style>
+/* ══ 고장/작업 영상 ══ */
+.vdc{border:1px solid var(--line,#E3E0D8);border-radius:13px;overflow:hidden;background:#0E1424;margin-bottom:11px}
+.vdc:last-child{margin-bottom:0}
+.vdc video{width:100%;max-height:290px;display:block;background:#0E1424}
+.vdc-bar{display:flex;align-items:center;gap:9px;padding:10px 12px;background:#fff;border-top:1px solid var(--line-2,#EFEDE7)}
+.vdc-t{flex:1;min-width:0;font-size:12.5px;font-weight:800;color:var(--ink,#1C1C22);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vdc-d{font-size:11.5px;color:var(--ink-mute,#9A9AA6);font-variant-numeric:tabular-nums;flex-shrink:0}
+.vdc-open{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:800;color:#0F766E;text-decoration:none;background:#E6F5F2;border-radius:999px;padding:6px 12px;flex-shrink:0}
+.vd-print{display:none}
+@media print{
+  .vdc{background:#fff;break-inside:avoid;page-break-inside:avoid}
+  .vdc video,.vdc-bar{display:none}
+  .vd-print{display:flex;align-items:center;gap:14px;padding:13px 14px;background:#fff}
+  .vd-print .vdq{width:106px;height:106px;flex-shrink:0;border:1px solid var(--line,#E3E0D8);border-radius:9px;padding:5px;background:#fff;box-sizing:border-box}
+  .vd-print .vdq img,.vd-print .vdq canvas{width:100%!important;height:100%!important;display:block}
+  .vd-pt{font-size:11.5px;color:var(--ink,#1C1C22);line-height:1.65;word-break:break-all}
+  .vd-pt .vu{color:#6b7280;font-size:10.5px}
+}
+</style>
 </head>
 <body>
 
@@ -701,6 +721,12 @@ body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;back
       <div style="padding:12px 16px;display:grid;grid-template-columns:1fr 1fr;gap:9px" id="work-photos-grid"></div>
     </div>
 
+    <div id="video-wrap" style="display:none">
+      <div style="height:1px;background:var(--line-2)"></div>
+      <div class="photo-section-hdr"><div class="psn" style="background:#0F766E">▶</div><div class="pst" id="photo-video-title">고장/작업 영상</div></div>
+      <div style="padding:12px 16px" id="video-list"></div>
+    </div>
+
     <div id="clean-photo-wrap" style="display:none">
       <div style="height:1px;background:var(--line-2)"></div>
       <div class="photo-section-hdr"><div class="psn">2</div><div class="pst" id="photo-clean-title">청소 전후 사진</div></div>
@@ -782,6 +808,8 @@ var T={
     'photo-record-title':'점검 사진 기록',
     'photo-problem-title':'문제 사진',
     'photo-work-title':'작업과정 사진','photo-clean-title':'청소 전후 사진','photo-item-title':'실외기 사진',
+    'photo-video-title':'고장/작업 영상',
+    vidItem:'영상',vidSec:'초',vidOpen:'영상 보기',vidQr:'휴대폰 카메라로 QR코드를 비추면 영상이 재생됩니다.',
     'lbl-clean-before':'청소 전 · Before','lbl-clean-after':'청소 후 · After',
     'msr-unit':'단위 — 압력: PSI · 전류: A · 절연저항: MΩ',
     'sec-defect':'발견 결함 및 조치 내역','sec-leak':'냉매 누설 검사',
@@ -839,6 +867,8 @@ var T={
     'photo-record-title':'Inspection Photos',
     'photo-problem-title':'Problem Photos',
     'photo-work-title':'Work Process Photos','photo-clean-title':'Before / After Cleaning','photo-item-title':'Outdoor Unit Photos',
+    'photo-video-title':'Fault / Work Video',
+    vidItem:'Video',vidSec:'s',vidOpen:'Play video',vidQr:'Scan the QR code with your phone camera to play the video.',
     'lbl-clean-before':'Before','lbl-clean-after':'After',
     'msr-unit':'Unit — Pressure: PSI · Current: A · Insulation: MΩ',
     'sec-defect':'Defects Found & Actions','sec-leak':'Refrigerant Leak Test',
@@ -883,6 +913,34 @@ function setLang(lang){
   if(window._invCardData&&window.renderInvoiceCard)window.renderInvoiceCard(window._invCardData);
 }
 window.setLang=setLang;
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+// ── QR 그리기 (인쇄물에서 영상 열기)
+function makeQR(box,text){
+  if(!box)return;
+  // 3단계: QR 라이브러리 → 이미지 생성 서비스 → 링크 텍스트
+  function fbText(){box.innerHTML='<div style="font-size:8.5px;word-break:break-all;padding:4px;color:#374151;line-height:1.35">'+text+'</div>';}
+  function fbImg(){
+    box.innerHTML='';
+    var im=document.createElement('img');
+    im.alt='QR';im.referrerPolicy='no-referrer';
+    im.onerror=fbText;
+    im.src='https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=0&data='+encodeURIComponent(text);
+    box.appendChild(im);
+  }
+  function go(){
+    try{box.innerHTML='';new QRCode(box,{text:text,width:96,height:96,colorDark:'#0E2350',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});}
+    catch(e){fbImg();}
+  }
+  if(typeof QRCode!=='undefined'){go();return;}
+  var n=0,iv=setInterval(function(){
+    n++;
+    if(typeof QRCode!=='undefined'){clearInterval(iv);go();}
+    else if(n>30){clearInterval(iv);fbImg();}
+  },100);
+}
+window.makeQR=makeQR;
 </script>
 <script>
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 보고서 렌더 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1387,6 +1445,39 @@ window.renderReport=function renderReport(data){
   // 1. 작업과정
   showWrap('work-photo-wrap',makePhotoGrid(G('work-photos-grid'),data.workPhotos,{height:'200px',fit:'cover'}));
 
+  // 1-1. 고장/작업 영상
+  var vList=G('video-list');
+  var vids=(data.workVideos||[]).filter(function(v){return v&&v.url;});
+  if(vList){
+    vList.innerHTML='';
+    vids.forEach(function(v,vi){
+      var link=v.short||v.url;
+      var box=document.createElement('div');box.className='vdc';
+      var vel=document.createElement('video');
+      vel.src=v.url+(v.url.indexOf('#')>-1?'':'#t=0.1');vel.controls=true;vel.preload='metadata';
+      vel.setAttribute('playsinline','');vel.setAttribute('webkit-playsinline','');
+      vel.setAttribute('controlsList','nodownload');
+      box.appendChild(vel);
+      var bar=document.createElement('div');bar.className='vdc-bar';
+      var tt=document.createElement('div');tt.className='vdc-t';tt.textContent=(t.vidItem||'영상')+' '+(vi+1);
+      var dd=document.createElement('div');dd.className='vdc-d';dd.textContent=v.dur?(Math.round(v.dur)+(t.vidSec||'초')):'';
+      var aa=document.createElement('a');aa.className='vdc-open';aa.href=link;aa.target='_blank';aa.rel='noopener';
+      aa.textContent='▶ '+(t.vidOpen||'영상 보기');
+      bar.appendChild(tt);bar.appendChild(dd);bar.appendChild(aa);
+      box.appendChild(bar);
+      // 인쇄용 QR + 링크
+      var pr=document.createElement('div');pr.className='vd-print';
+      var qb=document.createElement('div');qb.className='vdq';
+      var pt=document.createElement('div');pt.className='vd-pt';
+      pt.innerHTML='<b>'+(t.vidItem||'영상')+' '+(vi+1)+'</b>'+(v.dur?' · '+Math.round(v.dur)+(t.vidSec||'초'):'')+'<br>'+(t.vidQr||'')+'<br><span class="vu">'+link+'</span>';
+      pr.appendChild(qb);pr.appendChild(pt);
+      box.appendChild(pr);
+      vList.appendChild(box);
+      if(window.makeQR)window.makeQR(qb,link);
+    });
+  }
+  showWrap('video-wrap',vids.length>0);
+
   // 2. 청소 전후
   var cGrid=G('clean-photos-grid');
   if(cGrid){
@@ -1428,7 +1519,7 @@ window.renderReport=function renderReport(data){
   // 표시할 사진 블록이 하나도 없으면 사진 기록 섹션 자체를 숨김
   var prSec=G('photo-record-sec');
   if(prSec){
-    var anyPhoto=['problem-photo-wrap','work-photo-wrap','clean-photo-wrap','item-photo-wrap'].some(function(id){
+    var anyPhoto=['problem-photo-wrap','work-photo-wrap','video-wrap','clean-photo-wrap','item-photo-wrap'].some(function(id){
       var el=G(id);return el&&el.style.display!=='none';
     });
     prSec.style.display=anyPhoto?'block':'none';
