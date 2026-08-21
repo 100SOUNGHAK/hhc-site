@@ -1310,9 +1310,13 @@ window.addEventListener('popstate',function(){
     OPEN[k]=false;
     try{M[k].setSt();closedSec=M[k].hub;}catch(e){}
   });
-  if(closedSec){
+  // 상단 고정 메뉴로 이동하는 중이면 스크롤은 메뉴 쪽에서 처리합니다
+  const _jumping=!!(window.__navJump&&Date.now()-window.__navJump<800);
+  if(closedSec&&!_jumping){
     try{const y=closedSec.getBoundingClientRect().top+window.scrollY-12;window.scrollTo({top:y<0?0:y,behavior:'smooth'});}catch(e){}
   }
+  // 상단 고정 메뉴의 현재 위치 표시를 다시 계산합니다
+  setTimeout(function(){try{window.dispatchEvent(new Event('scroll'));}catch(e){}},480);
 });
 // 히어로 상태 칩 → 해당 섹션으로 부드럽게 이동
 document.addEventListener('click',function(ev){
@@ -2346,8 +2350,9 @@ function render(){
   // ── 📌 상단 고정 메뉴 : 탭 이동 + 현재 위치 자동 표시(스크롤 스파이) ──
   {const nav=document.getElementById('stnav');
    if(nav){
+     // 스크롤하면 축소 헤더가 나타나므로, 지금 보이지 않더라도 그 높이만큼 미리 비워 둡니다
      const OFFS=()=>{const mn=document.getElementById('mini');
-       return (mn&&mn.classList.contains('show')?mn.offsetHeight:0)+nav.offsetHeight+18;};
+       return (mn?mn.offsetHeight:0)+nav.offsetHeight+16;};
      const resolve=k=>{
        if(k==='top')return 'top';
        if(k.indexOf('hub-btn-')===0){const kk=k.slice(8);
@@ -2361,16 +2366,35 @@ function render(){
      const center=c=>{try{nav.scrollTo({left:c.offsetLeft-(nav.clientWidth-c.offsetWidth)/2,behavior:'smooth'});}catch(e){}};
      const setOn=c=>{chips.forEach(x=>x.classList.toggle('on',x===c));if(c)center(c);};
      let lock=0;
+     const goTo=el=>{
+       if(!el)return;
+       if(el==='top'){window.scrollTo({top:0,behavior:'smooth'});return;}
+       const y=el.getBoundingClientRect().top+window.scrollY-OFFS();
+       window.scrollTo({top:y<0?0:y,behavior:'smooth'});
+     };
      chips.forEach(c=>{c.onclick=()=>{
        const k=c.dataset.go,kk=k.indexOf('hub-btn-')===0?k.slice(8):null;
-       // 다른 문서의 내역 화면이 열려 있으면 닫고 이동합니다
-       Object.keys(window.__hubSet||{}).forEach(o=>{
-         if(OPEN[o]&&o!==kk){OPEN[o]=false;window.__hubSet[o].setSt();}});
-       const el=resolve(k);if(!el)return;
-       setOn(c);lock=Date.now()+900;
-       if(el==='top')window.scrollTo({top:0,behavior:'smooth'});
-       else{const y=el.getBoundingClientRect().top+window.scrollY-OFFS();
-            window.scrollTo({top:y<0?0:y,behavior:'smooth'});}
+       const M=window.__hubSet||{};
+       const openK=Object.keys(M).filter(o=>OPEN[o]);
+       const hadState=!!(history.state&&history.state.hhcHub);
+       window.__navJump=Date.now();
+       // 다른 문서의 내역 화면이 열려 있으면 닫습니다
+       openK.forEach(o=>{if(o!==kk){OPEN[o]=false;try{M[o].setSt();}catch(e){}}});
+       setOn(c);lock=Date.now()+1500;
+       // 📄 인보이스 · 점검보고서 · 정비내역 : 메뉴를 누르면 내역 목록을 바로 펼칩니다
+       if(kk&&M[kk]){
+         if(!OPEN[kk]){
+           OPEN[kk]=true;
+           try{M[kk].setSt();}catch(e){}
+           // 이미 다른 내역이 열려 있었다면 뒤로가기 기록은 그대로 둡니다
+           if(!hadState){try{history.pushState({hhcHub:kk},'');}catch(e){}}
+         }
+         setTimeout(()=>{goTo(document.getElementById('hub-list-'+kk));},90);
+         return;
+       }
+       // 일반 섹션 : 내역이 열려 있었다면 뒤로가기 기록도 함께 정리합니다
+       if(openK.length&&hadState){try{history.back();}catch(e){}}
+       setTimeout(()=>{goTo(resolve(k));},openK.length?140:0);
      };});
      const spy=()=>{
        if(Date.now()<lock)return;
