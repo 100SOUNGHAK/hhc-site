@@ -797,6 +797,8 @@ function msgSlim(m,dropLink){
     t=t.replace(/^.*https?:\/\/\S+.*$/gm,'')      // 링크가 들어간 줄 통째로 제거
        .replace(/^\s*📱\s*(MY ?PAGE|My Page|마이페이지)\s*$/gim,'')   // 주소 줄과 짝인 제목 줄
        .replace(/^\s*👑\s*(MEMBERSHIP|멤버십 안내장)\s*$/gim,'')      // 안내장 주소 줄과 짝인 제목 줄
+       .replace(/^\s*🎁\s*(GIFT ?VOUCHER|전자상품권 안내)\s*$/gim,'')   // 전자상품권 안내장 제목 줄
+       .replace(/^\s*💎\s*(REWARD ?POINTS|적립포인트 안내)\s*$/gim,'')  // 적립포인트 안내장 제목 줄
        .replace(/^\s*📝\s*(SERVICE REQUEST FORM|의뢰 요청서 작성)\s*$/gim,''); // 요청서 주소 줄과 짝인 제목 줄
   }
   t=t.replace(/^\s*[-=─━_·]{3,}\s*$/gm,'')        // 구분선 줄 제거
@@ -2843,6 +2845,8 @@ window.caSendModal=async function(idx){
     {t:'care6',   lb:'🔧 6개월 안내',   n:0, need:false},
     {t:'rqf',     lb:'📨 의뢰 요청서',  n:0, need:false},
     {t:'mem',     lb:'👑 멤버십 안내',  n:0, need:false},
+    {t:'evi',     lb:'🎁 전자상품권 안내', n:0, need:false},
+    {t:'pti',     lb:'💎 적립포인트 안내', n:0, need:false},
     {t:'fee',     lb:'💡 추가비용 안내', n:0, need:false},
     {t:'wp',      lb:'🪪 워크퍼밋 등록', n:0, need:false},
     {t:'install', lb:'📲 앱 설치 안내', n:0, need:false}
@@ -2853,7 +2857,7 @@ window.caSendModal=async function(idx){
     {g:'💰 청구 · 결제',  ts:['bill','rebill','pay']},
     {g:'📅 예약 · 의뢰',  ts:['bk','bkc','rq','ipr','ipv','mmv','rqf','revisit']},
     {g:'🌿 정기관리 알림', ts:['care3','care6']},
-    {g:'📢 안내 · 소개',  ts:['basic','aw','mem','fee','wp','install']}
+    {g:'📢 안내 · 소개',  ts:['basic','aw','mem','evi','pti','fee','wp','install']}
   ];
   const _cpSpan=(CPG.length&&CPD.length)?'':'grid-column:1/-1;';
   const _icSpan=(IPS.length&&CTS.length)?'':'grid-column:1/-1;';
@@ -2954,6 +2958,9 @@ window.caSendModal=async function(idx){
     // 👑 멤버십 안내 — 고객 마이페이지가 아니라 패키지 상품 안내장을 보냅니다.
     //   · 영문 발송은 미리보기 카드(그림·제목)까지 영어로 나오도록 membership-en.html 을 거칩니다.
     if(state.tpl==='mem')return BASE+(state.en?'/membership-en.html?lang=en':'/membership');
+    // 🎁 전자상품권 · 💎 적립포인트 안내장 — 마이페이지가 아니라 안내장 주소를 보냅니다
+    if(state.tpl==='evi')return BASE+'/evoucher.html'+(state.en?'?lang=en':'');
+    if(state.tpl==='pti')return BASE+'/points.html'+(state.en?'?lang=en':'');
     const v=['iv','ip','ct','cp'].filter(k=>state[k]);
     const f=FOCUS_OF[state.tpl]||'';
     // 영문 발송은 영문 전용 미리보기 페이지(my-en.html)로 보냅니다.
@@ -3134,6 +3141,12 @@ window.caSendModal=async function(idx){
   function msgTail(en){
     if(state.tpl==='mem'){
       return '\n\n'+(en?'👑 MEMBERSHIP':'👑 멤버십 안내장')+'\n🔗 '+link()+'\n\nHappy Home Care 📞 +60 17-247 2774';
+    }
+    if(state.tpl==='evi'){
+      return '\n\n'+(en?'🎁 GIFT VOUCHER':'🎁 전자상품권 안내')+'\n🔗 '+link()+'\n\nHappy Home Care 📞 +60 17-247 2774';
+    }
+    if(state.tpl==='pti'){
+      return '\n\n'+(en?'💎 REWARD POINTS':'💎 적립포인트 안내')+'\n🔗 '+link()+'\n\nHappy Home Care 📞 +60 17-247 2774';
     }
     return '\n\n📱 MY PAGE\n🔗 '+link()+'\n\nHappy Home Care 📞 +60 17-247 2774';
   }
@@ -3353,6 +3366,18 @@ window.caSendModal=async function(idx){
         ?('Hello, '+nm+' 😊\n\nOur [Happy Membership Package]:\nNo expiry \u00B7 spend more than you pay.\nUp to RM 15,000 bonus credit.\n\n\uD83C\uDF81 New sign-ups: double bonus.'+msgTail(en))
         :('안녕하세요, '+nm+' 고객님 😊\n\n[해피 멤버십 패키지] 안내드립니다.\n\n유효기간 없이 가입 금액보다 더 큰 이용 한도로 사용하실 수 있습니다.\n최대 RM 15,000 무상적립.\n\n\uD83C\uDF81 지금 신규가입 시 무상적립금 2배 (기간 한정)'+msgTail(en));
     }
+    if(state.tpl==='evi'){
+      // 🎁 전자상품권 안내 — 안내장 한 장으로 종류·혜택·이용방법을 모두 볼 수 있게 안내합니다.
+      return en
+        ?('Hello, '+nm+' 😊\n\nOur [Happy Home Care Gift Voucher]:\nBuy at 10% off face value and use it like cash for any service.\n\n🎁 A thoughtful gift for family and friends — we can register a recipient name.\n✓ Kept on your phone, no paper to lose\n✓ Any remaining balance is re-issued as a new voucher'+msgTail(en))
+        :('안녕하세요, '+nm+' 고객님 😊\n\n[해피홈케어 전자상품권] 안내드립니다.\n\n액면가보다 10% 저렴하게 구매하시고, 유효기간 안에서는 모든 서비스에 현금처럼 사용하실 수 있습니다.\n\n🎁 가족·지인께 선물도 가능합니다 (받는 분 지정)\n✓ 휴대폰에 보관 — 잃어버릴 걱정 없습니다\n✓ 잔액이 남으면 새 상품권으로 재발행'+msgTail(en));
+    }
+    if(state.tpl==='pti'){
+      // 💎 적립포인트 안내 — 적립 비율·사용 방법을 짧게 안내하고 자세한 내용은 안내장에서 보게 합니다.
+      return en
+        ?('Hello, '+nm+' 😊\n\nOur [Reward Points] programme:\nEarn RM 1 for every RM 100 you spend on our services — automatically.\n\n✓ No sign-up, no card to carry\n✓ No expiry — spend whenever it suits you\n✓ Use like cash from RM 10 onwards'+msgTail(en))
+        :('안녕하세요, '+nm+' 고객님 😊\n\n[적립포인트] 안내드립니다.\n\n서비스 결제 RM 100 당 RM 1이 자동으로 적립됩니다.\n\n✓ 따로 신청하실 것도, 카드를 챙기실 것도 없습니다\n✓ 유효기간이 없어 필요하실 때 쓰시면 됩니다\n✓ RM 10 이상 모이면 다음 결제에 현금처럼 사용'+msgTail(en));
+    }
     if(state.tpl==='fee'){
       // 💡 추가비용 안내 — 최소청구금액 · 주차비용 · 예약보증금
       //    자세한 내용(환급 규정 표 등)은 마이페이지에서 바로 펼쳐 보이도록 강조됩니다.
@@ -3465,7 +3490,8 @@ window.caSendModal=async function(idx){
     });
     const v=['iv','ip','ct','cp'].filter(k=>state[k]);
     // 👑 멤버십 안내만 안내장 주소를 보내므로 마이페이지 노출 항목과 무관합니다.
-    const _isMem=(state.tpl==='mem');
+    // 👑 멤버십 · 🎁 전자상품권 · 💎 적립포인트 안내는 안내장 주소를 보내므로 마이페이지 노출 항목과 무관합니다.
+    const _isMem=(state.tpl==='mem'||state.tpl==='evi'||state.tpl==='pti');
     const os=mk.querySelector('#cs-optsec');
     if(os)os.style.display=_isMem?'none':'';
     const w=mk.querySelector('#cs-warn');
@@ -3647,6 +3673,12 @@ window.caSendModal=async function(idx){
     const kkT=(state.tpl==='mem')
       ?{t:(en?'[Happy Home Care] Membership Packages':'[Happy Home Care] 해피 멤버십 패키지 안내'),
         btn:(en?'View membership':'멤버십 안내 보기')}
+      :(state.tpl==='evi')
+      ?{t:(en?'[Happy Home Care] Gift Voucher':'[Happy Home Care] 전자상품권 안내'),
+        btn:(en?'View voucher guide':'전자상품권 안내 보기')}
+      :(state.tpl==='pti')
+      ?{t:(en?'[Happy Home Care] Reward Points':'[Happy Home Care] 적립포인트 안내'),
+        btn:(en?'View points guide':'적립포인트 안내 보기')}
       :(state.tpl==='rqf')
       ?{t:(en?'[Happy Home Care] Service Request Form':'[Happy Home Care] 서비스 의뢰 요청서'),
         btn:(en?'Open My Page':'마이페이지 열기')}
@@ -3659,6 +3691,8 @@ window.caSendModal=async function(idx){
   mk.querySelector('#cs-copylink').addEventListener('click',()=>{
     navigator.clipboard.writeText(link()).then(()=>toast(
       state.tpl==='mem'?'🔗 멤버십 안내장 주소가 복사되었습니다'
+      :state.tpl==='evi'?'🔗 전자상품권 안내장 주소가 복사되었습니다'
+      :state.tpl==='pti'?'🔗 적립포인트 안내장 주소가 복사되었습니다'
       :'🔗 마이페이지 주소가 복사되었습니다'))
       .catch(()=>prompt('복사해서 사용하세요:',link()));
   });
