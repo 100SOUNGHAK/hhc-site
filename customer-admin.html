@@ -3243,6 +3243,35 @@ window.caSendModal=async function(idx){
       :('안녕하세요. '+nm+'님 😊\n\n점검(수리) 요청 접수되었습니다.\n확인후 방문 일정 안내드리겠습니다.\n\n※ 참고로 점검비용 발생되며 MY PAGE  하단 웹사이트의  가격정보>출장점검비용 참조 부탁드립니다.( 무상점검 기간내 또는 패키지 회원인 경우 제외)'+msgTail(en));
   }
   // 🚗 점검방문 안내 — 「2026.08.19 수요일 오후13:00 전후」 형식
+  // ✅ 예약 확정 방문일시 — 「2026년 8월 22일(토) 오전 11:30 전후」 / 「Sat, 22 Aug 2026, around 11:30 AM」
+  function bkcWhen(x,en){
+    if(!x)return '';
+    const d=String(x.booking_date||'');
+    const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
+    let out='';
+    if(m){
+      const w=CS_DOW[new Date(+m[1],+m[2]-1,+m[3]).getDay()];
+      out=en?(w[1]+', '+parseInt(m[3],10)+' '+CS_MN[parseInt(m[2],10)-1]+' '+m[1])
+            :(parseInt(m[1],10)+'년 '+parseInt(m[2],10)+'월 '+parseInt(m[3],10)+'일('+w[0]+')');
+    }else out=d;
+    if(!out)return '';
+    // 방문시간 — 「11:30」·「오전 11:30」·「09:00|11:00」 모두 처리
+    let t=String(x.booking_time||'').trim();
+    if(t.indexOf('|')>=0)t=(t.split('|')[0]||t).trim();
+    if(t){
+      const tm=/(\d{1,2})\s*[:시]\s*(\d{1,2})?/.exec(t);
+      if(tm){
+        let hh=parseInt(tm[1],10)||0;
+        const mi=(tm[2]||'00').padStart(2,'0');
+        if(/오후|저녁|p\.?m\.?/i.test(t)&&hh<12)hh+=12;
+        if(/오전|아침|a\.?m\.?/i.test(t)&&hh===12)hh=0;
+        const h12=(hh%12)||12;
+        out+=en?(', around '+h12+':'+mi+' '+(hh<12?'AM':'PM'))
+               :(' '+(hh<12?'오전':'오후')+' '+h12+':'+mi+' 전후');
+      }else out+=' '+t;
+    }
+    return out;
+  }
   function ipvWhen(x,en){
     const d=String(x.visit_date||'');
     const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(d);
@@ -3359,11 +3388,19 @@ window.caSendModal=async function(idx){
           (bi?'\n\n●신청 품목: '+bi:'')+inst+msgTail(en));
     }
     if(state.tpl==='bkc'){
-      // 매니지먼트 작업방문등록 정보 · 방문일시/품목 상세는 마이페이지에서 확인하도록 안내만 하고,
-      // WhatsApp 메시지 자체는 짧고 간결하게 유지한다 (요청하신 문구 그대로)
+      // ✅ 예약 확정 안내 — 방문일시를 본문에 넣고, 상세는 마이페이지에서 확인하도록 짧게 유지
+      const bkcW=bkcWhen(BKCU[0]||BKC[0],en);
       return en
-        ?('Hello '+nm+' 😊\n\nYour booking has been confirmed. [Check details on My Page]\nThank you for choosing Happy Home Care.\n📅 We will visit you as scheduled.\nOur team will provide careful, thorough service on the day.\n'+SEP2+'\n🏠 Your Personal My Page\n\nYou can conveniently check your service anytime below.\n'+msgList2(true)+'\n📱 My Page\n🔗 '+l+'\n'+SEP2+'\nThank you.\nHappy Home Care\n📞 +60 17-247 2774')
-        :('안녕하세요, '+nm+' 고객님 😊\n\n고객님의 예약이 정상적으로 확정되었습니다. [상세 예약정보는 마이페이지에서 확인]\nHappy Home Care를 이용해 주셔서 감사합니다.\n📅 예약된 일정에 맞춰 방문드리겠습니다.\n당일 안전하고 꼼꼼한 서비스로 찾아뵙겠습니다.\n'+SEP2+'\n🏠 고객 전용 마이페이지\n\n언제든지 아래 페이지에서 서비스를 편리하게 확인하실 수 있습니다.\n'+msgList2(false)+'\n📱 My Page\n🔗 '+l+'\n'+SEP2+'\n감사합니다.\nHappy Home Care\n📞 +60 17-247 2774');
+        ?('Hello, '+nm+' 😊\n\n✅ Your booking has been confirmed.\n'+
+          (bkcW?'\n📅 '+bkcW+'\n':'')+
+          '\n⚠️ Please complete your Work Permit (visit registration) in advance for smooth entry.\n'+
+          '\n📋 Full details are available on your My Page below.\n📱 My Page\n🔗 '+l+
+          '\nThank you.\nHappy Home Care\n📞 +60 17-247 2774')
+        :('안녕하세요, '+nm+' 고객님 😊\n\n✅ 예약이 확정되었습니다.\n'+
+          (bkcW?'\n📅 '+bkcW+'\n':'')+
+          '\n⚠️ 원활한 출입을 위해 사전에 Work Permit(작업 방문 등록)을 반드시 완료해 주시기 바랍니다.\n'+
+          '\n📋 상세 정보는 아래 마이페이지에서 확인해 주세요.\n📱 My Page\n🔗 '+l+
+          '\n감사합니다.\nHappy Home Care\n📞 +60 17-247 2774');
     }
     if(state.tpl==='rq'){
       const r=RQP[0]||{};
