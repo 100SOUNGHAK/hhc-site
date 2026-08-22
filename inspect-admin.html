@@ -2294,9 +2294,36 @@ function sevenSegDecode(dataUrl){
           var s8=0;for(var q8=0;q8<Math.min(3,ar.length);q8++)s8+=ar[q8];
           votes[vk8]=s8;
         }
-        var bestVal=null,bestW=0,secW=0;
-        for(var vk in votes){if(votes[vk]>bestW){secW=bestW;bestW=votes[vk];bestVal=vk;}else if(votes[vk]>secW)secW=votes[vk];}
+        var bestVal=null,bestW=0,secW=0,secVal=null;
+        for(var vk in votes){if(votes[vk]>bestW){secW=bestW;secVal=bestVal;bestW=votes[vk];bestVal=vk;}else if(votes[vk]>secW){secW=votes[vk];secVal=vk;}}
         if(bestVal===null){resolve(null);return;}
+        // ── 획 누락 보정 ────────────────────────────────────────────
+        // 사진으로 찍은 LCD는 획이 흐리거나 반사에 묻혀 「사라지는」 경우가
+        // 압도적으로 많고, 없던 획이 새로 생기는 경우는 드물다.
+        // 1·2위 표차가 근소하고 두 값이 「한 자리에서 세그먼트 하나 차이」라면
+        // 획이 더 많은 쪽을 채택한다. (8→6, 9→5, 8→9, 6→5 계통 오독 교정)
+        var _SEG={'0':'ABCDEF','1':'BC','2':'ABDEG','3':'ABCDG','4':'BCFG','5':'ACDFG','6':'ACDEFG','7':'ABC','8':'ABCDEFG','9':'ABCDFG'};
+        var _lostStroke=function(lo,hi){        // lo 의 획이 hi 의 부분집합이고 딱 1개 적은가
+          var a=_SEG[lo],b2=_SEG[hi];
+          if(!a||!b2||b2.length!==a.length+1)return false;
+          for(var i9=0;i9<a.length;i9++)if(b2.indexOf(a.charAt(i9))<0)return false;
+          return true;
+        };
+        if(secVal!==null&&bestW>0&&secW/bestW>=0.80){
+          var s1=String(bestVal),s2=String(secVal);
+          if(s1.length===s2.length){
+            var diffAt=-1,nDiff=0;
+            for(var ci=0;ci<s1.length;ci++)if(s1.charAt(ci)!==s2.charAt(ci)){nDiff++;diffAt=ci;}
+            if(nDiff===1){
+              var c1=s1.charAt(diffAt),c2=s2.charAt(diffAt);
+              if(_lostStroke(c1,c2)){          // 2위가 획이 하나 더 많다 → 2위 채택
+                console.log('[7SEG] 획 누락 보정: '+s1+' → '+s2+' ('+c1+'→'+c2+', 표차 '+(secW/bestW).toFixed(2)+')');
+                var tv=bestVal;bestVal=secVal;secVal=tv;
+                var tw=bestW;bestW=secW;secW=tw;
+              }
+            }
+          }
+        }
         console.log('[7SEG] 투표:',JSON.stringify(votes),'→ 채택:',bestVal,'(신뢰도',(bestW/(bestW+secW)).toFixed(2),')');
         // 1위/2위 표차로 계산한 확신도를 함께 반환 — 애매한 판독은 강조 표시
         resolve({val:bestVal,conf:(bestW+secW)>0?bestW/(bestW+secW):1});
