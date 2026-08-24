@@ -1176,6 +1176,38 @@ body{background:#E7EBF4}
 #sec-mm,#sec-qt{background:none!important;border:none!important;box-shadow:none!important;padding:0!important;margin-top:8px}
 .hub .hubbg{display:none}
 
+/* ═══ 📄 내역·문서 팝업 (전체 화면 시트) ═══ */
+.hubls.open{position:fixed!important;inset:0;z-index:260;display:block;margin:0!important;
+  background:var(--bg);overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:calc(10px + env(safe-area-inset-top)) 13px calc(20px + env(safe-area-inset-bottom));
+  animation:hubSheet .24s cubic-bezier(.22,.8,.28,1)!important}
+@keyframes hubSheet{from{opacity:0}to{opacity:1}}
+body.popon .topbar,body.popon .fixbar,body.popon .qtiles{display:none!important}
+.hubls.open .lshd{position:sticky;top:0;z-index:3;margin:-4px -3px 10px;padding:11px 12px;
+  box-shadow:0 6px 16px -8px rgba(11,24,51,.35)}
+.hubls.open .hubcls{margin-top:14px}
+/* 🧾 문서(인보이스 등) 팝업 */
+.docov{position:fixed;inset:0;z-index:320;display:none;background:rgba(8,16,34,.62);
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);align-items:center;justify-content:center;padding:0}
+.docov.open{display:flex}
+.docpop{width:100%;max-width:560px;height:100%;max-height:100%;display:flex;flex-direction:column;background:var(--bg);overflow:hidden}
+.doch{display:flex;align-items:center;gap:9px;flex:none;background:#fff;border-bottom:1px solid var(--bdr);
+  padding:calc(11px + env(safe-area-inset-top)) 14px 11px}
+.doch b{flex:1;min-width:0;font-size:13.5px;font-weight:900;letter-spacing:-.02em;color:#14192A;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.docnew,.docx{flex:none;width:34px;height:34px;border-radius:11px;border:1px solid var(--bdr);background:var(--bg);
+  color:var(--ink2);font-size:14px;font-weight:900;cursor:pointer;font-family:inherit;text-decoration:none;
+  display:flex;align-items:center;justify-content:center}
+.docnew:active,.docx:active{transform:translateY(1px)}
+.docb{flex:1;min-height:0;position:relative;background:#fff}
+.docb iframe{width:100%;height:100%;border:0;display:block}
+.docld{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:12.5px;font-weight:700;color:var(--ink3);background:#fff;z-index:2}
+@media (min-width:600px){.docpop{height:94vh;max-height:94vh;border-radius:18px;
+  box-shadow:0 10px 24px rgba(5,12,28,.34),0 36px 80px -20px rgba(5,12,28,.6)}
+  .docov{padding:16px}.doch{padding-top:11px}}
+@media (prefers-reduced-motion:reduce){.hubls.open{animation:none!important}}
+
 /* ═══ 🧭 2026-08-23 : 결제정보 팝업 · 요약카드 컴팩트 ═══ */
 .bkov{position:fixed;inset:0;z-index:300;background:rgba(8,16,34,.56);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
   display:flex;align-items:center;justify-content:center;padding:20px}
@@ -1607,22 +1639,78 @@ function inspTile(t){return t==='install'?'in':(t==='washer'?'wa':(t==='dispatch
 function p2(n){return String(n).length<2?'0'+n:String(n);}
 const MN_EN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function todayISO(){const d=new Date();return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());}
+// ── 📄 팝업 공통 : 뒤 화면을 그 자리에 그대로 붙잡아 둡니다 ──
+//    (팝업을 닫으면 열기 직전에 보고 있던 위치로 정확히 돌아옵니다)
+window.__popY=0;window.__popN=0;
+window.__popLock=function(){
+  if(window.__popN++>0)return;
+  window.__popY=window.scrollY||document.documentElement.scrollTop||0;
+  const b=document.body;
+  b.style.position='fixed';b.style.top=(-window.__popY)+'px';
+  b.style.left='0';b.style.right='0';b.style.width='100%';
+  b.classList.add('popon');   // 상단바·하단바는 팝업 동안 감춥니다
+};
+window.__popUnlock=function(force){
+  if(window.__popN>0)window.__popN--;
+  if(force)window.__popN=0;
+  if(window.__popN>0)return;
+  const b=document.body;
+  b.style.position='';b.style.top='';b.style.left='';b.style.right='';b.style.width='';
+  b.classList.remove('popon');
+  try{window.scrollTo(0,window.__popY);}catch(e){}
+};
+// ── 🧾 문서 팝업 : 인보이스·점검보고서 등을 앱 안에서 바로 보여 줍니다 ──
+window.__docPopOpen=false;
+window.__docPop=function(url,title){
+  if(!url)return;
+  let ov=document.getElementById('docpop');
+  if(!ov){
+    ov=document.createElement('div');ov.className='docov';ov.id='docpop';
+    ov.innerHTML='<div class="docpop"><div class="doch"><b id="docpop-t"></b>'+
+      '<a class="docnew" id="docpop-n" target="_blank" rel="noopener">↗</a>'+
+      '<button type="button" class="docx" id="docpop-x" aria-label="close">✕</button></div>'+
+      '<div class="docb"><div class="docld" id="docpop-l">불러오는 중…</div>'+
+      '<iframe id="docpop-f" title="document" referrerpolicy="no-referrer"></iframe></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click',function(e){if(e.target===ov)window.__docPopClose();});
+    ov.querySelector('#docpop-x').onclick=function(){window.__docPopClose();};
+    ov.querySelector('#docpop-f').onload=function(){
+      const l=document.getElementById('docpop-l');if(l)l.style.display='none';};
+  }
+  document.getElementById('docpop-t').textContent=title||'';
+  document.getElementById('docpop-n').href=url;
+  const l=document.getElementById('docpop-l');if(l)l.style.display='';
+  document.getElementById('docpop-f').src=url;
+  window.__popLock();
+  ov.classList.add('open');window.__docPopOpen=true;
+  try{history.pushState({hhcDoc:1},'');}catch(e){}
+};
+window.__docPopClose=function(){
+  const ov=document.getElementById('docpop');
+  if(ov)ov.classList.remove('open');
+  if(!window.__docPopOpen)return;
+  window.__docPopOpen=false;window.__popUnlock();
+  try{const f=document.getElementById('docpop-f');if(f)f.src='about:blank';}catch(e){}
+  try{if(history.state&&history.state.hhcDoc)history.replaceState({},'');}catch(e){}
+};
+document.addEventListener('keydown',function(e){
+  if(e.key!=='Escape')return;
+  if(window.__docPopOpen){window.__docPopClose();return;}
+  const M=window.__hubSet||{};
+  Object.keys(M).forEach(function(k){if(OPEN[k]&&M[k].close)M[k].close();});
+});
 // 📄 브라우저 뒤로가기 : 열려 있는 내역 화면을 닫고 요약 첫 화면으로 돌아갑니다
 window.addEventListener('popstate',function(){
+  // 문서 팝업이 열려 있으면 그것부터 닫습니다
+  if(window.__docPopOpen){window.__docPopClose();return;}
   const M=window.__hubSet||{};
-  let closedSec=null;
+  let any=false;
   Object.keys(M).forEach(function(k){
     if(!OPEN[k])return;
-    OPEN[k]=false;
-    try{M[k].setSt();closedSec=M[k].hub;}catch(e){}
+    OPEN[k]=false;any=true;
+    try{M[k].setSt();}catch(e){}
   });
-  // 상단 고정 메뉴로 이동하는 중이면 스크롤은 메뉴 쪽에서 처리합니다
-  const _jumping=!!(window.__navJump&&Date.now()-window.__navJump<800);
-  if(closedSec&&!_jumping){
-    try{const y=closedSec.getBoundingClientRect().top+window.scrollY-12;window.scrollTo({top:y<0?0:y,behavior:'smooth'});}catch(e){}
-  }
-  // 상단 고정 메뉴의 현재 위치 표시를 다시 계산합니다
-  setTimeout(function(){try{window.dispatchEvent(new Event('scroll'));}catch(e){}},480);
+  if(any)window.__popUnlock();
 });
 // 히어로 상태 칩 → 해당 섹션으로 부드럽게 이동
 document.addEventListener('click',function(ev){
@@ -2281,9 +2369,11 @@ function render(){
       _rcNm=LANG==='ko'?svcKo(_rcNm):trItemsEn(_rcNm);
       if(_rcNm){
         const _rcPaid=_rc.status==='paid';
+        const _rcU=BASE+'/hhc-invoice.html?view='+encodeURIComponent(_rc.id||_rc.__id)+'&lang='+LANG;
+        const _rcT=(LANG==='en'?'Invoice ':'인보이스 ')+esc(_rc.id||'');
         h+='<div class="rec-sec"><div class="dochd">'+L.recT+
            '<button type="button" class="dh-all" data-qt="iv">'+L.recAll+' \u203A</button></div>'+
-           '<button type="button" class="recrow" data-qt="iv"><span class="hri">\u{1F3E0}</span>'+
+           '<button type="button" class="recrow" data-doc="'+esc(_rcU)+'" data-doct="'+_rcT+'"><span class="hri">\u{1F3E0}</span>'+
            '<span class="hrx"><b>'+esc(_rcNm)+'</b><i>'+esc(dfmt(_rc.date)||'')+'</i></span>'+
            '<span class="pill2 '+(_rcPaid?'ok':'warn')+'">'+(_rcPaid?(LANG==='en'?'Done':'완료'):(LANG==='en'?'Billing':'청구중'))+'</span></button></div>';
       }
@@ -2656,31 +2746,31 @@ function render(){
     // 주의: scrollIntoView 는 overflow 를 가진 조상 박스 내부까지 스크롤시켜
     //       제목이 박스 위로 밀려 잘리는 문제가 있어 window 스크롤만 사용한다.
     const go=el=>{try{const y=el.getBoundingClientRect().top+window.scrollY-12;window.scrollTo({top:y<0?0:y,behavior:'smooth'});}catch(e){}};
+    // 📄 내역은 「팝업(전체 화면 시트)」로 열립니다.
+    //    닫으면 열기 직전에 보고 있던 위치로 그대로 돌아옵니다.
     const setSt=()=>{
       b.classList.toggle('open',OPEN[k]);
       const t=b.querySelector('.bt');
       if(t)t.textContent=b.getAttribute(OPEN[k]?'data-c':'data-o');
       ls.classList.toggle('open',OPEN[k]);
-      // 📄 내역을 열면 요약 카드는 감추고 「내역 전용 화면」처럼 보여줍니다
-      if(hub)hub.style.display=OPEN[k]?'none':'';
-      // 2열 배치에서 내역을 펼치면 그 카드가 전체 폭을 쓰도록 (구형 브라우저 :has 미지원 대비)
-      try{const sc=ls.closest('.sec');if(sc)sc.classList.toggle('wide',OPEN[k]);}catch(e){}
+      try{ls.scrollTop=0;}catch(e){}
     };
     window.__hubSet[k]={setSt:setSt,hub:hub,ls:ls};
     setSt();   // 언어 전환 등으로 다시 그려져도 열림 상태가 화면에 그대로 반영되게
     const closeUi=()=>{
-      // 우리가 쌓은 히스토리가 있으면 브라우저 뒤로가기와 똑같이 동작시킵니다
-      if(history.state&&history.state.hhcHub){history.back();return;}
+      if(!OPEN[k])return;
       OPEN[k]=false;setSt();
-      setTimeout(()=>go(hub),60);
+      window.__popUnlock();
+      // ⚠️ history.back() 을 쓰지 않습니다 — 카카오톡 내부 브라우저처럼
+      //    이전 기록이 없는 곳에서는 화면 자체가 닫혀 버리기 때문입니다.
+      try{if(history.state&&history.state.hhcHub)history.replaceState({},'');}catch(e){}
     };
+    window.__hubSet[k].close=closeUi;
     b.onclick=()=>{
-      OPEN[k]=!OPEN[k];setSt();
-      if(OPEN[k]){
-        try{history.pushState({hhcHub:k},'');}catch(e){}
-        // 상단 축소 헤더가 겹치지 않게 여유를 두고 내역 화면 맨 위로
-        setTimeout(()=>{try{const y=ls.getBoundingClientRect().top+window.scrollY-104;window.scrollTo({top:y<0?0:y,behavior:'smooth'});}catch(e){}},80);
-      }
+      if(OPEN[k]){closeUi();return;}
+      window.__popLock();
+      OPEN[k]=true;setSt();
+      try{if(!(history.state&&history.state.hhcHub))history.pushState({hhcHub:k},'');}catch(e){}
     };
     const c=document.getElementById('hub-cls-'+k);
     if(c)c.onclick=closeUi;
@@ -2716,11 +2806,15 @@ function render(){
       Object.keys(mm).forEach(o=>{if(OPEN[o]&&o!==k){OPEN[o]=false;try{mm[o].setSt();}catch(e){}}});
       if(!mm[k]){go(document.getElementById('sec-'+k));return;}
       if(!OPEN[k]){
+        window.__popLock();
         OPEN[k]=true;try{mm[k].setSt();}catch(e){}
         try{if(!(history.state&&history.state.hhcHub))history.pushState({hhcHub:k},'');}catch(e){}
       }
-      setTimeout(()=>go(document.getElementById('hub-list-'+k)),90);
     };
+    // 🧾 문서(인보이스 등)를 앱 안에서 팝업으로 열기
+    document.querySelectorAll('[data-doc]').forEach(el=>{
+      el.onclick=()=>window.__docPop(el.dataset.doc,el.dataset.doct||'');
+    });
     const act=t=>{
       if(t==='iv'||t==='ip'||t==='mm'||t==='qt'){window.__openHub(t);return;}
       if(t==='bk'){const el=document.getElementById('bk-sec');
