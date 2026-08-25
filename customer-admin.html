@@ -2251,8 +2251,26 @@ window.saveEdit=async function(){
       }
       // action==='separate' → 동명이인, 아래에서 신규 등록을 계속 진행
     }
-    const dup=entries.find(x=>pn(phone)&&pn(x.phone)===pn(phone));
-    if(dup&&!confirm('같은 연락처의 고객('+dup.name+')이 이미 있습니다. 그래도 새로 등록할까요?'))return;
+    // 이름·연락처·별칭이 겹치는 고객이 있으면 자동으로 합치지 않고 물어봅니다
+    const _hits=caDupFind({name,phone,aliases},null);
+    if(_hits.length){
+      const _ch=await caDupAsk(_hits,{name,phone,aliases},true);
+      if(!_ch)return;
+      if(_ch.action==='merge'){
+        const t=_ch.target;
+        const mAls=[...new Set((t.aliases||[]).concat(aliases,[t.name,name]))]
+          .filter(a=>a&&nn(a)!==nn(name));
+        try{
+          await updateDoc(doc(db,'customers',t.__id),{name,phone:phone||t.phone||'',member:member||t.member||'',
+            ca_member_set:true,email:email||t.email||'',addr:addr||t.addr||'',memo:memo||t.memo||'',
+            aliases:mAls,updated_at:now});
+          toast('✓ 「'+t.name+'」 고객과 합쳤습니다');
+          closeEdit();loadAll(true);
+        }catch(err){toast('합치기 실패: '+err.message);}
+        return;
+      }
+      // 'separate' → 그대로 새 고객으로 등록
+    }
     try{
       await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name,phone,member,ca_member_set:true,email,addr,memo,aliases,created_at:now,updated_at:now});
       toast('✓ 신규 고객이 등록되었습니다');
@@ -2267,11 +2285,39 @@ window.saveEdit=async function(){
   // 별칭을 지우면 그 이름으로 된 문서가 떨어져 나가므로, 함께 바꿀지 확인합니다
   const keepK=aliases.map(nn);
   const aliasRemoved=(e.aliases||[]).some(a=>nn(a)&&nn(a)!==nn(name)&&keepK.indexOf(nn(a))<0);
+  // 🔎 바꾼 정보가 다른 고객과 겹치면 자동으로 합치지 않고 먼저 물어봅니다
+  let _keepApart=false;
+  if(nameChanged||phoneChanged||aliases.length!==(e.aliases||[]).length||
+     aliases.some(a=>!(e.aliases||[]).some(z=>nn(z)===nn(a)))){
+    const _hits=caDupFind({name,phone,aliases},e.master);
+    if(_hits.length){
+      const _ch=await caDupAsk(_hits,{name,phone,aliases},false);
+      if(!_ch)return;
+      if(_ch.action==='merge'){
+        const t=_ch.target;
+        const mAls=[...new Set((t.aliases||[]).concat(aliases,e.aliases||[],[t.name,e.name,name]))]
+          .filter(a=>a&&nn(a)!==nn(name));
+        try{
+          await updateDoc(doc(db,'customers',t.__id),{name,phone:phone||t.phone||'',member:member||t.member||'',
+            ca_member_set:true,email:email||t.email||'',addr:addr||t.addr||'',memo:memo||t.memo||'',
+            aliases:mAls,updated_at:now});
+          if(e.master&&e.master.__id&&e.master.__id!==t.__id){
+            await caRekey('m:'+e.master.__id,'m:'+t.__id);
+            await deleteDoc(doc(db,'customers',e.master.__id));
+          }
+          toast('✓ 「'+t.name+'」 고객과 합쳤습니다');
+          closeEdit();closeDrawer();loadAll(true);
+        }catch(err){toast('합치기 실패: '+err.message);}
+        return;
+      }
+      _keepApart=true;   // 따로 두기 → 아래에서 자동 합치기를 막습니다
+    }
+  }
   if((nameChanged||phoneChanged||aliasRemoved)&&docCount(e)>0){
     const _pl=propPlan(e,{name,phone,member,email,addr,memo,aliases});
-    if(_pl.length){showPropModal(e,{name,phone,member,email,addr,memo,aliases});return;}
+    if(_pl.length){showPropModal(e,{name,phone,member,email,addr,memo,aliases},_keepApart);return;}
   }
-  await applyEdit(e,{name,phone,member,email,addr,memo,aliases},false);
+  await applyEdit(e,{name,phone,member,email,addr,memo,aliases},false,_keepApart);
 };
 // 🔑 연결 키 갈아끼우기
 //  고객마스터가 없던 고객은 이름·연락처로 만든 임시 키(k:이름#번호)로 문서와 연결돼 있습니다.
@@ -2308,7 +2354,7 @@ async function caRekey(oldKey,newKey){
   }
   return n;
 }
-async function applyEdit(e,v,propagate){
+async function applyEdit(e,v,propagate,keepApart){
   const now=new Date().toISOString();
   try{
     let als=(v.aliases!=null)?v.aliases.slice():(e.master&&e.master.aliases||e.aliases||[]).slice();
@@ -2323,7 +2369,8 @@ async function applyEdit(e,v,propagate){
       // 같은 고객의 고객마스터가 이미 있는지 한 번 더 확인합니다.
       //  (다른 프로그램에서 방금 만들어졌거나, 별칭으로만 이어져 있던 경우
       //   그대로 새로 만들면 목록에 같은 고객이 하나 더 생깁니다)
-      const _ex=caFindMaster(e,v);
+      // 「따로 두기」를 고르셨으면 기존 고객으로 흡수하지 않고 새로 만듭니다
+      const _ex=keepApart?null:caFindMaster(e,v);
       if(_ex&&_ex.__id){
         const mergedAls=als.slice();
         [_ex.name].concat(_ex.aliases||[]).forEach(a=>{
@@ -2388,9 +2435,9 @@ function propPlan(e,v){
   return plan.filter(p=>p.docs.some(x=>Object.keys(p.upd(x)).length));
 }
 let curProp=null;
-function showPropModal(e,v){
+function showPropModal(e,v,keepApart){
   const plan=propPlan(e,v);
-  curProp={e,v,plan};
+  curProp={e,v,plan,keepApart:!!keepApart};
   const total=plan.reduce((a,p)=>a+p.docs.length,0);
   let h='';
   if(pn(v.phone)!==pn(e.phone))h+='<div class="cmp"><div><small>현재 연락처</small><b>'+esc(e.phone||'(없음)')+'</b></div><div>→</div><div><small>변경</small><b style="color:var(--pri)">'+esc(v.phone||'(없음)')+'</b></div></div>';
@@ -2405,7 +2452,7 @@ window.closeProp=function(){document.getElementById('prop-mask').classList.remov
 document.getElementById('prop-go').addEventListener('click',async()=>{
   if(!curProp)return;
   const btn=document.getElementById('prop-go');btn.disabled=true;btn.textContent='변경 중...';
-  await applyEdit(curProp.e,curProp.v,true);
+  await applyEdit(curProp.e,curProp.v,true,curProp.keepApart);
   btn.disabled=false;
 });
 async function propagateDocs(e,v){
@@ -2426,6 +2473,64 @@ async function propagateDocs(e,v){
 function caFindByName(nm){
   const k=nn(nm);if(!k)return null;
   return entries.find(x=>nn(x.name)===k||(x.aliases||[]).some(a=>nn(a)===k))||null;
+}
+// ── 🔎 입력한 이름·연락처·별칭이 「다른 고객」과 겹치는지 확인 ──
+//    self : 지금 수정 중인 고객마스터(자기 자신은 제외)
+function caJosa(w){
+  const c=String(w||'').trim().slice(-1);
+  const k=c.charCodeAt(0);
+  if(!(k>=0xAC00&&k<=0xD7A3))return '이(가)';
+  return ((k-0xAC00)%28)?'이':'가';
+}
+function caDupFind(v,self){
+  const list=RAW.customers||[];
+  const selfId=self&&self.__id;
+  const myKeys=[v.name].concat(v.aliases||[]).map(nn).filter(Boolean);
+  const myP=pn(v.phone);
+  const hits=[];
+  list.forEach(c=>{
+    if(selfId&&c.__id===selfId)return;
+    const why=[];
+    if(myP&&myP.length>=6&&pn(c.phone)===myP)why.push('연락처');
+    const cKeys=[c.name].concat(c.aliases||[]).map(nn).filter(Boolean);
+    const hitName=myKeys.filter(k=>cKeys.indexOf(k)>=0);
+    if(hitName.length)why.push(nn(c.name)===nn(v.name)?'고객명':'별칭');
+    if(why.length)hits.push({c:c,why:[...new Set(why)]});
+  });
+  return hits;
+}
+// ── ⚠️ 겹치는 고객이 있을 때 : 자동으로 합치지 않고 물어봅니다 ──
+function caDupAsk(hits,v,isNew){
+  return new Promise(res=>{
+    // 겹치는 고객이 여럿이면 「어느 고객과 합칠지」를 직접 고르게 합니다.
+    //  (이름이 정확히 같은 고객을 맨 위로 올려 둡니다)
+    const list=hits.slice().sort((a,b)=>
+      (nn(b.c.name)===nn(v.name)?1:0)-(nn(a.c.name)===nn(v.name)?1:0)).slice(0,5);
+    const rows=list.map((h,i)=>
+      '<button type="button" class="pc-opt" data-a="merge" data-i="'+i+'">'+
+      '<b>이 고객과 합치기 — '+esc(h.c.name||'(이름 없음)')+'</b>'+
+      '<span>'+esc(h.why.join(' · '))+caJosa(h.why[h.why.length-1])+' 같습니다 · '+esc(h.c.phone||'연락처 없음')+
+        ((h.c.aliases&&h.c.aliases.length)?' · 별칭 '+esc(h.c.aliases.join(', ')):'')+
+      '</span></button>').join('');
+    const more=hits.length>5?'<p style="font-size:11.5px;color:var(--ink3);font-weight:700;margin-top:6px">외 '+(hits.length-5)+'명이 더 겹칩니다</p>':'';
+    const mk=genericModal('⚠️ 같은 정보의 고객이 이미 있습니다',
+      '<p style="font-size:12.5px;color:var(--ink2);line-height:1.7;margin-bottom:11px">'+
+      '입력하신 <b>'+esc(v.name)+'</b> 의 정보가 아래 고객과 겹칩니다.<br>'+
+      '<b>자동으로 합치지 않습니다.</b> 어떻게 할지 선택해 주세요.</p>'+
+      '<button type="button" class="pc-opt" data-a="separate" style="border-color:var(--pri)">'+
+        '<b>따로 두기 (권장)</b>'+
+        '<span>합치지 않고 '+(isNew?'별도 고객으로 등록':'입력한 대로 이 고객만 수정')+'합니다. 두 고객은 계속 각각 관리됩니다.</span></button>'+
+      '<div style="font-size:11px;font-weight:800;color:var(--ink3);margin:12px 0 7px">합칠 고객을 고르면 하나로 합쳐집니다 · 겹친 이름은 별칭으로 남습니다</div>'+
+      rows+more,
+      '<button class="btn" data-a="cancel">저장 취소</button>');
+    mk.addEventListener('click',ev=>{
+      const b=ev.target.closest('[data-a]');if(!b)return;
+      const a=b.dataset.a;mk.remove();
+      if(a==='cancel')return res(null);
+      if(a==='separate')return res({action:'separate'});
+      res({action:'merge',target:list[parseInt(b.dataset.i,10)||0].c});
+    });
+  });
 }
 function caPhoneConfirm(m,typedPhone){
   return new Promise(res=>{
