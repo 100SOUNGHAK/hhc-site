@@ -3251,12 +3251,20 @@ function vrKkText(m){
   return t;
 }
 // 💬 왓츠앱·복사 본문 — 마이페이지 발송과 같은 형식 (카드가 없으므로 주소를 그대로 남깁니다)
+// ── 🔗 발송 직전 링크 점검 : 옛 주소가 섞여 있으면 정식 주소로 바꿉니다 ──
+//    (예전에 저장해 둔 링크가 문구에 그대로 들어오는 경우를 막습니다)
+function hhcFixLinks(t){
+  return String(t==null?'':t)
+    .replace(/https?:\/\/(?:www\.)?hhc-3p8\.pages\.dev/gi,'https://happyhomecare.com.my')
+    .replace(/https?:\/\/www\.happyhomecare\.com\.my/gi,'https://happyhomecare.com.my')
+    .replace(/https?:\/\/(?:www\.)?happyhomecare\.my/gi,'https://happyhomecare.com.my');
+}
 function vrWaText(m){
-  return String(m||'').replace(/[ \t]+$/gm,'').replace(/\n{3,}/g,'\n\n').trim();
+  return hhcFixLinks(m).replace(/[ \t]+$/gm,'').replace(/\n{3,}/g,'\n\n').trim();
 }
 // 📱 마이페이지 안내 꼬리말 — 총괄 고객관리「마이페이지 발송」과 같은 형식
 function vrTail(url,en){
-  return '\n\n📱 MY PAGE\n🔗 '+url+'\n\nHappy Home Care 📞 +60 17-247 2774';
+  return '\n\n📱 MY PAGE\n🔗 '+hhcFixLinks(url)+'\n\nHappy Home Care 📞 +60 17-247 2774';
 }
 // 💬 왓츠앱 주소 — 고객 번호가 있으면 바로 그 대화방이 열립니다
 function vrWaUrl(phone,text){
@@ -3285,10 +3293,23 @@ async function vrKkSend(msg,url,en){
   }catch(err){alert('카카오톡 공유 실패 · 메시지 복사를 이용해 주세요');return false;}
 }
 // 방문 안내 카드가 열어 줄 주소 — 고객 마이페이지(예약 위치로 이동), 못 찾으면 홈페이지
+// ── 🌐 고객에게 보내는 주소는 「항상 정식 도메인」으로 만듭니다 ──
+//    관리자가 옛 주소(hhc-3p8.pages.dev)나 www· .my 주소로 화면을 열어 두었더라도
+//    발송 메시지의 링크는 happyhomecare.com.my 로 통일됩니다.
+//    (localhost·file: 등 시험 환경에서는 지금 주소를 그대로 씁니다)
+function hhcOrigin(){
+  try{
+    if(location.protocol==='file:')return 'https://happyhomecare.com.my';
+    var h=location.hostname||'';
+    if(h==='localhost'||h==='127.0.0.1'||h==='::1'||/^192\.168\./.test(h)||/^10\./.test(h))
+      return location.origin;
+    return 'https://happyhomecare.com.my';
+  }catch(e){return 'https://happyhomecare.com.my';}
+}
 function vrBase(){
   try{
     if(location.protocol==='file:')return 'https://happyhomecare.com.my';
-    return location.origin+location.pathname.replace(/[^/]*$/,'').replace(/\/$/,'');
+    return hhcOrigin()+location.pathname.replace(/[^/]*$/,'').replace(/\/$/,'');
   }catch(e){return 'https://happyhomecare.com.my';}
 }
 function vrMyLink(name,phone,en){
