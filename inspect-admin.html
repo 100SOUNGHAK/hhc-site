@@ -2254,7 +2254,7 @@ function sevenSegDecode(dataUrl){
         // 정답은 시도 전반에서 반복적으로 나타난다는 점을 이용.
         // 단, 단순 합산은 「같은 오답을 여러 기울기에서 반복하는」 모드가
         // 표를 독점해버린다 → 값마다 상위 3개 시도의 가중치만 더한다.
-        var votes={},info={},vlist={};
+        var votes={},info={},vlist={},vmodes={};
         for(var mi2=0;mi2<modes.length;mi2++){
           for(var si=0;si<shears.length;si++){
             var r=_sevenSegFromImage(img,shears[si],modes[mi2]);
@@ -2285,6 +2285,7 @@ function sevenSegDecode(dataUrl){
             }
             else if(!hasDot)wgt*=0.7;
             (vlist[r.val]=vlist[r.val]||[]).push(wgt);
+            (vmodes[r.val]=vmodes[r.val]||{})[modes[mi2]]=1;
             if(!info[r.val])info[r.val]={mode:modes[mi2],shear:shears[si]};
           }
         }
@@ -2309,20 +2310,79 @@ function sevenSegDecode(dataUrl){
           for(var i9=0;i9<a.length;i9++)if(b2.indexOf(a.charAt(i9))<0)return false;
           return true;
         };
-        if(secVal!==null&&bestW>0&&secW/bestW>=0.80){
-          var s1=String(bestVal),s2=String(secVal);
-          if(s1.length===s2.length){
-            var diffAt=-1,nDiff=0;
-            for(var ci=0;ci<s1.length;ci++)if(s1.charAt(ci)!==s2.charAt(ci)){nDiff++;diffAt=ci;}
-            if(nDiff===1){
-              var c1=s1.charAt(diffAt),c2=s2.charAt(diffAt);
-              if(_lostStroke(c1,c2)){          // 2위가 획이 하나 더 많다 → 2위 채택
-                console.log('[7SEG] 획 누락 보정: '+s1+' → '+s2+' ('+c1+'→'+c2+', 표차 '+(secW/bestW).toFixed(2)+')');
-                var tv=bestVal;bestVal=secVal;secVal=tv;
-                var tw=bestW;bestW=secW;secW=tw;
-              }
-            }
+        // ── 오독 보정: 값을 「×10 정수 문자열」(9→"90", 9.8→"98", 28.5→"285")로
+        // 정렬해 자리별로 비교한다. 소수점 유무와 무관하게 같은 자릿수끼리
+        // 비교되므로, 「9.8의 8을 통째로 잃고 9로 읽은」 경우(90↔98)도
+        // 「28.5의 8을 0으로 읽은」 경우(205↔285)와 같은 규칙으로 잡힌다.
+        var _x10=function(v){var n=parseFloat(v);return isNaN(n)?null:String(Math.round(n*10));};
+        var _nModes=function(v){var o=vmodes[v]||{},n9=0,k9;for(k9 in o)n9++;return n9;};
+        var bestX=_x10(bestVal);
+        var fixVal=null,fixW=0;
+        // 규칙 1 — 획 누락 짝 보정: 1위와 「한 자리에서 세그먼트 1개 차이·획이
+        // 더 많은」 후보가 (a) 표 80% 이상, 또는 (b) 표 55% 이상 + 더 많은
+        // 종류의 이진화 모드에서 재현되었다면 그 후보를 채택.
+        // (사진의 LCD 획은 반사·노출로 「사라지는」 경우가 압도적이고,
+        //  없던 획이 생기는 경우는 드물다)
+        for(var vc in votes){
+          if(vc===bestVal)continue;
+          var vX=_x10(vc);
+          if(!bestX||!vX||vX.length!==bestX.length)continue;
+          var diffAt=-1,nDiff=0;
+          for(var ci=0;ci<bestX.length;ci++)if(bestX.charAt(ci)!==vX.charAt(ci)){nDiff++;diffAt=ci;}
+          if(nDiff!==1)continue;
+          if(!_lostStroke(bestX.charAt(diffAt),vX.charAt(diffAt)))continue;
+          var ratio9=votes[vc]/bestW;
+          if(ratio9>=0.80||(ratio9>=0.55&&_nModes(vc)>_nModes(bestVal))){
+            if(votes[vc]>fixW){fixW=votes[vc];fixVal=vc;}
           }
+        }
+        // 규칙 2 — 획 가족 보정: 경합 후보들이 「같은 자리」에서만 다르고, 그
+        // 자리의 다른 숫자들이 모두 어떤 숫자 P의 획 부분집합(1~2개 누락)이라면
+        // (8→0, 8→6, 8→5처럼 서로 다른 획이 사라진 변형들) 진짜 숫자는 P다.
+        // 부분집합 변형이 2종 이상일 때만 발동 — 진짜 0이 어쩌다 8로 한 번
+        // 오독된 경우(변형 1종)에는 절대 발동하지 않는다.
+        if(fixVal===null&&bestX){
+          var _isSub=function(a,b){
+            var sa=_SEG[a],sb=_SEG[b];
+            if(!sa||!sb||sa.length>=sb.length||sb.length-sa.length>2)return false;
+            for(var i8=0;i8<sa.length;i8++)if(sb.indexOf(sa.charAt(i8))<0)return false;
+            return true;
+          };
+          // 같은 자릿수의 모든 후보를 자리별로 겹쳐 「자리마다의 숫자 표」를 만든다
+          // (다른 자리가 함께 틀린 후보의 표도 해당 자리의 증거로 합산 —
+          //  회전·저해상도에서 표가 여러 값으로 흩어져도 자리 단위로는 모인다)
+          var sameLen=[];
+          for(var vf in votes){
+            var fX=_x10(vf);
+            if(fX&&fX.length===bestX.length)sameLen.push({v:vf,x:fX,w:votes[vf]});
+          }
+          for(var pos=0;pos<bestX.length&&fixVal===null;pos++){
+            var digs={};
+            sameLen.forEach(function(e){digs[e.x.charAt(pos)]=(digs[e.x.charAt(pos)]||0)+e.w;});
+            var bd=bestX.charAt(pos);
+            var Pd=null;
+            for(var dk in digs){if(_SEG[dk]&&(Pd===null||_SEG[dk].length>_SEG[Pd].length))Pd=dk;}
+            if(Pd===null||Pd===bd)continue;
+            var subs=0,famOk=true;
+            for(var dk2 in digs){
+              if(dk2===Pd)continue;
+              if(_isSub(dk2,Pd))subs++;else{famOk=false;break;}
+            }
+            // 변형 2종 이상 + P 자리 질량이 1위 숫자 질량의 35% 이상일 때만
+            if(!famOk||subs<2)continue;
+            if((digs[Pd]||0)<(digs[bd]||1)*0.35)continue;
+            var candX=bestX.slice(0,pos)+Pd+bestX.slice(pos+1);
+            // 재구성 값: 후보 목록에 있으면 그 표를, 없으면 자리 질량을 신뢰도로
+            var candV=null;
+            sameLen.forEach(function(e){if(e.x===candX)candV=e.v;});
+            if(candV===null){var rn=parseInt(candX,10)/10;if(rn<1||rn>60)continue;candV=String(rn);}
+            fixVal=candV;fixW=Math.max(votes[candV]||0,digs[Pd]);
+            console.log('[7SEG] 획 가족 보정: '+bestVal+' → '+candV+' (자리 '+pos+', 변형 '+subs+'종, 자리표 '+digs[Pd].toFixed(1)+'/'+digs[bd].toFixed(1)+')');
+          }
+        }
+        if(fixVal!==null){
+          console.log('[7SEG] 획 누락 보정: '+bestVal+' → '+fixVal+' (표 '+(fixW/bestW).toFixed(2)+', 모드 '+_nModes(fixVal)+'/'+_nModes(bestVal)+')');
+          secVal=bestVal;secW=bestW;bestVal=fixVal;bestW=fixW;
         }
         console.log('[7SEG] 투표:',JSON.stringify(votes),'→ 채택:',bestVal,'(신뢰도',(bestW/(bestW+secW)).toFixed(2),')');
         // 1위/2위 표차로 계산한 확신도를 함께 반환 — 애매한 판독은 강조 표시
@@ -2925,6 +2985,15 @@ function splitScreenRegions(dataUrl){
             else mg.push([b[0],b[1]]);
           });
           mg=mg.filter(function(b){return b[1]-b[0]>=h*0.035;});
+          // 밴드 경계 확장: 검출은 높은 문턱(30%)으로 하되, 경계는 낮은 문턱
+          // (10%)까지 위아래로 넓힌다 — 흐리거나 작은 사진에서 숫자의 위·아래
+          // 획이 문턱에 못 미쳐 밴드 밖으로 잘려나가는 것을 막는다
+          var thLo=Math.max(1,p80*0.10);
+          for(var eb=0;eb<mg.length;eb++){
+            var loLim=eb>0?mg[eb-1][1]+1:y0, hiLim=eb<mg.length-1?mg[eb+1][0]-1:y1-1;
+            while(mg[eb][0]>loLim&&(vals[mg[eb][0]-1-y0]||0)>=thLo)mg[eb][0]--;
+            while(mg[eb][1]<hiLim&&(vals[mg[eb][1]+1-y0]||0)>=thLo)mg[eb][1]++;
+          }
           if(doSplit){
             var sp=[];mg.forEach(function(b){splitTall(vals,y0,b,sp,0);});
             mg=sp.filter(function(b){return b[1]-b[0]>=h*0.035;});
@@ -2939,7 +3008,11 @@ function splitScreenRegions(dataUrl){
         var allB=bandsIn(0.34,0.97,0,h,true);
         if(window.__7segDbg)console.log('[SPLIT] 전체 줄:',JSON.stringify(allB));
         if(!allB.length){resolve(null);return;}
+        // 첫 밴드가 아니라 「질량이 최대 밴드의 22% 이상인」 첫 밴드 — 느슨한
+        // 크롭에서 화면 위 흰 벽·빨간 몸체가 만든 성긴 잡음 띠를 건너뛴다
+        var maxMass=0;allB.forEach(function(b){if(b.mass>maxMass)maxMass=b.mass;});
         var tempB=allB[0];
+        for(var tb2=0;tb2<allB.length;tb2++){if(allB[tb2].mass>=maxMass*0.22){tempB=allB[tb2];break;}}
         // 큰 숫자(토출)는 항상 오른쪽 정렬 — 온도 줄 아래에서 오른쪽 27%만
         // 투영하면 왼쪽에 머무는 습도(%) 줄과 붙지 않고 분리된다
         var rightB=bandsIn(0.70,0.97,tempB[1]+h*0.015,h);
