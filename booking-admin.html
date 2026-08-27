@@ -277,6 +277,12 @@ select.field-input{cursor:pointer}
 
 /* LOADING */
 .loading-ov{display:none;position:fixed;inset:0;background:rgba(244,247,252,.7);z-index:998;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+/* 입력 오류가 난 칸을 잠깐 붉게 강조 — 어느 칸을 고쳐야 하는지 바로 보이게 */
+.field-bad{border-color:#DC2626!important;background:#FEF3F2!important;animation:fieldBad 1.6s ease}
+.field-note{display:none;margin-top:5px;font-size:11px;font-weight:600;line-height:1.5;color:#B42318}
+.field-note.show{display:block}
+@keyframes fieldBad{0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}18%{box-shadow:0 0 0 4px rgba(220,38,38,.20)}62%{box-shadow:0 0 0 4px rgba(220,38,38,.20)}}
+@media (prefers-reduced-motion:reduce){.field-bad{animation:none}}
 .loading-ov.open{display:flex}
 .loading-box{background:var(--white);border-radius:var(--radius-lg);padding:16px 24px;font-size:14px;font-weight:700;color:var(--text);box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:11px}
 .spinner{width:18px;height:18px;border:2.5px solid var(--surface2);border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite}
@@ -660,6 +666,7 @@ html.sa body:has(.app-body.active){padding-left:200px}
             <div class="field">
               <label class="field-label">연락처</label>
               <input id="c-phone" type="text" placeholder="+60 ···" class="field-input sm">
+              <div class="field-note" id="c-phone-note"></div>
             </div>
           </div>
           <div class="field" style="margin-top:10px">
@@ -2062,7 +2069,20 @@ function renderSelDates(){
   updateNewBookingProgress();
 }
 
+// 연락처 칸이 「채워져 보이지만 번호가 아닌」 상태면 그 자리에서 알려 준다
+// (다 적고 맨 아래 저장 버튼을 누른 뒤에야 알게 되던 것을 앞당긴다)
+function updatePhoneNote(){
+  const el=document.getElementById('c-phone'),note=document.getElementById('c-phone-note');
+  if(!el||!note)return;
+  const v=String(el.value||'').trim();
+  if(v&&!hccPN(v)&&bkIsPlaceholder(v)){
+    note.textContent='「'+v+'」는 실제 번호가 아닙니다 — 예약 등록 시 연락처가 필요합니다';
+    note.classList.add('show');
+  }else note.classList.remove('show');
+}
+
 function updateNewBookingProgress(){
+  updatePhoneNote();
   const checks=[
     {id:'customer',done:!!(document.getElementById('c-name').value.trim()&&hccPN(document.getElementById('c-phone').value))},
     {id:'confirm',done:!!document.getElementById('b-date').value||document.getElementById('b-instant-confirm').checked},
@@ -2149,15 +2169,33 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
   const bMemo=document.getElementById('b-memo').value.trim();
   const instantConfirm=document.getElementById('b-instant-confirm').checked;
 
-  if(!name||!hccPN(phone)){showModal(lang==='en'?'Input Error':'입력 오류',lang==='en'?'Please enter condo/unit name and phone.':'콘도명/동호수(상호)와 연락처를 입력해주세요.',false);return;}
-  if(_nb.some(p=>p.free&&!(p.text||'').trim())){showModal('입력 오류','「기타 (직접 입력)」 품목의 요청 내용을 적어주세요.',false);return;}
+  const EN=(lang==='en');
+  // ── 필수 입력 확인 : 무엇이 왜 비어 있는지 하나씩 짚어 준다 ──
+  if(!name){
+    bkErr(EN?'Input Error':'입력 오류',
+      EN?'Please enter the condo/unit name.':'콘도명/동호수(상호)를 입력해주세요.','c-name');return;
+  }
+  if(!hccPN(phone)){
+    // 「******」처럼 채워져 보이지만 번호가 아닌 값 → 그 사실을 그대로 알려준다
+    var _ph=bkIsPlaceholder(phone)
+      ?(EN?('The phone field contains "'+phone+'", which is not a real number.\nPlease enter the actual phone number (e.g. +60 12-345 6789).')
+           :('연락처 칸에 「'+phone+'」가 들어 있습니다. 실제 번호가 아닙니다.\n번호를 입력해주세요. (예: +60 12-345 6789)'))
+      :(EN?'Please enter the phone number. (e.g. +60 12-345 6789)'
+           :'연락처를 입력해주세요. (예: +60 12-345 6789)');
+    bkErr(EN?'Input Error':'입력 오류',_ph,'c-phone');return;
+  }
+  if(_nb.some(p=>p.free&&!(p.text||'').trim())){
+    bkErr(EN?'Input Error':'입력 오류',
+      EN?'Please describe the request for the "Other (free text)" item.':'「기타 (직접 입력)」 품목의 요청 내용을 적어주세요.');return;
+  }
 
   if(instantConfirm){
-    if(!bDate||!bItems){showModal(lang==='en'?'Input Error':'입력 오류',lang==='en'?'Please enter the booking date and items.':'예약일과 의뢰 품목을 입력해주세요.',false);return;}
+    if(!bDate){bkErr(EN?'Input Error':'입력 오류',EN?'Please enter the booking date.':'예약일을 입력해주세요.','b-date');return;}
+    if(!bItems){bkErr(EN?'Input Error':'입력 오류',EN?'Please select the service items.':'의뢰 품목을 선택해주세요.');return;}
   }else{
-    if(!selectedDates.length){showModal(lang==='en'?'No Schedule':'일정 없음',lang==='en'?'Please select at least one date.':'예약 가능 날짜를 최소 1개 선택해주세요.',false);return;}
+    if(!selectedDates.length){bkErr(EN?'No Schedule':'일정 없음',EN?'Please select at least one date.':'예약 가능 날짜를 최소 1개 선택해주세요.');return;}
     const hasTime=selectedDates.some(d=>scheduleMap[d]&&scheduleMap[d].length>0);
-    if(!hasTime){showModal(lang==='en'?'No Time':'시간 없음',lang==='en'?'Please set at least one available time.':'최소 1개 날짜에 방문 가능 시간을 설정해주세요.',false);return;}
+    if(!hasTime){bkErr(EN?'No Time':'시간 없음',EN?'Please set at least one available time.':'최소 1개 날짜에 방문 가능 시간을 설정해주세요.');return;}
   }
 
   if(window.HHCC_fill){
@@ -3591,6 +3629,40 @@ function showModal(title,msg,showCancel,onOk){
   ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open');});
 }
 function showLoading(v){document.getElementById('loading-ov').classList.toggle('open',v);}
+
+// ── 입력 오류를 「어느 칸이 왜」까지 알려주기 ────────────────────────
+// 「******」「---」「미상」처럼 사람이 「번호 없음」 뜻으로 적어 둔 값은
+// 눈으로는 채워져 보이지만 실제 연락처가 아니다. 예전에는 이런 값도
+// 그냥 「연락처를 입력해주세요」로 뭉뚱그려 안내해서, 화면에 글자가
+// 보이는데 왜 오류가 나는지 알 수 없었다.
+function bkIsPlaceholder(v){
+  var t=String(v==null?'':v).trim();
+  if(!t)return false;
+  if(/^[\s\-_.*#?+()0]*$/.test(t))return true;                       // ****** --- +60 000
+  return /^(미상|없음|없슴|모름|추후|미정|na|n\/a|none|unknown|tbd|x+)$/i.test(t);
+}
+// 문제가 난 칸으로 화면을 옮기고, 접힌 카드는 펼치고, 잠깐 붉게 표시한다
+function bkFocusBad(id){
+  var el=document.getElementById(id);
+  if(!el)return;
+  try{
+    var body=el.closest('.card-collapse-body');
+    if(body&&!body.classList.contains('open')){
+      body.classList.add('open');
+      var head=document.querySelector('.card-head.collapsible[data-target="'+body.id+'"]');
+      var chev=head&&head.querySelector('.card-chev');
+      if(chev)chev.classList.add('open');
+    }
+  }catch(e){}
+  try{el.scrollIntoView({behavior:'smooth',block:'center'});}catch(e){}
+  el.classList.add('field-bad');
+  setTimeout(function(){try{el.focus({preventScroll:true});}catch(e){try{el.focus();}catch(_){}}},380);
+  setTimeout(function(){el.classList.remove('field-bad');},2600);
+}
+// 오류 안내 + 「확인」을 누르면 그 칸으로 이동
+function bkErr(title,msg,focusId){
+  showModal(title,msg,false,focusId?function(){bkFocusBad(focusId);}:null);
+}
 
 // ── 👤 총괄 고객관리(customer-admin.html)의 해당 고객 상세 열기 ──
 // 관리자 허브(staff-app) 안이면 허브의 「고객관리」 탭으로 전환해서 열고,
