@@ -1047,6 +1047,52 @@ document.addEventListener('toggle',function(e){
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, getDoc, setDoc, query, where, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+// ── 🔗 발송 주소 단축 ────────────────────────────────────────────
+// 메시지에 들어가는 긴 happyhomecare 주소를 짧은 주소(/r?k=키)로 바꿉니다.
+// 인보이스·계약서에서 이미 쓰던 단축 저장소(shorts · r.html)를 그대로 씁니다.
+//  · 같은 주소는 항상 같은 키를 재사용합니다 (저장소에서 먼저 찾음)
+//  · 새 키는 4자리로 만들고, 이미 쓰는 키와 겹치면 자릿수를 늘려 다시 만듭니다
+//  · 단축에 실패하면 원래 주소를 그대로 보냅니다 (발송이 막히는 일은 없음)
+const HHC_SHORT_BASE='https://happyhomecare.com.my/r?k=';
+const _hhcShortCache={};
+async function hhcShortUrl(url){
+  url=String(url||'');
+  if(_hhcShortCache[url])return _hhcShortCache[url];
+  if(url.length<=40)return url;                                   // 이미 짧은 주소
+  if(!/^https:\/\/(www\.)?happyhomecare\.com\.my\//.test(url))return url;
+  if(/\/r(\.html)?\?k=/.test(url))return url;                     // 이미 단축된 주소
+  try{
+    const col=collection(db,'shorts');
+    const ex=await getDocs(query(col,where('url','==',url)));
+    let key='';
+    if(!ex.empty){key=ex.docs[0].data().key;}
+    else{
+      for(let n=4;n<=8&&!key;n++){
+        const k=Math.random().toString(36).slice(2,2+n);
+        if(k.length<n)continue;
+        const dup=await getDocs(query(col,where('key','==',k)));
+        if(dup.empty){await addDoc(col,{key:k,url:url,created:new Date().toISOString()});key=k;}
+      }
+      if(!key)return url;
+    }
+    return (_hhcShortCache[url]=HHC_SHORT_BASE+key);
+  }catch(e){return url;}
+}
+// 문구 전체에서 긴 주소를 찾아 모두 짧은 주소로 (실패한 주소는 원문 유지)
+async function hhcShortLinks(text){
+  text=String(text==null?'':text);
+  const found=text.match(/https:\/\/(?:www\.)?happyhomecare\.com\.my\/[^\s'"<>)\]]+/g)||[];
+  const uniq=found.filter((u,i)=>found.indexOf(u)===i);
+  for(const u of uniq){
+    const s=await hhcShortUrl(u);
+    if(s!==u)text=text.split(u).join(s);
+  }
+  return text;
+}
+// 다른 스크립트 블록(window.* 핸들러)에서도 쓸 수 있게 공개
+try{window.hhcShortUrl=hhcShortUrl;window.hhcShortLinks=hhcShortLinks;}catch(_e){}
+
+
 
 // ═══════════════════════════════════════════════════════════
 // HHC 고객 마스터 연동 공통 엔진 (customers 컬렉션)
@@ -2364,22 +2410,22 @@ function getConfirmMsg(name,date,time,items,lang){
 }
 
 function _linkWithLang(url,lang){return url.replace(/[&?]lang=\w+/,'')+(url.indexOf('?')>=0?'&':'?')+'lang='+(lang==='en'?'en':'ko');}
-document.getElementById('btn-wa-link').addEventListener('click',()=>{
+document.getElementById('btn-wa-link').addEventListener('click',async()=>{
   let url=document.getElementById('link-url').textContent;
   const name=document.getElementById('c-name').value||'고객';
   const phone=document.getElementById('c-phone').value||'';
   const lang=document.querySelector('input[name="c-lang"]:checked')?.value||'ko';
-  url=_linkWithLang(url,lang);
+  url=await hhcShortUrl(_linkWithLang(url,lang));   // 🔗 예약 링크도 짧은 주소로
   const msg=getMsg(name,phone,url,selectedDates,scheduleMap,lang);
   window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
 });
 
-document.getElementById('btn-kakao-link').addEventListener('click',()=>{
+document.getElementById('btn-kakao-link').addEventListener('click',async()=>{
   let url=document.getElementById('link-url').textContent;
   const name=document.getElementById('c-name').value||'고객';
   const phone=document.getElementById('c-phone').value||'';
   const lang=document.querySelector('input[name="c-lang"]:checked')?.value||'ko';
-  url=_linkWithLang(url,lang);
+  url=await hhcShortUrl(_linkWithLang(url,lang));   // 🔗 짧은 주소로
   const msg=getMsg(name,phone,url,selectedDates,scheduleMap,lang);
   navigator.clipboard.writeText(msg).then(()=>{
     const ok=document.getElementById('kakao-ok');ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
@@ -2746,13 +2792,13 @@ HAPPY WORKS SERVICES SDN.BHD.
 }
 
 // ── 인보이스 WA 발송
-function sendInvWA(id){
+async function sendInvWA(id){
   const b=allBookings.find(x=>x.__id===id);
   if(!b)return;
   const lang=b.customer_lang||'ko';
   const phone=(b.customer_phone||'').replace(/[\s\-()]/g,'').replace('+','');
   if(!phone){showToast('연락처 없음');return;}
-  const msg=buildInvMsg(b,lang);
+  const msg=await hhcShortLinks(buildInvMsg(b,lang));   // 🔗 문구 속 인보이스 주소 단축
   window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`,'_blank');
 }
 
@@ -3396,7 +3442,7 @@ window.sendVisitReminder=function(scheduleItemId){
   if(!timeS&&schItem)timeS=schItem.time_s||'';
   if(!cphone&&schItem)cphone=schItem.customer_phone||'';
   // 📱 마이페이지 주소 — 왓츠앱 본문과 카카오 카드 버튼이 함께 사용합니다
-  const VR_URL=vrMyLink(name,cphone,lang==='en');
+  let VR_URL=vrMyLink(name,cphone,lang==='en');
   const title=lang==='en'?'💬 Visit Reminder Message':'💬 방문 안내 메시지';
   const subtitle=lang==='en'?`Choose a template and send to ${name}`:`템플릿 선택 후 ${name}님께 전송해 주세요`;
   const closeLabel=lang==='en'?'Close':'닫기';
@@ -3454,6 +3500,14 @@ window.sendVisitReminder=function(scheduleItemId){
     b.addEventListener('click',()=>setTpl(b.dataset.tpl));
   });
   setTpl(defTpl);
+  // 🔗 마이페이지 주소를 짧은 주소로 — 준비되면 문구 속 주소만 바꿔치기
+  hhcShortUrl(VR_URL).then(sv=>{
+    if(sv&&sv!==VR_URL){
+      const box=document.getElementById('visit-msg-box');
+      if(box)box.value=box.value.split(VR_URL).join(sv);
+      VR_URL=sv;                       // 이후 템플릿 전환·카카오 버튼도 짧은 주소 사용
+    }
+  });
   const getMsg=()=>document.getElementById('visit-msg-box').value;
   // 💬 왓츠앱 — 마이페이지 발송과 같은 형식(주소 포함) + 고객 번호로 바로 열립니다
   document.getElementById('visit-wa-btn').addEventListener('click',()=>{

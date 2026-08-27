@@ -748,7 +748,59 @@ window.caQrCard=function(o){
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot, query, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+// ── 🔗 발송 주소 단축 ────────────────────────────────────────────
+// 메시지에 들어가는 긴 happyhomecare 주소를 짧은 주소(/r?k=키)로 바꿉니다.
+// 인보이스·계약서에서 이미 쓰던 단축 저장소(shorts · r.html)를 그대로 씁니다.
+//  · 같은 주소는 항상 같은 키를 재사용합니다 (저장소에서 먼저 찾음)
+//  · 새 키는 4자리로 만들고, 이미 쓰는 키와 겹치면 자릿수를 늘려 다시 만듭니다
+//  · 단축에 실패하면 원래 주소를 그대로 보냅니다 (발송이 막히는 일은 없음)
+const HHC_SHORT_BASE='https://happyhomecare.com.my/r?k=';
+const _hhcShortCache={};
+async function hhcShortUrl(url){
+  url=String(url||'');
+  if(_hhcShortCache[url])return _hhcShortCache[url];
+  if(url.length<=40)return url;                                   // 이미 짧은 주소
+  if(!/^https:\/\/(www\.)?happyhomecare\.com\.my\//.test(url))return url;
+  if(/\/r(\.html)?\?k=/.test(url))return url;                     // 이미 단축된 주소
+  try{
+    const col=collection(db,'shorts');
+    const ex=await getDocs(query(col,where('url','==',url)));
+    let key='';
+    if(!ex.empty){key=ex.docs[0].data().key;}
+    else{
+      for(let n=4;n<=8&&!key;n++){
+        const k=Math.random().toString(36).slice(2,2+n);
+        if(k.length<n)continue;
+        const dup=await getDocs(query(col,where('key','==',k)));
+        if(dup.empty){await addDoc(col,{key:k,url:url,created:new Date().toISOString()});key=k;}
+      }
+      if(!key)return url;
+    }
+    return (_hhcShortCache[url]=HHC_SHORT_BASE+key);
+  }catch(e){return url;}
+}
+// 이미 단축해 둔 주소만 즉시 치환 (미리보기용 · 통신 없음)
+function hhcShortSync(text){
+  text=String(text==null?'':text);
+  for(const k in _hhcShortCache)text=text.split(k).join(_hhcShortCache[k]);
+  return text;
+}
+// 문구 전체에서 긴 주소를 찾아 모두 짧은 주소로 (실패한 주소는 원문 유지)
+async function hhcShortLinks(text){
+  text=String(text==null?'':text);
+  const found=text.match(/https:\/\/(?:www\.)?happyhomecare\.com\.my\/[^\s'"<>)\]]+/g)||[];
+  const uniq=found.filter((u,i)=>found.indexOf(u)===i);
+  for(const u of uniq){
+    const s=await hhcShortUrl(u);
+    if(s!==u)text=text.split(u).join(s);
+  }
+  return text;
+}
+// 다른 스크립트 블록(window.* 핸들러)에서도 쓸 수 있게 공개
+try{window.hhcShortUrl=hhcShortUrl;window.hhcShortLinks=hhcShortLinks;}catch(_e){}
+
+
 
 const BASE='https://happyhomecare.com.my';
 
@@ -969,7 +1021,7 @@ async function kkSend(title,desc,url,en,btn,img){
 // 안내 문구가 뜰 틈도 없이 화면이 넘어가 버립니다. 그래서 안내부터 띄운 뒤 공유를 시작합니다.
 async function kkShareMsg(name,message,url,en,title,img){
   // 클립보드에는 왓츠앱과 같은 간략한 내용(주소 포함)을 넣어, 손으로 붙여 보낼 때도 동일하게 나갑니다
-  try{await navigator.clipboard.writeText(waText(message));}catch(_){}
+  try{await navigator.clipboard.writeText(await hhcShortLinks(waText(message)));}catch(_){}
   toast('💛 카카오톡 공유창을 엽니다 · 전체 메시지도 복사되었습니다');
   const ok=await kkSend((title&&title.t)||(en?('[Happy Home Care] Notice for '+(name||'Customer'))
                           :('[Happy Home Care] '+(name||'고객')+'님 안내')),
@@ -3321,23 +3373,26 @@ window.caSendModal=async function(idx){
     const cnt=h.filter(u=>(parseFloat(u.amount)||0)>0).length;
     return {paid:paid,bonus:bonus,total:total,remain:total-used+disc+carry,cnt:cnt};
   }
+  // 발송 문구에는 짧은 주소를 씁니다 — paint() 가 미리 단축을 걸어 두고,
+  // 준비되기 전이나 실패 시에는 원래 주소가 그대로 나갑니다
+  const dLink=()=>_hhcShortCache[link()]||link();
   // 모든 발송 문구 공통 꼬리 — 마이페이지 주소 + 서명
   //  · WhatsApp : 아래 🔗 주소가 그대로 발송됩니다.
   //  · 카카오톡 : kkText 가 주소 줄을 걷어내고 「마이페이지 열기」 버튼이 대신합니다.
   function msgTail(en){
     if(state.tpl==='mem'){
-      return '\n\n'+(en?'👑 MEMBERSHIP':'👑 멤버십 안내장')+'\n🔗 '+link()+'\n\nHappy Home Care 📞 +60 17-247 2774';
+      return '\n\n'+(en?'👑 MEMBERSHIP':'👑 멤버십 안내장')+'\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
     }
     if(state.tpl==='evi'){
-      return '\n\n'+(en?'🎁 GIFT VOUCHER':'🎁 전자상품권 안내')+'\n🔗 '+link()+'\n\nHappy Home Care 📞 +60 17-247 2774';
+      return '\n\n'+(en?'🎁 GIFT VOUCHER':'🎁 전자상품권 안내')+'\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
     }
     if(state.tpl==='pti'){
-      return '\n\n'+(en?'💎 REWARD POINTS':'💎 적립포인트 안내')+'\n🔗 '+link()+'\n\nHappy Home Care 📞 +60 17-247 2774';
+      return '\n\n'+(en?'💎 REWARD POINTS':'💎 적립포인트 안내')+'\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
     }
     if(state.tpl==='nc'){
-      return '\n\n'+(en?'💼 DIGITAL NAME CARD':'💼 전자명함')+'\n🔗 '+link()+'\n\nHappy Home Care 📞 +60 17-247 2774';
+      return '\n\n'+(en?'💼 DIGITAL NAME CARD':'💼 전자명함')+'\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
     }
-    return '\n\n📱 MY PAGE\n🔗 '+link()+'\n\nHappy Home Care 📞 +60 17-247 2774';
+    return '\n\n📱 MY PAGE\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
   }
   // ── 🔧 점검보고서 발송 ──────────────────────
   function insMsg(en){
@@ -3770,7 +3825,13 @@ window.caSendModal=async function(idx){
       }
       cn.innerHTML=hh;
     }
-    const raw=waText(msg());   // 「이대로 발송됩니다」 — 실제로 나가는 내용을 그대로 보여 줍니다
+    // 🔗 문구 속 긴 주소는 짧은 주소로 보여 줍니다 — 아직 안 만든 주소는
+    //    만들어지는 대로 다시 그립니다 (실패하면 원래 주소 그대로)
+    let raw=waText(msg());   // 「이대로 발송됩니다」 — 실제로 나가는 내용을 그대로 보여 줍니다
+    const _pend=(raw.match(/https:\/\/(?:www\.)?happyhomecare\.com\.my\/[^\s'"<>)\]]+/g)||[])
+      .filter((u,i,a)=>a.indexOf(u)===i&&u.length>40&&!/\/r(\.html)?\?k=/.test(u)&&!_hhcShortCache[u]);
+    if(_pend.length)Promise.all(_pend.map(hhcShortUrl)).then(()=>{try{paint();}catch(_){}});
+    raw=hhcShortSync(raw);
     mk.querySelector('#cs-msg').innerHTML=msgHtml(raw);
     const ln=mk.querySelector('#cs-len');
     if(ln){
@@ -3861,12 +3922,13 @@ window.caSendModal=async function(idx){
     caCareLog(idx,state.tpl==='care6'?6:3,ch);
     setTimeout(paint,60);
   }
-  mk.querySelector('#cs-wa').addEventListener('click',()=>{
+  mk.querySelector('#cs-wa').addEventListener('click',async()=>{
     let wa='https://wa.me/';
     const ph=pn(e.phone);
     if(ph)wa+='60'+ph;
     // 카카오톡과 같은 간략한 내용 + 주소 (왓츠앱은 카드가 없어 주소는 남깁니다)
-    window.open(wa+'?text='+encodeURIComponent(waText(msg())),'_blank');
+    const _t=await hhcShortLinks(waText(msg()));   // 🔗 문구 속 긴 주소를 모두 단축
+    window.open(wa+'?text='+encodeURIComponent(_t),'_blank');
     careMark('wa');
   });
   mk.querySelector('#cs-kk').addEventListener('click',()=>{
@@ -3900,8 +3962,9 @@ window.caSendModal=async function(idx){
   });
   mk.querySelector('#cs-kkset').addEventListener('click',()=>{kkResetKey();});
   mk.querySelector('#cs-pv').addEventListener('click',()=>{window.caView(link(),'👁 고객 발송 화면 미리보기 — '+(e.name||''));});
-  mk.querySelector('#cs-copylink').addEventListener('click',()=>{
-    navigator.clipboard.writeText(link()).then(()=>toast(
+  mk.querySelector('#cs-copylink').addEventListener('click',async()=>{
+    const _sl=await hhcShortUrl(link());   // 🔗 주소 복사도 짧은 주소로
+    navigator.clipboard.writeText(_sl).then(()=>toast(
       state.tpl==='mem'?'🔗 멤버십 안내장 주소가 복사되었습니다'
       :state.tpl==='evi'?'🔗 전자상품권 안내장 주소가 복사되었습니다'
       :state.tpl==='pti'?'🔗 적립포인트 안내장 주소가 복사되었습니다'
@@ -3909,8 +3972,8 @@ window.caSendModal=async function(idx){
       :'🔗 마이페이지 주소가 복사되었습니다'))
       .catch(()=>prompt('복사해서 사용하세요:',link()));
   });
-  mk.querySelector('#cs-cp').addEventListener('click',()=>{
-    const _t=waText(msg());   // 실제 발송되는 내용과 똑같이 복사됩니다
+  mk.querySelector('#cs-cp').addEventListener('click',async()=>{
+    const _t=await hhcShortLinks(waText(msg()));   // 실제 발송되는 내용과 똑같이 복사됩니다
     navigator.clipboard.writeText(_t).then(()=>toast('✓ 메시지가 복사되었습니다'))
       .catch(()=>prompt('복사해서 사용하세요:',_t));
     careMark('cp');
@@ -3967,10 +4030,14 @@ window.caHomeModal=function(idx){
   function msg(){
     const o=HP_SECS.find(x=>x.k===sec);
     return en
-      ?('Hello '+e.name+' 😊\nThis is Happy Home Care.\n\n'+o.en+'\n\n🔗 '+link()+'\n\nThank you 🙏\nHappy Home Care\n📞 +60 17-247 2774')
-      :('안녕하세요, '+e.name+' 고객님 😊\nHappy Home Care 입니다.\n\n'+o.ko+'\n\n🔗 '+link()+'\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774');
+      ?('Hello '+e.name+' 😊\nThis is Happy Home Care.\n\n'+o.en+'\n\n🔗 '+hpLink()+'\n\nThank you 🙏\nHappy Home Care\n📞 +60 17-247 2774')
+      :('안녕하세요, '+e.name+' 고객님 😊\nHappy Home Care 입니다.\n\n'+o.ko+'\n\n🔗 '+hpLink()+'\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774');
   }
+  // 문구에는 짧은 주소를 씁니다 (준비 전·실패 시엔 원 주소)
+  const hpLink=()=>_hhcShortCache[link()]||link();
   function paint(){
+    const _lk=link();
+    if(_lk.length>40&&!_hhcShortCache[_lk])hhcShortUrl(_lk).then(sv=>{if(sv!==_lk)try{paint();}catch(_){}});
     mk.querySelectorAll('#hp-secs [data-k]').forEach(el=>{
       const on=el.dataset.k===sec;
       el.style.background=on?'var(--pri-bg)':'#fff';
@@ -3997,16 +4064,17 @@ window.caHomeModal=function(idx){
     const o=HP_SECS.find(x=>x.k===sec);
     window.caView(link(),'👁 홈페이지 미리보기 — '+o.lb);
   });
-  mk.querySelector('#hp-wa').addEventListener('click',()=>{
+  mk.querySelector('#hp-wa').addEventListener('click',async()=>{
     let wa='https://wa.me/';
     const ph=pn(e.phone);
     if(ph)wa+='60'+ph;
-    window.open(wa+'?text='+encodeURIComponent(msg()),'_blank');
+    window.open(wa+'?text='+encodeURIComponent(await hhcShortLinks(msg())),'_blank');
   });
   mk.querySelector('#hp-kk').addEventListener('click',()=>{kkShareMsg(e.name,msg(),link(),!!state.en);});
-  mk.querySelector('#hp-cp').addEventListener('click',()=>{
-    navigator.clipboard.writeText(msg()).then(()=>toast('✓ 메시지가 복사되었습니다'))
-      .catch(()=>prompt('복사해서 사용하세요:',msg()));
+  mk.querySelector('#hp-cp').addEventListener('click',async()=>{
+    const _t=await hhcShortLinks(msg());
+    navigator.clipboard.writeText(_t).then(()=>toast('✓ 메시지가 복사되었습니다'))
+      .catch(()=>prompt('복사해서 사용하세요:',_t));
   });
   paint();
 };

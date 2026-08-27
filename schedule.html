@@ -459,7 +459,53 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 
 <script type="module">
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import {getFirestore,collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,getDocs,getDoc,setDoc} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import {getFirestore,collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,getDocs,getDoc,setDoc, query, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+// ── 🔗 발송 주소 단축 ────────────────────────────────────────────
+// 메시지에 들어가는 긴 happyhomecare 주소를 짧은 주소(/r?k=키)로 바꿉니다.
+// 인보이스·계약서에서 이미 쓰던 단축 저장소(shorts · r.html)를 그대로 씁니다.
+//  · 같은 주소는 항상 같은 키를 재사용합니다 (저장소에서 먼저 찾음)
+//  · 새 키는 4자리로 만들고, 이미 쓰는 키와 겹치면 자릿수를 늘려 다시 만듭니다
+//  · 단축에 실패하면 원래 주소를 그대로 보냅니다 (발송이 막히는 일은 없음)
+const HHC_SHORT_BASE='https://happyhomecare.com.my/r?k=';
+const _hhcShortCache={};
+async function hhcShortUrl(url){
+  url=String(url||'');
+  if(_hhcShortCache[url])return _hhcShortCache[url];
+  if(url.length<=40)return url;                                   // 이미 짧은 주소
+  if(!/^https:\/\/(www\.)?happyhomecare\.com\.my\//.test(url))return url;
+  if(/\/r(\.html)?\?k=/.test(url))return url;                     // 이미 단축된 주소
+  try{
+    const col=collection(db,'shorts');
+    const ex=await getDocs(query(col,where('url','==',url)));
+    let key='';
+    if(!ex.empty){key=ex.docs[0].data().key;}
+    else{
+      for(let n=4;n<=8&&!key;n++){
+        const k=Math.random().toString(36).slice(2,2+n);
+        if(k.length<n)continue;
+        const dup=await getDocs(query(col,where('key','==',k)));
+        if(dup.empty){await addDoc(col,{key:k,url:url,created:new Date().toISOString()});key=k;}
+      }
+      if(!key)return url;
+    }
+    return (_hhcShortCache[url]=HHC_SHORT_BASE+key);
+  }catch(e){return url;}
+}
+// 문구 전체에서 긴 주소를 찾아 모두 짧은 주소로 (실패한 주소는 원문 유지)
+async function hhcShortLinks(text){
+  text=String(text==null?'':text);
+  const found=text.match(/https:\/\/(?:www\.)?happyhomecare\.com\.my\/[^\s'"<>)\]]+/g)||[];
+  const uniq=found.filter((u,i)=>found.indexOf(u)===i);
+  for(const u of uniq){
+    const s=await hhcShortUrl(u);
+    if(s!==u)text=text.split(u).join(s);
+  }
+  return text;
+}
+// 다른 스크립트 블록(window.* 핸들러)에서도 쓸 수 있게 공개
+try{window.hhcShortUrl=hhcShortUrl;window.hhcShortLinks=hhcShortLinks;}catch(_e){}
+
+
 
 const FIREBASE_CFG={
   apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
@@ -1718,7 +1764,7 @@ window.sendVisitReminder=function(itemId){
   const timeS=item.time_s||item.booking_time||'';
   // 📱 마이페이지 주소 · 고객 연락처 — 왓츠앱 본문과 카카오 카드 버튼이 함께 사용합니다
   const VR_PH=item.customer_phone||item.phone||'';
-  const VR_URL=vrMyLink(name,VR_PH,lang==='en');
+  let VR_URL=vrMyLink(name,VR_PH,lang==='en');
   const title=lang==='en'?'💬 Visit Reminder Message':'💬 방문 안내 메시지';
   const subtitle=lang==='en'?`Choose a template and send to ${name}`:`템플릿 선택 후 ${name}님께 전송해 주세요`;
   const closeLabel=lang==='en'?'Close':'닫기';
@@ -1776,6 +1822,14 @@ window.sendVisitReminder=function(itemId){
     b.addEventListener('click',()=>setTpl(b.dataset.tpl));
   });
   setTpl(defTpl);
+  // 🔗 마이페이지 주소를 짧은 주소로 — 준비되면 문구 속 주소만 바꿔치기
+  hhcShortUrl(VR_URL).then(sv=>{
+    if(sv&&sv!==VR_URL){
+      const box=document.getElementById('visit-msg-box');
+      if(box)box.value=box.value.split(VR_URL).join(sv);
+      VR_URL=sv;
+    }
+  });
 
   const getMsg=()=>document.getElementById('visit-msg-box').value;
   // 💬 왓츠앱 — 마이페이지 발송과 같은 형식(주소 포함) + 고객 번호로 바로 열립니다
@@ -1881,7 +1935,9 @@ window.saveDayImage=async function(){
 };
 
 // ── 공유
-window.shareWA=function(){const b=document.getElementById('msg-body');if(b)window.open('https://wa.me/?text='+encodeURIComponent(b.textContent),'_blank');};
+window.shareWA=async function(){const b=document.getElementById('msg-body');if(!b)return;
+  const _t=await hhcShortLinks(b.textContent);   // 🔗 문구 속 긴 주소가 있으면 단축
+  window.open('https://wa.me/?text='+encodeURIComponent(_t),'_blank');};
 window.shareKakao=function(){
   const b=document.getElementById('msg-body');if(!b)return;
   navigator.clipboard.writeText(b.textContent).then(()=>{
