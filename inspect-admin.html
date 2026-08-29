@@ -5057,30 +5057,41 @@ async function tr(text){
 }
 
 // ── 사진 업로드
+//    네트워크 불안정으로 인한 업로드 실패가 조용히 무시되던 문제 개선:
+//    최대 2번 더 자동 재시도하고, 그래도 실패하면 null을 반환해 호출부에서
+//    「업로드 실패 목록」에 기록하도록 합니다(고객에게 사진 없는 보고서가 그대로 발송되지 않도록).
 async function uploadPhoto(key,dataUrl,rid){
   if(!dataUrl||!ST)return null;
   // 이미 Firebase Storage URL인 경우 재업로드 없이 그대로 반환
   if(dataUrl.startsWith('http')){return dataUrl;}
-  try{
-    var blob=await fetch(dataUrl).then(function(r){return r.blob();});
-    var sref=ref(ST,'inspections/'+rid+'/'+key+'.'+(blob.type.includes('png')?'png':'jpg'));
-    var snap=await uploadBytes(sref,blob,{contentType:blob.type});
-    return await getDownloadURL(snap.ref);
-  }catch(e){console.error('upload:',e);return null;}
+  var lastErr=null;
+  for(var attempt=0;attempt<3;attempt++){
+    try{
+      var blob=await fetch(dataUrl).then(function(r){return r.blob();});
+      var sref=ref(ST,'inspections/'+rid+'/'+key+'.'+(blob.type.includes('png')?'png':'jpg'));
+      var snap=await uploadBytes(sref,blob,{contentType:blob.type});
+      return await getDownloadURL(snap.ref);
+    }catch(e){lastErr=e;if(attempt<2)await new Promise(function(r){setTimeout(r,700);});}
+  }
+  console.error('upload:',lastErr);return null;
 }
 
-// ── 동영상 업로드
+// ── 동영상 업로드 (사진과 동일하게 최대 2번 재시도)
 async function uploadVideo(item,rid,idx){
   if(!item||!ST)return null;
   if(!item.file&&item.url)return item.url;
-  try{
-    var f=item.file;
-    var ext='mp4';
-    if(f.name&&f.name.indexOf('.')>-1){var e2=f.name.split('.').pop().toLowerCase();if(/^[a-z0-9]{2,4}$/.test(e2))ext=e2;}
-    var sref=ref(ST,'inspections/'+rid+'/video-'+idx+'.'+ext);
-    var snap=await uploadBytes(sref,f,{contentType:f.type||'video/mp4'});
-    return await getDownloadURL(snap.ref);
-  }catch(e){console.error('video upload:',e);return null;}
+  var f=item.file;
+  var ext='mp4';
+  if(f.name&&f.name.indexOf('.')>-1){var e2=f.name.split('.').pop().toLowerCase();if(/^[a-z0-9]{2,4}$/.test(e2))ext=e2;}
+  var lastErr=null;
+  for(var attempt=0;attempt<3;attempt++){
+    try{
+      var sref=ref(ST,'inspections/'+rid+'/video-'+idx+'.'+ext);
+      var snap=await uploadBytes(sref,f,{contentType:f.type||'video/mp4'});
+      return await getDownloadURL(snap.ref);
+    }catch(e){lastErr=e;if(attempt<2)await new Promise(function(r){setTimeout(r,700);});}
+  }
+  console.error('video upload:',lastErr);return null;
 }
 
 // ── 단축URL
@@ -5266,12 +5277,16 @@ window.saveReport=async function(){
     if(currentEditId){rid=currentEditId;}
     else{var dref=await addDoc(collection(DB,'inspections'),data);rid=dref.id;}
     // 사진 업로드
+    //  업로드가 실패한 사진은(재시도 후에도) 조용히 빠지지 않도록 failedPhotoKeys에 기록해
+    //  저장이 끝난 뒤 반드시 관리자에게 알립니다 — 고객에게 사진 없는 보고서가 그대로
+    //  발송되는 사고를 막기 위함입니다.
+    var failedPhotoKeys=[];
     var keys=Object.keys(photoData);
     showSaveProg('사진 업로드 중...',keys.length?('0 / '+keys.length):'사진 없음');
     for(var i=0;i<keys.length;i++){
       setSaveProg((i)/(keys.length||1),(i)+' / '+keys.length);
       var key=keys[i];var url2=await uploadPhoto(key,photoData[key],rid);
-      if(!url2)continue;
+      if(!url2){failedPhotoKeys.push(key);continue;}
       if(key.startsWith('w-problem-photos')){data.wProblemPhotos=(data.wProblemPhotos||[]).concat(url2);}
       else if(key.startsWith('w-before-photos')){data.wBeforePhotos=(data.wBeforePhotos||[]).concat(url2);}
       else if(key.startsWith('w-after-photos')){data.wAfterPhotos=(data.wAfterPhotos||[]).concat(url2);}
@@ -5339,6 +5354,7 @@ window.saveReport=async function(){
     }
     setSaveProg(1,'완료');
     // 동영상 업로드
+    var failedVideoCount=0;
     var vkeys=Object.keys(videoData);
     if(vkeys.length){
       showSaveProg('동영상 업로드 중...','0 / '+vkeys.length);
@@ -5347,7 +5363,7 @@ window.saveReport=async function(){
         setSaveProg(vi/vkeys.length,(vi)+' / '+vkeys.length);
         var vit=videoData[vkeys[vi]];
         var vurl=await uploadVideo(vit,rid,vi);
-        if(!vurl)continue;
+        if(!vurl){failedVideoCount++;continue;}
         var vsh=vit.short||await shorten(vurl);
         vlist.push({url:vurl,short:vsh,name:vit.name||'',size:vit.size||0,dur:Math.round(vit.dur||0)});
       }
@@ -5357,6 +5373,16 @@ window.saveReport=async function(){
     showSaveProg('링크 생성 중...','');
     await setDoc(doc(DB,'inspections',rid),data);
     if(window.HHCC_upsert)HHCC_upsert(data.client,data.phone||'');
+    if(failedPhotoKeys.length||failedVideoCount){
+      var _failMsg='⚠️ 저장은 완료됐지만 '+
+        (failedPhotoKeys.length?('사진 '+failedPhotoKeys.length+'장'):'')+
+        (failedPhotoKeys.length&&failedVideoCount?', ':'')+
+        (failedVideoCount?('동영상 '+failedVideoCount+'개'):'')+
+        '이 인터넷 연결 문제로 업로드되지 못했습니다.\n\n'+
+        '고객에게 보내기 전에 해당 사진/동영상을 다시 첨부하고 한 번 더 저장해 주세요.\n'+
+        '(나머지 내용과 정상 업로드된 사진은 그대로 저장되었습니다)';
+      alert(_failMsg);
+    }
     var pageFile=isInstall?'install.html':(isWasher?'washer.html':'inspect.html');
     var koUrl='https://happyhomecare.com.my/'+pageFile+'?id='+rid+'&lang=ko';
     var enUrl='https://happyhomecare.com.my/'+pageFile+'?id='+rid+'&lang=en';

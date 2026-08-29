@@ -1416,6 +1416,7 @@ const T={
       feePkg:'패키지 회원은 최소청구금액 · 주차비용 · 예약보증금이 모두 면제됩니다.',
       fbRq:'서비스 의뢰',fbRqS:'간편 견적 · 바로 접수',fbHp:'가격 · 서비스',fbHpS:'홈페이지 보기',fbWa:'문의',
       hpT:'가격/서비스 확인하기',hpS:'홈페이지에서 전체 서비스와 가격표를 확인하세요',hpB:'홈페이지 바로가기',notfound:'고객 정보를 찾을 수 없습니다.<br>링크를 다시 확인해 주세요.',
+      loadErr:'일시적인 오류로 불러오지 못했습니다.<br>인터넷 연결을 확인한 뒤 다시 시도해 주세요.',retryBtn:'🔄 다시 시도',waHelpBtn:'💬 문의하기',
       foot:'본 페이지는 열 때마다 최신 내용으로 갱신됩니다.',
       amtPaid:'결제 금액',amtBill:'청구 금액',amtDue:'미납 금액',crUsed:'적립잔액',crUsedSuf:' 사용',more:'개 더',qtyU:'개',etcA:' 외 ',etcB:'건',svcU:'개 서비스',pkgPre:'패키지 - ',
       ivGo:'인보이스 보기 →',ipGo:'📄 보고서 열기 →',ctGo:'📑 계약 상세 · 이용내역 보기 →',cpGo:'열기 →',
@@ -1481,6 +1482,7 @@ const T={
       feePkg:'Package members are exempt from the minimum charge, parking fee and booking deposit.',
       fbRq:'Request',fbRqS:'Quick quote & booking',fbHp:'Prices',fbHpS:'View homepage',fbWa:'Chat',
       hpT:'Check Prices & Services',hpS:'See our full service list and price guide on the homepage',hpB:'Visit Homepage',notfound:'Customer not found.<br>Please check your link.',
+      loadErr:'Could not load due to a temporary error.<br>Please check your connection and try again.',retryBtn:'🔄 Try Again',waHelpBtn:'💬 Contact Us',
       foot:'This page always shows your latest records when opened.',
       amtPaid:'PAID',amtBill:'AMOUNT DUE',amtDue:'OVERDUE',crUsed:'Credit',crUsedSuf:' used',more:' more',qtyU:'',etcA:' +',etcB:' more',svcU:' services',pkgPre:'Package · ',
       ivGo:'View invoice →',ipGo:'📄 Open report →',ctGo:'📑 Contract details →',cpGo:'Open →',
@@ -2969,19 +2971,50 @@ function focusSection(){
   },1200);
 }
 
-(async()=>{
+// ── 데이터 로딩 : 일시적 오류(네트워크 지연 등)는 화면에 보여주기 전에 잠깐 간격을 두고
+//    최대 2번 더 자동으로 다시 시도합니다. 「고객 정보 없음(not-found)」만 확정 오류로 보고
+//    곧바로 포기하며, 그 외 오류는 재시도 후에도 실패하면 화면에 「다시 시도」 버튼을 보여줍니다.
+async function loadWithRetry(){
+  var lastErr=null;
+  for(var i=0;i<3;i++){
+    try{ await load(); return; }
+    catch(e){
+      lastErr=e;
+      if(e&&e.message==='not-found')throw e;
+      if(i<2)await new Promise(function(r){setTimeout(r,900);});
+    }
+  }
+  throw lastErr;
+}
+async function boot(){
   try{
     if(!CID)throw new Error('no-id');
-    await load();
+    await loadWithRetry();
     render();
     // 팝업 안내는 모두 제거했습니다 — 같은 내용이 화면 상단 카드·상태 칩으로 항상 보입니다.
     setTimeout(focusSection,400);   // 발송 메시지가 가리키는 곳으로 이동·강조 (팝업이 있으면 닫힌 뒤)
     // 📱 설치 흐름으로 열렸으면(외부 브라우저 전환 · 앱 설치 안내 링크) 스크롤 없이 설치 창구를 바로 띄웁니다
     if(P.get('install')==='1'||FOCUS==='ap')setTimeout(a2mShow,650);
   }catch(e){
-    document.getElementById('page').innerHTML='<div class="empty-page"><div style="font-size:34px">🔎</div><div>'+T[LANG].notfound+'</div></div>';
+    var L=T[LANG];
+    // 확정 오류(주소에 c값이 아예 없거나, 그 고객 문서가 실제로 없음)는 재시도 버튼이
+    // 의미가 없으므로 문의 버튼만 보여줍니다. 그 외(네트워크 지연 등으로 재시도까지
+    // 실패한 경우)는 CID 자체는 유효하므로 다시 시도할 수 있게 합니다.
+    var hardFail=!!(e&&(e.message==='not-found'||e.message==='no-id'));
+    var msg=hardFail?L.notfound:(L.loadErr||L.notfound);
+    var html='<div class="empty-page"><div style="font-size:34px">'+(hardFail?'🔎':'⚠️')+'</div><div>'+msg+'</div>';
+    if(!hardFail)html+='<button type="button" class="a2hs-btn" id="my-retry-btn" style="max-width:260px">'+(L.retryBtn||'다시 시도')+'</button>';
+    html+='<a class="a2hs-btn" id="my-wa-btn" style="max-width:260px;display:block;text-decoration:none;text-align:center;box-sizing:border-box" href="https://wa.me/60172472774" target="_blank" rel="noopener">'+(L.waHelpBtn||L.nbWa)+'</a></div>';
+    document.getElementById('page').innerHTML=html;
+    var rb=document.getElementById('my-retry-btn');
+    if(rb)rb.onclick=async function(){
+      rb.disabled=true;
+      document.getElementById('page').innerHTML='<div class="empty-page"><div class="spin"></div><div id="load-msg">'+(LANG==='en'?'Loading...':'불러오는 중...')+'</div></div>';
+      await boot();
+    };
   }
-})();
+}
+boot();
 </script>
 
 <!-- ═══ 문서 뷰어 오버레이 — 닫으면 마이페이지로 그대로 복귀 ═══ -->
