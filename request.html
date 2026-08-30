@@ -618,7 +618,7 @@ const L={
     calcDiscLbl:'🎁 이벤트 할인',
     calcTotalLbl:'예상 합계',
     calcNote1:'최소청구금액 RM320 미만이면 RM320이 청구됩니다. 실제 금액은 방문 후 확정됩니다.',
-    calcNote2:'※ 진행 중인 이벤트 할인은 조건 충족 시 자동 반영됩니다. (공동의뢰 할인·패키지 회원 혜택 제외)',
+    calcNote2:'※ 9월 추석맞이 할인(에어컨·가전·패브릭 합계 RM600+ 10% · RM800+ 15% · RM1,500+ 20%)과 상시 이벤트는 자동 반영됩니다. 부품비·자재비·수리비 제외 (공동의뢰 할인·패키지 회원 혜택 미반영)',
     calcNote3:'본 견적가격은 예상안내가격으로 실제 청구 금액과 다를 수 있습니다.',
     calcRemoveLbl:'삭제',
     infoTitle:'고객 정보',infoDesc:'연락드릴 정보를 입력해주세요',
@@ -665,7 +665,7 @@ const L={
     calcDiscLbl:'🎁 Event Discount',
     calcTotalLbl:'Estimated Total',
     calcNote1:'If the total is below RM320, a minimum charge of RM320 applies. The final amount is confirmed on-site.',
-    calcNote2:'※ Ongoing event discounts are applied automatically when conditions are met. (Group-request and membership discounts are not included.)',
+    calcNote2:'※ The September Chuseok discount (air-con·appliance·fabric total RM600+ 10% · RM800+ 15% · RM1,500+ 20%) and always-on offers are applied automatically. Parts, materials and repair costs excluded. (Group-request and membership discounts are not included.)',
     calcNote3:'This is an estimated price only — the actual charge may differ.',
     calcRemoveLbl:'Remove',
     infoTitle:'Customer Information',infoDesc:'Enter your contact details',
@@ -826,14 +826,21 @@ const CALC_NAMES_EN={
   "건식진공흡입방식":"Dry vacuum method", "습식스팀살균방식":"Wet steam sanitizing"
 };
 function calcLabel(ko){return (isEn()&&CALC_NAMES_EN[ko])?CALC_NAMES_EN[ko]:ko;}
-// 이벤트 할인 규칙 — serviceinfo.html의 calcPromos와 함께 갱신
+// 이벤트 할인 규칙 — service-info.html의 calcPromos와 함께 갱신
 const CALC_PROMOS=[
-  {t:"벽걸이 에어컨", c:"전용약품세척", minQty:5, pct:10, end:"2026-07-31"},
-  {t:"벽걸이 에어컨", c:"스팀살균세척", minQty:5, pct:10, end:"2026-07-31"},
-  {t:"벽걸이 에어컨", c:"전체분해세척", minQty:5, pct:10, end:"2026-07-31"},
-  {t:"매트리스", c:"습식스팀살균방식", minQty:3, pct:10, end:"2026-07-31"},
   {t:"커튼 (현장세탁, 1 SQ당)", c:"기본가", minQty:1, pct:50, end:null}
 ];
+// 🌕 추석맞이 총액 구간 할인 (2026.9.1 ~ 9.30)
+//  · 에어컨·가전·패브릭(ac/app/fab) 합계 기준 — 기타 탭(수리성 품목)은 합계·할인 대상 제외
+//  · 상시 이벤트(커튼 50%) 반영 후 금액 기준으로 적용 (상시 이벤트는 중복 가능)
+const CALC_TIER={from:'2026-09-01',to:'2026-09-30',
+  nmKo:'추석맞이 특별 할인',nmEn:'Chuseok Special Discount',
+  tiers:[{min:1500,pct:20},{min:800,pct:15},{min:600,pct:10}]};
+function calcTierLive(){
+  const d=new Date();
+  const t=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+  return CALC_TIER.from<=t&&t<=CALC_TIER.to;   // 종료일 당일까지 적용
+}
 function calcPromoActive(p){
   if(!p.end)return true;
   const end=new Date(p.end+'T00:00:00');
@@ -1059,7 +1066,7 @@ function calcRender(){
   const removeLabel=L[currentLang].calcRemoveLbl;
   const grpQty={};
   calcItems.forEach(it=>{grpQty[it.t+'|'+it.c]=(grpQty[it.t+'|'+it.c]||0)+it.q;});
-  let subtotal=0,discount=0;
+  let subtotal=0,discount=0,tierElig=0;
   calcItems.forEach((it,i)=>{
     const line=it.price*it.q;
     subtotal+=line;
@@ -1069,6 +1076,7 @@ function calcRender(){
       lineDisc=Math.round(line*promo.pct/100);
       discount+=lineDisc;
     }
+    if(calcCatIdOf(it.t)!=='etc')tierElig+=line-lineDisc;   // 추석 구간할인 대상 합계
     const row=document.createElement('div');
     row.className='calc-item-row';
     const badge=lineDisc>0?'<span class="calc-item-promo">🎁 '+promo.pct+'% '+(isEn()?'OFF':'할인')+'</span>':'';
@@ -1079,6 +1087,21 @@ function calcRender(){
     row.innerHTML='<span>'+esc(calcLabel(it.t))+' · '+esc(cLbl)+' x'+it.q+badge+'</span><span>'+priceHtml+'<button class="calc-item-remove" onclick="calcRemoveItem('+i+')">'+esc(removeLabel)+'</button></span>';
     list.appendChild(row);
   });
+  // 🌕 추석맞이 총액 구간 할인 — 조건 충족 시 자동 반영
+  if(calcTierLive()&&tierElig>0){
+    let tp=null;
+    for(let ti=0;ti<CALC_TIER.tiers.length;ti++){ if(tierElig>=CALC_TIER.tiers[ti].min){ tp=CALC_TIER.tiers[ti]; break; } }
+    if(tp){
+      const td=Math.round(tierElig*tp.pct/100);
+      discount+=td;
+      const trow=document.createElement('div');
+      trow.className='calc-item-row';
+      trow.innerHTML='<span>🌕 '+(isEn()?CALC_TIER.nmEn:CALC_TIER.nmKo)+' '+tp.pct+'%'
+        +'<span class="calc-item-promo">'+(isEn()?'RM '+tp.min.toLocaleString()+'+':'RM '+tp.min.toLocaleString()+' 이상')+'</span></span>'
+        +'<span>− RM '+td.toLocaleString()+'</span>';
+      list.appendChild(trow);
+    }
+  }
   let total=subtotal-discount;
   if(total>0&&total<320)total=320;
   const subRow=$('calcSubRow'),discRow=$('calcDiscRow');
