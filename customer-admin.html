@@ -1200,6 +1200,7 @@ let _subs=[];
 function subscribeAll(){
   _subs.forEach(u=>{try{u();}catch(e){}});
   _subs=COLL_NAMES.map(n=>onSnapshot(collection(db,n),snap=>{
+    window.__hhcReady&&window.__hhcReady();
     RAW[n]=snap.docs.map(d=>{const x=d.data()||{};x.__id=d.id;return x;});
     scheduleRebuild();
   },err=>console.warn('sub',n,err.message)));
@@ -4977,6 +4978,30 @@ try{
 }catch(e){
   document.getElementById('list').innerHTML='<div class="empty">Firebase 연결 실패: '+esc(e.message)+'</div>';
 }
+</script>
+<script>
+/* ══ 허브(staffapp.html) 안에서 열렸을 때 「화면 살아있음」 신호 ══════════════
+   · 열리자마자 hhcHello, 데이터가 처음 도착하면 hhcReady 를 허브로 보냅니다.
+   · 15초 안에 데이터가 오지 않으면(앱을 켠 직후 통신이 걸린 상태) 스스로 새로고침 — 최대 2회.
+     그래도 안 되면 허브에 hhcStuck 을 알려 「다시 불러오기」 안내를 띄우게 합니다.
+   · 허브가 hhcPing 을 보내면 현재 상태(hhcPong)로 답합니다.
+   ※ 허브 밖에서 단독으로 열었을 때는 아무 동작도 하지 않습니다. */
+(function(){
+  if(window.top===window.self)return;
+  var ready=false,KEY='hhc_wd:'+location.pathname,n=0;
+  try{n=parseInt(sessionStorage.getItem(KEY)||'0',10)||0;}catch(e){}
+  function post(m){try{window.parent.postMessage(m,'*');}catch(e){}}
+  window.__hhcReady=function(){if(ready)return;ready=true;try{sessionStorage.removeItem(KEY);}catch(e){}post({hhcReady:1});};
+  window.addEventListener('message',function(e){var d=e&&e.data;if(d&&d.hhcPing)post({hhcPong:1,ready:ready});});
+  post({hhcHello:1});
+  setTimeout(function(){
+    if(ready)return;
+    if(navigator.onLine===false||document.visibilityState!=='visible'){post({hhcStuck:1,soft:1});return;}
+    if(n>=2){post({hhcStuck:1});return;}
+    try{sessionStorage.setItem(KEY,String(n+1));}catch(e){}
+    location.reload();
+  },15000);
+})();
 </script>
 </body>
 </html>

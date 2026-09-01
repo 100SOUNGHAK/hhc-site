@@ -844,7 +844,7 @@ function dedupe(a){const seen={},out=[];a.forEach(x=>{if(seen[x.__id])return;see
 let rbT=null;
 function scheduleRebuild(){clearTimeout(rbT);rbT=setTimeout(()=>{renderList();if(document.getElementById('mm-mask').classList.contains('open'))renderSnips();},250);}
 function subscribeAll(){
-  onSnapshot(collection(db,'memos'),s=>{MEMOS=dedupe(s.docs.map(d=>Object.assign({__id:d.id},d.data())));scheduleRebuild();},e=>console.warn(e));
+  onSnapshot(collection(db,'memos'),s=>{window.__hhcReady&&window.__hhcReady();MEMOS=dedupe(s.docs.map(d=>Object.assign({__id:d.id},d.data())));scheduleRebuild();},e=>console.warn(e));
   onSnapshot(collection(db,'memo_snippets'),s=>{SNIPS=dedupe(s.docs.map(d=>Object.assign({__id:d.id},d.data())));scheduleRebuild();},e=>console.warn(e));
 }
 
@@ -1272,6 +1272,30 @@ try{
 window._memos=function(){return MEMOS;};
 window._snips=function(){return SNIPS;};
 window._tplText=tplText;
+</script>
+<script>
+/* ══ 허브(staffapp.html) 안에서 열렸을 때 「화면 살아있음」 신호 ══════════════
+   · 열리자마자 hhcHello, 데이터가 처음 도착하면 hhcReady 를 허브로 보냅니다.
+   · 15초 안에 데이터가 오지 않으면(앱을 켠 직후 통신이 걸린 상태) 스스로 새로고침 — 최대 2회.
+     그래도 안 되면 허브에 hhcStuck 을 알려 「다시 불러오기」 안내를 띄우게 합니다.
+   · 허브가 hhcPing 을 보내면 현재 상태(hhcPong)로 답합니다.
+   ※ 허브 밖에서 단독으로 열었을 때는 아무 동작도 하지 않습니다. */
+(function(){
+  if(window.top===window.self)return;
+  var ready=false,KEY='hhc_wd:'+location.pathname,n=0;
+  try{n=parseInt(sessionStorage.getItem(KEY)||'0',10)||0;}catch(e){}
+  function post(m){try{window.parent.postMessage(m,'*');}catch(e){}}
+  window.__hhcReady=function(){if(ready)return;ready=true;try{sessionStorage.removeItem(KEY);}catch(e){}post({hhcReady:1});};
+  window.addEventListener('message',function(e){var d=e&&e.data;if(d&&d.hhcPing)post({hhcPong:1,ready:ready});});
+  post({hhcHello:1});
+  setTimeout(function(){
+    if(ready)return;
+    if(navigator.onLine===false||document.visibilityState!=='visible'){post({hhcStuck:1,soft:1});return;}
+    if(n>=2){post({hhcStuck:1});return;}
+    try{sessionStorage.setItem(KEY,String(n+1));}catch(e){}
+    location.reload();
+  },15000);
+})();
 </script>
 </body>
 </html>
