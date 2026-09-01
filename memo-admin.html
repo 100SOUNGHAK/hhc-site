@@ -18,6 +18,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Pretendard",'Noto Sans KR',sa
 .btn{font-family:inherit;font-size:11.5px;font-weight:800;border:1px solid var(--bdr);background:#fff;color:var(--ink2);border-radius:9px;padding:8px 13px;cursor:pointer}
 .btn.p{background:var(--pri);border-color:var(--pri);color:#fff}
 .btn.s{background:#22c55e;border-color:#22c55e;color:#fff}
+.btn.c{background:#0E7490;border-color:#0E7490;color:#fff}   /* 🧺 커튼세탁 등록 */
 .btn.sm{font-size:10.5px;padding:6px 11px}
 .search-row input{width:100%;border:1px solid var(--bdr);border-radius:11px;padding:11px 14px;font-size:13px;font-family:inherit;background:#fff}
 .search-row input:focus{outline:none;border-color:var(--pri)}
@@ -39,6 +40,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Pretendard",'Noto Sans KR',sa
 .pill.r{background:#fef2f2;color:var(--bad)}
 .pill.g{background:#f1f5f9;color:#64748b}
 .pill.k{background:#fff3c4;color:#7a5b00}
+.pill.ct{background:#E0F2FE;color:#0369A1}   /* 🧺 커튼세탁 표시 */
 .pill.wa{background:#dcfce7;color:#15803d}
 .acts{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
 .rb{font-size:10.5px;font-weight:800;padding:6px 11px;border-radius:8px;border:1px solid var(--bdr);background:#fff;color:var(--ink2);cursor:pointer;font-family:inherit}
@@ -136,10 +138,12 @@ textarea.fi{resize:vertical;line-height:1.6}
     <span class="sp"></span>
     <span class="lgb" id="mm-lang"><button type="button" data-l="ko">한국어</button><button type="button" data-l="en">EN</button></span>
     <button class="btn" data-t="rf" onclick="loadAll(true)">🔄 새로고침</button>
-    <button class="btn p" data-t="add" onclick="openMemo(null)">＋ 수리요청 등록</button>
+    <button class="btn p" data-t="add" onclick="openMemo(null,'repair')">＋ 수리요청 등록</button>
+    <button class="btn c" data-t="addCt" onclick="openMemo(null,'curtain')">🧺 커튼세탁 등록</button>
   </div>
   <div class="search-row"><input id="q" data-p="srch" placeholder="🔍 콘도명 · 고객명 · 증상 검색" oninput="renderList()"></div>
   <div class="stats" id="stats"></div>
+  <div class="chips" id="chips-kd"></div>
   <div class="chips" id="chips-st"></div>
   <div class="chips" id="chips-ch"></div>
   <div id="list"><div class="loading">불러오는 중...</div></div>
@@ -153,7 +157,7 @@ textarea.fi{resize:vertical;line-height:1.6}
       <div class="row">
         <div><div class="fl" data-t="fReq">요청 날짜</div><input class="fi" id="mm-req" type="date"></div>
         <div><div class="fl" data-t="fSt">상태</div><select class="fi" id="mm-status">
-          <option value="pending" data-t="oPend">🕐 대기</option><option value="contacted" data-t="oCont">📞 연락완료</option><option value="done" data-t="oDone">✅ 방문완료</option>
+          <option value="pending">🕐 대기</option><option value="contacted">📞 연락완료</option><option value="done">✅ 방문완료</option>
         </select></div>
       </div>
       <div class="fl" data-t="fCondo">콘도명 · 호수 *</div>
@@ -170,6 +174,7 @@ textarea.fi{resize:vertical;line-height:1.6}
         <button type="button" data-ch="other" data-t="chOt">기타</button>
       </div>
       <div class="hint" data-t="hCh">선택한 채널에 맞춰 발송 버튼이 바뀝니다. (왓챕 → 바로 발송 / 카톡·기타 → 메시지 복사)</div>
+      <div id="mm-sec-sym">
       <div class="fl" data-t="fSym">증상</div>
       <textarea class="fi" id="mm-sym" rows="3" data-p="pSym" placeholder="증상을 입력하거나 아래 자주 쓰는 문구를 눌러 넣으세요"></textarea>
       <div class="fl"><span data-t="fSymEn">증상 (English)</span> <span data-t="tgEn" style="font-size:10px;color:#1D4ED8;background:#DBEAFE;border-radius:5px;padding:1px 6px;font-weight:800">🇬🇧 영문 고객용</span><button type="button" class="trbtn" id="mm-tr-sym" data-t="bTr">🔁 한국어 → 영문 변환</button></div>
@@ -179,15 +184,23 @@ textarea.fi{resize:vertical;line-height:1.6}
         <div class="sc" id="mm-snips"></div>
         <div class="hint" data-t="hSnip" style="color:#4f5f8f;margin-top:8px">문구를 누르면 증상칸 끝에 <b>· 로 이어서</b> 붙습니다. ✕로 삭제, 자주 쓴 문구는 앞쪽에 자동 정렬됩니다.</div>
       </div>
+      </div>
+      <div id="mm-sec-wash" style="display:none">
+        <div class="fl"><span data-t="fWash">세탁 완료 예정일</span> <span data-t="tgOpt" style="font-size:10px;color:#0369A1;background:#E0F2FE;border-radius:5px;padding:1px 6px;font-weight:800">선택 입력</span></div>
+        <input class="fi" id="mm-wash" type="date">
+        <div class="hint" data-t="hWash">세탁이 끝나는 예정일입니다. 「② 재설치 일정 확인」 메시지에 들어갑니다. 비워 두면 아래 재설치 방문 예정일이 대신 들어갑니다.</div>
+      </div>
       <div class="row">
         <div><div class="fl"><span data-t="fVd">방문 예정일</span> <span data-t="tgCal" style="font-size:10px;color:#5B21B6;background:#EDE9FE;border-radius:5px;padding:1px 6px;font-weight:800">📅 캘린더 자동등록</span></div><input class="fi" id="mm-vd" type="date"></div>
         <div><div class="fl" data-t="fVt">방문 예정시각</div><input class="fi" id="mm-vt" type="time"></div>
       </div>
+      <div id="mm-sec-res">
       <div class="fl"><span data-t="fRes">진단 및 결과</span> <span data-t="tgPub" style="font-size:10px;color:#7c3aed;background:#f5f3ff;border-radius:5px;padding:1px 6px;font-weight:800">👁 고객 공개</span></div>
       <textarea class="fi" id="mm-res" rows="3" data-p="pRes" placeholder="방문 후 진단 내용과 처리 결과를 입력하세요 (나중에 입력 가능) — 고객 마이페이지에 표시됩니다"></textarea>
       <div class="fl"><span data-t="fResEn">진단 및 결과 (English)</span> <span data-t="tgEn2" style="font-size:10px;color:#1D4ED8;background:#DBEAFE;border-radius:5px;padding:1px 6px;font-weight:800">🇬🇧 영문 고객용</span><button type="button" class="trbtn" id="mm-tr-res" data-t="bTr2">🔁 한국어 → 영문 변환</button></div>
       <textarea class="fi" id="mm-res-en" rows="2" placeholder="Diagnosis & result in English — 비워 두면 위 한국어가 그대로 표시됩니다"></textarea>
       <div class="hint" data-t="hEn">🇬🇧 영문 고객의 마이페이지에서는 위 영문이 우선 표시됩니다. 비워 두면 한국어가 그대로 보입니다.</div>
+      </div>
       <div class="fl" data-t="fMemo">내부 메모 (고객에게 보이지 않음)</div>
       <textarea class="fi" id="mm-memo" rows="2" data-p="pMemo" placeholder="예) 부품 주문 필요 · 관리실 통해 출입"></textarea>
     </div>
@@ -520,12 +533,21 @@ window.hccPropagate=hccPropagate;
 // HHCC 자동 채움 연결 — 콘도명/고객명을 다 쓰면 등록된 연락처가 자동으로 들어옵니다
 try{setTimeout(function(){try{HHCC_autofill('#mm-name','#mm-phone',{extra:'#mm-condo'});HHCC_autofill('#mm-condo','#mm-phone',{extra:'#mm-name'});}catch(e){}},1200);}catch(e){}
 
-let stFilter='all',chFilter='all',editId=null,sendId=null,sendTpl=1;
+let stFilter='all',chFilter='all',kdFilter='all',editId=null,sendId=null,sendTpl=1;
 
 const CH_KO={kakao:['💛 카톡','k'],whatsapp:['💚 왓챕','wa'],other:['기타','g']};
 const CH_EN={kakao:['💛 KakaoTalk','k'],whatsapp:['💚 WhatsApp','wa'],other:['Other','g']};
 const ST_KO={pending:['🕐 대기','r'],contacted:['📞 연락완료','w'],done:['✅ 방문완료','ok']};
 const ST_EN={pending:['🕐 Pending','r'],contacted:['📞 Contacted','w'],done:['✅ Visited','ok']};
+// 🧺 커튼세탁은 같은 3단계를 커튼 흐름에 맞는 말로 보여 줍니다 (저장되는 값은 동일)
+const CT_ST_KO={pending:['🧺 수거완료','r'],contacted:['📞 연락완료','w'],done:['✅ 재설치완료','ok']};
+const CT_ST_EN={pending:['🧺 Collected','r'],contacted:['📞 Contacted','w'],done:['✅ Reinstalled','ok']};
+function isCt(m){return !!m&&m.kind==='curtain';}
+function stLb(m){
+  var k=(m&&m.status)||'pending';
+  var T=isCt(m)?(LANG==='en'?CT_ST_EN:CT_ST_KO):(LANG==='en'?ST_EN:ST_KO);
+  return T[k]||T.pending;
+}
 const CH_LB=new Proxy({},{get:function(_,k){return (LANG==='en'?CH_EN:CH_KO)[k];}});
 const ST_LB=new Proxy({},{get:function(_,k){return (LANG==='en'?ST_EN:ST_KO)[k];}});
 /* ══════════════════════════════════════════════════════════════
@@ -567,7 +589,20 @@ const ML={
     noCondo:'(콘도명 없음)',trDone:'✓ 영문으로 변환했습니다 · 필요하면 고쳐 주세요',
     chKa:'💛 카톡',chWa:'💚 왓챕',chOt:'기타',
     snNone:'저장된 문구가 없습니다. 증상을 입력한 뒤 「＋ 현재 증상 저장」을 눌러보세요.',
-    trEmpty:'먼저 한국어 내용을 입력해 주세요'},
+    trEmpty:'먼저 한국어 내용을 입력해 주세요',
+    addCt:'🧺 커튼세탁 등록',ctNew:'🧺 커튼세탁 등록',ctEdit:'🧺 커튼세탁 수정',
+    fPick:'수거 날짜',fWash:'세탁 완료 예정일',tgOpt:'선택 입력',
+    hWash:'세탁이 끝나는 예정일입니다. 「② 재설치 일정 확인」 메시지에 들어갑니다. 비워 두면 아래 재설치 방문 예정일이 대신 들어갑니다.',
+    fVdCt:'재설치 방문 예정일',fVtCt:'방문 예정시각',
+    kdAll:'전체 종류',kdRp:'🛠 수리요청',kdCt:'🧺 커튼세탁',
+    lbCt:'🧺 커튼세탁',lbPick:'🧺 수거',lbWash:'🧼 세탁완료',lbReinst:'🚗 재설치',
+    ctPend:'🧺 수거완료',ctCont:'📞 연락완료',ctDone:'✅ 재설치완료',
+    sdCt:'🧺 커튼세탁 안내 메시지',
+    ct1:'① 접수 완료 안내',ct1t:'수거 직후 발송',
+    ct2:'② 재설치 일정 확인',ct2t:'재설치 방문 예정일 필요',ct2ok:'예정일·시각 자동 반영',
+    ct3:'③ 재설치 방문 안내',ct3t:'방문 직전 발송',
+    ctNeedDate:'재설치 방문 예정일을 먼저 입력해 주세요',
+    ctNote:'노란 부분은 자동으로 채워집니다 — 호칭은 <b>콘도명(고객명)</b>, 날짜·시각은 <b>세탁 완료 예정일 · 재설치 방문 예정일/시각</b>에서 가져옵니다.<br><b>① 접수 완료</b>는 커튼을 수거한 직후, <b>② 재설치 일정 확인</b>은 세탁 완료 일정이 잡힌 뒤, <b>③ 재설치 방문 안내</b>는 방문 직전에 보내는 메시지입니다.<br>발송하면 이 건은 <b>📞 연락완료</b>로 자동 변경되고 발송 기록이 남습니다.'},
   en:{ttl:'📝 Repair Notes',rf:'🔄 Refresh',add:'＋ New request',
     srch:'🔍 Search condo · name · issue',
     fReq:'Request date',fSt:'Status',oPend:'🕐 Pending',oCont:'📞 Contacted',oDone:'✅ Visited',
@@ -598,7 +633,20 @@ const ML={
     noCondo:'(no condo name)',trDone:'✓ Converted to English · edit if needed',
     chKa:'💛 KakaoTalk',chWa:'💚 WhatsApp',chOt:'Other',
     snNone:'No saved phrases yet. Type an issue, then tap 「＋ Save current issue」.',
-    trEmpty:'Please enter the Korean text first'}
+    trEmpty:'Please enter the Korean text first',
+    addCt:'🧺 New curtain laundry',ctNew:'🧺 New curtain laundry',ctEdit:'🧺 Edit curtain laundry',
+    fPick:'Pickup date',fWash:'Laundry completion date',tgOpt:'Optional',
+    hWash:'The date the laundry will be finished. Used in the 「② Reinstall schedule」 message. Leave blank to use the reinstall visit date instead.',
+    fVdCt:'Reinstall visit date',fVtCt:'Visit time',
+    kdAll:'All types',kdRp:'🛠 Repair',kdCt:'🧺 Curtain',
+    lbCt:'🧺 Curtain laundry',lbPick:'🧺 Picked up',lbWash:'🧼 Laundry done',lbReinst:'🚗 Reinstall',
+    ctPend:'🧺 Collected',ctCont:'📞 Contacted',ctDone:'✅ Reinstalled',
+    sdCt:'🧺 Curtain laundry message',
+    ct1:'① Request received',ct1t:'Send right after pickup',
+    ct2:'② Reinstall schedule',ct2t:'Reinstall visit date needed',ct2ok:'Date & time applied',
+    ct3:'③ Reinstall visit notice',ct3t:'Send just before the visit',
+    ctNeedDate:'Please enter the reinstall visit date first',
+    ctNote:'Highlighted parts are filled in automatically — the greeting from <b>Condo (Name)</b>, dates from <b>laundry completion date · reinstall visit date/time</b>.<br><b>①</b> right after pickup, <b>②</b> once the laundry schedule is known, <b>③</b> just before the visit.<br>Sending marks this record as <b>📞 Contacted</b> and keeps a send log.'}
 };
 function L(k){return (ML[LANG]&&ML[LANG][k])||ML.ko[k]||'';}
 /* EN 화면에서는 영문 내용을 보여 줍니다 — 고객 마이페이지와 같은 규칙 */
@@ -674,6 +722,7 @@ function applyLang(){
   });
   var t=document.getElementById('mm-title');
   if(t)t.textContent=editId?L('ttlEdit'):L('ttlNew');
+  if(typeof applyKindUI==='function')try{applyKindUI();}catch(e){}
   if(typeof renderList==='function')try{renderList();}catch(e){}
   if(typeof renderSnips==='function')try{renderSnips();}catch(e){}
 }
@@ -780,6 +829,71 @@ function tplHtml(m,n){
 }
 function canTpl2(m){return !!(m.visit_date);}
 
+/* ═══ 🧺 커튼세탁 안내 메시지 3종 ═══════════════════════════════
+   ① 접수 완료 안내      — 커튼 수거 직후
+   ② 재설치 일정 확인    — 세탁 완료 예정일 + 재설치 방문 예정일시로 가능 여부 확인
+   ③ 재설치 방문 안내    — 방문 직전 (Work Permit 확인 요청)
+   날짜·시각은 등록 내용에서 자동으로 들어갑니다. */
+function mdKo(d){
+  var v=String(d||'');
+  var mo=parseInt(v.slice(5,7),10),dy=parseInt(v.slice(8,10),10);
+  if(!mo||!dy)return '';
+  return mo+'월 '+dy+'일';
+}
+function hmKo(t){
+  var v=String(t||'');
+  var hh=parseInt(v.slice(0,2),10),mi=v.slice(3,5);
+  if(isNaN(hh))return '';
+  return hh+'시 '+(mi||'00')+'분';
+}
+function ctText(m,n){
+  var name=who(m);
+  var dReinst=mdKo(m.visit_date), tReinst=hmKo(m.visit_time);
+  var dWash=mdKo(m.wash_date)||dReinst;
+  var when=dReinst+(tReinst?(' '+tReinst):'')+' 전후';
+  if(n===2){
+    return '안녕하세요, '+name+' 고객님.\n'+
+      '📅 세탁 완료 예정: '+dWash+'\n'+
+      '커튼 재설치를 위해\n'+
+      '📅 '+when+' 방문 가능하실까요?\n'+
+      '가능 여부 회신 부탁드립니다.';
+  }
+  if(n===3){
+    return '안녕하세요, '+name+' 고객님.\n'+
+      '🔔 커튼 재설치 방문 안내\n'+
+      '📅 '+when+' 방문 예정입니다.\n'+
+      '원활한 출입을 위해 Work Permit(작업 방문 등록) 상태를 다시 한번 확인 부탁드립니다.';
+  }
+  return '안녕하세요, '+name+' 고객님.\n'+
+    '✅ 커튼 세탁 접수가 완료되었습니다.\n'+
+    '세탁 완료 일정이 확인되는 대로 커튼 재설치 방문 일정을 안내드리겠습니다.';
+}
+function ctHtml(m,n){
+  var name='<span class="hl">'+esc(who(m))+'</span>';
+  var dReinst=mdKo(m.visit_date), tReinst=hmKo(m.visit_time);
+  var dWash=mdKo(m.wash_date)||dReinst;
+  var when='<span class="hl">'+esc(dReinst+(tReinst?(' '+tReinst):'')+' 전후')+'</span>';
+  if(n===2){
+    return '안녕하세요, '+name+' 고객님.\n'+
+      '📅 세탁 완료 예정: <span class="hl">'+esc(dWash)+'</span>\n'+
+      '커튼 재설치를 위해\n'+
+      '📅 '+when+' 방문 가능하실까요?\n'+
+      '가능 여부 회신 부탁드립니다.';
+  }
+  if(n===3){
+    return '안녕하세요, '+name+' 고객님.\n'+
+      '🔔 커튼 재설치 방문 안내\n'+
+      '📅 '+when+' 방문 예정입니다.\n'+
+      '원활한 출입을 위해 <span class="hl">Work Permit(작업 방문 등록)</span> 상태를 다시 한번 확인 부탁드립니다.';
+  }
+  return '안녕하세요, '+name+' 고객님.\n'+
+    '✅ 커튼 세탁 접수가 완료되었습니다.\n'+
+    '세탁 완료 일정이 확인되는 대로 커튼 재설치 방문 일정을 안내드리겠습니다.';
+}
+// 종류에 맞는 메시지를 돌려줍니다 (수리요청 ↔ 커튼세탁)
+function msgText(m,n){return isCt(m)?ctText(m,n):tplText(m,n);}
+function msgHtml(m,n){return isCt(m)?ctHtml(m,n):tplHtml(m,n);}
+
 // 고객 + 서비스의뢰를 합쳐 콘도 자동완성 후보를 만든다
 function buildCusts(cust,reqs){
   const out=[],seen={};
@@ -868,6 +982,11 @@ window.renderList=function(){
     '<div class="st"><b style="color:var(--bad)">'+(cnt.pending||0)+'</b><span>'+L('oPend')+'</span></div>'+
     '<div class="st"><b style="color:var(--warn)">'+(cnt.contacted||0)+'</b><span>'+L('oCont')+'</span></div>'+
     '<div class="st"><b style="color:var(--ok)">'+(cnt.done||0)+'</b><span>'+L('oDone')+'</span></div>';
+  const ckd={all:all.length,repair:0,curtain:0};
+  all.forEach(m=>{ckd[m.kind==='curtain'?'curtain':'repair']++;});
+  document.getElementById('chips-kd').innerHTML=
+    ['all','repair','curtain'].map(k=>'<span class="chip'+(kdFilter===k?' on':'')+'" data-kd="'+k+'">'+
+      (k==='all'?L('kdAll'):(k==='repair'?L('kdRp'):L('kdCt')))+' '+(ckd[k]||0)+'</span>').join('');
   document.getElementById('chips-st').innerHTML=
     ['all','pending','contacted','done'].map(k=>'<span class="chip'+(stFilter===k?' on':'')+'" data-st="'+k+'">'+
       (k==='all'?L('stAll'):ST_LB[k][0])+' '+(cnt[k]||0)+'</span>').join('');
@@ -876,6 +995,7 @@ window.renderList=function(){
       (k==='all'?L('chAll'):CH_LB[k][0])+' '+(cch[k]||0)+'</span>').join('');
 
   const rows=all.filter(m=>{
+    if(kdFilter!=='all'&&(m.kind==='curtain'?'curtain':'repair')!==kdFilter)return false;
     if(stFilter!=='all'&&(m.status||'pending')!==stFilter)return false;
     if(chFilter!=='all'&&(m.channel||'other')!==chFilter)return false;
     if(q){
@@ -886,12 +1006,14 @@ window.renderList=function(){
   });
   const td=today();
   document.getElementById('list').innerHTML=rows.length?rows.map(m=>{
-    const st=ST_LB[m.status||'pending']||ST_LB.pending;
+    const st=stLb(m);
     const ch=CH_LB[m.channel||'other']||CH_LB.other;
+    const ct=isCt(m);
     const urgent=(m.status!=='done')&&m.visit_date&&m.visit_date<=td;
     const last=(m.sent_log||[]).slice(-1)[0];
     return '<div class="it'+(urgent?' urg':'')+(m.status==='done'?' done':'')+'">'+
       '<div class="it-t"><b class="cust-go" data-act="cust" data-id="'+m.__id+'" title="총괄 고객관리에서 이 고객 상세 보기">'+esc(m.condo||m.name||L('noCondo'))+'</b>'+
+        (ct?'<span class="pill ct">'+L('lbCt')+'</span>':'')+
         '<span class="pill '+st[1]+'">'+st[0]+'</span>'+
         '<span class="pill '+ch[1]+'">'+ch[0]+'</span>'+
         (urgent?'<span class="pill w">'+(m.visit_date===td?L('lbToday'):L('lbPast'))+'</span>':'')+'</div>'+
@@ -903,10 +1025,13 @@ window.renderList=function(){
       (m.memo?'<div class="imemo">🔒 '+esc(m.memo)+'</div>':'')+
       '<div class="meta">'+
         '<span class="cust-go" data-act="cust" data-id="'+m.__id+'" title="총괄 고객관리에서 이 고객 상세 보기">👤 '+esc(m.name||'-')+(m.phone?' · '+esc(m.phone):'')+' ↗</span>'+
-        '<span>'+L('lbReq')+' '+esc(m.req_date||'-')+'</span>'+
-        '<span>'+L('lbVisit')+' <b>'+(m.visit_date?esc(m.visit_date)+(m.visit_time?' '+esc(m.visit_time):''):L('lbTbd'))+'</b>'+(m.visit_date&&m.schedule_id?' <span style="font-size:10px;color:#5B21B6;background:#EDE9FE;border-radius:5px;padding:1px 6px;font-weight:800">'+L('lbCal')+'</span>':'')+'</span>'+
+        '<span>'+(ct?L('lbPick'):L('lbReq'))+' '+esc(m.req_date||'-')+'</span>'+
+        (ct&&m.wash_date?'<span>'+L('lbWash')+' '+esc(m.wash_date)+'</span>':'')+
+        '<span>'+(ct?L('lbReinst'):L('lbVisit'))+' <b>'+(m.visit_date?esc(m.visit_date)+(m.visit_time?' '+esc(m.visit_time):''):L('lbTbd'))+'</b>'+(m.visit_date&&m.schedule_id?' <span style="font-size:10px;color:#5B21B6;background:#EDE9FE;border-radius:5px;padding:1px 6px;font-weight:800">'+L('lbCal')+'</span>':'')+'</span>'+
       '</div>'+
-      (last?'<div class="sentlog">📤 '+esc(String(last.at||'').slice(0,16).replace('T',' '))+' · '+(last.tpl===2?'②예정시각':'①즉시')+' 발송</div>':'')+
+      (last?'<div class="sentlog">📤 '+esc(String(last.at||'').slice(0,16).replace('T',' '))+' · '+
+        (ct?('①②③'.charAt(Math.max(0,Math.min(2,(last.tpl||1)-1)))+' 안내')
+           :(last.tpl===2?'②예정시각':'①즉시'))+' 발송</div>':'')+
       '<div class="acts">'+
         (m.status==='done'?'':'<button class="rb s" data-act="send" data-id="'+m.__id+'">'+L('lbSend')+'</button>')+
         '<button class="rb p" data-act="edit" data-id="'+m.__id+'">'+L('lbEdit')+'</button>'+
@@ -919,6 +1044,8 @@ window.renderList=function(){
   }).join(''):'<div class="none">해당하는 요청이 없습니다.</div>';
 };
 
+document.getElementById('chips-kd').addEventListener('click',ev=>{
+  const c=ev.target.closest('[data-kd]');if(!c)return;kdFilter=c.dataset.kd;renderList();});
 document.getElementById('chips-st').addEventListener('click',ev=>{
   const c=ev.target.closest('[data-st]');if(!c)return;stFilter=c.dataset.st;renderList();});
 document.getElementById('chips-ch').addEventListener('click',ev=>{
@@ -958,10 +1085,33 @@ function setCh(c){curCh=c;document.querySelectorAll('#mm-ch button').forEach(b=>
 document.getElementById('mm-ch').addEventListener('click',ev=>{
   const b=ev.target.closest('[data-ch]');if(!b)return;setCh(b.dataset.ch);});
 
-window.openMemo=function(id){
+// 🧺/🛠 종류에 맞춰 모달의 칸과 글자를 바꿉니다
+let curKind='repair';
+function applyKindUI(){
+  const ct=(curKind==='curtain');
+  const show=(id,on)=>{const e=document.getElementById(id);if(e)e.style.display=on?'':'none';};
+  show('mm-sec-sym',!ct);      // 증상 · 자주 쓰는 문구 (수리요청 전용)
+  show('mm-sec-res',!ct);      // 진단 및 결과 (수리요청 전용)
+  show('mm-sec-wash',ct);      // 세탁 완료 예정일 (커튼세탁 전용)
+  const t=document.getElementById('mm-title');
+  if(t)t.textContent=ct?(editId?L('ctEdit'):L('ctNew')):(editId?L('ttlEdit'):L('ttlNew'));
+  const setL=(sel,txt)=>{const e=document.querySelector(sel);if(e)e.textContent=txt;};
+  setL('[data-t="fReq"]',ct?L('fPick'):L('fReq'));
+  setL('[data-t="fVd"]',ct?L('fVdCt'):L('fVd'));
+  setL('[data-t="fVt"]',ct?L('fVtCt'):L('fVt'));
+  const st=document.getElementById('mm-status');
+  if(st&&st.options.length>=3){
+    st.options[0].textContent=ct?L('ctPend'):L('oPend');
+    st.options[1].textContent=ct?L('ctCont'):L('oCont');
+    st.options[2].textContent=ct?L('ctDone'):L('oDone');
+  }
+}
+window.openMemo=function(id,kind){
   editId=id||null;
   const m=id?(MEMOS.find(x=>x.__id===id)||{}):{};
+  curKind=(id?(m.kind==='curtain'?'curtain':'repair'):(kind==='curtain'?'curtain':'repair'));
   document.getElementById('mm-title').textContent=id?L('ttlEdit'):L('ttlNew');
+  document.getElementById('mm-wash').value=m.wash_date||'';
   document.getElementById('mm-req').value=m.req_date||today();
   document.getElementById('mm-status').value=m.status||'pending';
   document.getElementById('mm-condo').value=m.condo||'';
@@ -988,14 +1138,18 @@ window.openMemo=function(id){
     };
   }
   renderSnips();
+  applyKindUI();
   document.getElementById('mm-ac').classList.remove('open');
   document.getElementById('mm-mask').classList.add('open');
-  if(LANG==='en')autoFillEn(false);
+  if(LANG==='en'&&curKind!=='curtain')autoFillEn(false);
 };
 window.closeMemo=function(){document.getElementById('mm-mask').classList.remove('open');editId=null;};
 
 function collect(){
+  const ct=(curKind==='curtain');
   return {
+    kind:ct?'curtain':'repair',
+    wash_date:ct?(document.getElementById('mm-wash').value||''):'',
     req_date:document.getElementById('mm-req').value||today(),
     status:document.getElementById('mm-status').value||'pending',
     condo:document.getElementById('mm-condo').value.trim(),
@@ -1012,21 +1166,33 @@ function collect(){
     updated_at:nowIso()
   };
 }
+// 커튼세탁 건은 증상칸이 없으므로, 목록·캘린더·고객 마이페이지에 보일 내용을 자동으로 채웁니다
+function ctFill(d){
+  if(d.kind!=='curtain')return d;
+  d.symptom='커튼 세탁 · 수거 후 재설치';
+  d.symptom_en='Curtain laundry · pickup & reinstallation';
+  return d;
+}
 // ═══ 스케줄 캘린더 자동 반영 ═══════════════════════════════════
 // 방문 예정일이 입력된 수리요청은 schedules 컬렉션에 type:'repair'(🛠 수리)로
 // 자동 등록됩니다. 예정일을 지우면 캘린더에서도 자동으로 사라집니다.
 // 메모 문서에 schedule_id 를 저장해 두고 1:1로 관리합니다.
 function schedTitle(m){
   const who=(m.condo||'').trim(), nm=(m.name||'').trim();
-  const base=who&&nm?(who+' ('+nm+')'):(who||nm||'수리 방문');
-  return '🛠 '+base;
+  const ct=(m.kind==='curtain');
+  const base=who&&nm?(who+' ('+nm+')'):(who||nm||(ct?'커튼 재설치':'수리 방문'));
+  return (ct?'🧺 커튼 재설치 · ':'🛠 ')+base;
 }
 function schedMemo(m){
+  const ct=(m.kind==='curtain');
   return [
-    m.symptom?'🔧 '+m.symptom:'',
+    ct?'🔧 커튼 세탁 · 재설치 방문':(m.symptom?'🔧 '+m.symptom:''),
+    (ct&&m.req_date)?('🧺 수거일: '+m.req_date):'',
+    (ct&&m.wash_date)?('🧼 세탁 완료 예정: '+m.wash_date):'',
     m.phone?'📞 '+m.phone:'',
     m.memo?'📝 '+m.memo:'',
-    '※ 메모장(수리요청)에서 자동 등록된 일정입니다.'
+    ct?'※ 메모장(커튼세탁)에서 자동 등록된 일정입니다.'
+       :'※ 메모장(수리요청)에서 자동 등록된 일정입니다.'
   ].filter(Boolean).join('\n');
 }
 async function syncSchedule(memoId,d,prevSchedId){
@@ -1072,7 +1238,7 @@ async function syncSchedule(memoId,d,prevSchedId){
 }
 
 async function saveMemo(thenSend){
-  const d=collect();
+  const d=ctFill(collect());
   if(!d.condo&&!d.name){toast('콘도명 또는 고객명을 입력해 주세요');return null;}
   const custName=(d.name||d.condo||'').trim();
   // 연락처가 비어 있으면 고객 마스터에서 자동으로 가져옵니다
@@ -1112,8 +1278,9 @@ async function saveMemo(thenSend){
     closeMemo();renderList();
     // 방문 예정일 → 스케줄 캘린더(🛠 수리) 자동 반영
     await syncSchedule(id,d,prevSchedId);
+    const _ctLb=(d.kind==='curtain')?'🧺 커튼 재설치':'🛠 수리';
     toast(d.visit_date
-      ? (hadDate&&prevSchedId?'✓ 저장 — 캘린더 일정도 수정되었습니다':'✓ 저장 — 캘린더에 🛠 수리 일정으로 등록했습니다')
+      ? (hadDate&&prevSchedId?'✓ 저장 — 캘린더 일정도 수정되었습니다':'✓ 저장 — 캘린더에 '+_ctLb+' 일정으로 등록했습니다')
       : (prevSchedId?'✓ 저장 — 방문 예정일이 없어 캘린더에서 제거했습니다':'✓ 저장되었습니다'));
     if(thenSend)openSend(id);
     return id;
@@ -1187,6 +1354,8 @@ acEl.addEventListener('mousedown',ev=>{
 window.openSend=function(id){
   const m=MEMOS.find(x=>x.__id===id);if(!m)return;
   sendId=id;sendTpl=canTpl2(m)?2:1;
+  const _sh=document.querySelector('[data-t="sdTtl"]');
+  if(_sh)_sh.textContent=isCt(m)?L('sdCt'):L('sdTtl');
   document.getElementById('sd-who').textContent=m.condo?(m.condo+(m.name?' · '+m.name:'')):(m.name||'');
   paintSend();
   document.getElementById('sd-mask').classList.add('open');
@@ -1200,6 +1369,29 @@ function paintSend(){
   const ok2=canTpl2(m);
   if(!ok2&&sendTpl===2)sendTpl=1;
   const ch=m.channel||'other';
+  // 🧺 커튼세탁 — 접수완료 / 재설치 일정 확인 / 재설치 방문 안내
+  if(isCt(m)){
+    if(!ok2&&sendTpl===3)sendTpl=1;
+    document.getElementById('sd-body').innerHTML=
+      '<div class="mtitle">보낼 메시지를 선택하세요</div>'+
+      '<div class="mc'+(sendTpl===1?' on':'')+'" data-tpl="1"><b><i></i>'+L('ct1')+'<span class="tag">'+L('ct1t')+'</span></b>'+
+        '<p>'+esc(ctText(m,1))+'</p></div>'+
+      '<div class="mc'+(sendTpl===2?' on':'')+(ok2?'':' off')+'" data-tpl="2"><b><i></i>'+L('ct2')+'<span class="tag">'+(ok2?L('ct2ok'):L('ct2t'))+'</span></b>'+
+        '<p>'+(ok2?esc(ctText(m,2)):L('ctNeedDate'))+'</p></div>'+
+      '<div class="mc'+(sendTpl===3?' on':'')+(ok2?'':' off')+'" data-tpl="3"><b><i></i>'+L('ct3')+'<span class="tag">'+(ok2?L('ct3t'):L('ct2t'))+'</span></b>'+
+        '<p>'+(ok2?esc(ctText(m,3)):L('ctNeedDate'))+'</p></div>'+
+      '<div class="pv"><div class="pv-h">📱 고객에게 보이는 화면</div>'+
+        '<div class="bub">'+ctHtml(m,sendTpl)+'</div>'+
+        '<div class="sendrow">'+
+          (ch==='whatsapp'
+            ?'<button class="sb-wa" data-send="wa">💚 왓챕 발송</button><button class="sb-cp" data-send="cp">🔗 복사</button>'
+            :(ch==='kakao'
+              ?'<button class="sb-ka" data-send="cp">💛 카톡용 복사</button><button class="sb-wa" data-send="wa">💚 왓챕으로 보내기</button>'
+              :'<button class="sb-cp" data-send="cp" style="background:var(--navy);color:#fff;border:none!important">📋 메시지 복사</button><button class="sb-wa" data-send="wa">💚 왓챕으로 보내기</button>'))+
+        '</div></div>'+
+      '<div class="note">'+L('ctNote')+'</div>';
+    return;
+  }
   document.getElementById('sd-body').innerHTML=
     '<div class="mtitle">보낼 메시지를 선택하세요</div>'+
     '<div class="mc'+(sendTpl===1?' on':'')+'" data-tpl="1"><b><i></i>① 지금 바로 방문<span class="tag">시간 표기 없음</span></b>'+
@@ -1225,12 +1417,13 @@ function paintSend(){
 document.getElementById('sd-body').addEventListener('click',async ev=>{
   const t=ev.target.closest('[data-tpl]');
   if(t){
-    if(t.classList.contains('off')){toast('방문 예정일을 먼저 입력해 주세요');return;}
+    const _cm=MEMOS.find(x=>x.__id===sendId);
+    if(t.classList.contains('off')){toast(isCt(_cm)?L('ctNeedDate'):'방문 예정일을 먼저 입력해 주세요');return;}
     sendTpl=parseInt(t.dataset.tpl,10);paintSend();return;
   }
   const b=ev.target.closest('[data-send]');if(!b)return;
   const m=MEMOS.find(x=>x.__id===sendId);if(!m)return;
-  const txt=tplText(m,sendTpl);
+  const txt=msgText(m,sendTpl);
   if(b.dataset.send==='wa'){
     let wa='https://wa.me/';const ph=pn(m.phone);if(ph)wa+='60'+ph;
     window.open(wa+'?text='+encodeURIComponent(txt),'_blank');
@@ -1272,6 +1465,7 @@ try{
 window._memos=function(){return MEMOS;};
 window._snips=function(){return SNIPS;};
 window._tplText=tplText;
+window._msgText=msgText;   // 🧺 커튼세탁 포함
 </script>
 <script>
 /* ══ 허브(staffapp.html) 안에서 열렸을 때 「화면 살아있음」 신호 ══════════════

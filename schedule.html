@@ -1499,7 +1499,7 @@ async function renderDay(ds){
     const isAuto=s.source==='booking';
     // 액션 버튼 (최대 4개 → 2열로 접힘)
     const acts=(!isAuto?`<button class="sch-edit" onclick="editItem('${s._id}')">✏️</button><button class="sch-del" onclick="deleteItem('${s._id}')">×</button>`:'')
-      +(schIsBk(s.type)?`<button class="sch-edit" style="color:#085048" onclick="sendVisitReminder('${s._id}')" title="방문 안내 메시지 발송">💬</button>`:'')
+      +(schHasCust(s)?`<button class="sch-edit" style="color:#085048" onclick="sendVisitReminder('${s._id}')" title="${s.type==='repair'?'수리 방문 안내 메시지 발송':'방문 안내 메시지 발송'}">💬</button>`:'')
       // 👤 총괄 고객관리 바로가기 — 예약 일정뿐 아니라 고객정보가 들어있는 직접입력·수리 일정에도 표시한다
       +(schHasCust(s)?`<button class="sch-edit sch-ca" style="color:#1d4ed8" onclick="openCustomerAdmin('${s._id}')" title="이 고객의 총괄 고객관리 상세 열기">👤</button>`:'');
     html+=`<div class="sch-item" data-id="${s._id}">
@@ -1544,9 +1544,9 @@ async function renderDay(ds){
 
 // ── 방문 안내 메시지 3종 템플릿 ──
 // tpl: 'pre'(예약 방문 안내) | 'tomorrow'(내일 방문 안내) | 'today'(금일 방문 안내)
-function getVisitReminderMsg(name,dateStr,lang,tpl,timeS){
-  lang=lang||'ko';tpl=tpl||'pre';
-  // 📅 일자 : 「8월 22일(토)」 · 영문 「Aug 22 (Sat)」
+// 📅⏰ 일자·방문시간 문구 만들기 — 예약 안내와 수리 안내가 함께 사용합니다
+//    dKo 「8월 22일(토)」 · dEn 「Aug 22 (Sat)」 · tKo 「오전 9시 전후」 · tEn 「around 9 AM」
+function vrDT(dateStr,timeS){
   var dKo='',dEn='';
   if(dateStr){
     var p=String(dateStr).split('-');
@@ -1574,6 +1574,12 @@ function getVisitReminderMsg(name,dateStr,lang,tpl,timeS){
       tEn='around '+h12+(mi?':'+String(mi).padStart(2,'0'):'')+(h<12?' AM':' PM');
     }
   }
+  return {dKo:dKo,dEn:dEn,tKo:tKo,tEn:tEn};
+}
+
+function getVisitReminderMsg(name,dateStr,lang,tpl,timeS){
+  lang=lang||'ko';tpl=tpl||'pre';
+  var D=vrDT(dateStr,timeS),dKo=D.dKo,dEn=D.dEn,tKo=D.tKo,tEn=D.tEn;
   var L=[];
   if(lang==='en'){
     if(tpl==='tomorrow'){
@@ -1609,6 +1615,87 @@ function getVisitReminderMsg(name,dateStr,lang,tpl,timeS){
     L.push('','원활한 방문을 위해 Work Permit 등록 상태를 미리 확인 부탁드립니다.','예약일에 뵙겠습니다. 감사합니다.');
   }
   return L.join('\n');
+}
+
+// ── 🛠 수리 방문 안내 메시지 4종 템플릿 (메모장에서 등록된 수리 일정용) ──
+// tpl: 'now'(지금 방문 가능 확인) | 'pre'(방문 예정 안내) | 'tomorrow'(내일) | 'today'(당일)
+function getRepairReminderMsg(name,dateStr,lang,tpl,timeS,symptom){
+  lang=lang||'ko';tpl=tpl||'pre';
+  var D=vrDT(dateStr,timeS);
+  var L=[];
+  if(lang==='en'){
+    if(tpl==='now'){
+      L.push('Hello, '+name+'.','','🛠 Repair Visit');
+      if(symptom)L.push('• Request: '+symptom);
+      L.push('','Our technician can come over now — would that be convenient for you?','Please let us know. Thank you.');
+    }else if(tpl==='tomorrow'){
+      L.push('Hello, '+name+'.','','🔔 Repair Visit Tomorrow');
+      if(symptom)L.push('• Request: '+symptom);
+      if(D.dEn)L.push('• Date: '+D.dEn);
+      if(D.tEn)L.push('• Time: '+D.tEn);
+      L.push('','Please kindly re-confirm your Work Permit registration before our visit.','Thank you.');
+    }else if(tpl==='today'){
+      L.push('Hello, '+name+'.','','🔔 Repair Visit Today');
+      if(symptom)L.push('• Request: '+symptom);
+      if(D.tEn)L.push('• Time: '+D.tEn);
+      L.push('','Please confirm your Work Permit registration for smooth entry.','See you shortly. Thank you.');
+    }else{
+      L.push('Hello, '+name+'.','','🛠 Repair Visit Scheduled');
+      if(symptom)L.push('• Request: '+symptom);
+      if(D.dEn)L.push('• Date: '+D.dEn);
+      if(D.tEn)L.push('• Time: '+D.tEn);
+      L.push('','Please kindly confirm your Work Permit registration in advance for a smooth visit.','We look forward to seeing you. Thank you.');
+    }
+    return L.join('\n');
+  }
+  if(tpl==='now'){
+    L.push('안녕하세요, '+name+' 고객님.','','🛠 수리 방문 안내');
+    if(symptom)L.push('• 접수내용: '+symptom);
+    L.push('','지금 방문드릴 수 있을 것 같아 가능하신지 확인 연락드립니다.','회신 주시면 감사하겠습니다.');
+  }else if(tpl==='tomorrow'){
+    L.push('안녕하세요, '+name+' 고객님.','','🔔 내일 수리 방문 안내');
+    if(symptom)L.push('• 접수내용: '+symptom);
+    if(D.dKo)L.push('• 일자: '+D.dKo);
+    if(D.tKo)L.push('• 방문시간: '+D.tKo);
+    L.push('','방문 전 Work Permit 등록 상태를 다시 한번 확인 부탁드립니다.','감사합니다.');
+  }else if(tpl==='today'){
+    L.push('안녕하세요, '+name+' 고객님.','','🔔 금일 수리 방문 안내');
+    if(symptom)L.push('• 접수내용: '+symptom);
+    if(D.tKo)L.push('• 방문시간: '+D.tKo);
+    L.push('','원활한 출입을 위해 Work Permit 등록 상태를 확인 부탁드립니다.','잠시 후 뵙겠습니다. 감사합니다.');
+  }else{
+    L.push('안녕하세요, '+name+' 고객님.','','🛠 수리 방문 예정 안내');
+    if(symptom)L.push('• 접수내용: '+symptom);
+    if(D.dKo)L.push('• 일자: '+D.dKo);
+    if(D.tKo)L.push('• 방문시간: '+D.tKo);
+    L.push('','원활한 방문을 위해 Work Permit 등록 상태를 미리 확인 부탁드립니다.','예정일에 뵙겠습니다. 감사합니다.');
+  }
+  return L.join('\n');
+}
+// 수리 일정의 메모에서 접수내용(🔧 줄)만 뽑아 옵니다
+function vrSymptom(item){
+  var out='';
+  try{
+    String((item&&item.memo)||'').split('\n').forEach(function(x){
+      var t=String(x).trim();
+      if(!out&&t.indexOf('🔧')===0)out=t.replace(/^🔧\s*/,'').trim();
+    });
+  }catch(e){}
+  return out.length>60?out.slice(0,60)+'…':out;
+}
+// 📤 수리 일정에서 보낸 안내는 메모장(수리요청)의 발송 이력에도 남깁니다
+async function vrLogMemoSend(memoId,txt,ch,tplNo){
+  if(!db||!memoId)return;
+  try{
+    var ref=doc(db,'memos',memoId);
+    var d=await getDoc(ref);
+    if(!d||!d.exists||!d.exists())return;
+    var m=d.data()||{};
+    var log=(m.sent_log||[]).concat([{at:new Date().toISOString(),tpl:tplNo||2,ch:ch||'other',text:txt}]).slice(-20);
+    var patch={sent_log:log,updated_at:new Date().toISOString()};
+    if(m.status!=='done')patch.status='contacted';
+    await updateDoc(ref,patch);
+  }catch(e){}
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1734,7 +1821,7 @@ function vrBase(){
     return hhcOrigin()+location.pathname.replace(/[^/]*$/,'').replace(/\/$/,'');
   }catch(e){return 'https://happyhomecare.com.my';}
 }
-function vrMyLink(name,phone,en){
+function vrMyLink(name,phone,en,focus){
   var id='';
   try{
     var p=hhcgPN(phone),n=hhcgNN(name);
@@ -1743,7 +1830,8 @@ function vrMyLink(name,phone,en){
   }catch(e){}
   var b=vrBase();
   if(!id)return b+'/home'+(en?'?lang=en':'');
-  return b+'/my.html?c='+encodeURIComponent(id)+'&v=iv,ip,ct,cp&lang='+(en?'en':'ko')+'&f=bk';
+  // f= : 마이페이지에서 강조해 보여 줄 곳 (bk 예약 · mm 수리요청 처리내역)
+  return b+'/my.html?c='+encodeURIComponent(id)+'&v=iv,ip,ct,cp&lang='+(en?'en':'ko')+'&f='+(focus||'bk');
 }
 
 window.sendVisitReminder=function(itemId){
@@ -1757,25 +1845,35 @@ window.sendVisitReminder=function(itemId){
   let dateStr=item.booking_date||item.date||'';
   let lang=curLang==='en'?'en':'ko';
   if(!item.customer_name&&item.title){
-    const parts=item.title.split(' — ');
+    // 예약 제목 「고객명 — 품목」 · 수리 제목 「🛠 콘도(고객명)」 에서 호칭만 뽑습니다
+    const parts=String(item.title).replace(/^🛠\s*/,'').split(' — ');
     if(parts[0])name=parts[0].trim();
   }
-  if(!dateStr){alert('예약 날짜를 찾을 수 없습니다');return;}
+  if(!dateStr&&item.type!=='repair'&&!item.memo_id){alert('예약 날짜를 찾을 수 없습니다');return;}
 
   const timeS=item.time_s||item.booking_time||'';
+  // 🛠 메모장(수리요청)에서 자동 등록된 일정 — 수리 전용 문구·마이페이지 위치를 사용합니다
+  const isRepair=(item.type==='repair'||!!item.memo_id);
+  const symptom=isRepair?vrSymptom(item):'';
   // 📱 마이페이지 주소 · 고객 연락처 — 왓츠앱 본문과 카카오 카드 버튼이 함께 사용합니다
   const VR_PH=item.customer_phone||item.phone||'';
-  let VR_URL=vrMyLink(name,VR_PH,lang==='en');
-  const title=lang==='en'?'💬 Visit Reminder Message':'💬 방문 안내 메시지';
+  let VR_URL=vrMyLink(name,VR_PH,lang==='en',isRepair?'mm':'bk');
+  const title=isRepair
+    ?(lang==='en'?'🛠 Repair Visit Message':'🛠 수리 방문 안내 메시지')
+    :(lang==='en'?'💬 Visit Reminder Message':'💬 방문 안내 메시지');
   const subtitle=lang==='en'?`Choose a template and send to ${name}`:`템플릿 선택 후 ${name}님께 전송해 주세요`;
   const closeLabel=lang==='en'?'Close':'닫기';
   const waLabel=lang==='en'?'Send via WhatsApp':'WhatsApp 전송';
   const kakaoLabel=lang==='en'?'Send via KakaoTalk':'카카오톡 발송';
   const copyLabel=lang==='en'?'Copy':'메시지 복사';
   const copiedLabel=lang==='en'?'✓ Copied! Paste in KakaoTalk':'✓ 복사됨! 카카오톡에 붙여넣기 하세요';
-  const tplLabels=lang==='en'
-    ?[{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'}]
-    :[{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'}];
+  const tplLabels=isRepair
+    ?(lang==='en'
+      ?[{k:'now',l:'⚡ Now'},{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'}]
+      :[{k:'now',l:'⚡ 지금 방문'},{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'}])
+    :(lang==='en'
+      ?[{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'}]
+      :[{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'}]);
   // 예약일 기준 기본 템플릿 자동 선택: 당일→'today', 내일→'tomorrow', 그 외→'pre'
   let defTpl='pre';
   try{
@@ -1784,6 +1882,7 @@ window.sendVisitReminder=function(itemId){
     const diff=Math.round((bd-today)/86400000);
     if(diff===0)defTpl='today';else if(diff===1)defTpl='tomorrow';
   }catch(e){}
+  if(isRepair&&!dateStr)defTpl='now';   // 방문 예정일이 없는 수리요청 → 「지금 방문」 문구
 
   const existing=document.getElementById('visit-msg-modal');
   if(existing)existing.remove();
@@ -1809,6 +1908,7 @@ window.sendVisitReminder=function(itemId){
     </div>`;
   document.body.appendChild(modal);
 
+  let curTpl=defTpl;
   function setTpl(tpl){
     document.querySelectorAll('#visit-tpl-row button').forEach(b=>{
       const on=b.dataset.tpl===tpl;
@@ -1816,8 +1916,10 @@ window.sendVisitReminder=function(itemId){
       b.style.color=on?'#fff':'#6b7280';
       b.style.borderColor=on?'#0BB5A4':'#e5e7eb';
     });
+    curTpl=tpl;
     document.getElementById('visit-msg-box').value=
-      getVisitReminderMsg(name,dateStr,lang,tpl,timeS)+vrTail(VR_URL,lang==='en');
+      (isRepair?getRepairReminderMsg(name,dateStr,lang,tpl,timeS,symptom)
+               :getVisitReminderMsg(name,dateStr,lang,tpl,timeS))+vrTail(VR_URL,lang==='en');
   }
   document.querySelectorAll('#visit-tpl-row button').forEach(b=>{
     b.addEventListener('click',()=>setTpl(b.dataset.tpl));
@@ -1833,20 +1935,30 @@ window.sendVisitReminder=function(itemId){
   });
 
   const getMsg=()=>document.getElementById('visit-msg-box').value;
+  // 📤 수리 일정에서 보낸 안내는 메모장(수리요청) 발송 이력에도 남깁니다
+  const logSend=(txt,ch)=>{
+    if(!isRepair||!item.memo_id)return;
+    vrLogMemoSend(item.memo_id,txt,ch,curTpl==='now'?1:2);
+  };
   // 💬 왓츠앱 — 마이페이지 발송과 같은 형식(주소 포함) + 고객 번호로 바로 열립니다
   document.getElementById('visit-wa-btn').addEventListener('click',()=>{
-    window.open(vrWaUrl(VR_PH,vrWaText(getMsg())),'_blank');
+    const t=vrWaText(getMsg());
+    window.open(vrWaUrl(VR_PH,t),'_blank');
+    logSend(t,'whatsapp');
   });
   // 💛 카카오톡 카드 발송 — 「마이페이지 열기」 버튼이 붙은 카드로 나갑니다
   document.getElementById('visit-kakao-btn').addEventListener('click',async()=>{
     const m=getMsg();
     try{await navigator.clipboard.writeText(vrWaText(m));}catch(_){}
-    await vrKkSend(m,VR_URL,lang==='en');
+    const ok=await vrKkSend(m,VR_URL,lang==='en');
+    if(ok!==false)logSend(vrWaText(m),'kakao');
   });
   document.getElementById('visit-copy-btn').addEventListener('click',()=>{
-    navigator.clipboard.writeText(vrWaText(getMsg())).then(()=>{
+    const t=vrWaText(getMsg());
+    navigator.clipboard.writeText(t).then(()=>{
       const ok=document.getElementById('visit-kakao-ok');
       ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
+      logSend(t,'other');
     }).catch(()=>prompt('복사 후 붙여넣기:',getMsg()));
   });
   document.getElementById('visit-close-btn').addEventListener('click',()=>modal.remove());
