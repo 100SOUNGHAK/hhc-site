@@ -98,6 +98,49 @@ input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--bdr);b
 .sec-grp.exp .sg-t{color:#c0392b}
 .vitem.dim{opacity:.62;background:#fafafa}
 .pv-img{width:100%;border-radius:14px;display:block;box-shadow:0 16px 40px -20px rgba(8,18,33,.5)}
+
+/* ══ 2026-08-30 · 발급 내역 보기 개선 ══════════════════════════════
+   · 종류(상품권/할인권) 탭 → 상태(사용 가능/사용완료/기간만료) 탭 두 단계로 나눠 봅니다
+   · 카드는 종류 배지 + 금액을 크게, 버튼은 꼭 필요한 것만 보이고 나머지는 「⋯」에 접습니다 */
+.tseg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:#e9edf5;border-radius:12px;padding:4px;margin-bottom:10px}
+.tseg button{border:none;background:transparent;border-radius:9px;padding:10px 6px;font-family:inherit;font-size:13px;font-weight:800;color:#5b6474;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.tseg button i{font-style:normal;font-size:11px;font-weight:800;color:#8a93a3;background:rgba(255,255,255,.7);border-radius:999px;padding:1px 7px}
+.tseg button.on{background:#fff;color:var(--navy);box-shadow:0 1px 2px rgba(15,32,64,.08),0 4px 10px -4px rgba(15,32,64,.18)}
+.tseg button.on i{color:#fff;background:var(--navy)}
+.stabs{display:flex;gap:6px;margin-bottom:12px}
+.stabs button{flex:1;border:1.5px solid var(--bdr);background:#fff;border-radius:10px;padding:9px 4px;font-family:inherit;font-size:12px;font-weight:800;color:#6b7280;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2}
+.stabs button b{font-size:17px;font-weight:900;color:#1a1a2e}
+.stabs button.ok.on{border-color:#0a7a4a;background:#e8f8f0;color:#0a7a4a}
+.stabs button.ok.on b{color:#0a7a4a}
+.stabs button.used.on{border-color:#6b7280;background:#eceff3;color:#374151}
+.stabs button.exp.on{border-color:#c0392b;background:#fde8e8;color:#c0392b}
+.stabs button.exp.on b{color:#c0392b}
+.cust-wrap{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.cust-lb{flex:none;font-size:10.5px;font-weight:800;color:#8a93a3}
+.cust-sum{flex:1;display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto;margin:0;padding-bottom:2px;scrollbar-width:none}
+.cust-sum::-webkit-scrollbar{display:none}
+.cs-chip{flex:none;font-size:11px;padding:6px 12px}
+/* 카드 */
+.vitem{padding:12px 13px 11px}
+.vitem .top{gap:8px;flex-wrap:nowrap}
+.vtype{flex:none;font-size:10.5px;font-weight:900;border-radius:7px;padding:4px 8px;letter-spacing:-.01em}
+.vtype.gift{background:#fdf3d8;color:#8a6a12}
+.vtype.discount{background:#e0f5f2;color:#0f766e}
+.vamt{margin-left:0;font-size:19px;letter-spacing:-.02em;color:#1a1a2e;font-variant-numeric:tabular-nums}
+.vitem .top .vst{margin-left:auto}
+.vcode{display:inline-block;margin-top:7px;font-size:12px}
+.vsub{margin-top:5px}
+.vsub .who{color:#1a1a2e;font-weight:700}
+.vsub .arr{color:#b8860b;margin:0 3px}
+.vact{gap:6px;margin-top:10px}
+.vact .vbtn{padding:9px 12px;font-size:12px;border-radius:9px}
+.vact .vbtn.more{padding:9px 10px;color:#6b7280;margin-left:auto}
+.vact .vbtn.more.on{background:#f1f3f6}
+.vmore{display:none;gap:6px;margin-top:6px;flex-wrap:wrap;padding-top:8px;border-top:1px dashed var(--bdr)}
+.vmore.on{display:flex}
+.vmore .vbtn{padding:7px 11px;font-size:11px}
+.vitem.dim .vamt{color:#6b7280}
+@media(max-width:380px){.tseg button{font-size:12px;gap:4px;padding:9px 4px}.stabs button b{font-size:15px}.vamt{font-size:17px}}
 </style>
 </head>
 <body>
@@ -125,7 +168,7 @@ input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--bdr);b
   </div>
 
   <div class="card">
-    <div class="card-hdr">📋 발급 내역 — 검색 · 고객별 조회
+    <div class="card-hdr">📋 발급 내역
       <span class="q-wrap">
         <input id="q-code" placeholder="🔍 코드 · 고객명 · 받는분 검색">
         <button type="button" id="q-clear" onclick="clearSearch()" title="검색어 지우기">✕</button>
@@ -133,8 +176,9 @@ input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--bdr);b
     </div>
     <div class="card-bd">
       <div class="q-hint" id="qHint"></div>
-      <div class="stat-row" id="statRow"></div>
-      <div class="cust-sum" id="custChips"></div>
+      <div class="tseg" id="typeTabs"></div>
+      <div class="stabs" id="stTabs"></div>
+      <div class="cust-wrap"><span class="cust-lb">고객별</span><div class="cust-sum" id="custChips"></div></div>
       <div id="vlist"><div class="empty">불러오는 중...</div></div>
     </div>
   </div>
@@ -221,6 +265,8 @@ input,select,textarea{width:100%;padding:10px 11px;border:1px solid var(--bdr);b
 var PAGE_BASE='https://happyhomecare.com.my/coupon.html';
 var allCoupons=[];
 var filterName=null;
+var typeFilter='all';   // all | gift | discount   — 상품권/할인권 탭
+var stFilter='ok';      // ok | used | exp          — 상태 탭 (기본: 사용 가능)
 var _sendTarget=null;
 
 function gid(id){return document.getElementById(id);}
@@ -338,14 +384,30 @@ window.issueCoupon=async function(){
 };
 
 // ── 목록
+// 고객 필터만 적용한 목록 (종류·상태 탭의 숫자를 셀 때 사용)
+function baseRows(){return allCoupons.filter(function(c){return !filterName||c.name===filterName;});}
 function renderStats(){
-  var t=allCoupons.length,ok=0,used=0,exp=0;
-  allCoupons.forEach(function(c){var s=stOf(c);if(s==='ok')ok++;else if(s==='used')used++;else exp++;});
-  gid('statRow').innerHTML=
-    '<div class="stat-c"><div class="n">'+t+'</div><div class="l">전체 발급</div></div>'+
-    '<div class="stat-c"><div class="n" style="color:#0a7a4a">'+ok+'</div><div class="l">사용 가능</div></div>'+
-    '<div class="stat-c"><div class="n" style="color:#6b7280">'+used+'</div><div class="l">사용완료</div></div>'+
-    '<div class="stat-c"><div class="n" style="color:#c0392b">'+exp+'</div><div class="l">기간만료</div></div>';
+  var base=baseRows();
+  // ① 종류 탭 — 전체 / 상품권 / 할인권
+  var nG=base.filter(function(c){return c.type!=='discount';}).length, nD=base.length-nG;
+  var tt=gid('typeTabs');tt.innerHTML='';
+  [['all','전체',base.length],['gift','🎫 상품권',nG],['discount','🏷️ 할인권',nD]].forEach(function(x){
+    var b=document.createElement('button');b.type='button';b.className=(typeFilter===x[0]?'on':'');
+    b.innerHTML=x[1]+' <i>'+x[2]+'</i>';
+    b.onclick=function(){typeFilter=x[0];renderAll();};
+    tt.appendChild(b);
+  });
+  // ② 상태 탭 — 사용 가능 / 사용완료 / 기간만료 (선택한 종류 안에서 셉니다)
+  var inType=base.filter(function(c){return typeFilter==='all'||(typeFilter==='discount'?c.type==='discount':c.type!=='discount');});
+  var ok=0,used=0,exp=0;
+  inType.forEach(function(c){var st=stOf(c);if(st==='ok')ok++;else if(st==='used')used++;else exp++;});
+  var st=gid('stTabs');st.innerHTML='';
+  [['ok','✅ 사용 가능',ok],['used','사용완료',used],['exp','기간만료',exp]].forEach(function(x){
+    var b=document.createElement('button');b.type='button';b.className=x[0]+(stFilter===x[0]?' on':'');
+    b.innerHTML='<b>'+x[2]+'</b>'+x[1];
+    b.onclick=function(){stFilter=x[0];renderAll();};
+    st.appendChild(b);
+  });
 }
 function renderChips(){
   var names={};allCoupons.forEach(function(c){names[c.name]=(names[c.name]||0)+1;});
@@ -374,29 +436,38 @@ function hl(txt,q){
 function mkItem(cpn,q){
   var s=stOf(cpn);
   var stLbl=s==='ok'?'<span class="vst ok">사용 가능</span>':s==='used'?'<span class="vst used">사용완료 '+(cpn.usedAt||'')+'</span>':'<span class="vst exp">기간만료</span>';
+  var isD=cpn.type==='discount';
   var d=document.createElement('div');d.className='vitem'+(s!=='ok'?' dim':'');
-  var recvTxt=cpn.receiver?('🎁 받는 <b class="rc">'+hl(cpn.receiver,q)+'</b>'):'🎁 받는 <b class="rc">'+hl(cpn.name,q)+'</b> <i style="font-style:normal;font-size:10px;color:#9ca3af">(구매고객 동일)</i>';
+  var who=cpn.receiver&&cpn.receiver!==cpn.name
+    ?('구매 <span class="who">'+hl(cpn.name,q)+'</span><span class="arr">→</span>받는 <span class="who">'+hl(cpn.receiver,q)+'</span>')
+    :('구매·받는 <span class="who">'+hl(cpn.name,q)+'</span>');
   var histN=(cpn.history||[]).length;
-  d.innerHTML='<div class="top"><span class="vcode">'+hl(cpn.code,q)+'</span>'+stLbl+'<span class="vamt">'+typeLabel(cpn.type)+' '+cpn.value+'</span></div>'+
-    '<div class="vsub">🛒 구매(양도) '+hl(cpn.name,q)+' · '+recvTxt+'</div>'+
-    '<div class="vsub">발급 '+(cpn.issuedAt||'')+(cpn.expiry?' · ~'+cpn.expiry:'')+(cpn.cond?' · '+cpn.cond:'')+(histN?' · 🕘 고객변경 '+histN+'회':'')+'</div>'+
-    '<div class="vact"></div>';
-  var act=d.querySelector('.vact');
-  function mk(label,cls,fn){var b=document.createElement('button');b.className='vbtn'+(cls?' '+cls:'');b.textContent=label;b.onclick=fn;act.appendChild(b);}
-  mk('👁 미리보기','',function(){openPv(cpn);});
-  // 쿠폰에는 연락처가 없으므로 구매(양도) 고객명으로 찾습니다
-  mk('👤 고객상세','cust',function(){window.hhcOpenCust('',cpn.name);});
-  // 고객변경: 상품권만 (할인권은 양도·양수 불가)
-  if(cpn.type!=='discount')mk('✏️ 고객변경','ch',function(){openChg(cpn);});
+  var line3=['발급 '+(cpn.issuedAt||'-'),cpn.expiry?('유효 ~'+cpn.expiry):'',cpn.cond||'',histN?('🕘 고객변경 '+histN+'회'):''].filter(Boolean).join(' · ');
+  d.innerHTML=
+    '<div class="top"><span class="vtype '+(isD?'discount':'gift')+'">'+(isD?'🏷️ 할인권':'🎫 상품권')+'</span><span class="vamt">'+esc(cpn.value||'')+'</span>'+stLbl+'</div>'+
+    '<span class="vcode">'+hl(cpn.code,q)+'</span>'+
+    '<div class="vsub">'+who+'</div>'+
+    '<div class="vsub">'+line3+'</div>'+
+    '<div class="vact"></div><div class="vmore"></div>';
+  var act=d.querySelector('.vact'),more=d.querySelector('.vmore');
+  function mk(host,label,cls,fn){var b=document.createElement('button');b.type='button';b.className='vbtn'+(cls?' '+cls:'');b.textContent=label;b.onclick=fn;host.appendChild(b);return b;}
+  // 자주 쓰는 버튼만 바로 보이고, 나머지는 「⋯」 안에 접어 둡니다
   if(s==='ok'){
-    mk('✓ 사용 처리','use',function(){markUsed(cpn);});
-    mk('📤 발송','send',function(){openSend(cpn);});
+    mk(act,'📤 발송','send',function(){openSend(cpn);});
+    mk(act,'✓ 사용 처리','use',function(){markUsed(cpn);});
   }
-  if(s==='used')mk('↩ 사용 취소','',function(){unmarkUsed(cpn);});
-  mk('🔗 링크 복사','',function(){
-    copyText(couponLink(cpn._id));toast('고객용 링크가 복사되었습니다');
-  });
-  mk('🗑','del',function(){
+  if(s==='used')mk(act,'↩ 사용 취소','',function(){unmarkUsed(cpn);});
+  if(s==='exp')mk(act,'👁 미리보기','',function(){openPv(cpn);});
+  var mb=mk(act,'⋯','more',function(){var on=more.classList.toggle('on');mb.classList.toggle('on',on);});
+  mb.title='더 보기 (미리보기 · 고객상세 · 고객변경 · 링크 · 삭제)';
+  if(s!=='exp')mk(more,'👁 미리보기','',function(){openPv(cpn);});
+  // 쿠폰에는 연락처가 없으므로 구매(양도) 고객명으로 찾습니다
+  mk(more,'👤 고객상세','cust',function(){window.hhcOpenCust('',cpn.name);});
+  // 고객변경: 상품권만 (할인권은 양도·양수 불가)
+  if(!isD)mk(more,'✏️ 고객변경','ch',function(){openChg(cpn);});
+  mk(more,'🔗 링크 복사','',function(){copyText(couponLink(cpn._id));toast('고객용 링크가 복사되었습니다');});
+  if(s!=='ok')mk(more,'📤 재발송','send',function(){openSend(cpn);});
+  mk(more,'🗑 삭제','del',function(){
     if(!confirm(cpn.name+' 님의 '+cpn.code+' 쿠폰을 삭제할까요?\n삭제하면 고객 링크도 무효화됩니다.'))return;
     window.__deleteCoupon(cpn._id).then(function(){
       allCoupons=allCoupons.filter(function(x){return x._id!==cpn._id;});
@@ -421,6 +492,9 @@ function renderList(){
   gid('q-clear').className=raw?'on':'';
   var rows=allCoupons.filter(function(cpn){
     if(filterName&&cpn.name!==filterName)return false;
+    if(typeFilter!=='all'&&(typeFilter==='discount')!==(cpn.type==='discount'))return false;
+    // 검색어가 있을 때는 상태 탭과 관계없이 찾아 줍니다 (찾는 쿠폰이 다른 탭에 있어도 보이게)
+    if(!raw&&stOf(cpn)!==stFilter)return false;
     return cpnHit(cpn,q);
   });
   // 검색 결과 요약
@@ -435,7 +509,13 @@ function renderList(){
         (filterName?' <span style="color:#b8860b">(고객 필터: '+esc(filterName)+' 적용중)</span>':'')
       : '🔍 <b>'+esc(raw)+'</b> — 일치하는 쿠폰이 없습니다.'+(filterName?' 위의 <b>전체</b> 칩을 눌러 고객 필터를 해제해 보세요.':' 코드 일부(예: 1234)나 고객명으로 다시 검색해 보세요.');
   }else hint.className='q-hint';
-  if(!rows.length){w.innerHTML='<div class="empty">'+(allCoupons.length?'조건에 맞는 쿠폰이 없습니다':'아직 발급된 쿠폰이 없습니다')+'</div>';return;}
+  if(!rows.length){
+    var stNm={ok:'사용 가능한',used:'사용완료된',exp:'기간이 만료된'}[stFilter]||'';
+    var tyNm=typeFilter==='gift'?'상품권':typeFilter==='discount'?'할인권':'쿠폰';
+    w.innerHTML='<div class="empty">'+(allCoupons.length?(raw?'조건에 맞는 쿠폰이 없습니다':stNm+' '+tyNm+'이 없습니다'):'아직 발급된 쿠폰이 없습니다')+'</div>';return;
+  }
+  // 상태 탭으로 보는 중에는 이미 한 상태만 있으므로 구분 제목 없이 바로 나열합니다
+  if(!raw){rows.forEach(function(cpn){w.appendChild(mkItem(cpn,q));});return;}
   var groups=[
     {key:'ok',t:'✅ 사용 가능',cls:'ok'},
     {key:'used',t:'사용완료',cls:'used'},
