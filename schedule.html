@@ -2450,7 +2450,21 @@ window.openCustomerAdmin=function(id){
   const list=getMerged(selDate);
   const it=list.find(x=>x._id===id);
   if(!it){showToast('일정 정보를 찾을 수 없습니다');return;}
-  const key=(it.customer_phone||'').trim()||schName(it)||(it.customer_name||'').trim();
+  // 연락처·고객명을 함께 넘깁니다 (customer-admin 은 「연락처|이름」 형식을 받습니다).
+  // 연락처가 「+60」처럼 불완전하면 이름으로 찾도록 연락처 후보에서 뺍니다.
+  const ph=(it.customer_phone||'').trim();
+  const phOk=!/[a-zA-Z가-힣]/.test(ph)&&ph.replace(/[^0-9]/g,'').replace(/^60/,'').replace(/^0+/,'').length>=6;
+  const parts=[];
+  if(phOk)parts.push(ph);
+  const nm=schName(it)||(it.customer_name||'').trim();
+  if(nm)parts.push(nm);
+  if(it.memo_id&&it.title){          // 메모장 일정: 제목 「🛠 콘도명 (고객명)」의 두 값도 후보로
+    const tt=String(it.title).replace(/^[^0-9A-Za-z가-힣]+/,'').replace(/^커튼 재설치\s*·\s*/,'').trim();
+    const mm=tt.match(/^(.*?)\s*\((.*?)\)\s*$/);
+    if(mm){parts.push(mm[2].trim());parts.push(mm[1].trim());}
+    else if(tt&&tt!=='수리 방문'&&tt!=='커튼 재설치')parts.push(tt);
+  }
+  const key=parts.filter(function(v,i,a){return v&&a.indexOf(v)===i;}).join('|');
   if(!key){showToast('고객 정보가 없는 일정입니다');return;}
   const url='customer-admin.html?open='+encodeURIComponent(key);
   let done=false;

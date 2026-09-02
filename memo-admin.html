@@ -903,10 +903,11 @@ function buildCusts(cust,reqs){
   const out=[],seen={};
   const push=(condo,name,phone)=>{
     condo=String(condo||'').trim();name=String(name||'').trim();
+    phone=hccPhoneOk(phone)?String(phone).trim():'';   // 숫자 6자리 미만(「+60」 등)은 연락처로 보지 않습니다
     if(!condo&&!name)return;
     const k=sn(condo)+'|'+sn(name);
     if(seen[k]){ if(!seen[k].phone&&phone)seen[k].phone=phone; return; }
-    const o={__id:'a'+out.length,condo:condo,name:name,phone:String(phone||'').trim()};
+    const o={__id:'a'+out.length,condo:condo,name:name,phone:phone};
     seen[k]=o;out.push(o);
   };
   (cust||[]).forEach(c=>push(c.addr||'',c.name||'',c.phone||''));
@@ -1221,7 +1222,7 @@ async function syncSchedule(memoId,d,prevSchedId){
       memo:schedMemo(d),
       memo_id:memoId,
       customer_name:d.name||d.condo||'',
-      customer_phone:d.phone||'',
+      customer_phone:hccPhoneOk(d.phone)?d.phone:'',   // 「+60」처럼 불완전한 번호는 일정에 싣지 않습니다
       updated_at:nowIso()
     };
     if(sid){
@@ -1350,7 +1351,7 @@ acEl.addEventListener('mousedown',ev=>{
   const c=CUSTS.find(x=>x.__id===d.dataset.cid);if(!c)return;
   condoEl.value=c.condo||c.name||'';
   if(!document.getElementById('mm-name').value.trim())document.getElementById('mm-name').value=c.name||'';
-  if(!document.getElementById('mm-phone').value.trim())document.getElementById('mm-phone').value=c.phone||'';
+  if(!document.getElementById('mm-phone').value.trim()&&hccPhoneOk(c.phone))document.getElementById('mm-phone').value=c.phone||'';   // 「+60」처럼 불완전한 번호는 가져오지 않습니다
   acEl.classList.remove('open');
 });
 
