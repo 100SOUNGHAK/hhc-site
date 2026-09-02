@@ -1267,7 +1267,7 @@ function buildEntries(){
       e=newEntry(name,phone);entries.push(e);
       if(pk)byP[pk]=e;if(nk&&!byN[nk])byN[nk]=e;
     }else{
-      if(!e.phone&&phone)e.phone=phone;
+      if(!pn(e.phone)&&pn(phone).length>=6)e.phone=phone;   // 문서의 번호는 완전한 번호(숫자 6자리 이상)일 때만 물려받습니다
       if(name&&nn(e.name)!==nk&&!e.aliases.some(a=>nn(a)===nk)&&!(e.master&&(e.master.aliases||[]).some(a=>nn(a)===nk)))
         if(nk&&nn(e.name)!==nk)e.aliases=e.aliases.concat([name]);
     }
@@ -2371,7 +2371,8 @@ window.saveEdit=async function(){
   // ── 수정 ──
   const e=editTarget;
   const oldName=e.name,oldPhone=e.phone;
-  const nameChanged=name!==oldName,phoneChanged=pn(phone)!==pn(e.phone)&&pn(oldPhone);
+  // 연락처 변경 판정 — 「+60」처럼 불완전한 번호를 지우는 것은 문서 반영 대상이 아닙니다
+  const nameChanged=name!==oldName,phoneChanged=pn(phone)!==pn(e.phone)&&pn(oldPhone).length>=6;
   // 별칭을 지우면 그 이름으로 된 문서가 떨어져 나가므로, 함께 바꿀지 확인합니다
   const keepK=aliases.map(nn);
   const aliasRemoved=(e.aliases||[]).some(a=>nn(a)&&nn(a)!==nn(name)&&keepK.indexOf(nn(a))<0);
@@ -2481,14 +2482,24 @@ async function applyEdit(e,v,propagate,keepApart){
 }
 // 전파 대상 정의: [컬렉션, 라벨, 매칭(문서,이름셋,pn), 변경필드(이름변경,번호변경)]
 function propPlan(e,v){
-  const names=[nn(e.name)].concat(e.aliases.map(nn)).filter(Boolean);
-  const op=pn(e.phone);
+  const op=pn(e.phone).length>=6?pn(e.phone):'';   // 불완전한 번호(「+60」 등)로는 문서를 찾지 않습니다
+  const removing=!pn(v.phone);                    // 연락처를 지우는 경우
+  // 연락처를 지울 때는 고객마스터에 직접 적힌 이름·별칭만 씁니다.
+  //  (문서에서 자동으로 딸려 온 별칭은 「같은 번호」 때문에 붙은 다른 고객 이름일 수 있습니다)
+  const names=(removing&&e.master
+    ?[nn(e.master.name)].concat((e.master.aliases||[]).map(nn))
+    :[nn(e.name)].concat(e.aliases.map(nn))).filter(Boolean);
   // 🔗 수동 연결(ca_link)된 문서는 고객명·연락처를 「그대로 유지」하기로 한 문서이므로
   //    고객 정보를 수정해도 일괄 변경 대상에서 제외합니다.
   const notLinked=x=>!x.ca_link;
-  const hitP=x=>op&&pn(x)===op;
+  const hitP0=x=>!!op&&pn(x)===op;
   const hitN=s=>names.includes(nn(s));
-  const nameChanged=v.name!==e.name, phoneChanged=pn(v.phone)!==pn(e.phone);
+  // 연락처를 지울 때는 「번호만 같은 문서」(다른 고객 문서일 수 있음)는 건드리지 않고,
+  // 이 고객 이름으로 된 문서에 잘못 적힌 그 번호만 지웁니다.
+  const hitP=x=>removing?false:hitP0(x);
+  const nameChanged=v.name!==e.name, phoneChanged=pn(v.phone)!==pn(e.phone)&&!!op;
+  // 문서 연락처 갱신 규칙: 새 번호가 있으면 기존 규칙대로, 지우는 경우엔 옛 번호가 적힌 문서만 비웁니다
+  const phUpd=(cur)=>removing?hitP0(cur):(phoneChanged||!pn(cur));
   // 📌 「낡은 이름」 판정 : 새 고객명도 아니고, 남겨 두는 별칭도 아닌 이름
   //    (별칭을 지우면 그 이름으로 된 문서가 떨어져 나가 목록에 항목이 하나 더 생깁니다.
   //     그래서 지워진 별칭으로 된 문서는 새 고객명으로 함께 바꿔 줍니다)
@@ -2503,23 +2514,23 @@ function propPlan(e,v){
     return {condo_name:nm,condo:nm,condo_unit:''};
   };
   const plan=[];
-  const add=(coll,label,docs,upd)=>{if(docs.length)plan.push({coll,label,docs,upd});};
+  const add=(coll,label,docs,upd)=>{docs=docs.filter(x=>Object.keys(upd(x)).length);if(docs.length)plan.push({coll,label,docs,upd});};   // 실제로 바뀌는 문서만 셉니다
   add('contracts','📑 계약서',RAW.contracts.filter(x=>notLinked(x)&&(hitP(x.phone)||hitN(x.name))),
-    x=>{const u={};if(staleName(x.name))u.name=v.name;if(phoneChanged||!pn(x.phone))u.phone=v.phone;return u;});
+    x=>{const u={};if(staleName(x.name))u.name=v.name;if(phUpd(x.phone))u.phone=v.phone;return u;});
   add('invoices','💳 인보이스',RAW.invoices.filter(x=>{if(!notLinked(x))return false;const c=x.customer||{};return hitP(c.phone)||hitN(c.name);}),
-    x=>{const u={};if(staleName((x.customer||{}).name))u['customer.name']=v.name;if(phoneChanged||!pn((x.customer||{}).phone))u['customer.phone']=v.phone;return u;});
+    x=>{const u={};if(staleName((x.customer||{}).name))u['customer.name']=v.name;if(phUpd((x.customer||{}).phone))u['customer.phone']=v.phone;return u;});
   add('inspections','🔧 점검보고서',RAW.inspections.filter(x=>notLinked(x)&&(hitP(x.phone)||hitN(x.client))),
-    x=>{const u={};if(staleName(x.client))u.client=v.name;if(phoneChanged||!pn(x.phone))u.phone=v.phone;return u;});
+    x=>{const u={};if(staleName(x.client))u.client=v.name;if(phUpd(x.phone))u.phone=v.phone;return u;});
   add('bookings','🗓️ 예약',RAW.bookings.filter(x=>notLinked(x)&&(hitP(x.customer_phone)||hitN(x.customer_name))),
-    x=>{const u={};if(staleName(x.customer_name))u.customer_name=v.name;if(phoneChanged||!pn(x.customer_phone))u.customer_phone=v.phone;return u;});
+    x=>{const u={};if(staleName(x.customer_name))u.customer_name=v.name;if(phUpd(x.customer_phone))u.customer_phone=v.phone;return u;});
   add('schedules','📅 스케줄',RAW.schedules.filter(x=>notLinked(x)&&(hitP(x.customer_phone)||hitN(x.customer_name))),
-    x=>{const u={};if(staleName(x.customer_name))u.customer_name=v.name;if(phoneChanged||!pn(x.customer_phone))u.customer_phone=v.phone;return u;});
+    x=>{const u={};if(staleName(x.customer_name))u.customer_name=v.name;if(phUpd(x.customer_phone))u.customer_phone=v.phone;return u;});
   add('requests','📥 의뢰',RAW.requests.filter(x=>notLinked(x)&&(hitP(x.phone)||hitN(reqName(x)))),
-    x=>{const u={};if(staleName(reqName(x)))Object.assign(u,rqSplit(x));if(phoneChanged||!pn(x.phone))u.phone=v.phone;return u;});
+    x=>{const u={};if(staleName(reqName(x)))Object.assign(u,rqSplit(x));if(phUpd(x.phone))u.phone=v.phone;return u;});
   add('quotes','🧾 견적서',RAW.quotes.filter(x=>notLinked(x)&&(hitP(x.phone)||hitN(x.client))),
-    x=>{const u={};if(staleName(x.client))u.client=v.name;if(phoneChanged||!pn(x.phone))u.phone=v.phone;return u;});
+    x=>{const u={};if(staleName(x.client))u.client=v.name;if(phUpd(x.phone))u.phone=v.phone;return u;});
   add('memos','📝 메모장',RAW.memos.filter(x=>notLinked(x)&&(hitP(x.phone)||hitN(x.name)||hitN(x.condo))),
-    x=>{const u={};if(x.name&&staleName(x.name))u.name=v.name;if(x.condo&&staleName(x.condo))u.condo=v.name;if(phoneChanged||!pn(x.phone))u.phone=v.phone;return u;});
+    x=>{const u={};if(x.name&&staleName(x.name))u.name=v.name;if(x.condo&&staleName(x.condo))u.condo=v.name;if(phUpd(x.phone))u.phone=v.phone;return u;});
   add('coupons','🎫 상품권',RAW.coupons.filter(x=>notLinked(x)&&(hitN(x.name)||hitN(x.receiver))),
     x=>{const u={};if(staleName(x.name))u.name=v.name;if(staleName(x.receiver))u.receiver=v.name;return u;});
   return plan.filter(p=>p.docs.some(x=>Object.keys(p.upd(x)).length));
@@ -2532,7 +2543,7 @@ function showPropModal(e,v,keepApart){
   let h='';
   if(pn(v.phone)!==pn(e.phone))h+='<div class="cmp"><div><small>현재 연락처</small><b>'+esc(e.phone||'(없음)')+'</b></div><div>→</div><div><small>변경</small><b style="color:var(--pri)">'+esc(v.phone||'(없음)')+'</b></div></div>';
   if(v.name!==e.name)h+='<div class="cmp"><div><small>현재 이름</small><b>'+esc(e.name)+'</b></div><div>→</div><div><small>변경</small><b style="color:var(--pri)">'+esc(v.name)+'</b></div></div>';
-  h+='<p style="font-size:12.5px;color:var(--ink2);line-height:1.7;margin-bottom:11px">아래 문서가 함께 변경됩니다.<br><span style="font-size:11.5px;color:var(--ink3)">🔗 수동으로 연결한 문서는 원본 고객명·연락처를 유지하기 위해 제외됩니다.</span></p>';
+  h+='<p style="font-size:12.5px;color:var(--ink2);line-height:1.7;margin-bottom:11px">'+(!pn(v.phone)&&pn(e.phone)?'이 고객 이름으로 된 문서 중 <b>'+esc(e.phone)+'</b> 이 적힌 문서에서 번호를 지웁니다. 번호만 같은 다른 고객 문서는 건드리지 않습니다.':'아래 문서가 함께 변경됩니다.')+'<br><span style="font-size:11.5px;color:var(--ink3)">🔗 수동으로 연결한 문서는 원본 고객명·연락처를 유지하기 위해 제외됩니다.</span></p>';
   h+=plan.map(p=>'<div class="prop-row"><span class="id">'+p.label+'</span><span class="m">'+p.docs.length+'건</span></div>').join('')||'<div class="dnone">변경 대상 문서 없음</div>';
   document.getElementById('prop-body').innerHTML=h;
   document.getElementById('prop-go').textContent='총 '+total+'건 변경 실행';
@@ -2546,7 +2557,8 @@ document.getElementById('prop-go').addEventListener('click',async()=>{
   btn.disabled=false;
 });
 async function propagateDocs(e,v){
-  const plan=propPlan(e,v);
+  // 확인창에서 보여 준 계획을 그대로 실행합니다 (그 사이 고객마스터가 바뀌어도 대상이 늘어나지 않도록)
+  const plan=(curProp&&curProp.e===e&&curProp.plan)?curProp.plan:propPlan(e,v);
   for(const p of plan){
     for(const x of p.docs){
       const u=p.upd(x);
