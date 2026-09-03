@@ -1122,6 +1122,8 @@ body{background:#E7EBF4}
 .dochd{display:flex;align-items:baseline;margin:15px 2px 8px;font-size:13.5px;font-weight:900;letter-spacing:-.02em;color:#14192A}
 .dh-all{margin-left:auto;border:none;background:none;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;color:#98A1B4;padding:2px}
 .rec-sec .dochd{margin-top:15px}
+.recrow{margin-bottom:8px}
+.rec-sec .recrow:last-child{margin-bottom:0}
 .recrow,.hubrow{width:100%;display:flex;align-items:center;gap:11px;border:1px solid var(--bdr);border-radius:14px;background:#fff;
   cursor:pointer;font-family:inherit;text-align:left;padding:12px 13px;
   box-shadow:0 1px 2px rgba(14,35,80,.06),0 8px 18px -8px rgba(14,35,80,.14);transition:transform .14s ease}
@@ -1440,14 +1442,14 @@ const T={
       a2dT:'✅ 앱 설치가 완료되었습니다',a2dS:'홈 화면의 Happy HomeCare 아이콘으로 언제든 바로 열 수 있습니다.',
       a2i1:'Safari 하단의 공유 버튼(네모에 ↑ 화살표)을 누르세요',a2i2:'"홈 화면에 추가"를 선택하세요',a2i3:'오른쪽 위 "추가"를 누르면 완료!',
       a2a1:'브라우저 메뉴( ⋮ )를 여세요',a2a2:'"홈 화면에 추가" 또는 "앱 설치"를 선택하세요',
-      pyrT:'납부 예정 금액',pyrBtn:'결제정보 보기',pyrOf:'청구분',
+      pyrT:'납부 예정 금액',pyrBtn:'결제계좌 보기',pyrOf:'청구분',
       bankT:'입금 계좌 안내',bankNm:'은행명',bankAc:'계좌번호',bankHd:'예금주',bankCp:'📋 계좌번호 복사',bankCpd:'✓ 계좌번호가 복사되었습니다',
       qtBk:'예약',qtPay:'납부',qtIv:'인보이스',qtIp:'점검보고서',
       recT:'최근 서비스',recAll:'전체보기',
       docHd:'문서 및 서비스 현황',
       vstT:'방문 예정',vstS:'수리요청 방문 일정',vstB:'수리내역 보기',
       nbHome:'홈',nbBk:'예약',nbSv:'가격정보',nbWa:'문의',
-      mmT:'🛠️ 수리요청 처리내역',mmS:'수리 요청 · 결과',mmCap:'수리요청 내역',
+      mmT:'🛠️ 수리 요청/처리결과',mmS:'수리 요청 · 결과',mmCap:'수리 요청/처리결과 내역',
       mmLast:'최근 요청',mmTot:'전체 요청',mmDone:'처리완료 ',mmOpenB:'수리요청 내역 보기',mmCloseB:'내역 닫기',
       mmKName:'고객명',mmKSym:'증상',mmKVisit:'방문일',mmKRes:'진단 및 결과',
       mmWait:'방문 후 결과가 입력될 예정입니다',mmNoVisit:'일정 조율 중입니다',
@@ -1506,14 +1508,14 @@ const T={
       a2dT:'✅ App installed',a2dS:'Open it anytime from the Happy HomeCare icon on your home screen.',
       a2i1:'Tap the Share button at the bottom of Safari',a2i2:'Choose "Add to Home Screen"',a2i3:'Tap "Add" at the top right — done!',
       a2a1:'Open the browser menu ( ⋮ )',a2a2:'Choose "Add to Home screen" or "Install app"',
-      pyrT:'Payment Due',pyrBtn:'Payment info',pyrOf:'billed',
+      pyrT:'Payment Due',pyrBtn:'Bank account',pyrOf:'billed',
       bankT:'Bank Transfer Details',bankNm:'Bank',bankAc:'Account No.',bankHd:'Account Holder',bankCp:'📋 Copy account number',bankCpd:'✓ Account number copied',
       qtBk:'Booking',qtPay:'Payment',qtIv:'Invoices',qtIp:'Reports',
       recT:'Recent Service',recAll:'View all',
       docHd:'Documents & Services',
       vstT:'Upcoming Visit',vstS:'Repair request visit',vstB:'View request',
       nbHome:'Home',nbBk:'Booking',nbSv:'Pricing',nbWa:'Chat',
-      mmT:'🛠️ Repair Requests',mmS:'REPAIR REQUEST & RESULT',mmCap:'Request History',
+      mmT:'🛠️ Repair Request / Result',mmS:'REPAIR REQUEST & RESULT',mmCap:'Request / Result History',
       mmLast:'Latest Request',mmTot:'Total Requests',mmDone:'Completed ',mmOpenB:'View repair history',mmCloseB:'Close history',
       mmKName:'Name',mmKSym:'Issue',mmKVisit:'Visit',mmKRes:'Diagnosis & Result',
       mmWait:'The result will be filled in after our visit',mmNoVisit:'Scheduling in progress',
@@ -1571,6 +1573,36 @@ function svcKo(s){
   }
   s=s.replace(/(에어컨|세탁기|세척)(\s+\1)+/g,'$1');
   return s.replace(/\s{2,}/g,' ').replace(/(\d+)\s+대/g,'$1대').trim();
+}
+// ── 🕘 최근 서비스 제목 : 인보이스 첫 품목을 화면 언어로 보여 줍니다 ──
+//    영문명만 있는 품목을 한국어 화면에서 보면(그 반대도) 이름 대신 분류(설치 · 사전준비인건비용)를 씁니다.
+const RC_CAT_EN={
+  '청소':'Cleaning','세척':'Cleaning','수리':'Repair','설치':'Installation','점검':'Inspection','기타':'Others',
+  '회원제상품(가정용)':'Membership (Home)','회원제상품(매장용)':'Membership (Store)',
+  '에어컨(가정용)':'Air Conditioner (Home)','에어컨(매장용)':'Air Conditioner (Store)',
+  '세탁기':'Washing Machine','건조기':'Dryer','매트리스':'Mattress','쇼파':'Sofa','소파':'Sofa','커튼':'Curtain',
+  '기타제품':'Other Items','기타 서비스':'Other Service','현장수리':'On-site Repair',
+  '인건비용':'Labor Cost','자재비용':'Material Cost','사전준비인건비용':'Preparation Labor','본설치인건비용':'Installation Labor',
+  '벽걸이형':'Wall-mounted','매립형':'Ceiling Concealed','매립천정형':'Ceiling Concealed','카세트형':'Cassette',
+  '천정형':'Ceiling Type','스탠드형':'Floor Standing','실외기':'Outdoor Unit','실내기':'Indoor Unit'
+};
+function rcCatPath(li){
+  const a=[li&&li.cat,li&&li.subcat,li&&li.sub2].map(v=>String(v==null?'':v).trim())
+    .filter(Boolean).filter((v,i,arr)=>arr.indexOf(v)===i);
+  if(!a.length)return '';
+  return (LANG==='en'?a.map(v=>RC_CAT_EN[v]||v):a).join(' · ');
+}
+function rcItemName(li){
+  let n=String((li||{}).name||'').trim();
+  const st=n.replace(/^[A-Z]{2,}[-]?\d+[A-Za-z0-9-]*[\s:·-]*/,'').trim();   // 관리 코드(HHCPL1002 등) 제거
+  if(st)n=st;
+  const out=(LANG==='ko'?svcKo(n):trItemsEn(n)).trim();
+  const hasKo=/[\uAC00-\uD7A3]/.test(out);
+  if((LANG==='ko'&&out&&!hasKo)||(LANG==='en'&&hasKo)){
+    const c=rcCatPath(li);
+    if(c)return c;
+  }
+  return out;
 }
 // 메모장(수리요청)의 자유 문장 : EN 화면에서 관리자가 넣어 둔 영문이 있으면 그것을,
 // 없으면 한국어 원문을 그대로 보여 줍니다.
@@ -2350,24 +2382,53 @@ function render(){
   const _h2open=VIS.includes('iv')||VIS.includes('ip');
   const _h2one=true;   // 📋 문서 현황 행은 항상 1열 목록
   if(_h2open){
-    // 🕘 최근 서비스 : 가장 최근 인보이스의 품목 한 줄
-    const _rc=DATA.invoices[0];
-    if(_rc&&(_rc.items||[]).length){
-      let _rcNm=String((_rc.items[0]||{}).name||'').trim();
-      // 관리 코드(HHC10102 등)는 숨기고, 화면 언어에 맞는 서비스명으로 보여줍니다
-      const _rcStrip=_rcNm.replace(/^[A-Z]{2,}[-]?\d+[A-Za-z0-9-]*[\s:·-]*/,'').trim();
-      if(_rcStrip)_rcNm=_rcStrip;
-      _rcNm=LANG==='ko'?svcKo(_rcNm):trItemsEn(_rcNm);
-      if(_rcNm){
-        const _rcPaid=_rc.status==='paid';
-        const _rcU=BASE+'/hhc-invoice.html?view='+encodeURIComponent(_rc.id||_rc.__id)+'&lang='+LANG;
-        const _rcT=esc((LANG==='en'?'\u{1F9FE} Invoice ':'\u{1F9FE} 인보이스 ')+(_rc.id||''));
-        h+='<div class="rec-sec"><div class="dochd">'+L.recT+
-           '<button type="button" class="dh-all" data-qt="iv">'+L.recAll+' \u203A</button></div>'+
-           '<a class="recrow" href="'+esc(_rcU)+'" target="_blank" rel="noopener" data-mvt="'+_rcT+'"><span class="hri">\u{1F3E0}</span>'+
-           '<span class="hrx"><b>'+esc(_rcNm)+'</b><i>'+esc(dfmt(_rc.date)||'')+'</i></span>'+
-           '<span class="pill2 '+(_rcPaid?'ok':'warn')+'">'+(_rcPaid?(LANG==='en'?'Done':'완료'):(LANG==='en'?'Billing':'청구중'))+'</span></a></div>';
-      }
+    // 🕘 최근 서비스 : 가장 최근 「날짜」에 만들어진 인보이스 · 점검보고서 · 수리요청을 모두 보여 줍니다
+    //    (그날 인보이스만 있으면 인보이스만, 세 가지를 모두 작성했으면 세 줄이 보입니다)
+    const RC=[];
+    (DATA.invoices||[]).forEach(x=>{
+      if(x.status==='draft')return;
+      const d=String(x.date||'').slice(0,10);if(!d)return;
+      const li=(x.items||[])[0]||null;
+      const nm=li?rcItemName(li):'';
+      RC.push({d:d,ico:'\u{1F9FE}',t:nm||((LANG==='en'?'Invoice ':'인보이스 ')+(x.id||'')),
+        u:BASE+'/hhc-invoice.html?view='+encodeURIComponent(x.id||x.__id)+'&lang='+LANG,
+        mv:(LANG==='en'?'\u{1F9FE} Invoice ':'\u{1F9FE} 인보이스 ')+(x.id||''),
+        pill:x.status==='paid'?(LANG==='en'?'Done':'완료'):(LANG==='en'?'Billing':'청구중'),
+        pc:x.status==='paid'?'ok':'warn'});
+    });
+    (DATA.inspections||[]).forEach(x=>{
+      const d=String(x.date||'').slice(0,10);if(!d)return;
+      const bd=parseFloat(x.statBad)||0,wn=parseFloat(x.statWarn)||0;
+      let pill=L.dpDone,pc='ok';
+      if(x.type==='dispatch'&&x.dispatchResult==='revisit'){pill=L.dpRevisit;pc='warn';}
+      else if(bd>0){pill=L.needAct;pc='bad';}
+      else if(wn>0){pill=L.caution;pc='warn';}
+      RC.push({d:d,ico:inspIco(x.type),t:(L.insp[x.type]||L.insp.inspect),
+        u:BASE+'/'+inspPage(x.type)+'?id='+encodeURIComponent(x.__id)+'&lang='+LANG,
+        mv:(T.en.insp[x.type]||T.en.insp.inspect)+' '+(dfmt(x.date)||''),pill:pill,pc:pc});
+    });
+    (DATA.memos||[]).forEach(x=>{
+      const d=String(x.req_date||'').slice(0,10);if(!d)return;
+      RC.push({d:d,ico:'\u{1F527}',
+        t:mmTx(x.symptom,x.symptom_en)||String(L.mmT).replace(/^[^0-9A-Za-z\uAC00-\uD7A3]+/,''),
+        qt:'mm',
+        pill:x.status==='done'?L.mmStD:(x.status==='contacted'?L.mmStC:L.mmStP),
+        pc:x.status==='done'?'ok':'warn'});
+    });
+    if(RC.length){
+      const _rcMax=RC.reduce((a,r)=>r.d>a?r.d:a,'');
+      const _rcDay=RC.filter(r=>r.d===_rcMax).slice(0,6);
+      h+='<div class="rec-sec"><div class="dochd">'+L.recT+
+         '<button type="button" class="dh-all" data-qt="iv">'+L.recAll+' \u203A</button></div>';
+      _rcDay.forEach(r=>{
+        const inner='<span class="hri">'+r.ico+'</span>'+
+          '<span class="hrx"><b>'+esc(r.t)+'</b><i>'+esc(dfmt(r.d)||'')+'</i></span>'+
+          '<span class="pill2 '+r.pc+'">'+esc(r.pill)+'</span>';
+        h+=r.u
+          ?'<a class="recrow" href="'+esc(r.u)+'" target="_blank" rel="noopener" data-mvt="'+esc(r.mv||'')+'">'+inner+'</a>'
+          :'<button type="button" class="recrow" data-qt="'+esc(r.qt||'mm')+'">'+inner+'</button>';
+      });
+      h+='</div>';
     }
     h+='<div class="dochd">'+L.docHd+'</div>';
   }
