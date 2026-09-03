@@ -206,6 +206,7 @@ var GRP_OF={};FLAT.forEach(function(c){GRP_OF[c.id]=c._g;});
 
 // 탭별 iframe은 한 번만 로드 후 유지 — 탭을 오가도 작성 중인 내용이 보존됨
 var loaded={};
+var lastActive={};                 // 탭을 마지막으로 본 시각 — 오래 안 본 화면은 메모리에서 내립니다
 var LS_KEY='hhc_hub_tab';
 var LS_GLAST='hhc_hub_glast';      // 갈래별 마지막 화면 {gid:tabId}
 function glast(){try{return JSON.parse(localStorage.getItem(LS_GLAST)||'{}')||{};}catch(e){return {};}}
@@ -249,6 +250,7 @@ function activate(tab,silent){
   document.getElementById('hdr-title').textContent=g.gname+' · '+m.name;
   document.title='HHC 관리자 · '+m.name;
   window.__hhcActiveTab=tab;
+  lastActive[tab]=Date.now();
   if(window.__hhcAlertClear)window.__hhcAlertClear(tab);
 
   if(!loaded[tab]){
@@ -331,11 +333,14 @@ function wdArm(tab){
   if(!m||m.wd===false)return;
   var st=WD[tab];if(!st)return;
   clearTimeout(st.timer);
+  // 큰 화면(고객관리·인보이스 등)은 느린 통신에서 문서 내려받기만 20초를 넘길 수 있어 45초를 기다리고,
+  // 자동 재시도는 한 번만 합니다. 그 뒤에는 「다시 불러오기」 띠를 보여 사용자가 고르게 합니다.
   st.timer=setTimeout(function(){
     var s=WD[tab];if(!s||s.hello||s.ready)return;
     if(document.visibilityState!=='visible'||navigator.onLine===false)return;
-    if(s.reloads<2)wdReload(tab);else wdBanner(tab,true);
-  },20000);
+    if(window.__hhcActiveTab!==tab)return;          // 보고 있지 않은 화면은 건드리지 않습니다
+    if(s.reloads<1)wdReload(tab);else wdBanner(tab,true);
+  },45000);
 }
 window.__hhcWdStart=function(tab){
   var m=FLAT.find(function(x){return x.id===tab;});
@@ -393,6 +398,35 @@ window.addEventListener('online',function(){
   if(wdOfflineAt&&Date.now()-wdOfflineAt>30000)setTimeout(wdCheckActive,1500);
   wdOfflineAt=0;
 });
+
+/* ══ 오래 안 본 화면 내리기 (메모리 절약) ══════════════════════════════════
+   증상: 화면들을 여러 개 열어 두면 휴대폰 메모리가 부족해져 브라우저가 앱 전체를 스스로 다시 불러옵니다
+         (「불러오기」가 뜨고 보던 화면·영어 전환이 초기화됨). 화면마다 데이터베이스 연결과 전체 목록을
+         메모리에 들고 있어 5~6개만 열려도 수백 MB가 됩니다.
+   처리: 30분 넘게 보지 않은 화면은 메모리에서 내립니다(다시 누르면 새로 불러옴).
+         지금 보고 있는 화면, 편집 창이 열려 있거나 글을 적어 둔 화면은 내리지 않습니다. */
+var IDLE_UNLOAD_MS=30*60*1000;
+function unloadIdlePanes(){
+  var now=Date.now();
+  Object.keys(loaded).forEach(function(tab){
+    if(!loaded[tab]||tab===window.__hhcActiveTab)return;
+    if(now-(lastActive[tab]||now)<IDLE_UNLOAD_MS)return;
+    var ifr=wdIframe(tab);if(!ifr)return;
+    try{
+      var d=ifr.contentDocument;
+      if(d){
+        // 편집 창이 열려 있거나 입력해 둔 글이 있는 화면은 보존합니다 (숨겨진 화면은 커서가 사라지므로 내용으로 판단)
+        if(d.querySelector('[class*="mask"].open,[id*="mask"].open,.modal.open,.sheet.open,.ov.on,.irp-ov.on'))return;
+        var tas=d.querySelectorAll('textarea');
+        for(var i=0;i<tas.length;i++){if(String(tas[i].value||'').trim()&&!tas[i].readOnly)return;}
+      }
+    }catch(e){}
+    var pane=document.querySelector('.pane[data-pane="'+tab+'"]');
+    if(pane)pane.innerHTML='';
+    loaded[tab]=false;delete WD[tab];
+  });
+}
+setInterval(unloadIdlePanes,60*1000);
 
 // 의뢰관리·예약목록 등에서 「👤 고객정보」를 누르면 고객관리 탭으로 전환해 해당 고객 상세를 연다
 function hubOpenCustomer(key){
