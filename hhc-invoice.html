@@ -998,7 +998,7 @@ function catEn(n){var v=CAT_EN[n];return (v==null?'':String(v)).trim();}
 // 관리자 화면용 : "청소 · Cleaning"
 function catKoEn(n){var e=catEn(n);return e?(n+' · '+e):n;}
 // 고객용 인보이스에 찍힐 이름 — 영어가 있으면 영어, 없으면 한글 그대로
-function catOut(n){return catEn(n)||n;}
+function catOut(n){var v=catEn(n);if(v)return v;return (typeof ivEnTx==='function')?ivEnTx(n):n;}   // 영문명이 없으면 사전으로 한 번 더 바꿔 봅니다
 function loadCatalogLocal(){try{applyCatalog(JSON.parse(localStorage.getItem(LCAT)||'null'));}catch(e){}}
 function saveCatalog(){
   localStorage.setItem(LCAT,JSON.stringify(catalogObj()));
@@ -1053,6 +1053,62 @@ var ITEM_NAME_EN={
   '기타 서비스':'Other Service'
 };
 function trItemName(name){var en=ITEM_NAME_EN[name];return en?(name+' · '+en):name;}
+
+// ── 고객용 영문 인보이스 : 남아 있는 한글을 영문으로 바꿔 줍니다 ──────────────
+//  ① 문장 통째로 맞으면 그대로 바꾸고 ② 없으면 낱말 사전으로 바꿉니다.
+//  사전에 없는 문구는 원문을 그대로 둡니다 (뜻이 틀리게 바뀌는 것보다 낫습니다).
+var IV_EN_PHRASE={
+  '현금 결제':'Cash Payment','현금결제':'Cash Payment','계좌 이체':'Bank Transfer','카드 결제':'Card Payment',
+  '30일 이내 무상 점검':'Free inspection within 30 days',
+  '30일내 무상점검':'Free inspection within 30 days',
+  '30일내 무상점검 (회원 무제한)':'Free inspection within 30 days (unlimited for members)',
+  '회원은 계약 기간 내 무제한 점검이 가능합니다.':'Members are eligible for unlimited inspections during the membership period.',
+  '별도 협의':'By separate agreement','추후 협의':'To be discussed','부가세 별도':'Excluding tax','부가세 포함':'Including tax',
+  '출장 점검비':'On-site Inspection Fee','출장비':'Call-out Fee','기술자 인건비':'Technician Labor',
+  '최소 청구 금액':'Minimum Charge','재방문':'Revisit','무상':'Free of charge'
+};
+var IV_EN_WORD=[
+  ['회원제상품','Membership'],['패키지(사업)','Business Package'],['패키지','Package'],['멤버십','Membership'],
+  ['실버회원','Silver Member'],['골드회원','Gold Member'],['로얄회원','Royal Member'],
+  ['다이아회원','Diamond Member'],['티타늄회원','Titanium Member'],['스페셜해피홈','Special Happy Home'],
+  ['실버','Silver'],['골드','Gold'],['로얄','Royal'],['다이아','Diamond'],['티타늄','Titanium'],['회원','Member'],
+  ['에어컨(가정용)','Air Conditioner (Home)'],['에어컨(매장용)','Air Conditioner (Store)'],['에어컨','Air Conditioner'],
+  ['벽걸이형','Wall-mounted'],['매립천정형','Ceiling Concealed'],['매립형','Ceiling Concealed'],
+  ['카세트형','Cassette'],['천정형','Ceiling Type'],['실외기','Outdoor Unit'],['실내기','Indoor Unit'],
+  ['세탁기','Washing Machine'],['건조기','Dryer'],['냉장고','Refrigerator'],['오븐','Oven'],
+  ['매트리스','Mattress'],['쇼파','Sofa'],['소파','Sofa'],['커튼','Curtain'],['방충망','Insect Screen'],
+  ['전체분해세척','Full Dismantle Cleaning'],['전용약품세척','Chemical Cleaning'],['약품세척','Chemical Cleaning'],
+  ['스팀살균세척','Steam Sterilization Cleaning'],['스팀그릴세척','Steam Grille Cleaning'],['스팀살균','Steam Sterilization'],
+  ['기본세척','Basic Cleaning'],['기본청소','Basic Cleaning'],['물세척','Water Cleaning'],
+  ['세척','Cleaning'],['청소','Cleaning'],['세탁','Washing'],['살균','Sterilization'],
+  ['현장수리','On-site Repair'],['출장점검','On-site Inspection'],['출장','On-site'],
+  ['사전준비인건비용','Preparation Labor'],['본설치인건비용','Installation Labor'],
+  ['인건비용','Labor Cost'],['인건비','Labor'],['자재비용','Material Cost'],['자재비','Material Cost'],['자재','Material'],
+  ['설치','Installation'],['수리','Repair'],['점검','Inspection'],['교체','Replacement'],['보증','Warranty'],
+  ['기타제품','Other Items'],['기타 서비스','Other Service'],['기타','Others'],
+  ['시간당','per hour'],['별도청구','billed separately'],['수거포함','pickup included'],['수거','Pickup'],
+  ['추가','Additional'],['할인','Discount'],['무제한','Unlimited'],['서비스','Service']
+];
+function ivHasKo(s){return /[가-힣]/.test(String(s==null?'':s));}
+function ivEnTx(s){
+  var t=String(s==null?'':s).trim();
+  if(!t||!ivHasKo(t))return String(s==null?'':s);
+  var out=t.split('\n').map(function(line){
+    var v=line.trim();
+    if(!v)return line;
+    if(IV_EN_PHRASE[v])return IV_EN_PHRASE[v];
+    if(!ivHasKo(v))return line;
+    IV_EN_WORD.forEach(function(d){v=v.split(d[0]).join(d[1]);});
+    return v.replace(/\s{2,}/g,' ').trim();
+  }).join('\n');
+  return out;
+}
+// 회원 등급 배지 (예: 「패키지 - 골드회원」 → 「Package - Gold Member」)
+function ivMemberEn(m){
+  var v=String(m==null?'':m).trim();
+  if(!v||!ivHasKo(v))return v;
+  return ivEnTx(v);
+}
 var DEF_BANKS=[
   {id:'db1',bankName:'MAYBANK',accName:'HAPPY WORKS SERVICES SDN.BHD.',accNum:'562179535697',order:0},
   {id:'db2',bankName:'현금 결제',accName:'HAPPY WORKS SERVICES SDN.BHD.',accNum:'',order:1}
@@ -2538,6 +2594,7 @@ function ivaName(li,en){
     if(ix>0){ if(!ko)ko=t.slice(0,ix); if(!eng)eng=t.slice(ix+3); }
   }
   if(!ko)ko=raw; if(!eng)eng=raw;
+  if(en&&ivHasKo(eng))eng=ivEnTx(eng);   // 영문명이 등록되지 않은 품목은 사전으로 바꿔 줍니다
   return en?eng:ko;
 }
 function buildInvAppHTML(inv,lang){
@@ -2574,7 +2631,7 @@ function buildInvAppHTML(inv,lang){
   h+='<div class="ivcard"><div class="ivh">\u{1F4C7} '+L('청구 정보','Billing Details')+'</div><div class="ivp">'+
      '<div><div class="k">BILL TO · '+L('고객','Customer')+'</div><div class="n">'+ivxEsc(cust.name||'—')+'</div>'+
      '<div class="d">'+([ivxEsc(cust.phone?'****':''),ivxEsc(cust.addr||'')].filter(Boolean).join('<br>')||'—')+'</div>'+
-     (cust.member?'<span class="mc">\u{1F451} '+ivxEsc(cust.member)+'</span>':'')+'</div>'+
+     (cust.member?'<span class="mc">\u{1F451} '+ivxEsc(en?ivMemberEn(cust.member):cust.member)+'</span>':'')+'</div>'+
      '<div><div class="k">FROM · '+L('발행처','Issuer')+'</div><div class="n">'+ivxEsc(iss.name||'')+'</div>'+
      '<div class="d">'+[ivxEsc(iss.phone||''),ivxEsc(iss.addr||''),(iss.biz?'Reg. No. '+ivxEsc(iss.biz):'')].filter(Boolean).join('<br>')+'</div></div>'+
      '</div></div>';
@@ -2631,7 +2688,7 @@ function buildInvAppHTML(inv,lang){
 
   // 결제 안내
   var payTxt=inv.bankInfo
-    ?[ivxEsc(inv.bankInfo.bankName||''),ivxEsc(inv.bankInfo.accNum||''),ivxEsc(inv.bankInfo.accName||'')].filter(Boolean).join('\n')
+    ?[ivxEsc(en?ivEnTx(inv.bankInfo.bankName||''):(inv.bankInfo.bankName||'')),ivxEsc(inv.bankInfo.accNum||''),ivxEsc(inv.bankInfo.accName||'')].filter(Boolean).join('\n')
     :(L('문의: ','Enquiry: ')+ivxEsc(iss.phone||''));
   h+='<div class="ivcard gold"><div class="ivbox"><div class="bi">\u{1F4DE}</div><div>'+
      '<div class="bt">'+L('결제 정보','Payment Information')+'</div><div class="bb">'+payTxt+'</div>'+
@@ -2640,7 +2697,7 @@ function buildInvAppHTML(inv,lang){
 
   // 메모
   var noteTxt=(inv.notes||inv.terms)
-    ?ivxEsc((inv.notes?inv.notes+'\n':'')+(inv.terms||''))
+    ?ivxEsc(function(){var _n=(inv.notes?inv.notes+'\n':'')+(inv.terms||'');return en?ivEnTx(_n):_n;}())
     :L('30일 이내 무상 점검 · 회원은 계약 기간 내 무제한 점검이 가능합니다.','Free inspection within 30 days · Members are eligible for unlimited inspections during the membership period.');
   h+='<div class="ivcard blue"><div class="ivbox"><div class="bi">\u{1F4C4}</div><div>'+
      '<div class="bt">'+L('메모','Notes')+' · NOTES</div><div class="bb">'+noteTxt+'</div></div></div></div>';
