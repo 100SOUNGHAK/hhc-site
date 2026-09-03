@@ -5042,7 +5042,8 @@ try{
 // ── Google Translate
 async function _tr1(text){
   if(!text||!text.trim())return '';
-  try{var r=await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q='+encodeURIComponent(text));var d=await r.json();return d[0]?d[0].map(function(x){return x[0]||'';}).join(''):''}catch(e){return text;}
+  // 번역 실패 시 한글 원문을 영문 칸에 넣지 않습니다 (고객 화면이 다시 번역을 시도합니다)
+  try{var r=await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q='+encodeURIComponent(text));var d=await r.json();var out=d[0]?d[0].map(function(x){return x[0]||'';}).join(''):'';return /[\uAC00-\uD7A3]/.test(out)?'':out;}catch(e){return '';}
 }
 async function tr(text){
   if(!text||!text.trim())return '';
@@ -5204,15 +5205,15 @@ async function translateData(data){
   (data.defects||[]).forEach(function(d,i){pt('d_'+i+'_defect',d.defect);pt('d_'+i+'_loc',d.loc);pt('d_'+i+'_action',d.action);});
   (data.recommendations||[]).forEach(function(r,i){pt('rec_'+i+'_title',r.title);pt('rec_'+i+'_desc',r.desc);});
   var translated=await Promise.all(tasks.map(function(t){return t.src?tr(t.src):Promise.resolve('');}));
-  var map={};tasks.forEach(function(t,i){map[t.key]=translated[i]||t.src;});
+  var map={};tasks.forEach(function(t,i){map[t.key]=translated[i]||'';});   // 실패한 항목은 비워 둡니다
   data.opinion_en=map.opinion_en||'';
   data.dispatchReason_en=map.dispatchReason_en||'';data.dispatchWork_en=map.dispatchWork_en||'';
-  (data.results||[]).forEach(function(r,i){r.cat_en=map['r_'+i+'_cat']||r.cat;r.name_en=map['r_'+i+'_name']||r.name;r.note_en=map['r_'+i+'_note']||r.note;});
-  (data.equipments||[]).forEach(function(e,i){e.type_en=map['e_'+i+'_type']||e.type;e.loc_en=map['e_'+i+'_loc']||e.loc;});
-  (data.coolUnits||[]).forEach(function(u,i){u.loc_en=map['c_'+i+'_loc']||u.loc;});
-  (data.measurements||[]).forEach(function(m,i){m.label_en=map['m_'+i+'_label']||m.label;});
-  (data.defects||[]).forEach(function(d,i){d.defect_en=map['d_'+i+'_defect']||d.defect;d.loc_en=map['d_'+i+'_loc']||d.loc;d.action_en=map['d_'+i+'_action']||d.action;});
-  (data.recommendations||[]).forEach(function(r,i){r.title_en=map['rec_'+i+'_title']||r.title;r.desc_en=map['rec_'+i+'_desc']||r.desc;});
+  (data.results||[]).forEach(function(r,i){r.cat_en=map['r_'+i+'_cat']||'';r.name_en=map['r_'+i+'_name']||'';r.note_en=map['r_'+i+'_note']||'';});
+  (data.equipments||[]).forEach(function(e,i){e.type_en=map['e_'+i+'_type']||'';e.loc_en=map['e_'+i+'_loc']||'';});
+  (data.coolUnits||[]).forEach(function(u,i){u.loc_en=map['c_'+i+'_loc']||'';});
+  (data.measurements||[]).forEach(function(m,i){m.label_en=map['m_'+i+'_label']||'';});
+  (data.defects||[]).forEach(function(d,i){d.defect_en=map['d_'+i+'_defect']||'';d.loc_en=map['d_'+i+'_loc']||'';d.action_en=map['d_'+i+'_action']||'';});
+  (data.recommendations||[]).forEach(function(r,i){r.title_en=map['rec_'+i+'_title']||'';r.desc_en=map['rec_'+i+'_desc']||'';});
   return data;
 }
 

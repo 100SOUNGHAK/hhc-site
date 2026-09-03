@@ -321,7 +321,10 @@ var SUBJ_EN={
   '식탁의자':'dining chair','전등교체':'light replacement','콘센트 교체':'socket replacement',
   '추가 공사':'additional work','추가공사':'additional work','마감 작업':'finishing work',
   '복원 작업':'restoration work','복원':'restoration','시공':'installation work','공사':'work',
-  '작업':'work','서비스':'service','현장':'site','정리':'arrangement','및':'and','외':'etc.'
+  '작업':'work','서비스':'service','현장':'site','정리':'arrangement','및':'and','외':'etc.',
+  '미포함':'not included','포함':'included','별도':'separate','기준':'basis','무상':'free','유상':'chargeable',
+  '보증':'warranty','개월':'months','주차':'parking','당일':'same day','사전':'prior','협의':'consultation',
+  '가능':'available','불가':'not available','부품':'parts','정품':'genuine','고객':'customer','회원':'member'
 };
 var _SEK=Object.keys(SUBJ_EN).sort(function(a,b){return b.length-a.length;});
 function subjEn(txt){
@@ -330,8 +333,13 @@ function subjEn(txt){
   for(var i=0;i<_SEK.length;i++){if(t.indexOf(_SEK[i])>=0)t=t.split(_SEK[i]).join(SUBJ_EN[_SEK[i]]);}
   t=t.replace(/(\d+)\s*\uB300(?![\uAC00-\uD7A3])/g,function(m,q){return q+(q==='1'?' unit':' units');});
   t=t.replace(/(\d+)\s*\uAC1C(?![\uAC00-\uD7A3])/g,function(m,q){return q+(q==='1'?' item':' items');});
-  return t.replace(/\s{2,}/g,' ').trim();
+  t=t.replace(/\s{2,}/g,' ').trim();
+  // 사전으로 다 바꾸지 못해 한글이 섞여 남으면(반쪽 번역) 원문을 그대로 보여 줍니다
+  return /[\uAC00-\uD7A3]/.test(t)?String(txt||''):t;
 }
+// 수량 단위 한→영 (대·개·세트·장·시간…) — 모르는 단위는 원문 유지
+var UNIT_EN={'대':['unit','units'],'개':['pc','pcs'],'장':['pc','pcs'],'세트':['set','sets'],'시간':['hr','hrs'],'회':['time','times'],'박스':['box','boxes'],'롤':['roll','rolls'],'병':['bottle','bottles'],'명':['person','persons'],'일':['day','days'],'월':['month','months'],'건':['job','jobs'],'쌍':['pair','pairs']};
+function unitEn(u,q){var m=UNIT_EN[String(u||'').trim()];if(!m)return subjEn(u);return (Number(q)||1)===1?m[0]:m[1];}
 function subjOf(Q,isEn){
   var ko=Q.subject||'';
   if(!isEn)return ko;
@@ -449,9 +457,11 @@ function render(){
     const sumGross=groups[g].reduce((s,it)=>s+itGross(it),0);
     let rows='';
     groups[g].forEach(it=>{
-      const nm=isEn?(it.nameEn||it.name):it.name;
-      const nt=isEn?(it.noteEn||it.note||''):(it.note||'');
-      const qtyTxt=((it.qty&&it.qty!==1)||it.unit)?(fmtN(it.qty)+(it.unit?' '+it.unit:'')+' × RM '+fmtN(it.price)):'';
+      // 영문 화면: 영문명이 없으면 용어 사전(subjEn)으로 바꿉니다 — 한글이 그대로 남지 않게
+      const nm=isEn?((it.nameEn&&it.nameEn.trim())||subjEn(it.name)):it.name;
+      const nt=isEn?((it.noteEn&&it.noteEn.trim())||subjEn(it.note||'')):(it.note||'');
+      const unitTx=it.unit?(isEn?unitEn(it.unit,it.qty):it.unit):'';
+      const qtyTxt=((it.qty&&it.qty!==1)||it.unit)?(fmtN(it.qty)+(unitTx?' '+unitTx:'')+' × RM '+fmtN(it.price)):'';
       const dv=parseFloat(it.discVal)||0;
       const gross=(parseFloat(it.qty)||1)*(parseFloat(it.price)||0);
       const da=dv>0?(it.discType==='amt'?Math.min(dv,gross):gross*Math.min(dv,100)/100):0;
@@ -628,7 +638,7 @@ function render(){
         '<div class="qtot"><span class="k">'+t.final+'</span><span class="v">RM '+fmtN(finalTotal)+'</span></div></div>'+
       acHtml+
       secHtml+
-      ((Q.notices||[]).length?('<div class="notice"><b>'+t.notice+'</b>'+(Q.notices||[]).map(n=>'<p>'+esc(isEn?(NOTICE_EN[n]||n):n)+'</p>').join('')+'</div>'):'')+
+      ((Q.notices||[]).length?('<div class="notice"><b>'+t.notice+'</b>'+(Q.notices||[]).map(n=>'<p>'+esc(isEn?(NOTICE_EN[n]||subjEn(n)):n)+'</p>').join('')+'</div>'):'')+
       '<div class="valid'+(expired?' expired':'')+'">'+(expired?t.expMsg:('⏳ '+t.validMsg(Q.validDays||7,Q.validUntil||'')))+'</div>'+
       '<div class="card ft"><div class="fi">📞</div><div>'+
         '<div class="ft1">Happy Works Services Sdn. Bhd.</div>'+

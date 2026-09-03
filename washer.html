@@ -282,18 +282,22 @@ window.renderReport=function renderReport(data){
   window._reportData=data;
   var isEn=currentLang==='en';
   var t=T[currentLang];
-  window._trCache=window._trCache||{};
+  // 온라인 번역 결과를 기기에 저장해 두어 다음에 열 때 즉시 영문으로 보입니다
+  function _hasKo(v){return /[\uAC00-\uD7A3]/.test(String(v==null?'':v));}
+  window._trCache=window._trCache||(function(){try{var o=JSON.parse(localStorage.getItem('hhc_insp_tr')||'{}');return (o&&typeof o==='object')?o:{};}catch(e){return {};}})();
+  function _trSave(){try{localStorage.setItem('hhc_insp_tr',JSON.stringify(window._trCache));}catch(e){}}
   function autoTr(ko,en,applyFn){
     if(!isEn){applyFn(ko||'');return;}
-    if(en){applyFn(en);return;}
+    if(en&&!_hasKo(en)){applyFn(en);return;}   // 저장 당시 번역이 실패해 한글이 남은 영문 칸은 다시 번역합니다
     if(!ko){applyFn('');return;}
     if(window._trCache[ko]){applyFn(window._trCache[ko]);return;}
     applyFn(ko);
     fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q='+encodeURIComponent(ko))
       .then(function(r){return r.json();})
       .then(function(j){
-        var tr=(j&&j[0])?j[0].map(function(seg){return seg[0];}).join(''):ko;
-        window._trCache[ko]=tr;
+        var tr=(j&&j[0])?j[0].map(function(seg){return seg[0];}).join(''):'';
+        if(!tr||_hasKo(tr))return;
+        window._trCache[ko]=tr;_trSave();
         if(currentLang==='en')applyFn(tr);
       }).catch(function(){});
   }
