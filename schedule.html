@@ -1050,8 +1050,11 @@ async function initApp(){
     db=getFirestore(app);
     hhcgWatch(refresh);   // 회원등급표 실시간 구독
 
+    let _langRestored=false;
     onSnapshot(collection(db,'schedules'),snap=>{
       window.__hhcReady&&window.__hhcReady();
+      // 마지막에 보던 언어(EN)를 되살립니다 — 새로고침·재접속 후 한국어로 돌아가지 않도록
+      if(!_langRestored){_langRestored=true;try{if(localStorage.getItem('hhc_sch_lang')==='en'&&localStorage.getItem('hhc_ak')&&curLang!=='en')setTimeout(function(){window.setLang('en',true);},50);}catch(e){}}
       schedules={};
       RAW_SCH=snap.docs.map(d=>Object.assign({},d.data(),{_id:d.id}));
       snap.docs.forEach(d=>{
@@ -2389,10 +2392,10 @@ window.saveItem=async function(){
 };
 
 // ── 언어
-window.setLang=async function(lang){
+window.setLang=async function(lang,silent){
   curLang=lang;translCache={};
-  // 번역 테스트
-  if(lang==='en'){
+  // 번역 테스트 (silent: 새로고침 후 저장된 언어를 되살릴 때는 확인 없이 바로 적용)
+  if(lang==='en'&&!silent){
     const key=localStorage.getItem('hhc_ak')||'';
     if(!key){
       alert('API 키가 없습니다. 페이지를 새로고침 후 다시 로그인하세요.');
@@ -2438,6 +2441,7 @@ window.setLang=async function(lang){
   document.getElementById('leg-r').textContent=lang==='en'?'🛠 Repair':'🛠 수리';
   document.getElementById('leg-m').textContent=lang==='en'?'Internal':'직접입력';
   document.getElementById('leg-h').textContent=lang==='en'?'Holiday':'휴일';
+  try{localStorage.setItem('hhc_sch_lang',lang);}catch(e){}   // 화면이 다시 불러와져도 언어 유지
   refresh();if(selDate)renderDay(selDate);
 };
 

@@ -353,27 +353,46 @@ window.addEventListener('message',function(e){
   if(d.hhcPong){st.pong=Date.now();st.pongReady=!!d.ready;}
   if(d.hhcStuck&&!d.soft){wdBanner(tab,true);}
 });
-// 백그라운드에서 돌아왔을 때 · 인터넷이 다시 연결됐을 때 → 현재 화면 상태 확인
-var wdHiddenAt=0;
+// 백그라운드에서 돌아왔을 때 · 인터넷이 끊겼다가 다시 연결됐을 때 → 현재 화면이 살아 있는지 확인
+//  · 화면이 hhcPong 으로 응답하면 그대로 둡니다 (데이터가 아직 없어도 새로고침하지 않습니다 —
+//    보고 있던 화면·영어 전환 상태가 초기화되는 것을 막기 위해서입니다)
+//  · 두 번 물어도 응답이 없을 때만(화면이 멈춘 경우) 다시 불러옵니다
+//  · 확인은 2분에 한 번만 합니다 (휴대폰의 잦은 네트워크 전환으로 되풀이되지 않도록)
+var wdHiddenAt=0,wdOfflineAt=0,wdLastCheck=0,wdChecking=false;
 function wdCheckActive(){
   var tab=window.__hhcActiveTab;if(!tab)return;
   var m=FLAT.find(function(x){return x.id===tab;});
   if(!m||m.wd===false)return;
+  if(wdChecking||Date.now()-wdLastCheck<120000)return;
   var ifr=wdIframe(tab);if(!ifr)return;
   var st=WD[tab]||(WD[tab]={t0:Date.now(),hello:false,ready:false,reloads:0});
-  st.pong=0;
-  try{ifr.contentWindow.postMessage({hhcPing:1},'*');}catch(e){}
-  setTimeout(function(){
-    var s=WD[tab];if(!s)return;
-    if(!s.pong||!s.pongReady){s.reloads=0;wdReload(tab);}
-  },4000);
+  if(Date.now()-(st.t0||0)<25000)return;      // 아직 처음 불러오는 중이면 wdArm 이 맡습니다
+  wdChecking=true;wdLastCheck=Date.now();
+  var tries=0;
+  function ping(){
+    st.pong=0;
+    try{ifr.contentWindow.postMessage({hhcPing:1},'*');}catch(e){}
+    setTimeout(function(){
+      var s=WD[tab];if(!s){wdChecking=false;return;}
+      if(s.pong){wdChecking=false;return;}                       // 응답 있음 → 정상
+      if(document.visibilityState!=='visible'||navigator.onLine===false){wdChecking=false;return;}
+      if(++tries<2){ping();return;}                              // 한 번 더 물어봅니다
+      wdChecking=false;s.reloads=0;wdReload(tab);                // 두 번 다 무응답 → 다시 불러오기
+    },5000);
+  }
+  ping();
 }
 document.addEventListener('visibilitychange',function(){
   if(document.visibilityState==='hidden'){wdHiddenAt=Date.now();return;}
   if(wdHiddenAt&&Date.now()-wdHiddenAt>3*60*1000)setTimeout(wdCheckActive,800);
   wdHiddenAt=0;
 });
-window.addEventListener('online',function(){setTimeout(wdCheckActive,1500);});
+window.addEventListener('offline',function(){wdOfflineAt=Date.now();});
+window.addEventListener('online',function(){
+  // 30초 이상 끊겼다가 돌아온 경우에만 확인합니다 (짧은 전환은 무시)
+  if(wdOfflineAt&&Date.now()-wdOfflineAt>30000)setTimeout(wdCheckActive,1500);
+  wdOfflineAt=0;
+});
 
 // 의뢰관리·예약목록 등에서 「👤 고객정보」를 누르면 고객관리 탭으로 전환해 해당 고객 상세를 연다
 function hubOpenCustomer(key){
