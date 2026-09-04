@@ -785,6 +785,7 @@ window.applyInvCatalog=function(svcs){
     // 관리자 표시는 한글명(name_ko) 우선 — 서비스명(name)이 영문 코드여도 한글로 보인다
     var ko=(x.name_ko&&String(x.name_ko).trim())||String(x.name||'');
     var enN=x.name_en||ITEM_EN[ko]||(window.LOCAL_EN&&LOCAL_EN[ko])||((x.name&&x.name!==ko&&!/[가-힣]/.test(x.name))?x.name:'')||ko;
+    enN=String(enN).replace(/^\s*HHC[A-Z]{0,4}\d{3,5}\s*[-:|·]?\s*/,'').trim()||String(enN);   // 고객용 견적서에는 관리 코드를 빼고 보여 줍니다
     byG[g].push({n:ko,en:enN,alt:(x.name&&x.name!==ko)?String(x.name):'',p:parseFloat(x.price)||0,unit:'',
       note:((x.subcat&&x.subcat!==x.cat)?x.subcat:(x.cat||''))+(x.unit?' · '+x.unit+'당':''),
       noteEn:'Per '+(x.unit||'unit'),
@@ -857,8 +858,11 @@ function qkBuild(){
   var railIdx={},nameSeen={};
   function rail(label){if(railIdx[label]==null){railIdx[label]=1;QRAILS.push({key:label,icon:qkIcon(label)});}return label;}
   function push(it,group,railLabel){
-    var k=group+'|'+it.n;
+    // 연동 품목은 항목설정 ID 로 구분합니다 — 가정용·매장용처럼 한글 이름이 같은 품목도 각각 나옵니다
+    var k=(it._svc&&it._svc.id)?('svc|'+it._svc.id):(group+'|'+railLabel+'|'+it.n);
     if(nameSeen[k])return;nameSeen[k]=1;
+    if(it._svc&&it._svc.id&&!nameSeen['nm|'+group+'|'+it.n])nameSeen['nm|'+group+'|'+it.n]=1;
+    if(!it._svc&&nameSeen['nm|'+group+'|'+it.n])return;   // 같은 이름의 연동 품목이 이미 있으면 내장 항목은 넣지 않는다
     // 내장 항목이라도 인보이스에 같은 이름이 있으면 인보이스 단가를 기준으로 쓴다
     var p=(!it._svc&&lp[it.n]!=null)?lp[it.n]:(parseFloat(it.p)||0);
     QCAT.push({qid:'q'+QCAT.length,n:it.n,en:it.en||LOCAL_EN[it.n]||it.n,alt:it.alt||'',p:p,unit:it.unit||'',note:it.note||'',noteEn:it.noteEn||'',group:group,rail:rail(railLabel),_svc:it._svc||null});
@@ -932,7 +936,8 @@ function itemNet(si){return Math.max(0,(parseFloat(si.price)||0)*(parseFloat(si.
 function qkGet(qid){for(var i=0;i<QCAT.length;i++)if(QCAT[i].qid===qid)return QCAT[i];return null;}
 function qkItemOf(qid){
   var c=qkGet(qid);if(!c)return null;
-  return selItems.find(function(x){return x.name===c.n&&x.group===c.group;})||null;
+  if(c._svc&&c._svc.id)return selItems.find(function(x){return x.svcId===c._svc.id;})||null;
+  return selItems.find(function(x){return !x.svcId&&x.name===c.n&&x.group===c.group;})||null;
 }
 window.qkItemOf2=qkItemOf;
 function qkRowHtml(c){
@@ -1015,7 +1020,9 @@ function qkRail(){
   selItems.forEach(function(si){
     var q=parseFloat(si.qty)||1;total+=q;
     for(var i=0;i<QCAT.length;i++){var c=QCAT[i];
-      if(c.n===si.name&&c.group===si.group){cnt[c.rail]=(cnt[c.rail]||0)+q;break;}}
+      // 연동 품목은 항목설정 ID 로, 그 외는 이름·구분으로 어느 레일에 담겼는지 찾습니다
+      var hit=(si.svcId&&c._svc)?(c._svc.id===si.svcId):(!si.svcId&&!c._svc&&c.n===si.name&&c.group===si.group);
+      if(hit){cnt[c.rail]=(cnt[c.rail]||0)+q;break;}}
   });
   var html='<button class="pk-rl'+(qkRailSel==='전체'?' on':'')+'" onclick="qkSetRail(\'전체\')">'+
     '<span class="cnt">'+(total||'')+'</span><span class="ic">📋</span><span class="t">전체</span></button>';
