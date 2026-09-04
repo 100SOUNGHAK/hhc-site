@@ -885,17 +885,38 @@ function qkBuild(){
   if(!LINKED)PRICE_DB.callout.forEach(function(it){push(it,'callout','출장');});
   // ⑥ 청소 — 연동 중분류 순서 그대로 (에어컨(가정용) · 에어컨(매장용) · 세탁기 …)
   var cS=subsOf(L.clean);
-  if(cS.length){cS.forEach(function(sb){linked(L.clean,'clean',sb);});}
-  else CLEAN_FALLBACK.forEach(function(it){push(it,'clean',cleanRail(it));});
-  // 🏬 에어컨(매장용) — 인보이스 「항목설정」에 매장용 품목이 아직 없어도 견적서에서 바로 고를 수 있게
-  //    카세트형·FCU 기본 품목을 더해 줍니다. (항목설정에 같은 이름이 있으면 그 단가를 따릅니다)
-  if(cS.indexOf('에어컨(매장용)')<0){
-    CLEAN_FALLBACK.forEach(function(it){
-      if(cleanRail(it)==='에어컨(매장용)')push(it,'clean','에어컨(매장용)');
-    });
-  }
+  cS.forEach(function(sb){linked(L.clean,'clean',sb);});
+  // 항목설정에서 중분류를 고르지 않은 청소 품목도 빠뜨리지 않습니다
+  L.clean.forEach(function(it){
+    if((it._svc&&it._svc.subcat)||'')return;
+    push(it,'clean',/(카세트|FCU|천장형|천정형)/i.test(it.n)?'에어컨(매장용)':'청소');
+  });
+  if(!L.clean.length)CLEAN_FALLBACK.forEach(function(it){push(it,'clean',cleanRail(it));});
   // ⑦ 기타 (연동 품목 중 위 분류에 안 걸리는 것)
   L.other.forEach(function(it){push(it,'custom','기타');});
+  ensureStoreRail(push);
+}
+// 🏬 에어컨(매장용) 레일은 항상 있게 합니다.
+//  ① 항목설정에 매장용 중분류가 있으면 그대로 두고
+//  ② 카세트형·FCU 품목이 다른 분류에 들어가 있으면 매장용으로 모아 주고
+//  ③ 그런 품목이 아예 없으면 기본 품목(카세트형 기본·화학청소 · FCU 청소)을 넣습니다.
+//  그리고 「에어컨(가정용)」 바로 뒤에 놓아 목록에서 바로 눈에 띄게 합니다.
+function ensureStoreRail(push){
+  var STORE='에어컨(매장용)';
+  var idxOf=function(f){for(var i=0;i<QRAILS.length;i++){if(f(QRAILS[i].key))return i;}return -1;};
+  if(idxOf(function(k){return /매장/.test(k);})<0){
+    var moved=0;
+    QCAT.forEach(function(c){
+      if(c.group==='clean'&&/(카세트|FCU|천장형|천정형)/i.test(c.n)){c.rail=STORE;moved++;}
+    });
+    if(!moved)CLEAN_FALLBACK.forEach(function(it){if(cleanRail(it)===STORE)push(it,'clean',STORE);});
+    if(idxOf(function(k){return k===STORE;})<0)QRAILS.push({key:STORE,icon:qkIcon(STORE)});
+  }
+  // 비어 버린 레일(품목이 하나도 없는 분류)은 목록에서 지웁니다
+  QRAILS=QRAILS.filter(function(r){return QCAT.some(function(c){return c.rail===r.key;});});
+  var si=idxOf(function(k){return /매장/.test(k);});
+  var hi=idxOf(function(k){return /가정용/.test(k);});
+  if(si>=0&&hi>=0&&si>hi+1){var r=QRAILS.splice(si,1)[0];QRAILS.splice(hi+1,0,r);}
 }
 // 항목별 할인액: pct=% · amt=RM 정액
 function itemDisc(si){
