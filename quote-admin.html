@@ -773,6 +773,8 @@ function invGroupOf(cat,sub,name){
   if(/설치/.test(c))return 'install';
   if(/수리/.test(c))return 'repair';
   if(/청소/.test(c))return 'clean';
+  // 「에어컨 (매장용)」처럼 청소 품목을 별도 대분류로 만들어 둔 경우도 청소로 봅니다
+  if(/에어컨|세척|카세트|FCU/i.test(c)||/에어컨|세척|카세트|FCU/i.test(s2))return 'clean';
   return 'other';
 }
 window.applyInvCatalog=function(svcs){
@@ -832,6 +834,17 @@ var LOCAL_EN={};window.LOCAL_EN=LOCAL_EN;
   Object.keys(ITEM_EN).forEach(function(n){LOCAL_EN[n]=ITEM_EN[n];});
 })();
 var QK_LBL={'사전준비인건비용':'사전준비','본설치인건비용':'본설치','수리인건비용':'수리인건','설치자재비용':'설치자재','자재비용':'자재비용','에어컨구매비용':'에어컨구매'};
+// 연동 청소 품목의 레일 — 항목설정의 대분류·중분류에서 정합니다
+//  · 「매장」이 들어가면 에어컨(매장용), 「가정」이 들어가면 에어컨(가정용) (띄어쓰기·괄호 차이 무시)
+//  · 그 외에는 중분류 → 대분류 이름을 그대로, 아무것도 없으면 이름으로 판단
+function cleanRailOf(it){
+  var c=String((it._svc&&it._svc.cat)||''),sb=String((it._svc&&it._svc.subcat)||'');
+  if(/매장/.test(sb)||/매장/.test(c))return '에어컨(매장용)';
+  if(/가정/.test(sb)||/가정/.test(c))return '에어컨(가정용)';
+  if(sb&&sb!==c)return sb;
+  if(c&&c!=='청소')return c;
+  return /(카세트|FCU|천장형|천정형)/i.test(it.n)?'에어컨(매장용)':'청소';
+}
 // 내장 청소 품목의 레일(중분류) — 비고 앞부분(에어컨(가정용) · 에어컨(매장용) · 세탁기)을 그대로 씁니다
 function cleanRail(it){
   var s=String((it&&it.note)||'').split('·')[0].trim();
@@ -883,34 +896,25 @@ function qkBuild(){
   // ⑤ 출장
   L.callout.forEach(function(it){push(it,'callout','출장');});
   if(!LINKED)PRICE_DB.callout.forEach(function(it){push(it,'callout','출장');});
-  // ⑥ 청소 — 연동 중분류 순서 그대로 (에어컨(가정용) · 에어컨(매장용) · 세탁기 …)
-  var cS=subsOf(L.clean);
-  cS.forEach(function(sb){linked(L.clean,'clean',sb);});
-  // 항목설정에서 중분류를 고르지 않은 청소 품목도 빠뜨리지 않습니다
-  L.clean.forEach(function(it){
-    if((it._svc&&it._svc.subcat)||'')return;
-    push(it,'clean',/(카세트|FCU|천장형|천정형)/i.test(it.n)?'에어컨(매장용)':'청소');
-  });
+  // ⑥ 청소 — 인보이스 「항목설정」의 분류를 그대로 레일로 씁니다 (등록된 순서 유지).
+  //    「에어컨 (매장용)」처럼 띄어쓰기가 다르거나 대분류로 만들어 둔 경우도 모두 「에어컨(매장용)」 레일로 모입니다.
+  var cRails=[];
+  L.clean.forEach(function(it){var r=cleanRailOf(it);if(cRails.indexOf(r)<0)cRails.push(r);});
+  cRails.forEach(function(r){L.clean.forEach(function(it){if(cleanRailOf(it)===r)push(it,'clean',r);});});
   if(!L.clean.length)CLEAN_FALLBACK.forEach(function(it){push(it,'clean',cleanRail(it));});
   // ⑦ 기타 (연동 품목 중 위 분류에 안 걸리는 것)
   L.other.forEach(function(it){push(it,'custom','기타');});
   ensureStoreRail(push);
 }
-// 🏬 에어컨(매장용) 레일은 항상 있게 합니다.
-//  ① 항목설정에 매장용 중분류가 있으면 그대로 두고
-//  ② 카세트형·FCU 품목이 다른 분류에 들어가 있으면 매장용으로 모아 주고
-//  ③ 그런 품목이 아예 없으면 기본 품목(카세트형 기본·화학청소 · FCU 청소)을 넣습니다.
-//  그리고 「에어컨(가정용)」 바로 뒤에 놓아 목록에서 바로 눈에 띄게 합니다.
+// 🏬 에어컨(매장용) 레일 정리
+//  · 품목·단가는 인보이스 「항목설정」에 등록된 것만 씁니다 (견적서가 임의로 만들거나 옮기지 않습니다).
+//  · 인보이스 연동이 없을 때(오프라인)만 내장 기본 품목을 채웁니다.
+//  · 레일은 「에어컨(가정용)」 바로 뒤에 놓아 목록에서 바로 눈에 띄게 합니다.
 function ensureStoreRail(push){
   var STORE='에어컨(매장용)';
   var idxOf=function(f){for(var i=0;i<QRAILS.length;i++){if(f(QRAILS[i].key))return i;}return -1;};
-  if(idxOf(function(k){return /매장/.test(k);})<0){
-    var moved=0;
-    QCAT.forEach(function(c){
-      if(c.group==='clean'&&/(카세트|FCU|천장형|천정형)/i.test(c.n)){c.rail=STORE;moved++;}
-    });
-    if(!moved)CLEAN_FALLBACK.forEach(function(it){if(cleanRail(it)===STORE)push(it,'clean',STORE);});
-    if(idxOf(function(k){return k===STORE;})<0)QRAILS.push({key:STORE,icon:qkIcon(STORE)});
+  if(!LINKED&&idxOf(function(k){return /매장/.test(k);})<0){
+    CLEAN_FALLBACK.forEach(function(it){if(cleanRail(it)===STORE)push(it,'clean',STORE);});
   }
   // 비어 버린 레일(품목이 하나도 없는 분류)은 목록에서 지웁니다
   QRAILS=QRAILS.filter(function(r){return QCAT.some(function(c){return c.rail===r.key;});});
