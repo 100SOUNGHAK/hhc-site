@@ -1244,7 +1244,13 @@ let LANG=(P.get('lang')==='en')?'en':'ko';
 
 // ── PWA : 홈 화면 설치 ──
 const IS_APP=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;
-const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent);
+// iOS 판별은 UA 문자열만 믿지 않습니다 — 「데스크탑 웹사이트 요청」·추적 방지 설정 등으로 UA 에 iPhone 이
+// 빠지면 Android 용 manifest 가 연결되어, 홈 화면 앱이 고객번호(c=) 없는 주소로 열리는 문제가 있었습니다.
+//  · navigator.standalone 은 iOS WebKit 에만 있는 속성 (Safari·Chrome·Firefox iOS 모두 정의됨)
+//  · MacIntel + 터치 = iPadOS / 데스크탑 모드 iPhone
+const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)
+  ||(typeof navigator.standalone!=='undefined')
+  ||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
 // 삼성 인터넷은 자체 패키징으로 앱을 설치해 Google 서명이 없어
 // Play 프로텍트 경고가 뜨는 문제가 있음 → Chrome 으로 열도록 유도
 const IS_SAMSUNG=/SamsungBrowser/i.test(navigator.userAgent);
@@ -1382,7 +1388,8 @@ try{
 //             저장공간이 분리되는 iOS 특성상 더 안정적 (전체화면은 apple-mobile-web-app 메타로 동작)
 (function(){
   if(!/^https?:$/.test(location.protocol))return;
-  if(!IS_IOS){
+  // Android 에서만 manifest 를 연결합니다 (iOS·Mac 등은 현재 주소(c= 포함)를 그대로 저장하는 방식이 안전)
+  if(IS_AND&&!IS_IOS){
     const l=document.createElement('link');l.rel='manifest';l.href='my-manifest.json';
     document.head.appendChild(l);
   }
@@ -1417,7 +1424,7 @@ const T={
       feeR1:'2주 초과 남은 시점',feeR2:'3일 ~ 2주 남은 시점',feeR3:'3일 이내 남은 시점',feeR4:'1일 이내 남은 시점',feeRNo:'환급 불가',
       feePkg:'패키지 회원은 최소청구금액 · 주차비용 · 예약보증금이 모두 면제됩니다.',
       fbRq:'서비스 의뢰',fbRqS:'간편 견적 · 바로 접수',fbHp:'가격 · 서비스',fbHpS:'홈페이지 보기',fbWa:'문의',
-      hpT:'가격/서비스 확인하기',hpS:'홈페이지에서 전체 서비스와 가격표를 확인하세요',hpB:'홈페이지 바로가기',notfound:'고객 정보를 찾을 수 없습니다.<br>링크를 다시 확인해 주세요.',
+      hpT:'가격/서비스 확인하기',hpS:'홈페이지에서 전체 서비스와 가격표를 확인하세요',hpB:'홈페이지 바로가기',notfound:'고객 정보를 찾을 수 없습니다.<br>링크를 다시 확인해 주세요.',noidApp:'<b>앱이 고객 정보 없이 설치되었습니다.</b><br><span style="font-size:13.5px;line-height:1.6;display:block;margin-top:8px">WhatsApp 으로 받으신 마이페이지 링크를 <b>Safari</b> 에서 다시 열어 주신 뒤,<br>공유 버튼(↑) → <b>홈 화면에 추가</b>로 다시 설치해 주세요.<br>(지금 아이콘은 삭제하셔도 됩니다)</span>',
       loadErr:'일시적인 오류로 불러오지 못했습니다.<br>인터넷 연결을 확인한 뒤 다시 시도해 주세요.',retryBtn:'🔄 다시 시도',waHelpBtn:'💬 문의하기',
       foot:'본 페이지는 열 때마다 최신 내용으로 갱신됩니다.',
       amtPaid:'결제 금액',amtBill:'청구 금액',amtDue:'미납 금액',crUsed:'적립잔액',crUsedSuf:' 사용',more:'개 더',qtyU:'개',etcA:' 외 ',etcB:'건',svcU:'개 서비스',pkgPre:'패키지 - ',
@@ -1483,7 +1490,7 @@ const T={
       feeR1:'More than 2 weeks left',feeR2:'3 days – 2 weeks left',feeR3:'Within 3 days',feeR4:'Within 1 day',feeRNo:'No refund',
       feePkg:'Package members are exempt from the minimum charge, parking fee and booking deposit.',
       fbRq:'Request',fbRqS:'Quick quote & booking',fbHp:'Prices',fbHpS:'View homepage',fbWa:'Chat',
-      hpT:'Check Prices & Services',hpS:'See our full service list and price guide on the homepage',hpB:'Visit Homepage',notfound:'Customer not found.<br>Please check your link.',
+      hpT:'Check Prices & Services',hpS:'See our full service list and price guide on the homepage',hpB:'Visit Homepage',notfound:'Customer not found.<br>Please check your link.',noidApp:'<b>The app was installed without your customer link.</b><br><span style="font-size:13.5px;line-height:1.6;display:block;margin-top:8px">Please open your MY PAGE link from WhatsApp in <b>Safari</b> again,<br>then tap Share (↑) → <b>Add to Home Screen</b> to reinstall.<br>(You can delete the current icon.)</span>',
       loadErr:'Could not load due to a temporary error.<br>Please check your connection and try again.',retryBtn:'🔄 Try Again',waHelpBtn:'💬 Contact Us',
       foot:'This page always shows your latest records when opened.',
       amtPaid:'PAID',amtBill:'AMOUNT DUE',amtDue:'OVERDUE',crUsed:'Credit',crUsedSuf:' used',more:' more',qtyU:'',etcA:' +',etcB:' more',svcU:' services',pkgPre:'Package · ',
@@ -3063,6 +3070,8 @@ async function boot(){
     // 실패한 경우)는 CID 자체는 유효하므로 다시 시도할 수 있게 합니다.
     var hardFail=!!(e&&(e.message==='not-found'||e.message==='no-id'));
     var msg=hardFail?L.notfound:(L.loadErr||L.notfound);
+    // 홈 화면 앱이 고객번호 없이 열린 경우(설치 당시 주소에 c= 가 빠짐) : 다시 설치하는 방법을 안내
+    if(e&&e.message==='no-id'&&IS_APP)msg=L.noidApp||msg;
     var html='<div class="empty-page"><div style="font-size:34px">'+(hardFail?'🔎':'⚠️')+'</div><div>'+msg+'</div>';
     if(!hardFail)html+='<button type="button" class="a2hs-btn" id="my-retry-btn" style="max-width:260px">'+(L.retryBtn||'다시 시도')+'</button>';
     html+='<a class="a2hs-btn" id="my-wa-btn" style="max-width:260px;display:block;text-decoration:none;text-align:center;box-sizing:border-box" href="https://wa.me/60172472774" target="_blank" rel="noopener">'+(L.waHelpBtn||L.nbWa)+'</a></div>';
