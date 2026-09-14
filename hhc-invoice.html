@@ -553,7 +553,8 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
         </div>
       </div>
     </div>
-    <div class="card cp"><div class="f"><label class="lb">메모</label><textarea id="inv-notes" rows="2" placeholder="고객에게 표시될 메모" oninput="App.upPrev()"></textarea></div></div>
+    <div class="card cp"><div class="f"><label class="lb">메모</label><textarea id="inv-notes" rows="2" placeholder="고객에게 표시될 메모" oninput="App.upPrev()"></textarea></div>
+      <div class="f" style="margin-top:8px"><label class="lb">메모 (영문) <span style="font-weight:500;color:#8A93A6">· 비워두면 영문 화면·PDF에서 자동 번역</span></label><textarea id="inv-notes-en" rows="2" placeholder="Notes shown on the English invoice (optional)" oninput="App.upPrev()"></textarea></div></div>
     <div class="card cp" style="margin-top:12px" id="iva-card">
       <div class="iva-hd"><span class="iva-ttl">📎 첨부 사진 · 증빙자료</span><span class="iva-cnt" id="iva-cnt"></span></div>
       <div class="iva-grid" id="iva-grid"></div>
@@ -1104,6 +1105,66 @@ function ivEnTx(s){
   }).join('\n');
   return out;
 }
+// ── 자유 입력 문장(메모·결제조건·은행명)의 영문 : 저장된 영문 → 사전 → 온라인 번역 캐시 → 원문 ──
+//  · 관리자가 자유롭게 쓴 메모는 사전에 없어 영문 화면에 한글이 남는 문제가 있었습니다.
+//  · 온라인 번역 결과는 기기 안(localStorage)에 저장해 다음부터는 바로 영문으로 보입니다.
+var IV_TR_KEY='hhc_iv_tr';
+function ivTrCache(){try{var o=JSON.parse(localStorage.getItem(IV_TR_KEY)||'{}');return (o&&typeof o==='object')?o:{};}catch(e){return {};}}
+function ivTrSave(o){try{var cur=ivTrCache();Object.keys(o).forEach(function(k){cur[k]=o[k];});var ks=Object.keys(cur);if(ks.length>400)ks.slice(0,ks.length-400).forEach(function(k){delete cur[k];});localStorage.setItem(IV_TR_KEY,JSON.stringify(cur));}catch(e){}}   // 동시에 여러 번역이 끝나도 서로 덮어쓰지 않도록 합쳐서 저장
+function ivFreeEn(ko,savedEn){
+  ko=String(ko==null?'':ko);
+  if(savedEn&&String(savedEn).trim()&&!ivHasKo(savedEn))return String(savedEn);
+  if(!ko.trim()||!ivHasKo(ko))return ko;
+  var c=ivTrCache();
+  return ko.split('\n').map(function(line){
+    var v=line.trim(); if(!v||!ivHasKo(v))return line;
+    var d=ivEnTx(v); if(!ivHasKo(d))return d;
+    return c[v]||line;
+  }).join('\n');
+}
+// 한글이 남은 줄만 온라인 번역 → 캐시 저장 → cb(영문 전체). 번역이 안 되는 환경이면 cb 는 호출되지 않습니다.
+function ivTrOnline(ko,savedEn,cb){
+  try{
+    ko=String(ko==null?'':ko);
+    var now=ivFreeEn(ko,savedEn);
+    if(!ivHasKo(now)){if(cb)cb(now);return Promise.resolve(now);}
+    var c=ivTrCache();
+    var need=[];now.split('\n').forEach(function(l){var v=l.trim();if(v&&ivHasKo(v)&&!c[v]&&need.indexOf(v)<0)need.push(v);});
+    return Promise.all(need.map(function(v){
+      return fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q='+encodeURIComponent(v))
+        .then(function(r){return r.json();})
+        .then(function(j){var tr=(j&&j[0])?j[0].map(function(s){return s[0];}).join(''):'';if(tr&&!ivHasKo(tr))c[v]=tr.trim();})
+        .catch(function(){});
+    })).then(function(){
+      ivTrSave(c);
+      var out=ivFreeEn(ko,savedEn);
+      if(cb&&out!==now)cb(out);
+      return out;
+    });
+  }catch(e){return Promise.resolve(String(ko||''));}
+}
+// PDF·인쇄 전에 메모·결제조건·은행명을 미리 번역해 둡니다 (최대 4초 대기)
+function ivTrPrefetch(inv){
+  var jobs=[ivTrOnline(inv.notes||'',inv.notes_en),ivTrOnline(inv.terms||'',inv.terms_en),ivTrOnline((inv.bankInfo&&inv.bankInfo.bankName)||'','')];
+  return Promise.race([Promise.all(jobs),new Promise(function(r){setTimeout(r,4000);})]);
+}
+// 화면에 그려진 뒤 한글이 남은 메모를 온라인 번역으로 바꿔 넣습니다
+function ivTrAfterPaint(){
+  setTimeout(function(){
+    document.querySelectorAll('[data-ivtr-notes]').forEach(function(el){
+      if(!ivHasKo(el.textContent))return;
+      var n=el.getAttribute('data-ivtr-notes')||'',ne=el.getAttribute('data-ivtr-en')||'',t=el.getAttribute('data-ivtr-terms')||'';
+      Promise.all([ivTrOnline(n,ne),ivTrOnline(t,'')]).then(function(r){
+        var out=r.filter(Boolean).join('\n');
+        if(el.isConnected&&out&&out!==el.textContent)el.textContent=out;   // 번역된 줄만이라도 반영
+      });
+    });
+    document.querySelectorAll('[data-ivtr]').forEach(function(el){
+      if(!ivHasKo(el.textContent))return;
+      ivTrOnline(el.getAttribute('data-ivtr')||'','',function(out){if(el.isConnected)el.textContent=out;});
+    });
+  },0);
+}
 // ── 수량 단위 : 항목설정(services)의 단위를 수량 옆에 붙입니다 (예: 2 대 · 2 units) ──
 var IV_UNIT_EN={'대':['unit','units'],'개':['pc','pcs'],'장':['pc','pcs'],'세트':['set','sets'],'시간':['hr','hrs'],
   '회':['time','times'],'박스':['box','boxes'],'롤':['roll','rolls'],'병':['bottle','bottles'],'명':['person','persons'],
@@ -1353,7 +1414,7 @@ App.resetForm=function(){
   var t=today();
   setVal('inv-date',t);setVal('inv-num',genId(t));setVal('inv-due',addDays(t,3));
   setVal('inv-status','billing');setVal('inv-currency','MYR');
-  ['c-name','c-email','c-addr','c-biz','c-member','inv-notes','inv-terms'].forEach(function(id){setVal(id,'');});
+  ['c-name','c-email','c-addr','c-biz','c-member','inv-notes','inv-notes-en','inv-terms'].forEach(function(id){setVal(id,'');});
   setVal('c-phone','+60');
   setVal('tax-rate','0');setVal('disc-val','0');setVal('disc-type','pct');
   setVal('parking-fee','0');setVal('min-charge','0');setVal('extra-fee','0');setVal('credit-use','0');setVal('voucher-amt','0');setVal('voucher-code','');setVal('point-use','0');
@@ -1485,7 +1546,7 @@ function loadInvToForm(inv){
   setVal('extra-fee',inv.extraFee||0);setVal('credit-use',inv.creditUse||0);setVal('voucher-amt',inv.voucherAmt||0);setVal('voucher-code',inv.voucherCode||'');setVal('point-use',inv.pointUse||0);
   payments=(inv.payments&&inv.payments.length)?JSON.parse(JSON.stringify(inv.payments)):((parseFloat(inv.paidAmount)||0)>0?[{amt:parseFloat(inv.paidAmount)||0,date:inv.paidDate||''}]:[]);
   renderPayments();
-  setVal('inv-notes',inv.notes||'');setVal('inv-terms',inv.terms||'');
+  setVal('inv-notes',inv.notes||'');setVal('inv-notes-en',inv.notes_en||'');setVal('inv-terms',inv.terms||'');
   setVal('send-email',inv.customer&&inv.customer.email||'');
   setVal('wa-num',inv.customer&&inv.customer.phone||'');
   var _ls=inv.status||'billing';
@@ -2318,7 +2379,7 @@ function getInvData(){
     items:JSON.parse(JSON.stringify(lineItems)),
     taxRate:t.taxRate,discVal:t.discVal,discType:t.discType,
     parkingFee:t.park,minCharge:t.minC,extraFee:t.extra,creditUse:t.credit,voucherAmt:t.voucher,voucherCode:t.voucherCode,pointUse:t.pts,paidAmount:t.paidAmount,payments:JSON.parse(JSON.stringify(payments)),
-    notes:val('inv-notes'),terms:val('inv-terms'),bankId:bankId,bankInfo:bank,total:t.grand,_t:t,
+    notes:val('inv-notes'),notes_en:val('inv-notes-en'),terms:val('inv-terms'),bankId:bankId,bankInfo:bank,total:t.grand,_t:t,
     files:invAtt.map(function(a){return{thumb:a.thumb||'',url:a.url||'',cap:a.cap||'',name:a.name||'',w:a.w||0,h:a.h||0};}),
     _insp:(window._invInspList||[]).slice(),
     contract_id:(window._invCtLink&&window._invCtLink.id)||'',
@@ -2713,7 +2774,7 @@ function buildInvAppHTML(inv,lang){
 
   // 결제 안내
   var payTxt=inv.bankInfo
-    ?[ivxEsc(en?ivEnTx(inv.bankInfo.bankName||''):(inv.bankInfo.bankName||'')),ivxEsc(inv.bankInfo.accNum||''),ivxEsc(inv.bankInfo.accName||'')].filter(Boolean).join('\n')
+    ?[(en?'<span data-ivtr="'+ivxEsc(inv.bankInfo.bankName||'')+'">'+ivxEsc(ivFreeEn(inv.bankInfo.bankName||'',''))+'</span>':ivxEsc(inv.bankInfo.bankName||'')),ivxEsc(inv.bankInfo.accNum||''),ivxEsc(inv.bankInfo.accName||'')].filter(Boolean).join('\n')
     :(L('문의: ','Enquiry: ')+ivxEsc(iss.phone||''));
   h+='<div class="ivcard gold"><div class="ivbox"><div class="bi">\u{1F4DE}</div><div>'+
      '<div class="bt">'+L('결제 정보','Payment Information')+'</div><div class="bb">'+payTxt+'</div>'+
@@ -2721,11 +2782,14 @@ function buildInvAppHTML(inv,lang){
      '</div></div></div>';
 
   // 메모
+  var noteKo=(inv.notes?inv.notes+'\n':'')+(inv.terms||'');
+  var noteEn=[ivFreeEn(inv.notes||'',inv.notes_en),ivFreeEn(inv.terms||'','')].filter(Boolean).join('\n');
   var noteTxt=(inv.notes||inv.terms)
-    ?ivxEsc(function(){var _n=(inv.notes?inv.notes+'\n':'')+(inv.terms||'');return en?ivEnTx(_n):_n;}())
+    ?(en?'<span data-ivtr-notes="'+ivxEsc(inv.notes||'')+'" data-ivtr-en="'+ivxEsc(inv.notes_en||'')+'" data-ivtr-terms="'+ivxEsc(inv.terms||'')+'">'+ivxEsc(noteEn)+'</span>':ivxEsc(noteKo))
     :L('30일 이내 무상 점검 · 회원은 계약 기간 내 무제한 점검이 가능합니다.','Free inspection within 30 days · Members are eligible for unlimited inspections during the membership period.');
+  if(en)ivTrAfterPaint();
   h+='<div class="ivcard blue"><div class="ivbox"><div class="bi">\u{1F4C4}</div><div>'+
-     '<div class="bt">'+L('메모','Notes')+' · NOTES</div><div class="bb">'+noteTxt+'</div></div></div></div>';
+     '<div class="bt">'+(en?'Notes':'메모 · Notes')+'</div><div class="bb">'+noteTxt+'</div></div></div></div>';
 
   // 📎 첨부 자료 — 세탁 무게 측정 사진 등 증빙자료
   var _atA=(inv.files||[]).filter(function(a){return a&&(a.thumb||a.url);});
@@ -2753,7 +2817,7 @@ function buildInvAppHTML(inv,lang){
 
   // 서명
   if(typeof imgData!=='undefined'&&imgData&&imgData.sign){
-    h+='<div class="ivcard"><div class="ivsign"><div class="k">'+L('담당자 서명','Authorized Signature')+' · Authorized Signature</div>'+
+    h+='<div class="ivcard"><div class="ivsign"><div class="k">'+(en?'Authorized Signature':'담당자 서명 · Authorized Signature')+'</div>'+
        '<img src="'+imgData.sign+'"></div></div>';
   }
   // 푸터
@@ -2798,11 +2862,11 @@ function buildInvHTML(inv,custView){
   var payHtml='';
   if(inv.bankInfo){
     var qrHtml=inv.bankInfo.qr?'<img class="qr" src="'+inv.bankInfo.qr+'">':'';
-    payHtml='<div class="nbox gold"><div class="nttl">Payment · 결제 안내</div><div class="payrow"><div class="nbody">'+ivxEsc(inv.bankInfo.bankName||'')+(inv.bankInfo.accNum?'\n'+ivxEsc(inv.bankInfo.accNum):'')+(inv.bankInfo.accName?'\n'+ivxEsc(inv.bankInfo.accName):'')+'</div>'+qrHtml+'</div></div>';
+    payHtml='<div class="nbox gold"><div class="nttl">Payment · 결제 안내</div><div class="payrow"><div class="nbody">'+ivxEsc(ivFreeEn(inv.bankInfo.bankName||'',''))+(inv.bankInfo.accNum?'\n'+ivxEsc(inv.bankInfo.accNum):'')+(inv.bankInfo.accName?'\n'+ivxEsc(inv.bankInfo.accName):'')+'</div>'+qrHtml+'</div></div>';
   }else{
     payHtml='<div class="nbox gold"><div class="nttl">Payment · 결제 안내</div><div class="nbody">문의: '+ivxEsc(iss.phone||'')+'</div></div>';
   }
-  var noteHtml='<div class="nbox"><div class="nttl">Notes · Terms</div><div class="nbody">'+((inv.notes||inv.terms)?ivxEsc((inv.notes?inv.notes+'\n':'')+(inv.terms||'')):'30일내 무상점검 · 무료 점검 기간 내 언제든지 서비스 신청 가능합니다. · Free inspection within 30 days (Unlimited for members) · Members eligible for unlimited inspections throughout membership period.')+'</div></div>';
+  var noteHtml='<div class="nbox"><div class="nttl">Notes · Terms</div><div class="nbody">'+((inv.notes||inv.terms)?ivxEsc([ivFreeEn(inv.notes||'',inv.notes_en),ivFreeEn(inv.terms||'','')].filter(Boolean).join('\n')):'30일내 무상점검 · 무료 점검 기간 내 언제든지 서비스 신청 가능합니다. · Free inspection within 30 days (Unlimited for members) · Members eligible for unlimited inspections throughout membership period.')+'</div></div>';
   var inspHtml='';
   var _ilist=inv._insp||[];
   if(_ilist.length){
@@ -2962,7 +3026,7 @@ function buildInvLiteHTML(inv,custView){
   if(t.pts>0)charge+='<div class="l-srow"><span>💎 해피포인트 · Points</span><span>- '+fa(t.pts)+'</span></div>';
   if(t.minC>0)charge+='<div class="l-srow"><span>최소 청구 · Min.</span><span>+ '+fa(t.minC)+'</span></div>';
   var payText=inv.bankInfo?[inv.bankInfo.bankName,inv.bankInfo.accNum,inv.bankInfo.accName].filter(Boolean).join('\n'):('문의 · Contact: '+(iss.phone||''));
-  var noteText=(inv.notes||inv.terms)?((inv.notes?inv.notes+'\n':'')+(inv.terms||'')):'30일내 무상점검 (회원 무제한) · Free inspection within 30 days';
+  var noteText=(inv.notes||inv.terms)?[ivFreeEn(inv.notes||'',inv.notes_en),ivFreeEn(inv.terms||'','')].filter(Boolean).join('\n'):'30일내 무상점검 (회원 무제한) · Free inspection within 30 days';
   var cInfo=[(custView&&cust.phone)?'****':cust.phone,cust.addr].filter(Boolean).map(function(x){return ivxEsc(x);}).join('<br>')+(cust.member?'<br>👑 '+ivxEsc(cust.member):'');
   var iInfo=[iss.phone,iss.addr,(iss.biz?'Reg. '+iss.biz:'')].filter(Boolean).map(function(x){return ivxEsc(x);}).join('<br>');
   var html='<div class="l-head"><div><div class="l-co">Happy Home Care</div><div class="l-sub">'+ivxEsc(iss.name||'HAPPY WORKS SERVICES SDN. BHD.')+'</div></div>'+
@@ -3983,6 +4047,7 @@ function renderList(){
 function openInvView(id){
   var inv=invoices.find(function(i){return i.id===id;});if(!inv)return;
   viewingId=id;inv._t=calcTotals(inv);
+  try{ivTrPrefetch(inv);}catch(e){}   // 인쇄·PDF 에 쓸 메모 영문 번역을 미리 받아 둡니다
   var body=$('inv-view-body');if(body)body.innerHTML=buildInvHTML(inv);
   $('inv-view-modal').classList.remove('hidden');
 }
@@ -5194,6 +5259,7 @@ async function generateAndSharePDF(shareType){
   if(!inv.id){showToast('먼저 인보이스를 저장해주세요.');return;}
   showLoad('PDF 생성 중...');
   try{
+    try{await ivTrPrefetch(inv);}catch(e){}   // 메모·결제조건 영문 번역을 먼저 받아 둡니다
     // 동적으로 라이브러리 로드
     if(!window.jspdf){
       await new Promise(function(res,rej){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
@@ -5363,7 +5429,7 @@ function bindAll(){
   });
   // Live preview inputs
   ['inv-date','inv-due','inv-status','inv-currency','c-name','c-phone','c-email','c-addr','c-biz','c-member',
-   'inv-notes','inv-terms','tax-rate','disc-val','disc-type','parking-fee','min-charge','extra-fee','credit-use','point-use'].forEach(function(id){
+   'inv-notes','inv-notes-en','inv-terms','tax-rate','disc-val','disc-type','parking-fee','min-charge','extra-fee','credit-use','point-use'].forEach(function(id){
     var el=$(id);if(el)el.addEventListener('input',App.upPrev);
   });
 }
@@ -6000,7 +6066,7 @@ function loadInvDraft(d){
   setVal('parking-fee',d.parkingFee||'0');setVal('min-charge',d.minCharge||'0');setVal('extra-fee',d.extraFee||'0');setVal('credit-use',d.creditUse||'0');setVal('voucher-amt',d.voucherAmt||'0');setVal('voucher-code',d.voucherCode||'');setVal('point-use',d.pointUse||'0');
   payments=(d.payments&&d.payments.length)?d.payments.map(function(x){return Object.assign({},x);}):((parseFloat(d.paidAmount)||0)>0?[{amt:parseFloat(d.paidAmount)||0,date:''}]:[]);
   renderPayments();
-  setVal('inv-notes',d.notes);setVal('inv-terms',d.terms);setVal('bank-select',d.bankId||'');
+  setVal('inv-notes',d.notes);setVal('inv-notes-en',d.notes_en||'');setVal('inv-terms',d.terms);setVal('bank-select',d.bankId||'');
   lineItems=(d.items||[]).map(function(x){return Object.assign({},x);});
   window._creditAuto=false;updateCreditHint(); // 임시저장 복원: 저장된 차감액 유지
   renderLI();App.upPrev();Nav('new');Tab('info');
