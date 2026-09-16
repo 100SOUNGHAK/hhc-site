@@ -591,6 +591,16 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
       <div class="qkrow"><button onclick="qkSet('parking-fee',5)">RM5</button><button onclick="qkSet('parking-fee',10)">RM10</button><button onclick="qkSet('parking-fee',0)">지우기</button></div>
       <div class="cr-row"><span class="cr-label">최소청구</span><input type="number" id="min-charge" value="0" min="0" step="0.5" class="cr-inp" oninput="App.upPrev()"><span style="font-size:12px;color:var(--gray);flex-shrink:0;padding:0 4px">금액</span></div>
       <div class="cr-row"><span class="cr-label">추가비용</span><input type="number" id="extra-fee" value="0" min="0" step="0.5" class="cr-inp" oninput="App.upPrev()"><span style="font-size:12px;color:var(--gray);flex-shrink:0;padding:0 4px">+금액</span></div>
+      <!-- 직접입력 조정 : 항목명을 직접 적고 금액을 더하거나(+) 뺍니다(−) -->
+      <div style="padding:9px 0;border-bottom:1px solid var(--bdr)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+          <span class="cr-label" style="min-width:0;color:var(--indigo);font-weight:700">직접입력 조정</span>
+          <span style="font-size:11.5px;color:var(--indigo);font-weight:800" id="adj-sum-lbl"></span>
+        </div>
+        <div id="adj-list"></div>
+        <button type="button" onclick="addAdjust()" style="width:100%;padding:9px;border:1.5px dashed rgba(79,110,247,.45);background:rgba(79,110,247,.06);color:var(--indigo);border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">+ 조정 항목 추가 (항목명 · 금액)</button>
+        <div style="font-size:10.5px;color:var(--gray);padding:7px 0 0;line-height:1.6">💡 왼쪽 <b>+ / −</b> 버튼으로 추가·차감을 고르고, 항목명은 고객 문서에 그대로 표시됩니다 (영문 문서에서는 자동 번역)</div>
+      </div>
       <div class="cr-row"><span class="cr-label" style="color:var(--red)">회원적립잔액</span><input type="number" id="credit-use" value="0" min="0" step="0.5" class="cr-inp" style="border-color:rgba(239,68,68,.3)" oninput="App.creditManual();App.upPrev()"><span style="font-size:12px;color:var(--red);flex-shrink:0;padding:0 4px">-차감</span></div>
       <div id="credit-auto-hint" style="display:none"></div>
       <div id="credit-bal-box" style="display:none"></div>
@@ -614,6 +624,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
       <div class="tr" id="disc-row" style="display:none"><span id="disc-lbl">할인</span><span id="disc-d"></span></div>
       <div class="tr" id="park-row" style="display:none"><span>주차비용</span><span id="park-d"></span></div>
       <div class="tr" id="extra-row" style="display:none"><span>추가비용</span><span id="extra-d"></span></div>
+      <div id="adj-rows"></div>
       <div class="tr" id="credit-row" style="display:none"><span style="color:#fca5a5">적립잔액사용</span><span id="credit-d" style="color:#fca5a5"></span></div>
       <div class="tr" id="voucher-row" style="display:none"><span style="color:#fcd34d" id="voucher-lbl">상품/할인권</span><span id="voucher-d" style="color:#fcd34d"></span></div>
       <div class="tr" id="point-row" style="display:none"><span style="color:#c4b5fd">💎 해피포인트</span><span id="point-d" style="color:#c4b5fd"></span></div>
@@ -1146,6 +1157,7 @@ function ivTrOnline(ko,savedEn,cb){
 // PDF·인쇄 전에 메모·결제조건·은행명을 미리 번역해 둡니다 (최대 4초 대기)
 function ivTrPrefetch(inv){
   var jobs=[ivTrOnline(inv.notes||'',inv.notes_en),ivTrOnline(inv.terms||'',inv.terms_en),ivTrOnline((inv.bankInfo&&inv.bankInfo.bankName)||'','')];
+  (inv.adjusts||[]).forEach(function(a){if(a&&a.name)jobs.push(ivTrOnline(a.name,''));});
   return Promise.race([Promise.all(jobs),new Promise(function(r){setTimeout(r,4000);})]);
 }
 // 화면에 그려진 뒤 한글이 남은 메모를 온라인 번역으로 바꿔 넣습니다
@@ -1418,6 +1430,7 @@ App.resetForm=function(){
   setVal('c-phone','+60');
   setVal('tax-rate','0');setVal('disc-val','0');setVal('disc-type','pct');
   setVal('parking-fee','0');setVal('min-charge','0');setVal('extra-fee','0');setVal('credit-use','0');setVal('voucher-amt','0');setVal('voucher-code','');setVal('point-use','0');
+  adjusts=[];renderAdjusts();
   payments=[];renderPayments();
   setVal('send-email','');
   var _tmpInv=getInvData();
@@ -1544,6 +1557,7 @@ function loadInvToForm(inv){
   setVal('tax-rate',inv.taxRate||0);setVal('disc-val',inv.discVal||0);setVal('disc-type',inv.discType||'pct');
   setVal('parking-fee',inv.parkingFee||0);setVal('min-charge',inv.minCharge||0);
   setVal('extra-fee',inv.extraFee||0);setVal('credit-use',inv.creditUse||0);setVal('voucher-amt',inv.voucherAmt||0);setVal('voucher-code',inv.voucherCode||'');setVal('point-use',inv.pointUse||0);
+  adjusts=(inv.adjusts&&inv.adjusts.length)?JSON.parse(JSON.stringify(inv.adjusts)):[];renderAdjusts();
   payments=(inv.payments&&inv.payments.length)?JSON.parse(JSON.stringify(inv.payments)):((parseFloat(inv.paidAmount)||0)>0?[{amt:parseFloat(inv.paidAmount)||0,date:inv.paidDate||''}]:[]);
   renderPayments();
   setVal('inv-notes',inv.notes||'');setVal('inv-notes-en',inv.notes_en||'');setVal('inv-terms',inv.terms||'');
@@ -1768,6 +1782,42 @@ window.addPayment=function(){payments.push({amt:0,date:today()});renderPayments(
 window.rmPayment=function(i){payments.splice(i,1);renderPayments();App.upPrev();};
 window.onPayAmt=function(i,v){if(payments[i]){payments[i].amt=parseFloat(v)||0;var s=$('pay-sum-lbl');if(s)s.textContent='합계 -'+fmtAmt(_payTotal());App.upPrev();}};
 window.onPayDate=function(i,v){if(payments[i]){payments[i].date=v;App.upPrev();}};
+
+// ── 직접입력 조정 : 관리자가 항목명을 직접 적고 금액을 더하거나(+) 빼는(−) 줄 ──
+//    저장 형태 : [{name:'야간 할증', amt:50, sign:1}]  (sign 1=추가 · -1=차감)
+var adjusts=[];
+function _adjNorm(src){
+  var a=(src&&src.length)?src:(src===undefined?adjusts:[]);
+  return (a||[]).map(function(x){
+    var amt=Math.abs(parseFloat(x&&x.amt)||0);
+    var sign=(parseFloat(x&&x.sign)||1)<0?-1:1;
+    return {name:String((x&&x.name)||'').trim(),amt:amt,sign:sign,val:amt*sign};
+  });
+}
+function _adjShow(src){return _adjNorm(src).filter(function(x){return x.amt>0.005;});}   // 문서에는 금액이 있는 줄만
+function _adjTotal(src){return _adjShow(src).reduce(function(s,x){return s+x.val;},0);}
+function renderAdjusts(){
+  var el=$('adj-list');if(!el)return;
+  el.innerHTML=adjusts.length?adjusts.map(function(a,i){
+    var minus=(parseFloat(a.sign)||1)<0;
+    var col=minus?'var(--red)':'var(--indigo)',bg=minus?'var(--rbg)':'var(--il)';
+    return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">'+
+      '<button type="button" onclick="toggleAdjSign('+i+')" title="추가 · 차감 바꾸기" style="width:34px;height:34px;min-width:34px;border:none;border-radius:7px;background:'+bg+';color:'+col+';font-size:18px;font-weight:800;cursor:pointer;font-family:inherit;flex-shrink:0">'+(minus?'−':'+')+'</button>'+
+      '<input value="'+ivxEsc(a.name||'').replace(/"/g,'&quot;')+'" placeholder="항목명 (예: 야간 할증)" oninput="onAdjName('+i+',this.value)" style="flex:1.3;min-width:0;padding:8px 9px;border:1.5px solid var(--bdr);border-radius:9px;font-size:12.5px;font-family:inherit">'+
+      '<div style="flex:1;min-width:0;position:relative"><i style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-style:normal;font-size:10px;color:var(--gray);font-weight:800;z-index:1">RM</i>'+
+        '<input type="number" value="'+(Math.abs(parseFloat(a.amt)||0))+'" min="0" step="0.5" placeholder="금액" oninput="onAdjAmt('+i+',this.value)" style="width:100%;padding:8px 8px 8px 32px;border:1.5px solid '+(minus?'rgba(239,68,68,.35)':'rgba(79,110,247,.35)')+';border-radius:9px;font-size:13px;font-weight:700;font-family:inherit"></div>'+
+      '<button type="button" class="ld" onclick="rmAdjust('+i+')" title="삭제">×</button>'+
+    '</div>';
+  }).join(''):'<div style="font-size:11.5px;color:var(--gray);padding:2px 0 8px">추가·차감할 항목이 있으면 아래 버튼으로 추가하세요</div>';
+  var s=$('adj-sum-lbl'),tv=_adjTotal();
+  if(s)s.textContent=Math.abs(tv)>0.005?((tv<0?'합계 -':'합계 +')+fmtAmt(Math.abs(tv))):'';
+}
+window.addAdjust=function(){adjusts.push({name:'',amt:0,sign:1});renderAdjusts();App.upPrev();
+  setTimeout(function(){var l=$('adj-list');if(l){var ins=l.querySelectorAll('input[placeholder^="항목명"]');if(ins.length)ins[ins.length-1].focus();}},0);};
+window.rmAdjust=function(i){adjusts.splice(i,1);renderAdjusts();App.upPrev();};
+window.toggleAdjSign=function(i){if(adjusts[i]){adjusts[i].sign=((parseFloat(adjusts[i].sign)||1)<0)?1:-1;renderAdjusts();App.upPrev();}};
+window.onAdjName=function(i,v){if(adjusts[i]){adjusts[i].name=v;App.upPrev();}};
+window.onAdjAmt=function(i,v){if(adjusts[i]){adjusts[i].amt=Math.abs(parseFloat(v)||0);var s=$('adj-sum-lbl'),tv=_adjTotal();if(s)s.textContent=Math.abs(tv)>0.005?((tv<0?'합계 -':'합계 +')+fmtAmt(Math.abs(tv))):'';App.upPrev();}};
 // 잔액이 남은 일부결제 인보이스 판별 (결제완료 처리 전 + 납부액 있음 + 잔액 있음)
 function invIsPartial(inv,t){
   var pa=t?(t.paidAmount||0):(parseFloat(inv.paidAmount)||0);
@@ -2194,12 +2244,14 @@ function calcTotals(inv){
   var park=parseFloat(inv?inv.parkingFee:val('parking-fee'))||0;
   var minC=parseFloat(inv?inv.minCharge:val('min-charge'))||0;
   var extra=parseFloat(inv?inv.extraFee:val('extra-fee'))||0;
+  var adjRows=_adjShow(inv?(inv.adjusts||[]):undefined);          // 직접입력 조정 (+ · −)
+  var adjSum=adjRows.reduce(function(a,x){return a+x.val;},0);
   var credit=parseFloat(inv?inv.creditUse:val('credit-use'))||0;
   // 패키지 회원 자동반영: 비용소계 + 세금 − 할인 + 추가비용을 회원적립잔액에 실시간 반영
   if(!inv&&window._creditAuto&&isPkgMember()){
     var _cTax=taxRate/100*sub;
     var _cDisc=discType==='pct'?discVal/100*sub:discVal;
-    credit=Math.round((sub+_cTax-_cDisc+extra)*100)/100;
+    credit=Math.round((sub+_cTax-_cDisc+extra+adjSum)*100)/100;
     if(credit<0)credit=0;
     var cEl=$('credit-use');
     if(cEl&&parseFloat(cEl.value)!==credit)cEl.value=credit;
@@ -2235,10 +2287,10 @@ function calcTotals(inv){
   var paidAmount=inv?(parseFloat(inv.paidAmount)||0):_payTotal();
   var tax=taxRate/100*sub;
   var disc=discType==='pct'?discVal/100*sub:discVal;
-  var rawGrand=sub+tax-disc+park+extra-credit-voucher-ptsUse;
+  var rawGrand=sub+tax-disc+park+extra+adjSum-credit-voucher-ptsUse;
   var grand=rawGrand+minC;
   var balance=grand-paidAmount;
-  var t={sub:sub,tax:tax,taxRate:taxRate,disc:disc,discVal:discVal,discType:discType,park:park,minC:minC,extra:extra,credit:credit,voucher:voucher,voucherCode:voucherCode,pts:ptsUse,paidAmount:paidAmount,balance:balance,grand:grand,rawGrand:rawGrand};
+  var t={sub:sub,tax:tax,taxRate:taxRate,disc:disc,discVal:discVal,discType:discType,park:park,minC:minC,extra:extra,adjusts:adjRows,adj:adjSum,credit:credit,voucher:voucher,voucherCode:voucherCode,pts:ptsUse,paidAmount:paidAmount,balance:balance,grand:grand,rawGrand:rawGrand};
   if(!inv){
     function sr(id,lbl,dispId,show,label,display){var r=$(id);if(r)r.style.display=show?'flex':'none';if(show){var l=$(lbl);if(l)l.textContent=label;var d=$(dispId);if(d)d.textContent=display;}}
     var sd=$('sub-d');if(sd)sd.textContent=fmtAmt(sub);
@@ -2247,6 +2299,11 @@ function calcTotals(inv){
     sr('disc-row','disc-lbl','disc-d',discVal>0,'할인'+(discType==='pct'?' '+discVal+'%':''),'-'+fmtAmt(disc));
     sr('park-row',null,'park-d',park>0,null,'+'+fmtAmt(park));
     sr('extra-row',null,'extra-d',extra>0,null,'+'+fmtAmt(extra));
+    var arw=$('adj-rows');
+    if(arw)arw.innerHTML=adjRows.map(function(x){
+      return '<div class="tr"><span'+(x.val<0?' style="color:#fca5a5"':'')+'>'+ivxEsc(x.name||'조정')+'</span>'+
+             '<span'+(x.val<0?' style="color:#fca5a5"':'')+'>'+(x.val<0?'-':'+')+fmtAmt(Math.abs(x.val))+'</span></div>';
+    }).join('');
     sr('credit-row',null,'credit-d',credit>0,null,'-'+fmtAmt(credit));
     sr('voucher-row','voucher-lbl','voucher-d',voucher>0,'상품/할인권'+(voucherCode?' ('+voucherCode+')':''),'-'+fmtAmt(voucher));
     sr('point-row',null,'point-d',ptsUse>0,null,'-'+fmtAmt(ptsUse));
@@ -2378,7 +2435,9 @@ function getInvData(){
     issuer:JSON.parse(JSON.stringify(issuer)),
     items:JSON.parse(JSON.stringify(lineItems)),
     taxRate:t.taxRate,discVal:t.discVal,discType:t.discType,
-    parkingFee:t.park,minCharge:t.minC,extraFee:t.extra,creditUse:t.credit,voucherAmt:t.voucher,voucherCode:t.voucherCode,pointUse:t.pts,paidAmount:t.paidAmount,payments:JSON.parse(JSON.stringify(payments)),
+    parkingFee:t.park,minCharge:t.minC,extraFee:t.extra,
+    adjusts:_adjNorm().filter(function(x){return x.amt>0.005||x.name;}).map(function(x){return{name:x.name,amt:x.amt,sign:x.sign};}),
+    creditUse:t.credit,voucherAmt:t.voucher,voucherCode:t.voucherCode,pointUse:t.pts,paidAmount:t.paidAmount,payments:JSON.parse(JSON.stringify(payments)),
     notes:val('inv-notes'),notes_en:val('inv-notes-en'),terms:val('inv-terms'),bankId:bankId,bankInfo:bank,total:t.grand,_t:t,
     files:invAtt.map(function(a){return{thumb:a.thumb||'',url:a.url||'',cap:a.cap||'',name:a.name||'',w:a.w||0,h:a.h||0};}),
     _insp:(window._invInspList||[]).slice(),
@@ -2756,6 +2815,11 @@ function buildInvAppHTML(inv,lang){
   if(t.discVal>0)row(L('할인','Discount')+(t.discType==='pct'?' '+t.discVal+'%':''),'- '+fa(t.disc),1);
   if(t.park>0)row(L('주차','Parking'),'+ '+fa(t.park));
   if(t.extra>0)row(L('추가','Extra'),'+ '+fa(t.extra));
+  (t.adjusts||[]).forEach(function(a){
+    var ko=a.name||L('조정','Adjustment');
+    var lbl=en?('<span data-ivtr="'+ivxEsc(ko).replace(/"/g,'&quot;')+'">'+ivxEsc(ivFreeEn(ko,''))+'</span>'):ivxEsc(ko);
+    row(lbl,(a.val<0?'- ':'+ ')+fa(Math.abs(a.val)),a.val<0?1:0);
+  });
   if(t.credit>0)row(L('회원 적립금','Member Credit'),'- '+fa(t.credit),1);
   if(t.voucher>0)row(L('상품·할인권','Voucher')+(t.voucherCode?' ('+ivxEsc(t.voucherCode)+')':''),'- '+fa(t.voucher),1);
   if(t.pts>0)row('\u{1F48E} '+L('해피포인트','Happy Points'),'- '+fa(t.pts),1);
@@ -2855,6 +2919,11 @@ function buildInvHTML(inv,custView){
   if(t.discVal>0)chargeRows+='<div class="sumrow minus"><span>할인 · Discount'+(t.discType==='pct'?' '+t.discVal+'%':'')+'</span><span class="num">- '+fa(t.disc)+'</span></div>';
   if(t.park>0)chargeRows+='<div class="sumrow"><span>주차 · Parking</span><span class="num">+ '+fa(t.park)+'</span></div>';
   if(t.extra>0)chargeRows+='<div class="sumrow"><span>추가 · Extra</span><span class="num">+ '+fa(t.extra)+'</span></div>';
+  (t.adjusts||[]).forEach(function(a){
+    var ko=a.name||'조정',eng=ivFreeEn(ko,'');
+    var lbl=(eng&&eng!==ko)?(ko+' · '+eng):ko;
+    chargeRows+='<div class="sumrow'+(a.val<0?' minus':'')+'"><span>'+ivxEsc(lbl)+'</span><span class="num">'+(a.val<0?'- ':'+ ')+fa(Math.abs(a.val))+'</span></div>';
+  });
   if(t.credit>0)chargeRows+='<div class="sumrow minus"><span>회원 적립금 · Member Credit</span><span class="num">- '+fa(t.credit)+'</span></div>';
   if(t.voucher>0)chargeRows+='<div class="sumrow minus"><span>상품/할인권 · Voucher'+(t.voucherCode?' ('+t.voucherCode+')':'')+'</span><span class="num">- '+fa(t.voucher)+'</span></div>';
   if(t.pts>0)chargeRows+='<div class="sumrow minus"><span>💎 해피포인트 · Happy Points</span><span class="num">- '+fa(t.pts)+'</span></div>';
@@ -2947,7 +3016,7 @@ function updateTabBadges(){
   var bit=$('badge-items');
   if(bit){var n=lineItems.length;bit.textContent=n;bit.classList.toggle('zero',n===0);}
   var bc=$('badge-charges');
-  var hasAdj=(parseFloat(val('tax-rate'))||0)>0||(parseFloat(val('disc-val'))||0)>0||(parseFloat(val('parking-fee'))||0)>0||(parseFloat(val('extra-fee'))||0)>0||(parseFloat(val('credit-use'))||0)>0||(parseFloat(val('voucher-amt'))||0)>0||(parseFloat(val('point-use'))||0)>0||_payTotal()>0;
+  var hasAdj=(parseFloat(val('tax-rate'))||0)>0||(parseFloat(val('disc-val'))||0)>0||(parseFloat(val('parking-fee'))||0)>0||(parseFloat(val('extra-fee'))||0)>0||(parseFloat(val('credit-use'))||0)>0||(parseFloat(val('voucher-amt'))||0)>0||(parseFloat(val('point-use'))||0)>0||Math.abs(_adjTotal())>0.005||_payTotal()>0;
   if(bc){
     bc.textContent=hasAdj?'✓':'–';bc.classList.toggle('zero',!hasAdj);
   }
@@ -3021,6 +3090,11 @@ function buildInvLiteHTML(inv,custView){
   if(t.discVal>0)charge+='<div class="l-srow"><span>할인 · Discount'+(t.discType==='pct'?' '+t.discVal+'%':'')+'</span><span>- '+fa(t.disc)+'</span></div>';
   if(t.park>0)charge+='<div class="l-srow"><span>주차 · Parking</span><span>+ '+fa(t.park)+'</span></div>';
   if(t.extra>0)charge+='<div class="l-srow"><span>추가 · Extra</span><span>+ '+fa(t.extra)+'</span></div>';
+  (t.adjusts||[]).forEach(function(a){
+    var ko=a.name||'조정',eng=ivFreeEn(ko,'');
+    var lbl=(eng&&eng!==ko)?(ko+' · '+eng):ko;
+    charge+='<div class="l-srow"><span>'+ivxEsc(lbl)+'</span><span>'+(a.val<0?'- ':'+ ')+fa(Math.abs(a.val))+'</span></div>';
+  });
   if(t.credit>0)charge+='<div class="l-srow"><span>회원 적립금 · Credit</span><span>- '+fa(t.credit)+'</span></div>';
   if(t.voucher>0)charge+='<div class="l-srow"><span>상품/할인권 · Voucher'+(t.voucherCode?' ('+t.voucherCode+')':'')+'</span><span>- '+fa(t.voucher)+'</span></div>';
   if(t.pts>0)charge+='<div class="l-srow"><span>💎 해피포인트 · Points</span><span>- '+fa(t.pts)+'</span></div>';
@@ -6063,7 +6137,8 @@ function loadInvDraft(d){
   var c=d.customer||{};
   setVal('c-name',c.name);setVal('c-phone',c.phone||'+60');setVal('c-email',c.email);setVal('c-addr',c.addr);setVal('c-biz',c.biz);setVal('c-member',c.member);
   setVal('tax-rate',d.taxRate||'0');setVal('disc-val',d.discVal||'0');setVal('disc-type',d.discType||'pct');
-  setVal('parking-fee',d.parkingFee||'0');setVal('min-charge',d.minCharge||'0');setVal('extra-fee',d.extraFee||'0');setVal('credit-use',d.creditUse||'0');setVal('voucher-amt',d.voucherAmt||'0');setVal('voucher-code',d.voucherCode||'');setVal('point-use',d.pointUse||'0');
+  setVal('parking-fee',d.parkingFee||'0');setVal('min-charge',d.minCharge||'0');setVal('extra-fee',d.extraFee||'0');
+  adjusts=(d.adjusts&&d.adjusts.length)?JSON.parse(JSON.stringify(d.adjusts)):[];renderAdjusts();setVal('credit-use',d.creditUse||'0');setVal('voucher-amt',d.voucherAmt||'0');setVal('voucher-code',d.voucherCode||'');setVal('point-use',d.pointUse||'0');
   payments=(d.payments&&d.payments.length)?d.payments.map(function(x){return Object.assign({},x);}):((parseFloat(d.paidAmount)||0)>0?[{amt:parseFloat(d.paidAmount)||0,date:''}]:[]);
   renderPayments();
   setVal('inv-notes',d.notes);setVal('inv-notes-en',d.notes_en||'');setVal('inv-terms',d.terms);setVal('bank-select',d.bankId||'');
