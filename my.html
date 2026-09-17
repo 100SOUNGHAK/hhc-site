@@ -1857,9 +1857,17 @@ async function load(){
     for(let i=0;i<ls.length;i++){if(MYK.indexOf(ls[i])>=0)return true;}
     return false;
   };
+  // 🔓 총괄 고객관리에서 「자동연결 해제」한 문서(ca_off)는 이 고객 화면에서 빼 줍니다
+  //    (다른 고객 이름·별칭이 겹쳐 잘못 붙은 문서를 관리자가 떼어내면 고객 화면에도 바로 반영됩니다)
+  const offMine=x=>{
+    const ls=(x&&Array.isArray(x.ca_off))?x.ca_off:[];
+    for(let i=0;i<ls.length;i++){if(MYK.indexOf(ls[i])>=0)return true;}
+    return false;
+  };
   const hit=(name,phone,x)=>{
-    if(inMyLinks(x))return true;
-    if(x&&x.ca_link)return linked(x);
+    if(inMyLinks(x))return true;          // 관리자가 추가로 연결한 문서
+    if(x&&x.ca_link)return linked(x);     // 소속을 옮긴 문서
+    if(offMine(x))return false;           // 이 고객에서 떼어낸 문서
     return (mp&&pn(phone)===mp)||(!!name&&keys.includes(nn(name)));
   };
   async function fetchColl(n){try{const s=await getDocs(collection(db,n));return s.docs.map(d=>{const x=d.data()||{};x.__id=d.id;return x;});}catch(e){return [];}}
@@ -1877,7 +1885,7 @@ async function load(){
     invoices:invs.filter(x=>hit(x.customer&&x.customer.name,x.customer&&x.customer.phone,x)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),
     inspections:insps.filter(x=>hit(x.client,x.phone,x)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),
     contracts:cts.filter(x=>hit(x.name,x.phone,x)),
-    coupons:cps.filter(x=>inMyLinks(x)||(x.ca_link?linked(x):(keys.includes(nn(x.name))||keys.includes(nn(x.receiver))))),
+    coupons:cps.filter(x=>inMyLinks(x)||(x.ca_link?linked(x):(!offMine(x)&&(keys.includes(nn(x.name))||keys.includes(nn(x.receiver)))))),
     // 예약 : 작성 대기(waiting) · 확인 중(booked) · 확정(confirmed) 만
     bookings:bks.filter(x=>hit(x.customer_name,x.customer_phone,x)&&['waiting','booked','confirmed'].indexOf(x.status)>=0)
       .sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))),
@@ -2095,8 +2103,12 @@ function scheduleBkHide(){
   _bkTimer=setTimeout(bkRerender,wait);
 }
 // 화면이 꺼져 있던 사이에 예약 시각이 지났다면 다시 열 때 바로 반영
+//  + 홈 화면 앱을 한동안 닫아 두었다가 다시 열면 문서 목록을 조용히 다시 불러옵니다
+//    (관리자가 문서를 연결·해제·수정한 내용이 바로 보이도록)
+let _hidAt=0,_reFetching=false;
 document.addEventListener('visibilitychange',function(){
-  if(document.visibilityState!=='visible'||!DATA)return;
+  if(document.visibilityState!=='visible'){_hidAt=Date.now();return;}
+  if(!DATA)return;
   const now=Date.now();
   const stale=(DATA.bookings||[]).some(x=>{
     if(x.status!=='confirmed')return false;
@@ -2104,6 +2116,10 @@ document.addEventListener('visibilitychange',function(){
     return at!=null&&at<=now;
   });
   if(stale)bkRerender();
+  if(_hidAt&&now-_hidAt>90000&&!_reFetching){
+    _reFetching=true;
+    load().then(function(){render();}).catch(function(){}).then(function(){_reFetching=false;_hidAt=0;});
+  }
 });
 
 function render(){
