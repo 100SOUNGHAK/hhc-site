@@ -3305,6 +3305,113 @@ boot();
   }
   function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
 
+  // 화면에 나타날 때 서서히 보이는 요소(애니메이션)를 즉시 보이게 만든다
+  //  · 숨긴 화면에서는 「화면에 들어왔는지」 감지가 동작하지 않아 사진·그래프가 빈칸으로 찍혔습니다
+  function revealIn(w){
+    try{
+      var d=w.document;
+      var st=d.createElement('style');
+      st.textContent='*{animation:none!important;transition:none!important}'+
+        '.an,.an-s,.an-r,.an-bar,.v-bar,.v-cat-bar,.rv{opacity:1!important;transform:none!important;clip-path:none!important;visibility:visible!important}';
+      d.head.appendChild(st);
+      Array.prototype.forEach.call(d.querySelectorAll('.an,.an-s,.an-r,.an-bar,.v-bar,.v-cat-bar,.rv'),
+        function(el){el.classList.add('in');});
+      // 0 부터 올라가는 숫자 효과 — 최종 값으로 되돌립니다
+      Array.prototype.forEach.call(d.querySelectorAll('[data-cnt]'),function(el){
+        var v=el.getAttribute('data-cnt'); if(v)el.textContent=v;
+      });
+      if(typeof w.revealAll==='function'){try{w.revealAll();}catch(e){}}
+    }catch(e){}
+  }
+
+  // 사진을 확실히 담는다
+  //  ① 화면의 사진이 모두 도착할 때까지 기다립니다 (고정 2.6초 대기로는 사진 여러 장이 못 실렸습니다)
+  //  ② 도착한 사진은 문서 안에 그림 데이터로 직접 심습니다
+  //     — PDF 를 만드는 단계에서 사진을 「다시」 내려받지 않아 빠르고, 주소 제한(CORS)으로 빈칸이 되는 일도 없습니다
+  async function waitImages(w,ms){
+    var d=w.document;
+    var imgs=Array.prototype.slice.call(d.images||[]);
+    imgs.forEach(function(im){try{im.loading='eager';im.decoding='sync';}catch(e){}});
+    function settled(im,limit){
+      return new Promise(function(res){
+        if(im.complete)return res();
+        var t=setTimeout(res,limit);
+        var fin=function(){clearTimeout(t);res();};
+        im.addEventListener('load',fin,{once:true});
+        im.addEventListener('error',fin,{once:true});
+      });
+    }
+    await Promise.all(imgs.map(function(im){return settled(im,ms);}));
+    var ext=imgs.filter(function(im){return /^https?:/i.test(im.currentSrc||im.src||'');});
+    var fail=0;
+    await Promise.all(ext.map(function(im){
+      var src=im.currentSrc||im.src;
+      return w.fetch(src,{mode:'cors',credentials:'omit',cache:'force-cache'})
+        .then(function(r){return r&&r.ok?r.blob():null;})
+        .then(function(b){
+          if(!b){fail++;return null;}
+          return new Promise(function(res){
+            var fr=new w.FileReader();
+            fr.onload=function(){im.src=fr.result;res();};
+            fr.onerror=function(){fail++;res();};
+            fr.readAsDataURL(b);
+          });
+        })
+        .catch(function(){fail++;});
+    }));
+    if(ext.length)await Promise.all(imgs.map(function(im){return settled(im,3000);}));
+    return {total:imgs.length,fail:fail};
+  }
+
+  // 쪽을 나눌 위치 찾기
+  //  · 문서 안 모든 상자의 위·아래 위치를 재어 두고,
+  //    「어떤 상자도 가로지르지 않는 지점」만 쪽 경계로 씁니다 (글자·카드가 두 쪽에 걸쳐 잘리지 않게)
+  function boxRects(w,sc){
+    var out=[];
+    try{
+      var els=w.document.body.querySelectorAll('div,section,article,table,tr,td,li,p,h1,h2,h3,h4,figure,img,ul,ol,span,button,a');
+      for(var i=0;i<els.length;i++){
+        var el=els[i],r=el.getBoundingClientRect();
+        if(r.height<=4)continue;
+        var cs=w.getComputedStyle(el);
+        if(cs.display==='none'||cs.visibility==='hidden')continue;
+        out.push([Math.round(r.top*sc),Math.round(r.bottom*sc)]);
+      }
+    }catch(e){}
+    return out;
+  }
+  // 이 위치에서 잘라도 되는가 (한 쪽에 들어가는 상자를 가로지르면 안 됩니다)
+  function cutOk(y,rects,pageH){
+    for(var i=0;i<rects.length;i++){
+      var t=rects[i][0],b=rects[i][1];
+      if(b-t>pageH)continue;                 // 한 쪽보다 큰 덩어리는 어차피 나눠야 합니다
+      if(t<y-1&&b>y+1)return false;
+    }
+    return true;
+  }
+  function pickCut(y,want,rects,pageH){
+    var lo=y+Math.floor(pageH*0.45);          // 너무 적게 담으면 쪽수만 늘어납니다
+    var cands=[];
+    for(var i=0;i<rects.length;i++){
+      var b=rects[i][1]+2;
+      if(b>lo&&b<=want&&(rects[i][1]-rects[i][0])<=pageH)cands.push(b);
+    }
+    cands.sort(function(a,b){return b-a;});
+    for(var j=0;j<cands.length;j++)if(cutOk(cands[j],rects,pageH))return cands[j];
+    return want;
+  }
+
+  // PDF 로 만들 문서는 「지금 보고 있는 주소와 같은 출처」에서 열어야 내용을 읽을 수 있습니다
+  //  (다른 주소로 열면 브라우저가 내용 접근을 막아 PDF 만들기가 통째로 실패했습니다)
+  function sameOrigin(u){
+    try{
+      var x=new URL(u,location.href);
+      if(/^https?:$/.test(location.protocol)&&x.origin!==location.origin)
+        return location.origin+x.pathname+x.search+x.hash;
+      return x.toString();
+    }catch(e){return u;}
+  }
+
   // 숨긴 화면에서 문서를 그려 PDF(Blob)로 만든다
   async function makePdf(url){
     var fr=document.createElement('iframe');
@@ -3316,10 +3423,10 @@ boot();
         var done=false;
         fr.onload=function(){if(!done){done=true;res();}};
         setTimeout(function(){if(!done){done=true;res();}},15000);
-        fr.src=url;
+        fr.src=sameOrigin(url);
       });
       var w=fr.contentWindow;
-      await sleep(2600);                                   // 문서가 데이터를 불러올 시간
+      await sleep(2000);                                   // 문서가 데이터를 불러올 시간
       // 화면 전용 요소(상단바·하단바 등 고정 배치)는 PDF에서 제외
       try{
         var d=w.document;
@@ -3330,23 +3437,40 @@ boot();
         d.body.style.background='#fff';
         var pad=d.querySelector('.iva,.cxa');if(pad)pad.style.paddingBottom='8px';
       }catch(e){}
-      await sleep(400);
+      revealIn(w);                                         // 애니메이션으로 숨어 있던 내용 펼치기
+      await sleep(250);
+      await waitImages(w,9000);                            // 사진이 다 실린 뒤에 찍습니다
+      await sleep(250);
       await loadIn(w,'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
       await loadIn(w,'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
       var body=w.document.body;
+      var docH=Math.max(body.scrollHeight,w.document.documentElement.scrollHeight);
       var cv=await w.html2canvas(body,{scale:2,useCORS:true,allowTaint:false,backgroundColor:'#ffffff',
-        windowWidth:560,width:560,height:body.scrollHeight,scrollX:0,scrollY:0,logging:false});
+        windowWidth:560,width:560,height:docH,scrollX:0,scrollY:0,imageTimeout:15000,logging:false});
       var JS=(w.jspdf&&w.jspdf.jsPDF)||w.jsPDF;
       var pdf=new JS('p','mm','a4');
       var pw=210,ph=297,mg=8,iw=pw-mg*2;
       var ratio=iw/cv.width;                                // 캔버스 px → mm
       var pageH=Math.floor((ph-mg*2)/ratio);                // 한 쪽에 담기는 캔버스 높이(px)
-      var y=0,first=true;
-      while(y<cv.height){
-        var hh=Math.min(pageH,cv.height-y);
+      // 한 쪽보다 조금만 길면 한 쪽에 맞게 줄입니다 (문서가 두 쪽으로 갈리지 않게)
+      if(cv.height>pageH&&cv.height<=pageH*1.3){
+        var fh=(ph-mg*2),fw=iw*((ph-mg*2)/(cv.height*ratio));
+        pdf.addImage(cv.toDataURL('image/jpeg',0.92),'JPEG',mg+(iw-fw)/2,mg,fw,fh);
+        return pdf.output('blob');
+      }
+      var sc=cv.height/(docH||1);                           // 화면 좌표 → 캔버스 좌표
+      var rects=boxRects(w,sc);
+      var y=0,first=true,guard=0;
+      while(y<cv.height-1&&guard++<80){
+        var want=Math.min(y+pageH,cv.height);
+        var cut=(want<cv.height)?pickCut(y,want,rects,pageH):want;
+        var hh=Math.min(cut-y,cv.height-y);
+        if(hh<=0)hh=Math.min(pageH,cv.height-y);
         var pc=w.document.createElement('canvas');
         pc.width=cv.width;pc.height=hh;
-        pc.getContext('2d').drawImage(cv,0,y,cv.width,hh,0,0,cv.width,hh);
+        var cx=pc.getContext('2d');
+        cx.fillStyle='#ffffff';cx.fillRect(0,0,pc.width,pc.height);
+        cx.drawImage(cv,0,y,cv.width,hh,0,0,cv.width,hh);
         if(!first)pdf.addPage();
         pdf.addImage(pc.toDataURL('image/jpeg',0.92),'JPEG',mg,mg,iw,hh*ratio);
         first=false;y+=hh;
@@ -3394,7 +3518,7 @@ boot();
     var txt='Happy Home Care · '+title;
     busy(T('PDF 만드는 중...','Creating PDF...'),T('문서를 불러와 PDF로 변환하고 있습니다. 잠시만 기다려 주세요.','Loading the document and converting it to PDF. This may take a few seconds.'));
     var blob=null;
-    try{blob=await makePdf(url);}catch(e){blob=null;}
+    try{blob=await makePdf(url);}catch(e){blob=null;try{console.warn('[PDF]',(e&&e.message)||e);}catch(_){}}
     if(blob){
       var file=null;
       try{file=new File([blob],nm,{type:'application/pdf'});}catch(e){}
