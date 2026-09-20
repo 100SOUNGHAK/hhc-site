@@ -105,6 +105,8 @@ details.acd-more[open]>summary:after{transform:rotate(-90deg)}
 .acd-ct td.sv .acd-sev{margin-left:0}
 .acd-ct small{display:block;color:var(--ink3);font-size:11px}
 .acd-ct-wrap{max-height:360px;overflow:auto}
+.acd-parts{padding:12px 12px 14px;background:#fff}
+.acd-pt td{white-space:nowrap}
 
 /* ── 결과 ── */
 .acd-hero{background:linear-gradient(140deg,#0E2350,#16346E 65%,#1D4090);color:#fff;border-radius:16px;padding:16px 16px 14px;margin-bottom:12px;
@@ -280,6 +282,26 @@ details.acd-refbox[open]>summary .acd-chd:after{transform:rotate(-90deg)}
       <datalist id="code-list"></datalist>
       <div class="acd-cprev" id="code-prev"></div>
       <details class="acd-more" id="code-tbl-box"><summary id="code-tbl-sum">이 브랜드 코드표 전체 보기</summary><div class="acd-ct-wrap" id="code-tbl"></div></details>
+      <details class="acd-more" id="parts-box"><summary id="l-parts">부품 측정</summary>
+        <div class="acd-parts">
+          <div class="acd-fl" id="l-cap">캐패시터</div>
+          <div class="acd-g2">
+            <div><div class="acd-fl" style="margin-top:0" id="l-capr">표기값</div><div class="acd-unit"><input class="acd-in" id="in-capr" type="number" inputmode="decimal" step="0.1" min="0"><span>µF</span></div></div>
+            <div><div class="acd-fl" style="margin-top:0" id="l-capm">측정값</div><div class="acd-unit"><input class="acd-in" id="in-capm" type="number" inputmode="decimal" step="0.1" min="0"><span>µF</span></div></div>
+          </div>
+          <div class="acd-dt" id="cap-live"></div>
+          <div class="acd-hint" id="cap-hint"></div>
+          <div class="acd-fl" style="margin-top:16px" id="l-th">써미스터</div>
+          <div class="acd-fl" style="margin-top:0" id="l-thn">공칭 저항</div>
+          <div class="acd-chips" id="c-thn"></div>
+          <div class="acd-g2" style="margin-top:10px">
+            <div><div class="acd-fl" style="margin-top:0" id="l-thr">측정 저항</div><div class="acd-unit"><input class="acd-in" id="in-thr" type="number" inputmode="decimal" step="0.1" min="0"><span>kΩ</span></div></div>
+            <div><div class="acd-fl" style="margin-top:0" id="l-tht">센서 온도</div><div class="acd-unit"><input class="acd-in" id="in-tht" type="number" inputmode="decimal" step="0.1"><span>°C</span></div></div>
+          </div>
+          <div class="acd-dt" id="th-live"></div>
+          <div class="acd-hint" id="th-hint"></div>
+        </div>
+      </details>
     </div>
   </section>
 
@@ -936,6 +958,11 @@ var REF={
 var DT_REF={good:15,ok:12,low:8};              /* 온도차 기준 (점검보고서와 동일) */
 var VOLT_REF={lo:216,hi:253,nom:230};           /* TNB 230V −6% / +10% */
 var AMB_DEFAULT=33;                             /* 외기 미입력 시 가정값 */
+/* 써미스터(NTC) 예상 저항: R25(kΩ) · B=3950 기준. 기종별 B값(3400~4000) 차이를 감안해 ±15%는 정상으로 본다 */
+var TH_B=3950;
+function thermR(r25,tC){return r25*Math.exp(TH_B*(1/(tC+273.15)-1/298.15));}
+var TH_NOMS=['5','10','20','50'];                  /* 공칭 저항(kΩ @25°C) 선택지 */
+var CAP_TOL=6;                                     /* 캐패시터 허용오차 ±% */
 /* HP별 정격 전류 추정 (A) — 명판 값이 있으면 명판 우선 */
 var AMP_EST={inv:{'1.0':3.9,'1.5':5.3,'2.0':8.2,'2.5':8.8,'3.0':9.8},
              non:{'1.0':4.2,'1.5':5.9,'2.0':8.6,'2.5':10.8,'3.0':12.5}};
@@ -972,7 +999,7 @@ ko:{
   yorkFam:'York 계열',yorkNew:'2015년 이후 (YWM3F · YWM5J)',yorkOld:'2015년 이전 (OYL · Daikin 계열)',
   guessHp:'모델명으로 추정',
   sym:'증상 (해당 항목 모두 선택)',
-  symList:{nocool:'냉방 약함 · 안 시원함',weakair:'바람 약함',leak:'실내기 물 샘',ice:'실내기 · 배관 결빙',odoff:'실외기 안 돎',trip:'자주 꺼짐 · 차단기 트립',noise:'소음 · 진동',smell:'냄새',nopower:'전원 안 켜짐 · 리모컨 불응',err:'에러코드 표시'},
+  symList:{nocool:'냉방 약함 · 안 시원함',weakair:'바람 약함',leak:'실내기 물 샘',ice:'실내기 · 배관 결빙',odoff:'실외기 안 돎',trip:'자주 꺼짐 · 차단기 트립',noise:'소음 · 진동',smell:'냄새',nopower:'전원 안 켜짐 · 리모컨 불응',err:'에러코드 표시',hum:'압축기 웅~ 소리 후 정지',fanpush:'실외 팬 손으로 밀면 돎',tempctl:'온도 조절 안 됨 · 표시온도 오차'},
   visual:'육안 점검',
   filter:'필터 · 증발기',filterOpt:['깨끗','보통','심한 오염'],
   cond:'실외기 응축기',condOpt:['깨끗','오염','통풍 불량 · 막힘'],
@@ -982,6 +1009,9 @@ ko:{
   press:'냉매 압력',lp:'저압 (흡입측)',hpp:'고압 (토출측)',unit:'단위',cur:'운전 전류 (A)',volt:'전원 전압 (V)',
   code:'에러코드',codePh:'예: U4, H11, CH38',codeNone:'등록되지 않은 코드입니다 — 제조사 매뉴얼을 확인하세요',
   codeTable:'이 브랜드 코드표 전체 보기',codeSel:'브랜드를 먼저 선택하세요',
+  parts:'부품 측정 (캐패시터 · 써미스터 의심 시)',cap:'캐패시터',capR:'표기값 (µF)',capM:'측정값 (µF)',capInv:'인버터 기기의 실외기에는 운전 캐패시터가 없습니다 — 기판(IPM)·DC 팬 모터를 점검하세요.',
+  th:'써미스터 (온도 센서)',thN:'공칭 저항 (25°C 기준)',thM:'측정 저항 (kΩ)',thT:'측정 시 센서 온도 (°C)',thHint:'공칭값은 서비스 매뉴얼 기준 — 실온·코일 센서는 보통 10kΩ(LG·Mitsubishi·Samsung·Midea·Gree) 또는 20kΩ(Daikin), 토출 센서는 50kΩ 이상',
+  capLive:'캐패시터',thLive:'써미스터 예상',
   run:'진단 결과 보기',reset:'초기화',copy:'결과 복사',copied:'복사됨',
   status:{none:'입력 대기',ok:'정상 범위',warn:'주의',bad:'점검 필요',crit:'즉시 조치'},
   noInput:'증상이나 측정값을 입력하면 진단 결과가 나옵니다.',
@@ -997,6 +1027,8 @@ ko:{
     cur:'운전 전류',curV:'명판 정격 대비 70~110% 정상 · 120% 이상 과부하 · 50% 미만은 냉매 부족 또는 압축기 미가동 의심. 인버터는 최대 냉방 시 기준.',
     curEst:'HP별 정격 전류 추정 (인버터 / 일반형): 1.0HP 3.9 / 4.2A · 1.5HP 5.3 / 5.9A · 2.0HP 8.2 / 8.6A · 2.5HP 8.8 / 10.8A · 3.0HP 9.8 / 12.5A — 명판 값 우선',
     volt:'전원 전압',voltV:'230V 기준, TNB 허용 −6% / +10% = 216~253V. 216V 미만 저전압(기동 불량·과전류), 253V 초과 과전압(기판 보호 정지)',
+    th:'써미스터 저항 기준 (NTC · B=3950 · ±15% 정상)',thNote:'단선 = 무한대(OL), 단락 = 0Ω → 에러코드. 값이 조금 틀어진 「드리프트」는 코드 없이 증상만 나타남: 실온 센서 → 설정온도 도달 판단 오류(계속 운전·너무 일찍 정지·표시온도 오차), 실내 코일 센서 → 결빙(보호 안 됨) 또는 멀쩡한데 동결 보호 정지, 실외 코일·토출 센서 → 응축기·압력 정상인데 고압·과열 보호 코드. 판정법: 커넥터 재장착 → 저항 측정 → 손으로 쥐어 저항이 내려가는지 → 같은 위치의 다른 센서와 비교.',
+    cap:'캐패시터 (일반형 · 정속 기기)',capNote:'표기 µF ±6% 밖이면 불량, 팽창·누액은 측정 없이 교체. 전형 사례 — ① 압축기 운전 캐패시터: 실외 팬은 도는데 압축기가 웅~ 소리만 내다 몇 초 뒤 정지·반복(기동 순간 전류 정격의 4~6배 → 0), 냉방 안 됨, 차단기 트립. 용량이 조금만 줄면 기동은 되나 전류 높고 과열 트립. ② 팬 캐패시터: 실외 팬이 안 돌거나 매우 느림, 손으로 밀면 돎, 모터 뜨거움 → 고압 급상승·압축기 과열 트립. ③ 듀얼(공용) 캐패시터: 팬만 또는 압축기만 안 돎. 교체는 같은 µF, 같거나 높은 전압(370→450V 가능). 인버터 기기에는 운전 캐패시터가 없고 기판 DC 콘덴서·IPM이 그 역할 — CH23·U2·F90·P1 같은 전압 코드로 나타남.',
     src:'출처: 각 제조사 서비스 매뉴얼·공식 에러코드 안내(Daikin·Panasonic·Mitsubishi Electric·LG·Samsung·Midea·Gree·Toshiba·Sharp·York·Acson), 냉매 PT표, TNB 전력공급 핸드북(전압 허용범위)'
   },
   sumHead:'[에어컨 진단 요약]',na:'—'
@@ -1010,7 +1042,7 @@ en:{
   yorkFam:'York family',yorkNew:'2015 onward (YWM3F · YWM5J)',yorkOld:'Before 2015 (OYL · Daikin platform)',
   guessHp:'Estimated from model',
   sym:'Symptoms (select all that apply)',
-  symList:{nocool:'Weak / no cooling',weakair:'Weak airflow',leak:'Water dripping indoors',ice:'Ice on indoor coil / pipe',odoff:'Outdoor unit not running',trip:'Keeps stopping · breaker trips',noise:'Noise · vibration',smell:'Odour',nopower:'No power · not responding',err:'Error code shown'},
+  symList:{nocool:'Weak / no cooling',weakair:'Weak airflow',leak:'Water dripping indoors',ice:'Ice on indoor coil / pipe',odoff:'Outdoor unit not running',trip:'Keeps stopping · breaker trips',noise:'Noise · vibration',smell:'Odour',nopower:'No power · not responding',err:'Error code shown',hum:'Compressor hums then stops',fanpush:'Outdoor fan runs only if pushed',tempctl:'Poor temp control · display temp wrong'},
   visual:'Visual check',
   filter:'Filter · evaporator',filterOpt:['Clean','Moderate','Heavily soiled'],
   cond:'Condenser (outdoor)',condOpt:['Clean','Dirty','Poor airflow · blocked'],
@@ -1020,6 +1052,9 @@ en:{
   press:'Refrigerant pressure',lp:'Low side (suction)',hpp:'High side (discharge)',unit:'Unit',cur:'Running current (A)',volt:'Supply voltage (V)',
   code:'Error code',codePh:'e.g. U4, H11, CH38',codeNone:'Code not in the table — check the manufacturer manual',
   codeTable:'Show full code table for this brand',codeSel:'Select a brand first',
+  parts:'Component tests (suspected capacitor / thermistor)',cap:'Capacitor',capR:'Rated (µF)',capM:'Measured (µF)',capInv:'Inverter outdoor units have no run capacitor — check the PCB (IPM) and DC fan motor instead.',
+  th:'Thermistor (temperature sensor)',thN:'Nominal resistance (at 25 °C)',thM:'Measured resistance (kΩ)',thT:'Sensor temperature when measured (°C)',thHint:'Nominal value per service manual — room/coil sensors are usually 10 kΩ (LG, Mitsubishi, Samsung, Midea, Gree) or 20 kΩ (Daikin); discharge sensors 50 kΩ or more',
+  capLive:'Capacitor',thLive:'Thermistor expected',
   run:'Show diagnosis',reset:'Reset',copy:'Copy result',copied:'Copied',
   status:{none:'Waiting for input',ok:'Within normal range',warn:'Caution',bad:'Needs inspection',crit:'Act now'},
   noInput:'Enter symptoms or measurements to get a diagnosis.',
@@ -1035,19 +1070,21 @@ en:{
     cur:'Running current',curV:'70–110 % of nameplate normal · ≥120 % overload · <50 % suspect shortage or compressor not running. Inverter: at maximum cooling.',
     curEst:'Estimated rated current by HP (inverter / non-inverter): 1.0HP 3.9 / 4.2 A · 1.5HP 5.3 / 5.9 A · 2.0HP 8.2 / 8.6 A · 2.5HP 8.8 / 10.8 A · 3.0HP 9.8 / 12.5 A — nameplate value takes priority',
     volt:'Supply voltage',voltV:'230 V nominal, TNB tolerance −6 % / +10 % = 216–253 V. Below 216 V: low voltage (start failure, over-current); above 253 V: PCB protection stop',
+    th:'Thermistor resistance reference (NTC · B=3950 · ±15 % normal)',thNote:'Open = infinite (OL), short = 0 Ω → error code. A drifted value gives no code, only symptoms: room sensor → wrong set-point judgement (runs non-stop, stops too early, display temp off); indoor coil sensor → icing (no protection) or freeze-protection stops on a healthy unit; outdoor coil / discharge sensor → high-pressure or overheat codes with normal condenser and pressures. Method: reseat connector → measure → squeeze the sensor and watch resistance fall → compare with another sensor at the same spot.',
+    cap:'Capacitor (non-inverter / fixed-speed units)',capNote:'Outside rated µF ±6 % = bad; bulged or leaking = replace without measuring. Typical cases — ① compressor run capacitor: outdoor fan runs but compressor only hums and stops after a few seconds, repeating (start current 4–6× rated then zero), no cooling, breaker trips; a slightly weak capacitor still starts but runs hot with high current and trips. ② fan capacitor: outdoor fan does not spin or is very slow, runs if pushed by hand, motor hot → head pressure spikes, compressor overheat trip. ③ dual capacitor: only the fan or only the compressor fails. Replace with the same µF and equal or higher voltage (370 → 450 V OK). Inverter units have no run capacitor — the PCB DC-link capacitor and IPM take that role and show as voltage codes (CH23, U2, F90, P1).',
     src:'Sources: manufacturer service manuals and official error-code pages (Daikin, Panasonic, Mitsubishi Electric, LG, Samsung, Midea, Gree, Toshiba, Sharp, York, Acson), refrigerant PT charts, TNB Electricity Supply Application Handbook (voltage tolerance)'
   },
   sumHead:'[AC diagnosis summary]',na:'—'
 }};
 
-var SYMS=['nocool','weakair','leak','ice','odoff','trip','noise','smell','nopower','err'];
+var SYMS=['nocool','weakair','leak','ice','odoff','trip','hum','fanpush','tempctl','noise','smell','nopower','err'];
 var HPS=['1.0','1.5','2.0','2.5','3.0'];
 var REFS=['R32','R410A','R22'];
 
 /* ── 상태 ─────────────────────────────────────────────────────────── */
 var S=blank();
 function blank(){return {lang:'ko',brand:null,yorkFam:'new',model:'',hp:null,type:null,ref:null,rated:'',
-  sym:{},filter:null,cond:null,odfan:null,ta:'',tb:'',amb:'',lp:'',hpp:'',punit:'psi',cur:'',volt:'',code:'',shown:false};}
+  sym:{},filter:null,cond:null,odfan:null,ta:'',tb:'',amb:'',lp:'',hpp:'',punit:'psi',cur:'',volt:'',code:'',capr:'',capm:'',thn:'10',thr:'',tht:'',shown:false};}
 function tx(){return T[S.lang];}
 function L(o){return o?(S.lang==='ko'?o.ko:o.en):'';}
 function num(v){if(v===''||v==null)return null;var n=parseFloat(String(v).replace(',','.'));return isFinite(n)?n:null;}
@@ -1194,6 +1231,14 @@ function diagnose(){
   if(sy.smell){hasAny=true;add('C12',4,symEv('smell'));add('C8',1,w('냄새 — 배수 트랩 건조 시 하수 냄새','Odour — sewer smell from dry drain trap'));}
   if(sy.nopower){hasAny=true;add('C7',3,symEv('nopower'));add('C9',3,symEv('nopower'));add('C14',2,w('리모컨 건전지·수신부 확인','Check remote batteries / receiver'));}
 
+  if(sy.hum){hasAny=true;
+    if(S.type==='inv'){add('C6',3,w('압축기 웅~ 후 정지 — 인버터 기기는 캐패시터가 없음: 압축기 권선·U·V·W 배선·IPM 점검','Hums then stops — inverter has no capacitor: check windings, U-V-W leads, IPM'));add('C7',1,symEv('hum'));}
+    else{add('C10',4,w('압축기 웅~ 소리 후 정지 — 운전 캐패시터 불량의 전형 (기동 전류 급상승 후 0)','Compressor hums then stops — classic run-capacitor failure'));add('C6',2,w('웅~ 후 정지 — 압축기 구속(락)도 같은 증상','Hum then stop — a locked compressor gives the same sign'));add('C7',1,w('저전압도 기동 실패를 일으킴','Low voltage also causes start failure'));}}
+  if(sy.fanpush){hasAny=true;
+    if(S.type==='inv'){add('C2',2,w('실외 팬 밀면 돎 — DC 팬 모터·기판 팬 구동부 (인버터)','Fan runs only if pushed — DC fan motor / PCB fan driver (inverter)'));add('C9',1,symEv('fanpush'));}
+    else{add('C10',4,w('실외 팬을 밀어야 돎 — 팬 캐패시터 불량의 전형','Fan runs only if pushed — classic fan-capacitor failure'));add('C2',2,w('팬 저속·정지 → 고압 상승·압축기 과열 트립','Slow/stopped fan → high head, compressor overheat trip'));}}
+  if(sy.tempctl){hasAny=true;add('C16',3,w('온도 조절 안 됨·표시온도 오차 — 실온 센서 드리프트(값이 틀어짐)의 전형','Poor temp control / display off — classic room-sensor drift'));add('C14',1,w('센서 위치·직사광·리모컨 센서 설정도 확인','Also check sensor position, sunlight, remote sensor setting'));}
+
   /* 육안 */
   if(S.filter===2){hasAny=true;add('C4',3,w('필터·증발기 심한 오염','Filter / evaporator heavily soiled'));add('C12',1,w('오염 — 냄새·곰팡이','Soiling — odour / mould'));}
   else if(S.filter===1){hasAny=true;add('C4',1,w('필터·증발기 보통 오염','Filter / evaporator moderately soiled'));}
@@ -1210,6 +1255,40 @@ function diagnose(){
       fam.m.forEach(function(p){add(p[0],p[1]+(codeRow[4]==='crit'?1:0),w('에러코드 '+codeRow[0]+' — '+codeRow[1],'Error code '+codeRow[0]+' — '+codeRow[2]));});
     }else if(S.brand){warns.push(w('에러코드 「'+S.code+'」는 '+brandName(S.brand)+' 코드표에 없습니다 — 표기(예: E1 21 → E121)·브랜드 계열을 확인하세요.','Code "'+S.code+'" is not in the '+brandName(S.brand)+' table — check the format (e.g. E1 21 → E121) and brand family.'));}
     else warns.push(w('브랜드를 선택하면 에러코드를 해석합니다.','Select a brand to interpret the error code.'));
+  }
+
+  /* 부품 측정 — 캐패시터 */
+  var capr=num(S.capr),capm=num(S.capm);
+  if(capr!=null&&capm!=null&&capr>0){hasAny=true;
+    var dev=(capm-capr)/capr*100,ad=Math.abs(dev),cst=ad<=CAP_TOL?'ok':ad<=10?'warn':'bad';
+    var dvS=(dev>=0?'+':'−')+ad.toFixed(1)+'%';
+    meas.push({label:t.cap,val:capm.toFixed(1)+' µF',sub:w('표기 '+capr.toFixed(1)+'µF 대비 '+dvS,dvS+' vs rated '+capr.toFixed(1)+' µF'),range:'±'+CAP_TOL+'%',st:cst});
+    if(cst==='bad')add('C10',5,w('캐패시터 측정 '+capm.toFixed(1)+'µF — 표기 대비 '+dvS+', 허용 ±'+CAP_TOL+'% 밖 (불량)','Capacitor '+capm.toFixed(1)+' µF — '+dvS+' vs rated, outside ±'+CAP_TOL+' %'));
+    else if(cst==='warn')add('C10',2,w('캐패시터 '+dvS+' — 한계 근접, 교체 권장','Capacitor '+dvS+' — near limit, replace soon'));
+    else notes.push(w('캐패시터 용량은 허용 범위입니다.','Capacitor is within tolerance.'));
+    if(S.type==='inv')assum.push(t.capInv);
+  }else if(capr!=null||capm!=null){warns.push(w('캐패시터는 표기값과 측정값을 둘 다 입력해야 판정합니다.','Enter both rated and measured µF to assess the capacitor.'));}
+  /* 부품 측정 — 써미스터 */
+  var thr=num(S.thr),tht=num(S.tht),thn=parseFloat(S.thn||'10');
+  if(thr!=null){hasAny=true;
+    if(tht==null){warns.push(w('써미스터는 측정 시 센서 온도를 함께 입력해야 판정합니다.','Enter the sensor temperature to assess the thermistor.'));meas.push({label:t.th,val:thr.toFixed(1)+' kΩ',range:t.na,st:null});}
+    else{var exp_=thermR(thn,tht),tdev=(thr-exp_)/exp_*100,tad=Math.abs(tdev);
+      var tst=(thr<=0.05||thr>=thn*200)?'bad':tad<=15?'ok':tad<=30?'warn':'bad';
+      var tdS=(tdev>=0?'+':'−')+tad.toFixed(0)+'%';
+      var thSub=thr<=0.05?w('단락 (0Ω)','short circuit (0 Ω)'):thr>=thn*200?w('단선 (무한대)','open circuit (infinite)'):w(thn+'kΩ형 · '+tht.toFixed(0)+'°C 예상 '+exp_.toFixed(1)+'kΩ ('+tdS+')',thn+' kΩ type · expected '+exp_.toFixed(1)+' kΩ at '+tht.toFixed(0)+' °C ('+tdS+')');
+      meas.push({label:t.th,val:(thr>=thn*200?'OL':thr.toFixed(1)+' kΩ'),sub:thSub,range:'±15%',st:tst});
+      if(thr<=0.05)add('C16',5,w('써미스터 0Ω — 단락','Thermistor 0 Ω — short circuit'));
+      else if(thr>=thn*200)add('C16',5,w('써미스터 저항 무한대 — 단선','Thermistor open circuit'));
+      else if(tst==='bad')add('C16',5,w('써미스터 '+thr.toFixed(1)+'kΩ — '+tht.toFixed(0)+'°C 예상 '+exp_.toFixed(1)+'kΩ 대비 '+tdS+' (드리프트 불량)','Thermistor '+thr.toFixed(1)+' kΩ — '+tdS+' vs expected '+exp_.toFixed(1)+' kΩ (drift)'));
+      else if(tst==='warn')add('C16',2,w('써미스터 '+tdS+' — 기종 B값 차이일 수 있음, 매뉴얼 표로 재확인','Thermistor '+tdS+' — may be B-value difference, confirm with manual table'));
+      else notes.push(w('써미스터 저항은 정상 범위입니다.','Thermistor resistance is within range.'));}
+  }
+  /* 센서 드리프트 추론 — 코드·증상은 있는데 측정값이 정상일 때 */
+  if(sy.ice&&S.filter===0&&lpC==='ok'){add('C16',4,w('필터 깨끗·저압 정상인데 결빙 — 실내 코일 센서 드리프트 의심','Icing with clean filter and normal suction — suspect indoor coil sensor drift'));}
+  if(codeInfo){
+    if(codeInfo.famKey==='hp'&&hpC==='ok'&&(S.cond==null||S.cond===0)&&(S.odfan==null||S.odfan==='ok'||S.odfan==='na'))add('C16',5,w('고압 보호 코드인데 고압·응축기·팬이 정상 — 실외 코일 센서 의심','High-pressure code with normal head, condenser and fan — suspect outdoor coil sensor'));
+    if(codeInfo.famKey==='freeze'&&lpC==='ok'&&S.filter===0)add('C16',5,w('동결 보호 코드인데 저압·필터 정상 — 실내 코일 센서 의심','Freeze-protection code with normal suction and clean filter — suspect indoor coil sensor'));
+    if(codeInfo.famKey==='disc'&&lpC==='ok'&&hpC==='ok')add('C16',4,w('토출 과열 코드인데 압력 정상 — 토출 센서 이탈·드리프트 의심','Discharge-overheat code with normal pressures — suspect dislodged/drifted discharge sensor'));
   }
 
   /* 정렬 · 신뢰도 */
@@ -1276,6 +1355,10 @@ function renderStatic(){
     '</table><p>'+esc(rb.prNote)+'</p></div>'+
     '<div class="acd-ref"><b>'+esc(rb.cur)+'</b><p>'+esc(rb.curV)+'</p><p class="dim">'+esc(rb.curEst)+'</p></div>'+
     '<div class="acd-ref"><b>'+esc(rb.volt)+'</b><p>'+esc(rb.voltV)+'</p></div>'+
+    '<div class="acd-ref"><b>'+esc(rb.th)+'</b><table class="acd-pt"><tr><th>°C</th>'+[0,10,20,25,30,35,40].map(function(c){return '<th>'+c+'</th>';}).join('')+'</tr>'+
+    ['5','10','20','50'].map(function(n){return '<tr><td>'+n+'kΩ</td>'+[0,10,20,25,30,35,40].map(function(c){var v=thermR(parseFloat(n),c);return '<td>'+(v>=100?v.toFixed(0):v.toFixed(1))+'</td>';}).join('')+'</tr>';}).join('')+
+    '</table><p>'+esc(rb.thNote)+'</p></div>'+
+    '<div class="acd-ref"><b>'+esc(rb.cap)+'</b><p>'+esc(rb.capNote)+'</p></div>'+
     '<p class="acd-src">'+esc(rb.src)+'</p>';
 }
 function renderInputs(){
@@ -1306,6 +1389,18 @@ function renderInputs(){
   else{dtEl.className='acd-dt';dtEl.textContent=t.dt+' —';}
   $('u-psi').classList.toggle('on',S.punit==='psi');$('u-bar').classList.toggle('on',S.punit==='bar');
   $('in-lp').placeholder=S.punit==='psi'?'psi':'bar';$('in-hpp').placeholder=S.punit==='psi'?'psi':'bar';
+  /* 부품 측정 */
+  $('l-parts').textContent=t.parts;$('l-cap').textContent=t.cap;$('l-capr').textContent=t.capR;$('l-capm').textContent=t.capM;
+  $('l-th').textContent=t.th;$('l-thn').textContent=t.thN;$('l-thr').textContent=t.thM;$('l-tht').textContent=t.thT;$('th-hint').textContent=t.thHint;
+  $('cap-hint').textContent=S.type==='inv'?t.capInv:'';
+  chips($('c-thn'),TH_NOMS.map(function(n){return {id:n,label:n+' kΩ'};}),S.thn,function(id){S.thn=id;renderInputs();rerun();});
+  var capr=num(S.capr),capm=num(S.capm),cl=$('cap-live');
+  if(capr!=null&&capm!=null&&capr>0){var cd=(capm-capr)/capr*100,cad=Math.abs(cd);var cs=cad<=CAP_TOL?'ok':cad<=10?'warn':'bad';
+    cl.className='acd-dt st-'+cs;cl.textContent=t.capLive+' '+(cd>=0?'+':'−')+cad.toFixed(1)+'%';}else{cl.className='acd-dt';cl.textContent='';}
+  var thr=num(S.thr),tht=num(S.tht),tl=$('th-live');
+  if(tht!=null){var ex=thermR(parseFloat(S.thn||'10'),tht);var txt=t.thLive+' '+ex.toFixed(1)+' kΩ';var ts='';
+    if(thr!=null){var td=(thr-ex)/ex*100;ts=Math.abs(td)<=15?'ok':Math.abs(td)<=30?'warn':'bad';txt+=' · '+(td>=0?'+':'−')+Math.abs(td).toFixed(0)+'%';}
+    tl.className='acd-dt'+(ts?' st-'+ts:'');tl.textContent=txt;}else{tl.className='acd-dt';tl.textContent='';}
   /* 코드 미리보기 · 코드표 */
   var cp=$('code-prev');
   if(S.code){var row=findCode(S.brand,S.code);
@@ -1397,7 +1492,7 @@ function copySummary(r){
 function fallbackCopy(txt){var ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);}
 
 function bindInputs(){
-  var map={'in-model':'model','in-rated':'rated','in-ta':'ta','in-tb':'tb','in-amb':'amb','in-lp':'lp','in-hpp':'hpp','in-cur':'cur','in-volt':'volt','in-code':'code'};
+  var map={'in-model':'model','in-rated':'rated','in-ta':'ta','in-tb':'tb','in-amb':'amb','in-lp':'lp','in-hpp':'hpp','in-cur':'cur','in-volt':'volt','in-code':'code','in-capr':'capr','in-capm':'capm','in-thr':'thr','in-tht':'tht'};
   Object.keys(map).forEach(function(id){var el=$(id);el.addEventListener('input',function(){S[map[id]]=el.value.trim();if(id==='in-code'&&el.value.trim())S.sym.err=true;renderInputs();rerun();});});
   $('u-psi').addEventListener('click',function(){S.punit='psi';renderInputs();rerun();});
   $('u-bar').addEventListener('click',function(){S.punit='bar';renderInputs();rerun();});
