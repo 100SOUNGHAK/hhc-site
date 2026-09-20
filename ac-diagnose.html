@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>에어컨 진단 가이드 · HHC</title>
+<link rel="icon" href="/icon-admin-192.png">
+<link rel="apple-touch-icon" href="/icon-admin-180.png">
+<meta name="theme-color" content="#0F1C3F">
+<style>
+/* ═══ 에어컨 진단 가이드 (ac-diagnose.html) — 관리자·직원 화면 계열 (inspect-admin 토큰) ═══
+   접두사 acd- 로 통일 — 다른 화면의 전역 클래스와 충돌하지 않게 합니다. */
+:root{
+  --navy:#0F1C3F;--navy2:#1b2f58;--teal:#0D9488;--teal-soft:#f0fdfb;--gold:#E8A838;
+  --bg:#f0f2f8;--ink:#1a1a2e;--ink2:#5b6478;--ink3:#9ca3af;--line:#dde1ee;--soft:#f8f9fc;
+  --ok:#10b981;--good:#0D9488;--warn:#f59e0b;--bad:#ef4444;
+  --e1:0 1px 2px rgba(14,35,80,.06),0 8px 18px -8px rgba(14,35,80,.16);
+  --e2:0 1px 2px rgba(11,24,51,.10),0 8px 16px -4px rgba(11,24,51,.16),0 26px 44px -14px rgba(11,24,51,.34);
+  --r:12px;--r-sm:9px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,'Pretendard','Noto Sans KR',sans-serif;background:var(--bg);color:var(--ink);
+  min-height:100vh;line-height:1.5;word-break:keep-all}
+button{font-family:inherit;cursor:pointer}
+input{font-family:inherit}
+.dim{color:var(--ink3)}
+
+/* ── 상단바 ── */
+#acd-top{position:sticky;top:0;z-index:60;background:linear-gradient(140deg,var(--navy),var(--navy2));color:#fff;
+  display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top)) 14px 10px;
+  box-shadow:0 4px 16px -6px rgba(6,18,45,.7)}
+#acd-top .mk{width:30px;height:30px;border-radius:8px;background:var(--teal);display:flex;align-items:center;justify-content:center;flex:none}
+#acd-top .mk svg{width:19px;height:19px;display:block}
+#acd-top .tt{flex:1;min-width:0}
+#acd-top .ti{font-size:15.5px;font-weight:800;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#acd-top .su{font-size:9px;font-weight:600;color:#8fa0c9;letter-spacing:.08em;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#acd-top .lgb{display:flex;gap:3px;background:rgba(255,255,255,.14);border-radius:999px;padding:3px;flex:none}
+#acd-top .lgb button{border:none;background:none;color:#C6D5F5;font-size:11.5px;font-weight:800;border-radius:999px;padding:5px 10px}
+#acd-top .lgb button.on{background:#fff;color:var(--navy)}
+
+/* ── 본문 ── */
+.acd-main{max-width:680px;margin:0 auto;padding:12px 12px calc(84px + env(safe-area-inset-bottom))}
+.acd-card{background:#fff;border:0.5px solid #e0e0e8;border-radius:var(--r);overflow:hidden;margin-bottom:12px;box-shadow:var(--e1)}
+.acd-chd{background:var(--navy);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:9px;font-size:13px;font-weight:700}
+.acd-chd .n{width:22px;height:22px;border-radius:6px;background:var(--teal);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:none}
+.acd-cb{padding:14px}
+.acd-fl{font-size:11px;font-weight:700;color:var(--ink2);letter-spacing:.02em;margin:12px 0 6px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.acd-fl:first-child{margin-top:0}
+.acd-fl small{font-weight:600;color:var(--teal);font-size:11px}
+.acd-hint{font-size:11.5px;color:var(--ink3);margin-top:5px;line-height:1.5}
+.acd-note{font-size:12px;color:#5b6478;background:var(--soft);border-radius:var(--r-sm);padding:9px 11px;line-height:1.55;margin-top:8px}
+.acd-note.brand{background:var(--teal-soft);color:#0f5f58}
+input.acd-in{width:100%;padding:10px 11px;font-size:15px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--soft);color:var(--ink);outline:none;
+  font-variant-numeric:tabular-nums}
+input.acd-in:focus{border-color:var(--teal);background:#fff}
+.acd-g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.acd-g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.acd-unit{position:relative}
+.acd-unit input{padding-right:40px}
+.acd-unit span{position:absolute;right:11px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--ink3);font-weight:700;pointer-events:none}
+
+/* 칩 (선택) */
+.acd-chips{display:flex;flex-wrap:wrap;gap:7px}
+.acd-chip{border:1.5px solid var(--line);background:#fff;color:#39415a;border-radius:999px;padding:8px 13px;font-size:13px;font-weight:700;
+  line-height:1.2;transition:transform .14s,background .14s,color .14s}
+.acd-chip:active{transform:translateY(1px)}
+.acd-chip.on{background:var(--navy);border-color:var(--navy);color:#fff;box-shadow:0 4px 12px -4px rgba(14,35,80,.5)}
+/* 세그먼트 (단계 선택) */
+.acd-segrow{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--soft)}
+.acd-seg{flex:1;border:none;border-right:1px solid var(--line);background:none;padding:10px 4px;font-size:12.5px;font-weight:700;color:#39415a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.acd-seg:last-child{border-right:none}
+.acd-seg.on{background:var(--navy);color:#fff}
+.acd-vis{display:grid;gap:10px}
+.acd-vis>div>.acd-fl{margin:0 0 5px}
+/* 단위 토글 */
+.acd-ut{display:inline-flex;gap:2px;background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:2px}
+.acd-ut button{border:none;background:none;border-radius:999px;padding:3px 9px;font-size:11px;font-weight:800;color:var(--ink3)}
+.acd-ut button.on{background:var(--navy);color:#fff}
+/* 온도차 실시간 */
+.acd-dt{margin-top:8px;font-size:13px;font-weight:800;color:var(--ink3);font-variant-numeric:tabular-nums}
+.acd-dt.st-good{color:var(--good)}.acd-dt.st-ok{color:var(--ok)}.acd-dt.st-warn{color:#b45309}.acd-dt.st-bad{color:var(--bad)}
+/* 코드 미리보기 */
+.acd-cprev{margin-top:8px;border-radius:var(--r-sm);padding:0;font-size:13px;line-height:1.5}
+.acd-cprev:not(:empty){padding:9px 11px}
+.acd-cprev b{font-size:14px;font-variant-numeric:tabular-nums;margin-right:6px}
+.acd-cprev small{display:block;color:var(--ink2);margin-top:2px;font-size:11.5px}
+.acd-cprev.sev-crit{background:#FEF2F2;color:#7f1d1d}.acd-cprev.sev-warn{background:#FFFBEB;color:#78350f}.acd-cprev.sev-info{background:var(--soft);color:var(--ink2)}
+.acd-cprev.sev-none{background:var(--soft);color:var(--ink2)}
+.acd-sev{display:inline-block;font-style:normal;font-size:10.5px;font-weight:800;border-radius:999px;padding:2px 8px;margin-left:6px;vertical-align:1px;background:#e5e7eb;color:#374151;white-space:nowrap}
+.sev-crit .acd-sev,.acd-sev.sev-crit{background:var(--bad);color:#fff}
+.sev-warn .acd-sev,.acd-sev.sev-warn{background:#F0B429;color:#3A2A00}
+.sev-info .acd-sev,.acd-sev.sev-info{background:#e5e7eb;color:#374151}
+/* 코드표 */
+details.acd-more{margin-top:10px;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden}
+details.acd-more>summary{list-style:none;cursor:pointer;padding:9px 12px;font-size:12.5px;font-weight:700;color:var(--teal);background:var(--teal-soft);display:flex;justify-content:space-between;align-items:center}
+details.acd-more>summary::-webkit-details-marker{display:none}
+details.acd-more>summary:after{content:'›';font-size:16px;transform:rotate(90deg);transition:transform .15s}
+details.acd-more[open]>summary:after{transform:rotate(-90deg)}
+.acd-ct{width:100%;border-collapse:collapse;font-size:12px}
+.acd-ct td{padding:7px 10px;border-top:1px solid #eef0f5;vertical-align:top;line-height:1.45}
+.acd-ct td.cd{font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;width:1%}
+.acd-ct td.sv{white-space:nowrap;width:1%;text-align:right}
+.acd-ct td.sv .acd-sev{margin-left:0}
+.acd-ct small{display:block;color:var(--ink3);font-size:11px}
+.acd-ct-wrap{max-height:360px;overflow:auto}
+
+/* ── 결과 ── */
+.acd-hero{background:linear-gradient(140deg,#0E2350,#16346E 65%,#1D4090);color:#fff;border-radius:16px;padding:16px 16px 14px;margin-bottom:12px;
+  box-shadow:0 3px 8px rgba(6,18,45,.3),0 18px 34px -14px rgba(6,18,45,.7)}
+.acd-hero-k{font-size:10px;font-weight:800;letter-spacing:.14em;color:#9FB6E8}
+.acd-hero-row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:8px}
+.acd-hero-b{font-size:12px;color:#C6D5F5;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acd-hero-n{font-size:16px;font-weight:700;margin-top:10px;line-height:1.35;letter-spacing:-.01em;color:#DCE6FA}
+.acd-hero-n b{color:#fff;font-weight:900}
+.acd-hero-m{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(255,255,255,.15);border-radius:11px;overflow:hidden;margin-top:13px}
+.acd-hero-m>div{background:rgba(255,255,255,.06);padding:9px 8px;min-width:0}
+.acd-hero-m .k2{font-size:9.5px;font-weight:800;color:#A9BEE9}
+.acd-hero-m .v2{font-size:13px;font-weight:900;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.acd-pill{display:inline-block;font-size:11.5px;font-weight:900;border-radius:999px;padding:5px 12px;background:#e5e7eb;color:#374151}
+.acd-pill.st-ok{background:var(--ok);color:#fff}.acd-pill.st-warn{background:#F0B429;color:#3A2A00}.acd-pill.st-bad{background:#F97316;color:#fff}.acd-pill.st-crit{background:var(--bad);color:#fff}
+.acd-warnbox .acd-chd{background:#FFF8EC;color:#8A5A00}
+.acd-ul{padding-left:18px;font-size:13.5px;line-height:1.55;margin:0}
+.acd-ul li{margin:3px 0}
+.acd-ul li.dim{color:var(--ink2)}
+.acd-empty{padding:26px 14px;text-align:center;font-size:13.5px;color:var(--ink2);line-height:1.6}
+.acd-code-big{font-size:26px;font-weight:900;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+.acd-code-mean{font-size:15px;font-weight:700;margin-top:4px;color:var(--ink)}
+.acd-kv{margin-top:10px;font-size:13.5px;line-height:1.55}
+.acd-kv>b{display:block;font-size:11px;font-weight:800;color:var(--teal);letter-spacing:.02em;margin-bottom:2px}
+.acd-kv ul,.acd-kv ol{padding-left:18px}
+.acd-kv li{margin:2px 0}
+/* 원인 목록 */
+.acd-causes{padding:6px 8px 8px}
+.acd-cause{border-radius:10px;border:1px solid transparent}
+.acd-cause+.acd-cause{margin-top:2px}
+.acd-cause[open]{background:var(--soft);border-color:#e8ebf3}
+.acd-cause>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 8px}
+.acd-cause>summary::-webkit-details-marker{display:none}
+.acd-rank{width:24px;height:24px;border-radius:50%;background:var(--navy);color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;flex:none;font-variant-numeric:tabular-nums}
+.acd-cause:nth-child(n+2) .acd-rank{background:#5b6478}
+.acd-cn{flex:1;min-width:0;display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center}
+.acd-cn b{font-size:14px;font-weight:800;letter-spacing:-.01em;grid-column:1/3;line-height:1.3}
+.acd-bar{height:5px;border-radius:999px;background:#e5e8f0;overflow:hidden}
+.acd-bar i{display:block;height:100%;background:var(--teal);border-radius:999px}
+.acd-cn small{font-size:10.5px;font-weight:800;white-space:nowrap}
+.conf-high{color:var(--bad)}.conf-mid{color:#b45309}.conf-low{color:var(--ink3)}
+.acd-chev{font-size:18px;color:#c3c8d4;transform:rotate(90deg);transition:transform .15s;flex:none;padding:0 2px}
+.acd-cause[open] .acd-chev{transform:rotate(-90deg)}
+.acd-cd{padding:0 10px 12px 42px}
+.acd-svc{margin-top:10px;font-size:12.5px;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--ink)}
+.acd-svc b{color:var(--gold);font-weight:800;margin-right:4px}
+.acd-cause.tag-clean .acd-svc{border-color:#b7e6dd;background:var(--teal-soft)}
+/* 측정값 표 */
+.acd-mt{width:100%;border-collapse:collapse;font-size:12.5px}
+.acd-mt td{padding:8px 4px;border-top:1px solid #eef0f5;vertical-align:middle}
+.acd-mt tr:first-child td{border-top:none}
+.acd-mt .ml{font-weight:700}
+.acd-mt .ms{font-size:11px;color:var(--ink3);margin-top:1px}
+.acd-mt .mv{font-weight:900;white-space:nowrap;font-variant-numeric:tabular-nums;text-align:right;font-size:13.5px}
+.acd-mt .mr{font-size:11px;color:var(--ink3);text-align:right;max-width:120px;line-height:1.35}
+.acd-mt .mst{width:22px;text-align:right}
+.acd-dot{display:inline-block;width:11px;height:11px;border-radius:50%;background:#d1d5db}
+.acd-dot.st-good{background:var(--good)}.acd-dot.st-ok{background:var(--ok)}.acd-dot.st-warn{background:var(--warn)}.acd-dot.st-bad{background:var(--bad)}
+.acd-copyrow{display:flex;justify-content:flex-end;margin:-4px 0 12px}
+.acd-copyrow button{border:1.5px solid var(--line);background:#fff;color:var(--ink2);border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:800}
+/* 참고 */
+.acd-ref{padding:10px 0;border-top:1px solid #eef0f5;font-size:12.5px;line-height:1.55}
+.acd-ref:first-child{border-top:none;padding-top:0}
+.acd-ref b{display:block;font-size:12.5px;font-weight:800;margin-bottom:3px}
+.acd-ref p{color:var(--ink2);margin-top:4px}
+.acd-pt{border-collapse:collapse;margin-top:4px;font-size:12px;font-variant-numeric:tabular-nums}
+.acd-pt th,.acd-pt td{padding:4px 10px 4px 0;text-align:left;font-weight:600}
+.acd-pt th{color:var(--ink3);font-size:11px}
+.acd-pt td:first-child{font-weight:800}
+.acd-src{font-size:11px;color:var(--ink3);margin-top:10px;line-height:1.5}
+details.acd-refbox>summary{list-style:none;cursor:pointer}
+details.acd-refbox>summary::-webkit-details-marker{display:none}
+details.acd-refbox>summary .acd-chd:after{content:'›';margin-left:auto;font-size:18px;transform:rotate(90deg);transition:transform .15s}
+details.acd-refbox[open]>summary .acd-chd:after{transform:rotate(-90deg)}
+
+/* ── 하단 고정 버튼바 ── */
+#acd-bar{position:fixed;left:0;right:0;bottom:0;z-index:70;max-width:680px;margin:0 auto;display:flex;gap:9px;
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(255,255,255,.94);
+  backdrop-filter:saturate(160%) blur(14px);-webkit-backdrop-filter:saturate(160%) blur(14px);
+  border-top:1px solid var(--line);box-shadow:0 -14px 30px -16px rgba(14,35,80,.45)}
+#acd-bar button{display:flex;align-items:center;justify-content:center;gap:6px;font-size:14.5px;font-weight:900;border-radius:13px;padding:13px 8px;
+  border:1.5px solid var(--navy);background:#fff;color:var(--navy);transition:transform .14s}
+#acd-bar #btn-reset{flex:0 0 32%}
+#acd-bar #btn-run{flex:1;background:linear-gradient(140deg,#0E2350,#1b2f58);color:#fff;border-color:transparent;box-shadow:0 6px 16px -6px rgba(14,35,80,.7)}
+#acd-bar button:active{transform:translateY(2px)}
+
+@media (max-width:820px){input:not([type=checkbox]):not([type=radio]),select,textarea{font-size:16px!important}}
+@media (max-width:380px){.acd-g3{grid-template-columns:1fr 1fr}.acd-seg{font-size:11.5px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+@media print{#acd-top,#acd-bar,.acd-copyrow{display:none}.acd-main{padding:0}.acd-card,.acd-hero{break-inside:avoid;box-shadow:none}.acd-cause{break-inside:avoid}}
+</style>
+</head>
+<body>
+
+<div id="acd-top">
+  <div class="mk"><svg viewBox="0 0 100 100" aria-hidden="true"><g fill="#fff"><rect x="15" y="14" width="19" height="74" rx="3.5"/><rect x="66" y="14" width="19" height="74" rx="3.5"/><path d="M50 28 85 51v16L50 43 15 67V51Z"/></g></svg></div>
+  <div class="tt"><div class="ti" id="acd-title">에어컨 진단 가이드</div><div class="su" id="acd-sub">HAPPY HOME CARE · 현장 점검용</div></div>
+  <div class="lgb"><button type="button" id="lg-ko" class="on">한국어</button><button type="button" id="lg-en">EN</button></div>
+</div>
+
+<main class="acd-main">
+
+  <!-- 1 · 장비 정보 -->
+  <section class="acd-card" id="sec-unit">
+    <div class="acd-chd"><span class="n">1</span><span id="h-s1">장비 정보</span></div>
+    <div class="acd-cb">
+      <div class="acd-fl" id="l-brand">브랜드</div>
+      <div class="acd-chips" id="c-brand"></div>
+      <div id="york-row" style="display:none;margin-top:8px">
+        <div class="acd-fl" id="l-york">York 계열</div>
+        <div class="acd-chips"><button type="button" class="acd-chip" id="yk-new"></button><button type="button" class="acd-chip" id="yk-old"></button></div>
+      </div>
+      <div class="acd-note brand" id="brand-note" style="display:none"></div>
+      <div class="acd-fl" id="l-model">모델명 (명판)</div>
+      <input class="acd-in" id="in-model" type="text" autocapitalize="characters" autocomplete="off" spellcheck="false">
+      <div class="acd-fl"><span id="l-hp">냉방능력</span><small id="hp-guess"></small></div>
+      <div class="acd-chips" id="c-hp"></div>
+      <div class="acd-g2" style="margin-top:12px">
+        <div>
+          <div class="acd-fl" style="margin-top:0" id="l-type">방식</div>
+          <div class="acd-chips" id="c-type"></div>
+        </div>
+        <div>
+          <div class="acd-fl" style="margin-top:0" id="l-ref">냉매</div>
+          <div class="acd-chips" id="c-ref"></div>
+        </div>
+      </div>
+      <div class="acd-hint" id="ref-hint"></div>
+      <div class="acd-fl" id="l-rated">정격 전류 (명판, A)</div>
+      <div class="acd-unit"><input class="acd-in" id="in-rated" type="number" inputmode="decimal" step="0.01" min="0"><span>A</span></div>
+      <div class="acd-hint" id="rated-hint"></div>
+    </div>
+  </section>
+
+  <!-- 2 · 증상 · 육안 -->
+  <section class="acd-card" id="sec-sym">
+    <div class="acd-chd"><span class="n">2</span><span id="h-s2">증상 · 육안 점검</span></div>
+    <div class="acd-cb">
+      <div class="acd-fl" id="l-sym">증상</div>
+      <div class="acd-chips" id="c-sym"></div>
+      <div class="acd-fl" style="margin-top:16px" id="l-visual">육안 점검</div>
+      <div class="acd-vis">
+        <div><div class="acd-fl" id="l-filter">필터 · 증발기</div><div class="acd-segrow" id="s-filter"></div></div>
+        <div><div class="acd-fl" id="l-cond">실외기 응축기</div><div class="acd-segrow" id="s-cond"></div></div>
+        <div><div class="acd-fl" id="l-odfan">실외 팬</div><div class="acd-segrow" id="s-odfan"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 · 측정값 -->
+  <section class="acd-card" id="sec-meas">
+    <div class="acd-chd"><span class="n">3</span><span id="h-s3">측정값</span></div>
+    <div class="acd-cb">
+      <div class="acd-note" id="meas-note" style="margin:0 0 12px"></div>
+      <div class="acd-g3">
+        <div><div class="acd-fl" id="l-ta">흡입온도 A</div><div class="acd-unit"><input class="acd-in" id="in-ta" type="number" inputmode="decimal" step="0.1"><span>°C</span></div></div>
+        <div><div class="acd-fl" id="l-tb">토출온도 B</div><div class="acd-unit"><input class="acd-in" id="in-tb" type="number" inputmode="decimal" step="0.1"><span>°C</span></div></div>
+        <div><div class="acd-fl" id="l-amb">실외 온도</div><div class="acd-unit"><input class="acd-in" id="in-amb" type="number" inputmode="decimal" step="0.1"><span>°C</span></div></div>
+      </div>
+      <div class="acd-dt" id="dt-live"></div>
+      <div class="acd-fl" style="margin-top:14px;justify-content:space-between"><span id="l-press">냉매 압력</span>
+        <span class="acd-ut"><button type="button" id="u-psi" class="on">psi</button><button type="button" id="u-bar">bar</button></span></div>
+      <div class="acd-g2">
+        <div><div class="acd-fl" style="margin-top:0" id="l-lp">저압</div><input class="acd-in" id="in-lp" type="number" inputmode="decimal" step="1"></div>
+        <div><div class="acd-fl" style="margin-top:0" id="l-hpp">고압</div><input class="acd-in" id="in-hpp" type="number" inputmode="decimal" step="1"></div>
+      </div>
+      <div class="acd-g2" style="margin-top:12px">
+        <div><div class="acd-fl" style="margin-top:0" id="l-cur">운전 전류</div><div class="acd-unit"><input class="acd-in" id="in-cur" type="number" inputmode="decimal" step="0.1"><span>A</span></div></div>
+        <div><div class="acd-fl" style="margin-top:0" id="l-volt">전원 전압</div><div class="acd-unit"><input class="acd-in" id="in-volt" type="number" inputmode="decimal" step="1"><span>V</span></div></div>
+      </div>
+      <div class="acd-fl" style="margin-top:14px" id="l-code">에러코드</div>
+      <input class="acd-in" id="in-code" type="text" list="code-list" autocapitalize="characters" autocomplete="off" spellcheck="false">
+      <datalist id="code-list"></datalist>
+      <div class="acd-cprev" id="code-prev"></div>
+      <details class="acd-more" id="code-tbl-box"><summary id="code-tbl-sum">이 브랜드 코드표 전체 보기</summary><div class="acd-ct-wrap" id="code-tbl"></div></details>
+    </div>
+  </section>
+
+  <!-- 4 · 결과 -->
+  <section id="sec-res" style="display:none"></section>
+
+  <!-- 참고 -->
+  <details class="acd-card acd-refbox" id="sec-ref">
+    <summary><div class="acd-chd"><span class="n">i</span><span id="h-s5">참고 기준값</span></div></summary>
+    <div class="acd-cb" id="ref-body"></div>
+  </details>
+
+</main>
+
+<div id="acd-bar">
+  <button type="button" id="btn-reset">초기화</button>
+  <button type="button" id="btn-run">진단 결과 보기</button>
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   진단 지식 데이터 — 원인 · 코드 계열 · 브랜드별 에러코드 · 냉매 PT표 · 기준값
+   (출처: 각 제조사 서비스 매뉴얼·공식 에러코드 페이지 — 파일 하단 SOURCES 참고)
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── 진단 원인 (점수화 대상) ─────────────────────────────────────── */
+var CAUSES={
+  C1:{ko:'냉매 부족 · 누설',en:'Low refrigerant / leak',tag:'ref',
+    svc:{ko:'냉매 작업 (누설 수리 → 정량 충전)',en:'Refrigerant work (leak repair → weigh-in charge)'},
+    chk:{ko:['실외기 스톱밸브(2·3방) 완전 개방 확인','저압·고압 재측정 + 흡입관 과열도 확인','플레어 너트·용접부·코일 누설 검사 (비눗물·검지기)','실내기 결빙·서리 여부 확인'],
+         en:['Confirm both stop valves fully open','Re-check pressures + suction superheat','Leak-test flare nuts, brazes and coils (soap / detector)','Look for frost on indoor coil / suction line']},
+    act:{ko:['누설부 수리 후 회수 → 진공 → 명판 규정량 정량 충전','단순 보충은 재발 — 누설 원인 제거가 우선'],
+         en:['Repair leak, then recover → vacuum → weigh in nameplate charge','A top-up alone will recur — fix the leak first']}},
+  C2:{ko:'실외기 방열 불량 — 응축기 오염 · 통풍 · 팬',en:'Condenser heat rejection — dirty coil, airflow, fan',tag:'clean',
+    svc:{ko:'실외기(응축기) 세척 서비스',en:'Outdoor unit (condenser) cleaning'},
+    chk:{ko:['응축기 핀 오염·막힘 육안 확인 (뒷면 포함)','실외기 주변 장애물·밀폐 발코니·루버창 등 열기 재순환 확인','실외 팬 회전 속도·소음·흔들림 확인','고압이 외기 +15°C 이상이면 방열 불량 확정'],
+         en:['Inspect condenser fins for dirt/blockage (rear too)','Check clearance, enclosed balcony, louvre window, hot-air recirculation','Check outdoor fan speed, noise, wobble','Condensing temp > ambient +15°C confirms poor heat rejection']},
+    act:{ko:['응축기 코일 고압 세척 (핀 손상 주의)','팬 모터·캐패시터 점검, 통풍 공간 확보 안내'],
+         en:['Pressure-wash condenser coil (protect fins)','Check fan motor/capacitor, advise clearance']}},
+  C3:{ko:'냉매 과충전',en:'Refrigerant overcharge',tag:'ref',
+    svc:{ko:'냉매 회수 → 정량 재충전',en:'Recover and re-charge by weight'},
+    chk:{ko:['최근 냉매 보충 이력 확인','저압·고압 모두 높고 응축기·팬은 정상인지 확인','흡입관에 이슬·액 복귀 흔적, 압축기 소음 확인'],
+         en:['Ask about recent refrigerant top-ups','Both pressures high with condenser/fan normal?','Check suction line sweating / liquid return, compressor noise']},
+    act:{ko:['회수 후 명판 규정량으로 정량 충전 (추가 배관 길이 반영)'],en:['Recover and weigh in nameplate charge (add for extra pipe length)']}},
+  C4:{ko:'실내 풍량 부족 — 필터 · 증발기 오염 · 실내 팬',en:'Low indoor airflow — filter, evaporator, indoor fan',tag:'clean',
+    svc:{ko:'실내기 분해 세척 서비스',en:'Indoor unit deep cleaning'},
+    chk:{ko:['필터·증발기 핀·송풍팬(블로워) 오염도 확인','강풍 설정에서 토출 풍량 체감 비교','팬 모터 회전 소음·속도 단계 변화 확인','증발기·흡입관 결빙 여부'],
+         en:['Check filter, evaporator fins and blower for dirt','Compare airflow on high fan','Fan motor noise / speed steps','Frost on evaporator or suction line']},
+    act:{ko:['필터·증발기·송풍팬 분해 세척','세척 후에도 풍량 약하면 팬 모터·캐패시터·기판 점검'],
+         en:['Deep-clean filter, evaporator and blower','If still weak after cleaning: fan motor, capacitor, PCB']}},
+  C5:{ko:'냉매 회로 막힘 — 팽창장치 · 스트레이너 · 배관',en:'Restriction — EEV/capillary, strainer, piping',tag:'repair',
+    svc:{ko:'수리 (막힘 부위 교체·배관 보수)',en:'Repair (replace restricted part, pipe rework)'},
+    chk:{ko:['저압만 낮고 고압은 정상·높음인지 확인','팽창밸브·모세관·필터드라이어 앞뒤 온도차(서리·이슬)로 막힘 위치 확인','배관 꺾임·눌림 확인','전원 투입 시 EEV 동작음(틱틱) 확인'],
+         en:['Low suction with normal/high discharge?','Find restriction by temperature drop / frost at EEV, capillary, drier','Check kinked or crushed pipe','Listen for EEV clicking at power-up']},
+    act:{ko:['막힌 부품 교체 후 진공·정량 충전','수분 혼입 의심 시 필터드라이어 교체'],en:['Replace restricted part, vacuum, weigh-in charge','Replace filter drier if moisture suspected']}},
+  C6:{ko:'압축기 · 인버터 구동 이상',en:'Compressor / inverter drive fault',tag:'repair',
+    svc:{ko:'수리 (부품 — 기판·압축기)',en:'Repair (parts — PCB / compressor)'},
+    chk:{ko:['실외 팬은 도는데 압축기만 안 도는지 확인 (전류 ≈ 팬 전류)','전원 차단 후 압축기 U·V·W 배선 이완·오결선 확인','권선 저항 3상 균등 여부 + 대지 절연 측정','(일반형) 기동·운전 캐패시터 용량 측정','저·고압이 균압(차이 거의 없음)이면 압축 불량'],
+         en:['Outdoor fan runs but compressor does not? (current ≈ fan only)','Power off, check U-V-W leads for looseness/mis-wiring','Windings equal across 3 legs + insulation to earth','(Non-inverter) measure start/run capacitor','Equalised pressures while running = not pumping']},
+    act:{ko:['배선·캐패시터 교정','기판(IPM) vs 압축기 판별 후 부품 교체 — 전문 수리 의뢰'],en:['Correct wiring / replace capacitor','Isolate PCB (IPM) vs compressor, replace part — refer to repair']}},
+  C7:{ko:'전원 · 전압 문제',en:'Power supply / voltage',tag:'elec',
+    svc:{ko:'전기 점검 (필요 시 전기 기술자)',en:'Electrical check (electrician if needed)'},
+    chk:{ko:['실외기 단자대에서 부하 운전 중 전압 측정 (기준 216~253V)','차단기·아이솔레이터·단자 조임 상태','전선 굵기·길이, 중성선 접속','같은 회로의 다른 부하 확인'],
+         en:['Measure voltage at outdoor terminals under load (216–253 V)','Breaker, isolator, terminal tightness','Cable size/length, neutral connection','Other loads on same circuit']},
+    act:{ko:['접속부 재조임·차단기 교체','저전압이 반복되면 전용 회로·안정기 검토 (전기 기술자)'],en:['Re-tighten connections, replace breaker','Persistent low voltage: dedicated circuit / stabiliser (electrician)']}},
+  C8:{ko:'배수 불량 — 드레인 막힘 · 기울기 · 펌프',en:'Drain problem — blocked hose, slope, pump',tag:'clean',
+    svc:{ko:'배수관 세척 서비스',en:'Drain line cleaning'},
+    chk:{ko:['배수판 고인 물·슬라임 확인','드레인 호스 막힘 (끝단에서 흡입 또는 물 흘려보기)','호스 기울기·꺾임·역구배','(카세트·매립) 드레인 펌프 작동·플로트 스위치'],
+         en:['Standing water / slime in drain pan','Blocked hose (suction at outlet or pour test)','Hose slope, kinks, up-slope','(Cassette/ducted) drain pump and float switch']},
+    act:{ko:['배수판·호스 고압 세척, 필요 시 호스 교체','기울기 교정, 펌프·플로트 교체'],en:['Flush pan and hose, replace hose if needed','Correct slope, replace pump/float']}},
+  C9:{ko:'통신 · 제어기판',en:'Communication / control PCB',tag:'repair',
+    svc:{ko:'수리 (기판·배선)',en:'Repair (PCB / wiring)'},
+    chk:{ko:['실외기 전원(L-N 230V)·퓨즈·기판 LED 확인','실내·실외 연결선 순서(1·2·3 / S1·S2·S3)가 양쪽 동일한지','단자 조임·단선·피복 손상','전원 30초~1분 차단 후 재기동'],
+         en:['Outdoor power (L-N 230 V), fuse, PCB LED','Interconnect order identical at both ends (1-2-3 / S1-S2-S3)','Terminal tightness, broken wire, insulation damage','Power reset 30 s–1 min']},
+    act:{ko:['배선 교정·재조임','반복 시 실외 기판 → 실내 기판 순 교체 (부품 수리)'],en:['Correct / re-tighten wiring','If repeating: outdoor PCB then indoor PCB (parts repair)']}},
+  C10:{ko:'실외기 캐패시터 · 기동 부품 (일반형)',en:'Capacitor / start components (non-inverter)',tag:'repair',
+    svc:{ko:'부품 교체',en:'Part replacement'},
+    chk:{ko:['캐패시터 팽창·누액 육안 확인','용량 측정 (표기값 ±6% 밖이면 불량)','압축기 기동 시 험(웅) 소리 후 정지 = 기동 불량'],
+         en:['Bulged or leaking capacitor','Measure capacitance (out of ±6% = bad)','Hum then stop at start = start failure']},
+    act:{ko:['캐패시터 교체 (동일 µF·전압)'],en:['Replace capacitor (same µF and voltage)']}},
+  C11:{ko:'배관 단열 · 결로',en:'Pipe insulation / condensation',tag:'repair',
+    svc:{ko:'단열 보수',en:'Insulation repair'},
+    chk:{ko:['배관 단열재 찢어짐·노출부 결로','실내기 배관 연결부(벽 관통) 물방울','드레인 호스 자체 결로'],
+         en:['Torn insulation, sweating on exposed pipe','Drips at pipe joints / wall penetration','Condensation on drain hose itself']},
+    act:{ko:['단열재 보수·교체, 연결부 테이핑'],en:['Repair / replace insulation, re-tape joints']}},
+  C12:{ko:'곰팡이 · 오염 (냄새)',en:'Mould / contamination (odour)',tag:'clean',
+    svc:{ko:'실내기 살균 세척 서비스',en:'Indoor unit sanitising clean'},
+    chk:{ko:['증발기·송풍팬·배수판 곰팡이 확인','냄새 종류: 곰팡내(오염) / 하수 냄새(배수 트랩) / 탄내(전기 — 즉시 정지)'],
+         en:['Mould on evaporator, blower, drain pan','Odour type: musty (contamination) / sewer (drain trap) / burnt (electrical — stop immediately)']},
+    act:{ko:['분해 세척 + 살균, 배수판 세척','탄내는 전원 차단 후 전기 점검'],en:['Deep clean + sanitise, clean drain pan','Burnt smell: power off, electrical check']}},
+  C13:{ko:'소음 · 진동 원인',en:'Noise / vibration',tag:'repair',
+    svc:{ko:'점검 조치',en:'Inspection and adjustment'},
+    chk:{ko:['소음 위치(실내/실외)·시점(기동/운전/정지) 파악','실내: 송풍팬 이물질·오염 불균형, 베어링, 패널 헐거움, 루버 모터','실외: 팬 날개 접촉, 압축기 방진 고무, 배관 떨림, 냉매 소리(쉭 = 누설 의심)'],
+         en:['Locate (indoor/outdoor) and timing (start/run/stop)','Indoor: blower debris/imbalance, bearing, loose panel, louver motor','Outdoor: fan blade contact, compressor mounts, pipe rattle, hissing (leak?)']},
+    act:{ko:['세척·이물질 제거, 고정 볼트·패널 조임, 방진 고무 교체'],en:['Clean, remove debris, tighten panels/bolts, replace mounts']}},
+  C14:{ko:'설정 · 사용 조건',en:'Settings / usage',tag:'info',
+    svc:{ko:'사용 안내',en:'Usage guidance'},
+    chk:{ko:['운전 모드가 냉방(❄)인지 (송풍·제습·자동 아님)','설정 온도가 실내 온도보다 낮은지','정지 후 3분 재기동 지연·타이머·절전 모드','리모컨 건전지·수신부'],
+         en:['Mode is COOL (not fan/dry/auto)','Set temp below room temp','3-min restart delay, timer, eco mode','Remote batteries / receiver']},
+    act:{ko:['설정 교정 후 15분 재운전하여 재측정'],en:['Correct settings, run 15 min, re-measure']}},
+  C15:{ko:'부하 과다 · 용량 부족',en:'Heat load / undersized unit',tag:'info',
+    svc:{ko:'사용 안내 (필요 시 용량 상담)',en:'Guidance (capacity consultation if needed)'},
+    chk:{ko:['방 크기·창 직사광·문 개방·열원(주방·기기)','기기 자체 측정값(ΔT·압력·전류)은 정상인지'],
+         en:['Room size, direct sun, open doors, heat sources','Unit measurements (ΔT, pressures, current) normal?']},
+    act:{ko:['커튼·문 닫기, 사용 시간대 안내, 용량 증설 상담'],en:['Curtains/doors, usage advice, capacity upgrade consultation']}},
+  C16:{ko:'센서(서미스터) 이상',en:'Sensor (thermistor) fault',tag:'repair',
+    svc:{ko:'부품 교체',en:'Part replacement'},
+    chk:{ko:['해당 센서 커넥터 재장착','센서 저항 측정 (매뉴얼 표 대조 — 보통 25°C에서 5~20kΩ, 토출 센서는 더 높음)','센서가 배관 홀더에서 빠지지 않았는지'],
+         en:['Reseat sensor connector','Measure resistance vs manual table (typ. 5–20 kΩ @25 °C, discharge sensor higher)','Sensor still in pipe holder?']},
+    act:{ko:['센서 교체 → 그래도 반복이면 기판'],en:['Replace sensor → then PCB if it repeats']}}
+};
+
+/* ── 에러코드 계열 (코드마다 공통 원인·확인 절차 + 진단 원인 가중치) ── */
+var FAM={
+  ref:{ko:'냉매 부족 · 누설 계열',en:'Refrigerant shortage / leak',
+    c:{ko:'냉매 누설(플레어·용접부·코일), 설치·수리 후 충전 부족, 스톱밸브 덜 열림, 배관·스트레이너 막힘, 팽창밸브(EEV) 불량',en:'Leak (flares, brazes, coils), undercharge after install/service, stop valve not fully open, blocked pipe/strainer, faulty EEV'},
+    k:{ko:'스톱밸브 개방 확인 → 저·고압·과열도 측정 → 누설 검사 → 회수·진공 후 정량 충전 → EEV 동작 확인',en:'Stop valves open → pressures & superheat → leak test → recover, vacuum, weigh-in charge → check EEV'},
+    m:[['C1',4],['C5',1]]},
+  hp:{ko:'고압 · 응축(방열) 불량 계열',en:'High pressure / heat rejection',
+    c:{ko:'응축기 오염, 실외기 통풍 불량·열기 재순환, 실외 팬 저속·정지, 냉매 과충전, 불응축가스, 스톱밸브 덜 열림',en:'Dirty condenser, poor clearance / hot-air recirculation, outdoor fan slow or stopped, overcharge, non-condensables, stop valve not fully open'},
+    k:{ko:'실외기 주변·통풍 확인 → 응축기 세척 → 팬 확인 → 고압(외기+10~15°C) 측정 → 과충전 의심 시 회수·정량 충전',en:'Clearance/airflow → clean condenser → check fan → discharge pressure (ambient +10–15 °C) → recover & re-charge if overcharged'},
+    m:[['C2',4],['C3',1]]},
+  lowp:{ko:'저압 · 압력스위치 보호 계열',en:'Low pressure / pressure switch',
+    c:{ko:'냉매 누설·부족, 스톱밸브 닫힘, 팽창장치·스트레이너 막힘, 실내 풍량 부족(결빙), 압력스위치·커넥터 불량',en:'Leak/undercharge, stop valve closed, EEV/strainer restriction, low indoor airflow (icing), switch or connector fault'},
+    k:{ko:'스톱밸브 → 저·고압 측정 → 누설 검사 → 필터·풍량 확인 → 스위치 도통',en:'Stop valves → pressures → leak test → filter/airflow → switch continuity'},
+    m:[['C1',3],['C5',2],['C4',1]]},
+  disc:{ko:'토출온도 · 압축기 과열 계열',en:'Discharge temperature / compressor overheat',
+    c:{ko:'냉매 부족·누설, 스톱밸브 닫힘, 팽창밸브·스트레이너 막힘, 응축기 오염·팬 불량, 토출 서미스터 이탈·불량',en:'Refrigerant shortage/leak, stop valve closed, EEV/strainer restriction, dirty condenser or fan fault, discharge thermistor dislodged/faulty'},
+    k:{ko:'밸브 개방 → 토출 서미스터 장착·저항 → 압력·과열도 → 누설 검사 → 응축기·팬 → 필요 시 회수·진공·정량 충전',en:'Valves open → discharge thermistor seating/resistance → pressures & superheat → leak test → condenser & fan → recharge if needed'},
+    m:[['C1',3],['C5',2],['C2',1]]},
+  ovl:{ko:'과전류 · 과부하 계열',en:'Over-current / overload',
+    c:{ko:'응축기 오염·통풍 불량로 고압 상승, 전원 전압 낮음·불안정, 냉매 과충전, 압축기 노후·구속, 실외 팬 불량',en:'High head from dirty condenser/poor airflow, low or unstable supply, overcharge, worn or locked compressor, outdoor fan fault'},
+    k:{ko:'부하 시 전압 → 운전 전류 vs 명판 → 응축기 세척·팬 → 압력 → 압축기 권선·절연',en:'Voltage under load → current vs nameplate → clean condenser, fan → pressures → compressor windings/insulation'},
+    m:[['C2',3],['C7',2],['C6',2],['C3',1]]},
+  comp:{ko:'압축기 · 인버터 구동 계열',en:'Compressor / inverter drive',
+    c:{ko:'압축기 권선 단락·구속, U·V·W 배선 이완·오결선, 인버터 IPM(파워모듈) 불량, 실외 기판 불량, 액냉매 역류(과충전), 전원 전압 이상',en:'Compressor winding short/locked rotor, loose or mis-wired U-V-W, IPM failure, outdoor PCB, liquid flood-back (overcharge), supply voltage'},
+    k:{ko:'전원 차단 → U·V·W 배선 → 권선 저항 3상 균등·절연 → 전압·DC 버스 → 압축기 분리 후 인버터 출력 점검 → 기판/압축기 교체 판단',en:'Power off → U-V-W leads → windings equal & insulation → voltage/DC bus → inverter output test with compressor disconnected → PCB vs compressor'},
+    m:[['C6',5],['C7',1]]},
+  volt:{ko:'전원 전압 이상 계열',en:'Supply voltage abnormal',
+    c:{ko:'전원 전압 낮음·높음·순간정전, 단자 이완·중성선 불량, 전선 굵기 부족, 실외 기판 전압 검출 회로·리액터 불량',en:'Low/high voltage or brownout, loose terminal / neutral, undersized cable, PCB voltage sensing or reactor fault'},
+    k:{ko:'실외기 단자에서 부하 시 전압(216~253V) → 차단기·단자 조임 → 리액터·압축기 배선 → 반복 시 실외 기판',en:'Voltage at outdoor terminals under load (216–253 V) → breaker/terminals → reactor & compressor leads → outdoor PCB if repeating'},
+    m:[['C7',4]]},
+  comm:{ko:'실내 · 실외기 통신 계열',en:'Indoor–outdoor communication',
+    c:{ko:'연결선 순서 오류·단선·이완, 실외기 전원 없음(퓨즈·차단기), 실외·실내 기판 불량, 노이즈·전압 강하',en:'Interconnect order/break/loose, outdoor unit unpowered (fuse, breaker), outdoor or indoor PCB, noise or voltage dip'},
+    k:{ko:'양쪽 단자대 배선 순서·조임 → 실외기 전원·퓨즈·기판 LED → 통신선 신호(펄스 DC) → 30초 전원 리셋 → 실외 기판 → 실내 기판',en:'Wiring order/tightness both ends → outdoor power, fuse, PCB LED → comm signal (pulsing DC) → 30 s reset → outdoor PCB → indoor PCB'},
+    m:[['C9',5],['C7',1]]},
+  pcb:{ko:'제어기판 · 메모리 계열',en:'Control PCB / EEPROM',
+    c:{ko:'기판 EEPROM 손상(서지·낙뢰), 기판 불량, 커넥터 이완, 전원 노이즈',en:'EEPROM corruption (surge/lightning), PCB failure, loose connector, power noise'},
+    k:{ko:'전원 1분 차단 후 재시도 → 커넥터 재장착 → 접지 확인 → 반복 시 해당 기판 교체',en:'Power off 1 min and retry → reseat connectors → check earthing → replace PCB if repeating'},
+    m:[['C9',4]]},
+  config:{ko:'조합 · 설정 불일치 계열',en:'Pairing / setting mismatch',
+    c:{ko:'실내·실외기 모델 조합 불일치, 수리 후 잘못된 기판·옵션 코드, 점퍼·설정 오류, 배선 오류',en:'Indoor/outdoor model mismatch, wrong PCB or option code after repair, jumper/setting error, wiring error'},
+    k:{ko:'모델 조합표 확인 → 기판 부품번호·옵션 코드 → 배선 재확인 → 올바른 기판·설정으로 교정',en:'Check combination table → PCB part no./option code → re-check wiring → correct PCB/settings'},
+    m:[['C9',3]]},
+  fanin:{ko:'실내 팬 모터 계열',en:'Indoor fan motor',
+    c:{ko:'송풍팬 먼지·이물질 고착, 베어링 마모, 커넥터 이완, DC 모터·홀센서 불량, 실내 기판 팬 구동부 불량',en:'Blower clogged with dust/debris, worn bearing, loose connector, DC motor / Hall sensor fault, PCB fan driver'},
+    k:{ko:'전원 차단 후 손으로 팬 회전 → 송풍팬·열교환기 세척 → 커넥터·하네스 → 모터 전원·피드백 전압 → 모터 → 기판',en:'Power off, spin fan by hand → clean blower & coil → connector/harness → motor supply & feedback → motor → PCB'},
+    m:[['C4',4],['C13',1]]},
+  fanout:{ko:'실외 팬 모터 계열',en:'Outdoor fan motor',
+    c:{ko:'팬 이물질·날개 파손, 모터 불량·커넥터 이완, 퓨즈 단선, 실외 기판 팬 구동부 불량, (일반형) 팬 캐패시터 불량',en:'Debris / damaged blade, motor fault or loose connector, blown fuse, PCB fan driver, (non-inverter) fan capacitor'},
+    k:{ko:'전원 차단 후 손으로 팬 회전 → 이물질 제거 → 커넥터·퓨즈 → 모터 권선 저항 → (일반형) 캐패시터 → 기판',en:'Power off, spin fan → remove debris → connector/fuse → motor windings → (non-inverter) capacitor → PCB'},
+    m:[['C2',3],['C10',2]]},
+  sensor:{ko:'온도 센서(서미스터) 계열',en:'Temperature sensor (thermistor)',
+    c:{ko:'서미스터 단선·단락, 커넥터 이완·부식, 센서 위치 이탈(배관에서 빠짐), 기판 입력 회로 불량',en:'Thermistor open/short, loose or corroded connector, sensor out of position, PCB input circuit'},
+    k:{ko:'커넥터 재장착 → 센서 저항 측정(매뉴얼 표 대조) → 장착 위치 확인 → 센서 교체 → 기판',en:'Reseat connector → measure resistance vs manual table → check seating → replace sensor → PCB'},
+    m:[['C16',4]]},
+  drain:{ko:'배수 · 플로트 스위치 계열',en:'Drain / float switch',
+    c:{ko:'드레인 호스·배수판 막힘(슬라임), 배수 기울기 불량, 드레인 펌프 불량, 플로트 스위치 커넥터 이완',en:'Blocked drain hose/pan (slime), poor slope, drain pump fault, loose float-switch connector'},
+    k:{ko:'배수판·호스 청소 → 기울기·끝단 확인 → 펌프 작동·플로트 도통 → 커넥터',en:'Clean pan & hose → slope and outlet → pump and float continuity → connector'},
+    m:[['C8',5]]},
+  freeze:{ko:'실내기 결빙 보호 계열',en:'Indoor coil freeze protection',
+    c:{ko:'필터·증발기 오염(풍량 부족), 실내 팬 저속·불량, 냉매 부족, 실내 코일 서미스터 불량, 찬 공기 재순환',en:'Dirty filter/evaporator (low airflow), indoor fan slow/faulty, low refrigerant, coil thermistor, cold-air recirculation'},
+    k:{ko:'필터·증발기 세척 → 팬 속도·풍량 → 저압·과열도(냉매) → 코일 서미스터 저항 → 설치 환경',en:'Clean filter & coil → fan speed/airflow → suction pressure & superheat → coil thermistor → installation'},
+    m:[['C4',3],['C1',2]]},
+  heat:{ko:'방열판 · 제어함 과열 계열',en:'Heat-sink / control box overheat',
+    c:{ko:'실외 팬 정지·저속, 방열판(핀) 먼지 막힘, 실외기 통풍 불량·고온, 기판 교체 후 방열 그리스 누락, 핀 서미스터 불량',en:'Outdoor fan stopped/slow, dusty heat-sink fins, poor ventilation / high ambient, missing thermal grease after PCB change, fin thermistor'},
+    k:{ko:'실외 팬 작동 → 방열판·핀 청소 → 통풍·설치 위치 → 기판 방열판 접촉·그리스 → 서미스터 → 기판',en:'Outdoor fan → clean heat-sink → ventilation → PCB/heat-sink contact & grease → thermistor → PCB'},
+    m:[['C2',3],['C6',1]]},
+  ovc:{ko:'과충전 · 액 복귀 계열',en:'Overcharge / liquid return',
+    c:{ko:'냉매 과충전, 팽창밸브 열림 고착, 토출 서미스터 불량',en:'Overcharge, EEV stuck open, discharge thermistor fault'},
+    k:{ko:'저·고압 확인 → 충전 이력 → 회수 후 정량 충전 → EEV·서미스터',en:'Pressures → charge history → recover & weigh-in → EEV / thermistor'},
+    m:[['C3',3],['C5',1]]},
+  valve4:{ko:'사방밸브 계열 (냉난방기)',en:'4-way valve (heat pump only)',
+    c:{ko:'사방밸브 코일 단선·커넥터 이완, 밸브 고착, 냉매 부족',en:'Coil open / loose connector, valve stuck, refrigerant shortage'},
+    k:{ko:'냉방 전용기에는 해당 없음 → 코일 저항·전압 → 밸브 교체',en:'Not applicable to cooling-only units → coil resistance/voltage → replace valve'},
+    m:[['C6',1],['C1',1]]},
+  info:{ko:'상태 표시 (고장 아님)',en:'Status indicator (not a fault)',
+    c:{ko:'필터 청소 알림, 제상, 서비스 모드, 운전 제한 등 정상 동작 표시',en:'Filter reminder, defrost, service mode, operating restriction — normal indication'},
+    k:{ko:'표시 의미에 따라 필터 청소·알림 리셋·모드 해제',en:'Clean filter / reset reminder / exit mode as indicated'},
+    m:[['C14',2]]},
+  remote:{ko:'리모컨 · 표시부 계열',en:'Remote controller / display',
+    c:{ko:'리모컨 건전지·수신부 불량, 표시부 케이블 이완, 리모컨 설정 오류',en:'Remote batteries / receiver, loose display cable, remote settings'},
+    k:{ko:'건전지 교체 → 수신부·케이블 재장착 → 리모컨 교체',en:'Replace batteries → reseat receiver/cable → replace remote'},
+    m:[['C14',2],['C9',1]]},
+  other:{ko:'기타 부품',en:'Other component',
+    c:{ko:'해당 부품(패널 모터·스위치·필터 유닛 등)·커넥터 불량',en:'That component (panel motor, switch, filter unit) or its connector'},
+    k:{ko:'커넥터 재장착 → 부품 동작 확인 → 교체',en:'Reseat connector → test part → replace'},
+    m:[['C9',1]]}
+};
+
+/* ── 브랜드 목록 ──────────────────────────────────────────────── */
+var BRANDS=[
+  {id:'daikin',name:'Daikin',tbl:'daikin'},
+  {id:'panasonic',name:'Panasonic',tbl:'panasonic'},
+  {id:'mitsubishi',name:'Mitsubishi Electric',tbl:'mitsubishi'},
+  {id:'mhi',name:'Mitsubishi Heavy (SRK)',tbl:'mhi'},
+  {id:'lg',name:'LG',tbl:'lg'},
+  {id:'samsung',name:'Samsung',tbl:'samsung'},
+  {id:'midea',name:'Midea',tbl:'midea'},
+  {id:'gree',name:'Gree',tbl:'gree'},
+  {id:'york',name:'York',tbl:'york'},
+  {id:'acson',name:'Acson',tbl:'acson'},
+  {id:'toshiba',name:'Toshiba / Carrier',tbl:'toshiba'},
+  {id:'sharp',name:'Sharp',tbl:'sharp'},
+  {id:'haier',name:'Haier',tbl:'yorknew'},
+  {id:'other',name:'기타|Other',tbl:null}
+];
+
+/* 브랜드별 안내 (코드 읽는 법 · 주의) */
+var BRAND_NOTE={
+  daikin:{ko:'코드 조회: 리모컨을 실내기로 향하고 「타이머 취소(CANCEL)」를 5초 → 「00」 점멸 → CANCEL을 반복 누르면 코드가 바뀌고, 긴 삐— 소리가 나는 코드가 저장된 코드. ※ 마지막 저장 코드이므로 지금은 정상일 수 있음.',
+          en:'Read code: point remote at indoor unit, hold TIMER CANCEL 5 s → "00" flashes → press CANCEL repeatedly; the code that gives a long beep is the stored code. Shows the last stored code — unit may be normal now.'},
+  panasonic:{ko:'코드 조회: 실내기 TIMER 램프 점멸 시, 리모컨 CHECK 버튼(핀)을 5초 → 「--」 → TIMER ▲/▼로 코드 이동, 긴 삐—(4초) + POWER 램프 점등이 저장 코드. 이력 삭제: 본체 AUTO 버튼 5초 후 CHECK. H = 정지 오류, F = 보호 제어(누적 후 정지).',
+             en:'Read code: when TIMER LED blinks, press CHECK (pin) 5 s → "--" → step with TIMER ▲/▼; long beep (4 s) + POWER LED = stored code. Clear: hold AUTO on unit 5 s then CHECK. H = stop fault, F = protection (stops after repeats).'},
+  mitsubishi:{ko:'가정용은 리모컨에 코드가 안 나옴 — 실내기 운전 램프 점멸 횟수로 판독. 즉시 점멸+삐 소리 = 실내측 오류(패턴 A), 3초 점등 후 점멸 = 실외측 오류(패턴 B). 고장 이력 호출: OPERATION SELECT + TEMP 누른 채 RESET → 약 3초 후 놓고 ON/OFF. 아래 [A-n]/[B-n]은 점멸 횟수.',
+              en:'Residential units show no code on the remote — count indoor OPERATION lamp blinks. Immediate blinks + beeps = indoor fault (pattern A); lamp ON 3 s then blinks = outdoor fault (pattern B). Recall: hold OPERATION SELECT + TEMP, press RESET, release after ~3 s, then ON/OFF. [A-n]/[B-n] below = blink count.'},
+  mhi:{ko:'유선 리모컨은 E코드 표시. 무선 리모컨 모델은 RUN(운전)·TIMER 램프 점멸 패턴으로 판독 (아래 [ ] 표기).',
+       en:'Wired remote shows the E-code. Wireless-remote models show RUN / TIMER lamp patterns (in [ ] below).'},
+  lg:{ko:'실내기 표시부에 「CH」와 숫자가 번갈아 표시. LED만 있는 모델은 LED 점멸(첫 LED = 1의 자리, 둘째 = 10의 자리). CH61은 자동 해제 안 됨 → 3분 전원 리셋. 구형 비인버터의 C1·C5·C6 등 한 자리 코드는 뜻이 다름.',
+      en:'Display alternates "CH" and the number. LED-only units blink LEDs (1st = ones, 2nd = tens). CH61 does not self-clear → 3-min power reset. Old non-inverter single-character codes (C1, C5, C6…) have different meanings.'},
+  samsung:{ko:'2자리 표시부는 「E1」↔「21」 교대 = E121. 4자리 표시부는 「E121」. CF(필터)·Cl(자동청소)·dF(제상)는 고장 아님. 구형 비인버터의 E1/E5/E6/E7은 센서 코드.',
+           en:'2-digit display alternates "E1" / "21" = E121; 4-digit shows "E121". CF, Cl, dF are indicators, not faults. Old non-inverter E1/E5/E6/E7 are sensor codes.'},
+  midea:{ko:'7세그먼트에 E/F/P 코드 또는 신형 4자 코드(EH/EL/EC/PH/PL/PC). 표시부 없는 모델: 타이머 램프 꺼짐 = E, 켜짐 = F, 점멸 = P + 운전 램프 점멸 횟수. 괄호는 신형 코드.',
+         en:'7-segment shows E/F/P or new 4-char codes (EH/EL/EC/PH/PL/PC). No display: timer lamp OFF = E, ON = F, blinking = P, with run-lamp blink count. Brackets = new-format code.'},
+  gree:{ko:'온도 표시부에 코드 표시 (여러 개면 순환). 표시부 없는 모델은 램프 점멸 횟수(E1 = 1회 … E8 = 8회). H3·H5·U3 등은 압축기 정지 약 200초 후에 표시됨. Gree가 만든 Sharp 모델도 같은 코드.',
+        en:'Code shows in the temperature display (cycles if several). No display: lamp blink count (E1 = 1 … E8 = 8). H3, H5, U3 etc. appear ~200 s after the compressor stops. Gree-built Sharp models use the same codes.'},
+  york:{ko:'두 계열이 있음 — ① 2015년 이후 YWM3F/YWM5J (Johnson Controls, Haier 계열): 실내기 표시부에 E/F 숫자 코드. ② 2015년 이전 OYL(Daikin 계열) 모델: Daikin과 같은 코드(A5·U4 등)를 리모컨 CANCEL 5초로 조회. 코드 형태로 구분하세요.',
+        en:'Two families — ① YWM3F/YWM5J from 2015 (Johnson Controls, Haier platform): E/F numeric codes on the indoor display. ② Pre-2015 OYL (Daikin platform): Daikin-style codes (A5, U4…) read via remote CANCEL 5 s. Tell them apart by code format.'},
+  acson:{ko:'Daikin 계열(OYL·DAMA) — Daikin과 같은 코드·조회법(리모컨 CANCEL 5초). 구형 AWM(LED 표시) 모델은 E1~EE 별도 코드 — 표 하단 「구형」 항목 참조.',
+         en:'Daikin platform (OYL / DAMA) — same codes and remote CANCEL 5 s method. Old AWM (LED) models use a separate E1–EE set — see "legacy" entries.'},
+  toshiba:{ko:'고장 시 실내기 램프 전체가 빠르게 점멸 + 삐 소리. 리모컨 CHECK(핀) → 「00」 → TIMER ▲/▼로 이동, 실내기가 연속 삐 소리를 내는 코드가 저장 코드. CLR로 소거(7F). 신형은 01-xx(실내)/02-xx(실외)/03-xx(압축기) 접두. 구형(SKV)은 코드 뜻이 다름.',
+           en:'On a fault all indoor lamps flash fast + beep. Remote CHECK (pin) → "00" → step with TIMER ▲/▼; continuous beep = stored code. CLR clears (7F). Newer units prefix 01-xx indoor / 02-xx outdoor / 03-xx compressor. Older SKV models use a different map.'},
+  sharp:{ko:'정지 상태에서 AUX(비상운전) 버튼 5초 이상 → 운전(적)·타이머(주황)·플라즈마(청/녹) 램프 점멸로 「주-부」 번호 표시. 전원을 끄면 이력이 사라지므로 차단기 내리기 전에 확인. Gree가 만든 Sharp(AY-X…RU 등)는 Gree 코드 사용.',
+         en:'With the unit stopped hold AUX 5 s+ → Operation (red), Timer (orange), Plasmacluster (blue/green) lamps flash the "main-sub" number. Memory is lost on power-off — read before switching off the breaker. Gree-built Sharp (AY-X…RU) uses Gree codes.'},
+  haier:{ko:'실내기 표시부에 E/F 숫자 코드. (York 2015년 이후 모델과 같은 표)',en:'E/F numeric codes on the indoor display (same table as York from 2015).'},
+  other:{ko:'등록된 코드표가 없는 브랜드 — 증상·측정값으로 진단하세요. 코드가 있으면 제조사 매뉴얼을 확인하세요.',en:'No code table for this brand — diagnose from symptoms and measurements. Check the manufacturer manual for codes.'}
+};
+
+/* ── 브랜드별 에러코드: [코드, 한글 뜻, 영문 뜻, 계열, 심각도, (표시·비고)] ───
+   심각도: crit = 정지·즉시 조치, warn = 주의·성능 저하, info = 정보 */
+var CODES={
+daikin:[
+['00','정상 — 저장된 오류 없음','Normal — no error stored','info','info'],
+['A1','실내기 기판 이상','Indoor PCB abnormality','pcb','warn'],
+['A3','배수 수위 이상 (드레인 펌프·플로트 스위치)','Drain level control abnormality','drain','warn'],
+['A5','실내 열교환기 결빙 방지 (냉방) · 과열 보호 (난방)','Freeze-up protection / heating peak-cut','freeze','warn'],
+['A6','실내 팬 모터 이상','Indoor fan motor abnormality','fanin','warn'],
+['C4','실내 열교환기 서미스터 이상','Indoor heat-exchanger thermistor','sensor','warn'],
+['C7','전면 패널 · 루버 리밋 스위치 이상','Front panel / louver limit switch','other','info'],
+['C9','실내 흡입 온도 서미스터 이상','Room temperature thermistor','sensor','warn'],
+['CC','습도 센서 이상','Humidity sensor','sensor','info'],
+['E1','실외기 기판 이상','Outdoor PCB abnormality','pcb','warn'],
+['E3','고압 스위치 작동','High pressure switch actuated','hp','crit'],
+['E5','압축기 과열 보호(OL) 작동','Compressor overload (OL) activation','disc','crit'],
+['E6','압축기 기동 불량 · 구속(락)','Compressor lock / start failure','comp','crit'],
+['E7','실외 DC 팬 모터 락','Outdoor DC fan lock','fanout','warn'],
+['E8','입력 과전류','Input over-current','ovl','crit'],
+['EA','사방밸브 이상 (냉난방기)','Four-way valve abnormality','valve4','warn'],
+['F3','토출 배관 온도 과열','Discharge pipe temperature too high','disc','crit'],
+['F6','냉방 고압 제어 — 실외 코일 온도 과다','High pressure control in cooling','hp','warn'],
+['F8','압축기 온도 이상 정지 (R32)','Compressor temperature abnormal (R32)','disc','crit'],
+['H0','압축기 센서 계통 이상','Compressor sensor system abnormality','comp','warn'],
+['H3','고압 스위치 회로 이상','High pressure switch circuit fault','sensor','warn'],
+['H6','압축기 위치 검출 이상 — 기동 실패','Position sensor abnormality — start failure','comp','crit'],
+['H7','실외 팬 모터 신호 이상','Outdoor fan motor signal error','fanout','warn'],
+['H8','DC 전압 · 전류 센서 이상','DC voltage / current sensor abnormality','pcb','warn'],
+['H9','실외 공기 온도 서미스터 이상','Outdoor air thermistor','sensor','warn'],
+['J3','토출 배관 서미스터 이상 · 이탈','Discharge pipe thermistor fault / dislodged','sensor','warn'],
+['J6','실외 열교환기 서미스터 이상','Outdoor heat-exchanger thermistor','sensor','warn'],
+['L3','제어함(전장부) 온도 상승','Electrical box temperature rise','heat','warn'],
+['L4','방열핀 온도 상승 — 인버터 과열','Radiation fin temperature rise','heat','crit'],
+['L5','출력 과전류 — 인버터 IPM','Output over-current (inverter)','comp','crit'],
+['LA','IGBT 온도 이상','IGBT temperature error','heat','crit'],
+['P4','방열핀 서미스터 이상','Radiation fin thermistor','sensor','warn'],
+['U0','냉매 부족','Refrigerant shortage','ref','crit','7분간 저전류 또는 토출온도 상승으로 판정|Detected via low current for 7 min or high discharge temp'],
+['U2','전원 전압 이상 (저전압 · 과전압)','Low / over voltage detection','volt','warn'],
+['U4','실내 · 실외기 통신 이상','Indoor–outdoor transmission error','comm','warn','연결선 3번(통신선) 확인|Check interconnect wire 3'],
+['U7','실외 기판 내부 통신 이상','Outdoor PCB internal transmission error','pcb','warn'],
+['UA','실내 · 실외기 조합 불일치 · 설치 오류','Indoor–outdoor combination / installation error','config','warn'],
+['UF','배관 · 배선 불일치 · 냉매 부족 (멀티)','Piping/wiring mismatch / gas shortage (multi)','config','warn']
+],
+panasonic:[
+['H00','정상 — 저장된 오류 없음','No abnormality stored','info','info'],
+['H11','실내 · 실외기 통신 실패','Indoor–outdoor communication failure','comm','crit'],
+['H12','실내 · 실외기 용량 불일치','Indoor/outdoor capacity mismatch','config','crit'],
+['H14','실내 흡입 온도 센서 이상','Indoor intake air sensor open/short','sensor','warn'],
+['H15','압축기(탱크) 온도 센서 이상','Compressor (tank) temperature sensor','sensor','warn'],
+['H16','CT 전류 검출 낮음 — 냉매 부족 · CT 이상','Current transformer reads low — gas shortage / CT','ref','crit','전류·저압 모두 낮음 = 냉매 부족, 전류 낮고 저압 높음 = 압축기 압축 불량|Both current & suction low = shortage; current low & suction high = compressor not pumping'],
+['H17','실외 흡입 온도 센서 이상','Outdoor suction temperature sensor','sensor','warn'],
+['H19','실내 DC 팬 모터 락','Indoor DC fan motor locked','fanin','crit'],
+['H21','플로트 스위치 작동 (배수)','Float switch operated (drain)','drain','warn'],
+['H23','실내 열교환기 센서 1 이상','Indoor heat-exchanger sensor 1','sensor','warn'],
+['H24','실내 열교환기 센서 2 이상','Indoor heat-exchanger sensor 2','sensor','warn'],
+['H25','이온 발생기 이상','Ion generator abnormal','other','info'],
+['H27','실외 공기 온도 센서 이상','Outdoor air temperature sensor','sensor','warn'],
+['H28','실외 열교환기 센서 1 이상','Outdoor heat-exchanger sensor 1','sensor','warn'],
+['H30','토출 배관 온도 센서 이상','Discharge pipe temperature sensor','sensor','warn'],
+['H32','실외 열교환기 센서 2 이상','Outdoor heat-exchanger sensor 2','sensor','warn'],
+['H33','실내 · 실외기 오결선 · 전압 등급 불일치','Indoor/outdoor wrong connection / model mismatch','config','crit'],
+['H34','실외 방열판 온도 센서 이상','Outdoor heat-sink temperature sensor','sensor','warn'],
+['H36','실외 가스관 온도 센서 이상','Outdoor gas-pipe sensor','sensor','warn'],
+['H37','실외 액관 온도 센서 이상','Outdoor liquid-pipe sensor','sensor','warn'],
+['H38','실내 · 실외기 브랜드 코드 불일치','Indoor/outdoor brand-code mismatch','config','crit'],
+['H39','대기 실내기 이상 (멀티)','Abnormal standby indoor unit (multi)','config','warn'],
+['H41','배관 · 배선 오결합 (멀티)','Wiring/piping cross-connection (multi)','config','warn'],
+['H58','실내 가스(PATROL) 센서 이상','Indoor gas (PATROL) sensor','other','info'],
+['H59','ECONAVI 센서 이상','ECONAVI sensor abnormal','other','info'],
+['H64','실외 고압 센서 이상','Outdoor high-pressure sensor','sensor','warn'],
+['H67','nanoe 발생기 이상','nanoe generator abnormal','other','info'],
+['H71','실외 제어함 냉각팬 이상','Control-box cooling fan abnormal','heat','warn'],
+['H97','실외 DC 팬 모터 락','Outdoor DC fan motor locked','fanout','crit'],
+['H98','실내 고압 보호 (난방) — 기록만','Indoor high-pressure protection (heating)','info','info'],
+['H99','실내 코일 동결 보호 (배관 2°C 이하)','Indoor coil freeze protection','freeze','warn'],
+['F11','사방밸브 전환 이상 (냉난방기)','4-way valve switching abnormality','valve4','warn'],
+['F16','총 운전 전류 보호','Total running current protection','ovl','warn'],
+['F17','대기 실내기 동결 (멀티)','Standby indoor unit freezing (multi)','freeze','warn'],
+['F87','제어함 과열 보호','Control box overheat protection','heat','warn'],
+['F90','PFC 보호 — DC 버스 전압 이상','PFC protection — abnormal DC bus','volt','crit','정전·전압 강하 후 자주 발생 — 전원부터 확인|Common after brownouts — check supply first'],
+['F91','냉동 사이클 이상 — 냉매 부족','Refrigeration cycle abnormal — refrigerant shortage','ref','crit'],
+['F93','압축기 회전 이상','Compressor abnormal revolution','comp','crit'],
+['F94','압축기 토출압 보호','Compressor discharge pressure protection','hp','crit'],
+['F95','냉방 고압 보호 — 실외 코일 온도 과다','Cooling high-pressure protection','hp','crit'],
+['F96','IPM(파워 트랜지스터) 과열','IPM / power transistor overheat','heat','crit'],
+['F97','압축기 과열 보호 (탱크 온도 112°C↑)','Compressor overheating protection','disc','crit'],
+['F98','총 운전 과전류 보호','Total running over-current protection','ovl','crit'],
+['F99','DC 피크 — 인버터 출력 과전류','DC peak detection — inverter output over-current','comp','crit']
+],
+mitsubishi:[
+['P1','실내 흡입 온도 서미스터 이상','Room (intake) thermistor open/short','sensor','warn','[A-1]'],
+['P2 / P9','실내 배관 서미스터 이상 (P2 액관 · P9 2상관)','Indoor pipe thermistor (P2 liquid, P9 2-phase)','sensor','warn','[A-2]'],
+['E6 / E7','실내 · 실외기 통신 오류','Indoor–outdoor communication error','comm','crit','[A-3] S1·S2·S3 배선 확인|Check S1-S2-S3 wiring'],
+['P4','드레인 센서 · 플로트 스위치 개방','Drain sensor / float switch open','drain','warn','[A-4]'],
+['P5','드레인 펌프 이상','Drain pump malfunction','drain','warn','[A-5]'],
+['PA','누수 감지로 압축기 강제 정지','Forced compressor stop after water-leak detection','drain','warn'],
+['P6','동결 보호 (냉방) · 과열 보호 (난방)','Freeze protection / overheat protection','freeze','warn','[A-6]'],
+['EE','실내 · 실외기 조합 · 통신 오류','Indoor/outdoor combination or communication error','config','crit','[A-7]'],
+['P8','배관 온도 이상 — 냉매 부족 · 밸브 닫힘','Pipe temperature error — low refrigerant / stop valve','ref','crit','[A-8]'],
+['E4 / E5','유선 리모컨 통신 오류','Wired remote controller communication error','remote','warn','[A-9]'],
+['Pb','실내 팬 모터 이상 (회전 피드백 없음)','Indoor fan motor error','fanin','crit','[A-11]'],
+['Fb','실내 기판 메모리 오류','Indoor control board memory error','pcb','crit','[A-12]'],
+['PL','냉매 회로 이상 — 누설 감지','Refrigerant circuit abnormal — leak detected','ref','crit','[A-14 · 미확인]|[A-14 · unverified]'],
+['E0 / E3','리모컨 송수신 오류','Wireless remote transmission error','remote','info'],
+['E1 / E2','리모컨 기판 오류','Remote controller board error','remote','info'],
+['E8 / E9','실내 · 실외 통신 오류 (실외측 검출)','Communication error seen from outdoor side','comm','crit','[B-1]'],
+['EA / Eb','연결선 오결선 (S1·S2·S3 역결선 · 단선)','Mis-wiring of interconnect (S1-S2-S3)','config','crit'],
+['EC','기동 시간 초과','Start-up time over','comm','warn'],
+['UP','압축기 과전류 차단','Compressor over-current interruption','ovl','crit','[B-2]'],
+['U3','토출 서미스터 이상','Discharge thermistor open/short','sensor','warn','[B-3]'],
+['U4','실외 서미스터 이상 (배관 · 외기 · 핀)','Other outdoor thermistors open/short','sensor','warn','[B-3]'],
+['UF','압축기 과전류 — 기동 30초 내 (구속)','Compressor over-current at start (locked)','comp','crit','[B-4]'],
+['U2','토출 온도 과열 · 냉매 부족','Abnormal high discharge temperature / insufficient refrigerant','disc','crit','[B-5]'],
+['U1 / Ud','고압 이상 · 실외 배관 과열 보호','Abnormal high pressure / overheat protection','hp','crit','[B-6]'],
+['U5','방열판(핀) 온도 이상','Heat-sink (fin) temperature abnormal','heat','warn','[B-7]'],
+['U8','실외 팬 모터 보호 정지','Outdoor fan motor protection stop','fanout','crit','[B-8]'],
+['U6','파워모듈(IPM) 과전류 · 이상','Power module (IPM) over-current','comp','crit','[B-9]'],
+['U7','토출 과열도 이상 — 액 복귀 (과충전 · LEV)','Abnormal superheat — liquid return (overcharge / LEV)','ovc','warn','[B-10]'],
+['U9 / UH','전원 전압 · DC 버스 · 전류 검출 이상','Over/under voltage, DC bus, current sensor error','volt','crit','[B-11]'],
+['UE','스톱밸브 닫힘 감지 (고압)','High pressure / closed stop valve detected','hp','crit'],
+['UL','저압 이상 (기동 3분 후)','Abnormal low pressure','lowp','crit'],
+['FC','실외 인버터 기판 메모리 오류','Outdoor inverter board memory error','pcb','crit']
+],
+mhi:[
+['E1','유선 리모컨 배선 오류','Wired remote wiring error','remote','warn'],
+['E5','실내 · 실외기 통신 오류','Indoor–outdoor signal transmission error','comm','crit','[TIMER 6회]|[TIMER ×6]'],
+['E7','실내 열교환기 센서 1 이상','Indoor heat-exchanger sensor 1','sensor','warn','[RUN 1회]|[RUN ×1]'],
+['E8','실내 온도 센서 이상','Room temperature sensor','sensor','warn','[RUN 2회]|[RUN ×2]'],
+['E9','배수 이상 (플로트 스위치)','Drain trouble (float switch)','drain','warn','[RUN 4회]|[RUN ×4]'],
+['E16','실내 팬 모터 이상','Indoor fan motor error','fanin','crit','[RUN 6회]|[RUN ×6]'],
+['E35','냉방 고압 보호 — 실외 코일 온도 과다','Cooling high-pressure protection','hp','crit','[TIMER 연속]|[TIMER continuous]'],
+['E36','압축기 과열 — 토출 온도 과다','Compressor overheat (discharge temp)','disc','crit','[TIMER 5회]|[TIMER ×5]'],
+['E37','실외 열교환기 센서 이상','Outdoor heat-exchanger sensor','sensor','warn'],
+['E38','실외 공기 온도 센서 이상','Outdoor air temperature sensor','sensor','warn'],
+['E39','토출 배관 온도 센서 이상','Discharge pipe sensor','sensor','warn'],
+['E40','서비스 밸브(가스측) 닫힘 · 실외 기판','Service valve closed / outdoor PCB','hp','crit'],
+['E42','압축기 과전류 — 기동 시 전류 차단','Current cut — compressor over-current at start','comp','crit','[TIMER 1회]|[TIMER ×1]'],
+['E47','액티브 필터 전압 오류','Active-filter voltage error','volt','crit'],
+['E48','실외 팬 모터 이상','Outdoor fan motor error','fanout','crit','[TIMER 7회]|[TIMER ×7]'],
+['E51','파워 트랜지스터 오류','Power transistor error','comp','crit'],
+['E53','실외 흡입관 센서 이상','Outdoor suction pipe sensor','sensor','warn'],
+['E57','냉매 부족 보호 제어','Refrigeration-cycle protection (low refrigerant)','ref','crit','[RUN 7회]|[RUN ×7]'],
+['E58','전류 안전 정지 — 과부하 · 과충전','Current safe stop (overload / overcharge)','ovl','crit','[TIMER 3회]|[TIMER ×3]'],
+['E59','압축기 기동 실패','Compressor start failure','comp','crit','[TIMER 2회]|[TIMER ×2]'],
+['E60','회전자 락 (자극 미검출)','Rotor lock','comp','crit']
+],
+lg:[
+['CH01','실내 온도 센서 이상','Indoor room temperature sensor','sensor','warn'],
+['CH02','실내 배관(입구) 온도 센서 이상','Indoor pipe (inlet) sensor','sensor','warn'],
+['CH03','유선 리모컨 통신 오류','Wired remote controller communication','remote','warn'],
+['CH04','플로트 스위치 · 배수 이상 (일부 모델)','Float switch / drain fault','drain','warn'],
+['CH05','실내 · 실외기 통신 오류 (실내 검출)','Indoor–outdoor communication (indoor detected)','comm','warn'],
+['CH06','실내 배관(출구) 온도 센서 이상','Indoor pipe (outlet) sensor','sensor','warn','구형 「C6」는 인버터 과전류|Old "C6" = inverter over-current'],
+['CH07','운전 모드 충돌 (멀티)','Operating mode conflict (multi)','info','info'],
+['CH09','실내 EEPROM 오류','Indoor EEPROM checksum error','pcb','warn'],
+['CH10','실내 BLDC 팬 모터 락','Indoor BLDC fan motor lock','fanin','warn'],
+['CH21','IPM 과전류 — DC 피크','IPM fault / DC peak over-current','comp','crit'],
+['CH22','입력 전류 초과 (CT2)','Input current exceeded (CT2)','ovl','crit'],
+['CH23','DC 링크 저전압','DC link voltage too low','volt','crit'],
+['CH24','고 · 저압 스위치 개방','High/low pressure switch open','lowp','crit'],
+['CH25','전원 전압 이상 (약 140V 미만 · 300V 초과)','AC input voltage abnormal','volt','warn'],
+['CH26','DC 압축기 위치 검출 이상','DC compressor position error','comp','crit'],
+['CH27','PSC · 리액터 회로 이상 (IGBT 과전류)','PSC / reactor circuit fault','comp','crit'],
+['CH28','DC 링크 과전압','DC link voltage too high','volt','crit'],
+['CH29','압축기 상 과전류','Compressor phase over-current','comp','crit'],
+['CH32','인버터 압축기 토출 온도 과열 (105°C↑)','Compressor discharge temperature too high','disc','crit'],
+['CH34','고압 상승 과다 (고압 보호)','Excessive high-pressure rise','hp','crit'],
+['CH35','저압 저하 과다 (저압 보호)','Excessive low-pressure drop','lowp','crit'],
+['CH38','냉매 누설 · 부족 감지','Refrigerant leak / low refrigerant detected','ref','crit','전원 불안정으로도 발생 — 1회 리셋 후 재확인|Also triggered by unstable power — reset once and re-check'],
+['CH40','CT 센서 이상','CT (current transformer) sensing error','pcb','warn'],
+['CH41','토출(D-pipe) 온도 센서 이상','Discharge (D-pipe) sensor','sensor','warn'],
+['CH44','실외 공기 온도 센서 이상','Outdoor air sensor','sensor','warn'],
+['CH45','실외 코일 온도 센서 이상','Outdoor condenser pipe sensor','sensor','warn'],
+['CH46','흡입관 온도 센서 이상','Suction pipe sensor','sensor','warn'],
+['CH51','용량 초과 (멀티)','Capacity mismatch (multi)','config','warn'],
+['CH53','실내 · 실외기 통신 오류 (실외 검출)','Indoor–outdoor communication (outdoor detected)','comm','warn'],
+['CH54','역상 · 결상 (3상)','Reverse / open phase (3-phase)','volt','crit'],
+['CH60','실외 EEPROM 오류','Outdoor EEPROM checksum error','pcb','warn'],
+['CH61','응축기 배관 온도 과열 (65°C↑)','Condenser pipe temperature too high','hp','crit','밀폐 발코니 · 루버창에서 흔함 — 자동 해제 안 됨, 3분 전원 리셋|Common in enclosed balconies — no self-clear, 3-min power reset'],
+['CH62','인버터 방열판 과열 (85°C↑)','Inverter heat-sink temperature too high','heat','crit'],
+['CH65','방열판 온도 센서 이상','Heat-sink temperature sensor','sensor','warn'],
+['CH67','실외 BLDC 팬 모터 락','Outdoor BLDC fan motor lock','fanout','warn'],
+['CH93','통신 · 실외기 전원 없음 (2021년~ 모델)','Communication / outdoor unit not receiving power','comm','warn']
+],
+samsung:[
+['E101 / E102','실내 · 실외기 통신 오류','Indoor–outdoor communication error','comm','warn'],
+['E121','실내 온도 센서 이상','Indoor room temperature sensor','sensor','warn'],
+['E122','실내 EVA-IN 센서 이상','Indoor EVA-IN sensor','sensor','warn'],
+['E123','실내 EVA-OUT 센서 이상','Indoor EVA-OUT sensor','sensor','warn'],
+['E128','실내 EVA-IN 센서 배관 이탈','EVA-IN sensor detached from pipe','sensor','warn'],
+['E154','실내 팬 모터 이상','Indoor fan motor error','fanin','warn'],
+['E162','실내 EEPROM 오류','Indoor unit EEPROM error','pcb','warn'],
+['E163','옵션(설정) 코드 오류','Option code setting error','config','warn'],
+['E201','실내기 수량 불일치 (멀티)','Indoor-unit count mismatch (multi)','config','warn'],
+['E202','실외 기판 수신 통신 오류','Outdoor PCB not receiving from indoor','comm','warn'],
+['E203','실외 메인 ↔ 인버터 기판 통신 오류','Outdoor main–inverter micom communication','pcb','warn'],
+['E221','실외 공기 온도 센서 이상','Outdoor ambient sensor','sensor','warn'],
+['E231','실외 코일(COND-OUT) 센서 이상','Outdoor condenser-out sensor','sensor','warn'],
+['E237','실외 코일(COND) 센서 이상','Outdoor condenser sensor','sensor','warn'],
+['E251','토출 온도 센서 이상','Compressor discharge sensor','sensor','warn'],
+['E320','OLP(압축기 상부) 센서 이상','OLP sensor open/short','sensor','warn'],
+['E416','토출 과열로 압축기 정지','Compressor stopped by discharge over-temperature','disc','crit'],
+['E422','EEV · 밸브 닫힘 · 배관 막힘 자가진단','EEV / valve-close or pipe blockage self-diagnosis','lowp','crit'],
+['E425','역상 · 전원선 오결선','Reverse/open phase or power cable mis-connection','volt','crit'],
+['E440','난방 제한 — 외기 고온 (냉방과 무관)','Heating restricted — outdoor temp high','info','info'],
+['E441','냉방 제한 — 외기 저온 감지 (센서 의심)','Cooling restricted — outdoor temp low (suspect sensor)','sensor','warn'],
+['E458','실외 팬 1 이상','Outdoor fan 1 error','fanout','warn'],
+['E461','인버터 압축기 기동 실패','Inverter compressor starting failure','comp','crit'],
+['E462','총 전류 제한 · PFC 과전류','Total current limit / PFC over-current','ovl','crit'],
+['E463','OLP 과열로 압축기 정지','Compressor stopped by OLP over-temperature','disc','crit'],
+['E464','IPM 과전류 (DC 피크)','IPM over-current (DC peak)','comp','crit'],
+['E465','압축기 과부하 (V/I 리밋)','Compressor overload (V-limit / I-limit)','comp','crit'],
+['E466','DC 링크 과 · 저전압','DC-link voltage under/over','volt','crit'],
+['E467','압축기 회전 오류 · 배선 누락','Compressor rotation error / wire missing','comp','crit'],
+['E468','전류 센서 오류','Current sensor error','pcb','warn'],
+['E469','DC 링크 전압 센서 오류','DC-link voltage sensor error','pcb','warn'],
+['E470','실외 EEPROM 데이터 오류','Outdoor EEPROM data error','pcb','warn'],
+['E471','실외 EEPROM 하드웨어 오류','Outdoor EEPROM hardware error','pcb','warn'],
+['E474','IPM 방열판 온도 센서 이상','IPM heat-sink temperature sensor','sensor','warn'],
+['E475','실외 팬 2 이상','Outdoor fan 2 error','fanout','warn'],
+['E484','PFC 과부하','PFC overload','ovl','crit'],
+['E485','입력 전류 센서 오류','Input current sensor error','pcb','warn'],
+['E500','IPM · 방열판 과열','IPM / heat-sink over-temperature','heat','crit'],
+['E554','냉매 누설 감지','Refrigerant leak detected','ref','crit'],
+['E556','실내 · 실외기 용량 불일치','Indoor/outdoor capacity mismatch','config','warn']
+],
+midea:[
+['E0','실내 EEPROM 오류','Indoor EEPROM error','pcb','crit','(EH 00)'],
+['E1','실내 · 실외기 통신 오류','Indoor–outdoor communication error','comm','crit','(EL 01)'],
+['E2','제로크로싱 검출 오류 (AC 팬 모델)','Zero-crossing detection error','volt','warn','(EH 02)'],
+['E3','실내 팬 속도 제어 불가','Indoor fan speed out of control','fanin','warn','(EH 03)'],
+['E4','실내 온도 센서 T1 이상','Room temperature sensor T1','sensor','warn','(EH 60)'],
+['E5','증발기 코일 센서 T2 이상','Evaporator coil sensor T2','sensor','warn','(EH 61)'],
+['E6 / Eb','기판 ↔ 표시부 통신 오류','Main PCB–display communication','remote','warn','(EH 0b)'],
+['EC','냉매 누설 감지','Refrigerant leakage detection','ref','crit','(EL 0C)'],
+['F0','과전류 보호','Over-current protection','ovl','warn','(PC 08)'],
+['F1','실외 공기 온도 센서 T4 이상','Outdoor ambient sensor T4','sensor','warn','(EC 53)'],
+['F2','응축기 코일 센서 T3 이상','Condenser coil sensor T3','sensor','warn','(EC 52)'],
+['F3','토출 온도 센서 T5 이상','Discharge temperature sensor T5','sensor','warn','(EC 54)'],
+['F4','실외 EEPROM 오류','Outdoor EEPROM error','pcb','crit','(EC 51)'],
+['F5','실외 팬 속도 제어 불가','Outdoor fan speed out of control','fanout','warn','(EC 07)'],
+['P0','IPM 이상 · IGBT 과전류','IPM malfunction / IGBT over-current','comp','crit','(PC 00)'],
+['P1','과 · 저전압 보호','Over/under-voltage protection','volt','crit','(PC 01)'],
+['P2','압축기 상부 · IPM 과열 보호','Compressor top / IPM high temperature protection','disc','crit','(PC 02)'],
+['P3','실외 저온 (해당 없음)','Outdoor ambient too low','info','info'],
+['P4','인버터 압축기 구동 오류 (P40~P49)','Inverter compressor drive error','comp','crit','(PC 04)'],
+['P5','모드 충돌 (멀티)','Mode conflict (multi)','info','info'],
+['P6','고 · 저압 스위치 개방','High/low pressure switch open','lowp','crit'],
+['CL / nF / dF / AP','상태 표시 — 필터 청소 · 필터 교체 · 제상 · Wi-Fi 설정','Status — filter clean / replace / defrost / Wi-Fi AP','info','info']
+],
+gree:[
+['E1','고압 보호','High pressure protection','hp','crit'],
+['E2','실내 동결 방지 보호','Indoor anti-freezing protection','freeze','warn'],
+['E3','저압 · 냉매 부족 · 막힘 보호','Low pressure / refrigerant-lacking / blockage','lowp','crit'],
+['E4','압축기 토출 온도 과열 보호','Compressor discharge temperature protection','disc','crit'],
+['E5','AC 과전류 보호','AC over-current protection','ovl','warn'],
+['E6','실내 · 실외기 통신 오류','Indoor–outdoor communication malfunction','comm','crit'],
+['E7','모드 충돌 (멀티)','Mode conflict (multi)','info','info'],
+['E8','고온 과부하 보호','High-temperature overload protection','hp','warn'],
+['E9','냉풍 방지 (난방 상태 표시)','Cold-air prevention (heating)','info','info'],
+['F0','냉매 부족 · 막힘 보호','Refrigerant-lacking / blockage protection','ref','crit'],
+['F1','실내 온도 센서 이상','Indoor ambient sensor','sensor','warn'],
+['F2','실내 증발기 센서 이상','Indoor evaporator sensor','sensor','warn'],
+['F3','실외 공기 온도 센서 이상','Outdoor ambient sensor','sensor','warn'],
+['F4','실외 응축기 센서 이상','Outdoor condenser sensor','sensor','warn'],
+['F5','토출 온도 센서 이상','Discharge temperature sensor','sensor','warn'],
+['F6 / F8 / F9 / FH','주파수 제한 (과부하 · 과전류 · 토출 과열 · 동결) — 상태','Frequency limiting (overload / current / discharge / freeze)','info','info'],
+['Fo','냉매 회수(펌프다운) 모드','Refrigerant gathering mode','info','info'],
+['H1','제상 중 (상태)','Defrosting (status)','info','info'],
+['H3','압축기 과부하 보호','Compressor overload protection','disc','crit'],
+['H4','시스템 과부하 (배관 온도 과다)','System overload','hp','warn'],
+['H5','IPM(모듈) 보호','IPM protection','comp','crit'],
+['H6','실내 팬 모터 피드백 없음','No feedback from indoor fan motor','fanin','warn'],
+['H7','압축기 탈조','Compressor desynchronising','comp','crit'],
+['HC','PFC 보호','PFC protection','volt','crit'],
+['U1','압축기 상전류 검출 회로 이상','Compressor phase-current detection circuit','pcb','crit'],
+['U3','DC 버스 전압 강하 보호','DC bus voltage drop protection','volt','crit'],
+['U5','전류 검출 회로 이상','Current detection circuit malfunction','pcb','crit'],
+['U7','사방밸브 이상 (냉난방기)','4-way valve reversal abnormal','valve4','warn'],
+['U8','제로크로싱 검출 오류','Zero-crossing detection error','volt','warn'],
+['P5','압축기 과전류 보호','Compressor over-current protection','comp','crit'],
+['PH','DC 버스 과전압','DC bus voltage too high','volt','crit'],
+['PL','DC 버스 저전압','DC bus voltage too low','volt','crit'],
+['EE','EEPROM 오류','EEPROM malfunction','pcb','crit'],
+['LP','실내 · 실외기 조합 불일치','Indoor/outdoor mismatch','config','warn'],
+['C5','점퍼캡 이상','Jumper cap malfunction','config','warn'],
+['oE','실외기 이상 (일반) — 실외 기판 LED 확인','Outdoor unit malfunction — read outdoor LED','pcb','warn'],
+['Lc / Ld / LE','압축기 기동 실패 · 결상 · 정지 보호','Compressor start failure / phase loss / stall','comp','crit']
+],
+toshiba:[
+['04','실내 → 실외 통신 오류','Indoor→outdoor serial communication error','comm','crit'],
+['05','시리얼 신호 오류','Serial signal error','comm','crit'],
+['07','운전 중 시리얼 신호 중단 · 순간 정전','Serial signal stops during operation','comm','warn'],
+['08','사방밸브 역전 오류 (냉난방기)','4-way valve reversal error','valve4','warn'],
+['0C','실내 온도 센서(TA) 이상','Room temperature sensor (TA)','sensor','warn'],
+['0d','실내 열교환기 센서(TC) 이상','Indoor heat-exchanger sensor (TC)','sensor','warn'],
+['11','실내 팬 모터 이상','Indoor fan motor error','fanin','warn'],
+['12','실내 기판 기타 오류','Other indoor PCB error','pcb','crit'],
+['14','인버터 과전류 · 단락 보호','Inverter over-current / short-circuit protection','comp','crit'],
+['16','압축기 위치 검출 회로 오류','Compressor position-detection circuit error','comp','crit'],
+['17','전류 검출 회로 오류','Current-detection circuit error','pcb','crit'],
+['18','실외 열교환기(TE) · 흡입(TS) 센서 이상','Outdoor heat-exchanger (TE) / suction (TS) sensor','sensor','warn'],
+['19','토출 온도 센서(TD) 이상','Discharge temperature sensor (TD)','sensor','warn'],
+['1A','실외 팬 모터 · 구동 오류','Outdoor fan motor / drive error','fanout','warn'],
+['1b','실외 온도 센서(TO) 이상','Outdoor temperature sensor (TO)','sensor','warn'],
+['1C','압축기 구동 출력 오류 · 오결선','Compressor drive output error / mis-wiring','comp','crit'],
+['1d','압축기 락 · 기동 직후 과전류','Compressor locked-rotor / over-current at start','comp','crit'],
+['1E','압축기 토출 온도 과열 (117°C↑)','Compressor discharge temperature too high','disc','crit'],
+['1F','압축기 이상 (전류 지속 높음)','Compressor breakdown (current stays high)','ovl','crit'],
+['20','저압 (미확인)','Low pressure (unverified)','lowp','crit'],
+['21','고압 (미확인)','High pressure (unverified)','hp','crit'],
+['7F','저장 코드 소거됨','Stored check code cleared','info','info']
+],
+sharp:[
+['1-0 / 1-1 / 1-2','실외 서미스터 단락 (열교환기 · 외기 · 흡입)','Outdoor thermistor short (HX / air / suction)','sensor','warn'],
+['2-0','압축기 고온 — 사이클 온도 오류','Compressor high temperature (cycle error)','disc','crit'],
+['3-0','제습 중 일시 정지 (정상)','Temporary stop during dehumidifying','info','info'],
+['5-0 ~ 5-5','실외 서미스터 개방 (열교환기 · 외기 · 흡입 · 토출 · 방열판)','Outdoor thermistor open (HX / air / suction / discharge / heat-sink)','sensor','warn'],
+['6-0','DC 과전류 (IPM · 압축기)','DC over-current (IPM / compressor)','comp','crit'],
+['7-0 / 7-2','AC 과전류 · 최대 전류 오류','AC over-current / maximum current','ovl','warn'],
+['7-3','AC 전류 부족 — 냉매 부족 · 막힘','AC current deficiency — shortage / blockage','ref','crit'],
+['9-4','사방밸브 · 가스 누설 오류','4-way valve / gas leak error','ref','crit'],
+['10-0 ~ 10-2','실외 EEPROM 오류','Outdoor EEPROM error','pcb','crit'],
+['11-0 ~ 11-5','실외 DC 팬 오류','Outdoor DC fan errors','fanout','warn'],
+['12-0','단자대 열퓨즈 오류 (단자 과열)','Terminal board thermal fuse (overheated terminal)','volt','crit'],
+['13-0 ~ 13-2','압축기 기동 · 회전 오류','Compressor start-up / rotation error','comp','crit'],
+['17-0 / 18-0','연결선 단락 · 개방 · 오결선','Inter-unit wiring short / open / wrong','comm','crit'],
+['26-1 ~ 26-3','실내 서미스터 이상 (실내 · 배관 · 밸브)','Indoor thermistor error','sensor','warn']
+],
+yorknew:[
+['E1','실내 온도 센서 이상','Indoor room temperature sensor','sensor','warn'],
+['E2','실내 코일 온도 센서 이상','Indoor coil sensor','sensor','warn'],
+['E4','실내 EEPROM 오류','Indoor EEPROM failure','pcb','warn'],
+['E5','실내 결빙 방지 보호','Indoor anti-frost protection','freeze','warn'],
+['E7','실내 · 실외기 통신 오류','Indoor–outdoor communication fault','comm','warn'],
+['E9','난방 과부하 (냉난방기)','Indoor overload in heating','info','info'],
+['E14','실내 팬 모터 이상','Indoor fan motor malfunction','fanin','warn'],
+['F1','IPM(파워모듈) 보호','IPM protection','comp','crit'],
+['F2','압축기 순시 과전류','Compressor instantaneous over-current','comp','crit'],
+['F3','IPM ↔ 실외 기판 통신 오류','IPM–outdoor main PCB communication','pcb','warn'],
+['F4','압축기 토출 온도 과열','Compressor discharge temperature protection','disc','crit'],
+['F6','실외 공기 온도 센서 이상','Outdoor ambient sensor','sensor','warn'],
+['F7','실외 흡입 온도 센서 이상','Outdoor suction sensor','sensor','warn'],
+['F8','실외 DC 팬 모터 이상','Outdoor DC fan motor','fanout','warn'],
+['F9','모듈 리셋','Module reset','comp','warn'],
+['F11','압축기 탈조','Loss of synchronism','comp','crit'],
+['F12','실외 EEPROM 오류','Outdoor EEPROM error','pcb','warn'],
+['F19','전원 과 · 저전압 보호','Power over/under-voltage protection','volt','warn'],
+['F21','실외 코일 온도 센서 이상','Outdoor coil sensor','sensor','warn'],
+['F22','실외 AC 과전류 보호','Outdoor AC over-current protection','ovl','crit'],
+['F23','압축기 과전류 보호','Compressor over-current protection','ovl','crit'],
+['F25','토출 온도 센서 이상','Discharge temperature sensor','sensor','warn'],
+['F28','압축기 회전자 위치 검출 오류','Compressor rotor position detection fault','comp','crit']
+],
+acsonlegacy:[
+['E1','(구형 AWM) 실내 온도 센서 이상 — 적색 3회 점멸','(Legacy AWM) room sensor — 3 red blinks','sensor','warn'],
+['E2','(구형 AWM) 코일 센서 개방 — 4회 점멸','(Legacy AWM) coil sensor open — 4 blinks','sensor','warn'],
+['E3','(구형 AWM) 실외 코일 센서 개방 — 5회 점멸','(Legacy AWM) outdoor coil sensor open — 5 blinks','sensor','warn'],
+['E4','(구형 AWM) 압축기 과부하 · 코일 센서 단락 — 6회 점멸','(Legacy AWM) compressor overload / coil sensor short — 6 blinks','ovl','crit'],
+['E5','(구형 AWM) 냉매 누설 (미확인)','(Legacy AWM) gas leak (unverified)','ref','crit'],
+['E6','(구형 AWM) 드레인 펌프 이상','(Legacy AWM) pump fault','drain','warn'],
+['E8','(구형 AWM) 하드웨어 오류 (택트 스위치)','(Legacy AWM) hardware error (tact switch)','pcb','warn'],
+['E9','(구형 AWM) 실내 팬 피드백 없음','(Legacy AWM) no indoor fan feedback','fanin','warn'],
+['EE','(구형 AWM) EEPROM 오류','(Legacy AWM) EEPROM error','pcb','warn']
+]
+};
+/* Acson 추가 코드 (Daikin 표 + 아래) */
+var ACSON_EXTRA=[
+['E4','저압 보호 (저압 스위치 모델)','Low pressure protection','lowp','crit'],
+['E9','EXV(전자팽창밸브) 이상','EXV (electronic expansion valve) error','other','warn'],
+['AH','전기집진 필터 이상','Electrical air cleaner abnormal','other','info'],
+['C5','실내 열교환기(2) 서미스터 이상','Indoor heat-exchanger (2) thermistor','sensor','warn'],
+['J8 / J9','액관 · 가스관 서미스터 이상 (멀티)','Liquid / gas pipe thermistor (multi)','sensor','warn'],
+['UH','다른 실내기 결빙 (멀티)','Antifreeze in other room (multi)','freeze','info']
+];
+
+/* 코드표 조회: 브랜드 → 사용할 표 목록 */
+function codeTables(brand,yorkFam){
+  if(brand==='acson')return CODES.daikin.concat(ACSON_EXTRA,CODES.acsonlegacy);
+  if(brand==='york')return yorkFam==='old'?CODES.daikin:CODES.yorknew;
+  if(brand==='haier')return CODES.yorknew;
+  var b=BRANDS.find(function(x){return x.id===brand;});
+  return (b&&b.tbl&&CODES[b.tbl])?CODES[b.tbl]:[];
+}
+
+/* ── 냉매 포화 온도표 (°C → psig) 0~60°C, 5°C 간격 ─────────────────── */
+var PT={
+  R32:  [103.2,123.5,145.9,171.2,199.2,230.3,264.8,302.9,344.9,390.8,441.3,496.4,556.6],
+  R410A:[101.1,120.6,142.7,167.3,194.8,225.1,258.7,295.7,336.3,380.9,429.6,482.7,540.6],
+  R22:  [57.5, 70.0, 84.0, 99.7,117.3,136.7,158.2,181.8,207.7,236.1,267.0,300.7,337.3]
+};
+/* psig → 포화온도(°C), 표 밖은 외삽 */
+function satTemp(ref,psi){
+  var t=PT[ref];if(!t||!(psi>0))return null;
+  if(psi<=t[0])return 0-(t[0]-psi)/(t[1]-t[0])*5;
+  for(var i=1;i<t.length;i++){if(psi<=t[i])return (i-1)*5+(psi-t[i-1])/(t[i]-t[i-1])*5;}
+  var n=t.length-1;return n*5+(psi-t[n])/(t[n]-t[n-1])*5;
+}
+
+/* ── 기준값 (냉방 · 외기 30~36°C · 최대 냉방 운전) ───────────────────── */
+var REF={
+  R32:  {lo:[115,145],hi:[400,480]},
+  R410A:{lo:[110,140],hi:[380,450]},
+  R22:  {lo:[60,75],  hi:[230,300]}
+};
+var DT_REF={good:15,ok:12,low:8};              /* 온도차 기준 (점검보고서와 동일) */
+var VOLT_REF={lo:216,hi:253,nom:230};           /* TNB 230V −6% / +10% */
+var AMB_DEFAULT=33;                             /* 외기 미입력 시 가정값 */
+/* HP별 정격 전류 추정 (A) — 명판 값이 있으면 명판 우선 */
+var AMP_EST={inv:{'1.0':3.9,'1.5':5.3,'2.0':8.2,'2.5':8.8,'3.0':9.8},
+             non:{'1.0':4.2,'1.5':5.9,'2.0':8.6,'2.5':10.8,'3.0':12.5}};
+/* 모델명 → 냉방능력(HP) 추정 */
+var HP_MAP={
+  daikin:{25:'1.0',35:'1.5',50:'2.0',60:'2.5',71:'2.5',75:'3.0'},
+  generic:{9:'1.0',10:'1.0',12:'1.5',13:'1.5',15:'1.5',18:'2.0',20:'2.0',22:'2.5',24:'2.5',25:'2.5',28:'3.0',30:'3.0'}
+};
+function guessHP(brand,model){
+  if(!model)return null;
+  var m=String(model).toUpperCase();
+  var map=brand==='daikin'?HP_MAP.daikin:HP_MAP.generic;
+  var nums=m.match(/\d{2,3}/g)||[];
+  for(var i=0;i<nums.length;i++){
+    var n=parseInt(nums[i],10);
+    if(map[n])return map[n];
+    if(brand!=='daikin'&&nums[i].length===3&&HP_MAP.generic[parseInt(nums[i].slice(0,2),10)])return HP_MAP.generic[parseInt(nums[i].slice(0,2),10)];
+  }
+  return null;
+}
+
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   화면 문구 (한/영) · 상태 · 진단 엔진 · 렌더링
+   ══════════════════════════════════════════════════════════════════ */
+var T={
+ko:{
+  title:'에어컨 진단 가이드',sub:'HAPPY HOME CARE · 현장 점검용',
+  s1:'장비 정보',s2:'증상 · 육안 점검',s3:'측정값',s4:'진단 결과',s5:'참고 기준값',
+  brand:'브랜드',model:'모델명 (명판)',modelPh:'예: FTKF35CV1MF',hp:'냉방능력',hpU:'HP',type:'방식',inv:'인버터',non:'일반형(정속)',
+  refr:'냉매',refHint:'실외기 명판에서 확인 — 2017년 이후 대부분 R32',refUnk:'미확인',
+  rated:'정격 전류 (명판, A)',ratedPh:'예: 5.27',ratedEst:'미입력 시 냉방능력으로 추정',
+  yorkFam:'York 계열',yorkNew:'2015년 이후 (YWM3F · YWM5J)',yorkOld:'2015년 이전 (OYL · Daikin 계열)',
+  guessHp:'모델명으로 추정',
+  sym:'증상 (해당 항목 모두 선택)',
+  symList:{nocool:'냉방 약함 · 안 시원함',weakair:'바람 약함',leak:'실내기 물 샘',ice:'실내기 · 배관 결빙',odoff:'실외기 안 돎',trip:'자주 꺼짐 · 차단기 트립',noise:'소음 · 진동',smell:'냄새',nopower:'전원 안 켜짐 · 리모컨 불응',err:'에러코드 표시'},
+  visual:'육안 점검',
+  filter:'필터 · 증발기',filterOpt:['깨끗','보통','심한 오염'],
+  cond:'실외기 응축기',condOpt:['깨끗','오염','통풍 불량 · 막힘'],
+  odfan:'실외 팬',odfanOpt:['정상','느림 · 소음','정지','미확인'],
+  measNote:'측정 조건: 냉방 모드 · 설정온도 최저 · 강풍 · 15분 이상 운전 후. 인버터는 최대 냉방 상태에서 판정합니다.',
+  ta:'흡입온도 A (°C)',tb:'토출온도 B (°C)',dt:'온도차 A−B',dtRange:'≥15 양호 · 12~15 정상 · <12 저하',amb:'실외 온도 (°C)',ambPh:'미입력 시 33°C 가정',
+  press:'냉매 압력',lp:'저압 (흡입측)',hpp:'고압 (토출측)',unit:'단위',cur:'운전 전류 (A)',volt:'전원 전압 (V)',
+  code:'에러코드',codePh:'예: U4, H11, CH38',codeNone:'등록되지 않은 코드입니다 — 제조사 매뉴얼을 확인하세요',
+  codeTable:'이 브랜드 코드표 전체 보기',codeSel:'브랜드를 먼저 선택하세요',
+  run:'진단 결과 보기',reset:'초기화',copy:'결과 복사',copied:'복사됨',
+  status:{none:'입력 대기',ok:'정상 범위',warn:'주의',bad:'점검 필요',crit:'즉시 조치'},
+  noInput:'증상이나 측정값을 입력하면 진단 결과가 나옵니다.',
+  topCause:'가장 유력한 원인',causes:'가능 원인 (유력한 순)',evidence:'근거',checks:'확인 절차',actions:'조치',svc:'HHC 서비스',
+  conf:{high:'가능성 높음',mid:'가능성 중간',low:'가능성 낮음'},
+  measTitle:'측정값 판정',normal:'기준',assumed:'가정',warnTitle:'확인 필요',
+  codeTitle:'에러코드 해석',family:'계열',sevL:{crit:'정지 · 즉시 조치',warn:'주의',info:'정보'},
+  commonCauses:'주요 원인',more:'확인 절차 · 조치 보기',less:'접기',
+  refBody:{
+    dt:'온도차 ΔT (흡입 − 토출)',dtV:'≥15°C 양호 · 12~15°C 정상 · <12°C 저하 · <8°C 심각 (점검보고서 기준과 동일)',
+    pr:'냉매 압력 (냉방 · 외기 30~36°C · 최대 냉방 운전, psi)',
+    prNote:'인버터는 압축기 속도에 따라 크게 변하므로 압력만으로 판정하지 말고 증발온도 5~12°C · 응축온도 = 외기 +10~15°C 를 함께 봅니다. 저압만 낮음 = 막힘·풍량 부족, 둘 다 낮음 = 냉매 부족, 고압만 높음 = 방열 불량, 둘 다 높음 = 과충전, 저압 높고 고압 낮음(균압) = 압축 불량.',
+    cur:'운전 전류',curV:'명판 정격 대비 70~110% 정상 · 120% 이상 과부하 · 50% 미만은 냉매 부족 또는 압축기 미가동 의심. 인버터는 최대 냉방 시 기준.',
+    curEst:'HP별 정격 전류 추정 (인버터 / 일반형): 1.0HP 3.9 / 4.2A · 1.5HP 5.3 / 5.9A · 2.0HP 8.2 / 8.6A · 2.5HP 8.8 / 10.8A · 3.0HP 9.8 / 12.5A — 명판 값 우선',
+    volt:'전원 전압',voltV:'230V 기준, TNB 허용 −6% / +10% = 216~253V. 216V 미만 저전압(기동 불량·과전류), 253V 초과 과전압(기판 보호 정지)',
+    src:'출처: 각 제조사 서비스 매뉴얼·공식 에러코드 안내(Daikin·Panasonic·Mitsubishi Electric·LG·Samsung·Midea·Gree·Toshiba·Sharp·York·Acson), 냉매 PT표, TNB 전력공급 핸드북(전압 허용범위)'
+  },
+  sumHead:'[에어컨 진단 요약]',na:'—'
+},
+en:{
+  title:'AC Diagnostic Guide',sub:'HAPPY HOME CARE · FIELD INSPECTION',
+  s1:'Unit information',s2:'Symptoms · visual check',s3:'Measurements',s4:'Diagnosis',s5:'Reference values',
+  brand:'Brand',model:'Model (nameplate)',modelPh:'e.g. FTKF35CV1MF',hp:'Capacity',hpU:'HP',type:'Type',inv:'Inverter',non:'Non-inverter',
+  refr:'Refrigerant',refHint:'Check outdoor nameplate — most units after 2017 use R32',refUnk:'Unknown',
+  rated:'Rated current (nameplate, A)',ratedPh:'e.g. 5.27',ratedEst:'Estimated from capacity if blank',
+  yorkFam:'York family',yorkNew:'2015 onward (YWM3F · YWM5J)',yorkOld:'Before 2015 (OYL · Daikin platform)',
+  guessHp:'Estimated from model',
+  sym:'Symptoms (select all that apply)',
+  symList:{nocool:'Weak / no cooling',weakair:'Weak airflow',leak:'Water dripping indoors',ice:'Ice on indoor coil / pipe',odoff:'Outdoor unit not running',trip:'Keeps stopping · breaker trips',noise:'Noise · vibration',smell:'Odour',nopower:'No power · not responding',err:'Error code shown'},
+  visual:'Visual check',
+  filter:'Filter · evaporator',filterOpt:['Clean','Moderate','Heavily soiled'],
+  cond:'Condenser (outdoor)',condOpt:['Clean','Dirty','Poor airflow · blocked'],
+  odfan:'Outdoor fan',odfanOpt:['Normal','Slow · noisy','Stopped','Not checked'],
+  measNote:'Conditions: COOL mode · lowest set temp · high fan · after 15 min running. Judge inverter units at maximum cooling.',
+  ta:'Intake temp A (°C)',tb:'Discharge temp B (°C)',dt:'ΔT A−B',dtRange:'≥15 good · 12–15 normal · <12 low',amb:'Outdoor temp (°C)',ambPh:'33 °C assumed if blank',
+  press:'Refrigerant pressure',lp:'Low side (suction)',hpp:'High side (discharge)',unit:'Unit',cur:'Running current (A)',volt:'Supply voltage (V)',
+  code:'Error code',codePh:'e.g. U4, H11, CH38',codeNone:'Code not in the table — check the manufacturer manual',
+  codeTable:'Show full code table for this brand',codeSel:'Select a brand first',
+  run:'Show diagnosis',reset:'Reset',copy:'Copy result',copied:'Copied',
+  status:{none:'Waiting for input',ok:'Within normal range',warn:'Caution',bad:'Needs inspection',crit:'Act now'},
+  noInput:'Enter symptoms or measurements to get a diagnosis.',
+  topCause:'Most likely cause',causes:'Possible causes (most likely first)',evidence:'Evidence',checks:'Checks',actions:'Actions',svc:'HHC service',
+  conf:{high:'High likelihood',mid:'Medium likelihood',low:'Low likelihood'},
+  measTitle:'Measurement assessment',normal:'Normal',assumed:'assumed',warnTitle:'Please check',
+  codeTitle:'Error code meaning',family:'Family',sevL:{crit:'Stop · act now',warn:'Caution',info:'Info'},
+  commonCauses:'Typical causes',more:'Show checks · actions',less:'Hide',
+  refBody:{
+    dt:'ΔT (intake − discharge)',dtV:'≥15 °C good · 12–15 °C normal · <12 °C low · <8 °C severe (same criteria as the inspection report)',
+    pr:'Refrigerant pressures (cooling · ambient 30–36 °C · max cooling, psi)',
+    prNote:'Inverter pressures vary with compressor speed — do not judge on psi alone; use evaporating temp 5–12 °C and condensing temp = ambient +10–15 °C. Low suction only = restriction / low airflow; both low = shortage; high head only = poor heat rejection; both high = overcharge; high suction + low head (equalised) = compressor not pumping.',
+    cur:'Running current',curV:'70–110 % of nameplate normal · ≥120 % overload · <50 % suspect shortage or compressor not running. Inverter: at maximum cooling.',
+    curEst:'Estimated rated current by HP (inverter / non-inverter): 1.0HP 3.9 / 4.2 A · 1.5HP 5.3 / 5.9 A · 2.0HP 8.2 / 8.6 A · 2.5HP 8.8 / 10.8 A · 3.0HP 9.8 / 12.5 A — nameplate value takes priority',
+    volt:'Supply voltage',voltV:'230 V nominal, TNB tolerance −6 % / +10 % = 216–253 V. Below 216 V: low voltage (start failure, over-current); above 253 V: PCB protection stop',
+    src:'Sources: manufacturer service manuals and official error-code pages (Daikin, Panasonic, Mitsubishi Electric, LG, Samsung, Midea, Gree, Toshiba, Sharp, York, Acson), refrigerant PT charts, TNB Electricity Supply Application Handbook (voltage tolerance)'
+  },
+  sumHead:'[AC diagnosis summary]',na:'—'
+}};
+
+var SYMS=['nocool','weakair','leak','ice','odoff','trip','noise','smell','nopower','err'];
+var HPS=['1.0','1.5','2.0','2.5','3.0'];
+var REFS=['R32','R410A','R22'];
+
+/* ── 상태 ─────────────────────────────────────────────────────────── */
+var S=blank();
+function blank(){return {lang:'ko',brand:null,yorkFam:'new',model:'',hp:null,type:null,ref:null,rated:'',
+  sym:{},filter:null,cond:null,odfan:null,ta:'',tb:'',amb:'',lp:'',hpp:'',punit:'psi',cur:'',volt:'',code:'',shown:false};}
+function tx(){return T[S.lang];}
+function L(o){return o?(S.lang==='ko'?o.ko:o.en):'';}
+function num(v){if(v===''||v==null)return null;var n=parseFloat(String(v).replace(',','.'));return isFinite(n)?n:null;}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function pick(str){/* '한글|영문' 표기 분리 */if(!str)return '';var p=String(str).split('|');return S.lang==='ko'?p[0]:(p[1]||p[0]);}
+
+/* ── 에러코드 조회 ────────────────────────────────────────────────── */
+function normCode(c){return String(c||'').toUpperCase().replace(/\s+/g,'');}
+function findCode(brand,code){
+  var q=normCode(code);if(!q||!brand)return null;
+  var qs=[q];
+  var m;
+  if((m=q.match(/^CH(\d)$/)))qs.push('CH0'+m[1]);                 /* CH5 → CH05 */
+  if((m=q.match(/^0[123]-?([0-9A-Z]{2})$/)))qs.push(m[1]);          /* Toshiba 02-1C → 1C */
+  if((m=q.match(/^E(\d)-?(\d\d)$/)))qs.push('E'+m[1]+m[2]);       /* Samsung E1-21 → E121 */
+  var tbl=codeTables(brand,S.yorkFam);
+  for(var i=0;i<tbl.length;i++){
+    var keys=String(tbl[i][0]).toUpperCase().split('/');
+    for(var k=0;k<keys.length;k++){
+      var key=keys[k].replace(/\s+/g,'');
+      if(key.indexOf('~')>=0){                                      /* 범위 5-0 ~ 5-5 */
+        var r=key.split('~'),a=r[0].match(/^(\d+)-(\d+)$/),b=r[1].match(/^(\d+)-(\d+)$/);
+        for(var j=0;j<qs.length;j++){var x=qs[j].match(/^(\d+)-(\d+)$/);
+          if(a&&b&&x&&x[1]===a[1]&&+x[2]>=+a[2]&&+x[2]<=+b[2])return tbl[i];}
+        continue;
+      }
+      for(var j2=0;j2<qs.length;j2++){if(key===qs[j2])return tbl[i];}
+    }
+    var al=String(tbl[i][5]||'').match(/\(([A-Z]{2}\s?[0-9A-Z]{2})\)/i);   /* 별칭 (EH 00) 등 */
+    if(al){var alk=al[1].toUpperCase().replace(/\s+/g,'');for(var j3=0;j3<qs.length;j3++){if(alk===qs[j3])return tbl[i];}}
+  }
+  return null;
+}
+
+/* ── 진단 엔진 ────────────────────────────────────────────────────── */
+function diagnose(){
+  var t=tx(),k=S.lang==='ko';
+  var sc={},ev={},meas=[],warns=[],assum=[],notes=[];
+  function add(id,p,why){sc[id]=(sc[id]||0)+p;if(why){ev[id]=ev[id]||[];if(ev[id].indexOf(why)<0)ev[id].push(why);}}
+  function w(ko,en){return k?ko:en;}
+  var hasAny=false;
+
+  /* 온도차 */
+  var ta=num(S.ta),tb=num(S.tb),dt=null,dtSt=null;
+  if(ta!=null&&tb!=null){hasAny=true;dt=ta-tb;
+    if(dt<0){warns.push(w('흡입온도가 토출온도보다 낮습니다 — 두 값이 바뀌지 않았는지 확인하세요.','Intake is colder than discharge — check the two values are not swapped.'));}
+    else{
+      dtSt=dt>=DT_REF.good?'good':dt>=DT_REF.ok?'ok':dt>=DT_REF.low?'warn':'bad';
+      meas.push({label:t.dt,val:dt.toFixed(1)+' °C',range:t.dtRange,st:dtSt});
+      var d=dt.toFixed(1);
+      if(dtSt==='bad'){add('C1',2,w('온도차 '+d+'°C — 8°C 미만, 냉방 능력 크게 저하','ΔT '+d+' °C — below 8 °C, cooling capacity badly reduced'));add('C6',2,w('온도차 '+d+'°C — 압축기 미가동·압축 불량 가능','ΔT '+d+' °C — compressor may not be running / pumping'));add('C2',1,w('온도차 저하','Low ΔT'));add('C14',1,w('냉방 모드·설정온도 확인 필요','Check mode and set temperature'));}
+      else if(dtSt==='warn'){add('C1',1,w('온도차 '+d+'°C — 12°C 미만','ΔT '+d+' °C — below 12 °C'));add('C4',1,w('온도차 '+d+'°C — 증발기 오염 시 능력 저하','ΔT '+d+' °C — dirty evaporator reduces capacity'));add('C2',1,w('온도차 저하','Low ΔT'));add('C15',1,w('온도차 저하 — 부하 과다 가능','Low ΔT — possible excess heat load'));}
+      if(dt>=20){
+        if((S.filter||0)>=1||S.sym.weakair||S.sym.ice){meas[meas.length-1].st='warn';add('C4',3,w('온도차 '+d+'°C로 과대 + 풍량 부족 징후 — 코일이 지나치게 차가움(결빙 위험)','ΔT '+d+' °C too high with low-airflow signs — coil too cold (icing risk)'));}
+        else add('C4',1,w('온도차 '+d+'°C — 기준 이상, 풍량 확인 권장','ΔT '+d+' °C — above range, check airflow'));
+      }
+    }
+  }else if(ta!=null||tb!=null){warns.push(w('흡입·토출 온도를 둘 다 입력해야 온도차를 판정합니다.','Enter both intake and discharge temperatures for ΔT.'));}
+
+  /* 압력 */
+  var lp=num(S.lp),hp=num(S.hpp);
+  if(S.punit==='bar'){if(lp!=null)lp*=14.5038;if(hp!=null)hp*=14.5038;}
+  var amb=num(S.amb),ambA=false;if(amb==null){amb=AMB_DEFAULT;ambA=true;}
+  var lpC=null,hpC=null,evt=null,cdt=null,split=null;
+  if(lp!=null||hp!=null){hasAny=true;
+    if(!S.ref){warns.push(w('냉매 종류를 선택하면 압력을 판정할 수 있습니다.','Select the refrigerant to assess pressures.'));
+      if(lp!=null)meas.push({label:t.lp,val:lp.toFixed(0)+' psi',range:t.na,st:null});
+      if(hp!=null)meas.push({label:t.hpp,val:hp.toFixed(0)+' psi',range:t.na,st:null});
+    }else{
+      var R=REF[S.ref];
+      if(lp!=null){evt=satTemp(S.ref,lp);
+        lpC=lp<R.lo[0]?'low':lp>R.lo[1]?'high':'ok';
+        var lpSt=lpC==='ok'?'ok':(lpC==='low'?(lp<R.lo[0]*0.85?'bad':'warn'):(lp>R.lo[1]*1.15?'bad':'warn'));
+        meas.push({label:t.lp,val:lp.toFixed(0)+' psi',sub:w('증발온도 약 '+evt.toFixed(0)+'°C','evaporating ≈ '+evt.toFixed(0)+' °C'),range:R.lo[0]+'~'+R.lo[1]+' psi',st:lpSt});
+      }
+      if(hp!=null){cdt=satTemp(S.ref,hp);split=cdt-amb;var spS=(split>=0?'+':'−')+Math.abs(split).toFixed(0);
+        if(ambA){hpC=hp<R.hi[0]?'low':hp>R.hi[1]?'high':'ok';assum.push(w('실외 온도 미입력 — 33°C로 가정하여 응축온도를 계산했습니다.','Outdoor temp not entered — 33 °C assumed for condensing temp.'));}
+        else{hpC=split<6?'low':split>18?'high':'ok';}
+        var hpSt=hpC==='ok'?'ok':(hpC==='high'?(split>24||hp>R.hi[1]*1.15?'bad':'warn'):'warn');
+        meas.push({label:t.hpp,val:hp.toFixed(0)+' psi',sub:w('응축온도 약 '+cdt.toFixed(0)+'°C (외기 '+spS+'°C)','condensing ≈ '+cdt.toFixed(0)+' °C (ambient '+spS+' °C)'),range:R.hi[0]+'~'+R.hi[1]+' psi · '+w('외기 +6~18°C','ambient +6–18 °C'),st:hpSt});
+      }
+      var eq=(lp!=null&&hp!=null)&&((hp-lp)<0.35*(R.hi[0]-R.lo[1]));
+      if(lpC&&hpC){
+        if(eq){add('C6',5,w('저압·고압이 거의 같음(균압 '+lp.toFixed(0)+'/'+hp.toFixed(0)+' psi) — 압축기가 압축하지 않음','Suction and discharge nearly equal ('+lp.toFixed(0)+'/'+hp.toFixed(0)+' psi) — compressor not pumping'));}
+        else if(lpC==='low'&&hpC==='low'){add('C1',4,w('저압·고압 모두 낮음 — 전형적인 냉매 부족 패턴','Both pressures low — classic refrigerant shortage pattern'));}
+        else if(lpC==='low'){add('C5',3,w('저압만 낮고 고압은 정상·높음 — 냉매 회로 막힘 패턴','Low suction with normal/high head — restriction pattern'));add('C4',2,w('저압 낮음 — 실내 풍량 부족(필터·증발기 오염)도 저압을 낮춤','Low suction — poor indoor airflow also lowers suction'));if(hpC==='high')add('C5',1,w('고압까지 높음','Head also high'));}
+        else if(lpC==='high'&&hpC==='high'){add('C3',3,w('저압·고압 모두 높음 — 과충전 패턴','Both pressures high — overcharge pattern'));add('C2',2,w('고압 높음 — 응축기 방열 상태 확인','High head — check condenser heat rejection'));add('C15',1,w('실내 부하 과다 시에도 저압 상승','High heat load also raises suction'));}
+        else if(hpC==='high'){add('C2',4,w('고압만 높음(응축온도 외기 +'+split.toFixed(0)+'°C) — 응축기 오염·통풍·팬 불량 패턴','High head only (condensing ambient +'+split.toFixed(0)+' °C) — dirty condenser / airflow / fan'));add('C3',1,w('과충전도 고압을 높임','Overcharge also raises head'));}
+        else if(lpC==='high'){add('C6',3,w('저압 높고 고압 낮음·정상 — 압축 불량 의심','High suction with low/normal head — weak compression'));add('C15',1,w('부하 과다 가능','Possible high load'));}
+        else if(hpC==='low'){add('C1',2,w('고압 낮음 — 냉매 부족 가능','Low head — possible shortage'));add('C6',1,w('고압 낮음 — 압축기 능력 저하 가능','Low head — weak compressor possible'));}
+        else notes.push(w('냉매 압력은 정상 범위입니다.','Refrigerant pressures are within normal range.'));
+      }else if(lpC){
+        if(lpC==='low'){add('C1',2,w('저압 낮음','Low suction'));add('C5',1,w('저압 낮음 — 막힘 가능','Low suction — restriction possible'));add('C4',1,w('저압 낮음 — 풍량 부족 가능','Low suction — low airflow possible'));}
+        else if(lpC==='high'){add('C6',2,w('저압 높음 — 압축 불량 가능','High suction — weak compression possible'));add('C3',1,w('저압 높음 — 과충전 가능','High suction — overcharge possible'));add('C15',1,w('부하 과다 가능','High load possible'));}
+        else notes.push(w('저압은 정상 범위입니다.','Suction pressure is within range.'));
+      }else if(hpC){
+        if(hpC==='high'){add('C2',3,w('고압 높음(응축온도 외기 +'+split.toFixed(0)+'°C)','High head (condensing ambient +'+split.toFixed(0)+' °C)'));add('C3',1,w('과충전 가능','Overcharge possible'));}
+        else if(hpC==='low'){add('C1',2,w('고압 낮음','Low head'));add('C6',1,w('고압 낮음 — 압축기 능력 저하 가능','Low head — weak compressor possible'));}
+        else notes.push(w('고압은 정상 범위입니다.','Head pressure is within range.'));
+      }
+      if(S.type==='inv'&&((lpC&&lpC!=='ok')||(hpC&&hpC!=='ok')))assum.push(w('인버터 기기: 압축기 속도에 따라 압력이 변합니다. 최대 냉방(설정 최저·강풍·15분↑)에서 측정한 값인지 확인하세요.','Inverter unit: pressures vary with compressor speed. Confirm readings were taken at maximum cooling.'));
+    }
+  }
+
+  /* 전류 */
+  var cur=num(S.cur),rated=num(S.rated),ratedA=false;
+  var hpEff=S.hp||guessHP(S.brand,S.model);
+  if(rated==null&&hpEff){rated=AMP_EST[S.type==='non'?'non':'inv'][hpEff];ratedA=true;}
+  var ratio=null;
+  if(cur!=null){hasAny=true;
+    if(rated){ratio=cur/rated;var pc=Math.round(ratio*100);
+      var cSt=ratio>=1.2?'bad':ratio>=1.1?'warn':ratio>=0.7?'ok':ratio>=0.4?'warn':'bad';
+      meas.push({label:t.cur,val:cur.toFixed(1)+' A',sub:w('정격 '+rated.toFixed(1)+'A의 '+pc+'%'+(ratedA?' (추정 정격)':''),pc+' % of rated '+rated.toFixed(1)+' A'+(ratedA?' (estimated)':'')),range:w('정격의 70~110%','70–110 % of rated'),st:cSt});
+      if(ratedA)assum.push(w('정격 전류 미입력 — '+hpEff+'HP '+(S.type==='non'?'일반형':'인버터')+' 기준 '+rated.toFixed(1)+'A로 추정했습니다. 명판 값을 입력하면 더 정확합니다.','Rated current not entered — estimated '+rated.toFixed(1)+' A for '+hpEff+' HP. Enter the nameplate value for accuracy.'));
+      if(ratio>=1.2){add('C2',3,w('운전 전류 정격의 '+pc+'% — 과부하 운전(고압 상승)','Current '+pc+' % of rated — overload (high head)'));add('C7',1,w('저전압도 전류를 높임','Low voltage also raises current'));add('C6',1,w('과전류 — 압축기 노후 가능','Over-current — worn compressor possible'));add('C3',1,w('과충전도 전류를 높임','Overcharge also raises current'));}
+      else if(ratio>=1.1){add('C2',1,w('운전 전류 정격의 '+pc+'% — 약간 높음','Current '+pc+' % of rated — slightly high'));}
+      else if(ratio<0.4||cur<1){add('C6',3,w('운전 전류 정격의 '+pc+'% — 팬만 도는 수준, 압축기 미가동 의심','Current '+pc+' % of rated — fan-only level, compressor may not be running'));if(S.type==='non')add('C10',2,w('일반형 — 캐패시터 불량 시 압축기 기동 실패','Non-inverter — failed capacitor prevents start'));add('C9',1,w('압축기 미가동 — 제어·통신 가능','Compressor not running — control/communication possible'));add('C7',1,w('압축기 미가동 — 전원 확인','Compressor not running — check supply'));}
+      else if(ratio<0.7){add('C1',2,w('운전 전류 정격의 '+pc+'% — 낮음, 냉매 부족 시 전류 감소','Current '+pc+' % of rated — low; shortage lowers current'));add('C6',1,w('전류 낮음 — 압축 능력 저하 가능','Low current — weak compression possible'));if(S.type==='inv')assum.push(w('인버터는 부하가 낮으면 전류가 낮게 나옵니다 — 최대 냉방 상태에서 재측정하세요.','Inverter current drops at low load — re-measure at maximum cooling.'));}
+    }else{meas.push({label:t.cur,val:cur.toFixed(1)+' A',range:t.na,st:null});warns.push(w('정격 전류(명판) 또는 냉방능력(HP)을 입력하면 전류를 판정합니다.','Enter rated current or capacity (HP) to assess current.'));}
+  }
+
+  /* 전압 */
+  var v=num(S.volt);
+  if(v!=null){hasAny=true;
+    var vSt=v<200?'bad':v<VOLT_REF.lo?'warn':v>265?'bad':v>VOLT_REF.hi?'warn':'ok';
+    meas.push({label:t.volt,val:v.toFixed(0)+' V',range:VOLT_REF.lo+'~'+VOLT_REF.hi+' V',st:vSt});
+    if(v<200)add('C7',5,w('전압 '+v.toFixed(0)+'V — 심한 저전압, 압축기 기동 불량·과전류·기판 보호 정지 원인','Voltage '+v.toFixed(0)+' V — severe low voltage'));
+    else if(v<VOLT_REF.lo)add('C7',3,w('전압 '+v.toFixed(0)+'V — 허용 하한(216V) 미만','Voltage '+v.toFixed(0)+' V — below 216 V limit'));
+    else if(v>265)add('C7',5,w('전압 '+v.toFixed(0)+'V — 심한 과전압','Voltage '+v.toFixed(0)+' V — severe over-voltage'));
+    else if(v>VOLT_REF.hi)add('C7',3,w('전압 '+v.toFixed(0)+'V — 허용 상한(253V) 초과','Voltage '+v.toFixed(0)+' V — above 253 V limit'));
+    else notes.push(w('전원 전압은 정상 범위입니다.','Supply voltage is within range.'));
+  }
+
+  /* 증상 */
+  var sy=S.sym,sl=t.symList;
+  function symEv(id){return w('증상: '+sl[id],'Symptom: '+sl[id]);}
+  if(sy.nocool){hasAny=true;add('C1',1,symEv('nocool'));add('C4',1,symEv('nocool'));add('C2',1,symEv('nocool'));if(dt==null&&lp==null&&hp==null)add('C15',1,symEv('nocool'));}
+  if(sy.weakair){hasAny=true;add('C4',3,symEv('weakair'));}
+  if(sy.leak){hasAny=true;add('C8',4,symEv('leak'));add('C11',2,symEv('leak'));add('C4',1,w('물 샘 — 결빙 후 녹은 물일 수 있음','Dripping — may be melt from icing'));add('C1',1,w('물 샘 — 냉매 부족 결빙 가능','Dripping — icing from low charge possible'));}
+  if(sy.ice){hasAny=true;add('C1',3,symEv('ice'));add('C4',3,symEv('ice'));add('C5',1,symEv('ice'));}
+  if(sy.odoff){hasAny=true;add('C9',3,symEv('odoff'));add('C7',2,symEv('odoff'));add('C6',2,symEv('odoff'));if(S.type==='non')add('C10',2,symEv('odoff'));add('C14',2,w('실외기 정지 — 설정온도 도달·3분 지연·타이머일 수 있음','Outdoor off — may be set-point reached, 3-min delay or timer'));}
+  if(sy.trip){hasAny=true;add('C2',3,symEv('trip'));add('C7',2,symEv('trip'));add('C6',2,symEv('trip'));if(S.type==='non')add('C10',1,symEv('trip'));add('C1',1,w('자주 꺼짐 — 토출 과열 보호 가능','Stopping — discharge overheat protection possible'));}
+  if(sy.noise){hasAny=true;add('C13',4,symEv('noise'));add('C3',1,w('소음 — 액 복귀(과충전) 시 압축기 소음','Noise — liquid return (overcharge) noise'));add('C6',1,symEv('noise'));}
+  if(sy.smell){hasAny=true;add('C12',4,symEv('smell'));add('C8',1,w('냄새 — 배수 트랩 건조 시 하수 냄새','Odour — sewer smell from dry drain trap'));}
+  if(sy.nopower){hasAny=true;add('C7',3,symEv('nopower'));add('C9',3,symEv('nopower'));add('C14',2,w('리모컨 건전지·수신부 확인','Check remote batteries / receiver'));}
+
+  /* 육안 */
+  if(S.filter===2){hasAny=true;add('C4',3,w('필터·증발기 심한 오염','Filter / evaporator heavily soiled'));add('C12',1,w('오염 — 냄새·곰팡이','Soiling — odour / mould'));}
+  else if(S.filter===1){hasAny=true;add('C4',1,w('필터·증발기 보통 오염','Filter / evaporator moderately soiled'));}
+  if(S.cond===1){hasAny=true;add('C2',2,w('응축기 오염','Condenser dirty'));}
+  else if(S.cond===2){hasAny=true;add('C2',3,w('실외기 통풍 불량·막힘','Outdoor airflow blocked'));}
+  if(S.odfan==='slow'){hasAny=true;add('C2',3,w('실외 팬 느림·소음','Outdoor fan slow / noisy'));add('C13',1,w('실외 팬 소음','Outdoor fan noise'));}
+  else if(S.odfan==='stop'){hasAny=true;add('C2',2,w('실외 팬 정지 — 고압 상승·보호 정지','Outdoor fan stopped — high head, protection stop'));if(S.type==='non')add('C10',2,w('실외 팬 정지 — 팬 캐패시터','Fan stopped — fan capacitor'));add('C9',1,w('실외 팬 정지 — 기판 팬 구동부','Fan stopped — PCB fan driver'));}
+
+  /* 에러코드 */
+  var codeRow=null,codeInfo=null;
+  if(S.code){hasAny=true;codeRow=findCode(S.brand,S.code);
+    if(codeRow){var fam=FAM[codeRow[3]]||FAM.other;
+      codeInfo={code:codeRow[0],mean:k?codeRow[1]:codeRow[2],fam:fam,famKey:codeRow[3],sev:codeRow[4],note:pick(codeRow[5])};
+      fam.m.forEach(function(p){add(p[0],p[1]+(codeRow[4]==='crit'?1:0),w('에러코드 '+codeRow[0]+' — '+codeRow[1],'Error code '+codeRow[0]+' — '+codeRow[2]));});
+    }else if(S.brand){warns.push(w('에러코드 「'+S.code+'」는 '+brandName(S.brand)+' 코드표에 없습니다 — 표기(예: E1 21 → E121)·브랜드 계열을 확인하세요.','Code "'+S.code+'" is not in the '+brandName(S.brand)+' table — check the format (e.g. E1 21 → E121) and brand family.'));}
+    else warns.push(w('브랜드를 선택하면 에러코드를 해석합니다.','Select a brand to interpret the error code.'));
+  }
+
+  /* 정렬 · 신뢰도 */
+  var list=Object.keys(sc).map(function(id){return {id:id,score:sc[id],ev:ev[id]||[]};}).filter(function(x){return x.score>0;});
+  list.sort(function(a,b){return b.score-a.score;});
+  list=list.slice(0,5);
+  list.forEach(function(x){x.conf=x.score>=7?'high':x.score>=4?'mid':'low';});
+
+  /* 종합 상태 */
+  var top=list[0],status='none';
+  var judged=meas.some(function(m){return !!m.st;});
+  if(hasAny&&(list.length||judged||codeInfo)){
+    var measBad=meas.some(function(m){return m.st==='bad';}),measWarn=meas.some(function(m){return m.st==='warn';});
+    if((codeInfo&&codeInfo.sev==='crit')||(top&&top.score>=7&&['C1','C6','C7','C5'].indexOf(top.id)>=0)||(v!=null&&(v<200||v>265)))status='crit';
+    else if((top&&top.score>=5)||measBad)status='bad';
+    else if((top&&top.score>=2)||measWarn||(codeInfo&&codeInfo.sev==='warn'))status='warn';
+    else status='ok';
+  }
+  if(status!=='none'&&status!=='ok'&&(dtSt==='bad'||dtSt==='warn'||(lpC&&lpC!=='ok')||(hpC&&hpC!=='ok')))notes.unshift(t.measNote);
+  return {status:status,list:list,meas:meas,warns:warns,assum:assum,notes:notes,code:codeInfo,hasAny:hasAny,
+          dt:dt,lp:lp,hp:hp,ratio:ratio};
+}
+function brandName(id){var b=BRANDS.find(function(x){return x.id===id;});return b?pick(b.name):'';}
+
+/* ── 렌더링 ───────────────────────────────────────────────────────── */
+function $(id){return document.getElementById(id);}
+function chips(host,items,cur,onSel,multi){
+  host.innerHTML='';
+  items.forEach(function(it){
+    var b=document.createElement('button');b.type='button';b.className='acd-chip'+((multi?cur[it.id]:cur===it.id)?' on':'');
+    b.textContent=it.label;b.addEventListener('click',function(){onSel(it.id);});host.appendChild(b);
+  });
+}
+function seg(host,opts,cur,onSel){
+  host.innerHTML='';
+  opts.forEach(function(lbl,i){var b=document.createElement('button');b.type='button';
+    b.className='acd-seg'+(cur===i||cur===lbl?' on':'');b.textContent=lbl;
+    b.addEventListener('click',function(){onSel(i);});host.appendChild(b);});
+}
+function renderStatic(){
+  var t=tx();
+  document.documentElement.lang=S.lang;
+  document.title=t.title+' · HHC';
+  $('acd-title').textContent=t.title;$('acd-sub').textContent=t.sub;
+  $('lg-ko').classList.toggle('on',S.lang==='ko');$('lg-en').classList.toggle('on',S.lang==='en');
+  ['s1','s2','s3','s5'].forEach(function(k){$('h-'+k).textContent=t[k];});
+  $('l-brand').textContent=t.brand;$('l-model').textContent=t.model;$('in-model').placeholder=t.modelPh;
+  $('l-hp').textContent=t.hp;$('l-type').textContent=t.type;$('l-ref').textContent=t.refr;$('ref-hint').textContent=t.refHint;
+  $('l-rated').textContent=t.rated;$('in-rated').placeholder=t.ratedPh;$('rated-hint').textContent=t.ratedEst;
+  $('l-york').textContent=t.yorkFam;
+  $('l-sym').textContent=t.sym;$('l-visual').textContent=t.visual;
+  $('l-filter').textContent=t.filter;$('l-cond').textContent=t.cond;$('l-odfan').textContent=t.odfan;
+  $('meas-note').textContent=t.measNote;
+  $('l-ta').textContent=t.ta;$('l-tb').textContent=t.tb;$('l-amb').textContent=t.amb;$('in-amb').placeholder=t.ambPh;
+  $('l-press').textContent=t.press;$('l-lp').textContent=t.lp;$('l-hpp').textContent=t.hpp;$('l-cur').textContent=t.cur;$('l-volt').textContent=t.volt;
+  $('l-code').textContent=t.code;$('in-code').placeholder=t.codePh;
+  $('btn-run').textContent=t.run;$('btn-reset').textContent=t.reset;
+  /* 참고 기준값 */
+  var rb=t.refBody,R=REF;
+  $('ref-body').innerHTML=
+    '<div class="acd-ref"><b>'+esc(rb.dt)+'</b><p>'+esc(rb.dtV)+'</p></div>'+
+    '<div class="acd-ref"><b>'+esc(rb.pr)+'</b><table class="acd-pt"><tr><th></th><th>'+esc(t.lp)+'</th><th>'+esc(t.hpp)+'</th></tr>'+
+    REFS.map(function(r){return '<tr><td>'+r+'</td><td>'+R[r].lo[0]+'~'+R[r].lo[1]+'</td><td>'+R[r].hi[0]+'~'+R[r].hi[1]+'</td></tr>';}).join('')+
+    '</table><p>'+esc(rb.prNote)+'</p></div>'+
+    '<div class="acd-ref"><b>'+esc(rb.cur)+'</b><p>'+esc(rb.curV)+'</p><p class="dim">'+esc(rb.curEst)+'</p></div>'+
+    '<div class="acd-ref"><b>'+esc(rb.volt)+'</b><p>'+esc(rb.voltV)+'</p></div>'+
+    '<p class="acd-src">'+esc(rb.src)+'</p>';
+}
+function renderInputs(){
+  var t=tx();
+  chips($('c-brand'),BRANDS.map(function(b){return {id:b.id,label:pick(b.name)};}),S.brand,function(id){S.brand=id;renderInputs();rerun();});
+  $('york-row').style.display=S.brand==='york'?'':'none';
+  $('yk-new').textContent=t.yorkNew;$('yk-old').textContent=t.yorkOld;
+  $('yk-new').classList.toggle('on',S.yorkFam==='new');$('yk-old').classList.toggle('on',S.yorkFam==='old');
+  var note=BRAND_NOTE[S.brand];$('brand-note').style.display=note?'':'none';$('brand-note').textContent=note?L(note):'';
+  /* 모델명 → HP 추정 */
+  var g=guessHP(S.brand,S.model);
+  $('hp-guess').textContent=(g&&!S.hp)?t.guessHp+': '+g+' HP':'';
+  chips($('c-hp'),HPS.map(function(h){return {id:h,label:h+' '+t.hpU};}),S.hp||g,function(id){S.hp=(S.hp===id)?null:id;renderInputs();rerun();});
+  chips($('c-type'),[{id:'inv',label:t.inv},{id:'non',label:t.non}],S.type,function(id){S.type=(S.type===id)?null:id;renderInputs();rerun();});
+  chips($('c-ref'),REFS.map(function(r){return {id:r,label:r};}),S.ref,function(id){S.ref=(S.ref===id)?null:id;renderInputs();rerun();});
+  var hpE=S.hp||g;var est=hpE?AMP_EST[S.type==='non'?'non':'inv'][hpE]:null;
+  $('rated-hint').textContent=est&&!S.rated?(t.ratedEst+' → '+est.toFixed(1)+' A'):t.ratedEst;
+  chips($('c-sym'),SYMS.map(function(s){return {id:s,label:t.symList[s]};}),S.sym,function(id){S.sym[id]=!S.sym[id];if(id==='err'&&S.sym.err)$('in-code').focus();renderInputs();rerun();},true);
+  seg($('s-filter'),t.filterOpt,S.filter,function(i){S.filter=(S.filter===i)?null:i;renderInputs();rerun();});
+  seg($('s-cond'),t.condOpt,S.cond,function(i){S.cond=(S.cond===i)?null:i;renderInputs();rerun();});
+  var fo=['ok','slow','stop','na'];
+  seg($('s-odfan'),t.odfanOpt,fo.indexOf(S.odfan),function(i){S.odfan=(S.odfan===fo[i])?null:fo[i];renderInputs();rerun();});
+  /* 온도차 실시간 */
+  var ta=num(S.ta),tb=num(S.tb);
+  var dtEl=$('dt-live');
+  if(ta!=null&&tb!=null){var d=ta-tb;var st=d<0?'bad':d>=DT_REF.good?'good':d>=DT_REF.ok?'ok':d>=DT_REF.low?'warn':'bad';
+    dtEl.className='acd-dt st-'+st;dtEl.textContent=t.dt+' '+d.toFixed(1)+' °C';}
+  else{dtEl.className='acd-dt';dtEl.textContent=t.dt+' —';}
+  $('u-psi').classList.toggle('on',S.punit==='psi');$('u-bar').classList.toggle('on',S.punit==='bar');
+  $('in-lp').placeholder=S.punit==='psi'?'psi':'bar';$('in-hpp').placeholder=S.punit==='psi'?'psi':'bar';
+  /* 코드 미리보기 · 코드표 */
+  var cp=$('code-prev');
+  if(S.code){var row=findCode(S.brand,S.code);
+    if(row){var fam=FAM[row[3]]||FAM.other;
+      cp.className='acd-cprev sev-'+row[4];
+      cp.innerHTML='<b>'+esc(row[0])+'</b> <span>'+esc(S.lang==='ko'?row[1]:row[2])+'</span><i class="acd-sev">'+esc(t.sevL[row[4]])+'</i>'+
+        (row[5]?'<small>'+esc(pick(row[5]))+'</small>':'');
+    }else{cp.className='acd-cprev sev-none';cp.textContent=S.brand?t.codeNone:t.codeSel;}
+  }else{cp.className='acd-cprev';cp.innerHTML='';}
+  var tbl=S.brand?codeTables(S.brand,S.yorkFam):[];
+  $('code-tbl-sum').textContent=t.codeTable+(tbl.length?' — '+brandName(S.brand)+' ('+tbl.length+')':'');
+  var dl=$('code-list');dl.innerHTML=tbl.map(function(r){return '<option value="'+esc(String(r[0]).split(' / ')[0])+'">';}).join('');
+  $('code-tbl').innerHTML=tbl.length?('<table class="acd-ct">'+tbl.map(function(r){return '<tr class="sev-'+r[4]+'"><td class="cd">'+esc(r[0])+'</td><td>'+esc(S.lang==='ko'?r[1]:r[2])+(r[5]?' <small>'+esc(pick(r[5]))+'</small>':'')+'</td><td class="sv"><i class="acd-sev">'+esc(t.sevL[r[4]])+'</i></td></tr>';}).join('')+'</table>'):'<p class="dim" style="padding:10px 14px">'+esc(t.codeSel)+'</p>';
+}
+function rerun(){if(S.shown)renderResult(true);}
+function renderResult(keep){
+  var t=tx(),k=S.lang==='ko',r=diagnose(),host=$('sec-res');
+  S.shown=true;host.style.display='';
+  if(!r.hasAny){host.innerHTML='<div class="acd-card"><div class="acd-empty">'+esc(t.noInput)+'</div></div>';return;}
+  var h='';
+  /* 히어로 */
+  var top=r.list[0];
+  var stats=[
+    {k:'ΔT',v:r.dt!=null?r.dt.toFixed(1)+'°C':t.na},
+    {k:k?'저압 / 고압':'Low / High',v:(r.lp!=null||r.hp!=null)?((r.lp!=null?r.lp.toFixed(0):'–')+' / '+(r.hp!=null?r.hp.toFixed(0):'–')+' psi'):t.na},
+    {k:k?'전류':'Current',v:r.ratio!=null?Math.round(r.ratio*100)+'%':(num(S.cur)!=null?num(S.cur).toFixed(1)+' A':t.na)}
+  ];
+  h+='<div class="acd-hero st-'+r.status+'"><div class="acd-hero-k">'+esc(t.s4)+'</div>'+
+     '<div class="acd-hero-row"><span class="acd-pill st-'+r.status+'">'+esc(t.status[r.status])+'</span>'+
+     (S.brand?'<span class="acd-hero-b">'+esc(brandName(S.brand))+(S.model?' · '+esc(S.model):'')+((S.hp||guessHP(S.brand,S.model))?' · '+esc(S.hp||guessHP(S.brand,S.model))+'HP':'')+(S.ref?' · '+esc(S.ref):'')+'</span>':'')+'</div>'+
+     '<div class="acd-hero-n">'+(top?esc(t.topCause)+': <b>'+esc(L(CAUSES[top.id]))+'</b>':esc(t.status[r.status]))+'</div>'+
+     '<div class="acd-hero-m">'+stats.map(function(s){return '<div><div class="k2">'+esc(s.k)+'</div><div class="v2">'+esc(s.v)+'</div></div>';}).join('')+'</div></div>';
+  /* 경고 · 가정 */
+  if(r.warns.length||r.assum.length){
+    h+='<div class="acd-card acd-warnbox"><div class="acd-chd">⚠️ '+esc(t.warnTitle)+'</div><ul class="acd-ul">'+r.warns.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+r.assum.map(function(x){return '<li class="dim">'+esc(x)+'</li>';}).join('')+'</ul></div>';
+  }
+  /* 에러코드 */
+  if(r.code){var c=r.code;
+    h+='<div class="acd-card"><div class="acd-chd">🔢 '+esc(t.codeTitle)+'<i class="acd-sev sev-'+c.sev+'">'+esc(t.sevL[c.sev])+'</i></div><div class="acd-cb">'+
+       '<div class="acd-code-big">'+esc(c.code)+'</div><div class="acd-code-mean">'+esc(c.mean)+'</div>'+(c.note?'<div class="dim" style="margin-top:4px">'+esc(c.note)+'</div>':'')+
+       '<div class="acd-kv"><b>'+esc(t.family)+'</b><span>'+esc(L(c.fam))+'</span></div>'+
+       '<div class="acd-kv"><b>'+esc(t.commonCauses)+'</b><span>'+esc(L(c.fam.c))+'</span></div>'+
+       '<div class="acd-kv"><b>'+esc(t.checks)+'</b><span>'+esc(L(c.fam.k))+'</span></div></div></div>';
+  }
+  /* 원인 목록 */
+  if(r.list.length){
+    h+='<div class="acd-card"><div class="acd-chd">🔍 '+esc(t.causes)+'</div><div class="acd-cb acd-causes">';
+    var mx=Math.max(10,r.list[0].score);
+    r.list.forEach(function(x,i){var C=CAUSES[x.id];
+      h+='<details class="acd-cause tag-'+C.tag+'"'+(i===0?' open':'')+'><summary>'+
+         '<span class="acd-rank">'+(i+1)+'</span><span class="acd-cn"><b>'+esc(L(C))+'</b>'+
+         '<span class="acd-bar"><i style="width:'+Math.round(Math.min(100,x.score/mx*100))+'%"></i></span>'+
+         '<small class="conf-'+x.conf+'">'+esc(t.conf[x.conf])+'</small></span><span class="acd-chev">›</span></summary>'+
+         '<div class="acd-cd">'+
+         '<div class="acd-kv"><b>'+esc(t.evidence)+'</b><ul>'+x.ev.map(function(e){return '<li>'+esc(e)+'</li>';}).join('')+'</ul></div>'+
+         '<div class="acd-kv"><b>'+esc(t.checks)+'</b><ol>'+L(C.chk).map(function(e){return '<li>'+esc(e)+'</li>';}).join('')+'</ol></div>'+
+         '<div class="acd-kv"><b>'+esc(t.actions)+'</b><ul>'+L(C.act).map(function(e){return '<li>'+esc(e)+'</li>';}).join('')+'</ul></div>'+
+         '<div class="acd-svc"><b>'+esc(t.svc)+'</b> '+esc(L(C.svc))+'</div>'+
+         '</div></details>';
+    });
+    h+='</div></div>';
+  }
+  /* 측정값 판정 */
+  if(r.meas.length){
+    h+='<div class="acd-card"><div class="acd-chd">📏 '+esc(t.measTitle)+'</div><div class="acd-cb"><table class="acd-mt">'+
+       r.meas.map(function(m){return '<tr><td><div class="ml">'+esc(m.label)+'</div>'+(m.sub?'<div class="ms">'+esc(m.sub)+'</div>':'')+'</td><td class="mv">'+esc(m.val)+'</td><td class="mr">'+esc(m.range)+'</td><td class="mst"><i class="acd-dot st-'+(m.st||'none')+'"></i></td></tr>';}).join('')+
+       '</table>'+(r.notes.length?'<ul class="acd-ul dim" style="margin-top:8px">'+r.notes.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>':'')+'</div></div>';
+  }else if(r.notes.length){h+='<div class="acd-card"><div class="acd-cb"><ul class="acd-ul dim">'+r.notes.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul></div></div>';}
+  h+='<div class="acd-copyrow"><button type="button" id="btn-copy">📋 '+esc(t.copy)+'</button></div>';
+  host.innerHTML=h;
+  $('btn-copy').addEventListener('click',function(){copySummary(r);});
+  if(!keep){var y=host.getBoundingClientRect().top+window.scrollY-70;window.scrollTo({top:y<0?0:y,behavior:'smooth'});}
+}
+function copySummary(r){
+  var t=tx(),k=S.lang==='ko',lines=[t.sumHead];
+  var unit=[S.brand?brandName(S.brand):'',S.model,S.hp?S.hp+'HP':'',S.type?(S.type==='inv'?t.inv:t.non):'',S.ref].filter(Boolean).join(' · ');
+  if(unit)lines.push(unit);
+  var syms=SYMS.filter(function(s){return S.sym[s];}).map(function(s){return t.symList[s];});
+  if(syms.length)lines.push((k?'증상: ':'Symptoms: ')+syms.join(', '));
+  r.meas.forEach(function(m){lines.push('· '+m.label+' '+m.val+(m.sub?' ('+m.sub+')':'')+(m.st?' ['+({good:k?'양호':'good',ok:k?'정상':'normal',warn:k?'주의':'caution',bad:k?'이상':'abnormal'})[m.st]+']':''));});
+  if(r.code)lines.push((k?'에러코드 ':'Error code ')+r.code.code+' — '+r.code.mean);
+  lines.push((k?'판정: ':'Status: ')+t.status[r.status]);
+  r.list.forEach(function(x,i){lines.push((i+1)+'. '+L(CAUSES[x.id])+' ('+t.conf[x.conf]+')');});
+  var txt=lines.join('\n');
+  var done=function(){var b=$('btn-copy');if(b){b.textContent='✓ '+t.copied;setTimeout(function(){b.textContent='📋 '+t.copy;},1500);}};
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done,function(){fallbackCopy(txt);done();});}
+  else{fallbackCopy(txt);done();}
+}
+function fallbackCopy(txt){var ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);}
+
+function bindInputs(){
+  var map={'in-model':'model','in-rated':'rated','in-ta':'ta','in-tb':'tb','in-amb':'amb','in-lp':'lp','in-hpp':'hpp','in-cur':'cur','in-volt':'volt','in-code':'code'};
+  Object.keys(map).forEach(function(id){var el=$(id);el.addEventListener('input',function(){S[map[id]]=el.value.trim();if(id==='in-code'&&el.value.trim())S.sym.err=true;renderInputs();rerun();});});
+  $('u-psi').addEventListener('click',function(){S.punit='psi';renderInputs();rerun();});
+  $('u-bar').addEventListener('click',function(){S.punit='bar';renderInputs();rerun();});
+  $('yk-new').addEventListener('click',function(){S.yorkFam='new';renderInputs();rerun();});
+  $('yk-old').addEventListener('click',function(){S.yorkFam='old';renderInputs();rerun();});
+  $('lg-ko').addEventListener('click',function(){S.lang='ko';renderAll();});
+  $('lg-en').addEventListener('click',function(){S.lang='en';renderAll();});
+  $('btn-run').addEventListener('click',function(){renderResult(false);});
+  $('btn-reset').addEventListener('click',function(){var lang=S.lang;S=blank();S.lang=lang;
+    Object.keys(map).forEach(function(id){$(id).value='';});$('sec-res').style.display='none';$('sec-res').innerHTML='';
+    renderAll();window.scrollTo({top:0,behavior:'smooth'});});
+}
+function renderAll(){renderStatic();renderInputs();if(S.shown)renderResult(true);}
+document.addEventListener('DOMContentLoaded',function(){bindInputs();renderAll();});
+
+/* ══ 직원 허브(staffapp.html) 살아있음 감시 호환 — 데이터 로딩이 없으므로 즉시 준비 완료 ══
+   허브 밖에서 단독으로 열었을 때는 아무 동작도 하지 않습니다. */
+(function(){
+  if(window.top===window.self)return;
+  function post(m){try{window.parent.postMessage(m,'*');}catch(e){}}
+  window.addEventListener('message',function(e){var d=e&&e.data;if(d&&d.hhcPing)post({hhcPong:1,ready:true});});
+  post({hhcHello:1});post({hhcReady:1});
+})();
+
+</script>
+</body>
+</html>
