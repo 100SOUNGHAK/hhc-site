@@ -507,9 +507,9 @@ body.np-open{overflow:hidden}
   <section class="na-sec" id="linkBox">
     <h2 class="na-h" id="hLinks" data-t="hLinks">바로가기</h2>
     <div class="na-links">
-      <a id="lnk0" href="https://happyhomecare.com.my/event" class="evt">
+      <a id="lnk0" href="https://happyhomecare.com.my/event-oct" class="evt">
         <span class="ic" aria-hidden="true">🎁</span>
-        <span><b data-t="l0t">추석맞이 특별 할인 이벤트</b><span data-t="l0d">최대 20% 할인 + 해피포인트 2배 · 9/30까지</span></span>
+        <span><b data-t="l0t">10월 한정 특별가</b><span data-t="l0d">에어컨 RM 90부터 · 세탁기 10% · 10/31까지</span></span>
         <span class="ar" aria-hidden="true">›</span>
       </a>
       <a id="lnk1" href="https://happyhomecare.com.my/request">
@@ -599,9 +599,20 @@ var SITE = 'https://happyhomecare.com.my';
 var SHARE_URL = SITE + '/namecard';
 
 /* 바로가기 — 화면 언어를 그대로 이어서 연다 */
-var EVENT_END = '2026-09-30';        /* 이벤트 마지막 날 — 지나면 명함에서 이벤트 줄이 자동으로 사라진다 */
+/* 이벤트 바로가기 — 날짜에 따라 자동으로 바뀐다 (말레이시아 시간 기준 마지막 날 자정까지).
+   모든 이벤트가 끝나면 명함에서 이벤트 줄이 자동으로 사라진다. 다음 이벤트는 여기에 한 줄 추가. */
+var EVENTS = [
+  { end:'2026-10-31', path:'/event-oct', tk:'l0t', dk:'l0d' }   /* 🍁 10월 한정 특별가 */
+];
+function curEvent(){
+  var now = Date.now();
+  for(var i = 0; i < EVENTS.length; i++){
+    if(now <= new Date(EVENTS[i].end + 'T23:59:59+08:00').getTime()) return EVENTS[i];
+  }
+  return null;
+}
 var LINKS = [
-  { id:'lnk0', path:'/event', hash:'', evt:true },
+  { id:'lnk0', path:'/event-oct', hash:'', evt:true },
   { id:'lnk1', path:'/request', hash:'' },
   { id:'lnk2', path:'/pricing', hash:'' },
   { id:'lnk3', path:'/membership', hash:'' },
@@ -616,7 +627,7 @@ var T = {
     segPerson:'개인 명함', segQr:'QR 보기',
     btnWa:'왓츠앱 상담', btnTel:'전화 걸기', btnMail:'이메일',
     hInfo:'연락처', hCompany:'회사 정보', hLinks:'바로가기',
-    l0t:'추석맞이 특별 할인 이벤트', l0d:'최대 20% 할인 + 해피포인트 2배 · 9/30까지',
+    l0t:'10월 한정 특별가', l0d:'에어컨 RM 90부터 · 세탁기 10% · 10/31까지',
     l1t:'예약 신청하기', l1d:'방문 날짜와 품목을 남겨주세요',
     l2t:'서비스 · 요금 안내', l2d:'품목별 요금 · 추가비용 · 무상보증',
     l3t:'멤버십 안내', l3d:'정기 관리 회원 혜택',
@@ -651,7 +662,7 @@ var T = {
     segPerson:'Personal', segQr:'View QR',
     btnWa:'WhatsApp', btnTel:'Call', btnMail:'Email',
     hInfo:'CONTACT', hCompany:'COMPANY INFORMATION', hLinks:'SERVICES',
-    l0t:'Chuseok Special Discount', l0d:'Up to 20% off + double Happy Points · until 30 Sep',
+    l0t:'October Special Prices', l0d:'A/C from RM 90 · washer 10% off · until 31 Oct',
     l1t:'Request a booking', l1d:'Tell us your date and items',
     l2t:'Services & pricing', l2d:'Prices by item · extra charges · warranty',
     l3t:'Membership', l3d:'Benefits for regular care members',
@@ -826,12 +837,19 @@ function render(){
   document.getElementById('quickActs').hidden = !person;
   document.getElementById('infoTitle').textContent = person ? t.hInfo : t.hCompany;
 
+  var ev = curEvent();
   LINKS.forEach(function(L){
     var el = document.getElementById(L.id);
     if(!el) return;
-    el.href = SITE + L.path + '?from=card' + (lang === 'en' ? '&lang=en' : '') + L.hash;
+    var path = (L.evt && ev) ? ev.path : L.path;
+    el.href = SITE + path + '?from=card' + (lang === 'en' ? '&lang=en' : '') + L.hash;
+    if(L.evt && ev){
+      var tb = el.querySelector('[data-t="l0t"]'), db = el.querySelector('[data-t="l0d"]');
+      if(tb && t[ev.tk] != null) tb.innerHTML = t[ev.tk];
+      if(db && t[ev.dk] != null) db.innerHTML = t[ev.dk];
+    }
     /* 회사 명함에서는 서비스 안내가 대신 들어가고, 바로가기는 이벤트 + 홈페이지만 남긴다 */
-    var over = L.evt && Date.now() > new Date(EVENT_END + 'T23:59:59+08:00').getTime();
+    var over = L.evt && !ev;
     el.hidden = over || (mode === 'company' && L.id !== 'lnk4' && !L.evt);
   });
   var svcBox = document.getElementById('svcBox');
