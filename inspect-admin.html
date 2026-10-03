@@ -38,6 +38,11 @@ textarea{resize:vertical;line-height:1.6}
 .dd-custom{padding:7px 10px;font-size:13px;border:0.5px solid #dde1ee;border-radius:6px;background:#fff;width:100%;display:none}
 .dd-custom.show{display:block}
 /* 버튼 */
+.rr-row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:0.5px solid #ececf2;font-size:13px;line-height:1.6}
+.rr-row:last-of-type{border-bottom:0}
+.rr-row b{flex-shrink:0;width:66px;font-size:11.5px;font-weight:700;color:#B45309;padding-top:2px}
+.rr-row span{flex:1;color:#0F1C3F;word-break:break-word}
+.rr-note{margin-top:8px;background:#FFFBEB;border:0.5px solid #FCD34D;border-radius:8px;padding:9px 11px;font-size:11.5px;line-height:1.6;color:#7C4A03}
 .btn-add{display:flex;align-items:center;gap:5px;width:100%;padding:11px;border-radius:8px;border:1.5px dashed #0D9488;background:#f0fdfb;color:#0D9488;font-size:13px;cursor:pointer;justify-content:center;transition:background .15s;margin-top:6px}
 .btn-add:hover{background:#e0faf5}
 .btn-del{width:28px;height:28px;border-radius:6px;background:#fde8e8;color:#c0392b;border:none;font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0}
@@ -6222,6 +6227,43 @@ setTimeout(function(){
 // ═══ 📎 인보이스 · 총괄 고객관리에서 넘어온 고객 기본정보 자동 반영 ═══
 // (?from=hhc + localStorage hhc_transfer_inspect)
 (function(){
+  // ── 📨 의뢰 요청 내용 참고 카드 ──────────────────────────────
+  //  · 점검 전에 「무엇을 요청받았는지」 맨 위에서 확인하는 카드입니다
+  //  · 최종 의견란은 비워 두고, 필요하면 버튼으로 옮겨 적습니다
+  window.showReqRef=function(d){
+    try{
+      d=d||{};
+      var items=String(d.items||'').trim(), memo=String(d.memo||'').trim();
+      if(!items&&!memo)return;
+      var host=document.getElementById('inspect-form-body');
+      if(!host)return;
+      var old=document.getElementById('req-ref-card'); if(old)old.remove();
+      var esc=function(v){return String(v==null?'':v).replace(/[&<>]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[m];});};
+      var row=function(k,v){return v?('<div class="rr-row"><b>'+k+'</b><span>'+esc(v).replace(/\n/g,'<br>')+'</span></div>'):'';};
+      var c=document.createElement('div');
+      c.className='card'; c.id='req-ref-card';
+      c.innerHTML='<div class="card-hdr"><div class="card-icon" style="background:#B45309">📨</div>'+
+          '<div class="card-title">의뢰 요청 내용 · 참고</div>'+
+          '<button type="button" id="rr-x" title="닫기" style="background:rgba(255,255,255,.14);border:0;color:#fff;width:22px;height:22px;border-radius:6px;cursor:pointer;font-size:12px;line-height:1;flex-shrink:0">✕</button></div>'+
+        '<div class="card-body">'+row('요청 품목',items)+row('요청 사항',memo)+
+          '<div class="rr-note">※ 고객이 요청한 내용입니다. <b>최종 의견</b>은 점검 결과를 보고 직접 작성해 주세요.</div>'+
+          '<button type="button" class="btn-add" id="rr-paste">📋 최종 의견란에 옮겨 적기</button></div>';
+      host.insertBefore(c,host.firstChild);
+      var x=c.querySelector('#rr-x'); if(x)x.onclick=function(){c.remove();};
+      var pb=c.querySelector('#rr-paste');
+      if(pb)pb.onclick=function(){
+        var op=document.getElementById('f-opinion'); if(!op)return;
+        var ln=[]; if(items)ln.push('[요청 품목] '+items); if(memo)ln.push('[요청 사항] '+memo);
+        var cur=String(op.value||'');
+        op.value=(cur.trim()?cur.replace(/\s+$/,'')+'\n':'')+ln.join('\n')+'\n';
+        op.focus();
+        try{op.setSelectionRange(op.value.length,op.value.length);}catch(e){}
+        if(typeof updateInspProgress==='function')try{updateInspProgress();}catch(e){}
+        if(typeof toast==='function')toast('📋 최종 의견란에 옮겨 적었습니다 — 점검 결과에 맞게 고쳐 주세요');
+      };
+    }catch(e){}
+  };
+
   var p=null;
   try{p=new URLSearchParams(location.search);}catch(e){return;}
   if(!p||p.get('from')!=='hhc')return;
@@ -6238,14 +6280,9 @@ setTimeout(function(){
       set('f-phone',d.phone||'+60 ');
       set('f-addr',d.addr);
       set('f-date',d.date||new Date().toISOString().split('T')[0]);
-      // 예약 품목·요청사항이 함께 넘어왔으면 소견란이 비어 있을 때만 참고용으로 적어 둔다
-      var op=document.getElementById('f-opinion');
-      if(op&&!String(op.value||'').trim()){
-        var ln=[];
-        if(d.items)ln.push('[요청 품목] '+d.items);
-        if(d.memo)ln.push('[요청 사항] '+d.memo);
-        if(ln.length)op.value=ln.join('\n')+'\n\n';
-      }
+      // 의뢰·예약에서 넘어온 요청 내용은 「참고 카드」로 따로 보여 줍니다
+      //  (예전에는 최종 의견란에 바로 적어 넣어, 지우지 않으면 고객 보고서에 요청 목록이 그대로 나갔습니다)
+      showReqRef(d);
       if(typeof updateInspProgress==='function')try{updateInspProgress();}catch(e){}
       if(typeof toast==='function')toast('✓ 고객 기본정보 자동 반영됨 — 점검 내용을 입력한 뒤 저장하세요');
       window.scrollTo({top:0});

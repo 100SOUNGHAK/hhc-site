@@ -415,19 +415,24 @@ body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;back
 /* 냉방 성능 측정 카드 — 기본 접힘 */
 .cu-tools{display:flex;justify-content:center;padding:14px 16px 3px}
 /* ❄️ 냉방상태 상세보기 — 가운데 정렬 + 크게 강조 */
-.cu-btn{width:100%;max-width:360px;display:inline-flex;align-items:center;justify-content:center;gap:9px;
-  border:1.6px solid var(--cool);background:linear-gradient(180deg,#FFFFFF,var(--cool-bg));
-  color:var(--cool);font-family:inherit;font-size:14.5px;font-weight:800;letter-spacing:-.02em;
-  padding:14px 20px;border-radius:15px;cursor:pointer;-webkit-tap-highlight-color:transparent;
-  box-shadow:0 8px 20px -12px rgba(46,127,158,.75),inset 0 1px 0 rgba(255,255,255,.85);
+.cu-btn{width:100%;max-width:440px;display:inline-flex;align-items:center;justify-content:center;gap:10px;
+  border:0;background:linear-gradient(180deg,#3690B1,var(--cool) 55%,#24677F);
+  color:#fff;font-family:inherit;font-size:15.5px;font-weight:800;letter-spacing:-.02em;
+  padding:17px 22px;border-radius:16px;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  box-shadow:0 2px 4px rgba(46,127,158,.3),0 14px 26px -12px rgba(46,127,158,.9),inset 0 1px 0 rgba(255,255,255,.3);
   transition:transform .16s var(--ez-i),box-shadow .2s var(--ez-i),background .2s}
-.cu-btn:hover{box-shadow:0 10px 24px -12px rgba(46,127,158,.9)}
+.cu-btn .ic{font-size:17px;flex-shrink:0}
+.cu-btn:hover{transform:translateY(-1px);box-shadow:0 2px 4px rgba(46,127,158,.3),0 18px 32px -12px rgba(46,127,158,.95)}
 .cu-btn:active{transform:translateY(1px) scale(.994)}
-.cu-btn .ar{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;
-  background:var(--cool);color:#fff;font-size:9.5px;flex-shrink:0;transition:transform .3s var(--ez-i)}
-.cu-btn.open{background:var(--soft);border-color:var(--line);color:var(--ink-soft);box-shadow:none}
+.cu-btn .ar{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;
+  background:rgba(255,255,255,.24);color:#fff;font-size:10px;flex-shrink:0;transition:transform .3s var(--ez-i)}
+.cu-btn.open{background:var(--soft);color:var(--ink-soft);box-shadow:inset 0 0 0 1.6px var(--line)}
+.cu-btn.open .ic{filter:grayscale(1);opacity:.7}
 .cu-btn.open .ar{background:var(--ink-mute);transform:rotate(180deg)}
-@media (max-width:400px){.cu-btn{font-size:13.5px;padding:13px 16px}}
+@media (max-width:400px){.cu-btn{font-size:14px;padding:15px 16px;gap:8px}}
+/* 첫 1대는 항상 보이고, 나머지는 버튼을 눌러 펼칩니다 */
+.cu-first{padding-bottom:4px}
+.cu-rest{padding-top:4px}
 .cu-fold{display:grid;grid-template-rows:1fr}
 .cu-fold>div{min-height:0}
 /* ❄️ 냉방상태 상세 — 목록 전체를 한 번에 접고 펼칩니다 (닫으면 항목 줄도 보이지 않음) */
@@ -788,13 +793,14 @@ body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;back
       <div class="sk-num"><span id="sk-n1">12°C 미만</span><span id="sk-n2">12~15</span><span id="sk-n3">15°C 이상</span></div>
     </div>
     <div class="cool-sum" id="cool-sum" style="display:none"></div>
-    <div class="cu-tools" id="cu-tools" style="display:none">
-      <button type="button" class="cu-btn" id="cu-exp"><em id="cu-exp-t" style="font-style:normal">냉방상태 상세보기</em><span class="ar">▼</span></button>
-    </div>
+    <div class="cu-list cu-first" id="cool-msr-first"></div>
     <div class="cu-listfold" id="cu-listfold"><div>
-      <div class="cu-list" id="cool-msr-body"></div>
-      <div class="msr-unit" id="cool-msr-unit">단위 — 온도: °C</div>
+      <div class="cu-list cu-rest" id="cool-msr-body"></div>
     </div></div>
+    <div class="cu-tools" id="cu-tools" style="display:none">
+      <button type="button" class="cu-btn" id="cu-exp"><span class="ic">❄️</span><em id="cu-exp-t" style="font-style:normal">나머지 측정값 보기</em><span class="ar">▼</span></button>
+    </div>
+    <div class="msr-unit" id="cool-msr-unit">단위 — 온도: °C</div>
   </div>
 
   <!-- 03.5 누설검사 -->
@@ -1635,8 +1641,10 @@ window.renderReport=function renderReport(data){
 
   // ── 냉방능력 측정
   var coolMsrBody=G('cool-msr-body');var coolMsrSec=G('cool-msr-sec');
+  var coolMsrFirst=G('cool-msr-first');
   if(coolMsrBody){
     coolMsrBody.innerHTML='';
+    if(coolMsrFirst)coolMsrFirst.innerHTML='';
     var hasCoolMsr=(data.coolUnits||[]).some(function(u){return u.a||u.b;});
     if(coolMsrSec)coolMsrSec.style.display=hasCoolMsr?'block':'none';
     var heroWrap=G('cool-hero-wrap');if(heroWrap)heroWrap.innerHTML='';
@@ -1716,7 +1724,9 @@ window.renderReport=function renderReport(data){
               '<div class="cu-axis"><i style="left:0;transform:none">0</i><i style="left:60%">12</i><i style="left:75%">15</i><i style="left:100%;transform:translateX(-100%)">20°C</i></div></div>'+
           '</div>'+
         '</div></div></div>';
-      coolMsrBody.appendChild(cu);
+      /* 첫 1대는 바로 보이게, 나머지는 「나머지 측정값 보기」 안으로 */
+      if(cIdx===1&&coolMsrFirst)coolMsrFirst.appendChild(cu);
+      else coolMsrBody.appendChild(cu);
     });
     // ❄️ 에어컨 냉방 능력 — 양호 N대 / 정상 N대 / 저하 N대
     var csEl=G('cool-sum'),cuTip=G('cu-tools');
@@ -1728,10 +1738,14 @@ window.renderReport=function renderReport(data){
         ((cSum.warn||0)?pc('warn',(isEn?'Normal':'정상'),cSum.warn):'')+
         pc('bad',(isEn?'Low':'저하'),cSum.bad||0)+'</span>';
       csEl.style.display='';
-      if(cuTip){cuTip.style.display='';if(window.__cuSync)window.__cuSync(isEn);}
+      /* 2대 이상일 때만 「나머지 측정값 보기」 버튼이 필요합니다 */
+      var restN=coolMsrBody.querySelectorAll('.cu').length;
+      if(cuTip){cuTip.style.display=restN?'':'none';if(window.__cuSync)window.__cuSync(isEn);}
+      var cuEl=G('cool-msr-unit');if(cuEl)cuEl.style.display='';
     }else{
       if(csEl)csEl.style.display='none';
       if(cuTip)cuTip.style.display='none';
+      var cuEl0=G('cool-msr-unit');if(cuEl0)cuEl0.style.display='none';
     }
   }
 
@@ -2207,8 +2221,8 @@ window.irxOpen=irxOpen;
     var open=fold.classList.contains('open');
     b2.classList.toggle('open',open);
     lb.textContent=window.__cuEn
-      ?(open?'Hide cooling details':'View cooling details ('+n+')')
-      :(open?'냉방상태 상세 닫기':'냉방상태 상세보기 '+n+'개');
+      ?(open?'Hide the other units':'Show '+n+' more unit'+(n>1?'s':''))
+      :(open?'나머지 측정값 닫기':'나머지 '+n+'대 측정값 보기');
   };
   document.addEventListener('click',function(ev){
     if(!ev.target||!ev.target.closest)return;
