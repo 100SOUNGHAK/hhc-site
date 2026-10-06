@@ -516,6 +516,8 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
     <div style="display:flex;gap:6px;flex-wrap:wrap;width:100%">
       <button onclick="window.bulkResultOk()" style="padding:5px 10px;border-radius:6px;border:0.5px solid rgba(52,211,153,.5);background:rgba(16,185,129,.25);color:#fff;font-size:10.5px;font-weight:600;cursor:pointer">✓ 전체 양호 일괄적용</button>
       <button onclick="sortResultRows()" style="padding:5px 10px;border-radius:6px;border:0.5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;font-size:10.5px;font-weight:500;cursor:pointer">⇅ 구분별 정렬</button>
+      <button onclick="inspPresetReload()" title="새 보고서 기본 항목으로 다시 채우기" style="padding:5px 10px;border-radius:6px;border:0.5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;font-size:10.5px;font-weight:500;cursor:pointer">↺ 기본 항목 불러오기</button>
+      <button onclick="inspPresetSave()" title="지금 담긴 항목·결과·비고를 새 보고서의 기본값으로 저장" style="padding:5px 10px;border-radius:6px;border:0.5px solid rgba(227,201,138,.6);background:rgba(201,164,76,.22);color:#fff;font-size:10.5px;font-weight:600;cursor:pointer">⭐ 현재 항목을 기본값으로</button>
     </div>
     <div id="res-cat-chips" style="display:flex;gap:6px;overflow-x:auto;width:100%;padding-top:2px"></div>
   </div>
@@ -1043,6 +1045,83 @@ var DEFAULT_RESULTS=[
   {cat:'전기',name:'절연저항 측정'}
 ];
 
+// ═══════════════════════════════════════════
+// ⭐ 새 점검보고서 「기본 점검 항목」 — 새로 작성할 때 자동으로 담겨 나옵니다
+//    · 보고서마다 결과·비고를 바꾸거나 항목을 더하고 빼면 됩니다.
+//    · 「⭐ 현재 항목을 기본값으로」 를 누르면 지금 목록이 새 기본값이 됩니다
+//      (settings/insp_preset 에 저장 · 모든 기기 공유)
+// ═══════════════════════════════════════════
+var INSP_PRESET_DEF=[
+  {cat:'오염상태',name:'패널/에어필터 오염상태',status:'ok',note:'고도 찌든 오염상태>현장세척 완료'},
+  {cat:'오염상태',name:'열교환기 오염상태',status:'ok',note:'고도 찌든 오염상태>현장세척 완료'},
+  {cat:'오염상태',name:'송풍팬 오염상태',status:'ok',note:'고도 찌든수준 오염상태>현장세척 완료'},
+  {cat:'오염상태',name:'드레인판 오염상태',status:'ok',note:'고도 찌든수준 오염상태>현장세척 완료'},
+  {cat:'오염상태',name:'응축기 오염상태',status:'ok',note:'경미한 수준 오염상태>세척 불필요'},
+  {cat:'열교환·성능',name:'실내 토출 온도차 ΔT',status:'ok',note:'정상 범위 측정'},
+  {cat:'열교환·성능',name:'풍량 상태',status:'ok',note:'이상 없음'},
+  {cat:'배수',name:'드레인 배수 및 배관 상태',status:'warn',note:'배수 배관 기울기 불량 (전체 에어컨)'},
+  {cat:'배수',name:'드레인 배관 막힘',status:'ok',note:'심각한 막힘상태>현장세척 완료'},
+  {cat:'운전',name:'소음·진동 / 리모컨 동작',status:'ok',note:'이상 없음'},
+  {cat:'운전',name:'루버 작동 상태',status:'ok',note:'이상 없음'},
+  {cat:'운전',name:'냉방 기동 상태',status:'ok',note:'이상 없음'}
+];
+var INSP_PRESET_KEY='hhc_insp_preset_v1';
+function inspPresetNorm(a){
+  return (Array.isArray(a)?a:[]).map(function(x){
+    return {cat:String((x&&x.cat)||'기타'),name:String((x&&x.name)||'').trim(),
+      status:(['ok','warn','bad'].indexOf(x&&x.status)>=0)?x.status:'ok',note:String((x&&x.note)||'')};
+  }).filter(function(x){return x.name;});
+}
+function inspPreset(){
+  try{var v=inspPresetNorm(JSON.parse(localStorage.getItem(INSP_PRESET_KEY)||'null'));if(v.length)return v;}catch(e){}
+  return INSP_PRESET_DEF.slice();
+}
+// 현재 담긴 항목 (보고서 저장 형식과 같은 모양)
+function inspRowsNow(){
+  var out=[];
+  document.querySelectorAll('#result-rows .rcard').forEach(function(c){
+    if(!c._nameInp)return;var nm=c._nameInp.value.trim();if(!nm)return;
+    out.push({cat:c._getCatSel?c._getCatSel().value:'기타',name:nm,status:c._statusSel?c._statusSel.value:'ok',note:c._getNoteInp?c._getNoteInp().value:''});
+  });
+  return out;
+}
+var _presetSig='';
+function inspPresetApply(force){
+  var wrap=gid('result-rows');if(!wrap)return;
+  if(!force&&wrap.querySelector('.rcard'))return;          // 이미 담긴 항목이 있으면 건드리지 않음
+  wrap.innerHTML='';
+  inspPreset().forEach(function(r){addResultRow(r.cat,r.name,r.status,'',r.note);});
+  if(typeof sortResultRows==='function')sortResultRows(true);
+  if(typeof updateStats==='function')updateStats();
+  _presetSig=JSON.stringify(inspRowsNow());
+}
+window.inspPresetApply=inspPresetApply;
+// 버튼 : ↺ 기본 항목 불러오기
+window.inspPresetReload=function(){
+  if(document.querySelector('#result-rows .rcard')&&!confirm('지금 담긴 점검 항목을 지우고 기본 항목으로 다시 채울까요?'))return;
+  inspPresetApply(true);
+  if(window.__scheduleDraft)window.__scheduleDraft();
+  toast('↺ 기본 점검 항목을 불러왔습니다');
+};
+// 버튼 : ⭐ 현재 항목을 기본값으로
+window.inspPresetSave=function(){
+  var rows=inspRowsNow();
+  if(!rows.length){toast('담긴 점검 항목이 없습니다');return;}
+  if(!confirm('지금 담긴 점검 항목 '+rows.length+'개(결과 · 비고 포함)를\n새 보고서의 기본 항목으로 저장할까요?'))return;
+  try{localStorage.setItem(INSP_PRESET_KEY,JSON.stringify(rows));}catch(e){}
+  _presetSig=JSON.stringify(rows);
+  if(window.__savePreset)window.__savePreset(rows);
+  toast('⭐ 기본 점검 항목으로 저장했습니다 ('+rows.length+'개)');
+};
+// 서버(다른 기기)에 저장된 기본값을 받으면 — 아직 손대지 않은 새 보고서라면 바로 바꿔 줍니다
+window.__presetLoaded=function(items){
+  var v=inspPresetNorm(items);if(!v.length)return;
+  var cur='';try{cur=localStorage.getItem(INSP_PRESET_KEY)||'';}catch(e){}
+  if(cur===JSON.stringify(v))return;
+  try{localStorage.setItem(INSP_PRESET_KEY,JSON.stringify(v));}catch(e){}
+  if(_presetSig&&!currentEditId&&reportType==='inspect'&&JSON.stringify(inspRowsNow())===_presetSig)inspPresetApply(true);
+};
+
 function gid(id){return document.getElementById(id);}
 function gv(id){var el=gid(id);return el?el.value:'';}
 function updateInspProgress(){
@@ -1477,7 +1556,7 @@ var ITEM_CATALOG={
  '기타':['사용 안내 실시','고객 요청 사항','기타 특이사항']
 };
 var IP_STD={};
-try{DEFAULT_RESULTS.forEach(function(d){IP_STD[d.name]=1;});}catch(e){}
+try{inspPreset().forEach(function(d){IP_STD[d.name]=1;});}catch(e){}
 var IP_ICONS={'외관·설치':'🧱','오염상태':'🧼','냉매 계통':'❄️','열교환·성능':'🌡️','배수':'💧','운전':'⚙️','실외기 오염상태':'🏭','전기':'⚡','기타':'📦'};
 var IP_RAIL_LBL={'외관·설치':'외관<br>설치','냉매 계통':'냉매<br>계통','열교환·성능':'열교환<br>성능','실외기 오염상태':'실외기<br>오염'};
 var ipCat='전체',ipQ='',ipRendered=[];
@@ -3615,6 +3694,7 @@ window.newReport=function(){
   }else{
     photoData={};videoData={};
     loadIntoForm({});
+    if(reportType==='inspect')inspPresetApply(true);   // ⭐ 기본 점검 항목으로 시작
     var fd=gid('f-date');if(fd)fd.value=new Date().toISOString().split('T')[0];
   }
   currentEditId=null;
@@ -4683,6 +4763,7 @@ window.initEnhancements=initEnhancements;
 
 window.onload=function(){
   gid('f-date').value=new Date().toISOString().split('T')[0];
+  if(reportType==='inspect'&&!currentEditId)inspPresetApply();   // ⭐ 새 보고서 = 기본 점검 항목으로 시작
   sortResultRows(true); // 기본적으로 구분별 정렬된 상태로 표시
   updateStats();
   initEnhancements();
@@ -5111,6 +5192,20 @@ async function shorten(url){
     return 'https://happyhomecare.com.my/r?k='+key;
   }catch(e){return url;}
 }
+
+// ── ⭐ 새 보고서 기본 점검 항목 저장/로딩 (settings/insp_preset — 모든 기기 공유)
+window.__savePreset=async function(items){
+  if(!DB)return;
+  try{await setDoc(doc(DB,'settings','insp_preset'),{items:items,updatedAt:new Date().toISOString()});}
+  catch(e){console.error('preset save:',e);}
+};
+(async function(){
+  if(!DB)return;
+  try{
+    var s=await getDoc(doc(DB,'settings','insp_preset'));
+    if(s.exists()&&s.data()&&Array.isArray(s.data().items)&&window.__presetLoaded)window.__presetLoaded(s.data().items);
+  }catch(e){console.error('preset load:',e);}
+})();
 
 // ── 자주 쓰는 문구 저장/로딩 (settings/insp_phrases — 모든 기기 공유)
 window.__savePhrases=async function(obj){
