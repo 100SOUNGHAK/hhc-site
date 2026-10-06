@@ -634,7 +634,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
       <div class="tr" id="balance-row" style="display:none;font-weight:700"><span>잔여 잔액</span><span id="balance-d"></span></div>
     </div>
     <div class="card cp" style="margin-top:12px">
-      <div class="f"><label class="lb">결제 은행</label><select id="bank-select" onchange="onBankSel()"><option value="">-- 은행 선택 --</option></select></div>
+      <div class="f"><label class="lb">결제 은행</label><select id="bank-select" onchange="onBankSel(true)"><option value="">-- 은행 선택 --</option></select></div>
       <div id="bank-prev" style="display:none;background:var(--bg);border-radius:10px;padding:12px;font-size:13px;line-height:1.8;color:var(--txt2);margin-top:8px"></div>
     </div>
     <div class="card cp" style="margin-top:12px"><div class="f"><label class="lb">결제 조건</label><textarea id="inv-terms" rows="2" placeholder="예: 7일 이내 결제" oninput="App.upPrev()"></textarea></div></div>
@@ -1737,13 +1737,24 @@ function renderBankSel(){
   sel.innerHTML='<option value="">-- 은행 선택 --</option>'+banks.map(function(b){return '<option value="'+b.id+'">'+b.bankName+' — '+b.accNum+'</option>';}).join('');
   if(cur)sel.value=cur;
 }
-function onBankSel(){
+// 💳 결제 은행 목록에서 「카드 결제」 항목인지 (은행명·예금주·계좌번호 어디에든 카드/card 가 들어 있으면)
+function isCardBank(b){
+  if(!b)return false;
+  var n=String(b.bankName||'')+' '+String(b.accName||'')+' '+String(b.accNum||'');
+  return /카드|card/i.test(n);
+}
+function onBankSel(user){
   var id=val('bank-select'),bp=$('bank-prev');
   if(!id||!bp){if(bp)bp.style.display='none';return;}
   var b=banks.find(function(x){return x.id===id;});
   if(!b){bp.style.display='none';return;}
   bp.style.display='block';
   bp.innerHTML='<b>'+b.bankName+'</b><br>예금주: '+b.accName+(b.accNum?'<br>Account No: '+b.accNum:'');
+  // 💳 직접 「카드 결제」를 고르면 상태를 「결제완료」로 자동 변경 (저장된 인보이스를 불러올 때는 바꾸지 않음)
+  if(user===true&&isCardBank(b)){
+    var st=$('inv-status');
+    if(st&&st.value!=='paid'){st.value='paid';showToast('💳 카드 결제 → 상태가 「결제완료」로 바뀌었습니다');}
+  }
   App.upPrev();
 }
 window.onBankSel=onBankSel;
