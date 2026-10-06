@@ -226,7 +226,15 @@ textarea.fi{resize:vertical;line-height:1.6}
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+// ⚡ 빠른 열기 : 데이터베이스 내용을 이 기기 안에 저장해 둡니다(IndexedDB).
+//    다음부터는 저장된 내용으로 화면을 먼저 그리고, 서버에서는 바뀐 부분만 받아 옵니다.
+//    (관리자 앱의 여러 화면이 같은 저장소를 함께 쓰므로 multi-tab 모드 · 저장소를 못 쓰는 환경에서는 예전 방식으로 동작)
+function hhcFastDb(app){
+  try{return initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager(),cacheSizeBytes:150*1024*1024}),experimentalAutoDetectLongPolling:true});}
+  catch(e){return getFirestore(app);}
+}
+
 
 let db=null;
 let MEMOS=[],SNIPS=[],CUSTS=[];
@@ -1459,7 +1467,7 @@ try{
     messagingSenderId:"553635350672",
     appId:"1:553635350672:web:e601b74b96b83e0d4d2b83"
   });
-  db=getFirestore(app);
+  db=hhcFastDb(app);
   document.getElementById('fb-dot').classList.add('on');
   loadAll();
   subscribeAll();

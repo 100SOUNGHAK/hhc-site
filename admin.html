@@ -1851,7 +1851,15 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, where, getDocs, limit, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, where, getDocs, limit, setDoc, getDoc, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+// ⚡ 빠른 열기 : 데이터베이스 내용을 이 기기 안에 저장해 둡니다(IndexedDB).
+//    다음부터는 저장된 내용으로 화면을 먼저 그리고, 서버에서는 바뀐 부분만 받아 옵니다.
+//    (관리자 앱의 여러 화면이 같은 저장소를 함께 쓰므로 multi-tab 모드 · 저장소를 못 쓰는 환경에서는 예전 방식으로 동작)
+function hhcFastDb(app){
+  try{return initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager(),cacheSizeBytes:150*1024*1024}),experimentalAutoDetectLongPolling:true});}
+  catch(e){return getFirestore(app);}
+}
+
 
 // ═══════════════════════════════════════════════════════════
 // HHC 고객 마스터 연동 공통 엔진 (customers 컬렉션)
@@ -2607,7 +2615,7 @@ function showScreen(id){
 async function connectFirebase(cfg){
   try{
     const app=initializeApp(cfg);
-    db=getFirestore(app);
+    db=hhcFastDb(app);
     window._storage=getStorage(app);
     // shorten 함수에서 db 접근 가능하도록 window에 노출
     window._db=db;
@@ -2812,7 +2820,7 @@ async function runCustomerView(id,mode,lang){
   if(!host){host=document.createElement('div');host.id='cust-standalone';document.body.appendChild(host);}
   host.innerHTML='<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;color:#0F1C3F;font-size:15px"><div style="width:22px;height:22px;border:2px solid #3D52A0;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></div>불러오는 중...</div>';
   // 고객 조회는 단일 문서만 읽음 (전체 목록 구독 불필요)
-  try{ if(!db){const app=initializeApp(FIREBASE_CFG);db=getFirestore(app);} }catch(e){}
+  try{ if(!db){const app=initializeApp(FIREBASE_CFG);db=hhcFastDb(app);} }catch(e){}
   let c=null;
   try{const snap=await getDoc(doc(db,'contracts',id));if(snap.exists())c=snap.data();}catch(e){console.error(e);}
   if(!c){host.innerHTML='<div style="padding:64px 20px;text-align:center;color:#D6433F;font-size:15px">계약서를 찾을 수 없습니다.<br>Contract not found.</div>';return;}

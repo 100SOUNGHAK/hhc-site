@@ -1327,7 +1327,15 @@ window.hhcOpenCust=function(phone,name){
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, addDoc, setDoc, getDocs, getDoc, deleteDoc, updateDoc, query, orderBy, limit, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, addDoc, setDoc, getDocs, getDoc, deleteDoc, updateDoc, query, orderBy, limit, where, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+// ⚡ 빠른 열기 : 데이터베이스 내용을 이 기기 안에 저장해 둡니다(IndexedDB).
+//    다음부터는 저장된 내용으로 화면을 먼저 그리고, 서버에서는 바뀐 부분만 받아 옵니다.
+//    (관리자 앱의 여러 화면이 같은 저장소를 함께 쓰므로 multi-tab 모드 · 저장소를 못 쓰는 환경에서는 예전 방식으로 동작)
+function hhcFastDb(app){
+  try{return initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager(),cacheSizeBytes:150*1024*1024}),experimentalAutoDetectLongPolling:true});}
+  catch(e){return getFirestore(app);}
+}
+
 
 // ═══════════════════════════════════════════════════════════
 // HHC 고객 마스터 연동 공통 엔진 (customers 컬렉션)
@@ -1649,7 +1657,7 @@ const FIREBASE_CFG={
 let DB=null;
 try{
   const app=initializeApp(FIREBASE_CFG);
-  DB=getFirestore(app);
+  DB=hhcFastDb(app);
   document.getElementById('fb-dot').classList.add('on');
 }catch(e){console.error('Firebase 연결 실패:',e);}
 

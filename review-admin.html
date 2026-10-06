@@ -136,7 +136,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, deleteDoc, onSnapshot, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+// ⚡ 빠른 열기 : 데이터베이스 내용을 이 기기 안에 저장해 둡니다(IndexedDB).
+//    다음부터는 저장된 내용으로 화면을 먼저 그리고, 서버에서는 바뀐 부분만 받아 옵니다.
+//    (관리자 앱의 여러 화면이 같은 저장소를 함께 쓰므로 multi-tab 모드 · 저장소를 못 쓰는 환경에서는 예전 방식으로 동작)
+function hhcFastDb(app){
+  try{return initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager(),cacheSizeBytes:150*1024*1024}),experimentalAutoDetectLongPolling:true});}
+  catch(e){return getFirestore(app);}
+}
+
 import { getStorage, ref, deleteObject } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
 const FIREBASE_CFG={
@@ -237,7 +245,7 @@ window.delRv=async function(id){
 /* ── 실시간 구독 ─────────────────────────────── */
 try{
   const app=initializeApp(FIREBASE_CFG);
-  db=getFirestore(app);storage=getStorage(app);
+  db=hhcFastDb(app);storage=getStorage(app);
   onSnapshot(collection(db,'reviews'),snap=>{
     window.__hhcReady&&window.__hhcReady();
     ALL=snap.docs.map(d=>{const x=d.data()||{};x.__id=d.id;return x;})

@@ -7,7 +7,11 @@
 <meta name="robots" content="noindex, nofollow, noarchive">
 <title>HHC Invoice</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet">
+<!-- ⚡ 빠른 열기 : 데이터베이스 서버에 미리 연결 · 글꼴은 화면을 막지 않고 뒤에서 내려받습니다 -->
+<link rel="preconnect" href="https://www.gstatic.com">
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+KR:wght@400;500;600;700;800&family=Cormorant+Garamond:wght@600;700&display=swap" rel="stylesheet"></noscript>
 <style>
 :root{--navy:#0F1729;--indigo:#4F6EF7;--il:#eef1fe;--gold:#E8A838;--green:#10b981;--gbg:#d1fae5;--red:#ef4444;--rbg:#fee2e2;--abg:#fef3c7;--amber:#d97706;--gray:#6b7280;--bdr:rgba(0,0,0,.09);--sf:#fff;--bg:#f4f6fb;--txt:#0f172a;--txt2:#475569;--r:12px;--bb:64px}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -933,6 +937,15 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 // ═══════════════════════════════════════════════════════════
 var BASE_URL='https://happyhomecare.com.my';
 var FB_CFG={apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",authDomain:"happywork-packageplan.firebaseapp.com",projectId:"happywork-packageplan",storageBucket:"happywork-packageplan.firebasestorage.app",messagingSenderId:"101289103022",appId:"1:101289103022:web:d81aca7f3747dd26df673f"};
+// ⚡ 빠른 열기 : 데이터베이스 내용을 이 기기 안에 저장해 둡니다(IndexedDB).
+//    다음부터는 저장된 내용으로 화면을 먼저 그리고, 서버에서는 바뀐 부분만 받아 옵니다.
+//    (관리자 앱의 여러 화면이 같은 저장소를 함께 쓰므로 synchronizeTabs · 저장소를 못 쓰는 환경에서는 예전 방식으로 동작)
+function hhcPersist(db){
+  if(!db||db.__hhcP)return db; db.__hhcP=1;
+  try{db.settings({cacheSizeBytes:150*1024*1024,experimentalAutoDetectLongPolling:true,merge:true});}catch(e){}
+  try{var pr=db.enablePersistence({synchronizeTabs:true});if(pr&&pr.catch)pr.catch(function(){});}catch(e){}
+  return db;
+}
 
 // ═══════════════════════════════════════════════════════════
 // STATE
@@ -6048,7 +6061,7 @@ async function init(){
     // 이미 초기화된 경우 기존 앱 사용
     var fbApp;
     try{fbApp=firebase.app();}catch(e){fbApp=firebase.initializeApp(FB_CFG);}
-    DB=firebase.firestore(fbApp);
+    DB=hhcPersist(firebase.firestore(fbApp));
     // Storage SDK 동적 로드
     try{
       if(!firebase.storage){
@@ -6183,23 +6196,31 @@ async function runInvoiceView(vid,lang){
   var host=document.getElementById('ivx-host');
   try{
     var fbApp;try{fbApp=firebase.app();}catch(e){fbApp=firebase.initializeApp(FB_CFG);}
-    var db=firebase.firestore(fbApp);
+    var db=hhcPersist(firebase.firestore(fbApp));
+    // ⚡ 로고/서명 · 발행처 · 품목 카탈로그 · 인보이스를 한꺼번에 요청합니다 (예전엔 다섯 번 차례로 기다렸습니다)
+    var _nul=function(){return null;};
+    var _r=await Promise.all([
+      db.collection('settings').doc('images').get().catch(_nul),
+      db.collection('settings').doc('issuer').get().catch(_nul),
+      db.collection('services').get().catch(_nul),
+      db.collection('settings').doc('catalog').get().catch(_nul),
+      db.collection('invoices').where('id','==',vid).limit(1).get().catch(_nul)
+    ]);
+    var imgDoc=_r[0],issDoc=_r[1],svSnap=_r[2],ctDoc=_r[3],snap=_r[4];
     // 로고/서명 이미지
-    try{var imgDoc=await db.collection('settings').doc('images').get();if(imgDoc.exists)imgData=Object.assign({logo:'',sign:''},imgDoc.data());}catch(e){}
-    try{var issDoc=await db.collection('settings').doc('issuer').get();if(issDoc.exists)issuer=Object.assign({},issuer,issDoc.data());}catch(e){}
+    try{if(imgDoc&&imgDoc.exists)imgData=Object.assign({logo:'',sign:''},imgDoc.data());}catch(e){}
+    try{if(issDoc&&issDoc.exists)issuer=Object.assign({},issuer,issDoc.data());}catch(e){}
     // 항목 카탈로그 — 저장된 품목의 분류를 "지금의 분류"로 최신화해 보여주기 위해 함께 불러온다
     try{
-      var svSnap=await db.collection('services').get();
-      if(!svSnap.empty){
+      if(svSnap&&!svSnap.empty){
         var _all=svSnap.docs.map(function(d){return normSvc(Object.assign({},d.data(),{_docId:d.id}));});
         services=_all.filter(function(x){return !x._del;});
         trashSvcs=_all.filter(function(x){return !!x._del;});
       }
     }catch(e){}
-    try{var ctDoc=await db.collection('settings').doc('catalog').get();if(ctDoc.exists)applyCatalog(ctDoc.data());}catch(e){}
+    try{if(ctDoc&&ctDoc.exists)applyCatalog(ctDoc.data());}catch(e){}
     var inv=null;
-    var snap=await db.collection('invoices').where('id','==',vid).limit(1).get();
-    if(!snap.empty)inv=snap.docs[0].data();
+    if(snap&&!snap.empty)inv=snap.docs[0].data();
     if(!inv){try{var d2=await db.collection('invoices').doc(vid).get();if(d2.exists)inv=d2.data();}catch(e){}}
     if(!inv){document.getElementById('ivx-host').innerHTML='<div style="padding:70px 20px;text-align:center;color:#D6433F;font-size:15px">Invoice not found.<br>인보이스를 찾을 수 없습니다.</div>';return;}
     inv._t=calcTotals(inv);

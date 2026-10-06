@@ -459,7 +459,15 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 
 <script type="module">
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import {getFirestore,collection,doc,addDoc,updateDoc,deleteDoc,onSnapshot,getDocs,getDoc,setDoc, query, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, getDocs, getDoc, setDoc, query, where, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+// ⚡ 빠른 열기 : 데이터베이스 내용을 이 기기 안에 저장해 둡니다(IndexedDB).
+//    다음부터는 저장된 내용으로 화면을 먼저 그리고, 서버에서는 바뀐 부분만 받아 옵니다.
+//    (관리자 앱의 여러 화면이 같은 저장소를 함께 쓰므로 multi-tab 모드 · 저장소를 못 쓰는 환경에서는 예전 방식으로 동작)
+function hhcFastDb(app){
+  try{return initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager(),cacheSizeBytes:150*1024*1024}),experimentalAutoDetectLongPolling:true});}
+  catch(e){return getFirestore(app);}
+}
+
 // ── 🔗 발송 주소 단축 ────────────────────────────────────────────
 // 메시지에 들어가는 긴 happyhomecare 주소를 짧은 주소(/r?k=키)로 바꿉니다.
 // 인보이스·계약서에서 이미 쓰던 단축 저장소(shorts · r.html)를 그대로 씁니다.
@@ -1047,7 +1055,7 @@ async function initApp(){
   showLoading(true);
   try{
     const app=initializeApp(FIREBASE_CFG);
-    db=getFirestore(app);
+    db=hhcFastDb(app);
     hhcgWatch(refresh);   // 회원등급표 실시간 구독
 
     let _langRestored=false;

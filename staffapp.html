@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
 <title>Happy Home Care 관리자</title>
 <link rel="manifest" href="/staff-app-manifest.json">
+<!-- ⚡ 빠른 열기 : 각 화면이 쓰는 데이터베이스 라이브러리·서버에 미리 연결해 둡니다 (화면들이 같은 캐시를 함께 씁니다) -->
+<link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://www.gstatic.com">
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
 <meta name="theme-color" content="#0B1833">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -468,14 +474,22 @@ window.addEventListener('hashchange',function(){
 <!-- ══ 새 의뢰·예약신청 실시간 알림 : 배지 표시 + 알림음 ══ -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, onSnapshot, doc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, onSnapshot, doc, setDoc, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+// ⚡ 빠른 열기 : 데이터베이스 내용을 이 기기 안에 저장해 둡니다(IndexedDB).
+//    다음부터는 저장된 내용으로 화면을 먼저 그리고, 서버에서는 바뀐 부분만 받아 옵니다.
+//    (관리자 앱의 여러 화면이 같은 저장소를 함께 쓰므로 multi-tab 모드 · 저장소를 못 쓰는 환경에서는 예전 방식으로 동작)
+function hhcFastDb(app){
+  try{return initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager(),cacheSizeBytes:150*1024*1024}),experimentalAutoDetectLongPolling:true});}
+  catch(e){return getFirestore(app);}
+}
+
 
 const CFG={apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",authDomain:"happywork-packageplan.firebaseapp.com",
   projectId:"happywork-packageplan",storageBucket:"happywork-packageplan.firebasestorage.app",
   messagingSenderId:"101289103022",appId:"1:101289103022:web:d81aca7f3747dd26df673f"};
 
 let db=null;
-try{db=getFirestore(initializeApp(CFG));}catch(e){}
+try{db=hhcFastDb(initializeApp(CFG));}catch(e){}
 
 // ── 이미 본 문서 기억 (새로고침해도 같은 건으로 다시 울리지 않음) ──
 function loadSeen(k){try{return new Set(JSON.parse(localStorage.getItem(k)||'[]'));}catch(e){return new Set();}}
