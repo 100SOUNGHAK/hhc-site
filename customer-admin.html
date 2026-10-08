@@ -544,6 +544,9 @@ textarea.fi{resize:vertical;min-height:60px;line-height:1.6}
 .sm-bubble>div{background:#fff;border-radius:12px;border-bottom-left-radius:4px;padding:12px 13px;
   font-size:12px;line-height:1.72;color:var(--ink);word-break:break-word;max-height:280px;overflow:auto;
   box-shadow:0 1px 4px rgba(11,24,51,.1)}
+/* ⭐ 리뷰 이벤트 — 문구 위에 함께 나가는 카드 이미지 */
+.sm-revimg{display:block;width:120px;aspect-ratio:4/5;border-radius:8px;margin-bottom:8px;
+  box-shadow:0 1px 2px rgba(11,24,51,.12),0 6px 14px -6px rgba(11,24,51,.3)}
 .sm-send{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;margin-top:9px}
 .sm-send .btn{padding:12px 6px;font-size:12px;font-weight:900}
 .sm-sub{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
@@ -3111,6 +3114,7 @@ window.caSendModal=async function(idx){
     {t:'fee',     lb:'💡 추가비용 안내', n:0, need:false},
     {t:'wp',      lb:'🪪 워크퍼밋 등록', n:0, need:false},
     {t:'nc',      lb:'💼 전자명함',      n:0, need:false},
+    {t:'rev',     lb:'⭐ 리뷰 이벤트',   n:0, need:false},
     {t:'install', lb:'📲 앱 설치 안내', n:0, need:false}
   ];
   // 발송 종류를 성격별로 묶어 한눈에 찾을 수 있게 합니다.
@@ -3119,7 +3123,7 @@ window.caSendModal=async function(idx){
     {g:'💰 청구 · 결제',  ts:['bill','rebill','pay']},
     {g:'📅 예약 · 의뢰',  ts:['bk','bkc','rq','ipr','ipv','mmv','rqf','revisit']},
     {g:'🌿 정기관리 알림', ts:['care3','care6']},
-    {g:'📢 안내 · 소개',  ts:['nc','basic','aw','mem','evi','pti','fee','wp','install']}
+    {g:'📢 안내 · 소개',  ts:['nc','rev','basic','aw','mem','evi','pti','fee','wp','install']}
   ];
   const _cpSpan=(CPG.length&&CPD.length)?'':'grid-column:1/-1;';
   const _icSpan=(IPS.length&&CTS.length)?'':'grid-column:1/-1;';
@@ -3226,6 +3230,8 @@ window.caSendModal=async function(idx){
     //   · 왓츠앱·문자 말풍선에서 주소가 두 줄로 감기지 않습니다 (42자 → 31자)
     //   · 미리보기 사진·문구가 발송 언어에 맞춰 나오고, 눌리면 고객 화면으로 열립니다
     if(state.tpl==='nc')return BASE+(state.en?'/nce':'/nc');
+    // ⭐ 리뷰 이벤트 — 홈페이지 리뷰 섹션으로 바로 갑니다 (주소를 줄이지 않고 그대로 보냅니다)
+    if(state.tpl==='rev')return BASE+'/home'+(state.en?'?lang=en':'')+'#reviews';
     if(state.tpl==='evi')return BASE+'/evoucher.html'+(state.en?'?lang=en':'');
     if(state.tpl==='pti')return BASE+'/points.html'+(state.en?'?lang=en':'');
     const v=['iv','ip','ct','cp'].filter(k=>state[k]);
@@ -3583,6 +3589,55 @@ window.caSendModal=async function(idx){
       ?('Hello, '+nm+' 😊\n\nWe can visit for the inspection around '+when+'.\nDoes this schedule work for you?'+msgTail(en))
       :('안녕하세요. '+nm+'님 😊\n\n'+when+' 전후 점검방문 가능합니다.\n일정 가능하시나요?'+msgTail(en));
   }
+  // ⭐ 리뷰 이벤트 — 카드 이미지(review-event-ko/en.png) + 아래 두 줄 문구를 함께 보냅니다
+  function revMsg(en){
+    return en
+      ?('🎁 Leave a review on our website and get RM10 in Happy Points!\n👉 '+link())
+      :('🎁 홈페이지 리뷰 남기고 Happy Point RM10 받으세요!\n👉 '+link());
+  }
+  const revImgUrl=en=>BASE+'/review-event-'+(en?'en':'ko')+'.png';
+  // 📱 휴대폰 공유창은 「누른 순간」에 바로 열어야 하므로 카드 이미지를 미리 받아 둡니다
+  const _revFile={};
+  function revPrefetch(en){
+    const k=en?'en':'ko';
+    if(_revFile[k])return _revFile[k];
+    _revFile[k]=fetch(revImgUrl(en),{cache:'no-cache'})
+      .then(r=>r.ok?r.blob():null)
+      .then(b=>b?new File([b],'happyhomecare-review-event-'+k+'.png',{type:'image/png'}):null)
+      .catch(()=>null);
+    return _revFile[k];
+  }
+  // 💬 왓츠앱 — 이미지 + 문구
+  //  · 휴대폰 : 공유창이 열립니다 → WhatsApp → 고객 선택 (사진 + 문구가 함께 나갑니다)
+  //  · PC     : 카드 이미지를 복사하고 고객 대화방을 문구가 채워진 채로 엽니다 → Ctrl+V 로 사진 붙여넣기
+  async function revWa(){
+    const en=!!state.en,txt=revMsg(en);
+    const f=await revPrefetch(en);
+    if(f&&navigator.canShare&&navigator.canShare({files:[f]})&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
+      try{await navigator.share({files:[f],text:txt});return;}
+      catch(err){if(err&&err.name==='AbortError')return;}
+    }
+    let copied=false;
+    if(f&&window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){
+      try{await navigator.clipboard.write([new ClipboardItem({'image/png':f})]);copied=true;}catch(_){}
+    }
+    const ph=pn(e.phone);
+    window.open('https://wa.me/'+(ph?'60'+ph:'')+'?text='+encodeURIComponent(txt),'_blank');
+    if(copied)toast('🖼 카드 이미지가 복사되었습니다 · 대화창에 붙여넣기(Ctrl+V) 후 보내세요');
+    else{window.open(revImgUrl(en),'_blank');toast('🖼 카드 이미지를 새 창에 열었습니다 · 저장 후 대화창에 첨부해 주세요');}
+  }
+  // 💛 카카오톡 — 「위 사진 · 가운데 문구 · 아래 [리뷰 작성하기] 버튼」 카드
+  //    카카오 카드는 세로 사진을 잘라내므로 가로 배너(review-share-ko/en.jpg)를 씁니다.
+  async function revKk(){
+    const en=!!state.en,txt=revMsg(en);
+    try{await navigator.clipboard.writeText(txt);}catch(_){}
+    toast('💛 카카오톡 공유창을 엽니다 · 문구도 복사되었습니다');
+    await kkSend(en?'[Happy Home Care] Review Event':'[Happy Home Care] 리뷰 이벤트','',link(),en,
+      en?'Write a review':'리뷰 작성하기',
+      {u:BASE+'/review-share-'+(en?'en':'ko')+'.jpg',w:1200,h:600,
+       t:(en?'🎁 Leave a review & get RM10 in Happy Points!':'🎁 홈페이지 리뷰 남기고 Happy Point RM10 받으세요!'),
+       d:(en?'Tap [Write a review] below to share your feedback.':'아래 [리뷰 작성하기]를 눌러 의견을 남겨 주세요.')});
+  }
   // 💼 전자명함 안내 — 한국어/영문 모두 상대방에게 같은 내용으로 보입니다
   function ncMsg(en){
     return en
@@ -3596,6 +3651,7 @@ window.caSendModal=async function(idx){
   function msg(){
     const l=link(),en=!!state.en,nm=e.name||'',list=msgList();
     if(state.tpl==='nc')return ncMsg(en);
+    if(state.tpl==='rev')return revMsg(en);
     if(state.tpl==='ipr')return iprMsg(en);
     if(state.tpl==='ipv')return ipvMsg(en);
     if(state.tpl==='mmv')return mmvMsg(en);
@@ -3776,7 +3832,8 @@ window.caSendModal=async function(idx){
     // 👑 멤버십 안내만 안내장 주소를 보내므로 마이페이지 노출 항목과 무관합니다.
     // 👑 멤버십 · 🎁 전자상품권 · 💎 적립포인트 안내는 안내장 주소를 보내므로 마이페이지 노출 항목과 무관합니다.
     // 💼 전자명함도 명함 주소를 보내므로 마이페이지 노출 항목과 무관합니다.
-    const _isMem=(state.tpl==='mem'||state.tpl==='evi'||state.tpl==='pti'||state.tpl==='nc');
+    // ⭐ 리뷰 이벤트도 홈페이지 주소를 보내므로 마찬가지입니다.
+    const _isMem=(state.tpl==='mem'||state.tpl==='evi'||state.tpl==='pti'||state.tpl==='nc'||state.tpl==='rev');
     const os=mk.querySelector('#cs-optsec');
     if(os)os.style.display=_isMem?'none':'';
     const w=mk.querySelector('#cs-warn');
@@ -3857,11 +3914,14 @@ window.caSendModal=async function(idx){
     // 🔗 문구 속 긴 주소는 짧은 주소로 보여 줍니다 — 아직 안 만든 주소는
     //    만들어지는 대로 다시 그립니다 (실패하면 원래 주소 그대로)
     let raw=waText(msg());   // 「이대로 발송됩니다」 — 실제로 나가는 내용을 그대로 보여 줍니다
-    const _pend=(raw.match(/https:\/\/(?:www\.)?happyhomecare\.com\.my\/[^\s'"<>)\]]+/g)||[])
+    const _isRev=state.tpl==='rev';   // ⭐ 리뷰 이벤트는 주소를 줄이지 않습니다
+    const _pend=_isRev?[]:(raw.match(/https:\/\/(?:www\.)?happyhomecare\.com\.my\/[^\s'"<>)\]]+/g)||[])
       .filter((u,i,a)=>a.indexOf(u)===i&&u.length>40&&!/\/r(\.html)?\?k=/.test(u)&&!_hhcShortCache[u]);
     if(_pend.length)Promise.all(_pend.map(hhcShortUrl)).then(()=>{try{paint();}catch(_){}});
-    raw=hhcShortSync(raw);
-    mk.querySelector('#cs-msg').innerHTML=msgHtml(raw);
+    if(!_isRev)raw=hhcShortSync(raw);
+    mk.querySelector('#cs-msg').innerHTML=
+      (_isRev?'<img class="sm-revimg" src="'+revImgUrl(!!state.en)+'" alt="">':'')+msgHtml(raw);
+    if(_isRev)revPrefetch(!!state.en);
     const ln=mk.querySelector('#cs-len');
     if(ln){
       // 카카오톡은 200자까지만 보여 주므로, 줄여서 나가는 경우 그 사실을 알려 줍니다
@@ -3952,6 +4012,7 @@ window.caSendModal=async function(idx){
     setTimeout(paint,60);
   }
   mk.querySelector('#cs-wa').addEventListener('click',async()=>{
+    if(state.tpl==='rev'){revWa();return;}   // ⭐ 리뷰 이벤트 : 이미지 + 문구
     let wa='https://wa.me/';
     const ph=pn(e.phone);
     if(ph)wa+='60'+ph;
@@ -3961,6 +4022,7 @@ window.caSendModal=async function(idx){
     careMark('wa');
   });
   mk.querySelector('#cs-kk').addEventListener('click',()=>{
+    if(state.tpl==='rev'){revKk();return;}   // ⭐ 리뷰 이벤트 : 배너 사진 카드
     const en=!!state.en;
     const kkT=(state.tpl==='mem')
       ?{t:(en?'[Happy Home Care] Membership Packages':'[Happy Home Care] 해피 멤버십 패키지 안내'),
@@ -3992,6 +4054,11 @@ window.caSendModal=async function(idx){
   mk.querySelector('#cs-kkset').addEventListener('click',()=>{kkResetKey();});
   mk.querySelector('#cs-pv').addEventListener('click',()=>{window.caView(link(),'👁 고객 발송 화면 미리보기 — '+(e.name||''));});
   mk.querySelector('#cs-copylink').addEventListener('click',async()=>{
+    if(state.tpl==='rev'){   // ⭐ 리뷰 이벤트 주소는 줄이지 않고 그대로
+      navigator.clipboard.writeText(link()).then(()=>toast('🔗 홈페이지 리뷰 주소가 복사되었습니다'))
+        .catch(()=>prompt('복사해서 사용하세요:',link()));
+      return;
+    }
     const _sl=await hhcShortUrl(link());   // 🔗 주소 복사도 짧은 주소로
     navigator.clipboard.writeText(_sl).then(()=>toast(
       state.tpl==='mem'?'🔗 멤버십 안내장 주소가 복사되었습니다'
@@ -4002,7 +4069,8 @@ window.caSendModal=async function(idx){
       .catch(()=>prompt('복사해서 사용하세요:',link()));
   });
   mk.querySelector('#cs-cp').addEventListener('click',async()=>{
-    const _t=await hhcShortLinks(waText(msg()));   // 실제 발송되는 내용과 똑같이 복사됩니다
+    const _t=state.tpl==='rev'?revMsg(!!state.en)          // ⭐ 리뷰 이벤트 : 주소 그대로
+      :await hhcShortLinks(waText(msg()));   // 실제 발송되는 내용과 똑같이 복사됩니다
     navigator.clipboard.writeText(_t).then(()=>toast('✓ 메시지가 복사되었습니다'))
       .catch(()=>prompt('복사해서 사용하세요:',_t));
     careMark('cp');
