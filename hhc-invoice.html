@@ -634,6 +634,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
       <div class="tr" id="point-row" style="display:none"><span style="color:#c4b5fd">💎 해피포인트</span><span id="point-d" style="color:#c4b5fd"></span></div>
       <div class="tr" id="min-row" style="display:none"><span>최소청구</span><span id="min-d"></span></div>
       <div class="tr gd"><span>최종 청구금액</span><span id="grand-d">RM 0.00</span></div>
+      <div class="tr" id="dtot-row" style="display:none"><span style="color:#86efac">🏷️ 총 할인금액</span><span id="dtot-d" style="color:#86efac;font-weight:700"></span></div>
       <div class="tr" id="paid-row" style="display:none"><span style="color:#6ee7b7">기납부액</span><span id="paid-d" style="color:#6ee7b7"></span></div>
       <div class="tr" id="balance-row" style="display:none;font-weight:700"><span>잔여 잔액</span><span id="balance-d"></span></div>
     </div>
@@ -2254,12 +2255,22 @@ window.pkSetSub=pkSetSub;window.pkSetS2=pkSetS2;window.pickerRender=pickerRender
 // ═══════════════════════════════════════════════════════════
 // TOTALS
 // ═══════════════════════════════════════════════════════════
+// 🏷️ 총 할인금액 구성 (두 가지 이상일 때만 괄호로 풀어서 보여줍니다)
+function ivDiscParts(t,ko,fa){
+  var p=[];
+  if(t.itemDisc>0.005)p.push((ko?'항목 할인 ':'Item ')+fa(t.itemDisc));
+  if(t.disc>0.005)p.push((ko?'전체 할인 ':'Overall ')+fa(t.disc));
+  if(t.adjDisc>0.005)p.push((ko?'조정 차감 ':'Adjustment ')+fa(t.adjDisc));
+  return p.length>1?p.join(' · '):'';
+}
 function calcTotals(inv){
   var items=inv?inv.items:lineItems;
   var cur=inv?inv.currency:getCur();
+  var itemDisc=0;   // 🏷️ 항목별 할인 합계
   var sub=items.reduce(function(s,l){
     var lineAmt=(l.price||0)*(l.qty||1);
     var discAmt=l.discType==='pct'?lineAmt*((l.discVal||0)/100):(l.discVal||l.disc||0);
+    itemDisc+=(parseFloat(discAmt)||0);
     return s+lineAmt-discAmt;
   },0);
   var taxRate=parseFloat(inv?inv.taxRate:val('tax-rate'))||0;
@@ -2314,11 +2325,15 @@ function calcTotals(inv){
   var rawGrand=sub+tax-disc+park+extra+adjSum-credit-voucher-ptsUse;
   var grand=rawGrand+minC;
   var balance=grand-paidAmount;
-  var t={sub:sub,tax:tax,taxRate:taxRate,disc:disc,discVal:discVal,discType:discType,park:park,minC:minC,extra:extra,adjusts:adjRows,adj:adjSum,credit:credit,voucher:voucher,voucherCode:voucherCode,pts:ptsUse,paidAmount:paidAmount,balance:balance,grand:grand,rawGrand:rawGrand};
+  // 🏷️ 총 할인금액 = 항목별 할인 + 전체 할인 + 직접입력 조정의 차감(−)분
+  var adjDisc=adjRows.reduce(function(a,x){return a+(x.val<0?-x.val:0);},0);
+  var discTotal=Math.round((itemDisc+disc+adjDisc)*100)/100;
+  var t={itemDisc:itemDisc,adjDisc:adjDisc,discTotal:discTotal,sub:sub,tax:tax,taxRate:taxRate,disc:disc,discVal:discVal,discType:discType,park:park,minC:minC,extra:extra,adjusts:adjRows,adj:adjSum,credit:credit,voucher:voucher,voucherCode:voucherCode,pts:ptsUse,paidAmount:paidAmount,balance:balance,grand:grand,rawGrand:rawGrand};
   if(!inv){
     function sr(id,lbl,dispId,show,label,display){var r=$(id);if(r)r.style.display=show?'flex':'none';if(show){var l=$(lbl);if(l)l.textContent=label;var d=$(dispId);if(d)d.textContent=display;}}
     var sd=$('sub-d');if(sd)sd.textContent=fmtAmt(sub);
     var gd=$('grand-d');if(gd)gd.textContent=fmtAmt(grand);
+    sr('dtot-row',null,'dtot-d',discTotal>0.005,null,'-'+fmtAmt(discTotal));
     sr('tax-row','tax-lbl','tax-d',taxRate>0,'세금 '+taxRate+'%',fmtAmt(tax));
     sr('disc-row','disc-lbl','disc-d',discVal>0,'할인'+(discType==='pct'?' '+discVal+'%':''),'-'+fmtAmt(disc));
     sr('park-row',null,'park-d',park>0,null,'+'+fmtAmt(park));
@@ -2541,6 +2556,9 @@ var IVX_CSS=`
 .ivx .nbody{font-size:12px;color:var(--ink2);line-height:1.8;white-space:pre-wrap}
 .ivx .nbox.gold .nbody{color:#5E4B0E}
 .ivx .payrow{display:flex;gap:12px;align-items:flex-start}
+.ivx .dtot{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-top:8px;padding:7px 10px;border-radius:9px;background:#E9F8F0;border:1px solid #BFE8D2;color:#0E7A4E;font-size:12px;font-weight:800;break-inside:avoid}
+.ivx .dtot small{display:block;font-size:10px;font-weight:600;color:#3E8F69;margin-top:1px}
+.ivx .dtot .num{font-weight:900;white-space:nowrap}
 .ivx .pmline{font-size:11px;line-height:1.5;color:#5E4B0E;background:rgba(255,255,255,.65);border:1px solid var(--gdb);border-radius:8px;padding:6px 9px;margin:2px 0 8px}
 .ivx .pmline b{color:#0E2350}
 .ivx .qr{width:74px;height:74px;object-fit:contain;border-radius:8px;border:1px solid var(--gdb);background:#fff;flex-shrink:0}
@@ -2690,6 +2708,10 @@ var IVA_CSS=""
 +".iva .ivbal{display:flex;justify-content:space-between;font-size:13px;font-weight:900;color:var(--red);"
 +"padding:11px 0 2px;border-top:1px dashed var(--line);margin-top:11px}"
 /* 안내 박스 */
++".iva .ivdtot{margin-top:10px;background:#E9F8F0;border:1px solid #BFE8D2;border-radius:11px;padding:9px 12px}"
++".iva .ivdtot .r1{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;font-weight:800;color:#0E7A4E}"
++".iva .ivdtot .r1 b{font-size:14px;font-weight:900;font-variant-numeric:tabular-nums}"
++".iva .ivdtot .r2{font-size:10.5px;color:#3E8F69;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums}"
 +".iva .ivbox{display:flex;gap:11px;padding:13px 14px;align-items:flex-start}"
 +".iva .ivbox .bi{width:34px;height:34px;border-radius:11px;flex:none;display:flex;align-items:center;justify-content:center;font-size:15px}"
 +".iva .ivbox .bt{font-size:12.5px;font-weight:900}"
@@ -2864,8 +2886,10 @@ function buildInvAppHTML(inv,lang){
     });
     paidRows+='<div class="ivbal"><span>'+L('잔여 결제금액','Balance Due')+'</span><span>'+fa(t.balance)+'</span></div>';
   }
+  var _dp=(t.discTotal>0.005)?ivDiscParts(t,!en,fa):'';
+  var dtotHtml=(t.discTotal>0.005)?'<div class="ivdtot"><div class="r1"><span>\u{1F3F7}\uFE0F '+L('총 할인금액','Total Savings')+'</span><b>- '+fa(t.discTotal)+'</b></div>'+(_dp?'<div class="r2">'+_dp+'</div>':'')+'</div>':'';
   h+='<div class="ivcard"><div class="ivh">\u{1F4B3} '+L('결제 요약','Payment Summary')+'</div><div class="ivsum">'+sr+
-     '<div class="ivtot"><span class="k">'+L('최종 합계','TOTAL')+' ('+cur+')</span><span class="v">'+fa(t.grand)+'</span></div>'+
+     '<div class="ivtot"><span class="k">'+L('최종 합계','TOTAL')+' ('+cur+')</span><span class="v">'+fa(t.grand)+'</span></div>'+dtotHtml+
      (paidRows?'<div style="margin-top:14px">'+paidRows+'</div>':'')+
      '</div></div>';
 
@@ -3032,6 +3056,7 @@ function buildInvHTML(inv,custView){
     '<div class="sumwrap"><div class="sums">'+
       '<div class="sumrow"><span>소계 · Subtotal</span><span class="num">'+fa(t.sub)+'</span></div>'+chargeRows+
       '<div class="total"><span class="total-lbl">청구 합계 · TOTAL ('+cur+')</span><span class="total-val">'+fa(t.grand)+'</span></div>'+
+      ((t.discTotal>0.005)?'<div class="dtot"><span>🏷️ 총 할인금액 · Total Savings'+(ivDiscParts(t,false,fa)?'<small>'+ivDiscParts(t,false,fa)+'</small>':'')+'</span><span class="num">- '+fa(t.discTotal)+'</span></div>':'')+
       (t.paidAmount>0?((inv.payments&&inv.payments.length?inv.payments:[{amt:t.paidAmount,date:inv.paidDate||''}]).map(function(p,pi){return '<div class="sumrow minus"'+(pi===0?' style="margin-top:6px"':'')+'><span>기결제 · Paid'+(p.date?' <span style="opacity:.72;font-size:.92em">('+ivxEsc(p.date)+')</span>':'')+'</span><span class="num">- '+fa(p.amt)+'</span></div>';}).join('')+'<div class="balrow"><span>잔여 결제금액 · BALANCE DUE</span><span>'+fa(t.balance)+'</span></div>'):'')+
     '</div></div>'+
     attHtml+
@@ -3155,6 +3180,7 @@ function buildInvLiteHTML(inv,custView){
   html+='<table class="l-items"><thead><tr><th>항목 · Description</th><th class="c">수량</th><th class="r">단가</th>'+(hasDisc?'<th class="r">할인</th>':'')+'<th class="r">금액</th></tr></thead><tbody>'+rows+'</tbody></table>';
   html+='<div class="l-sum"><div class="l-srow"><span>소계 · Subtotal</span><span>'+fa(t.sub)+'</span></div>'+charge+
     '<div class="l-total"><span>청구 합계 · TOTAL ('+cur+')</span><span>'+fa(t.grand)+'</span></div>'+
+    ((t.discTotal>0.005)?'<div class="l-srow" style="font-weight:700"><span>총 할인금액 · Total Savings'+(ivDiscParts(t,false,fa)?' ('+ivDiscParts(t,false,fa)+')':'')+'</span><span>- '+fa(t.discTotal)+'</span></div>':'')+
     (t.paidAmount>0?((inv.payments&&inv.payments.length?inv.payments:[{amt:t.paidAmount,date:inv.paidDate||''}]).map(function(p,pi){return '<div class="l-srow"'+(pi===0?' style="margin-top:5px"':'')+'><span>기결제 · Paid'+(p.date?' ('+ivxEsc(p.date)+')':'')+'</span><span>- '+fa(p.amt)+'</span></div>';}).join('')+'<div class="l-bal"><span>잔여 결제금액 · BALANCE DUE</span><span>'+fa(t.balance)+'</span></div>'):'')+
     '</div>';
   html+='<div class="l-lower"><div class="l-box"><div class="l-btitle">Payment · 결제 안내</div><div class="l-btext">'+ivxEsc(payText)+'</div></div>'+
