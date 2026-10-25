@@ -5007,9 +5007,15 @@ function caFindByKey(k){
     const i=entries.findIndex(e=>caAllNames(e).some(a=>caKey(a)===kk));
     if(i>=0)return i;
   }
-  for(const c of cands){                       // ④ 부분 포함
-    const kk=caKey(c);if(kk.length<5)continue;
-    const i=entries.findIndex(e=>caAllNames(e).some(a=>{const q=caKey(a);return q.length>=5&&(q.indexOf(kk)>=0||kk.indexOf(q)>=0);}));
+  // ④ 부분 포함 — 연락처가 함께 넘어왔는데 그 연락처의 고객이 없으면 「아직 등록되지 않은 고객」입니다.
+  //    이때 이름 일부만 겹치는 고객(같은 콘도의 다른 호수 등)을 열면 엉뚱한 고객 상세로 연결되므로 찾지 않습니다.
+  const hasPhone=cands.some(c=>caPhoneish(c)&&pn(c).length>=6);
+  if(hasPhone)return -1;
+  for(const c of cands){
+    const kk=caKey(c);if(kk.length<8)continue;
+    //    찾는 이름이 고객명 「안에」 들어 있을 때만 (RESIDENSI 22 → RESIDENSI 22 A-18-03). 그 반대(콘도명만 등록된 고객이
+    //    동호수까지 적힌 이름에 걸리는 경우)는 다른 고객일 수 있어 열지 않습니다.
+    const i=entries.findIndex(e=>caAllNames(e).some(a=>{const q=caKey(a);return q.length>=8&&q.indexOf(kk)>=0;}));
     if(i>=0)return i;
   }
   return -1;

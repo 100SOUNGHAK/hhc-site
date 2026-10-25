@@ -1466,11 +1466,9 @@ window.HHCC_find=async function(name,phone){
     if(!m&&nn)m=list.find(function(c){return hccNN(c.name)===nn;})||null;
     if(!m&&nn)m=list.find(function(c){return (c.aliases||[]).some(function(a){return hccNN(a)===nn;});})||null;
     if(!m&&kk)m=list.find(function(c){return hccKey(c.name)===kk||(c.aliases||[]).some(function(a){return hccKey(a)===kk;});})||null;
-    if(!m&&kk&&kk.length>=6)m=list.find(function(c){
-      var k=hccKey(c.name);
-      if(k&&k.length>=6&&(k.indexOf(kk)>=0||kk.indexOf(k)>=0))return true;
-      return (c.aliases||[]).some(function(a){var q=hccKey(a);return q&&q.length>=6&&(q.indexOf(kk)>=0||kk.indexOf(q)>=0);});
-    })||null;
+    // ⚠️ 「부분 포함」 찾기는 쓰지 않습니다 — 「RESIDENSI 22」처럼 콘도명만으로 등록된 고객이
+    //    같은 콘도의 다른 호수(RESIDENSI 22 A-18-03)와 같은 사람으로 잡혀, 의뢰 고객정보를 고치면
+    //    엉뚱한 고객의 연락처가 채워지거나 다른 고객 상세에 연결되는 문제가 있었습니다.
     return m;
   }catch(e){return null;}
 };
@@ -1542,6 +1540,10 @@ async function hccScan(oldPhone,oldName){
         var x=d.data()||{};
         if(oldPN&&oldPN.length>=6&&hccPN(hccPick(x,job.p))===oldPN){hits.push({id:d.id,f:'',x:x});return;}
         if(!oldKK||oldKK.length<3)return;
+        // 이름이 같아도 「다른 연락처」가 적힌 문서는 다른 고객(같은 콘도의 다른 호수 등)일 수 있으므로 건드리지 않습니다
+        //  · 이전 연락처가 있는 경우 : 연락처가 같은 문서만 (위에서 처리) → 이름으로는 연락처 없는 문서만
+        //  · 이전 연락처가 없는 경우 : 이름이 같고 연락처도 없는 문서만
+        if(hccPhoneOk(hccPick(x,job.p)))return;
         if(job.key){try{if(hccKey(job.key(x))===oldKK){hits.push({id:d.id,f:'',x:x});return;}}catch(e0){}}
         var fs=job.n||[];
         for(var q=0;q<fs.length;q++){
@@ -1618,6 +1620,8 @@ window.HHCC_sync=async function(prev,next,ask){
   // 고객 마스터도 갱신 (이전 이름은 별칭으로 남긴다)
   try{
     var m=await window.HHCC_find(prev.name,prev.phone);
+    // 이름으로만 찾아진 고객이 「다른 연락처」를 갖고 있으면 다른 사람입니다 — 그 고객의 이름·연락처를 바꾸지 않습니다
+    if(m&&hccPhoneOk(m.phone)&&hccPhoneOk(prev.phone)&&hccPN(m.phone)!==hccPN(prev.phone))m=null;
     if(m&&m._docId){
       var upd={updated_at:new Date().toISOString()};
       if(hccPhoneOk(next.phone))upd.phone=next.phone;
