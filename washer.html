@@ -89,6 +89,14 @@ body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;back
 
 /* 사진 */
 .photo-record-sec{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:13px;box-shadow:0 1px 2px rgba(16,30,60,.03),0 10px 26px -20px rgba(16,30,60,.22)}
+.wprob{padding:12px 16px;border-bottom:1px solid var(--line)}
+.wprob:last-child{border-bottom:none}
+.wprob-h{display:flex;align-items:flex-start;gap:9px;margin-bottom:9px}
+.wprob-h:only-child{margin-bottom:0}
+.wprob-n{width:24px;height:24px;border-radius:50%;background:var(--bad);color:#fff;font-size:10.5px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.wprob-m{flex:1;font-size:12.5px;color:var(--ink-soft);line-height:1.65;background:var(--bad-bg);border:1px solid var(--bad-bd);border-radius:9px;padding:9px 11px;white-space:pre-wrap}
+.wprob-g{display:grid;gap:7px}
+.wprob,.wprob-g .photo-box{break-inside:avoid}
 .photo-box{background:var(--soft);border:1px solid var(--line);border-radius:9px;overflow:hidden;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}
 .photo-box img{width:100%;height:100%;object-fit:cover;display:block;cursor:zoom-in}
 .photo-box .empty-note{width:100%}
@@ -175,15 +183,19 @@ body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;back
   <div class="sec">
     <div class="sec-hdr"><div class="sec-num">03</div><div class="sec-title" id="sec-diag">고장 진단</div></div>
     <div class="sec-body">
-      <div class="diag-block">
+      <!-- 최종 의견 (새 보고서) — 값이 있으면 이 칸만 보이고 아래 3칸은 숨깁니다 -->
+      <div class="diag-block" id="op-block" style="display:none">
+        <div class="diag-txt" id="r-opinion" style="white-space:pre-line">—</div>
+      </div>
+      <div class="diag-block dg-old">
         <div class="diag-lbl"><span class="diag-num">1</span><span id="lbl-diag1">점검 결과</span></div>
         <div class="diag-txt" id="r-diag1">—</div>
       </div>
-      <div class="diag-block">
+      <div class="diag-block dg-old">
         <div class="diag-lbl"><span class="diag-num">2</span><span id="lbl-diag2">원인 분석 (분해점검)</span></div>
         <div class="diag-txt" id="r-diag2">—</div>
       </div>
-      <div class="diag-block">
+      <div class="diag-block dg-old">
         <div class="diag-lbl"><span class="diag-num">3</span><span id="lbl-diag3">조치 결과 및 권장사항</span></div>
         <div class="diag-txt" id="r-diag3">—</div>
       </div>
@@ -206,6 +218,7 @@ body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;back
     <div id="problem-photo-wrap" style="display:none">
       <div class="photo-section-hdr"><div class="psn">1</div><div class="pst" id="photo-problem-title">문제 사진 · Problem Photos</div></div>
       <div style="padding:10px 16px;display:grid;grid-template-columns:1fr 1fr;gap:8px" id="problem-photos-grid"></div>
+      <div id="problem-photos-sec"></div>
     </div>
 
     <!-- 세척 전/후 -->
@@ -338,17 +351,45 @@ window.renderReport=function renderReport(data){
     return '<div class="check-row"><span class="check-label">'+label+'</span><span class="check-tag '+(bad?'check-bad':'check-ok')+'">'+(bad?t.checkBad:t.checkOk)+'</span></div>';
   }).join(''):'<div class="empty-note">'+(isEn?'No checklist records':'체크리스트 기록 없음')+'</div>';
 
-  // 고장진단
+  // 최종 의견 (새 보고서) · 고장진단 3칸 (예전 보고서)
+  var _hasOp=!!(data.opinion&&String(data.opinion).trim());
+  document.getElementById('op-block').style.display=_hasOp?'':'none';
+  document.querySelectorAll('.dg-old').forEach(function(el){el.style.display=_hasOp?'none':'';});
+  document.getElementById('sec-diag').textContent=_hasOp?(isEn?'Final Opinion':'최종 의견'):t['sec-diag'];
+  if(_hasOp)autoTr(data.opinion,data.opinion_en,function(v){document.getElementById('r-opinion').textContent=v||'—';});
   autoTr(data.diag1,data.diag1_en,function(v){document.getElementById('r-diag1').textContent=v||'—';});
   autoTr(data.diag2,data.diag2_en,function(v){document.getElementById('r-diag2').textContent=v||'—';});
   autoTr(data.diag3,data.diag3_en,function(v){document.getElementById('r-diag3').textContent=v||'—';});
 
-  // 사진: 문제 사진
-  var problemPhotos=data.wProblemPhotos||[];
+  // 사진: 문제 사진 — 번호 · 메모 · 사진 묶음 (점검보고서와 같은 형식)
+  //   예전 보고서(사진만 모아 둔 wProblemPhotos)는 예전처럼 사진 격자로 보여 줍니다
   var pWrap=document.getElementById('problem-photo-wrap');
-  if(problemPhotos.length){
-    pWrap.style.display='block';
-    document.getElementById('problem-photos-grid').innerHTML=problemPhotos.map(function(u){return '<div class="photo-box"><img src="'+u+'"></div>';}).join('');
+  var pGridOld=document.getElementById('problem-photos-grid'),pSec=document.getElementById('problem-photos-sec');
+  var probs=(data.wProblems||[]).filter(function(p){return p&&((p.memo&&String(p.memo).trim())||(p.photos&&p.photos.length));});
+  pSec.innerHTML='';pGridOld.innerHTML='';
+  if(probs.length){
+    pWrap.style.display='block';pGridOld.style.display='none';
+    probs.forEach(function(p,pi){
+      var photos=p.photos||[];
+      var item=document.createElement('div');item.className='wprob';
+      var row=document.createElement('div');row.className='wprob-h';
+      var num=document.createElement('div');num.className='wprob-n';num.textContent=pi+1;row.appendChild(num);
+      if(p.memo&&String(p.memo).trim()){
+        var memo=document.createElement('div');memo.className='wprob-m';
+        autoTr(p.memo,p.memo_en,function(v){memo.textContent=v||'';});
+        row.appendChild(memo);
+      }
+      item.appendChild(row);
+      if(photos.length){
+        var g=document.createElement('div');g.className='wprob-g';g.style.gridTemplateColumns='repeat('+Math.min(photos.length,3)+',1fr)';
+        g.innerHTML=photos.map(function(u){return '<div class="photo-box"><img src="'+u+'"></div>';}).join('');
+        item.appendChild(g);
+      }
+      pSec.appendChild(item);
+    });
+  }else if((data.wProblemPhotos||[]).length){
+    pWrap.style.display='block';pGridOld.style.display='grid';
+    pGridOld.innerHTML=data.wProblemPhotos.map(function(u){return '<div class="photo-box"><img src="'+u+'"></div>';}).join('');
   }else{pWrap.style.display='none';}
 
   // 사진: 세척 전/후
