@@ -548,6 +548,11 @@ textarea.fi{resize:vertical;min-height:60px;line-height:1.6}
 .sm-revimg{display:block;width:120px;aspect-ratio:4/5;border-radius:8px;margin-bottom:8px;
   box-shadow:0 1px 2px rgba(11,24,51,.12),0 6px 14px -6px rgba(11,24,51,.3)}
 .sm-send{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;margin-top:9px}
+/* 🌿 정기관리 안내 — 마지막 관리일이 들어간 안내장 이미지 (문구 위에 함께 나갑니다) */
+.sm-careimg{display:block;width:132px;aspect-ratio:4/5;object-fit:cover;object-position:top;border-radius:8px;margin-bottom:8px;cursor:zoom-in;
+  box-shadow:0 1px 2px rgba(11,24,51,.12),0 6px 14px -6px rgba(11,24,51,.3)}
+.sm-careph{display:flex;align-items:center;justify-content:center;width:132px;aspect-ratio:4/5;border-radius:8px;margin-bottom:8px;
+  background:var(--bg);border:1.5px dashed var(--bdr);font-size:10.5px;font-weight:800;color:var(--ink3);text-align:center;line-height:1.5;padding:8px}
 .sm-send .btn{padding:12px 6px;font-size:12px;font-weight:900}
 .sm-sub{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
 .sm-sub .btn{font-size:11px;padding:9px 6px}
@@ -1613,6 +1618,100 @@ function careSentOf(e,k,since){
   }
   return null;
 }
+// ═══ 🌿 정기관리 안내장 이미지 ═══
+//  · 안내장 바탕 그림(care-cycle-ko/en.png)에 「마지막 관리일」을 그려 넣어 PNG 로 만듭니다.
+//  · 마지막 관리일 = 마지막 에어컨 인보이스 날짜 (발송 화면에서 고쳐 쓸 수 있습니다)
+//  · 바탕 그림을 다시 만들면 아래 글자 위치(l1·l2·x)도 함께 확인할 것 — 1170px 기준 픽셀
+const CARE_IMG={
+  ko:{u:'/care-cycle-ko.png',l1:769,l2:835},
+  en:{u:'/care-cycle-en.png',l1:769,l2:831},
+  x:76,fs:40,navy:'#0f2540'
+};
+const CARE_MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function careLastAc(e){
+  const ds=((e&&e.docs&&e.docs.invoices)||[]).filter(x=>x.status!=='draft'&&careAcInv(x))
+    .map(x=>String(x.date||'').slice(0,10)).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x)).sort();
+  return ds.length?ds[ds.length-1]:'';
+}
+function careDateTxt(v,en){
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v||''));
+  if(!m)return '';
+  const y=m[1],mo=parseInt(m[2],10),d=parseInt(m[3],10);
+  return en?(d+' '+CARE_MN[mo-1]+' '+y):(y+'년 '+mo+'월 '+d+'일');
+}
+let _careFontP=null;
+function careFont(){
+  if(_careFontP)return _careFontP;
+  _careFontP=(async()=>{
+    try{
+      if(!window.FontFace||!document.fonts)return false;
+      const src='https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/woff2/Pretendard-';
+      const fs=[new FontFace('HHCPret','url('+src+'ExtraBold.woff2)',{weight:'800'}),
+                new FontFace('HHCPret','url('+src+'Black.woff2)',{weight:'900'})];
+      await Promise.race([Promise.all(fs.map(f=>f.load())),new Promise((_,r)=>setTimeout(()=>r(0),3500))]);
+      fs.forEach(f=>document.fonts.add(f));
+      return true;
+    }catch(_){return false;}   // 글꼴을 못 받으면 기기 기본 글꼴로 그립니다
+  })();
+  return _careFontP;
+}
+const _careBase={};
+function careBase(en){
+  const k=en?'en':'ko';
+  if(!_careBase[k])_careBase[k]=fetch(BASE+CARE_IMG[k].u,{cache:'no-cache'})
+    .then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.blob();})
+    .catch(err=>{delete _careBase[k];throw err;});
+  return _careBase[k];
+}
+function careBlobImg(b){
+  if(window.createImageBitmap)return createImageBitmap(b);
+  return new Promise((res,rej)=>{const u=URL.createObjectURL(b),im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=u;});
+}
+// 안내장 PNG 만들기 → File
+const _careFile={};
+function careFile(en,date){
+  const key=(en?'en':'ko')+'|'+date;
+  if(_careFile[key])return _careFile[key];
+  _careFile[key]=(async()=>{
+    await careFont();
+    const im=await careBlobImg(await careBase(en));
+    const cv=document.createElement('canvas');cv.width=im.width;cv.height=im.height;
+    const x=cv.getContext('2d');x.drawImage(im,0,0);
+    const L=CARE_IMG[en?'en':'ko'],F="HHCPret,'Pretendard Variable',Pretendard,-apple-system,'Apple SD Gothic Neo','Noto Sans KR','Noto Sans CJK KR','Malgun Gothic',sans-serif";
+    x.fillStyle=CARE_IMG.navy;x.textBaseline='middle';
+    try{x.letterSpacing='-0.8px';}catch(_){}
+    const D=careDateTxt(date,en);
+    // 글자 조각을 이어 그리고, 날짜는 굵게 + 밑줄
+    function run(y,parts){
+      let cx=CARE_IMG.x;
+      parts.forEach(pt=>{
+        x.font=(pt.d?'900 ':'800 ')+CARE_IMG.fs+'px '+F;
+        x.fillText(pt.t,cx,y);
+        const w=x.measureText(pt.t).width;
+        if(pt.d)x.fillRect(cx,y+25,w,5);
+        cx+=w;
+      });
+    }
+    if(en){
+      run(L.l1,[{t:'Your air-con was last serviced'}]);
+      run(L.l2,[{t:'on '},{t:D,d:1},{t:'.'}]);
+    }else{
+      run(L.l1,[{t:'고객님 댁 에어컨은 '},{t:D,d:1},{t:'에'}]);
+      run(L.l2,[{t:'마지막으로 관리받으셨습니다.'}]);
+    }
+    const b=await new Promise(r=>cv.toBlob(r,'image/png'));
+    if(!b)throw new Error('이미지를 만들지 못했습니다');
+    return new File([b],'happyhomecare-aircon-care-'+(en?'en':'ko')+'-'+date+'.png',{type:'image/png'});
+  })();
+  _careFile[key].catch(()=>{delete _careFile[key];});
+  return _careFile[key];
+}
+function careDownload(f){
+  const u=URL.createObjectURL(f),a=document.createElement('a');
+  a.href=u;a.download=f.name;document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),4000);
+}
+const _careUrl={};
 function careDue(e){
   const ds=((e.docs&&e.docs.invoices)||[]).filter(x=>x.status!=='draft'&&careAcInv(x))
     .map(x=>String(x.date||'').slice(0,10)).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x)).sort();
@@ -3080,7 +3179,8 @@ window.caSendModal=async function(idx){
   // 자리를 지켜 주므로 한쪽만 남아 빈 자리가 생기지 않습니다. (필요하면 아래에서 해제 가능)
   const state={iv:true,ip:true,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:BKP.length?'bk':(BKCU.length?'bkc':(careDue(e)?(careDue(e).k===6?'care6':'care3'):'basic')),
     cpi:{cpg:0,cpd:0,ins:0,ct:0,qt:0,mmv:0,ipv:0},
-    payDate:_td.getFullYear()+'-'+_p2(_td.getMonth()+1)+'-'+_p2(_td.getDate())};
+    payDate:_td.getFullYear()+'-'+_p2(_td.getMonth()+1)+'-'+_p2(_td.getDate()),
+    careDate:careLastAc(e)};
   // 발송 메시지 종류를 항상 모두 표시합니다.
   //  need:true 인 항목은 해당 자료(예약·상품권·점검보고서 등)가 있어야 발송할 수 있어
   //  0건이면 흐리게 표시하고 선택을 막습니다.
@@ -3162,6 +3262,8 @@ window.caSendModal=async function(idx){
           '</div>'+
           '<div class="sm-opt" id="cs-cpsel"><span id="cs-cp-lb">발송할 쿠폰</span>'+
             '<select id="cs-cp-pick"></select></div>'+
+          '<div class="sm-opt" id="cs-care"><span>마지막 관리일 <small style="font-weight:700">(안내장에 표시)</small></span>'+
+            '<input type="date" id="cs-caredate"></div>'+
           '<div class="sm-opt" id="cs-pay"><span>결제 완료일</span>'+
             '<input type="date" id="cs-paydate"></div>'+
           '<div id="cs-bwarn" style="display:none;background:var(--warn-bg);color:var(--warn);border-radius:9px;padding:8px 11px;font-size:10.5px;font-weight:800;margin-top:7px">⚠️ 잔여 결제금액이 남은 청구중 · 연체 인보이스가 없어 청구금액이 0 입니다</div>'+
@@ -3196,6 +3298,7 @@ window.caSendModal=async function(idx){
           '<div class="sm-sub">'+
             '<button id="cs-pv" class="btn" style="background:var(--pri-bg);border-color:var(--pri);color:var(--pri)">👁 고객화면</button>'+
             '<button id="cs-cp" class="btn">📋 메시지 복사</button>'+
+            '<button id="cs-careimg" class="btn" style="display:none;grid-column:1/-1">🖼 안내장 이미지 저장</button>'+
           '</div>'+
         '</div>'+
       '</div>'+
@@ -3841,6 +3944,11 @@ window.caSendModal=async function(idx){
     mk.querySelector('#cs-link').textContent=link();
     const pw=mk.querySelector('#cs-pay');
     if(pw)pw.style.display=(state.tpl==='pay')?'flex':'none';
+    const _isCareT=(state.tpl==='care3'||state.tpl==='care6');
+    const crw=mk.querySelector('#cs-care');
+    if(crw)crw.style.display=_isCareT?'flex':'none';
+    const crb=mk.querySelector('#cs-careimg');
+    if(crb)crb.style.display=_isCareT?'':'none';
     const cw=mk.querySelector('#cs-cpsel');
     if(cw){
       const isCP=PICK_TPLS.indexOf(state.tpl)>=0;
@@ -3920,7 +4028,7 @@ window.caSendModal=async function(idx){
     if(_pend.length)Promise.all(_pend.map(hhcShortUrl)).then(()=>{try{paint();}catch(_){}});
     if(!_isRev)raw=hhcShortSync(raw);
     mk.querySelector('#cs-msg').innerHTML=
-      (_isRev?'<img class="sm-revimg" src="'+revImgUrl(!!state.en)+'" alt="">':'')+msgHtml(raw);
+      (_isRev?'<img class="sm-revimg" src="'+revImgUrl(!!state.en)+'" alt="">':'')+carePrevHtml()+msgHtml(raw);
     if(_isRev)revPrefetch(!!state.en);
     const ln=mk.querySelector('#cs-len');
     if(ln){
@@ -4011,8 +4119,68 @@ window.caSendModal=async function(idx){
     caCareLog(idx,state.tpl==='care6'?6:3,ch);
     setTimeout(paint,60);
   }
+  // 🌿 정기관리 안내장 이미지 — 마지막 관리일이 들어간 PNG 를 문구와 함께 보냅니다
+  const _isMob=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  function careOn(){return state.tpl==='care3'||state.tpl==='care6';}
+  function careCur(){
+    if(!careOn()||!/^\d{4}-\d{2}-\d{2}$/.test(state.careDate||''))return null;
+    return careFile(!!state.en,state.careDate);
+  }
+  function carePrevHtml(){
+    if(!careOn())return '';
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(state.careDate||''))
+      return '<div class="sm-careph">📅 마지막 관리일을<br>입력하면 안내장<br>이미지가 함께 나갑니다</div>';
+    const key=(state.en?'en':'ko')+'|'+state.careDate;
+    if(_careUrl[key])return '<img class="sm-careimg" id="cs-careprev" src="'+_careUrl[key]+'" alt="" title="눌러서 크게 보기">';
+    careCur().then(f=>{_careUrl[key]=URL.createObjectURL(f);paint();})
+      .catch(err=>{const ph=mk.querySelector('.sm-careph');if(ph)ph.textContent='⚠️ 안내장 이미지를 만들지 못했습니다 ('+((err&&err.message)||'')+')';});
+    return '<div class="sm-careph">🖼 안내장<br>이미지 만드는 중…</div>';
+  }
+  mk.querySelector('#cs-msg').addEventListener('click',ev=>{
+    const im=ev.target.closest('#cs-careprev');if(im)window.open(im.src,'_blank');
+  });
+  const _cd=mk.querySelector('#cs-caredate');
+  if(_cd){_cd.value=state.careDate||'';_cd.addEventListener('change',()=>{state.careDate=_cd.value;paint();});}
+  // 휴대폰 : 공유창(사진 + 문구) → WhatsApp · 카카오톡 중 선택
+  // PC     : 사진을 클립보드에 복사(안 되면 내려받기)하고, 대화방 / 카카오 카드를 평소처럼 엽니다
+  async function careSend(ch){
+    let f=null;
+    try{f=await careCur();}catch(err){toast('⚠️ 안내장 이미지를 만들지 못했습니다 — 문구만 보냅니다');}
+    if(!f){
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(state.careDate||''))toast('📅 마지막 관리일이 없어 문구만 보냅니다');
+      return false;
+    }
+    const txt=await hhcShortLinks(waText(msg()));
+    if(_isMob&&navigator.canShare&&navigator.canShare({files:[f]})){
+      try{await navigator.share({files:[f],text:txt});careMark(ch);return true;}
+      catch(err){if(err&&err.name==='AbortError')return true;}
+    }
+    if(ch==='kk'){   // 카카오톡(PC) : 클립보드는 카드 문구가 쓰므로 이미지는 내려받아 둡니다
+      careDownload(f);
+      return false;
+    }
+    let copied=false;
+    if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){
+      try{await navigator.clipboard.write([new ClipboardItem({'image/png':f})]);copied=true;}catch(_){}
+    }
+    if(!copied)careDownload(f);
+    if(ch==='wa'){
+      const ph=pn(e.phone);
+      window.open('https://wa.me/'+(ph?'60'+ph:'')+'?text='+encodeURIComponent(txt),'_blank');
+      toast(copied?'🖼 안내장 이미지가 복사되었습니다 · 대화창에 붙여넣기(Ctrl+V) 후 보내세요'
+                  :'🖼 안내장 이미지를 내려받았습니다 · 대화창에 첨부해 주세요');
+      careMark('wa');
+      return true;
+    }
+    return false;   // 카카오톡(PC) : 이미지는 준비만 하고 아래 카드 발송을 이어 갑니다
+  }
+  mk.querySelector('#cs-careimg').addEventListener('click',async()=>{
+    try{const f=await careCur();if(!f){toast('📅 마지막 관리일을 먼저 입력하세요');return;}careDownload(f);toast('🖼 안내장 이미지를 저장했습니다');}
+    catch(err){toast('⚠️ 안내장 이미지를 만들지 못했습니다: '+((err&&err.message)||''));}
+  });
   mk.querySelector('#cs-wa').addEventListener('click',async()=>{
     if(state.tpl==='rev'){revWa();return;}   // ⭐ 리뷰 이벤트 : 이미지 + 문구
+    if(careOn()&&await careSend('wa'))return;   // 🌿 정기관리 : 안내장 이미지 + 문구
     let wa='https://wa.me/';
     const ph=pn(e.phone);
     if(ph)wa+='60'+ph;
@@ -4021,8 +4189,12 @@ window.caSendModal=async function(idx){
     window.open(wa+'?text='+encodeURIComponent(_t),'_blank');
     careMark('wa');
   });
-  mk.querySelector('#cs-kk').addEventListener('click',()=>{
+  mk.querySelector('#cs-kk').addEventListener('click',async()=>{
     if(state.tpl==='rev'){revKk();return;}   // ⭐ 리뷰 이벤트 : 배너 사진 카드
+    if(careOn()){
+      if(await careSend('kk'))return;           // 🌿 휴대폰 : 공유창에서 카카오톡 선택
+      if(careCur())setTimeout(()=>toast('🖼 안내장 이미지를 내려받았습니다 · 카카오톡 대화방에 첨부해 주세요'),2600);
+    }
     const en=!!state.en;
     const kkT=(state.tpl==='mem')
       ?{t:(en?'[Happy Home Care] Membership Packages':'[Happy Home Care] 해피 멤버십 패키지 안내'),
