@@ -281,6 +281,11 @@ button:focus-visible,a:focus-visible{outline:3px solid rgba(15,118,110,.32);outl
 .na-row dd small{display:block;margin-top:2px;font-size:11.5px;line-height:1.45;font-weight:550;color:var(--ink-600)}
 .na-row dd a{color:var(--navy-800);text-decoration:none;border-bottom:1px solid rgba(35,75,140,.28);padding-bottom:1px}
 .na-row dd a:active{opacity:.55}
+/* 전화 · 왓츠앱 한 줄 — 번호 아래 작은 버튼 두 개 */
+.na-ra{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.na-row dd .na-ra a{display:inline-flex;align-items:center;gap:4px;padding:5px 11px;border-radius:999px;border:1px solid var(--line);
+  font-size:12px;line-height:1.3;font-weight:800;color:var(--navy-800);background:#fff}
+.na-row dd .na-ra a.wa{color:#fff;background:var(--teal-700);border-color:var(--teal-700)}
 
 /* 서비스 */
 .na-lead{margin:0 2px 12px;font-size:14px;line-height:1.55;font-weight:650;color:var(--ink-600)}
@@ -471,7 +476,7 @@ body.np-open{overflow:hidden}
   .na-note{font-size:10.5px}
   .na-tag{font-size:8px;letter-spacing:.16em}
   .na-acts a{min-height:64px;font-size:10.8px}
-  .na-row{grid-template-columns:72px;gap:9px;padding-left:14px;padding-right:14px}
+  .na-row{grid-template-columns:72px minmax(0,1fr);gap:9px;padding-left:14px;padding-right:14px}
 }
 @media (max-width:359px){
   .na-bn span{letter-spacing:.08em}
@@ -804,7 +809,7 @@ var T = {
       note:'에어컨 · 가전제품 세척 · 설치 · 유지관리' },
     company:{ name:'해피홈케어', sub:'HAPPY WORKS SERVICES SDN. BHD.', role:'에어컨 · 가전 세척 · 설치 · 유지관리',
       note:'말레이시아 한인 가정의 에어컨과 가전을 전문 장비로 관리합니다.' },
-    rows:{ wa:'왓츠앱', tel:'전화', mail:'이메일', comp:'회사', reg:'등록번호', addr:'지역', web:'홈페이지', person:'대표' },
+    rows:{ wa:'왓츠앱', tel:'전화', telwa:'전화 / 왓츠앱', mail:'이메일', comp:'회사', reg:'등록번호', addr:'지역', web:'홈페이지', person:'대표' },
     addr:'KL & Klang Valley', country:'Malaysia'
   },
   en:{
@@ -855,7 +860,7 @@ var T = {
       note:'Air-conditioner & home appliance cleaning, installation and maintenance' },
     company:{ name:'Happy Home Care', sub:'HAPPY WORKS SERVICES SDN. BHD.', role:'Cleaning · Installation · Maintenance',
       note:'We care for air-conditioners and home appliances with professional equipment.' },
-    rows:{ wa:'WhatsApp', tel:'Phone', mail:'Email', comp:'Company', reg:'Company No.', addr:'Area', web:'Website', person:'Director' },
+    rows:{ wa:'WhatsApp', tel:'Phone', telwa:'Phone / WhatsApp', mail:'Email', comp:'Company', reg:'Company No.', addr:'Area', web:'Website', person:'Director' },
     addr:'KL & Klang Valley', country:'Malaysia'
   }
 };
@@ -944,18 +949,19 @@ function toast(msg){
 function esc(s){ return String(s).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];}); }
 
 function rowsFor(t){
+  /* 순서: 회사명 → 전화·왓츠앱(한 줄) → 홈페이지 → 이메일 → (회사 정보 화면) 대표 · 등록번호 → 지역 */
   var r = t.rows, out = [];
-  out.push([r.wa, TEL_D, null, 'https://wa.me/' + TEL.replace(/\D/g, '')]);
-  out.push([r.tel, TEL_D, null, 'tel:' + TEL]);
+  out.push([r.comp, 'HAPPY WORKS SERVICES SDN. BHD.', t.brand]);
+  out.push([r.telwa, TEL_D, null, 'tel:' + TEL,
+    '<span class="na-ra"><a href="tel:' + TEL + '">📞 ' + esc(t.btnTel) + '</a>' +
+    '<a class="wa" href="https://wa.me/' + TEL.replace(/\D/g, '') + '" target="_blank" rel="noopener">💬 ' + esc(r.wa) + '</a></span>']);
+  out.push([r.web, 'happyhomecare.com.my', null, SITE]);
   out.push([r.mail, MAIL, null, 'mailto:' + MAIL]);
-  if(mode === 'person'){
-    out.push([r.comp, 'HAPPY WORKS SERVICES SDN. BHD.', t.brand]);
-  }else{
+  if(mode !== 'person'){
     out.push([r.person, t.person.name]);
     out.push([r.reg, '201801016892 (1278908-M)']);
   }
   out.push([r.addr, t.addr, t.country]);
-  out.push([r.web, 'happyhomecare.com.my', null, SITE]);
   return out;
 }
 
@@ -984,7 +990,7 @@ function render(){
       ? '<a href="' + x[3] + '"' + (x[3].indexOf('http') === 0 ? ' target="_blank" rel="noopener"' : '') + '>' + esc(x[1]) + '</a>'
       : esc(x[1]);
     return '<div class="na-row"><dt>' + esc(x[0]) + '</dt><dd>' + val +
-      (x[2] ? '<small>' + esc(x[2]) + '</small>' : '') + '</dd></div>';
+      (x[2] ? '<small>' + esc(x[2]) + '</small>' : '') + (x[4] || '') + '</dd></div>';
   }).join('');
   document.getElementById('infoList').innerHTML = html;
 
