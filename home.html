@@ -2239,8 +2239,8 @@ html[lang="en"] .ba-item.on::after{content:"Viewing"}
     </div>
 
     <!-- 상시 진행 혜택 -->
-    <div class="pm-sub-head rv"><b>상시 진행 혜택</b><span>이달의 할인과 함께 받을 수 있습니다</span></div>
-    <div class="pgrid3">
+    <div class="pm-sub-head rv" id="pm-alw-head"><b>상시 진행 혜택</b><span>이달의 할인과 함께 받을 수 있습니다</span></div>
+    <div class="pgrid3" id="pm-alw">
       <div class="pcard rv"><span class="off">50%</span><span class="rb">상시 진행</span>
         <h4>커튼 현장세탁 50% 할인</h4><p>커튼을 떼지 않고 그 자리에서 세탁해 드립니다. 종료 안내 시까지 계속됩니다.</p>
         <div class="how">✔ 예약 시 「커튼 현장세탁」을 선택하시면 자동 적용</div>
@@ -4069,6 +4069,12 @@ setTimeout(function(){var d=document.getElementById('dcard');if(d)d.classList.ad
     DYN={min:p&&p.min_on?(+p.min_charge||0):0,from:p?p.from:null,to:p?p.to:null};
     try{calc();}catch(e){}
   };
+  /* ♾️ 상시 혜택 (promo-admin 「상시 혜택」) — 커튼 50% 같은 계산기 할인을 관리자 내용으로 바꿉니다 */
+  window.__calcAlways=function(rows){
+    for(var i=ROWP.length-1;i>=0;i--){var r=ROWP[i];if(r.always||(!r.to&&!r.promo))ROWP.splice(i,1);}
+    (rows||[]).forEach(function(r){ROWP.push(r);});
+    try{calc();}catch(e){}
+  };
   window.calcRefreshLang=function(){try{calc();}catch(e){}try{if(window.__promoRender)window.__promoRender();}catch(e){}};
   /* 🍁 프로모션 무대의 D-day 칩 — 마감까지 남은 날짜를 보여 주고, 끝나면 「종료」로 바꿉니다 */
   function ddayChip(chipId,heroId,ev){
@@ -4882,6 +4888,23 @@ var HHCPromo=(function(){
       cb((j.documents||[]).map(function(d){var o=fsVal({mapValue:{fields:d.fields||{}}});o.month=o.month||String(d.name).split('/').pop();return o;}));
     }).catch(function(){if(!done){done=true;clearTimeout(to);cb(null);}});}catch(e){done=true;clearTimeout(to);cb(null);}
   }
+
+  /* ── 상시 혜택 (promos/_always 문서의 items[]) ──
+     {id, on, val 큰글씨, rb 리본, t 제목, d 설명, how 신청방법, dt 아랫줄, ct·cd 명함/안내장 한 줄(비우면 t·d),
+      tag 「상시」표시, teal 청록색, link 연결주소, home·card·event 표시 위치, calc 계산기 할인{it,m,q,kind,val}}
+     문서가 아직 없으면 null → 각 화면은 원래 고정 내용을 그대로 씁니다. */
+  function alwaysOf(list){var d=(list||[]).filter(function(p){return p&&p.month==='_always';})[0];
+    return d&&Array.isArray(d.items)?d.items:null;}
+  function aTxt(a,k,L){return String(a[k+'_'+L]||'').trim()||String(a[k+'_ko']||'').trim();}
+  function aShown(a,where){return a&&a.on!==false&&a[where]!==false;}
+  function valHTML(v){v=String(v||'').trim();var m=/^(\d+(?:\.\d+)?)\s*%$/.exec(v);return m?esc(m[1])+'<small>%</small>':esc(v);}
+  function alwaysRows(items,CATS){
+    var rows=[];(items||[]).forEach(function(a){
+      if(!a||a.on===false||!a.calc||!a.calc.it)return;
+      var r=calcRows({items:[a.calc],month:'',from:null,to:null},CATS)[0];if(!r)return;
+      delete r.promo;r.from=null;r.to=null;r.always=1;r.nm=aTxt(a,'t','ko');r.nm_en=aTxt(a,'t','en');rows.push(r);});
+    return rows;
+  }
   function defaultNotes(){return [
     {ic:'✅',auto:'target',t_ko:'적용 대상',t_en:'Eligible services'},
     {ic:'🚫',t_ko:'제외 항목',t_en:'Not included',b_ko:'부품비 · 자재비 · 수리비는 할인 대상에서 제외됩니다',b_en:'Parts, materials and repair charges are excluded from the discount'},
@@ -4894,7 +4917,7 @@ var HHCPromo=(function(){
   return {esc:esc,money:money,today:today,monthRange:monthRange,nextDay:nextDay,stateOf:stateOf,pickLive:pickLive,dday:dday,
     tiers:tiers,calcRows:calcRows,titleOf:titleOf,headOf:headOf,subOf:subOf,chipOf:chipOf,dateLine:dateLine,dateShort:dateShort,
     noteRows:noteRows,names:names,heroHTML:heroHTML,gridHTML:gridHTML,detailHTML:detailHTML,calcNoteHTML:calcNoteHTML,
-    defaultNotes:defaultNotes,cardLine:cardLine,tierText:tierText,fetchAll:fetchAll,fsVal:fsVal,perUnit:perUnit,unitTxt:unitTxt,exLine:exLine,exQty:exQty,isFullMonth:isFullMonth,autoLabel:autoLabel,minOn:minOn,MON:MON};
+    defaultNotes:defaultNotes,alwaysOf:alwaysOf,aTxt:aTxt,aShown:aShown,valHTML:valHTML,alwaysRows:alwaysRows,cardLine:cardLine,tierText:tierText,fetchAll:fetchAll,fsVal:fsVal,perUnit:perUnit,unitTxt:unitTxt,exLine:exLine,exQty:exQty,isFullMonth:isFullMonth,autoLabel:autoLabel,minOn:minOn,MON:MON};
 })();
 
 /* ---------- 📅 월별 프로모션 그리기 ----------
@@ -4922,12 +4945,29 @@ var HHCPromo=(function(){
     html.setAttribute('data-evt','dyn');
     if(window.__calcPromo)window.__calcPromo(HHCPromo.calcRows(CUR,C),CUR);
   }
-  window.__promoRender=render;
+  /* ♾️ 상시 혜택 카드 — 관리자 화면에서 저장한 적이 없으면(ALW=null) 원래 카드를 그대로 둡니다 */
+  var ALW=null;
+  function renderAlways(){
+    if(!ALW)return;
+    var g=document.getElementById('pm-alw'),hd=document.getElementById('pm-alw-head');if(!g)return;
+    var L=lang(),P=HHCPromo,its=ALW.filter(function(a){return P.aShown(a,'home');});
+    g.innerHTML=its.map(function(a){
+      var rb=P.aTxt(a,'rb',L),how=P.aTxt(a,'how',L),dt=P.aTxt(a,'dt',L);
+      return '<div class="pcard"><span class="off">'+P.valHTML(a.val)+'</span>'+(rb?'<span class="rb">'+P.esc(rb)+'</span>':'')+
+        '<h4>'+P.esc(P.aTxt(a,'t',L))+'</h4><p>'+P.esc(P.aTxt(a,'d',L))+'</p>'+
+        (how?'<div class="how">'+P.esc(how)+'</div>':'')+(dt?'<div class="dt">'+P.esc(dt)+'</div>':'')+'</div>';
+    }).join('');
+    g.style.display=its.length?'':'none';if(hd)hd.style.display=its.length?'':'none';
+    if(window.__calcAlways)window.__calcAlways(P.alwaysRows(ALW,window.__hhcCats||[]));
+  }
+  window.__alwaysApply=function(items){if(PREVIEW)return;ALW=items||null;renderAlways();};
+  window.__promoRender=function(){render();renderAlways();};
   window.__promoApply=function(list){if(PREVIEW)return;CUR=HHCPromo.pickLive(list);render();};
   if(PREVIEW){
     window.addEventListener('message',function(e){
       if(e.origin!==location.origin||!e.data||e.data.type!=='hhc-promo-preview')return;
       CUR=e.data.promo||null;render();
+      if('always' in e.data){ALW=e.data.always||null;renderAlways();}
       var sec=document.getElementById('promotion');
       if(sec)setTimeout(function(){var n=document.getElementById('nav');window.scrollTo(0,sec.getBoundingClientRect().top+window.pageYOffset-(n?n.offsetHeight:72));},60);
     });
@@ -4956,7 +4996,9 @@ const storage=getStorage(app);
 /* 📅 월별 프로모션 불러오기 (관리자 화면 promo-admin.html 에서 공개한 내용) */
 if(!window.__promoPreview){
   getDocs(collection(db,'promos')).then(function(s){
-    if(window.__promoApply)window.__promoApply(s.docs.map(function(d){return Object.assign({month:d.id},d.data());}));
+    var list=s.docs.map(function(d){return Object.assign({month:d.id},d.data());});
+    if(window.__promoApply)window.__promoApply(list);
+    if(window.__alwaysApply)window.__alwaysApply(HHCPromo.alwaysOf(list));
   }).catch(function(e){console.warn('promo load failed:',e);});
 }
 

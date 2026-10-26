@@ -359,6 +359,8 @@ body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFo
 .alw .av{width:50px;height:50px;border-radius:13px;flex:none;display:flex;align-items:baseline;justify-content:center;align-content:center;flex-wrap:wrap;
   background:linear-gradient(150deg,var(--navy-800),var(--navy-900));color:var(--gold-300);font-size:20px;font-weight:900;letter-spacing:-.03em;padding-top:12px}
 .alw .av small{font-size:11px;font-weight:800}
+.alw .av.lng{font-size:13px;padding:0 4px;align-items:center;text-align:center;line-height:1.1;letter-spacing:-.04em;word-break:keep-all}
+.alw .av.teal{background:linear-gradient(155deg,var(--teal-700),#0a4f4a);color:#fff}
 .alw.sub .av{background:var(--paper);padding-top:0;align-items:center;font-size:20px}
 .alw .at{flex:1;min-width:0}
 .alw .at b{display:block;font-size:14px;font-weight:900;letter-spacing:-.025em}
@@ -639,6 +641,23 @@ var HHCPromo=(function(){
       cb((j.documents||[]).map(function(d){var o=fsVal({mapValue:{fields:d.fields||{}}});o.month=o.month||String(d.name).split('/').pop();return o;}));
     }).catch(function(){if(!done){done=true;clearTimeout(to);cb(null);}});}catch(e){done=true;clearTimeout(to);cb(null);}
   }
+
+  /* ── 상시 혜택 (promos/_always 문서의 items[]) ──
+     {id, on, val 큰글씨, rb 리본, t 제목, d 설명, how 신청방법, dt 아랫줄, ct·cd 명함/안내장 한 줄(비우면 t·d),
+      tag 「상시」표시, teal 청록색, link 연결주소, home·card·event 표시 위치, calc 계산기 할인{it,m,q,kind,val}}
+     문서가 아직 없으면 null → 각 화면은 원래 고정 내용을 그대로 씁니다. */
+  function alwaysOf(list){var d=(list||[]).filter(function(p){return p&&p.month==='_always';})[0];
+    return d&&Array.isArray(d.items)?d.items:null;}
+  function aTxt(a,k,L){return String(a[k+'_'+L]||'').trim()||String(a[k+'_ko']||'').trim();}
+  function aShown(a,where){return a&&a.on!==false&&a[where]!==false;}
+  function valHTML(v){v=String(v||'').trim();var m=/^(\d+(?:\.\d+)?)\s*%$/.exec(v);return m?esc(m[1])+'<small>%</small>':esc(v);}
+  function alwaysRows(items,CATS){
+    var rows=[];(items||[]).forEach(function(a){
+      if(!a||a.on===false||!a.calc||!a.calc.it)return;
+      var r=calcRows({items:[a.calc],month:'',from:null,to:null},CATS)[0];if(!r)return;
+      delete r.promo;r.from=null;r.to=null;r.always=1;r.nm=aTxt(a,'t','ko');r.nm_en=aTxt(a,'t','en');rows.push(r);});
+    return rows;
+  }
   function defaultNotes(){return [
     {ic:'✅',auto:'target',t_ko:'적용 대상',t_en:'Eligible services'},
     {ic:'🚫',t_ko:'제외 항목',t_en:'Not included',b_ko:'부품비 · 자재비 · 수리비는 할인 대상에서 제외됩니다',b_en:'Parts, materials and repair charges are excluded from the discount'},
@@ -651,7 +670,7 @@ var HHCPromo=(function(){
   return {esc:esc,money:money,today:today,monthRange:monthRange,nextDay:nextDay,stateOf:stateOf,pickLive:pickLive,dday:dday,
     tiers:tiers,calcRows:calcRows,titleOf:titleOf,headOf:headOf,subOf:subOf,chipOf:chipOf,dateLine:dateLine,dateShort:dateShort,
     noteRows:noteRows,names:names,heroHTML:heroHTML,gridHTML:gridHTML,detailHTML:detailHTML,calcNoteHTML:calcNoteHTML,
-    defaultNotes:defaultNotes,cardLine:cardLine,tierText:tierText,fetchAll:fetchAll,fsVal:fsVal,perUnit:perUnit,unitTxt:unitTxt,exLine:exLine,exQty:exQty,isFullMonth:isFullMonth,autoLabel:autoLabel,minOn:minOn,MON:MON};
+    defaultNotes:defaultNotes,alwaysOf:alwaysOf,aTxt:aTxt,aShown:aShown,valHTML:valHTML,alwaysRows:alwaysRows,cardLine:cardLine,tierText:tierText,fetchAll:fetchAll,fsVal:fsVal,perUnit:perUnit,unitTxt:unitTxt,exLine:exLine,exQty:exQty,isFullMonth:isFullMonth,autoLabel:autoLabel,minOn:minOn,MON:MON};
 })();
 
 </script>
@@ -703,7 +722,7 @@ var CATS=[
 var Q=new URLSearchParams(location.search);
 var LANG=(Q.get('lang')==='en')?'en':'ko';
 var PREVIEW=Q.get('promo_preview')==='1';
-var PROMO=null, STATE='loading';
+var PROMO=null, STATE='loading', ALW=null;   /* ALW : 관리자 「상시 혜택」 목록 (없으면 아래 기본 3개) */
 var P=HHCPromo, esc=P.esc, money=P.money;
 
 var UI={
@@ -858,12 +877,19 @@ function renderPromo(){
 function renderNone(){
   var L=UI[LANG];
   document.title=(LANG==='en'?'Promotions':'이달의 이벤트')+L.tSuffix;
-  var a=function(href,v,t,d){return '<a class="alw" href="'+q(SITE+href)+'"><span class="av">'+v+'</span><span class="at"><b>'+esc(t)+'</b><span>'+esc(d)+'</span></span><span class="aa">›</span></a>';};
+  var a=function(href,v,t,d,teal){var lng=String(v).replace(/<[^>]+>/g,'').replace(/&[a-z]+;/g,'_').length>3&&!/<small>/.test(v);
+    return '<a class="alw" href="'+q(SITE+href)+'"><span class="av'+(teal?' teal':'')+(lng?' lng':'')+'">'+v+'</span><span class="at"><b>'+esc(t)+'</b><span>'+esc(d)+'</span></span><span class="aa">›</span></a>';};
+  var list;
+  if(ALW){
+    list=ALW.filter(function(x){return P.aShown(x,'event');}).map(function(x){
+      var lk=/^\/[A-Za-z0-9_\-\/#?=&.]*$/.test(x.link||'')?x.link:'/home';
+      return a(lk,P.valHTML(x.val),P.aTxt(x,'ct',LANG)||P.aTxt(x,'t',LANG),P.aTxt(x,'cd',LANG)||P.aTxt(x,'d',LANG),x.teal);}).join('');
+  }else list=a('/curtain','50<small>%</small>',L.a1t,L.a1d)+a('/group','10<small>%</small>',L.a2t,L.a2d)+a('/points','P',L.a3t,L.a3d,true);
   document.getElementById('pg').innerHTML=
     '<div class="hero">'+lgb()+LOGO+'<div class="kick">'+esc(L.noneK)+'</div>'+
       '<h1><em>'+esc(L.noneH)+'</em></h1><p>'+esc(L.noneS)+'</p></div>'+
-    sh('alw','01',L.alw,L.alwS,16)+
-    '<div class="alws">'+a('/curtain','50<small>%</small>',L.a1t,L.a1d)+a('/group','10<small>%</small>',L.a2t,L.a2d)+a('/points','P',L.a3t,L.a3d)+
+    (list?sh('alw','01',L.alw,L.alwS,16):'')+
+    '<div class="alws">'+list+
       '<a class="alw sub" href="'+q(SITE+'/pricing')+'"><span class="av">🧾</span><span class="at"><b>'+esc(L.seePrice)+'</b></span><span class="aa">›</span></a></div>'+
     foot(L);
   bar(L,null);
@@ -911,13 +937,14 @@ render();
 if(PREVIEW){
   window.addEventListener('message',function(e){
     if(e.origin!==location.origin||!e.data||e.data.type!=='hhc-promo-preview')return;
-    PROMO=e.data.promo||null;STATE=PROMO?'live':'none';render();
+    PROMO=e.data.promo||null;STATE=PROMO?'live':'none';if('always' in e.data)ALW=e.data.always||null;render();
   });
   var rdy=function(){try{if(window.parent!==window)window.parent.postMessage({type:'hhc-promo-ready'},location.origin);}catch(e){}};
   if(document.readyState==='complete')rdy();else window.addEventListener('load',rdy);
 }else{
   P.fetchAll(function(list){
     var live=list?P.pickLive(list):null;
+    ALW=list?P.alwaysOf(list):null;
     if(!live&&P.today()<=OCT_FALLBACK_END){location.replace('event-oct.html'+location.search+location.hash);return;}
     PROMO=live;STATE=live?'live':'none';render();
   });

@@ -843,6 +843,23 @@ var HHCPromo=(function(){
       cb((j.documents||[]).map(function(d){var o=fsVal({mapValue:{fields:d.fields||{}}});o.month=o.month||String(d.name).split('/').pop();return o;}));
     }).catch(function(){if(!done){done=true;clearTimeout(to);cb(null);}});}catch(e){done=true;clearTimeout(to);cb(null);}
   }
+
+  /* ── 상시 혜택 (promos/_always 문서의 items[]) ──
+     {id, on, val 큰글씨, rb 리본, t 제목, d 설명, how 신청방법, dt 아랫줄, ct·cd 명함/안내장 한 줄(비우면 t·d),
+      tag 「상시」표시, teal 청록색, link 연결주소, home·card·event 표시 위치, calc 계산기 할인{it,m,q,kind,val}}
+     문서가 아직 없으면 null → 각 화면은 원래 고정 내용을 그대로 씁니다. */
+  function alwaysOf(list){var d=(list||[]).filter(function(p){return p&&p.month==='_always';})[0];
+    return d&&Array.isArray(d.items)?d.items:null;}
+  function aTxt(a,k,L){return String(a[k+'_'+L]||'').trim()||String(a[k+'_ko']||'').trim();}
+  function aShown(a,where){return a&&a.on!==false&&a[where]!==false;}
+  function valHTML(v){v=String(v||'').trim();var m=/^(\d+(?:\.\d+)?)\s*%$/.exec(v);return m?esc(m[1])+'<small>%</small>':esc(v);}
+  function alwaysRows(items,CATS){
+    var rows=[];(items||[]).forEach(function(a){
+      if(!a||a.on===false||!a.calc||!a.calc.it)return;
+      var r=calcRows({items:[a.calc],month:'',from:null,to:null},CATS)[0];if(!r)return;
+      delete r.promo;r.from=null;r.to=null;r.always=1;r.nm=aTxt(a,'t','ko');r.nm_en=aTxt(a,'t','en');rows.push(r);});
+    return rows;
+  }
   function defaultNotes(){return [
     {ic:'✅',auto:'target',t_ko:'적용 대상',t_en:'Eligible services'},
     {ic:'🚫',t_ko:'제외 항목',t_en:'Not included',b_ko:'부품비 · 자재비 · 수리비는 할인 대상에서 제외됩니다',b_en:'Parts, materials and repair charges are excluded from the discount'},
@@ -855,7 +872,7 @@ var HHCPromo=(function(){
   return {esc:esc,money:money,today:today,monthRange:monthRange,nextDay:nextDay,stateOf:stateOf,pickLive:pickLive,dday:dday,
     tiers:tiers,calcRows:calcRows,titleOf:titleOf,headOf:headOf,subOf:subOf,chipOf:chipOf,dateLine:dateLine,dateShort:dateShort,
     noteRows:noteRows,names:names,heroHTML:heroHTML,gridHTML:gridHTML,detailHTML:detailHTML,calcNoteHTML:calcNoteHTML,
-    defaultNotes:defaultNotes,cardLine:cardLine,tierText:tierText,fetchAll:fetchAll,fsVal:fsVal,perUnit:perUnit,unitTxt:unitTxt,exLine:exLine,exQty:exQty,isFullMonth:isFullMonth,autoLabel:autoLabel,minOn:minOn,MON:MON};
+    defaultNotes:defaultNotes,alwaysOf:alwaysOf,aTxt:aTxt,aShown:aShown,valHTML:valHTML,alwaysRows:alwaysRows,cardLine:cardLine,tierText:tierText,fetchAll:fetchAll,fsVal:fsVal,perUnit:perUnit,unitTxt:unitTxt,exLine:exLine,exQty:exQty,isFullMonth:isFullMonth,autoLabel:autoLabel,minOn:minOn,MON:MON};
 })();
 
 </script>
@@ -1143,10 +1160,18 @@ function reqCats(){
 }
 window.__reqPromoApply=function(list){
   if(!window.HHCPromo)return;
+  /* ♾️ 상시 혜택 (관리자 「상시 혜택」에서 계산기 할인을 켠 것) — 저장된 적이 없으면 아래 고정 규칙(커튼 50%) 그대로 */
+  const al=HHCPromo.alwaysOf(list||[]);
+  if(al){
+    for(let i=CALC_PROMOS.length-1;i>=0;i--){const x=CALC_PROMOS[i];if(x.always||(!x.end&&!x.promo))CALC_PROMOS.splice(i,1);}
+    HHCPromo.alwaysRows(al,reqCats()).forEach(r=>{
+      const o={t:r.it,c:r.m,minQty:r.q,end:null,always:true};if(r.pct)o.pct=r.pct;else o.off=r.off;CALC_PROMOS.push(o);
+      if(r.pct&&CALC_ADDONS[r.it])CALC_PROMOS.push({t:r.it,c:'__addon',minQty:1,pct:r.pct,end:null,always:true});
+    });
+  }
   const p=HHCPromo.pickLive(list||[]);
-  if(!p)return;                           /* 공개된 이달 프로모션이 없으면 기존 규칙 그대로 */
-  const rows=HHCPromo.calcRows(p,reqCats());
-  if(!rows.length)return;
+  const rows=p?HHCPromo.calcRows(p,reqCats()):[];
+  if(!p||!rows.length){if(al&&window.calcRefreshLang)window.calcRefreshLang();return;}   /* 이달 프로모션이 없으면 기존 규칙 그대로 */
   REQ_PROMO=p;
   for(let i=CALC_PROMOS.length-1;i>=0;i--){if(CALC_PROMOS[i].end)CALC_PROMOS.splice(i,1);}   /* 기간 한정 고정 할인(10월)은 빼고 상시 할인은 남김 */
   rows.forEach(r=>{
@@ -1420,7 +1445,7 @@ function calcRender(){
     const row=document.createElement('div');
     row.className='calc-item-row';
     const badge=lineDisc>0?'<span class="calc-item-promo">'+(promo.promo?esc(promo.emoji)+' ':promo.oct?'🍁 ':'🎁 ')
-      +(promo.off?(promo.promo?(isEn()?'Special RM '+(it.price-promo.off)+'/unit':'특가 대당 RM '+(it.price-promo.off))
+      +(promo.off?((promo.promo||promo.always)?(isEn()?'Special RM '+(it.price-promo.off)+'/unit':'특가 대당 RM '+(it.price-promo.off))
                    :(isEn()?'Oct special RM '+(it.price-promo.off)+'/unit':'10월 특가 대당 RM '+(it.price-promo.off)))
                  :promo.pct+'% '+(isEn()?'OFF':'할인'))+'</span>':'';
     const priceHtml=lineDisc>0

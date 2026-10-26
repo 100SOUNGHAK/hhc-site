@@ -326,6 +326,7 @@ button:focus-visible,a:focus-visible{outline:3px solid rgba(15,118,110,.32);outl
 }
 .na-links .ic.val>span{display:block;margin:0;white-space:nowrap;font:inherit;color:inherit}
 .na-links .ic.val small{font-size:10px;font-weight:800;margin-left:1px}
+.na-links .ic.val.lng{font-size:10.5px;line-height:1.1;text-align:center;letter-spacing:-.04em;padding:0 2px;white-space:normal;word-break:keep-all}
 .na-links a>span:not(.ic):not(.ar){flex:1;min-width:0;word-break:keep-all;overflow-wrap:anywhere}
 .na-links a.pts .ic.val{font-size:17px;color:#fff;background:linear-gradient(155deg,var(--teal-700),var(--teal-800))}
 .na-links b .pt{display:inline;margin:0;font-size:inherit;font-weight:inherit;color:inherit}
@@ -753,7 +754,10 @@ function loadPromo(){
     fetch(u).then(function(r){ return r.ok ? r.json() : null; }).then(function(j){
       if(!j || !j.documents) return;
       var d = new Date(), t = d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2);
-      var live = j.documents.map(function(x){ return val({mapValue:{fields:x.fields||{}}}); })
+      /* ♾️ 상시 혜택 — 관리자 화면 「상시 혜택」에 저장된 목록이 있으면 아래 혜택 줄을 그것으로 바꾼다 */
+      var alw = j.documents.filter(function(x){ return /\/_always$/.test(x.name || ''); })[0];
+      if(alw){ var ad = val({mapValue:{fields:alw.fields||{}}}); if(ad && ad.items){ buildPerks(ad.items); if(typeof render === 'function') render(); } }
+      var live = j.documents.filter(function(x){ return !/\/_always$/.test(x.name || ''); }).map(function(x){ return val({mapValue:{fields:x.fields||{}}}); })
         .filter(function(p){ return p && p.status === 'live' && p.from <= t && t <= p.to && p.disp; })
         .sort(function(a,b){ return String(b.from).localeCompare(String(a.from)); })[0];
       if(!live) return;
@@ -764,6 +768,32 @@ function loadPromo(){
     }).catch(function(){});
   }catch(e){}
 }
+function buildPerks(items){
+  var box = document.querySelector('#perkBox .na-perk'); if(!box) return;
+  function tx(a, k, l){ return String(a[k + '_' + l] || '').trim() || String(a[k + '_ko'] || '').trim(); }
+  Array.prototype.slice.call(box.querySelectorAll('a[id^="pk"]')).forEach(function(el){ el.remove(); });
+  for(var i = LINKS.length - 1; i >= 0; i--) if(LINKS[i].perk) LINKS.splice(i, 1);
+  var its = items.filter(function(a){ return a && a.on !== false && a.card !== false; });
+  its.forEach(function(a, i){
+    var id = 'pk' + (i + 1), k = 'pa' + i, v = String(a.val || '').trim(), m = /^(\d+(?:\.\d+)?)\s*%$/.exec(v);
+    ['ko','en'].forEach(function(l){
+      T[l][k + 't'] = esc(tx(a, 'ct', l) || tx(a, 't', l));
+      T[l][k + 'd'] = esc(tx(a, 'cd', l) || tx(a, 'd', l));
+    });
+    var link = /^\/[A-Za-z0-9_\-\/#?=&.]*$/.test(a.link || '') ? a.link : '/home';
+    var el = document.createElement('a');
+    el.id = id; el.href = SITE + link; if(a.teal) el.className = 'pts';
+    el.innerHTML = '<span class="ic val' + (!m && v.length > 2 ? ' lng' : '') + '" aria-hidden="true">' + (m ? '<span>' + esc(m[1]) + '<small>%</small></span>' : esc(v)) + '</span>' +
+      '<span><b><span data-t="' + k + 't" class="pt"></span></b>' +
+      (a.tag ? '<span class="dd"><i class="tg" data-t="tgAlways"></i><span data-t="' + k + 'd"></span></span>' : '<span data-t="' + k + 'd"></span>') + '</span>' +
+      '<span class="ar" aria-hidden="true">›</span>';
+    box.appendChild(el);
+    LINKS.push({ id:id, path:link, hash:'', perk:true });
+  });
+  var note = document.querySelector('#perkBox .na-perk-note'); if(note) note.hidden = !its.length;
+  PERKS_N = its.length;
+}
+var PERKS_N = 3;
 function curEvent(){
   if(DYN_EV) return DYN_EV;
   var now = Date.now();
@@ -1062,6 +1092,8 @@ function render(){
     var over = L.evt && !ev;
     el.hidden = over || (mode === 'company' && L.id !== 'lnk4' && !L.evt && !L.perk);
   });
+  /* 이벤트도 상시 혜택도 없으면 「이벤트 · 혜택」 칸 자체를 숨긴다 */
+  document.getElementById('perkBox').hidden = !curEvent() && !PERKS_N;
   var svcBox = document.getElementById('svcBox');
   svcBox.hidden = (mode !== 'company');
   /* 회사 명함: 서비스 안내 → 연락처 순 / 개인 명함: 연락처 → 바로가기 순 */
