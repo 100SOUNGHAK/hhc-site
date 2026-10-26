@@ -600,7 +600,7 @@ body.np-open{overflow:hidden}
   <section class="na-sec" id="perkBox">
     <h2 class="na-h" data-t="hPerk">이벤트 · 혜택</h2>
     <div class="na-links na-perk">
-      <a id="lnk0" href="https://happyhomecare.com.my/event-oct" class="evt">
+      <a id="lnk0" href="https://happyhomecare.com.my/event" class="evt">
         <span class="ic" aria-hidden="true">🎁</span>
         <span><b data-t="l0t">10월 한정 특별가</b><span data-t="l0d">에어컨 RM 90부터 · 세탁기 10% · 10/31까지</span></span>
         <span class="ar" aria-hidden="true">›</span>
@@ -738,9 +738,34 @@ var SHARE_URL = SITE + '/namecard';
 /* 이벤트 바로가기 — 날짜에 따라 자동으로 바뀐다 (말레이시아 시간 기준 마지막 날 자정까지).
    모든 이벤트가 끝나면 명함에서 이벤트 줄이 자동으로 사라진다. 다음 이벤트는 여기에 한 줄 추가. */
 var EVENTS = [
-  { end:'2026-10-31', path:'/event-oct', tk:'l0t', dk:'l0d' }   /* 🍁 10월 한정 특별가 */
+  { end:'2026-10-31', path:'/event', tk:'l0t', dk:'l0d' }   /* 🍁 10월 한정 특별가 (관리자 화면에 공개된 이벤트가 없을 때만) */
 ];
+/* 📅 월별 프로모션 — 관리자 화면(promo-admin.html)에서 공개한 이번 달 이벤트가 있으면 그것을 보여 준다.
+   제목·한 줄 요약은 관리자 화면이 저장할 때 같이 만들어 둔 것(disp)을 그대로 쓴다. */
+var DYN_EV = null;
+function loadPromo(){
+  var u = 'https://firestore.googleapis.com/v1/projects/happywork-packageplan/databases/(default)/documents/promos?pageSize=60&key=AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00';
+  function val(v){ if(!v) return null;
+    if('stringValue' in v) return v.stringValue; if('integerValue' in v) return +v.integerValue; if('doubleValue' in v) return v.doubleValue;
+    if('booleanValue' in v) return v.booleanValue; if('arrayValue' in v) return (v.arrayValue.values||[]).map(val);
+    if('mapValue' in v){ var o = {}, f = v.mapValue.fields || {}; for(var k in f) o[k] = val(f[k]); return o; } return null; }
+  try{
+    fetch(u).then(function(r){ return r.ok ? r.json() : null; }).then(function(j){
+      if(!j || !j.documents) return;
+      var d = new Date(), t = d.getFullYear() + '-' + ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2);
+      var live = j.documents.map(function(x){ return val({mapValue:{fields:x.fields||{}}}); })
+        .filter(function(p){ return p && p.status === 'live' && p.from <= t && t <= p.to && p.disp; })
+        .sort(function(a,b){ return String(b.from).localeCompare(String(a.from)); })[0];
+      if(!live) return;
+      T.ko.__dt = live.disp.t_ko; T.ko.__dd = live.disp.c_ko;
+      T.en.__dt = live.disp.t_en || live.disp.t_ko; T.en.__dd = live.disp.c_en || live.disp.c_ko;
+      DYN_EV = { path:'/event', tk:'__dt', dk:'__dd', emoji: live.emoji || '🎁', plain:true };
+      if(typeof render === 'function') render();
+    }).catch(function(){});
+  }catch(e){}
+}
 function curEvent(){
+  if(DYN_EV) return DYN_EV;
   var now = Date.now();
   for(var i = 0; i < EVENTS.length; i++){
     if(now <= new Date(EVENTS[i].end + 'T23:59:59+08:00').getTime()) return EVENTS[i];
@@ -748,7 +773,7 @@ function curEvent(){
   return null;
 }
 var LINKS = [
-  { id:'lnk0', path:'/event-oct', hash:'', evt:true },
+  { id:'lnk0', path:'/event', hash:'', evt:true },
   { id:'lnk1', path:'/request', hash:'' },
   { id:'lnk2', path:'/pricing', hash:'' },
   { id:'lnk3', path:'/membership', hash:'' },
@@ -784,7 +809,7 @@ var T = {
     barBook:'예약 신청하기', barPrice:'서비스 비용 안내',
     popBook:'📅 예약 신청하기', popPrice:'🧾 서비스 비용 안내',
     popNew:'새 창', popLoad:'불러오는 중…',
-    hGuide:'서비스별 안내', guideLead:'실제 작업 사진으로 과정을 확인하세요',
+    hGuide:'서비스별 안내', guideFail:'안내를 불러오지 못했습니다. 잠시 후 다시 눌러 주세요.', guideLead:'실제 작업 사진으로 과정을 확인하세요',
     g_acBasic:['에어컨 기본세척','고압세척수로 내부 먼지 제거','2단계'],
     g_acChem:['에어컨 약품세척','전용 약품 + 고압세척수','4단계'],
     g_acSteam:['에어컨 스팀살균세척','약품세척 + 고온 스팀 살균','5단계'],
@@ -835,7 +860,7 @@ var T = {
     barBook:'Book a service', barPrice:'Services & pricing',
     popBook:'📅 Book a service', popPrice:'🧾 Services & pricing',
     popNew:'New tab', popLoad:'Loading…',
-    hGuide:'SERVICE GUIDES', guideLead:'See each process in photos from real jobs',
+    hGuide:'SERVICE GUIDES', guideFail:'Could not load this guide. Please try again shortly.', guideLead:'See each process in photos from real jobs',
     g_acBasic:['A/C basic cleaning','Dust washed out with high-pressure water','2 steps'],
     g_acChem:['A/C chemical cleaning','Cleaning chemical + high-pressure rinse','4 steps'],
     g_acSteam:['A/C steam sterilisation','Chemical wash + hot-steam sterilising','5 steps'],
@@ -1029,8 +1054,9 @@ function render(){
     el.href = SITE + path + '?from=card' + (lang === 'en' ? '&lang=en' : '') + L.hash;
     if(L.evt && ev){
       var tb = el.querySelector('[data-t="l0t"]'), db = el.querySelector('[data-t="l0d"]');
-      if(tb && t[ev.tk] != null) tb.innerHTML = t[ev.tk];
-      if(db && t[ev.dk] != null) db.innerHTML = t[ev.dk];
+      if(tb && t[ev.tk] != null){ if(ev.plain) tb.textContent = t[ev.tk]; else tb.innerHTML = t[ev.tk]; }
+      if(db && t[ev.dk] != null){ if(ev.plain) db.textContent = t[ev.dk]; else db.innerHTML = t[ev.dk]; }
+      var eic = el.querySelector('.ic'); if(eic) eic.textContent = ev.emoji || '🎁';
     }
     /* 회사 명함에서는 서비스 안내가 대신 들어가고, 바로가기는 이벤트 + 홈페이지만 남긴다 */
     var over = L.evt && !ev;
@@ -1232,6 +1258,7 @@ document.getElementById('btnCopy').addEventListener('click', copyLink);
    ·화면 언어(한국어/EN)를 그대로 물려줍니다 */
 /* 서비스별 안내 — 한국어는 안내장 그림(guide-*.png), 영문은 그림이 있으면 그림, 없으면 홈페이지 해당 부분
    ·그림을 바꾸려면 같은 이름으로 덮어쓰면 됩니다 (가로 1170px) */
+var GUIDE_VER = '20261026';   /* 안내 그림을 바꿔 올렸는데 예전 그림(또는 빈 화면)이 보이면 이 숫자만 바꾸면 됩니다 */
 var GUIDES = [
   { k:'care',    img:'guide-care.png', imgEn:'guide-care-en.png', th:'guide-care-thumb.jpg', wide:true },
   { k:'acBasic', img:'guide-ac-basic.png',     th:'ac-s-wash.jpg',          enHash:'#acx', tab:'basic' },
@@ -1263,16 +1290,25 @@ function guideOpen(i){
   _popKey = '';
   document.getElementById('npTitle').textContent = c[0];
   var nw = document.getElementById('npNew');
-  nw.href = img; nw.textContent = t.popNew;
+  var url = img + '?v=' + GUIDE_VER;
+  nw.href = url; nw.textContent = t.popNew;
   var ld = document.getElementById('npLoad');
   ld.textContent = t.popLoad; ld.hidden = false;
   document.getElementById('npFrame').style.display = 'none';
   var wrap = document.getElementById('npImg'), pic = document.getElementById('npPic');
   wrap.hidden = false; wrap.scrollTop = 0;
   pic.onload = function(){ ld.hidden = true; };
-  pic.onerror = function(){ ld.hidden = true; };
+  pic.onerror = function(){                    /* 그림을 못 불러오면 빈 화면 대신 홈페이지의 같은 내용을 띄운다 */
+    pic.onerror = null; pic.removeAttribute('src');
+    if(g.enHash){
+      POPS['g' + i] = { file:'home.html', hash:g.enHash, title:c[0], tab:g.tab, sel:g.sel };
+      popOpen('g' + i);
+    }else{
+      ld.textContent = t.guideFail; ld.hidden = false;
+    }
+  };
   pic.alt = c[0];
-  pic.src = img;
+  pic.src = url;
   document.getElementById('naPop').hidden = false;
   document.body.classList.add('np-open');
 }
@@ -1368,6 +1404,7 @@ document.getElementById('btnFlip').addEventListener('click', function(){
 });
 
 render();
+loadPromo();
 })();
 </script>
 </body>

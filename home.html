@@ -1032,6 +1032,21 @@ html:not([data-evt="oct"]) .evt-oct{display:none!important}
 }
 .calc-out .ln.mc b{color:var(--gold-300)}
 
+/* ---------- 월별 프로모션 (관리자 화면 promo-admin.html 에서 입력 · Firestore promos) ----------
+   공개된 이달 프로모션이 있으면 html[data-evt="dyn"] 이 되고, 위의 고정 10월 블록(.evt-oct)은 자동으로 숨겨집니다. */
+html:not([data-evt="dyn"]) .evt-dyn{display:none!important}
+#pm-hero-dyn .pm-left,#pm-hero-dyn .pm-pts{min-width:0}
+#pm-hero-dyn .pm-title .nw{white-space:nowrap}
+.pm-pts[data-emoji]::after{content:attr(data-emoji);opacity:.16}
+.pm-gn{grid-template-columns:repeat(var(--pmn,3),1fr)}
+@media(max-width:1080px){ .pm-gn[style*="--pmn:4"]{grid-template-columns:repeat(2,1fr)} }
+@media(max-width:860px){
+  .pm-gn,.pm-gn[style*="--pmn:4"]{grid-template-columns:1fr}
+  #pm-hero-dyn .pm-title .t2{font-size:clamp(34px,10.5vw,48px)}
+  #pm-hero-dyn .pm-tp{white-space:normal}
+  #pm-hero-dyn .pm-cta .btn{white-space:normal;text-align:center}
+}
+
 /* 해피포인트 안내 팝업 */
 .ovl .hd .hp-evt{display:inline-block;margin-top:12px;background:rgba(201,164,76,.18);border:1px solid rgba(227,201,138,.45);color:#fff6dd;
   font-size:13px;font-weight:800;padding:8px 14px;border-radius:999px;line-height:1.5}
@@ -2173,6 +2188,9 @@ html[lang="en"] .ba-item.on::after{content:"Viewing"}
       <p class="lead">진행 중인 할인과 적립 혜택은 예약 신청 시 자동으로 안내해 드립니다.</p>
     </div>
 
+    <!-- 📅 월별 프로모션 — 관리자 화면(promo-admin.html)에서 공개한 이달 프로모션이 여기에 그려집니다 -->
+    <div id="pm-dyn-top"></div>
+
     <!-- 🍁 10월 한정 특별가 — 무대 (왼쪽: 품목 특가 · 오른쪽: 최소 청구금액 안내) · 10/31까지 표시 -->
     <div class="pm-hero rv evt-oct" id="pm-hero-oct">
       <div class="pm-left">
@@ -2249,6 +2267,7 @@ html[lang="en"] .ba-item.on::after{content:"Viewing"}
         <div class="pm-drow"><span class="ic">💳</span><div><b>최소 청구금액</b><p>할인된 최종 청구금액이 RM 320 이하인 경우 RM 320 청구 · 유료 주차 시 RM 10(2시간 기준) 별도</p></div></div>
       </div>
     </div>
+    <div id="pm-dyn-bot"></div>
   </div>
 </section>
 
@@ -3169,7 +3188,8 @@ html[lang="en"] .ba-item.on::after{content:"Viewing"}
             <span class="ic">🍁</span>
             <div><b>10월 한정 특별가 (2026.10.1 ~ 10.31)</b><span class="s">벽걸이 에어컨 약품세척 대당 RM 90 · 살균세척 대당 RM 120 · 세탁기 10% 할인 자동 반영<br>· 타 쿠폰·프로모션과 중복 불가 (상시 진행 이벤트는 중복 가능) · 부품비·자재비·수리비 제외</span></div>
           </div>
-          <div class="ln mc" id="cMinLn" hidden>📌 최소 청구금액 적용 <b>RM 320</b></div>
+          <div id="cpn-dyn"></div>
+          <div class="ln mc" id="cMinLn" hidden>📌 최소 청구금액 적용 <b id="cMinV">RM 320</b></div>
           <div class="ln note">※ 최소 청구금액 RM 320 · 실제 견적은 현장 확인 후 확정됩니다.</div>
         </div>
         <div class="calc-tot">
@@ -4037,6 +4057,19 @@ setTimeout(function(){var d=document.getElementById('dcard');if(d)d.classList.ad
   /* 🍁 10월 한정 특별가 기간 — 할인 후 합계가 RM 320 미만이면 최소 청구금액 RM 320 적용 */
   var OCT_EVT={to:'2026-10-31'};
   function octLive(){return today()<=OCT_EVT.to;}
+  /* 📅 월별 프로모션 (promo-admin) — Firestore에서 받아 온 할인을 계산기에 더합니다 */
+  var DYN={min:0,from:null,to:null};
+  function dynLive(){var t=today();return !!(DYN.from&&DYN.from<=t&&t<=DYN.to);}
+  window.__hhcCats=CATS;
+  window.__calcPromo=function(rows,p){
+    for(var i=ROWP.length-1;i>=0;i--){var r=ROWP[i];
+      /* 새 프로모션이 있으면 기간 한정 고정 할인(10월 특가)은 빼고, 상시 할인(커튼 등)은 남깁니다 */
+      if(r.promo||(p&&r.to))ROWP.splice(i,1);}
+    (rows||[]).forEach(function(r){ROWP.unshift(r);});
+    DYN={min:p&&p.min_on?(+p.min_charge||0):0,from:p?p.from:null,to:p?p.to:null};
+    try{calc();}catch(e){}
+  };
+  window.calcRefreshLang=function(){try{calc();}catch(e){}try{if(window.__promoRender)window.__promoRender();}catch(e){}};
   /* 🍁 프로모션 무대의 D-day 칩 — 마감까지 남은 날짜를 보여 주고, 끝나면 「종료」로 바꿉니다 */
   function ddayChip(chipId,heroId,ev){
     var el=document.getElementById(chipId);if(!el)return;
@@ -4106,20 +4139,23 @@ setTimeout(function(){var d=document.getElementById('dcard');if(d)d.classList.ad
       var sb=row.querySelector('.sub'), rn=row.querySelector('.rnote');
       if(p){
         sb.innerHTML='<s>'+fmt(sum)+'</s> '+fmt(sum-d)+'<em>'+q+it.u+' × '+fmt(m[1])+'</em>';
-        if(names.indexOf(p.nm)<0) names.push(p.nm);
+        var pnm=(window.currentSiteLang==='en'&&p.nm_en)?p.nm_en:p.nm;
+        if(names.indexOf(pnm)<0) names.push(pnm);
       }else{
         sb.innerHTML=fmt(sum)+'<em>'+q+it.u+' × '+fmt(m[1])+'</em>';
       }
       var tips=[];
-      if(p) tips.push('<b>🎁 '+p.nm+' &nbsp;−'+fmt(d)+'</b>');
+      if(p) tips.push('<b>🎁 '+((window.currentSiteLang==='en'&&p.nm_en)?p.nm_en:p.nm)+' &nbsp;−'+fmt(d)+'</b>');
       if(it.note) tips.push(it.note);
       rn.innerHTML=tips.join(' · ');
       rn.style.display=tips.length?'block':'none';
     });
     var tot=base-disc;
     // 🍁 10월 특가 기간 — 할인 후 합계가 RM 320 미만이면 최소 청구금액 RM 320
-    var minOn=octLive() && disc>0 && tot>0 && tot<320;
-    if(minOn) tot=320;
+    var minAmt=dynLive()?DYN.min:(octLive()?320:0);   /* 월별 프로모션이 있으면 그 최소 청구금액 */
+    var minOn=minAmt>0 && disc>0 && tot>0 && tot<minAmt;
+    if(minOn) tot=minAmt;
+    var mv=document.getElementById('cMinV'); if(mv&&minAmt) mv.textContent=fmt(minAmt);
     show(document.getElementById('cMinLn'), minOn);
     document.getElementById('cBase').textContent=fmt(base);
     show(document.getElementById('cDiscLn'), disc>0);
@@ -4581,9 +4617,328 @@ setTimeout(function(){var d=document.getElementById('dcard');if(d)d.classList.ad
 </script>
 
 <!-- ================= REVIEWS (Firebase) ================= -->
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   HHC 월별 프로모션 엔진 — promo-admin.html · home.html 공통
+   ※ 두 파일에 똑같은 내용으로 들어 있습니다. 한쪽을 고치면 다른 쪽도 같이 고쳐 주세요.
+   데이터 : Firestore  promos/{YYYY-MM}
+     status  'live'(공개) | 'draft'(임시저장)
+     from,to 'YYYY-MM-DD' (두 날짜 포함)
+     emoji, title_ko/en, head_ko/en, sub_ko/en   (비우면 자동 문구)
+     items[] {it 품목, m 방식, q 최소수량, kind 'price'특가|'off'할인액|'pct'할인율, val, best, label_ko/en}
+     min_on, min_charge   최소 청구금액
+     notes[] {ic, t_ko, t_en, b_ko, b_en, auto:'target'|'period'|'min'}
+   ══════════════════════════════════════════════════════════════════ */
+var HHCPromo=(function(){
+  var MS={'전용약품세척':['약품세척','Chemical wash'],'스팀살균세척':['살균세척','Sanitizing wash'],
+    '기본세척':['기본세척','Basic wash'],'전체분해세척':['전체분해세척','Full teardown clean'],
+    '스팀그릴세척':['스팀그릴세척','Steam grille wash'],'분해약품세척':['분해약품세척','Disassembly-chemical wash'],
+    '건식진공흡입방식':['건식 청소','Dry vacuum clean'],'습식스팀살균방식':['습식 스팀세탁','Wet steam sanitizing']};
+  var FAM={'벽걸이 에어컨':'Wall-mounted AC','매립천정형 에어컨':'Concealed ceiling AC','천정형 에어컨':'Ceiling cassette AC',
+    '실외기 에어컨':'Outdoor unit','세탁기':'Washing machine','의류 건조기':'Clothes dryer','주방후드':'Kitchen hood',
+    '냉장고':'Refrigerator','공기청정기':'Air purifier','매트리스':'Mattress','쇼파':'Sofa','커튼':'Curtain',
+    '식탁의자 스팀세탁':'Dining chair steam wash','실링팬 간이청소':'Ceiling fan quick clean',
+    '실링팬 분해청소':'Ceiling fan full clean','전등·콘센트 교체':'Light / socket replacement'};
+  var UNIT_EN={'대':'unit','개':'pc','SQ':'sq','KG':'kg','세대':'home'};
+  var MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  var MON3=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var WK_KO=['일','월','화','수','목','금','토'], WK_EN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  /* **굵게** 표시만 허용 — 나머지는 모두 글자 그대로 */
+  function rich(s){return esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');}
+  function fam(it){return String(it||'').replace(/\s*[\(\[][^\)\]]*[\)\]]\s*/g,' ').replace(/\s+/g,' ').trim();}
+  function money(n){n=Math.round(n*100)/100;return 'RM '+(n%1?n.toFixed(2):n.toLocaleString('en-MY'));}
+  function pad(n){return ('0'+n).slice(-2);}
+  function today(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+  function dObj(s){var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s||'');return m?new Date(+m[1],+m[2]-1,+m[3]):null;}
+  function nextDay(s){var d=dObj(s);if(!d)return null;d.setDate(d.getDate()+1);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());}
+  function monthRange(ym){var y=+ym.slice(0,4),m=+ym.slice(5,7),last=new Date(y,m,0).getDate();return [ym+'-01',ym+'-'+pad(last)];}
+  function monthNo(p){return +String(p.month||p.from||'').slice(5,7)||(new Date().getMonth()+1);}
+  function yearNo(p){return +String(p.month||p.from||'').slice(0,4)||new Date().getFullYear();}
+  function isFullMonth(p){var r=monthRange(String(p.from||'').slice(0,7));return p.from===r[0]&&p.to===r[1];}
+
+  function dateLine(p,L){
+    var a=dObj(p.from),b=dObj(p.to);if(!a||!b)return '';
+    if(L==='en')return a.getDate()+' '+MON3[a.getMonth()]+' ('+WK_EN[a.getDay()]+') – '+b.getDate()+' '+MON3[b.getMonth()]+' ('+WK_EN[b.getDay()]+') '+b.getFullYear();
+    return a.getFullYear()+'. '+(a.getMonth()+1)+'. '+a.getDate()+' ('+WK_KO[a.getDay()]+') ~ '+(b.getMonth()+1)+'. '+b.getDate()+' ('+WK_KO[b.getDay()]+')';
+  }
+  function dateShort(p,L){
+    var a=dObj(p.from),b=dObj(p.to);if(!a||!b)return '';
+    if(L==='en')return a.getDate()+' '+MON3[a.getMonth()]+' – '+b.getDate()+' '+MON3[b.getMonth()]+' '+b.getFullYear();
+    return a.getFullYear()+'. '+(a.getMonth()+1)+'. '+a.getDate()+' ~ '+(b.getMonth()+1)+'. '+b.getDate();
+  }
+
+  /* 상태 : live 진행중 · scheduled 공개예약 · ended 종료 · draft 임시저장 */
+  function stateOf(p,t){t=t||today();if(!p||p.status!=='live')return 'draft';if(t<p.from)return 'scheduled';if(t>p.to)return 'ended';return 'live';}
+  function pickLive(list,t){t=t||today();
+    return (list||[]).filter(function(p){return stateOf(p,t)==='live';})
+      .sort(function(a,b){return String(b.from).localeCompare(String(a.from));})[0]||null;}
+  function dday(p,L,t){t=t||today();
+    if(t>p.to)return {txt:L==='en'?'Ended':'종료',end:true};
+    if(t<p.from)return {txt:L==='en'?'Coming soon':'곧 시작'};
+    var d=Math.max(0,Math.round((dObj(p.to)-dObj(t))/86400000));
+    return {txt:d===0?(L==='en'?'Ends today':'오늘 마감'):('D-'+d)};
+  }
+
+  function autoLabel(r,cat){
+    var f=fam(r.it),s=MS[r.m],fe=FAM[f]||f;
+    if(s)return {ko:f+' '+s[0],en:fe+' '+s[1].toLowerCase(),cko:s[0],cen:s[1],fk:f,fe:fe,sk:s[0],se:s[1].toLowerCase()};
+    if(!r.m||r.m==='기본가'){var w=(cat==='ac'||cat==='app');
+      return {ko:f+(w?' 세척':''),en:fe+(w?' cleaning':''),cko:f+(w?' 세척':''),cen:fe+(w?' cleaning':''),fk:f,fe:fe};}
+    return {ko:f+' '+r.m,en:fe+' '+r.m,cko:f+' '+r.m,cen:fe+' '+r.m};
+  }
+
+  /* 품목 행 → 화면용 묶음(같은 이름·같은 할인은 하나로 합칩니다. 예: 통돌이·드럼 → 세탁기 세척) */
+  function tiers(p,CATS){
+    var idx={};(CATS||[]).forEach(function(c){c.items.forEach(function(it){idx[it.n]={it:it,cat:c.id};});});
+    var out=[],map={};
+    (p.items||[]).forEach(function(r){
+      var f=idx[r.it];if(!f)return;
+      var mm=f.it.m.filter(function(x){return x[0]===r.m;})[0];if(!mm)return;
+      var base=mm[1],v=+r.val||0,fin,off;
+      if(r.kind==='pct'){if(v<=0||v>=100)return;fin=Math.round(base*(100-v))/100;off=base-fin;}
+      else if(r.kind==='off'){off=v;fin=base-v;}
+      else{fin=v;off=base-v;}
+      if(!(off>0)||fin<0)return;
+      var A=autoLabel(r,f.cat);
+      var lko=(r.label_ko||'').trim()||A.ko,len=(r.label_en||'').trim()||A.en;
+      var cko=(r.label_ko||'').trim()||A.cko,cen=(r.label_en||'').trim()||A.cen;
+      var custom=!!((r.label_ko||'').trim());
+      var fk0=custom?null:A.fk,fe0=custom?null:A.fe;
+      var key=lko+'|'+r.kind+'|'+v+(r.kind==='pct'?'':'|'+base);
+      if(map[key]){var o=map[key];o.best=o.best||!!r.best;o.bmin=Math.min(o.bmin,base);
+        if(base>o.base){o.base=base;o.fin=fin;o.off=off;}return;}
+      var t={it:r.it,m:r.m,q:Math.max(1,parseInt(r.q,10)||1),kind:r.kind||'price',val:v,base:base,bmin:base,fin:fin,off:off,
+        unit:f.it.u,best:!!r.best,lko:lko,len:len,cko:cko,cen:cen,
+        fk:fk0,fe:fe0,sk:custom?null:(A.sk||null),se:custom?null:(A.se||null)};
+      map[key]=t;out.push(t);
+    });
+    return out;
+  }
+  /* 견적 계산기용 할인 행 (home.html ROWP 형식) */
+  function calcRows(p,CATS){
+    var to=nextDay(p.to),rows=[];
+    var idx={};(CATS||[]).forEach(function(c){c.items.forEach(function(it){idx[it.n]=it;});});
+    (p.items||[]).forEach(function(r){
+      var it=idx[r.it];if(!it)return;var mm=it.m.filter(function(x){return x[0]===r.m;})[0];if(!mm)return;
+      var base=mm[1],v=+r.val||0,row={it:r.it,m:r.m,q:Math.max(1,parseInt(r.q,10)||1),from:p.from,to:to,promo:1};
+      if(r.kind==='pct'){if(v<=0||v>=100)return;row.pct=v;}
+      else if(r.kind==='off'){if(v<=0||v>base)return;row.off=v;}
+      else{if(v>=base||v<0)return;row.off=base-v;}
+      row.nm=titleOf(p,'ko');row.nm_en=titleOf(p,'en');rows.push(row);
+    });
+    return rows;
+  }
+
+  /* 같은 품목끼리 묶어 읽기 좋게 : 벽걸이 에어컨 약품세척 · 살균세척 / 세탁기 세척 */
+  function names(T,L){
+    var out=[],g={};
+    T.forEach(function(t){
+      var fk=L==='en'?t.fe:t.fk,sk=L==='en'?t.se:t.sk;
+      if(fk&&sk){if(g[fk]){if(g[fk].s.indexOf(sk)<0)g[fk].s.push(sk);return;}g[fk]={s:[sk]};out.push({fk:fk,g:g[fk]});return;}
+      var nm=L==='en'?t.len:t.lko;if(out.some(function(o){return o.nm===nm;}))return;out.push({nm:nm});
+    });
+    return out.map(function(o){return o.nm||(o.fk+' '+o.g.s.join(' · '));}).join(L==='en'?', ':' / ');
+  }
+  function unitTxt(u,L){return L==='en'?(UNIT_EN[u]||u):u;}
+  function perUnit(u,L){return L==='en'?'per '+unitTxt(u,L):(u+'당');}
+  function titleOf(p,L){
+    var v=(p['title_'+L]||'').trim();if(v)return v;
+    if(L==='en'&&(p.title_ko||'').trim()&&!/월 한정 특별가$/.test(p.title_ko.trim()))return p.title_ko.trim();
+    var m=monthNo(p);return L==='en'?MON[m-1]+' Special Prices':m+'월 한정 특별가';
+  }
+  function headOf(p,T,L){
+    var v=(p['head_'+L]||'').trim();if(v)return rich(v);
+    var pr=T.filter(function(t){return t.kind!=='pct';});
+    if(pr.length){var lo=pr.slice().sort(function(a,b){return a.fin-b.fin;})[0];
+      return L==='en'?'From <b>'+money(lo.fin)+'</b> per '+unitTxt(lo.unit,'en'):(lo.unit+'당 <span class="nw"><b>'+money(lo.fin)+'</b>부터</span>');}
+    var hi=Math.max.apply(null,T.map(function(t){return t.val;}).concat([0]));
+    return L==='en'?'Up to <b>'+hi+'%</b> off':'최대 <span class="nw"><b>'+hi+'%</b> 할인</span>';
+  }
+  function subOf(p,T,L){
+    var v=(p['sub_'+L]||'').trim();if(v)return esc(v);
+    var nm=names(T,L);
+    var m=monthNo(p),full=isFullMonth(p);
+    if(L==='en')return esc(nm)+(full?' — discounted for the whole of '+MON[m-1]+'.':' — discounted for a limited time.');
+    return esc(nm)+(full?' — '+m+'월 한 달 동안 할인해 드립니다.':' — 기간 한정으로 할인해 드립니다.');
+  }
+  function chipOf(p,L){var m=monthNo(p),y=yearNo(p),e=(p.emoji||'🎁');
+    return e+' '+(L==='en'?MON[m-1]+' '+y+' limited offer':y+'년 '+m+'월 한시 할인');}
+  function minOn(p){return !!p.min_on&&(+p.min_charge>0);}
+
+  /* 예시 수량 — 최소 청구금액이 있으면 그 금액을 넘는 첫 수량 */
+  function exQty(t,p){var n=t.q;if(minOn(p)){while(n*t.fin<+p.min_charge&&n<30)n++;}else if(t.kind!=='pct'&&n<2)n=Math.min(4,Math.max(n,3));return n;}
+  function exLine(t,p,L){var n=exQty(t,p),u=unitTxt(t.unit,L);
+    return (L==='en'?'e.g. '+n+' '+u+(n>1&&u.length>2?'s':'')+' ':'예) '+n+u+' ')+money(n*t.base)+' → '+money(n*t.fin);}
+
+  function noteRows(p,T,L){
+    return (p.notes||[]).map(function(n){
+      var t=(n['t_'+L]||'').trim()||(n.t_ko||'').trim(),b;
+      if(n.auto==='target')b=names(T,L);
+      else if(n.auto==='period')b=L==='en'?dateShort(p,'en')+' · services completed within the period only':dateShort(p,'ko')+' · 기간 내 완료된 서비스에 한합니다';
+      else if(n.auto==='min'){if(!minOn(p))return null;var mc=money(+p.min_charge);
+        b=L==='en'?'If the final amount after discount is '+mc+' or less, '+mc+' is charged · paid parking RM 10 (2 hrs) extra'
+          :'할인된 최종 청구금액이 '+mc+' 이하인 경우 '+mc+' 청구 · 유료 주차 시 RM 10(2시간 기준) 별도';}
+      else b=(n['b_'+L]||'').trim()||(n.b_ko||'').trim();
+      if(!t&&!b)return null;
+      return {ic:n.ic||'•',t:t,b:b};
+    }).filter(Boolean);
+  }
+
+  /* ── 화면 HTML (home.html 기존 마크업과 같은 구조) ── */
+  function heroHTML(p,T,L,t0){
+    var dd=dday(p,L,t0),ko=L!=='en';
+    var tp=T.slice(0,4).map(function(t){
+      if(t.kind==='pct')return '<span class="pm-tp'+(t.best?' best':'')+'"><b>'+t.val+'%</b>'+esc(ko?t.cko:t.cen)+'</span>';
+      return '<span class="pm-tp'+(t.best?' best':'')+'"><b>'+money(t.fin)+'</b>'+esc(ko?t.cko:t.cen)+'<span class="was">'+(ko?'정상 ':'Reg. ')+'<s>'+money(t.base)+'</s></span></span>';
+    }).join('');
+    var right;
+    if(minOn(p)){
+      var mc=+p.min_charge,ex=[];
+      T.filter(function(t){return t.kind!=='pct';}).slice(0,2).forEach(function(t){
+        var lo=t.q;if(lo*t.fin>=mc){ex.push([t,lo,false]);return;}
+        var hi=lo;while(hi*t.fin<mc&&hi<30)hi++;
+        var below=hi-1>=t.q?hi-1:null;if(below!=null)ex.push([t,below,true]);ex.push([t,hi,false]);
+      });
+      right='<div class="pm-pts oct" data-emoji="'+esc(p.emoji||'🎁')+'"><div class="pp-tag">'+(ko?'💡 꼭 확인하세요':'💡 Please note')+'</div>'+
+        '<div class="pp-mc"><small>'+(ko?'최소 청구금액':'Minimum charge')+'</small>'+money(mc)+'</div>'+
+        '<div class="pp-was">'+(ko?'할인된 최종 청구금액이 '+money(mc)+' 이하인 경우 '+money(mc)+'이 청구됩니다.':'If the final amount after discount is '+money(mc)+' or less, '+money(mc)+' is charged.')+'</div>'+
+        (ex.length?'<ul class="pp-ex">'+ex.slice(0,4).map(function(e){var t=e[0],n=e[1],u=unitTxt(t.unit,L),nm=(ko?t.cko+' '+n+u:t.cen+' × '+n);
+          return '<li><span>'+esc(nm)+'</span><span>'+(e[2]?'<s>'+money(n*t.fin)+'</s><b>'+money(mc)+(ko?' 청구':' charged')+'</b>':'<b>'+money(n*t.fin)+(ko?' 청구':' charged')+'</b>')+'</span></li>';}).join('')+'</ul>':'')+
+        '<a class="pp-go" href="#pricing" data-qm="pricing|🏷️|가격정보">'+(ko?'견적 계산기로 확인하기':'Check with the quote calculator')+' <span class="ar">›</span></a></div>';
+    }else{
+      right='<div class="pm-pts oct" data-emoji="'+esc(p.emoji||'🎁')+'"><div class="pp-tag">'+(ko?'💡 이렇게 적용됩니다':'💡 How it works out')+'</div>'+
+        '<ul class="pp-ex">'+T.slice(0,4).map(function(t){var n=exQty(t,p),u=unitTxt(t.unit,L);
+          return '<li><span>'+esc(ko?t.cko+' '+n+u:t.cen+' × '+n)+'</span><span><s>'+money(n*t.base)+'</s><b>'+money(n*t.fin)+'</b></span></li>';}).join('')+'</ul>'+
+        '<a class="pp-go" href="#pricing" data-qm="pricing|🏷️|가격정보">'+(ko?'견적 계산기로 확인하기':'Check with the quote calculator')+' <span class="ar">›</span></a></div>';
+    }
+    return '<div class="pm-hero evt-dyn'+(dd.end?' ended':'')+'" id="pm-hero-dyn"><div class="pm-left">'+
+      '<div class="pm-chips"><span class="pm-chip">'+esc(chipOf(p,L))+'</span><span class="pm-chip dday'+(dd.end?' end':'')+'">'+esc(dd.txt)+'</span></div>'+
+      '<h3 class="pm-title"><span class="t1">'+esc(titleOf(p,L))+'</span><span class="t2">'+headOf(p,T,L)+'</span></h3>'+
+      '<p class="pm-sub">'+subOf(p,T,L)+'</p>'+
+      '<div class="pm-tiers">'+tp+'</div>'+
+      '<p class="pm-date">📅 '+esc(dateLine(p,L))+(ko?' · 기간 내 완료된 서비스':' · services completed within the period')+'</p>'+
+      '<div class="pm-cta"><a class="btn btn-gold" href="#pricing" data-qm="pricing|🏷️|가격정보">'+(ko?'📐 견적 계산기로 내 할인 확인':'📐 Check my discount in the estimator')+'</a>'+
+      '<a class="btn btn-onnavy" href="request.html'+(ko?'':'?lang=en')+'">'+(ko?'예약 신청하기':'Book now')+' <span class="ar">→</span></a></div>'+
+      '</div>'+right+'</div>';
+  }
+  function gridHTML(p,T,L){
+    var ko=L!=='en',n=Math.min(T.length,4);if(!n)return '';
+    return '<div class="pm-grid3 evt-dyn pm-gn" style="--pmn:'+n+'">'+T.map(function(t){
+      var rib=t.kind==='pct'?'':'<div class="rib">'+money(t.off)+(ko?' 할인':' off')+'</div>';
+      var big=t.kind==='pct'?t.val+'%':'<small>RM</small>'+(money(t.fin).slice(3));
+      var was=t.kind==='pct'?(ko?'정상가 ':'Regular ')+(t.bmin<t.base?money(t.bmin)+' ~ ':'')+money(t.base)+' · '+perUnit(t.unit,L)
+        :(ko?'정상가 <s>'+money(t.base)+'</s> · '+perUnit(t.unit,L):'Regular <s>'+money(t.base)+'</s> · '+perUnit(t.unit,L));
+      return '<div class="pm-tier'+(t.best?' best':'')+'">'+rib+'<div class="pct">'+big+'</div><div class="thr">'+esc(ko?t.lko:t.len)+'</div>'+
+        '<div class="was">'+was+'</div><div class="save">'+esc(exLine(t,p,L))+'</div></div>';
+    }).join('')+'</div>';
+  }
+  function detailHTML(p,T,L){
+    var R=noteRows(p,T,L);if(!R.length)return '';
+    return '<div class="pm-detail evt-dyn"><div class="pm-dh">'+(L==='en'?'📌 Details · please read before booking':'📌 상세 안내 · 꼭 확인해 주세요')+'</div><div class="pm-dgrid">'+
+      R.map(function(r){return '<div class="pm-drow"><span class="ic">'+esc(r.ic)+'</span><div><b>'+esc(r.t)+'</b><p>'+esc(r.b)+'</p></div></div>';}).join('')+'</div></div>';
+  }
+  function calcNoteHTML(p,T,L){
+    var ko=L!=='en';
+    var list=T.map(function(t){return t.kind==='pct'?(ko?t.lko+' '+t.val+'% 할인':t.len+' '+t.val+'% off'):(ko?t.cko+' '+perUnit(t.unit,'ko')+' '+money(t.fin):t.cen+' '+money(t.fin)+' '+perUnit(t.unit,'en'));}).join(' · ');
+    return '<div class="cpn fix evt-dyn"><span class="ic">'+esc(p.emoji||'🎁')+'</span><div><b>'+esc(titleOf(p,L))+' ('+esc(dateShort(p,L))+')</b>'+
+      '<span class="s">'+esc(list)+(ko?' 자동 반영':' applied automatically')+'<br>'+(ko?'· 타 쿠폰·프로모션과 중복 불가 (상시 진행 이벤트는 중복 가능) · 부품비·자재비·수리비 제외':'· Not combinable with other coupons/promotions (always-on offers can be combined) · parts, materials and repairs excluded')+'</span></div></div>';
+  }
+
+  /* 짧은 한 줄 요약 — 전자명함 · 안내 문구용  예) 에어컨 RM 95부터 · 매트리스 15% · 11/30까지 */
+  function cardLine(p,T,L){
+    var seen={},parts=[];
+    T.forEach(function(t){
+      var fk=t.fk||t.lko,key=fk;
+      var nm=L==='en'?((t.fe||t.len)==='Wall-mounted AC'?'A/C':(t.fe||t.len)):String(fk).split(' ').pop();
+      if(seen[key]){var o=seen[key];if(t.kind!=='pct'){o.price=o.price==null?t.fin:Math.min(o.price,t.fin);}else o.pct=Math.max(o.pct||0,t.val);return;}
+      seen[key]={nm:nm,price:t.kind!=='pct'?t.fin:null,pct:t.kind==='pct'?t.val:null};parts.push(seen[key]);
+    });
+    var out=parts.slice(0,2).map(function(o){
+      if(o.price!=null)return L==='en'?o.nm+' from '+money(o.price):o.nm+' '+money(o.price)+'부터';
+      return L==='en'?o.nm+' '+o.pct+'% off':o.nm+' '+o.pct+'%';
+    });
+    var b=dObj(p.to);
+    if(b)out.push(L==='en'?'until '+b.getDate()+' '+MON3[b.getMonth()]:(b.getMonth()+1)+'/'+b.getDate()+'까지');
+    return out.join(' · ');
+  }
+  /* 품목별 할인 나열 — 의뢰신청서 안내 문구용 */
+  function tierText(T,L){
+    return T.map(function(t){return t.kind==='pct'?(L==='en'?t.len+' '+t.val+'% off':t.lko+' '+t.val+'% 할인')
+      :(L==='en'?t.len+' '+money(t.fin)+'/'+unitTxt(t.unit,'en'):t.lko+' '+perUnit(t.unit,'ko')+' '+money(t.fin));}).join(' · ');
+  }
+  /* Firestore REST 응답 → 일반 객체 (SDK 없이 읽는 화면용) */
+  function fsVal(v){if(!v)return null;
+    if('stringValue' in v)return v.stringValue;if('integerValue' in v)return +v.integerValue;if('doubleValue' in v)return v.doubleValue;
+    if('booleanValue' in v)return v.booleanValue;if('nullValue' in v)return null;if('timestampValue' in v)return v.timestampValue;
+    if('arrayValue' in v)return (v.arrayValue.values||[]).map(fsVal);
+    if('mapValue' in v){var o={},f=v.mapValue.fields||{};for(var k in f)o[k]=fsVal(f[k]);return o;}return null;}
+  function fetchAll(cb){
+    var u='https://firestore.googleapis.com/v1/projects/happywork-packageplan/databases/(default)/documents/promos?pageSize=60&key=AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00';
+    var done=false,to=setTimeout(function(){if(!done){done=true;cb(null);}},6000);
+    try{fetch(u).then(function(r){return r.ok?r.json():null;}).then(function(j){if(done)return;done=true;clearTimeout(to);
+      if(!j){cb(null);return;}
+      cb((j.documents||[]).map(function(d){var o=fsVal({mapValue:{fields:d.fields||{}}});o.month=o.month||String(d.name).split('/').pop();return o;}));
+    }).catch(function(){if(!done){done=true;clearTimeout(to);cb(null);}});}catch(e){done=true;clearTimeout(to);cb(null);}
+  }
+  function defaultNotes(){return [
+    {ic:'✅',auto:'target',t_ko:'적용 대상',t_en:'Eligible services'},
+    {ic:'🚫',t_ko:'제외 항목',t_en:'Not included',b_ko:'부품비 · 자재비 · 수리비는 할인 대상에서 제외됩니다',b_en:'Parts, materials and repair charges are excluded from the discount'},
+    {ic:'⚙️',t_ko:'적용 방법',t_en:'How it applies',b_ko:'별도 신청 없이 예약 시 자동 반영 · 인보이스에 할인 금액이 표시됩니다 · 견적 계산기에서 미리 확인 가능',b_en:'No request needed — applied automatically at booking · the discount is shown on your invoice · preview it in the estimator'},
+    {ic:'🔁',t_ko:'중복 적용',t_en:'Combining offers',b_ko:'타 쿠폰·프로모션과 중복 불가 · 상시 진행 프로모션(커튼 50% · 공동의뢰)은 중복 가능',b_en:'Cannot be combined with other coupons or promotions · always-on offers (curtain 50% · group booking) can be combined'},
+    {ic:'📅',auto:'period',t_ko:'기간',t_en:'Period'},
+    {ic:'💳',auto:'min',t_ko:'최소 청구금액',t_en:'Minimum charge'}
+  ];}
+
+  return {esc:esc,money:money,today:today,monthRange:monthRange,nextDay:nextDay,stateOf:stateOf,pickLive:pickLive,dday:dday,
+    tiers:tiers,calcRows:calcRows,titleOf:titleOf,headOf:headOf,subOf:subOf,chipOf:chipOf,dateLine:dateLine,dateShort:dateShort,
+    noteRows:noteRows,names:names,heroHTML:heroHTML,gridHTML:gridHTML,detailHTML:detailHTML,calcNoteHTML:calcNoteHTML,
+    defaultNotes:defaultNotes,cardLine:cardLine,tierText:tierText,fetchAll:fetchAll,fsVal:fsVal,perUnit:perUnit,unitTxt:unitTxt,exLine:exLine,exQty:exQty,isFullMonth:isFullMonth,autoLabel:autoLabel,minOn:minOn,MON:MON};
+})();
+
+/* ---------- 📅 월별 프로모션 그리기 ----------
+   관리자 화면(promo-admin.html)에서 「공개」한 프로모션 중 오늘이 기간 안에 드는 것을 이벤트 영역 · 견적 계산기에 보여 줍니다.
+   ?promo_preview=1 로 열리면 관리자 미리보기 창이 보내 주는 작성 중 내용을 대신 그립니다(저장된 내용과 무관). */
+(function(){
+  var CUR=null, html=document.documentElement, staticEvt=html.getAttribute('data-evt')||'none';
+  var PREVIEW=/[?&]promo_preview=1(&|$)/.test(location.search);
+  window.__promoPreview=PREVIEW;
+  function lang(){return window.currentSiteLang==='en'?'en':'ko';}
+  function render(){
+    var top=document.getElementById('pm-dyn-top'),bot=document.getElementById('pm-dyn-bot'),cp=document.getElementById('cpn-dyn');
+    if(!top)return;
+    var C=window.__hhcCats||[], T=CUR?HHCPromo.tiers(CUR,C):[];
+    if(!CUR||!T.length){
+      top.innerHTML='';if(bot)bot.innerHTML='';if(cp)cp.innerHTML='';
+      if(html.getAttribute('data-evt')==='dyn')html.setAttribute('data-evt',staticEvt);
+      if(window.__calcPromo)window.__calcPromo([],null);
+      return;
+    }
+    var L=lang();
+    top.innerHTML=HHCPromo.heroHTML(CUR,T,L)+HHCPromo.gridHTML(CUR,T,L);
+    if(bot)bot.innerHTML=HHCPromo.detailHTML(CUR,T,L);
+    if(cp)cp.innerHTML=HHCPromo.calcNoteHTML(CUR,T,L);
+    html.setAttribute('data-evt','dyn');
+    if(window.__calcPromo)window.__calcPromo(HHCPromo.calcRows(CUR,C),CUR);
+  }
+  window.__promoRender=render;
+  window.__promoApply=function(list){if(PREVIEW)return;CUR=HHCPromo.pickLive(list);render();};
+  if(PREVIEW){
+    window.addEventListener('message',function(e){
+      if(e.origin!==location.origin||!e.data||e.data.type!=='hhc-promo-preview')return;
+      CUR=e.data.promo||null;render();
+      var sec=document.getElementById('promotion');
+      if(sec)setTimeout(function(){var n=document.getElementById('nav');window.scrollTo(0,sec.getBoundingClientRect().top+window.pageYOffset-(n?n.offsetHeight:72));},60);
+    });
+    function ready(){try{if(window.parent!==window)window.parent.postMessage({type:'hhc-promo-ready'},location.origin);}catch(e){}}
+    if(document.readyState==='complete')ready();else window.addEventListener('load',ready);
+  }
+})();
+</script>
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, addDoc, doc, updateDoc, increment, onSnapshot, query, orderBy, limit } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, addDoc, doc, updateDoc, increment, onSnapshot, query, orderBy, limit, getDocs } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
 const FIREBASE_CFG={
@@ -4597,6 +4952,13 @@ const FIREBASE_CFG={
 const app=initializeApp(FIREBASE_CFG);
 const db=getFirestore(app);
 const storage=getStorage(app);
+
+/* 📅 월별 프로모션 불러오기 (관리자 화면 promo-admin.html 에서 공개한 내용) */
+if(!window.__promoPreview){
+  getDocs(collection(db,'promos')).then(function(s){
+    if(window.__promoApply)window.__promoApply(s.docs.map(function(d){return Object.assign({month:d.id},d.data());}));
+  }).catch(function(e){console.warn('promo load failed:',e);});
+}
 
 const LIKED_KEY='hhc_liked_reviews';
 function getLikedSet(){

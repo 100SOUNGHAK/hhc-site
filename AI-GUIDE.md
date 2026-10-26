@@ -2,7 +2,7 @@
 
 > 이 문서를 ChatGPT 등 다른 AI에게 그대로 붙여넣으면, 이 프로젝트의 구조와 규칙을
 > 이해한 상태에서 작업을 시작할 수 있습니다. **여기 적힌 규칙을 어기는 수정은
-> 실서비스 화면을 깨뜨립니다.** 마지막 갱신: 2026-08-24
+> 실서비스 화면을 깨뜨립니다.** 마지막 갱신: 2026-10-26
 
 ---
 
@@ -43,6 +43,8 @@
 | `coupon.html` | 고객용 상품권 보기 |
 | `booking.html` / `request.html` | 예약 신청서 / 서비스 의뢰 요청서 |
 | `home.html` | **현재 홈페이지.** 가격정보 섹션 앵커는 `#pricing` |
+| `event.html` | **이달의 이벤트 안내장 (자동).** 관리자 화면 promo-admin에서 공개한 이번 달 프로모션을 그대로 그린다. 고객에게는 항상 `/event` 하나만 보내면 된다. 없으면 상시 혜택 안내 |
+| `event-oct.html` | 10월 한정 특별가 고정 안내장 (보존용). 11월부터는 열면 `event.html`로 넘어간다 |
 | `service-info.html` | **예전 홈페이지.** 아직 저장소에 남아 있으나 어디서도 연결하지 않는다. 새 링크를 여기로 걸지 말 것 |
 | `membership.html` | 멤버십 패키지 안내장 (영문 og용 `membership-en.html`) |
 | `evoucher.html` / `points.html` | 전자상품권 · 적립포인트 안내장 (membership과 같은 구조) |
@@ -61,6 +63,7 @@
 | `schedule.html` | 일정 캘린더 (방문 안내 메시지 3종 포함) |
 | `schedule-widget.html` | 일정 위젯 (달력 + 오늘·내일). ☀️ 화면 켜둠(Wake Lock) 버튼 있음 · `?w=1` 초압축 모드 |
 | `schedule-list-widget.html` | **일정 리스트 위젯.** 달력 없이 오늘 + 앞으로 2일만 리스트로. 위와 별개 앱 아이콘 |
+| `promo-admin.html` | **월별 프로모션 관리 (직원앱 「이벤트관리」 탭).** 달마다 할인 품목·최소 청구금액·안내문 입력 → 홈페이지 이벤트 영역 · 견적 계산기 · 의뢰신청서 계산기 · 전자명함 이벤트 줄 · `event.html` 에 한꺼번에 반영. 시작일·종료일에 맞춰 자동 노출/종료 |
 | `quote-admin.html` / `request-admin.html` / `memo-admin.html` / `coupon-admin.html` / `expense-admin.html` / `review-admin.html` | 견적·의뢰·메모(수리요청)·상품권·지출·리뷰 관리 |
 | `staffapp.html` | 직원용 허브 |
 
@@ -151,7 +154,8 @@ QR이 미리 그려진 SVG(`qrKo`, `qrEn`)로 코드에 박혀 있다. 주소 �
 `inspections`(client, phone, type: inspect/dispatch/install/washer, results[], coolUnits[], workVideos[]) ·
 `contracts`(name, package_id, amount_paid, usage_history JSON) · `coupons`(name 구매자, receiver, code, type: gift/discount, status) ·
 `bookings`(customer_name, booking_date/time, status: waiting/booked/confirmed) · `quotes` · `memos`(수리요청: name, req_date, visit_date, status: pending/contacted/done) ·
-`schedules` · `settings/{points,kakao,insp_phrases}`
+`schedules` · `settings/{points,kakao,insp_phrases}` ·
+`promos`(문서ID=`YYYY-MM`, status: live/draft, from·to, emoji, title_ko/en·head·sub(비우면 자동 문구), items[]{it 품목, m 방식, q 최소수량, kind price특가/off할인액/pct할인율, val, best}, min_on·min_charge, notes[], **disp**{t_ko,t_en,c_ko,c_en} = 전자명함용 요약, 관리자 저장 시 자동 생성)
 
 - 고객 매칭 규칙: 이름 정규화(`공백 제거·소문자`) + 별칭(aliases) + 전화번호 뒷자리. 수동 연결은 `ca_link`/`ca_links` 필드.
 - 고객정보 통합(HHCC 엔진): 이름/전화 수정 시 9개 컬렉션에 전파. customer-admin이 원장.
@@ -272,3 +276,17 @@ namecard QR SVG 재생성, OAuth 원본 추가). 4장 참조
   `https://raw.githubusercontent.com/100SOUNGHAK/hhc-site/main/AI-GUIDE.md`
 - 큰 작업이 끝날 때마다 11장(최근 작업)을 갱신해 두면, 어떤 AI와 새 대화를 시작해도
   같은 지점에서 이어서 작업할 수 있다.
+
+## 13. 📅 월별 프로모션 시스템 (2026-10-26 신설)
+
+- 입력: `promo-admin.html` → Firestore `promos/{YYYY-MM}`
+- 「공개(live)」이고 오늘이 from~to 안에 드는 문서 하나가 「지금 진행 중」 (겹치면 늦게 시작한 쪽)
+- 반영되는 곳 5곳: `home.html` #promotion·견적 계산기 / `request.html` 계산기 / `event.html` / `namecard.html` 이벤트 줄
+- **⚠️ 계산 엔진 `HHCPromo` 가 4개 파일에 똑같은 내용으로 들어 있다** —
+  `promo-admin.html`, `home.html`, `request.html`, `event.html`. 한 곳을 고치면 네 곳 모두 같게 고칠 것
+  (파일 안 「HHC 월별 프로모션 엔진」 주석으로 찾는다)
+- 품목·정상가는 각 화면의 가격표(home `CATS`, request `CALC_PRICES`)를 쓴다. 가격표에서 품목 이름을 바꾸면
+  이미 저장된 프로모션의 그 품목은 할인이 빠진다 → 관리자 화면에서 다시 골라야 함. `promo-admin.html`·`event.html` 안의 CATS 사본도 같이 갱신
+- 공개된 프로모션이 없을 때: 10/31까지는 기존 10월 고정 블록이 보이고, 그 뒤로는 상시 혜택만 보인다
+- 관리자 「미리보기」는 `home.html?promo_preview=1` / `event.html?promo_preview=1` 을 열고 작성 중 내용을 postMessage로 넘긴다 (같은 도메인에서만)
+- `namecard.html`·`event.html` 은 Firebase SDK 없이 Firestore REST로 읽는다
