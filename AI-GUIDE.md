@@ -288,7 +288,7 @@ namecard QR SVG 재생성, OAuth 원본 추가). 4장 참조
 - 품목·정상가는 각 화면의 가격표(home `CATS`, request `CALC_PRICES`)를 쓴다. 가격표에서 품목 이름을 바꾸면
   이미 저장된 프로모션의 그 품목은 할인이 빠진다 → 관리자 화면에서 다시 골라야 함. `promo-admin.html`·`event.html` 안의 CATS 사본도 같이 갱신
 - 공개된 프로모션이 없을 때: 10/31까지는 기존 10월 고정 블록이 보이고, 그 뒤로는 상시 혜택만 보인다
-- 관리자 「미리보기」는 `home.html?promo_preview=1` / `event.html?promo_preview=1` 을 열고 작성 중 내용을 postMessage로 넘긴다 (같은 도메인에서만)
+- 관리자 「미리보기」는 `home.html` / `event.html` / `namecard.html` 을 `?promo_preview=1` 로 열고 작성 중(임시저장 포함) 내용을 postMessage로 넘긴다 (같은 도메인에서만). 이 모드에서는 저장된 데이터를 읽지 않으며, 홈페이지 계산기는 날짜와 상관없이 할인을 보여 준다
 - `namecard.html`·`event.html` 은 Firebase SDK 없이 Firestore REST로 읽는다
 - **♾️ 상시 혜택** — 같은 컬렉션의 문서 `promos/_always` (items[] 순서 = 화면 순서). 관리자 「상시 혜택」 탭에서 수정·숨김·삭제·추가·순서 변경.
   홈페이지 「상시 진행 혜택」 카드 · 전자명함 혜택 줄 · 이벤트 안내장(이벤트 없는 달) · 두 계산기의 상시 할인(커튼 50% 등)이 이 목록을 따른다.

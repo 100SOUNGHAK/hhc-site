@@ -744,7 +744,32 @@ var EVENTS = [
 /* 📅 월별 프로모션 — 관리자 화면(promo-admin.html)에서 공개한 이번 달 이벤트가 있으면 그것을 보여 준다.
    제목·한 줄 요약은 관리자 화면이 저장할 때 같이 만들어 둔 것(disp)을 그대로 쓴다. */
 var DYN_EV = null;
+/* 관리자 화면(이벤트관리) 미리보기 — ?promo_preview=1 로 열리면 저장된 내용 대신 작성 중인 내용을 받아서 그린다 */
+var PREVIEW = /[?&]promo_preview=1(&|$)/.test(location.search);
+function applyPreview(d){
+  var p = d.promo;
+  if(p && p.disp){
+    T.ko.__dt = p.disp.t_ko; T.ko.__dd = p.disp.c_ko;
+    T.en.__dt = p.disp.t_en || p.disp.t_ko; T.en.__dd = p.disp.c_en || p.disp.c_ko;
+    DYN_EV = { path:'/event', tk:'__dt', dk:'__dd', emoji: p.emoji || '🎁', plain:true };
+  } else DYN_EV = null;
+  if(Array.isArray(d.always)) buildPerks(d.always);
+  if(typeof render === 'function') render();
+  var box = document.getElementById('perkBox');
+  if(box) setTimeout(function(){ var y = box.getBoundingClientRect().top + window.pageYOffset - 12;
+    try{ window.scrollTo({ top: y, behavior: 'instant' }); }catch(e){ window.scrollTo(0, y); }
+    box.style.transition = 'box-shadow .3s'; box.style.boxShadow = '0 0 0 3px #c9a44c'; setTimeout(function(){ box.style.boxShadow = ''; }, 1600); }, 120);
+}
 function loadPromo(){
+  if(PREVIEW){
+    window.addEventListener('message', function(e){
+      if(e.origin !== location.origin || !e.data || e.data.type !== 'hhc-promo-preview') return;
+      applyPreview(e.data);
+    });
+    var rdy = function(){ try{ if(window.parent !== window) window.parent.postMessage({type:'hhc-promo-ready'}, location.origin); }catch(e){} };
+    if(document.readyState === 'complete') rdy(); else window.addEventListener('load', rdy);
+    return;
+  }
   var u = 'https://firestore.googleapis.com/v1/projects/happywork-packageplan/databases/(default)/documents/promos?pageSize=60&key=AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00';
   function val(v){ if(!v) return null;
     if('stringValue' in v) return v.stringValue; if('integerValue' in v) return +v.integerValue; if('doubleValue' in v) return v.doubleValue;
