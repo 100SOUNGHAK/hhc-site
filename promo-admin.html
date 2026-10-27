@@ -171,6 +171,10 @@ select.in{text-overflow:ellipsis;padding-right:28px}
 .lg{display:flex;background:rgba(255,255,255,.12);border-radius:999px;padding:3px}
 .lg button{font-size:12px;font-weight:800;color:#c9d3e6;background:none;border:none;border-radius:999px;padding:6px 11px;cursor:pointer}
 .lg button.on{background:#fff;color:var(--navy)}
+#pv .png{height:36px;padding:0 14px;border-radius:999px;border:none;background:linear-gradient(135deg,#E3C98A,#C9A44C);color:#0B1833;font-family:inherit;font-size:12.5px;font-weight:900;cursor:pointer;white-space:nowrap;box-shadow:0 6px 14px -6px rgba(201,164,76,.7)}
+#pv .png:active{transform:translateY(1px)}
+#pv .png[disabled]{opacity:.6;cursor:wait}
+#pv .png[hidden]{display:none}
 #pv .cl{width:36px;height:36px;border-radius:50%;border:none;background:rgba(255,255,255,.14);color:#fff;font-size:15px;font-weight:900;cursor:pointer}
 #pv .fr{flex:1;position:relative;background:#fdfcf9;border-radius:16px 16px 0 0;overflow:hidden}
 #pv iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
@@ -233,7 +237,7 @@ select.in{text-overflow:ellipsis;padding-right:28px}
   .vrow{grid-template-columns:1fr 130px}
 }
 @media(max-width:520px){ .it .two.sel{grid-template-columns:1fr} }
-@media(max-width:480px){ #pv .pv-h{flex-wrap:wrap} #pv .pv-h b{flex-basis:calc(100% - 50px);order:1} #pv .cl{order:2} #pv .lg{order:3} }
+@media(max-width:480px){ #pv .pv-h{flex-wrap:wrap} #pv .pv-h b{flex-basis:calc(100% - 50px);order:1} #pv .cl{order:2} #pv .lg{order:3} #pv .png{order:4} }
 @media(max-width:380px){
   body{padding-left:10px;padding-right:10px}
   .two{grid-template-columns:1fr}
@@ -251,6 +255,7 @@ select.in{text-overflow:ellipsis;padding-right:28px}
   <span class="sp"></span>
   <button class="hbtn" onclick="window.open('home.html#promotion','_blank')">🏠 홈페이지</button>
   <button class="hbtn" onclick="copyEvt()">🔗 안내장 링크</button>
+  <button class="hbtn" onclick="evtPng()">🖼️ 안내장 PNG</button>
 </div>
 
 <!-- ═════════ 목록 ═════════ -->
@@ -430,6 +435,7 @@ select.in{text-overflow:ellipsis;padding-right:28px}
     <b>미리보기<span>임시저장·작성 중인 내용도 그대로 보입니다</span></b>
     <div class="lg pg2"><button class="on" data-p="home" onclick="pvPage('home')">홈페이지</button><button data-p="event" onclick="pvPage('event')">안내장</button><button data-p="card" onclick="pvPage('card')">전자명함</button></div>
     <div class="lg"><button class="on" data-l="ko" onclick="pvLang('ko')">한국어</button><button data-l="en" onclick="pvLang('en')">EN</button></div>
+    <button class="png" id="pv-png" onclick="savePng()" hidden>📷 PNG 저장</button>
     <button class="cl" onclick="closePreview()" aria-label="닫기">✕</button>
   </div>
   <div class="fr"><div class="ld">홈페이지를 여는 중…</div><iframe id="pv-fr" title="미리보기"></iframe></div>
@@ -1093,7 +1099,7 @@ function pvSend(){const f=$('pv-fr');if(!f.contentWindow)return;
     /* 상시 혜택 미리보기 : 작성 중인 혜택을 목록에 넣어서, 이달 프로모션은 지금 공개된 그대로 */
     const L=clone(alwList());if(AED){if(AEDI<0)L.push(clone(AED));else L[AEDI]=clone(AED);}
     always=L.map(a=>cleanAlw(a));promo=pvP==='event'?null:(P.pickLive(LIST)||null);
-  }else{promo=clean(ED);always=ALW;}
+  }else{promo=ED?clean(ED):(P.pickLive(LIST)||null);always=ALW;}   // 목록 화면(작성 중 아님)에서는 지금 공개 중인 이벤트
   f.contentWindow.postMessage({type:'hhc-promo-preview',promo:promo,always:always,lang:pvL},location.origin);}
 window.openPreview=function(){
   $('pv').hidden=false;document.body.style.overflow='hidden';
@@ -1103,10 +1109,71 @@ window.openPreview=function(){
   f.src=PV_URL[pvP]+(pvL==='en'?'&lang=en':'')+(pvP==='home'?'#promotion':'');
 };
 let pvP='home';
-window.pvPage=function(x){pvP=x;document.querySelectorAll('.pg2 button').forEach(b=>b.classList.toggle('on',b.dataset.p===x));openPreview();};
+window.pvPage=function(x){pvP=x;document.querySelectorAll('.pg2 button').forEach(b=>b.classList.toggle('on',b.dataset.p===x));const pb=$('pv-png');if(pb)pb.hidden=(x!=='event');openPreview();};
 window.closePreview=function(){$('pv').hidden=true;document.body.style.overflow='';$('pv-fr').src='about:blank';};
 window.pvLang=function(l){pvL=l;document.querySelectorAll('.lg button[data-l]').forEach(b=>b.classList.toggle('on',b.dataset.l===l));openPreview();};
 window.addEventListener('message',e=>{if(e.data&&e.data.type==='hhc-promo-ready'){pvReady=true;pvSend();}});
+
+/* ══════════ 🖼️ 안내장 PNG 저장 ══════════
+   미리보기 화면의 안내장(event.html)을 그대로 이미지로 만듭니다 — 작성 중 · 임시저장 내용도 그대로.
+   · 하단 버튼바 · 언어 버튼은 빼고, 안내장 본문만 2배 해상도(약 1040px 폭)로 저장합니다.
+   · 휴대폰에서는 공유 창(사진 저장 · 왓츠앱 등)이 열리고, PC 에서는 파일로 내려받습니다. */
+const H2C_SRC='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+function pvWaitReady(ms){return new Promise(res=>{const t0=Date.now();(function chk(){if(pvReady||Date.now()-t0>ms)return res(pvReady);setTimeout(chk,150);})();});}
+window.evtPng=async function(){
+  pvPage('event');
+  await pvWaitReady(15000);
+  await new Promise(r=>setTimeout(r,900));   // 받은 내용으로 다시 그리는 시간
+  savePng();
+};
+window.savePng=async function(){
+  const btn=$('pv-png'),f=$('pv-fr');
+  if(pvP!=='event'){toast('안내장 미리보기에서 저장할 수 있습니다');return;}
+  const w=f&&f.contentWindow,d=f&&f.contentDocument;
+  const el=d&&d.getElementById('pg');
+  if(!el||!el.children.length){toast('안내장을 아직 불러오는 중입니다 — 잠시 후 다시 눌러 주세요');return;}
+  if(btn){btn.disabled=true;btn.textContent='⏳ 만드는 중…';}
+  try{
+    if(!w.html2canvas){
+      await new Promise((res,rej)=>{const sc=d.createElement('script');sc.src=H2C_SRC;sc.onload=res;sc.onerror=()=>rej(new Error('이미지 도구를 불러오지 못했습니다'));d.head.appendChild(sc);});
+    }
+    try{if(d.fonts&&d.fonts.ready)await d.fonts.ready;}catch(e){}
+    const canvas=await w.html2canvas(el,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,
+      width:520,windowWidth:520,scrollX:0,scrollY:-w.scrollY,   // 휴대폰에서 만들어도 항상 같은 크기(1040px 폭)
+      onclone:function(cd){
+        const st=cd.createElement('style');
+        st.textContent='.bar,.lgb{display:none!important}html,body{background:#fff!important}.pg{padding-bottom:0!important;min-height:0!important;box-shadow:none!important;width:520px!important;max-width:520px!important;margin:0!important}';
+        cd.head.appendChild(st);
+        // 글자에 그라데이션을 입힌 곳(background-clip:text)은 이미지 도구가 네모로 칠해 버리므로 금색 글자로 바꿉니다
+        const cw=cd.defaultView;
+        cd.querySelectorAll('#pg *').forEach(n=>{
+          let cs=null;try{cs=cw.getComputedStyle(n);}catch(e){}
+          if(!cs)return;
+          const bc=cs.webkitBackgroundClip||cs.backgroundClip||'';
+          if(bc==='text'){n.style.background='none';n.style.webkitTextFillColor='#F3D58A';n.style.color='#F3D58A';}
+          if(cs.backdropFilter&&cs.backdropFilter!=='none'){n.style.backdropFilter='none';n.style.webkitBackdropFilter='none';}
+        });
+      }});
+    const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));
+    if(!blob)throw new Error('이미지를 만들지 못했습니다');
+    const ym=(ED&&ED.from?String(ED.from).slice(0,7):new Date().toISOString().slice(0,7));
+    const name='HHC_Event_'+ym+(pvL==='en'?'_EN':'_KO')+'.png';   // 영문 파일명 — 한글 이름은 일부 브라우저에서 「download」로 바뀝니다
+    const file=new File([blob],name,{type:'image/png'});
+    const mobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&/Mac/.test(navigator.platform));
+    if(mobile&&navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:name});toast('✓ 안내장 이미지를 공유했습니다');return;}
+      catch(e){if(e&&e.name==='AbortError')return;}
+    }
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;
+    document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},4000);
+    toast('✓ 안내장 이미지를 저장했습니다 ('+canvas.width+'×'+canvas.height+')');
+  }catch(e){
+    console.warn('[PNG]',e);toast('⚠ 이미지 저장 실패: '+(e&&e.message||e));
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='📷 PNG 저장';}
+  }
+};
 
 /* 고객에게 보내는 안내장 주소 — 항상 「지금 진행 중인」 이벤트가 열립니다 */
 window.copyEvt=async function(){const u='https://happyhomecare.com.my/event';
