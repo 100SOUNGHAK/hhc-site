@@ -1160,6 +1160,216 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 <meta name="twitter:title" content="Happy Home Care · 계약서 · 서비스 이용내역">
 <meta name="twitter:description" content="멤버십 계약 내용과 잔액 · 이용내역을 확인하실 수 있습니다.">
 <meta name="twitter:image" content="https://happyhomecare.com.my/icon-512.png">
+<script id="hdoc-engine">
+/* ══ HHC 인쇄·PDF 문서 양식 (인보이스 · 견적서 · 계약서 공통) ══════════════════
+   화면은 그대로 두고, 인쇄할 때와 PDF로 공유할 때만 A4 문서 양식으로 바꿔 보여줍니다.
+   · 각 화면은 window.HDOC_BUILD = function(){ return 문서HTML } 을 정해 두고
+     내용이 바뀔 때마다 HDOC.refresh() 를 부릅니다.
+   · window.hhcDocMode(true) — 화면 캡처(PDF 공유)용 문서 모드 켜기 */
+(function(){
+  if(window.HDOC)return;
+  var CSS=''+
+  '#hdoc-root{display:none}'+
+  '@page{size:A4;margin:11mm 11mm 12mm}'+
+  '@media print{html.hdoc-ready body>*:not(#hdoc-root){display:none!important}'+
+    'html.hdoc-ready body>#hdoc-root{display:block!important}'+
+    'html.hdoc-ready,html.hdoc-ready body{background:#fff!important;height:auto!important;overflow:visible!important;padding:0!important;margin:0!important}}'+
+  /* 캡처(PDF 공유) 모드: 숨길 화면 요소에 표시를 달아 숨깁니다 — body 의 다른 자식을 통째로 숨기면
+     html2canvas 가 글자 위치를 재려고 넣는 측정용 상자까지 숨겨져 글자가 위로 밀려 찍힙니다 */
+  'html.pdfdoc [data-hdoc-hide]{display:none!important}'+
+  'html.pdfdoc.hdoc-ready body>#hdoc-root{display:block!important}'+
+  'html.pdfdoc.hdoc-ready,html.pdfdoc.hdoc-ready body{background:#fff!important;height:auto!important;overflow:visible!important;padding:0!important;margin:0!important;min-height:0!important}'+
+  '.hx{--n:#0E2350;--g:#B98A16;--gl:#FBF6E9;--gb:#E9DDBA;--ink:#14192A;--i2:#4A5468;--i3:#8A93A6;--ln:#E2E7F0;--soft:#F6F8FC;--ok:#0E8F5B;--red:#C62828;'+
+    'position:relative;max-width:760px;margin:0 auto;background:#fff;color:var(--ink);font-family:"Noto Sans KR","Inter",-apple-system,"Segoe UI",sans-serif;'+
+    'font-size:11.5px;line-height:1.55;letter-spacing:-.005em;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+  'html.pdfdoc .hx{padding:26px 4px 6px}'+
+  '.hx *{box-sizing:border-box;margin:0;padding:0}'+
+  '.hx b{font-weight:700}'+
+  '.hx .num{font-variant-numeric:tabular-nums}'+
+  '.hx-hd{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;padding-bottom:11px;border-bottom:2px solid var(--n)}'+
+  '.hx-br{display:flex;align-items:center;gap:10px}'+
+  '.hx-lg{width:40px;height:40px;border-radius:10px;background:var(--n);color:#E3C98A;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}'+
+  '.hx-lg svg{width:24px;height:24px;display:block}.hx-lg img{width:40px;height:40px;object-fit:contain;background:#fff}'+
+  '.hx-bn{font-size:15px;font-weight:800;color:var(--n);line-height:1.2}'+
+  '.hx-bs{font-size:8.5px;color:var(--i3);letter-spacing:.07em;margin-top:2px;font-weight:600}'+
+  '.hx-wd{text-align:right}'+
+  '.hx-wm{font-size:25px;font-weight:800;letter-spacing:.2em;color:var(--n);line-height:1.15;margin-right:-.2em}'+
+  '.hx-ws{font-size:9px;font-weight:700;color:var(--g);letter-spacing:.2em;text-transform:uppercase;margin-top:5px}'+
+  '.hx-gl{height:2px;margin-top:2px;background:#DCC48A}'+
+  '.hx-meta{display:flex;margin-top:12px;border:1px solid var(--ln);border-radius:8px;overflow:hidden}'+
+  '.hx-meta>div{flex:1 1 0;min-width:0;padding:7px 11px;border-left:1px solid var(--ln)}'+
+  '.hx-meta>div:first-child{border-left:0}'+
+  '.hx-k{font-size:8px;font-weight:700;color:var(--i3);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}'+
+  '.hx-v{font-size:11.5px;font-weight:700;color:var(--ink);margin-top:1px;overflow-wrap:anywhere}'+
+  '.hx-st{display:inline-block;font-size:9.5px;font-weight:800;padding:1px 9px;border-radius:20px;border:1px solid;letter-spacing:.02em}'+
+  '.hx-st.ok{color:var(--ok);border-color:#A9DCC4;background:#ECF8F2}'+
+  '.hx-st.due{color:#8A6410;border-color:var(--gb);background:var(--gl)}'+
+  '.hx-st.bad{color:var(--red);border-color:#F2C1C1;background:#FDF0F0}'+
+  '.hx-st.info{color:#1D4ED8;border-color:#C7D6F7;background:#EEF3FD}'+
+  '.hx-pt{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}'+
+  '.hx-pt>div{padding:9px 12px;border-radius:8px;background:var(--soft)}'+
+  '.hx-pl{font-size:8px;font-weight:800;color:var(--g);letter-spacing:.14em;text-transform:uppercase;margin-bottom:2px}'+
+  '.hx-pn{font-size:13px;font-weight:800;color:var(--ink);overflow-wrap:anywhere}'+
+  '.hx-pd{font-size:10px;color:var(--i2);line-height:1.6;margin-top:1px;overflow-wrap:anywhere}'+
+  '.hx-chip{display:inline-block;margin-top:4px;font-size:9px;font-weight:800;color:#8A6410;background:var(--gl);border:1px solid var(--gb);border-radius:20px;padding:0 8px}'+
+  '.hx-sec{margin-top:13px}'+
+  '.hx-sh{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:9.5px;font-weight:800;color:var(--n);letter-spacing:.1em;text-transform:uppercase;padding-bottom:4px;border-bottom:1.5px solid var(--n);break-after:avoid;page-break-after:avoid}'+
+  '.hx-sh small{font-size:9.5px;letter-spacing:0;text-transform:none;color:var(--i2);font-weight:700}'+
+  '.hx-t{width:100%;border-collapse:collapse}'+
+  '.hx-t th{font-size:8px;font-weight:700;color:var(--i3);letter-spacing:.08em;text-transform:uppercase;text-align:left;padding:6px 6px 4px;border-bottom:1px solid var(--ln);white-space:nowrap}'+
+  '.hx-t td{padding:5px 6px;border-bottom:1px solid var(--ln);vertical-align:top;font-size:11px}'+
+  '.hx-t tr{break-inside:avoid;page-break-inside:avoid}'+
+  '.hx-t .r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}'+
+  '.hx-t .c{text-align:center;white-space:nowrap}'+
+  '.hx-t td.b{font-weight:700}'+
+  '.hx-t .nm{font-weight:600;overflow-wrap:anywhere}'+
+  '.hx-t .sb{display:block;font-size:9px;color:var(--i3);font-weight:500;margin-top:1px}'+
+  '.hx-t .was{display:block;font-size:9px;color:var(--i3);text-decoration:line-through;font-weight:500}'+
+  '.hx-t .dc{color:var(--ok)}'+
+  '.hx-t .mu{color:var(--i3)}'+
+  '.hx-t tr.g td{background:var(--soft);font-size:9px;font-weight:800;color:var(--n);letter-spacing:.06em;padding:4px 6px;text-transform:uppercase}'+
+  '.hx-t tr.g td.r{color:var(--i2);letter-spacing:0}'+
+  '.hx-t tr.off td{color:var(--i3)}'+
+  '.hx-t .ck{display:inline-block;width:11px;color:var(--ok);font-weight:800}'+
+  '.hx-kv td{padding:5px 6px}.hx-kv td:first-child{width:34%;color:var(--i2);font-size:10px}'+
+  '.hx-sw{display:flex;justify-content:flex-end;margin-top:9px;break-inside:avoid;page-break-inside:avoid}'+
+  '.hx-sm{width:300px;max-width:100%}'+
+  '.hx-sr{display:flex;justify-content:space-between;gap:10px;padding:3px 2px;font-size:10.5px;color:var(--i2)}'+
+  '.hx-sr b{color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}'+
+  '.hx-sr.m b{color:var(--ok)}'+
+  '.hx-sr.s{padding-left:12px;font-size:10px;color:var(--i3)}.hx-sr.s b{font-weight:600;color:var(--i2)}'+
+  '.hx-tot{display:table;width:100%;table-layout:auto;margin-top:6px;padding:7px 12px;border-radius:7px;background:var(--n);color:#fff}'+
+  '.hx-tot>span,.hx-tot>b{display:table-cell;vertical-align:middle}.hx-tot>b{text-align:right;padding-left:10px}'+
+  '.hx-tot span{font-size:9.5px;font-weight:700;letter-spacing:.06em;color:rgba(255,255,255,.78);line-height:20px}'+
+  '.hx-tot b{font-size:16px;line-height:20px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;color:#fff}'+
+  '.hx-sv{display:flex;justify-content:space-between;gap:10px;margin-top:5px;padding:4px 10px;border-radius:6px;background:#ECF8F2;color:var(--ok);font-size:10px;font-weight:800}'+
+  '.hx-sv small{display:block;font-size:8.5px;font-weight:600;opacity:.85}'+
+  '.hx-sv>span:last-child{white-space:nowrap}'+
+  '.hx-bal{display:flex;justify-content:space-between;gap:10px;margin-top:5px;padding:6px 12px;border-radius:7px;background:var(--gl);border:1px solid var(--gb);color:#8A6410;font-weight:800;font-size:11px}'+
+  '.hx-bal b{font-size:14px;color:#8A6410}'+
+  '.hx-nt{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}'+
+  '.hx-nb{border:1px solid var(--ln);border-radius:8px;padding:8px 12px;break-inside:avoid;page-break-inside:avoid}'+
+  '.hx-nb.g{background:var(--gl);border-color:var(--gb)}'+
+  '.hx-nb.w{grid-column:1/-1}'+
+  '.hx-nh{font-size:8px;font-weight:800;color:var(--i3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px}'+
+  '.hx-nb.g .hx-nh{color:#8A6410}'+
+  '.hx-nx{font-size:10px;color:var(--i2);line-height:1.65;white-space:pre-line;overflow-wrap:anywhere}'+
+  '.hx-nx a{color:#1D4ED8;text-decoration:none;font-weight:700}'+
+  '.hx-ol{white-space:normal}.hx-li{display:flex;gap:6px;margin:1px 0}.hx-li>i{font-style:normal;flex:none;min-width:12px;color:var(--i3);font-weight:700}.hx-li>span{flex:1;min-width:0}'+
+  '.hx-qr{width:70px;height:70px;object-fit:contain;border:1px solid var(--gb);border-radius:6px;background:#fff;float:right;margin-left:8px}'+
+  '.hx-ph{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:7px}'+
+  '.hx-ph figure{break-inside:avoid;page-break-inside:avoid}'+
+  '.hx-ph img{display:block;width:100%;height:96px;object-fit:cover;border-radius:6px;border:1px solid var(--ln);background:var(--soft)}'+
+  '.hx-ph figcaption{font-size:8.5px;color:var(--i2);margin-top:2px;line-height:1.4;overflow-wrap:anywhere}'+
+  '.hx-sg{display:grid;grid-template-columns:1fr 1fr;gap:44px;margin-top:14px;break-inside:avoid;page-break-inside:avoid}'+
+  '.hx-sg .im{height:36px;display:flex;align-items:flex-end}.hx-sg .im img{max-height:36px;max-width:150px;object-fit:contain}'+
+  '.hx-sg .ln{border-top:1px solid var(--ink);padding-top:4px;font-size:9px;color:var(--i2);display:flex;justify-content:space-between;gap:8px}'+
+  '.hx-sg .ln b{color:var(--ink);font-size:9.5px}'+
+  '.hx-ft{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-top:12px;padding-top:7px;border-top:1px solid var(--ln);font-size:8.5px;color:var(--i3);line-height:1.6;break-inside:avoid;page-break-inside:avoid}'+
+  '.hx-ft b{color:var(--i2)}'+
+  '.hx-ty{font-size:9.5px;font-weight:800;color:var(--g);letter-spacing:.16em;text-transform:uppercase;white-space:nowrap}'+
+  '.hx-wmk{position:absolute;top:250px;left:50%;transform:translateX(-50%) rotate(-22deg);font-size:104px;font-weight:800;letter-spacing:.1em;pointer-events:none;white-space:nowrap;z-index:0;font-family:"Inter",sans-serif}'+
+  '.hx-wmk.ok{color:rgba(14,143,91,.07)}.hx-wmk.bad{color:rgba(198,40,40,.07)}'+
+  '.hx>*{position:relative;z-index:1}.hx>.hx-wmk{position:absolute;z-index:0}';
+
+  var LOGO='<svg viewBox="0 0 100 100" aria-hidden="true"><g fill="currentColor"><rect x="15" y="14" width="19" height="74" rx="3.5"/><rect x="66" y="14" width="19" height="74" rx="3.5"/><path d="M50 28 85 51v16L50 43 15 67V51Z"/></g></svg>';
+  var CO={name:'HAPPY WORKS SERVICES SDN. BHD.',reg:'201801016892 (1278908-M)',phone:'+60 17-247 2774',
+          addr:'129 BJ Jayaone, 46200 Petaling Jaya, Selangor',web:'happyhomecare.com.my'};
+
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+  function doc(d){
+    var c=Object.assign({},CO,d.co||{});
+    var h='<div class="hx">';
+    if(d.stamp)h+='<div class="hx-wmk '+(d.stamp.cls||'ok')+'">'+esc(d.stamp.t)+'</div>';
+    h+='<div class="hx-hd"><div class="hx-br"><div class="hx-lg">'+(d.logo?'<img src="'+esc(d.logo)+'" alt="">':LOGO)+'</div>'+
+       '<div><div class="hx-bn">Happy Home Care</div><div class="hx-bs">'+esc(c.name)+'</div></div></div>'+
+       '<div class="hx-wd"><div class="hx-wm">'+esc(d.word)+'</div>'+(d.wordSub?'<div class="hx-ws">'+esc(d.wordSub)+'</div>':'')+'</div></div>'+
+       '<div class="hx-gl"></div>';
+    if(d.meta&&d.meta.length)h+='<div class="hx-meta">'+d.meta.map(function(m){
+      return '<div><div class="hx-k">'+m[0]+'</div><div class="hx-v">'+m[1]+'</div></div>';}).join('')+'</div>';
+    if(d.parties&&d.parties.length)h+='<div class="hx-pt">'+d.parties.map(function(p){
+      return '<div><div class="hx-pl">'+p.l+'</div><div class="hx-pn">'+p.n+'</div>'+
+        ((p.d||[]).filter(Boolean).length?'<div class="hx-pd">'+p.d.filter(Boolean).join('<br>')+'</div>':'')+
+        (p.chip?'<span class="hx-chip">'+p.chip+'</span>':'')+'</div>';}).join('')+'</div>';
+    (d.blocks||[]).forEach(function(b){if(b)h+=b;});
+    if(d.sign)h+=sign(d.sign);
+    h+='<div class="hx-ft"><div><b>'+esc(c.name)+'</b>'+(c.reg?' ('+esc(c.reg)+')':'')+'<br>'+
+       [c.addr,'Tel '+c.phone,c.web].filter(Boolean).map(esc).join(' · ')+'</div>'+
+       '<div class="hx-ty">'+esc(d.thanks||'Thank you')+'</div></div>';
+    return h+'</div>';
+  }
+  function sec(title,right,inner){
+    return '<div class="hx-sec"><div class="hx-sh"><span>'+title+'</span>'+(right?'<small>'+right+'</small>':'')+'</div>'+inner+'</div>';
+  }
+  // cols: [{h:'Description',c:''|'r'|'c'}]  rows: [[cell,...]] · {g:'그룹', r:'오른쪽'} · {cls:'off',c:[...]}
+  function table(cols,rows,cls){
+    var h='<table class="hx-t'+(cls?' '+cls:'')+'">';
+    if(cols)h+='<thead><tr>'+cols.map(function(c){return '<th class="'+(c.c||'')+'"'+(c.w?' style="width:'+c.w+'"':'')+'>'+c.h+'</th>';}).join('')+'</tr></thead>';
+    h+='<tbody>'+rows.map(function(r){
+      if(r&&r.g!=null)return '<tr class="g"><td colspan="'+(cols?cols.length-1:1)+'">'+r.g+'</td><td class="r">'+(r.r||'')+'</td></tr>';
+      var cells=Array.isArray(r)?r:r.c,cl=Array.isArray(r)?'':(r.cls||'');
+      return '<tr'+(cl?' class="'+cl+'"':'')+'>'+cells.map(function(v,i){
+        var cc=cols&&cols[i]?cols[i].c||'':'';return '<td class="'+cc+'">'+v+'</td>';}).join('')+'</tr>';
+    }).join('')+'</tbody></table>';
+    return h;
+  }
+  // rows: [[라벨,값,'m'|'s'|'']]  total:[라벨,값]
+  function sums(rows,total,after){
+    return '<div class="hx-sw"><div class="hx-sm">'+(rows||[]).map(function(r){
+      return '<div class="hx-sr'+(r[2]?' '+r[2]:'')+'"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>';}).join('')+
+      (total?'<div class="hx-tot"><span>'+total[0]+'</span><b>'+total[1]+'</b></div>':'')+(after||'')+'</div></div>';
+  }
+  // boxes: [{t:'제목',x:'본문 html',cls:'g'|'w'|'g w'}]
+  function notes(boxes){
+    boxes=(boxes||[]).filter(Boolean);
+    if(!boxes.length)return '';
+    return '<div class="hx-nt">'+boxes.map(function(b){
+      return '<div class="hx-nb'+(b.cls?' '+b.cls:'')+'"><div class="hx-nh">'+b.t+'</div><div class="hx-nx">'+b.x+'</div></div>';}).join('')+'</div>';
+  }
+  // arr: [{l:'라벨', n:'이름', img:'서명이미지', d:'날짜'}]
+  // 번호 목록 (html2canvas 가 목록 번호를 엇나가게 그려서 번호를 직접 씁니다)
+  function list(arr){return '<div class="hx-ol">'+(arr||[]).map(function(x,i){return '<div class="hx-li"><i>'+(i+1)+'.</i><span>'+x+'</span></div>';}).join('')+'</div>';}
+  function sign(arr){
+    return '<div class="hx-sg">'+arr.map(function(s){
+      if(!s)return '<div></div>';
+      return '<div><div class="im">'+(s.img?'<img src="'+esc(s.img)+'" alt="">':'')+'</div>'+
+        '<div class="ln"><span>'+s.l+(s.n?'<br><b>'+s.n+'</b>':'')+'</span><span>'+(s.d||'')+'</span></div></div>';}).join('')+'</div>';
+  }
+
+  function ensureCss(){
+    if(document.getElementById('hdoc-css'))return;
+    var st=document.createElement('style');st.id='hdoc-css';st.textContent=CSS;
+    (document.head||document.documentElement).appendChild(st);
+  }
+  function refresh(){
+    ensureCss();
+    if(typeof window.HDOC_BUILD!=='function'||!document.body)return false;
+    var html='';
+    try{html=window.HDOC_BUILD()||'';}catch(e){try{console.warn('[HDOC]',e);}catch(_){}}
+    var root=document.getElementById('hdoc-root');
+    if(!html){if(root)root.innerHTML='';document.documentElement.classList.remove('hdoc-ready');return false;}
+    if(!root){root=document.createElement('div');root.id='hdoc-root';}
+    if(root.parentNode!==document.body||document.body.lastElementChild!==root)document.body.appendChild(root);
+    root.innerHTML=html;
+    document.documentElement.classList.add('hdoc-ready');
+    return true;
+  }
+  function mode(on){
+    var ok=on?refresh():false;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-hdoc-hide]'),function(el){el.removeAttribute('data-hdoc-hide');});
+    if(on&&ok&&document.body)Array.prototype.forEach.call(document.body.children,function(el){
+      if(el.id!=='hdoc-root'&&el.tagName!=='SCRIPT'&&el.tagName!=='STYLE')el.setAttribute('data-hdoc-hide','1');
+    });
+    document.documentElement.classList.toggle('pdfdoc',!!on);
+    return true;
+  }
+  ensureCss();
+  window.HDOC={CSS:CSS,esc:esc,doc:doc,sec:sec,table:table,sums:sums,notes:notes,list:list,sign:sign,refresh:refresh,mode:mode,CO:CO};
+  window.hhcDocMode=mode;
+  window.addEventListener('beforeprint',function(){refresh();});
+})();
+</script>
 </head>
 <body>
 
@@ -2859,6 +3069,9 @@ async function runCustomerView(id,mode,lang){
       +'<div id="cxa-bar">'
       +'<button onclick="window.print()">\u2B07\uFE0F '+(curLang==='en'?'Save PDF':'PDF 저장')+'</button>'
       +'<a class="prim" href="https://wa.me/60172472774" target="_blank" rel="noopener">\u{1F4AC} '+(curLang==='en'?'Contact us':'문의하기')+'</a></div>';
+    // 인쇄 · PDF 저장 때 보이는 A4 문서 양식
+    window.HDOC_BUILD=function(){return buildContractDocHX(c,curLang,mode,id);};
+    try{window.HDOC&&HDOC.refresh();}catch(e){}
     document.getElementById('cv-ko').onclick=function(){curLang='ko';draw();};
     document.getElementById('cv-en').onclick=function(){curLang='en';draw();};
   }
@@ -3854,6 +4067,85 @@ function cxaBullets(txt){
   if(!arr.length)return '';
   return '<ul>'+arr.map(function(x){return '<li>'+ncEsc(x)+'</li>';}).join('')+'</ul>';
 }
+// ══ 인쇄 · PDF 문서 양식 (A4) — 인보이스·견적서와 같은 양식 ═══════════════
+function buildContractDocHX(c,L,mode,id){
+  if(!window.HDOC)return '';
+  L=L||'ko';mode=mode||'all';
+  var H=window.HDOC,E=ncEsc,T=NC_TXT[L]||NC_TXT.ko,isEn=(L==='en');
+  function X(ko,en){return isEn?en:ko;}
+  var b=ncBalance(c);
+  var pkg=PACKAGES.find(function(p){return p.id===c.package_id;});
+  var pkgNm=pkg?(function(s){var a=String(s).split(' / ');return isEn?(a[1]||a[0]):a[0];})(pkg.label):'—';
+  var showContract=(mode==='contract'||mode==='all'),showUsage=(mode==='usage'||mode==='all');
+  var avail=b.total+b.carry,usedAmt=Math.max(0,b.used-b.disc);
+  var ended=(c.status==='ended')||(b.total>0&&b.remain<=0.005);
+  var blocks=[];
+  if(showContract){
+    // 계약 상품 — 납부 · 적립 구성
+    blocks.push(H.sec(T.sec_pkg,E(pkgNm),H.table(
+      [{h:X('구성','Item')},{h:X('금액','Amount (RM)'),c:'r',w:'130px'}],
+      [[T.paid,fmt(b.paid)],[T.bonus,fmt(b.bonus)],[T.spec,fmt(b.spec)],
+       {cls:'',c:['<b>'+T.total+'</b>','<b>'+fmt(b.total)+'</b>']}])));
+    // 약관
+    var svcLine=isEn?(SERVICES[c.service_type||0].split('\n')[1]||SERVICES[0]):(SERVICES[c.service_type||0].split('\n')[0]);
+    var bens=typeof c.benefits==='string'?JSON.parse(c.benefits||'{}'):(c.benefits||{});
+    var benList=BENEFITS.filter(function(x){return bens[x.key];});
+    var terms=[
+      {t:T.sec_svc,x:E(svcLine),cls:'w'},
+      {t:T.sec_how,x:E(T.how)},
+      {t:T.sec_valid,x:E(T.valid)},
+      {t:T.sec_effect,x:E(T.effect),cls:'w'}
+    ];
+    if(c.special_terms&&c.special_terms.trim()){
+      var tt=(isEn&&c.special_terms_en&&c.special_terms_en.trim())?c.special_terms_en:c.special_terms;
+      terms.push({t:T.sec_terms,x:E(tt),cls:'g w'});
+    }
+    terms.push({t:T.sec_ben,cls:'w',x:benList.length
+      ?H.list(benList.map(function(x){return '<b style="color:#14192A">'+E(isEn?x.en:x.ko)+'</b> — '+E(isEn?x.den:x.dko);}))
+      :E(T.ben_none)});
+    blocks.push(H.sec(X('계약 조건','Terms & Conditions'),'',H.notes(terms).replace('class="hx-nt"','class="hx-nt" style="margin-top:7px"')));
+  }
+  if(showUsage){
+    var rows=[];
+    if(b.history.length){
+      var ordered=b.history.slice().sort(function(a,z){return String(a.date||'').localeCompare(String(z.date||''));});
+      var run=b.total+b.carry;
+      ordered.forEach(function(u){
+        var amt=parseFloat(u.amount)||0,dsc=parseFloat(u.discount)||0,cry=parseFloat(u.carryover)||0;
+        run=run-amt+dsc;
+        var pd=ncParseDesc((isEn&&u.desc_en)?u.desc_en:u.desc);
+        var nm=pd.items.length?pd.items.map(function(it){return E((it.cat?it.cat+' · ':'')+(it.name||'')+(it.qty?' ('+it.qty+')':''));}).join('<br>'):E(pd.raw||'—');
+        var sub=[];
+        if(isMemberEntry(u))sub.push(X('회원제상품','Membership'));
+        if(u.inv_id)sub.push(X('인보이스 ','Invoice ')+E(u.inv_id));
+        if(dsc>0)sub.push(X('할인 ','Discount ')+'RM '+fmt(dsc));
+        var net=amt-dsc;
+        rows.push([E(u.date||''),'<span class="nm">'+nm+'</span>'+(sub.length?'<span class="sb">'+sub.join(' · ')+'</span>':''),
+          (cry>0&&net===0)?'<span class="dc">+ '+fmt(cry)+'</span>':(net?'− '+fmt(net):'<span class="mu">—</span>'),'<b>'+fmt(run)+'</b>']);
+      });
+    }else rows.push(['','<span class="mu">'+E(T.usage_empty)+'</span>','','']);
+    blocks.push(H.sec(T.usage_title,b.history.length?(b.history.length+X('건',' entries')):'',H.table(
+      [{h:T.th_date,w:'78px'},{h:T.th_desc},{h:T.th_amt+' (RM)',c:'r',w:'92px'},{h:T.th_bal+' (RM)',c:'r',w:'96px'}],rows)));
+  }
+  // 잔액 요약
+  var sr=[[X('총 계약금액','Total Contract Amount'),'RM '+fmt(avail)],[X('사용한 금액','Used'),'− RM '+fmt(usedAmt)]];
+  if(b.carry>0)sr.splice(1,0,[X('이월금액 포함','incl. Carryover'),'RM '+fmt(b.carry),'s']);
+  blocks.push(H.sums(sr,[X('잔여금액','REMAINING BALANCE'),'RM '+fmt(b.remain)]));
+  if(showUsage)blocks.push(H.notes([{t:X('안내','Note'),x:E(T.note),cls:'w'}]));
+  var word=mode==='usage'?'STATEMENT':'CONTRACT';
+  var sub=mode==='usage'?X('이용내역 · 잔액','Usage & Balance'):X('서비스 계약서','Membership Service Contract');
+  return H.doc({
+    word:word,wordSub:sub,
+    meta:[[X('계약번호','Contract No.'),E(cxaNo(c,id))],[T.lbl_date,E(c.contract_date||'—')],[T.lbl_pkg,E(pkgNm)],
+          [X('계약 상태','Status'),'<span class="hx-st '+(ended?'bad':'ok')+'">'+(ended?X('종료','Ended'):X('이용 중','Active'))+'</span>']],
+    parties:[{l:X('계약자','Contractor'),n:E(c.name||'—'),d:[E(c.phone||'')]},
+             {l:X('공급자','Provider'),n:'HAPPY WORKS SERVICES SDN. BHD.',d:['Reg. No. 201801016892 (1278908-M)','Tel +60 17-247 2774']}],
+    blocks:blocks,
+    sign:showContract?[{l:X('계약자 (서명 / 날짜)','Contractor (Signature / Date)'),n:E(c.name||'')},{l:X('공급자','Provider'),n:'Happy Home Care'}]:null,
+    thanks:X('감사합니다','Thank you')
+  });
+}
+
 function buildCustomerAppHTML(c,L,mode,id){
   L=L||'ko';mode=mode||'all';
   var T=NC_TXT[L]||NC_TXT.ko, isEn=(L==='en');

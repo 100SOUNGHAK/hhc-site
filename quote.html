@@ -210,6 +210,216 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,BlinkMacSyst
 <meta name="twitter:title" content="Happy Home Care · 견적서">
 <meta name="twitter:description" content="요청하신 서비스 견적 내용을 확인하실 수 있습니다.">
 <meta name="twitter:image" content="https://happyhomecare.com.my/icon-512.png">
+<script id="hdoc-engine">
+/* ══ HHC 인쇄·PDF 문서 양식 (인보이스 · 견적서 · 계약서 공통) ══════════════════
+   화면은 그대로 두고, 인쇄할 때와 PDF로 공유할 때만 A4 문서 양식으로 바꿔 보여줍니다.
+   · 각 화면은 window.HDOC_BUILD = function(){ return 문서HTML } 을 정해 두고
+     내용이 바뀔 때마다 HDOC.refresh() 를 부릅니다.
+   · window.hhcDocMode(true) — 화면 캡처(PDF 공유)용 문서 모드 켜기 */
+(function(){
+  if(window.HDOC)return;
+  var CSS=''+
+  '#hdoc-root{display:none}'+
+  '@page{size:A4;margin:11mm 11mm 12mm}'+
+  '@media print{html.hdoc-ready body>*:not(#hdoc-root){display:none!important}'+
+    'html.hdoc-ready body>#hdoc-root{display:block!important}'+
+    'html.hdoc-ready,html.hdoc-ready body{background:#fff!important;height:auto!important;overflow:visible!important;padding:0!important;margin:0!important}}'+
+  /* 캡처(PDF 공유) 모드: 숨길 화면 요소에 표시를 달아 숨깁니다 — body 의 다른 자식을 통째로 숨기면
+     html2canvas 가 글자 위치를 재려고 넣는 측정용 상자까지 숨겨져 글자가 위로 밀려 찍힙니다 */
+  'html.pdfdoc [data-hdoc-hide]{display:none!important}'+
+  'html.pdfdoc.hdoc-ready body>#hdoc-root{display:block!important}'+
+  'html.pdfdoc.hdoc-ready,html.pdfdoc.hdoc-ready body{background:#fff!important;height:auto!important;overflow:visible!important;padding:0!important;margin:0!important;min-height:0!important}'+
+  '.hx{--n:#0E2350;--g:#B98A16;--gl:#FBF6E9;--gb:#E9DDBA;--ink:#14192A;--i2:#4A5468;--i3:#8A93A6;--ln:#E2E7F0;--soft:#F6F8FC;--ok:#0E8F5B;--red:#C62828;'+
+    'position:relative;max-width:760px;margin:0 auto;background:#fff;color:var(--ink);font-family:"Noto Sans KR","Inter",-apple-system,"Segoe UI",sans-serif;'+
+    'font-size:11.5px;line-height:1.55;letter-spacing:-.005em;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact}'+
+  'html.pdfdoc .hx{padding:26px 4px 6px}'+
+  '.hx *{box-sizing:border-box;margin:0;padding:0}'+
+  '.hx b{font-weight:700}'+
+  '.hx .num{font-variant-numeric:tabular-nums}'+
+  '.hx-hd{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;padding-bottom:11px;border-bottom:2px solid var(--n)}'+
+  '.hx-br{display:flex;align-items:center;gap:10px}'+
+  '.hx-lg{width:40px;height:40px;border-radius:10px;background:var(--n);color:#E3C98A;display:flex;align-items:center;justify-content:center;flex:none;overflow:hidden}'+
+  '.hx-lg svg{width:24px;height:24px;display:block}.hx-lg img{width:40px;height:40px;object-fit:contain;background:#fff}'+
+  '.hx-bn{font-size:15px;font-weight:800;color:var(--n);line-height:1.2}'+
+  '.hx-bs{font-size:8.5px;color:var(--i3);letter-spacing:.07em;margin-top:2px;font-weight:600}'+
+  '.hx-wd{text-align:right}'+
+  '.hx-wm{font-size:25px;font-weight:800;letter-spacing:.2em;color:var(--n);line-height:1.15;margin-right:-.2em}'+
+  '.hx-ws{font-size:9px;font-weight:700;color:var(--g);letter-spacing:.2em;text-transform:uppercase;margin-top:5px}'+
+  '.hx-gl{height:2px;margin-top:2px;background:#DCC48A}'+
+  '.hx-meta{display:flex;margin-top:12px;border:1px solid var(--ln);border-radius:8px;overflow:hidden}'+
+  '.hx-meta>div{flex:1 1 0;min-width:0;padding:7px 11px;border-left:1px solid var(--ln)}'+
+  '.hx-meta>div:first-child{border-left:0}'+
+  '.hx-k{font-size:8px;font-weight:700;color:var(--i3);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}'+
+  '.hx-v{font-size:11.5px;font-weight:700;color:var(--ink);margin-top:1px;overflow-wrap:anywhere}'+
+  '.hx-st{display:inline-block;font-size:9.5px;font-weight:800;padding:1px 9px;border-radius:20px;border:1px solid;letter-spacing:.02em}'+
+  '.hx-st.ok{color:var(--ok);border-color:#A9DCC4;background:#ECF8F2}'+
+  '.hx-st.due{color:#8A6410;border-color:var(--gb);background:var(--gl)}'+
+  '.hx-st.bad{color:var(--red);border-color:#F2C1C1;background:#FDF0F0}'+
+  '.hx-st.info{color:#1D4ED8;border-color:#C7D6F7;background:#EEF3FD}'+
+  '.hx-pt{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}'+
+  '.hx-pt>div{padding:9px 12px;border-radius:8px;background:var(--soft)}'+
+  '.hx-pl{font-size:8px;font-weight:800;color:var(--g);letter-spacing:.14em;text-transform:uppercase;margin-bottom:2px}'+
+  '.hx-pn{font-size:13px;font-weight:800;color:var(--ink);overflow-wrap:anywhere}'+
+  '.hx-pd{font-size:10px;color:var(--i2);line-height:1.6;margin-top:1px;overflow-wrap:anywhere}'+
+  '.hx-chip{display:inline-block;margin-top:4px;font-size:9px;font-weight:800;color:#8A6410;background:var(--gl);border:1px solid var(--gb);border-radius:20px;padding:0 8px}'+
+  '.hx-sec{margin-top:13px}'+
+  '.hx-sh{display:flex;align-items:baseline;justify-content:space-between;gap:8px;font-size:9.5px;font-weight:800;color:var(--n);letter-spacing:.1em;text-transform:uppercase;padding-bottom:4px;border-bottom:1.5px solid var(--n);break-after:avoid;page-break-after:avoid}'+
+  '.hx-sh small{font-size:9.5px;letter-spacing:0;text-transform:none;color:var(--i2);font-weight:700}'+
+  '.hx-t{width:100%;border-collapse:collapse}'+
+  '.hx-t th{font-size:8px;font-weight:700;color:var(--i3);letter-spacing:.08em;text-transform:uppercase;text-align:left;padding:6px 6px 4px;border-bottom:1px solid var(--ln);white-space:nowrap}'+
+  '.hx-t td{padding:5px 6px;border-bottom:1px solid var(--ln);vertical-align:top;font-size:11px}'+
+  '.hx-t tr{break-inside:avoid;page-break-inside:avoid}'+
+  '.hx-t .r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}'+
+  '.hx-t .c{text-align:center;white-space:nowrap}'+
+  '.hx-t td.b{font-weight:700}'+
+  '.hx-t .nm{font-weight:600;overflow-wrap:anywhere}'+
+  '.hx-t .sb{display:block;font-size:9px;color:var(--i3);font-weight:500;margin-top:1px}'+
+  '.hx-t .was{display:block;font-size:9px;color:var(--i3);text-decoration:line-through;font-weight:500}'+
+  '.hx-t .dc{color:var(--ok)}'+
+  '.hx-t .mu{color:var(--i3)}'+
+  '.hx-t tr.g td{background:var(--soft);font-size:9px;font-weight:800;color:var(--n);letter-spacing:.06em;padding:4px 6px;text-transform:uppercase}'+
+  '.hx-t tr.g td.r{color:var(--i2);letter-spacing:0}'+
+  '.hx-t tr.off td{color:var(--i3)}'+
+  '.hx-t .ck{display:inline-block;width:11px;color:var(--ok);font-weight:800}'+
+  '.hx-kv td{padding:5px 6px}.hx-kv td:first-child{width:34%;color:var(--i2);font-size:10px}'+
+  '.hx-sw{display:flex;justify-content:flex-end;margin-top:9px;break-inside:avoid;page-break-inside:avoid}'+
+  '.hx-sm{width:300px;max-width:100%}'+
+  '.hx-sr{display:flex;justify-content:space-between;gap:10px;padding:3px 2px;font-size:10.5px;color:var(--i2)}'+
+  '.hx-sr b{color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}'+
+  '.hx-sr.m b{color:var(--ok)}'+
+  '.hx-sr.s{padding-left:12px;font-size:10px;color:var(--i3)}.hx-sr.s b{font-weight:600;color:var(--i2)}'+
+  '.hx-tot{display:table;width:100%;table-layout:auto;margin-top:6px;padding:7px 12px;border-radius:7px;background:var(--n);color:#fff}'+
+  '.hx-tot>span,.hx-tot>b{display:table-cell;vertical-align:middle}.hx-tot>b{text-align:right;padding-left:10px}'+
+  '.hx-tot span{font-size:9.5px;font-weight:700;letter-spacing:.06em;color:rgba(255,255,255,.78);line-height:20px}'+
+  '.hx-tot b{font-size:16px;line-height:20px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;color:#fff}'+
+  '.hx-sv{display:flex;justify-content:space-between;gap:10px;margin-top:5px;padding:4px 10px;border-radius:6px;background:#ECF8F2;color:var(--ok);font-size:10px;font-weight:800}'+
+  '.hx-sv small{display:block;font-size:8.5px;font-weight:600;opacity:.85}'+
+  '.hx-sv>span:last-child{white-space:nowrap}'+
+  '.hx-bal{display:flex;justify-content:space-between;gap:10px;margin-top:5px;padding:6px 12px;border-radius:7px;background:var(--gl);border:1px solid var(--gb);color:#8A6410;font-weight:800;font-size:11px}'+
+  '.hx-bal b{font-size:14px;color:#8A6410}'+
+  '.hx-nt{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}'+
+  '.hx-nb{border:1px solid var(--ln);border-radius:8px;padding:8px 12px;break-inside:avoid;page-break-inside:avoid}'+
+  '.hx-nb.g{background:var(--gl);border-color:var(--gb)}'+
+  '.hx-nb.w{grid-column:1/-1}'+
+  '.hx-nh{font-size:8px;font-weight:800;color:var(--i3);letter-spacing:.12em;text-transform:uppercase;margin-bottom:3px}'+
+  '.hx-nb.g .hx-nh{color:#8A6410}'+
+  '.hx-nx{font-size:10px;color:var(--i2);line-height:1.65;white-space:pre-line;overflow-wrap:anywhere}'+
+  '.hx-nx a{color:#1D4ED8;text-decoration:none;font-weight:700}'+
+  '.hx-ol{white-space:normal}.hx-li{display:flex;gap:6px;margin:1px 0}.hx-li>i{font-style:normal;flex:none;min-width:12px;color:var(--i3);font-weight:700}.hx-li>span{flex:1;min-width:0}'+
+  '.hx-qr{width:70px;height:70px;object-fit:contain;border:1px solid var(--gb);border-radius:6px;background:#fff;float:right;margin-left:8px}'+
+  '.hx-ph{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-top:7px}'+
+  '.hx-ph figure{break-inside:avoid;page-break-inside:avoid}'+
+  '.hx-ph img{display:block;width:100%;height:96px;object-fit:cover;border-radius:6px;border:1px solid var(--ln);background:var(--soft)}'+
+  '.hx-ph figcaption{font-size:8.5px;color:var(--i2);margin-top:2px;line-height:1.4;overflow-wrap:anywhere}'+
+  '.hx-sg{display:grid;grid-template-columns:1fr 1fr;gap:44px;margin-top:14px;break-inside:avoid;page-break-inside:avoid}'+
+  '.hx-sg .im{height:36px;display:flex;align-items:flex-end}.hx-sg .im img{max-height:36px;max-width:150px;object-fit:contain}'+
+  '.hx-sg .ln{border-top:1px solid var(--ink);padding-top:4px;font-size:9px;color:var(--i2);display:flex;justify-content:space-between;gap:8px}'+
+  '.hx-sg .ln b{color:var(--ink);font-size:9.5px}'+
+  '.hx-ft{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-top:12px;padding-top:7px;border-top:1px solid var(--ln);font-size:8.5px;color:var(--i3);line-height:1.6;break-inside:avoid;page-break-inside:avoid}'+
+  '.hx-ft b{color:var(--i2)}'+
+  '.hx-ty{font-size:9.5px;font-weight:800;color:var(--g);letter-spacing:.16em;text-transform:uppercase;white-space:nowrap}'+
+  '.hx-wmk{position:absolute;top:250px;left:50%;transform:translateX(-50%) rotate(-22deg);font-size:104px;font-weight:800;letter-spacing:.1em;pointer-events:none;white-space:nowrap;z-index:0;font-family:"Inter",sans-serif}'+
+  '.hx-wmk.ok{color:rgba(14,143,91,.07)}.hx-wmk.bad{color:rgba(198,40,40,.07)}'+
+  '.hx>*{position:relative;z-index:1}.hx>.hx-wmk{position:absolute;z-index:0}';
+
+  var LOGO='<svg viewBox="0 0 100 100" aria-hidden="true"><g fill="currentColor"><rect x="15" y="14" width="19" height="74" rx="3.5"/><rect x="66" y="14" width="19" height="74" rx="3.5"/><path d="M50 28 85 51v16L50 43 15 67V51Z"/></g></svg>';
+  var CO={name:'HAPPY WORKS SERVICES SDN. BHD.',reg:'201801016892 (1278908-M)',phone:'+60 17-247 2774',
+          addr:'129 BJ Jayaone, 46200 Petaling Jaya, Selangor',web:'happyhomecare.com.my'};
+
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+  function doc(d){
+    var c=Object.assign({},CO,d.co||{});
+    var h='<div class="hx">';
+    if(d.stamp)h+='<div class="hx-wmk '+(d.stamp.cls||'ok')+'">'+esc(d.stamp.t)+'</div>';
+    h+='<div class="hx-hd"><div class="hx-br"><div class="hx-lg">'+(d.logo?'<img src="'+esc(d.logo)+'" alt="">':LOGO)+'</div>'+
+       '<div><div class="hx-bn">Happy Home Care</div><div class="hx-bs">'+esc(c.name)+'</div></div></div>'+
+       '<div class="hx-wd"><div class="hx-wm">'+esc(d.word)+'</div>'+(d.wordSub?'<div class="hx-ws">'+esc(d.wordSub)+'</div>':'')+'</div></div>'+
+       '<div class="hx-gl"></div>';
+    if(d.meta&&d.meta.length)h+='<div class="hx-meta">'+d.meta.map(function(m){
+      return '<div><div class="hx-k">'+m[0]+'</div><div class="hx-v">'+m[1]+'</div></div>';}).join('')+'</div>';
+    if(d.parties&&d.parties.length)h+='<div class="hx-pt">'+d.parties.map(function(p){
+      return '<div><div class="hx-pl">'+p.l+'</div><div class="hx-pn">'+p.n+'</div>'+
+        ((p.d||[]).filter(Boolean).length?'<div class="hx-pd">'+p.d.filter(Boolean).join('<br>')+'</div>':'')+
+        (p.chip?'<span class="hx-chip">'+p.chip+'</span>':'')+'</div>';}).join('')+'</div>';
+    (d.blocks||[]).forEach(function(b){if(b)h+=b;});
+    if(d.sign)h+=sign(d.sign);
+    h+='<div class="hx-ft"><div><b>'+esc(c.name)+'</b>'+(c.reg?' ('+esc(c.reg)+')':'')+'<br>'+
+       [c.addr,'Tel '+c.phone,c.web].filter(Boolean).map(esc).join(' · ')+'</div>'+
+       '<div class="hx-ty">'+esc(d.thanks||'Thank you')+'</div></div>';
+    return h+'</div>';
+  }
+  function sec(title,right,inner){
+    return '<div class="hx-sec"><div class="hx-sh"><span>'+title+'</span>'+(right?'<small>'+right+'</small>':'')+'</div>'+inner+'</div>';
+  }
+  // cols: [{h:'Description',c:''|'r'|'c'}]  rows: [[cell,...]] · {g:'그룹', r:'오른쪽'} · {cls:'off',c:[...]}
+  function table(cols,rows,cls){
+    var h='<table class="hx-t'+(cls?' '+cls:'')+'">';
+    if(cols)h+='<thead><tr>'+cols.map(function(c){return '<th class="'+(c.c||'')+'"'+(c.w?' style="width:'+c.w+'"':'')+'>'+c.h+'</th>';}).join('')+'</tr></thead>';
+    h+='<tbody>'+rows.map(function(r){
+      if(r&&r.g!=null)return '<tr class="g"><td colspan="'+(cols?cols.length-1:1)+'">'+r.g+'</td><td class="r">'+(r.r||'')+'</td></tr>';
+      var cells=Array.isArray(r)?r:r.c,cl=Array.isArray(r)?'':(r.cls||'');
+      return '<tr'+(cl?' class="'+cl+'"':'')+'>'+cells.map(function(v,i){
+        var cc=cols&&cols[i]?cols[i].c||'':'';return '<td class="'+cc+'">'+v+'</td>';}).join('')+'</tr>';
+    }).join('')+'</tbody></table>';
+    return h;
+  }
+  // rows: [[라벨,값,'m'|'s'|'']]  total:[라벨,값]
+  function sums(rows,total,after){
+    return '<div class="hx-sw"><div class="hx-sm">'+(rows||[]).map(function(r){
+      return '<div class="hx-sr'+(r[2]?' '+r[2]:'')+'"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>';}).join('')+
+      (total?'<div class="hx-tot"><span>'+total[0]+'</span><b>'+total[1]+'</b></div>':'')+(after||'')+'</div></div>';
+  }
+  // boxes: [{t:'제목',x:'본문 html',cls:'g'|'w'|'g w'}]
+  function notes(boxes){
+    boxes=(boxes||[]).filter(Boolean);
+    if(!boxes.length)return '';
+    return '<div class="hx-nt">'+boxes.map(function(b){
+      return '<div class="hx-nb'+(b.cls?' '+b.cls:'')+'"><div class="hx-nh">'+b.t+'</div><div class="hx-nx">'+b.x+'</div></div>';}).join('')+'</div>';
+  }
+  // arr: [{l:'라벨', n:'이름', img:'서명이미지', d:'날짜'}]
+  // 번호 목록 (html2canvas 가 목록 번호를 엇나가게 그려서 번호를 직접 씁니다)
+  function list(arr){return '<div class="hx-ol">'+(arr||[]).map(function(x,i){return '<div class="hx-li"><i>'+(i+1)+'.</i><span>'+x+'</span></div>';}).join('')+'</div>';}
+  function sign(arr){
+    return '<div class="hx-sg">'+arr.map(function(s){
+      if(!s)return '<div></div>';
+      return '<div><div class="im">'+(s.img?'<img src="'+esc(s.img)+'" alt="">':'')+'</div>'+
+        '<div class="ln"><span>'+s.l+(s.n?'<br><b>'+s.n+'</b>':'')+'</span><span>'+(s.d||'')+'</span></div></div>';}).join('')+'</div>';
+  }
+
+  function ensureCss(){
+    if(document.getElementById('hdoc-css'))return;
+    var st=document.createElement('style');st.id='hdoc-css';st.textContent=CSS;
+    (document.head||document.documentElement).appendChild(st);
+  }
+  function refresh(){
+    ensureCss();
+    if(typeof window.HDOC_BUILD!=='function'||!document.body)return false;
+    var html='';
+    try{html=window.HDOC_BUILD()||'';}catch(e){try{console.warn('[HDOC]',e);}catch(_){}}
+    var root=document.getElementById('hdoc-root');
+    if(!html){if(root)root.innerHTML='';document.documentElement.classList.remove('hdoc-ready');return false;}
+    if(!root){root=document.createElement('div');root.id='hdoc-root';}
+    if(root.parentNode!==document.body||document.body.lastElementChild!==root)document.body.appendChild(root);
+    root.innerHTML=html;
+    document.documentElement.classList.add('hdoc-ready');
+    return true;
+  }
+  function mode(on){
+    var ok=on?refresh():false;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-hdoc-hide]'),function(el){el.removeAttribute('data-hdoc-hide');});
+    if(on&&ok&&document.body)Array.prototype.forEach.call(document.body.children,function(el){
+      if(el.id!=='hdoc-root'&&el.tagName!=='SCRIPT'&&el.tagName!=='STYLE')el.setAttribute('data-hdoc-hide','1');
+    });
+    document.documentElement.classList.toggle('pdfdoc',!!on);
+    return true;
+  }
+  ensureCss();
+  window.HDOC={CSS:CSS,esc:esc,doc:doc,sec:sec,table:table,sums:sums,notes:notes,list:list,sign:sign,refresh:refresh,mode:mode,CO:CO};
+  window.hhcDocMode=mode;
+  window.addEventListener('beforeprint',function(){refresh();});
+})();
+</script>
 </head>
 <body>
 <div id="state-loading" class="center"><div class="spin"></div><div>견적서를 불러오는 중...<br>Loading quotation...</div></div>
@@ -661,7 +871,110 @@ function render(){
   if(cbtn)cbtn.onclick=confirmChoice;
   const chbtn=document.getElementById('change-btn');
   if(chbtn)chbtn.onclick=()=>{acEditing=true;render();};
+  try{window.HDOC&&HDOC.refresh();}catch(e){}
 }
+
+// ══ 인쇄 · PDF 문서 양식 (A4) ═══════════════════════════════════
+// 화면(앱 카드)은 그대로 두고, 인쇄·PDF 저장·PDF 공유 때만 이 양식으로 바뀝니다.
+function buildQuoteDoc(){
+  if(!Q||!window.HDOC)return '';
+  const H=window.HDOC,e=esc,isEn=lang==='en';
+  const L=(ko,en)=>isEn?en:ko;
+  // 금액: 소수가 있으면 두 자리까지 (337.5 → 337.50)
+  const fm=n=>{n=Math.round((Number(n)||0)*100)/100;return Number.isInteger(n)?fmtN(n):n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  const RM=n=>'RM '+fm(n);
+  const expired=Q.validUntil&&Q.validUntil<new Date().toISOString().slice(0,10);
+  const acOn=acGroups.length>0;
+  const SM={base:[ '기본 인건비','Basic Labor'],extra:['추가 인건비','Additional Labor'],material:['자재 비용','Materials'],etc:['기타 비용','Other Costs']};
+  const sectOf=it=>{
+    if(it.sect&&SM[it.sect])return it.sect;
+    if(it.group==='material')return 'material';
+    if(it.group==='install'||it.group==='repair'||it.group==='clean')return 'base';
+    return 'etc';
+  };
+  const gross=it=>(parseFloat(it.qty)||1)*(parseFloat(it.price)||0);
+  const dAmt=it=>{const dv=parseFloat(it.discVal)||0;if(dv<=0)return 0;const g=gross(it);return it.discType==='amt'?Math.min(dv,g):g*Math.min(dv,100)/100;};
+  const net=it=>(it.amount!=null?it.amount:Math.max(0,gross(it)-dAmt(it)))||0;
+  const items=Q.items||[];
+  const hasDisc=items.some(it=>dAmt(it)>0);
+  const cols=[{h:L('항목','Description')},{h:L('수량','Qty'),c:'c',w:'72px'},{h:L('단가','Unit Price'),c:'r',w:'88px'}]
+    .concat(hasDisc?[{h:L('할인','Discount'),c:'r',w:'76px'}]:[]).concat([{h:L('금액','Amount'),c:'r',w:'92px'}]);
+  const rows=[],sectSum={},sectGross={};
+  ['base','extra','material','etc'].forEach(k=>{
+    const list=items.filter(it=>sectOf(it)===k);
+    if(!list.length)return;
+    const s=list.reduce((a,it)=>a+net(it),0);sectSum[k]=s;sectGross[k]=list.reduce((a,it)=>a+gross(it),0);
+    rows.push({g:L(SM[k][0],SM[k][1]),r:RM(s)});
+    list.forEach(it=>{
+      const nm=isEn?((it.nameEn&&it.nameEn.trim())||subjEn(it.name)):it.name;
+      const nt=isEn?((it.noteEn&&it.noteEn.trim())||subjEn(it.note||'')):(it.note||'');
+      const un=it.unit?(isEn?unitEn(it.unit,it.qty):it.unit):'';
+      const da=dAmt(it);
+      const r=['<span class="nm">'+e(nm||'—')+'</span>'+(nt?'<span class="sb">'+e(nt)+'</span>':''),
+        e(String(it.qty||1)+(un?' '+un:'')),fm(it.price||0)];
+      if(hasDisc)r.push(da>0?'<span class="dc">− '+(it.discType==='amt'?fm(da):fm(it.discVal)+'%')+'</span>':'<span class="mu">—</span>');
+      r.push('<b>'+fm(net(it))+'</b>');
+      rows.push(r);
+    });
+  });
+  // 에어컨 구입 (모델 선택형)
+  let acBlock='';const acSel=acTotal();
+  if(acOn){
+    const ar=[];
+    acGroups.forEach((g,i)=>{
+      const qty=g.qty||1,sel=selArr[i];
+      ar.push({g:(acGroups.length>1?(i+1)+'. ':'')+e(g.hp)+'HP '+e(acFormLb(g))+(qty>1?' × '+qty+L('대',' units'):''),
+        r:sel?(sel==='__none__'?L('구입 없음','No purchase'):RM(groupSel(i).amount)):L('선택 대기','Pending')});
+      (g.options||[]).forEach(o=>{
+        const key=o.key||o.brand+'|'+o.type,on=sel===key;
+        const tag=(o.type==='inv'?'INVERTER':'NON-INVERTER')+((g.recommended||'')===key?' · '+L('추천','Recommended'):'');
+        const r={cls:on?'':'off',c:['<span class="ck">'+(on?'✓':'')+'</span><span class="nm">'+e(o.brand||'')+'</span><span class="sb" style="display:inline;margin-left:6px">'+tag+'</span>',
+          String(qty),fm(o.price||0)]};
+        if(hasDisc)r.c.push('');
+        r.c.push(on?'<b>'+fm((o.price||0)*qty)+'</b>':'<span class="mu">'+fm((o.price||0)*qty)+'</span>');
+        ar.push(r);
+      });
+    });
+    acBlock=H.sec(L('에어컨 구입 — 모델 선택','AC Unit Purchase — Model Options'),
+      L('✓ 표시 모델 기준으로 합계가 계산됩니다','Total is based on the ✓ selected model'),H.table(cols,ar));
+  }
+  // 합계
+  // 구분별 소계는 표 안에 이미 있으므로 여기서는 반복하지 않습니다
+  const sr=[];
+  const disc=Q.discount||0;
+  const itemsNet=Object.keys(sectSum).reduce((a,k)=>a+sectSum[k],0);
+  if(acOn||disc>0){
+    sr.push([L('작업 · 자재 소계','Work & Materials'),fm(itemsNet)]);
+    if(acOn)sr.push([L('에어컨 구입','AC Unit'),acSel?fm(acSel):'—']);
+  }
+  if(disc>0)sr.push([L('할인','Discount'),'− '+fm(disc),'m']);
+  const itemDisc=Object.keys(sectGross).reduce((a,k)=>a+Math.max(0,sectGross[k]-sectSum[k]),0);
+  const totDisc=itemDisc+disc;
+  const finalTotal=(Q.baseTotal||0)+acSel;
+  const after=totDisc>0.004?'<div class="hx-sv"><span>'+L('총 할인금액','Total Savings')+'</span><span>− '+RM(totDisc)+'</span></div>':'';
+  const sumBlock=H.sums(sr,[L('최종 견적금액','TOTAL (MYR)'),RM(finalTotal)],after);
+  // 안내사항 · 유효기한
+  const nts=(Q.notices||[]).map(n=>isEn?(NOTICE_EN[n]||subjEn(n)):n).filter(Boolean);
+  const validTx=expired?L('본 견적서는 유효기간이 지났습니다. 최신 견적은 아래 연락처로 문의해 주세요.','This quotation has expired. Please contact us for an updated quotation.')
+    :L('발행일로부터 '+(Q.validDays||7)+'일간 유효합니다 ('+(Q.validUntil||'')+' 까지).','Valid for '+(Q.validDays||7)+' days from the issue date (until '+(Q.validUntil||'')+').');
+  const noteBlock=H.notes([
+    nts.length?{t:L('안내사항','Terms & Notes'),x:H.list(nts.map(n=>e(n))),cls:'w'}:null,
+    {t:L('유효기한','Validity'),x:e(validTx)},
+    {t:L('문의 · 예약','Enquiry & Booking'),x:'WhatsApp / Tel +60 17-247 2774<br>happyhomecare.com.my',cls:'g'}
+  ]);
+  const st=expired?['bad',L('유효기간 만료','Expired')]:((acOn&&Q.customerChoice)?['ok',L('선택 확정','Confirmed')]:['info',L('유효','Valid')]);
+  return H.doc({
+    word:'QUOTATION',wordSub:L('견적서','Service Quotation'),
+    meta:[[L('견적번호','Quote No.'),e(Q.qno||'—')],[L('발행일','Issued'),e(Q.issueDate||'—')],
+          [L('유효기한','Valid Until'),e(Q.validUntil||'—')],[L('상태','Status'),'<span class="hx-st '+st[0]+'">'+st[1]+'</span>']],
+    parties:[{l:L('고객','Prepared For'),n:e(Q.client||'—'),d:[Q.subject?(L('대상 작업 : ','Subject: ')+e(subjOf(Q,isEn))):'']},
+             {l:L('발행','From'),n:'HAPPY WORKS SERVICES SDN. BHD.',d:['Tel +60 17-247 2774','129 BJ Jayaone, 46200 Petaling Jaya, Selangor']}],
+    blocks:[items.length?H.sec(L('견적 내역','Quotation Details'),'',H.table(cols,rows)):'',acBlock,sumBlock,noteBlock],
+    sign:[{l:L('고객 확인 (서명 / 날짜)','Customer Acceptance (Signature / Date)')},{l:L('발행처','Issued by'),n:'Happy Home Care'}],
+    thanks:L('감사합니다','Thank you')
+  });
+}
+window.HDOC_BUILD=buildQuoteDoc;
 
 async function confirmChoice(){
   if(!allChosen())return;
