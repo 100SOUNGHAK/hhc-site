@@ -90,6 +90,13 @@ textarea{resize:none;line-height:1.5}
 .lkbl{font-size:11px;font-weight:700;color:var(--indigo);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
 .lku{font-size:11px;color:var(--navy);font-family:monospace;word-break:break-all;margin-bottom:10px;line-height:1.5}
 .lka{display:flex;gap:6px;flex-wrap:wrap}
+/* 직접입력 조정 — 금액 칸 (RM · % 전환) */
+.adj-am{flex:1;min-width:0;display:flex;align-items:center;border:1.5px solid var(--bdr);border-radius:9px;background:#fff;overflow:hidden}
+.adj-am button{flex:none;align-self:stretch;min-width:34px;padding:0 6px;border:none;border-right:1px solid var(--bdr);background:var(--bg,#F4F6FB);color:var(--gray);font-size:10.5px;font-weight:800;cursor:pointer;font-family:inherit;line-height:1}
+.adj-am.pc button{background:#FFF4D6;color:#9A6B00;font-size:13px}
+.adj-am input{flex:1;min-width:0;width:100%;border:none!important;outline:none;padding:8px 7px;font-size:13px;font-weight:700;font-family:inherit;background:transparent;box-shadow:none!important}
+.adj-ph{font-size:11px;color:var(--gray);margin:-2px 0 8px 40px;line-height:1.5}
+.adj-ph b{color:var(--navy)}.adj-ph span{color:var(--gray)}
 /* ⭐ 자주 쓰는 조정 항목 */
 #adj-presets{margin:2px 0 8px}
 .adjp-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
@@ -877,6 +884,14 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
     <div class="card cp" style="margin-top:12px">
       <div class="f"><label class="lb">결제 은행</label><select id="bank-select" onchange="onBankSel(true)"><option value="">-- 은행 선택 --</option></select></div>
       <div id="bank-prev" style="display:none;background:var(--bg);border-radius:10px;padding:12px;font-size:13px;line-height:1.8;color:var(--txt2);margin-top:8px"></div>
+      <!-- 💳 카드 전표 첨부 (결제 은행이 「카드」일 때 표시) -->
+      <div id="cslip-box" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--bdr)">
+        <div class="iva-hd"><span class="iva-ttl" style="color:var(--navy)">💳 카드 전표</span><span class="iva-cnt" id="cslip-cnt"></span></div>
+        <div class="iva-grid" id="cslip-grid"></div>
+        <input type="file" id="cslip-file" accept="image/*" multiple style="display:none" onchange="cslipPick(this)">
+        <button type="button" class="iva-add" id="cslip-add" onclick="var f=document.getElementById('cslip-file');if(f){f.value='';f.click();}">📷 전표 사진 첨부 <small>촬영 또는 앨범에서 선택</small></button>
+        <div class="iva-note">카드 결제 전표를 찍어 붙여 두면 결제 증빙으로 보관되고, 고객 인보이스 화면 · PDF의 결제 정보에 함께 표시됩니다. (최대 3장)</div>
+      </div>
     </div>
     <div class="card cp" style="margin-top:12px"><div class="f"><label class="lb">결제 조건</label><textarea id="inv-terms" rows="2" placeholder="예: 7일 이내 결제" oninput="App.upPrev()"></textarea></div></div>
   </div>
@@ -1084,7 +1099,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   <div class="ms" onclick="event.stopPropagation()">
     <div class="mh"></div>
     <div class="mt">⭐ 자주 쓰는 조정 항목</div>
-    <div style="font-size:11.5px;color:var(--gray);line-height:1.6;margin:-4px 0 12px"><b>+ / −</b> 로 추가·차감을 정하고, 금액을 적어 두면 금액까지 함께 들어갑니다 (비워 두면 금액만 직접 입력). ▲▼ 로 순서를 바꿉니다.</div>
+    <div style="font-size:11.5px;color:var(--gray);line-height:1.6;margin:-4px 0 12px"><b>+ / −</b> 로 추가·차감을 정하고, 금액(<b>RM</b>) 또는 <b>%</b>를 적어 두면 함께 들어갑니다 (비워 두면 값만 직접 입력). ▲▼ 로 순서를 바꿉니다.</div>
     <div id="adjp-list"></div>
     <button type="button" onclick="adjpEdAdd()" style="width:100%;padding:10px;border:1.5px dashed rgba(79,110,247,.45);background:rgba(79,110,247,.06);color:var(--indigo);border-radius:9px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:2px">+ 항목 추가</button>
     <div id="adjp-sug"></div>
@@ -1709,6 +1724,7 @@ App.resetForm=function(){
   var bp=$('bank-prev');if(bp)bp.style.display='none';
   lineItems=[];
   invAtt=[];invAttRender();
+  cardSlips=[];cslipRender();
   window._creditAuto=false;window._creditPicked=false;updateCreditHint();
   resetLinkBox();if(window.clearInspBox)window.clearInspBox();if(window.renderInspBox)window.renderInspBox();if(window.clearCtBox)window.clearCtBox();renderLI();App.upPrev();
   // 모든 화면 스크롤을 최상단으로 리셋
@@ -1850,6 +1866,8 @@ function loadInvToForm(inv){
   invAtt=(inv.files||[]).filter(function(a){return a&&(a.thumb||a.url);}).map(function(a){
     return{thumb:a.thumb||'',url:a.url||'',cap:a.cap||'',name:a.name||'',w:a.w||0,h:a.h||0,_up:false};});
   invAttRender();
+  cardSlips=(inv.cardSlips||[]).filter(function(a){return a&&(a.thumb||a.url);}).map(function(a){return{thumb:a.thumb||'',url:a.url||'',w:a.w||0,h:a.h||0,_up:false};});
+  cslipRender();
   showLinkBox(inv.id);renderLI();App.upPrev();Nav('new');Tab('info');
   if(window.refreshInspBox)window.refreshInspBox(inv.id);
   if(window.loadCtLinkFromInv)loadCtLinkFromInv(inv);
@@ -2011,11 +2029,12 @@ function isCardBank(b){
 }
 function onBankSel(user){
   var id=val('bank-select'),bp=$('bank-prev');
-  if(!id||!bp){if(bp)bp.style.display='none';return;}
+  if(!id||!bp){if(bp)bp.style.display='none';try{cslipRender();}catch(e){}return;}
   var b=banks.find(function(x){return x.id===id;});
-  if(!b){bp.style.display='none';return;}
+  if(!b){bp.style.display='none';try{cslipRender();}catch(e){}return;}
   bp.style.display='block';
   bp.innerHTML='<b>'+b.bankName+'</b><br>예금주: '+b.accName+(b.accNum?'<br>Account No: '+b.accNum:'');
+  try{cslipRender();}catch(e){}
   // 💳 직접 「카드 결제」를 고르면 상태를 「결제완료」로 자동 변경 (저장된 인보이스를 불러올 때는 바꾸지 않음)
   if(user===true&&isCardBank(b)){
     var st=$('inv-status');
@@ -2062,42 +2081,81 @@ window.onPayDate=function(i,v){if(payments[i]){payments[i].date=v;App.upPrev();}
 
 // ── 직접입력 조정 : 관리자가 항목명을 직접 적고 금액을 더하거나(+) 빼는(−) 줄 ──
 //    저장 형태 : [{name:'야간 할증', amt:50, sign:1}]  (sign 1=추가 · -1=차감)
+//    % 줄      : [{name:'단골 할인', unit:'pct', pct:10, amt:15, sign:-1}]
+//               · pct 는 「서비스 소계」(항목별 할인 반영 후) 기준 · amt 에는 계산된 RM 금액을 함께 저장
+//                 (고객총괄 · 마이페이지의 포인트 계산은 amt 를 그대로 읽습니다)
 var adjusts=[];
-function _adjNorm(src){
+function _adjSubOf(items){
+  return (items||[]).reduce(function(s,l){
+    var la=(l.price||0)*(l.qty||1);
+    var da=l.discType==='pct'?la*((l.discVal||0)/100):(l.discVal||l.disc||0);
+    return s+la-(parseFloat(da)||0);
+  },0);
+}
+function _adjR2(n){return Math.round((Number(n)||0)*100)/100;}
+function _adjIsPct(x){return !!x&&x.unit==='pct';}
+function _adjPctTx(x){return _adjIsPct(x)?' ('+(Math.round((parseFloat(x.pct)||0)*100)/100)+'%)':'';}
+function _adjNorm(src,base){
+  var live=!(src&&src.length)&&src===undefined;
   var a=(src&&src.length)?src:(src===undefined?adjusts:[]);
+  if(base==null&&live)base=_adjSubOf(lineItems);
   return (a||[]).map(function(x){
-    var amt=Math.abs(parseFloat(x&&x.amt)||0);
     var sign=(parseFloat(x&&x.sign)||1)<0?-1:1;
-    return {name:String((x&&x.name)||'').trim(),amt:amt,sign:sign,val:amt*sign};
+    var isP=_adjIsPct(x),pct=Math.abs(parseFloat(x&&x.pct)||0);
+    var amt=Math.abs(parseFloat(x&&x.amt)||0);
+    if(isP&&base!=null)amt=_adjR2(Math.max(0,base)*pct/100);
+    var o={name:String((x&&x.name)||'').trim(),amt:amt,sign:sign,val:amt*sign};
+    if(isP){o.unit='pct';o.pct=pct;}
+    return o;
   });
 }
-function _adjShow(src){return _adjNorm(src).filter(function(x){return x.amt>0.005;});}   // 문서에는 금액이 있는 줄만
-function _adjTotal(src){return _adjShow(src).reduce(function(s,x){return s+x.val;},0);}
+function _adjShow(src,base){return _adjNorm(src,base).filter(function(x){return x.amt>0.005;});}   // 문서에는 금액이 있는 줄만
+function _adjTotal(src,base){return _adjShow(src,base).reduce(function(s,x){return s+x.val;},0);}
 function renderAdjusts(){
   var el=$('adj-list');if(!el)return;
   el.innerHTML=adjusts.length?adjusts.map(function(a,i){
-    var minus=(parseFloat(a.sign)||1)<0;
+    var minus=(parseFloat(a.sign)||1)<0,isP=_adjIsPct(a);
     var col=minus?'var(--red)':'var(--indigo)',bg=minus?'var(--rbg)':'var(--il)';
     return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">'+
       '<button type="button" onclick="toggleAdjSign('+i+')" title="추가 · 차감 바꾸기" style="width:34px;height:34px;min-width:34px;border:none;border-radius:7px;background:'+bg+';color:'+col+';font-size:18px;font-weight:800;cursor:pointer;font-family:inherit;flex-shrink:0">'+(minus?'−':'+')+'</button>'+
       '<input value="'+ivxEsc(a.name||'').replace(/"/g,'&quot;')+'" placeholder="항목명 (예: 야간 할증)" oninput="onAdjName('+i+',this.value)" style="flex:1.3;min-width:0;padding:8px 9px;border:1.5px solid var(--bdr);border-radius:9px;font-size:12.5px;font-family:inherit">'+
-      '<div style="flex:1;min-width:0;position:relative"><i style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-style:normal;font-size:10px;color:var(--gray);font-weight:800;z-index:1">RM</i>'+
-        '<input type="number" value="'+(Math.abs(parseFloat(a.amt)||0))+'" min="0" step="0.5" placeholder="금액" oninput="onAdjAmt('+i+',this.value)" style="width:100%;padding:8px 8px 8px 32px;border:1.5px solid '+(minus?'rgba(239,68,68,.35)':'rgba(79,110,247,.35)')+';border-radius:9px;font-size:13px;font-weight:700;font-family:inherit"></div>'+
+      '<div class="adj-am'+(isP?' pc':'')+'" style="border-color:'+(minus?'rgba(239,68,68,.35)':'rgba(79,110,247,.35)')+'">'+
+        '<button type="button" onclick="toggleAdjUnit('+i+')" title="RM · % 바꾸기">'+(isP?'%':'RM')+'</button>'+
+        '<input type="number" value="'+(isP?(Math.abs(parseFloat(a.pct)||0)||''):(Math.abs(parseFloat(a.amt)||0)))+'" min="0" step="'+(isP?'1':'0.5')+'" placeholder="'+(isP?'%':'금액')+'" oninput="onAdjAmt('+i+',this.value)"></div>'+
       '<button type="button" class="adjp-st'+(_adjpHas(a.name)?' on':'')+'" onclick="adjpStar('+i+')" title="'+(_adjpHas(a.name)?'자주 쓰는 항목에 저장됨 (눌러서 수정)':'자주 쓰는 항목으로 저장')+'">'+(_adjpHas(a.name)?'★':'☆')+'</button>'+
       '<button type="button" class="ld" onclick="rmAdjust('+i+')" title="삭제">×</button>'+
-    '</div>';
+    '</div>'+(isP?'<div class="adj-ph" id="adj-ph-'+i+'"></div>':'');
   }).join(''):'<div style="font-size:11.5px;color:var(--gray);padding:2px 0 8px">추가·차감할 항목이 있으면 아래 버튼으로 추가하세요</div>';
-  var s=$('adj-sum-lbl'),tv=_adjTotal();
-  if(s)s.textContent=Math.abs(tv)>0.005?((tv<0?'합계 -':'합계 +')+fmtAmt(Math.abs(tv))):'';
+  adjCalcRefresh();
   renderAdjPresets();
 }
+// 합계 표시 · % 줄의 계산 금액 안내 (입력칸을 다시 그리지 않고 글자만 바꿉니다 — 서비스 항목이 바뀔 때도 호출)
+function adjCalcRefresh(){
+  var base=_adjSubOf(lineItems),rows=_adjNorm(undefined,base);
+  rows.forEach(function(r,i){
+    var h=$('adj-ph-'+i);if(!h)return;
+    h.innerHTML='= '+(r.sign<0?'− ':'+ ')+'<b>'+fmtAmt(r.amt)+'</b> <span>· 서비스 소계 '+fmtAmt(base)+'의 '+(Math.round((r.pct||0)*100)/100)+'%</span>';
+  });
+  var s=$('adj-sum-lbl'),tv=rows.filter(function(x){return x.amt>0.005;}).reduce(function(a,x){return a+x.val;},0);
+  if(s)s.textContent=Math.abs(tv)>0.005?((tv<0?'합계 -':'합계 +')+fmtAmt(Math.abs(tv))):'';
+}
+window.toggleAdjUnit=function(i){
+  var a=adjusts[i];if(!a)return;
+  if(_adjIsPct(a)){delete a.unit;delete a.pct;a.amt=0;}
+  else{a.unit='pct';a.pct=0;a.amt=0;}
+  renderAdjusts();App.upPrev();
+  setTimeout(function(){var l=$('adj-list');var ins=l?l.querySelectorAll('.adj-am input'):[];if(ins[i]){ins[i].focus();}},0);
+};
 window.addAdjust=function(){adjusts.push({name:'',amt:0,sign:1});renderAdjusts();App.upPrev();
   setTimeout(function(){var l=$('adj-list');if(l){var ins=l.querySelectorAll('input[placeholder^="항목명"]');if(ins.length)ins[ins.length-1].focus();}},0);};
 window.rmAdjust=function(i){adjusts.splice(i,1);renderAdjusts();App.upPrev();};
 window.toggleAdjSign=function(i){if(adjusts[i]){adjusts[i].sign=((parseFloat(adjusts[i].sign)||1)<0)?1:-1;renderAdjusts();App.upPrev();}};
 window.onAdjName=function(i,v){if(adjusts[i]){adjusts[i].name=v;App.upPrev();
   var r=$('adj-list');var st=r?r.querySelectorAll('.adjp-st')[i]:null;if(st){var on=_adjpHas(v);st.classList.toggle('on',on);st.textContent=on?'★':'☆';}}};
-window.onAdjAmt=function(i,v){if(adjusts[i]){adjusts[i].amt=Math.abs(parseFloat(v)||0);var s=$('adj-sum-lbl'),tv=_adjTotal();if(s)s.textContent=Math.abs(tv)>0.005?((tv<0?'합계 -':'합계 +')+fmtAmt(Math.abs(tv))):'';App.upPrev();}};
+window.onAdjAmt=function(i,v){var a=adjusts[i];if(!a)return;
+  var n=Math.abs(parseFloat(v)||0);
+  if(_adjIsPct(a)){a.pct=Math.min(n,100);a.amt=_adjR2(_adjSubOf(lineItems)*a.pct/100);}else a.amt=n;
+  adjCalcRefresh();App.upPrev();};
 // ── ⭐ 자주 쓰는 조정 항목 (직접입력 조정) ─────────────────────────────
 //    저장 위치 : settings/adj_presets {items:[{name,sign,amt}]}  (모든 기기 공유 · 이 기기에도 캐시)
 //    · 칩을 누르면 그 항목이 조정 줄로 바로 추가됩니다 (기본 금액이 있으면 금액까지)
@@ -2109,7 +2167,9 @@ try{var _ap=localStorage.getItem(ADJP_K);if(_ap)adjPresets=JSON.parse(_ap)||[];}
 function _adjpNorm(list){
   var seen={};
   return (list||[]).map(function(x){
-    return {name:String((x&&x.name)||'').trim(),sign:(parseFloat(x&&x.sign)||1)<0?-1:1,amt:Math.abs(parseFloat(x&&x.amt)||0)};
+    var o={name:String((x&&x.name)||'').trim(),sign:(parseFloat(x&&x.sign)||1)<0?-1:1,amt:Math.abs(parseFloat(x&&x.amt)||0)};
+    if(x&&x.unit==='pct'){o.unit='pct';o.pct=Math.min(100,Math.abs(parseFloat(x.pct)||0));o.amt=0;}
+    return o;
   }).filter(function(x){var k=x.name.toLowerCase();if(!x.name||seen[k])return false;seen[k]=1;return true;});
 }
 function _adjpKey(n){return String(n||'').trim().toLowerCase();}
@@ -2133,7 +2193,7 @@ function renderAdjPresets(){
   var chips=adjPresets.map(function(p,i){
     var minus=p.sign<0;
     return '<button type="button" class="adjp-c'+(minus?' mi':'')+'" onclick="adjpUse('+i+')" title="눌러서 조정 줄로 추가">'+
-      '<b>'+(minus?'−':'+')+'</b>'+ivxEsc(p.name)+(p.amt>0?'<i>'+fmtAmt(p.amt)+'</i>':'')+'</button>';
+      '<b>'+(minus?'−':'+')+'</b>'+ivxEsc(p.name)+(p.unit==='pct'?(p.pct>0?'<i>'+p.pct+'%</i>':'<i>%</i>'):(p.amt>0?'<i>'+fmtAmt(p.amt)+'</i>':''))+'</button>';
   }).join('');
   el.innerHTML='<div class="adjp-h"><span>⭐ 자주 쓰는 항목</span><button type="button" onclick="adjpOpen()">⚙ 관리</button></div>'+
     (chips?'<div class="adjp-w">'+chips+'</div>'
@@ -2144,10 +2204,11 @@ window.adjpUse=function(i){
   // 비어 있는 줄이 있으면 그 줄을 채우고, 없으면 새 줄을 만듭니다
   var empty=-1;for(var k=0;k<adjusts.length;k++){if(!String(adjusts[k].name||'').trim()&&!(parseFloat(adjusts[k].amt)>0)){empty=k;break;}}
   var row={name:p.name,amt:p.amt||0,sign:p.sign};
+  if(p.unit==='pct'){row.unit='pct';row.pct=p.pct||0;row.amt=_adjR2(_adjSubOf(lineItems)*(p.pct||0)/100);}
   if(empty>=0)adjusts[empty]=row;else adjusts.push(row);
   renderAdjusts();App.upPrev();
-  if(!(p.amt>0))setTimeout(function(){
-    var l=$('adj-list');if(!l)return;var ins=l.querySelectorAll('input[type=number]');
+  if(!(p.unit==='pct'?p.pct>0:p.amt>0))setTimeout(function(){
+    var l=$('adj-list');if(!l)return;var ins=l.querySelectorAll('.adj-am input');
     var t=ins[empty>=0?empty:ins.length-1];if(t){t.focus();t.select();}
   },0);
 };
@@ -2157,14 +2218,16 @@ window.adjpStar=function(i){
   if(!nm){showToast('항목명을 먼저 입력해 주세요');return;}
   if(_adjpHas(nm)){adjpOpen(nm);return;}               // 이미 저장된 항목 → 관리 창에서 수정
   var list=adjPresets.slice();
-  list.push({name:nm,sign:(parseFloat(a.sign)||1)<0?-1:1,amt:0});
+  var np={name:nm,sign:(parseFloat(a.sign)||1)<0?-1:1,amt:0};
+  if(_adjIsPct(a)){np.unit='pct';np.pct=0;}       // % 항목이면 % 형식으로 저장 (값은 관리 창에서 정할 수 있음)
+  list.push(np);
   adjpSaveAll(list,true);
   showToast('⭐ 「'+nm+'」 자주 쓰는 항목에 저장됨');
 };
 // ── 관리 창
 var _adjpEdit=[];
 window.adjpOpen=function(focusName){
-  _adjpEdit=adjPresets.map(function(p){return {name:p.name,sign:p.sign,amt:p.amt};});
+  _adjpEdit=adjPresets.map(function(p){return {name:p.name,sign:p.sign,amt:p.amt,unit:p.unit,pct:p.pct};});
   adjpDraw();
   $('adjp-modal').classList.remove('hidden');
   if(focusName)setTimeout(function(){
@@ -2191,7 +2254,8 @@ function adjpDraw(){
     return '<div class="adjp-r">'+
       '<button type="button" class="sg'+(minus?' mi':'')+'" onclick="adjpEdSign('+i+')" title="추가 · 차감 바꾸기">'+(minus?'−':'+')+'</button>'+
       '<input value="'+ivxEsc(p.name).replace(/"/g,'&quot;')+'" placeholder="항목명" oninput="adjpEdName('+i+',this.value)">'+
-      '<div class="am"><i>RM</i><input type="number" min="0" step="0.5" value="'+(p.amt>0?p.amt:'')+'" placeholder="금액" oninput="adjpEdAmt('+i+',this.value)"></div>'+
+      '<div class="adj-am'+(p.unit==='pct'?' pc':'')+'"><button type="button" onclick="adjpEdUnit('+i+')" title="RM · % 바꾸기">'+(p.unit==='pct'?'%':'RM')+'</button>'+
+        '<input type="number" min="0" step="'+(p.unit==='pct'?'1':'0.5')+'" value="'+(p.unit==='pct'?(p.pct>0?p.pct:''):(p.amt>0?p.amt:''))+'" placeholder="'+(p.unit==='pct'?'%':'금액')+'" oninput="adjpEdAmt('+i+',this.value)"></div>'+
       '<div class="mv"><button type="button" onclick="adjpEdMove('+i+',-1)"'+(i===0?' disabled':'')+'>▲</button><button type="button" onclick="adjpEdMove('+i+',1)"'+(i===_adjpEdit.length-1?' disabled':'')+'>▼</button></div>'+
       '<button type="button" class="ld" onclick="adjpEdDel('+i+')" title="삭제">×</button></div>';
   }).join(''):'<div class="adjp-e" style="padding:14px 4px">저장된 항목이 없습니다. 아래에서 추가해 주세요.</div>';
@@ -2202,7 +2266,8 @@ function adjpDraw(){
 }
 window.adjpEdSign=function(i){if(_adjpEdit[i]){_adjpEdit[i].sign=_adjpEdit[i].sign<0?1:-1;adjpDraw();}};
 window.adjpEdName=function(i,v){if(_adjpEdit[i])_adjpEdit[i].name=v;};
-window.adjpEdAmt=function(i,v){if(_adjpEdit[i])_adjpEdit[i].amt=Math.abs(parseFloat(v)||0);};
+window.adjpEdAmt=function(i,v){var p=_adjpEdit[i];if(!p)return;var n=Math.abs(parseFloat(v)||0);if(p.unit==='pct')p.pct=Math.min(n,100);else p.amt=n;};
+window.adjpEdUnit=function(i){var p=_adjpEdit[i];if(!p)return;if(p.unit==='pct'){delete p.unit;delete p.pct;}else{p.unit='pct';p.pct=0;}p.amt=0;adjpDraw();};
 window.adjpEdMove=function(i,d){var j=i+d;if(j<0||j>=_adjpEdit.length)return;var t=_adjpEdit[i];_adjpEdit[i]=_adjpEdit[j];_adjpEdit[j]=t;adjpDraw();};
 window.adjpEdDel=function(i){
   var p=_adjpEdit[i];if(!p)return;
@@ -2657,7 +2722,8 @@ function calcTotals(inv){
   var park=parseFloat(inv?inv.parkingFee:val('parking-fee'))||0;
   var minC=parseFloat(inv?inv.minCharge:val('min-charge'))||0;
   var extra=parseFloat(inv?inv.extraFee:val('extra-fee'))||0;
-  var adjRows=_adjShow(inv?(inv.adjusts||[]):undefined);          // 직접입력 조정 (+ · −)
+  var adjRows=_adjShow(inv?(inv.adjusts||[]):undefined,sub);      // 직접입력 조정 (+ · −) · % 줄은 소계 기준
+  if(!inv){try{adjCalcRefresh();}catch(e){}}
   var adjSum=adjRows.reduce(function(a,x){return a+x.val;},0);
   var credit=parseFloat(inv?inv.creditUse:val('credit-use'))||0;
   // 패키지 회원 자동반영: 비용소계 + 세금 − 할인 + 추가비용을 회원적립잔액에 실시간 반영
@@ -2843,6 +2909,69 @@ function invAttSetCap(i,v){
 window.invAttPick=invAttPick;window.invAttDel=invAttDel;
 window.invAttCap=invAttCap;window.invAttSetCap=invAttSetCap;
 
+// ── 💳 카드 전표 첨부 ───────────────────────────────────────────────
+//    결제 은행에서 「카드」를 고르면 전표 사진을 붙일 수 있습니다 (최대 3장)
+//    저장 : inv.cardSlips [{thumb,url,w,h}]  · 고객 인보이스 화면 · PDF 의 결제 정보 칸에 함께 표시
+var cardSlips=[];
+var CSLIP_MAX=3;
+function cslipVisible(){
+  var b=(banks||[]).find(function(x){return x.id===val('bank-select');});
+  return isCardBank(b)||cardSlips.length>0;
+}
+function cslipRender(){
+  var box=$('cslip-box');if(!box)return;
+  box.style.display=cslipVisible()?'block':'none';
+  var g=$('cslip-grid'),c=$('cslip-cnt'),add=$('cslip-add');
+  if(c)c.textContent=cardSlips.length?(cardSlips.length+' / '+CSLIP_MAX+'장'):'';
+  if(add)add.style.display=cardSlips.length>=CSLIP_MAX?'none':'';
+  if(g)g.innerHTML=cardSlips.map(function(a,i){
+    var st=a.url?'<span class="iva-st ok">✓ 원본 저장</span>':(a._up?'<span class="iva-st wait">올리는 중…</span>':'<span class="iva-st no">문서에만 저장</span>');
+    return '<div class="iva-it"><div class="iva-thb"><a href="'+(a.url||a.thumb||'')+'" target="_blank" rel="noopener"><img src="'+(a.thumb||a.url||'')+'" alt="카드 전표" style="object-fit:contain;background:#fff"></a>'+st+
+      '<button type="button" class="iva-x" onclick="cslipDel('+i+')" title="삭제">✕</button></div></div>';
+  }).join('');
+}
+async function cslipPick(inp){
+  var fs=Array.prototype.slice.call((inp&&inp.files)||[]);
+  if(inp)inp.value='';
+  fs=fs.filter(function(f){return /^image\//.test(f.type||'');});
+  if(!fs.length)return;
+  var room=CSLIP_MAX-cardSlips.length;
+  if(room<=0){showToast('⚠ 카드 전표는 최대 '+CSLIP_MAX+'장까지 가능합니다');return;}
+  if(fs.length>room){showToast('⚠ '+room+'장만 추가됩니다 (최대 '+CSLIP_MAX+'장)');fs=fs.slice(0,room);}
+  showLoad('전표 사진 준비 중...');
+  try{
+    for(var i=0;i<fs.length;i++){
+      // 전표 글씨가 읽히도록 일반 첨부보다 조금 크게 줄입니다
+      var th=await _ivaShrink(fs[i],900,0.7);
+      if(!th){showToast('⚠ 사진을 읽을 수 없습니다: '+(fs[i].name||''));continue;}
+      var it={thumb:th.data,w:th.w,h:th.h,url:'',_up:!!ST};
+      cardSlips.push(it);cslipRender();App.upPrev();
+      if(ST){
+        try{
+          var big=await _ivaShrink(fs[i],2000,0.86);
+          if(big){
+            var blob=await fetch(big.data).then(function(r){return r.blob();});
+            var key=String(val('inv-num')||'temp').replace(/[^A-Za-z0-9_-]/g,'_');
+            var snap=await ST.ref('invoices/'+key+'/slip-'+Date.now()+'-'+cardSlips.length+'.jpg').put(blob,{contentType:'image/jpeg'});
+            it.url=await snap.ref.getDownloadURL();
+          }
+        }catch(e){console.warn('전표 업로드 실패:',e&&e.message);}
+      }
+      it._up=false;cslipRender();
+    }
+    App.upPrev();
+    showToast('💳 카드 전표가 첨부되었습니다 — 인보이스를 저장해 주세요');
+  }finally{hideLoad();}
+}
+function cslipDel(i){
+  if(!cardSlips[i])return;
+  if(!confirm('이 카드 전표 사진을 삭제할까요?'))return;
+  cardSlips.splice(i,1);cslipRender();App.upPrev();
+}
+window.cslipPick=cslipPick;window.cslipDel=cslipDel;
+// 고객 화면 · PDF 용 전표 사진 묶음
+function cslipList(inv){return ((inv&&inv.cardSlips)||[]).filter(function(a){return a&&(a.thumb||a.url);});}
+
 function getInvData(){
   var t=calcTotals();
   var bankId=val('bank-select');
@@ -2853,10 +2982,11 @@ function getInvData(){
     items:JSON.parse(JSON.stringify(lineItems)),
     taxRate:t.taxRate,discVal:t.discVal,discType:t.discType,
     parkingFee:t.park,minCharge:t.minC,extraFee:t.extra,
-    adjusts:_adjNorm().filter(function(x){return x.amt>0.005||x.name;}).map(function(x){return{name:x.name,amt:x.amt,sign:x.sign};}),
+    adjusts:_adjNorm().filter(function(x){return x.amt>0.005||x.name||x.pct>0;}).map(function(x){var o={name:x.name,amt:x.amt,sign:x.sign};if(x.unit==='pct'){o.unit='pct';o.pct=x.pct;}return o;}),
     creditUse:t.credit,voucherAmt:t.voucher,voucherCode:t.voucherCode,pointUse:t.pts,paidAmount:t.paidAmount,payments:JSON.parse(JSON.stringify(payments)),
     notes:val('inv-notes'),notes_en:val('inv-notes-en'),terms:val('inv-terms'),bankId:bankId,bankInfo:bank,total:t.grand,_t:t,
     files:invAtt.map(function(a){return{thumb:a.thumb||'',url:a.url||'',cap:a.cap||'',name:a.name||'',w:a.w||0,h:a.h||0};}),
+    cardSlips:cardSlips.map(function(a){return{thumb:a.thumb||'',url:a.url||'',w:a.w||0,h:a.h||0};}),
     _insp:(window._invInspList||[]).slice(),
     contract_id:(window._invCtLink&&window._invCtLink.id)||'',
     contract_name:(window._invCtLink&&window._invCtLink.name)||'',
@@ -3103,6 +3233,11 @@ var IVA_CSS=""
 +".iva .pmx-d{font-size:11px;line-height:1.6;color:#5A6478;margin-top:8px;font-weight:600;word-break:keep-all}"
 +".iva .ivbox a{color:var(--bl);font-weight:800;text-decoration:none}"
 +".iva .ivcard.gold{background:#FFFDF6;border-color:#F0E3BC}"
++".iva .ivslip{margin-top:10px;padding-top:10px;border-top:1px dashed #EADFBF}"
++".iva .ivslip .k{font-size:11px;font-weight:800;color:#8A6608;margin-bottom:6px}"
++".iva .ivslip .g{display:flex;gap:7px;flex-wrap:wrap}"
++".iva .ivslip img{display:block;height:110px;max-width:140px;object-fit:contain;background:#fff;border:1px solid #EADFBF;border-radius:8px}"
++".iva .ivslip .z{font-size:10px;color:#98A1B4;margin-top:4px}"
 +".iva .ivcard.gold .bi{background:#FDF3D8;color:#8A6608}"
 +".iva .ivcard.blue .bi{background:#EAF1FF;color:var(--bl)}"
 +".iva .ivatt{padding:12px 13px 13px}"
@@ -3250,7 +3385,7 @@ function buildInvAppHTML(inv,lang){
   if(t.extra>0)row(L('추가','Extra'),'+ '+fa(t.extra));
   (t.adjusts||[]).forEach(function(a){
     var ko=a.name||L('조정','Adjustment');
-    var lbl=en?('<span data-ivtr="'+ivxEsc(ko).replace(/"/g,'&quot;')+'">'+ivxEsc(ivFreeEn(ko,''))+'</span>'):ivxEsc(ko);
+    var lbl=(en?('<span data-ivtr="'+ivxEsc(ko).replace(/"/g,'&quot;')+'">'+ivxEsc(ivFreeEn(ko,''))+'</span>'):ivxEsc(ko))+_adjPctTx(a);
     row(lbl,(a.val<0?'- ':'+ ')+fa(Math.abs(a.val)),a.val<0?1:0);
   });
   if(t.credit>0)row(L('회원 적립금','Member Credit'),'- '+fa(t.credit),1);
@@ -3282,6 +3417,10 @@ function buildInvAppHTML(inv,lang){
   h+='<div class="ivcard gold">'+_pmHtml+'<div class="ivbox"><div class="bi">\u{1F4DE}</div><div>'+
      '<div class="bt">'+L('결제 정보','Payment Information')+'</div><div class="bb">'+payTxt+'</div>'+
      (inv.bankInfo&&inv.bankInfo.qr?'<img src="'+inv.bankInfo.qr+'" style="max-width:120px;margin-top:8px;border-radius:8px">':'')+
+     (function(){var cs=cslipList(inv);if(!cs.length)return '';
+       return '<div class="ivslip"><div class="k">\u{1F4B3} '+L('카드 전표','Card Payment Slip')+'</div><div class="g">'+
+         cs.map(function(a){return '<a href="'+ivxEsc(a.url||a.thumb)+'" target="_blank" rel="noopener"><img src="'+ivxEsc(a.thumb||a.url)+'" alt=""></a>';}).join('')+
+         '</div><div class="z">'+L('눌러서 크게 보기 \u2197','Tap to enlarge \u2197')+'</div></div>';})()+
      '</div></div></div>';
 
   // 메모
@@ -3360,7 +3499,7 @@ function buildInvHTML(inv,custView){
   if(t.extra>0)chargeRows+='<div class="sumrow"><span>추가 · Extra</span><span class="num">+ '+fa(t.extra)+'</span></div>';
   (t.adjusts||[]).forEach(function(a){
     var ko=a.name||'조정',eng=ivFreeEn(ko,'');
-    var lbl=(eng&&eng!==ko)?(ko+' · '+eng):ko;
+    var lbl=((eng&&eng!==ko)?(ko+' · '+eng):ko)+_adjPctTx(a);
     chargeRows+='<div class="sumrow'+(a.val<0?' minus':'')+'"><span>'+ivxEsc(lbl)+'</span><span class="num">'+(a.val<0?'- ':'+ ')+fa(Math.abs(a.val))+'</span></div>';
   });
   if(t.credit>0)chargeRows+='<div class="sumrow minus"><span>회원 적립금 · Member Credit</span><span class="num">- '+fa(t.credit)+'</span></div>';
@@ -3477,7 +3616,7 @@ function buildInvDocHX(inv,lang){
   if(t.extra>0)sr.push([L('추가','Extra'),'+ '+fa(t.extra)]);
   (t.adjusts||[]).forEach(function(a){
     var ko=a.name||L('조정','Adjustment');
-    sr.push([E(en?ivFreeEn(ko,''):ko),(a.val<0?'− ':'+ ')+fa(Math.abs(a.val)),a.val<0?'m':'']);
+    sr.push([E((en?ivFreeEn(ko,''):ko)+_adjPctTx(a)),(a.val<0?'− ':'+ ')+fa(Math.abs(a.val)),a.val<0?'m':'']);
   });
   if(t.credit>0)sr.push([L('회원 적립금','Member Credit'),'− '+fa(t.credit),'m']);
   if(t.voucher>0)sr.push([L('상품·할인권','Voucher')+(t.voucherCode?' ('+E(t.voucherCode)+')':''),'− '+fa(t.voucher),'m']);
@@ -3512,6 +3651,10 @@ function buildInvDocHX(inv,lang){
   var lk=[];
   (inv._insp||[]).forEach(function(r){lk.push('<a href="'+E(r.url||'#')+'">'+E((en?({'설치':'Installation','세탁기':'Washer','출장':'Call-out','점검':'Inspection'}[r.typeLabel]||'Inspection'):(r.typeLabel||'점검'))+' '+L('보고서','Report')+(r.date?' · '+r.date:''))+' ↗</a>');});
   if(inv.contract_id)lk.push('<a href="'+E(inv._ctUrl||(BASE_URL+'/admin.html?view='+encodeURIComponent(inv.contract_id)+'&mode=all&lang='+(en?'en':'ko')))+'">'+L('멤버십 계약서','Membership Contract')+(inv.contract_cdate?' · '+E(inv.contract_cdate):'')+' ↗</a>');
+  var _cs=cslipList(inv);
+  if(_cs.length)payX+='<div style="margin-top:7px;font-weight:700;color:#8A6410">'+L('카드 전표','Card payment slip')+'</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">'+_cs.map(function(a){
+      return '<img src="'+E(a.thumb||a.url)+'" alt="" style="height:120px;max-width:150px;object-fit:contain;border:1px solid #E9DDBA;border-radius:5px;background:#fff">';}).join('')+'</div>';
   var noteBlock=H.notes([
     {t:paid?L('결제 정보','Payment'):L('결제 안내','Payment'),x:payX,cls:'g'},
     {t:L('메모 · 조건','Notes & Terms'),x:noteTx},
@@ -3623,7 +3766,7 @@ function buildInvLiteHTML(inv,custView){
   if(t.extra>0)charge+='<div class="l-srow"><span>추가 · Extra</span><span>+ '+fa(t.extra)+'</span></div>';
   (t.adjusts||[]).forEach(function(a){
     var ko=a.name||'조정',eng=ivFreeEn(ko,'');
-    var lbl=(eng&&eng!==ko)?(ko+' · '+eng):ko;
+    var lbl=((eng&&eng!==ko)?(ko+' · '+eng):ko)+_adjPctTx(a);
     charge+='<div class="l-srow"><span>'+ivxEsc(lbl)+'</span><span>'+(a.val<0?'- ':'+ ')+fa(Math.abs(a.val))+'</span></div>';
   });
   if(t.credit>0)charge+='<div class="l-srow"><span>회원 적립금 · Credit</span><span>- '+fa(t.credit)+'</span></div>';
