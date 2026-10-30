@@ -2188,28 +2188,41 @@ window.openDrawer=function(idx){
   {
     const MM=(e.docs.memos||[]).slice().sort((a,b)=>String(b.req_date||'').localeCompare(String(a.req_date||'')));
     h+='<div class="dcard'+(caFold('memos')?' fold':'')+'" data-fold="memos"><div class="dcard-h dch"><span class="chv">▾</span>📝 메모장<span class="cnt">'+MM.length+'건</span>'+
-       '<button class="rb hd" style="margin-left:6px" onclick="event.stopPropagation();caMemoEdit('+idx+',\'\')">＋ 메모 작성</button></div>';
+       '<button class="rb hd" style="margin-left:6px" onclick="event.stopPropagation();caMemoEdit('+idx+',\'\',\'repair\')">＋ 🛠 수리요청</button>'+
+       '<button class="rb hd" style="margin-left:4px" onclick="event.stopPropagation();caMemoEdit('+idx+',\'\',\'curtain\')">＋ 🧺 커튼세탁</button></div>';
     h+=MM.length?MM.map(x=>{
-      const st=x.status==='done'?'<span class="pill ok">✅ 방문완료</span>'
+      const ct=x.kind==='curtain';
+      const st=x.status==='done'?'<span class="pill ok">'+(ct?'✅ 재설치완료':'✅ 방문완료')+'</span>'
               :(x.status==='contacted'?'<span class="pill blue">📞 연락완료</span>'
-              :'<span class="pill warn">🕐 대기</span>');
+              :'<span class="pill warn">'+(ct?'🧺 수거완료':'🕐 대기')+'</span>');
+      const kd=ct?'<span class="pill" style="background:#E0F2FE;color:#0369A1">🧺 커튼세탁</span>':'<span class="pill" style="background:#F1F5F9;color:#334155">🛠 수리</span>';
+      const rph=(x.result_photos||[]).filter(p=>p&&(p.thumb||p.url));
       const ch=x.channel==='kakao'?'<span class="pill">💛 카톡</span>'
               :(x.channel==='whatsapp'?'<span class="pill">💚 왓챕</span>':'');
       return '<div class="mrow">'+
-        '<div class="mr1"><span class="mrdt">'+esc(x.req_date||'')+'</span>'+st+ch+
+        '<div class="mr1"><span class="mrdt">'+esc(x.req_date||'')+'</span>'+kd+st+ch+
           '<span class="mrbt">'+
             '<button class="rb ed" onclick="caMemoEdit('+idx+',\''+esc(x.__id)+'\')">✏️ 수정</button>'+
             '<button class="rb del" onclick="caMemoDel('+idx+',\''+esc(x.__id)+'\')">🗑</button>'+
           '</span></div>'+
-        '<div class="mr2">'+
+        (ct?('<div class="mr2">'+
+          '<div class="k">고객명</div><div class="v">'+esc(x.name||'—')+(x.phone?' · '+esc(x.phone):'')+'</div>'+
+          '<div class="k">🧺 수거</div><div class="v">'+esc(x.req_date||'—')+'</div>'+
+          '<div class="k">🧼 세탁완료</div><div class="v">'+(x.wash_date?esc(x.wash_date):'<span style="color:#8a94a6">미정</span>')+'</div>'+
+          '<div class="k">🚗 재설치</div><div class="v">'+(x.visit_date?esc(x.visit_date)+(x.visit_time?' '+esc(x.visit_time):''):'<span style="color:#8a94a6">미정</span>')+'</div>'+
+          (x.memo?'<div class="k">내부메모</div><div class="v int">🔒 '+esc(x.memo)+'</div>':'')+
+        '</div></div>'):'')+
+        (ct?'':('<div class="mr2">'+
           '<div class="k">고객명</div><div class="v">'+esc(x.name||'—')+(x.phone?' · '+esc(x.phone):'')+'</div>'+
           '<div class="k">증상</div><div class="v sym">'+esc(x.symptom||'—')+'</div>'+
           (x.symptom_en?'<div class="k">증상 EN</div><div class="v en">🇬🇧 '+esc(x.symptom_en)+'</div>':'')+
           '<div class="k">방문일</div><div class="v">'+(x.visit_date?esc(x.visit_date)+(x.visit_time?' '+esc(x.visit_time):''):'<span style="color:#8a94a6">미정</span>')+'</div>'+
           '<div class="k">진단·결과</div><div class="v '+(x.result?'res':'wait')+'">'+(x.result?esc(x.result):'⚠️ 결과 미입력 — 방문 후 작성해 주세요')+'</div>'+
           (x.result_en?'<div class="k">결과 EN</div><div class="v en">🇬🇧 '+esc(x.result_en)+'</div>':'')+
+          (rph.length?'<div class="k">결과 사진</div><div class="v"><div style="display:flex;gap:5px;flex-wrap:wrap">'+rph.slice(0,6).map(p=>'<a href="'+esc(p.url||p.thumb)+'" target="_blank" rel="noopener"><img src="'+esc(p.thumb||p.url)+'" alt="" loading="lazy" style="width:44px;height:44px;object-fit:cover;border-radius:7px;border:1px solid #E5E7EB"></a>').join('')+'</div></div>':'')+
+          ((x.result||rph.length)?'<div class="k">보고서</div><div class="v"><a href="https://happyhomecare.com.my/repair?id='+encodeURIComponent(x.__id)+'" target="_blank" rel="noopener" style="font-weight:800;color:#1D4ED8;text-decoration:none">📄 방문 결과 보고서 보기 ↗</a>'+(x.report_sent_at?' <span style="font-size:10.5px;color:#0E9B63;font-weight:800">✓ 발송 '+esc(String(x.report_sent_at).slice(0,10))+'</span>':'')+'</div>':'')+
           (x.memo?'<div class="k">내부메모</div><div class="v int">🔒 '+esc(x.memo)+'</div>':'')+
-        '</div></div>';
+        '</div></div>'));
     }).join(''):'<div class="dnone">메모 없음</div>';
     h+='</div>';
   }
@@ -4408,15 +4421,20 @@ function linkFieldsFor(coll,e,renameToo,rephoneToo){
 // 두 화면의 동작을 맞춰 둡니다. (메모 문서의 schedule_id 로 1:1 관리)
 function caSchedTitle(m){
   const who=String(m.condo||'').trim(), nm=String(m.name||'').trim();
-  const base=who&&nm?(who+' ('+nm+')'):(who||nm||'수리 방문');
-  return '🛠 '+base;
+  const ct=(m.kind==='curtain');
+  const base=who&&nm?(who+' ('+nm+')'):(who||nm||(ct?'커튼 재설치':'수리 방문'));
+  return (ct?'🧺 커튼 재설치 · ':'🛠 ')+base;
 }
 function caSchedMemo(m){
+  const ct=(m.kind==='curtain');
   return [
-    m.symptom?'🔧 '+m.symptom:'',
+    ct?'🔧 커튼 세탁 · 재설치 방문':(m.symptom?'🔧 '+m.symptom:''),
+    (ct&&m.req_date)?('🧺 수거일: '+m.req_date):'',
+    (ct&&m.wash_date)?('🧼 세탁 완료 예정: '+m.wash_date):'',
     m.phone?'📞 '+m.phone:'',
     m.memo?'📝 '+m.memo:'',
-    '※ 메모장(수리요청)에서 자동 등록된 일정입니다.'
+    ct?'※ 메모장(커튼세탁)에서 자동 등록된 일정입니다.'
+       :'※ 메모장(수리요청)에서 자동 등록된 일정입니다.'
   ].filter(Boolean).join('\n');
 }
 async function caSyncSchedule(memoId,d,prevSchedId){
@@ -4456,13 +4474,45 @@ async function caSyncSchedule(memoId,d,prevSchedId){
     return sid;
   }
 }
-window.caMemoEdit=function(idx,mid){
+window.caMemoEdit=function(idx,mid,kind){
   const e=entries[idx];if(!e)return;
   const m=mid?(e.docs.memos||[]).filter(x=>x.__id===mid)[0]:null;
+  // 🧺 커튼세탁 — 메모장(memo-admin)의 커튼세탁 등록과 같은 칸 · 같은 저장 형식
+  const ct=m?(m.kind==='curtain'):(kind==='curtain');
   const td=new Date().toISOString().slice(0,10);
   const v=s=>esc(String(s==null?'':s));
   const EC='<span class="eye-c">👁 고객 공개</span>',EI='<span class="eye-i">🔒 내부</span>';
   const EN='<span class="eye-e">🇬🇧 영문 고객용</span>';
+  if(ct){
+    const cbody=
+      '<input type="hidden" id="cm-kind" value="curtain">'+
+      '<div class="f2">'+
+        '<div><div class="fl">수거 날짜 '+EC+'</div><input type="date" class="fi" id="cm-req" value="'+v(m?m.req_date:td)+'"></div>'+
+        '<div><div class="fl">상태</div><select class="fi" id="cm-status">'+
+          ['pending|🧺 수거완료','contacted|📞 연락완료','done|✅ 재설치완료'].map(o=>{const a=o.split('|');
+            return '<option value="'+a[0]+'"'+((m?m.status:'pending')===a[0]?' selected':'')+'>'+a[1]+'</option>';}).join('')+
+        '</select></div>'+
+      '</div>'+
+      '<div class="fl">고객명 '+EC+'</div><input type="text" class="fi" id="cm-name" value="'+v(m?m.name:e.name)+'">'+
+      '<div class="fl">연락처</div><input type="text" class="fi" id="cm-phone" value="'+v(m?m.phone:e.phone)+'">'+
+      '<div class="fl">콘도명·호수</div><input type="text" class="fi" id="cm-condo" value="'+v(m?m.condo:(e.addr||''))+'">'+
+      '<div class="fl">세탁 완료 예정일 <span style="font-size:10px;color:#0369A1;background:#E0F2FE;border-radius:5px;padding:1px 6px;font-weight:800">선택 입력</span></div>'+
+      '<input type="date" class="fi" id="cm-wash" value="'+v(m?m.wash_date:'')+'">'+
+      '<div class="f2">'+
+        '<div><div class="fl">재설치 방문 예정일 '+EC+'</div><input type="date" class="fi" id="cm-vd" value="'+v(m?m.visit_date:'')+'"></div>'+
+        '<div><div class="fl">방문 예정시각</div><input type="time" class="fi" id="cm-vt" value="'+v(m?m.visit_time:'')+'"></div>'+
+      '</div>'+
+      '<div style="font-size:10.5px;font-weight:800;color:#5B21B6;background:#F5F3FF;border:1px solid #DDD6FE;border-radius:8px;padding:7px 10px;margin-top:6px;line-height:1.6">'+
+        '📅 재설치 방문 예정일을 입력하면 <b>스케줄 캘린더</b>에 「🧺 커튼 재설치」 일정으로 자동 등록됩니다.'+
+        (m&&m.schedule_id?' <b>(현재 캘린더에 등록되어 있습니다)</b>':'')+
+        '<br>안내 메시지(접수 완료 · 재설치 일정 확인 · 재설치 방문 안내)는 메모장(memo-admin)의 💬 발송에서 보낼 수 있습니다.</div>'+
+      '<div class="fl">내부 메모 '+EI+'</div><textarea class="fi" id="cm-memo" placeholder="예) 커튼 6장 · 후크 교체 필요 — 고객에게 표시되지 않습니다">'+v(m?m.memo:'')+'</textarea>';
+    const cfoot=(mid?'<button class="btn" style="background:var(--bad-bg);border-color:#fecaca;color:var(--bad);margin-right:auto" onclick="caMemoDel('+idx+',\''+esc(mid)+'\')">🗑 삭제</button>':'')+
+      '<button class="btn" onclick="document.getElementById(\'ca-doc-mask\').remove()">취소</button>'+
+      '<button class="btn p" onclick="caMemoSave('+idx+',\''+esc(mid||'')+'\')">💾 저장</button>';
+    genericModal(mid?'🧺 커튼세탁 수정':'🧺 커튼세탁 등록',cbody,cfoot);
+    return;
+  }
   const body=
     '<div class="f2">'+
       '<div><div class="fl">요청 날짜 '+EC+'</div><input type="date" class="fi" id="cm-req" value="'+v(m?m.req_date:td)+'"></div>'+
@@ -4490,14 +4540,35 @@ window.caMemoEdit=function(idx,mid){
   const foot=(mid?'<button class="btn" style="background:var(--bad-bg);border-color:#fecaca;color:var(--bad);margin-right:auto" onclick="caMemoDel('+idx+',\''+esc(mid)+'\')">🗑 삭제</button>':'')+
     '<button class="btn" onclick="document.getElementById(\'ca-doc-mask\').remove()">취소</button>'+
     '<button class="btn p" onclick="caMemoSave('+idx+',\''+esc(mid||'')+'\')">💾 저장</button>';
-  genericModal(mid?'✏️ 메모 수정':'📝 메모 등록',body,foot);
+  genericModal(mid?'🛠 수리요청 수정':'🛠 수리요청 등록',body,foot);
 };
 window.caMemoSave=async function(idx,mid){
   const e=entries[idx];if(!e)return;
   if(!db){toast('Firebase 연결 중입니다');return;}
   const g=id=>{const el=document.getElementById(id);return el?el.value:'';};
   const now=new Date().toISOString();
+  const ct=g('cm-kind')==='curtain';
+  if(ct){
+    // 🧺 커튼세탁 — 증상칸이 없으므로 목록 · 캘린더 · 고객 마이페이지에 보일 내용을 메모장과 똑같이 채웁니다
+    const cd={
+      kind:'curtain',
+      req_date:g('cm-req')||now.slice(0,10),
+      status:g('cm-status')||'pending',
+      condo:g('cm-condo').trim(),
+      name:g('cm-name').trim(),
+      phone:g('cm-phone').trim(),
+      wash_date:g('cm-wash')||'',
+      symptom:'커튼 세탁 · 수거 후 재설치',
+      symptom_en:'Curtain laundry · pickup & reinstallation',
+      visit_date:g('cm-vd'),
+      visit_time:g('cm-vt'),
+      memo:g('cm-memo').trim(),
+      updated_at:now
+    };
+    return caMemoSaveDoc(idx,mid,cd,'🧺 커튼 재설치');
+  }
   const d={
+    kind:'repair',
     req_date:g('cm-req')||now.slice(0,10),
     status:g('cm-status')||'pending',
     condo:g('cm-condo').trim(),
@@ -4512,6 +4583,11 @@ window.caMemoSave=async function(idx,mid){
     memo:g('cm-memo').trim(),
     updated_at:now
   };
+  return caMemoSaveDoc(idx,mid,d,'🛠 수리');
+};
+async function caMemoSaveDoc(idx,mid,d,lb){
+  const e=entries[idx];if(!e)return;
+  const now=d.updated_at;
   if(!d.condo&&!d.name){toast('콘도명 또는 고객명을 입력해 주세요');return;}
   const prev=mid?((e.docs.memos||[]).filter(x=>x.__id===mid)[0]||{}):{};
   const prevSchedId=prev.schedule_id||'';
@@ -4529,7 +4605,7 @@ window.caMemoSave=async function(idx,mid){
     // 📅 방문 예정일 → 스케줄 캘린더(🛠 수리) 자동 반영 — 메모장 화면과 똑같이 동작합니다
     await caSyncSchedule(id,d,prevSchedId);
     toast(d.visit_date
-      ? (hadDate&&prevSchedId?'✓ 저장 — 캘린더 일정도 수정되었습니다':'✓ 저장 — 캘린더에 🛠 수리 일정으로 등록했습니다')
+      ? (hadDate&&prevSchedId?'✓ 저장 — 캘린더 일정도 수정되었습니다':'✓ 저장 — 캘린더에 '+lb+' 일정으로 등록했습니다')
       : (prevSchedId?'✓ 저장 — 방문 예정일이 없어 캘린더에서 제거했습니다':(mid?'✓ 메모가 수정되었습니다':'✓ 메모가 등록되었습니다')));
     await loadAll(true);
     if(typeof openDrawer==='function')openDrawer(idx);
