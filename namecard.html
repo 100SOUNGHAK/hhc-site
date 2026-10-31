@@ -336,6 +336,11 @@ button:focus-visible,a:focus-visible{outline:3px solid rgba(15,118,110,.32);outl
   font-style:normal;font-size:10px;line-height:1.4;font-weight:800;letter-spacing:0;
   color:var(--teal-700);background:var(--teal-50);border:1px solid rgba(15,118,110,.16)
 }
+.na-evbn{display:block;margin:0 0 10px;border-radius:18px;overflow:hidden;
+  box-shadow:0 1px 2px rgba(8,23,43,.12),0 14px 28px -14px rgba(8,23,43,.6);transition:transform .18s var(--ease)}
+.na-evbn[hidden]{display:none}
+.na-evbn:active{transform:translateY(1px)}
+.na-evbn img{display:block;width:100%;height:auto}
 .na-perk-note{margin:9px 4px 0;font-size:11.5px;line-height:1.5;font-weight:550;color:var(--ink-600)}
 /* 서비스별 안내 — 사진 카드 2칸, 누르면 안내장을 명함 위에 띄운다 */
 .na-gd-lead{margin:-4px 2px 11px;font-size:12px;line-height:1.5;font-weight:600;color:var(--ink-600)}
@@ -628,6 +633,8 @@ body.np-open{overflow:hidden}
 
   <section class="na-sec" id="perkBox">
     <h2 class="na-h" data-t="hPerk">이벤트 · 혜택</h2>
+    <!-- 🎉 이달의 이벤트 배너 — 이벤트에 그림(bn)이 있을 때만 보입니다 · 누르면 이벤트 안내장 -->
+    <a class="na-evbn" id="evBn" hidden><img alt="" width="1500" height="840"></a>
     <div class="na-links na-perk">
       <a id="lnk0" href="https://happyhomecare.com.my/event" class="evt">
         <span class="ic" aria-hidden="true">🎁</span>
@@ -785,7 +792,9 @@ var SHARE_URL = SITE + '/namecard';
 /* 이벤트 바로가기 — 날짜에 따라 자동으로 바뀐다 (말레이시아 시간 기준 마지막 날 자정까지).
    모든 이벤트가 끝나면 명함에서 이벤트 줄이 자동으로 사라진다. 다음 이벤트는 여기에 한 줄 추가. */
 var EVENTS = [
-  { end:'2026-10-31', path:'/event', tk:'l0t', dk:'l0d' }   /* 🍁 10월 한정 특별가 (관리자 화면에 공개된 이벤트가 없을 때만) */
+  { end:'2026-10-31', path:'/event', tk:'l0t', dk:'l0d' },  /* 🍁 10월 한정 특별가 (관리자 화면에 공개된 이벤트가 없을 때만) */
+  { end:'2026-11-30', path:'/event', tk:'l0tN', dk:'l0dN', emoji:'🎉', plain:true,
+    bn:{ko:'nov-banner-m.jpg',en:'nov-banner-m-en.jpg'} }   /* 🎉 11월 한정 전 품목 10% — 배너 그림 함께 표시 */
 ];
 /* 📅 월별 프로모션 — 관리자 화면(promo-admin.html)에서 공개한 이번 달 이벤트가 있으면 그것을 보여 준다.
    제목·한 줄 요약은 관리자 화면이 저장할 때 같이 만들어 둔 것(disp)을 그대로 쓴다. */
@@ -899,6 +908,7 @@ var T = {
     hPay:'결제 방법', payT:'카드 결제 시작', payD:'작업이 끝나면 기사님께 바로 결제하세요', payCard:'카드', payBank:'계좌이체', payCash:'현금',
     payN:'Visa · Mastercard · 체크/신용카드 · DuitNow&nbsp;QR · Touch&nbsp;\'n&nbsp;Go · GrabPay',
     l0t:'10월 한정 특별가', l0d:'에어컨 RM 90부터 · 세탁기 10% · 10/31까지',
+    l0tN:'11월 한정 전 품목 10% 할인', l0dN:'에어컨 · 가전 · 패브릭 모두 · 11/30까지', l0bN:'11월 한정 특별 할인 · 모든 서비스 10% OFF · 11월 1일 ~ 11월 30일',
     l1t:'예약 신청하기', l1d:'방문 날짜와 품목을 남겨주세요',
     l2t:'서비스 · 요금 안내', l2d:'품목별 요금 · 추가비용 · 무상보증',
     l3t:'멤버십 안내', l3d:'정기 관리 회원 혜택',
@@ -954,6 +964,7 @@ var T = {
     hPay:'PAYMENT', payT:'Now accepting cards', payD:'Pay our technician on the spot once the job is done', payCard:'Card', payBank:'Bank transfer', payCash:'Cash',
     payN:'Visa · Mastercard · debit/credit cards · DuitNow&nbsp;QR · Touch&nbsp;\'n&nbsp;Go · GrabPay',
     l0t:'October Special Prices', l0d:'A/C from RM 90 · washer 10% off · until 31 Oct',
+    l0tN:'November: 10% off everything', l0dN:'Air-con · appliances · fabrics · until 30 Nov', l0bN:'November special — 10% off all services, 1 to 30 November',
     l1t:'Request a booking', l1d:'Tell us your date and items',
     l2t:'Services & pricing', l2d:'Prices by item · extra charges · warranty',
     l3t:'Membership', l3d:'Benefits for regular care members',
@@ -1171,6 +1182,18 @@ function render(){
     var over = L.evt && !ev;
     el.hidden = over || (mode === 'company' && L.id !== 'lnk4' && !L.evt && !L.perk);
   });
+  /* 🎉 이벤트 배너 그림 — 지금 이벤트에 그림이 있으면 혜택 목록 위에 크게 보여 준다 */
+  var bnEl = document.getElementById('evBn');
+  if(bnEl){
+    var bev = curEvent();
+    if(bev && bev.bn){
+      bnEl.href = SITE + bev.path + '?from=card' + (lang === 'en' ? '&lang=en' : '');
+      var bim = bnEl.querySelector('img');
+      bim.src = bev.bn[lang] || bev.bn.ko;
+      bim.alt = t.l0bN || '';
+      bnEl.hidden = false;
+    } else bnEl.hidden = true;
+  }
   /* 이벤트도 상시 혜택도 없으면 「이벤트 · 혜택」 칸 자체를 숨긴다 */
   document.getElementById('perkBox').hidden = !curEvent() && !PERKS_N;
   var svcBox = document.getElementById('svcBox');
