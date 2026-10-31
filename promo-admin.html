@@ -85,6 +85,17 @@ button,input,select,textarea{font-family:inherit}
 .card>h3 .no{width:22px;height:22px;border-radius:7px;background:var(--navy);color:#fff;font-size:11.5px;display:inline-flex;align-items:center;justify-content:center;flex:none}
 .card>.hint{font-size:12px;font-weight:600;color:var(--ink3);line-height:1.6;margin-bottom:12px}
 .fld{margin-bottom:12px}
+/* 배경 사진 */
+.phx{display:flex;gap:12px;align-items:stretch}
+.phx .th{flex:0 0 132px;aspect-ratio:4/3;border-radius:12px;background:#0f2540 center 25%/cover no-repeat;position:relative;overflow:hidden;
+  box-shadow:0 1px 2px rgba(11,24,51,.12),0 6px 14px -8px rgba(11,24,51,.4)}
+.phx .th span{position:absolute;left:6px;bottom:6px;font-size:10px;font-weight:800;color:#fff;background:rgba(8,23,43,.75);border-radius:999px;padding:2px 8px}
+.phx .bt{flex:1;min-width:0;display:flex;flex-direction:column;gap:7px;justify-content:center}
+.phx .bt label,.phx .bt button{display:block;text-align:center;font-size:13px;font-weight:800;border-radius:11px;padding:10px;cursor:pointer;font-family:inherit}
+.phx .bt label{color:#fff;background:var(--navy);border:0}
+.phx .bt button{color:var(--ink2);background:var(--bg);border:1.5px solid var(--bdr)}
+.phx .bt button[disabled],.phx .bt label.busy{opacity:.55;pointer-events:none}
+.phx-st{font-size:11.5px;font-weight:700;color:var(--ink3);margin-top:6px;line-height:1.5}
 .fld>label{display:block;font-size:12px;font-weight:800;color:var(--ink2);margin-bottom:6px}
 .fld>label em{font-style:normal;font-weight:700;color:var(--ink3);margin-left:4px}
 .in{width:100%;font-size:16px;font-weight:700;color:var(--ink);border:1.5px solid var(--bdr);border-radius:11px;padding:11px 12px;background:var(--bg);transition:border-color .14s,background .14s}
@@ -369,6 +380,16 @@ select.in{text-overflow:ellipsis;padding-right:28px}
     <div class="fld" style="margin-bottom:0"><label>설명 한 줄</label>
       <textarea class="in" id="f-sub_ko" maxlength="160" rows="2"></textarea>
       <div class="en-row"><span class="tag">EN</span><textarea class="in" id="f-sub_en" maxlength="240" rows="2"></textarea></div>
+    </div>
+    <div class="fld" style="margin:14px 0 0"><label>배경 사진 <em>홈페이지 이벤트 상자 오른쪽(휴대폰은 위쪽)에 깔리는 사진</em></label>
+      <div class="phx">
+        <div class="th" id="ph-th"><span id="ph-tag">기본 사진</span></div>
+        <div class="bt">
+          <label id="ph-up">📷 사진 바꾸기<input type="file" accept="image/*" id="f-photo" hidden></label>
+          <button type="button" id="ph-reset">기본 사진으로</button>
+        </div>
+      </div>
+      <div class="phx-st" id="ph-st">가로 사진, 사람이나 작업 모습이 오른쪽에 있는 사진이 잘 어울립니다. 올리면 자동으로 크기를 줄여 저장합니다.</div>
     </div>
   </div>
 
@@ -750,6 +771,7 @@ var HHCPromo=(function(){
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 
 const FIREBASE_CFG={
   apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
@@ -807,7 +829,7 @@ const OCT_SEED={month:'2026-10',status:'live',from:'2026-10-01',to:'2026-10-31',
   min_on:true,min_charge:320,notes:P.defaultNotes(),_seed:true};
 
 const EMOJI=['🍁','🎄','🎉','🧧','🌸','☀️','🌙','🎁','❄️','🏠'];
-let db=null, LIST=[], ED=null, EDID=null, pvL='ko', pvReady=false;
+let db=null, LIST=[], ED=null, EDID=null, pvL='ko', pvReady=false, ST=null;
 const hasDB=()=>!!db;
 const isPreviewEnv=new URLSearchParams(location.search).get('demo')==='1';
 
@@ -890,7 +912,56 @@ function showEdit(){
   $('del-btn').hidden=!EDID;
   ['from','to','title_ko','title_en','head_ko','head_en','sub_ko','sub_en'].forEach(k=>{$('f-'+k).value=ED[k]||'';});
   $('f-min_on').checked=!!ED.min_on;$('f-min_charge').value=ED.min_charge||'';
-  renderEmoji();renderItems();renderNotes();refresh();window.scrollTo(0,0);
+  renderEmoji();renderItems();renderNotes();renderPhoto();refresh();window.scrollTo(0,0);
+}
+/* ── 🖼 배경 사진 ──────────────────────────────────────────
+   · 고른 사진을 가로 1600px 이하 JPEG 로 줄여 Firebase Storage(promos/)에 올리고, 주소를 이 프로모션의 photo 에 넣습니다.
+   · 저장소에 올리지 못하면(권한 · 연결 문제) 줄인 사진을 프로모션 문서 안에 직접 넣습니다 (600KB 이하일 때).
+   · 「기본 사진으로」를 누르면 photo 를 비워 홈페이지 기본 사진(event-hero.jpg)이 나옵니다.
+   · 바뀐 사진은 「저장 / 공개하기」를 눌러야 홈페이지에 반영됩니다. */
+function renderPhoto(){
+  if(!ED)return;
+  const th=$('ph-th'),has=!!ED.photo;
+  th.style.backgroundImage='url("'+(has?ED.photo:'event-hero.jpg')+'")';
+  $('ph-tag').textContent=has?'새 사진':'기본 사진';
+  $('ph-reset').disabled=!has;
+}
+function phShrink(file){
+  return new Promise((res,rej)=>{
+    const u=URL.createObjectURL(file),im=new Image();
+    im.onload=()=>{
+      const M=1600,k=Math.min(1,M/Math.max(im.naturalWidth,im.naturalHeight));
+      const c=document.createElement('canvas');c.width=Math.round(im.naturalWidth*k);c.height=Math.round(im.naturalHeight*k);
+      c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);
+      c.toBlob(b=>b?res({blob:b,canvas:c}):rej(new Error('변환 실패')),'image/jpeg',0.82);
+    };
+    im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('사진을 열 수 없습니다'));};
+    im.src=u;
+  });
+}
+async function phUpload(file){
+  if(!ED||!file)return;
+  if(!/^image\//.test(file.type)){toast('사진 파일만 올릴 수 있습니다');return;}
+  const up=$('ph-up'),st=$('ph-st');up.classList.add('busy');st.textContent='사진을 줄이는 중…';
+  try{
+    const r=await phShrink(file);let url='';
+    if(ST&&hasDB()){
+      try{st.textContent='사진을 올리는 중…';
+        const path='promos/'+ED.month+'-'+Date.now()+'.jpg';
+        const snap=await uploadBytes(sRef(ST,path),r.blob,{contentType:'image/jpeg'});
+        url=await getDownloadURL(snap.ref);ED.photo_path=path;
+      }catch(e){console.warn('storage upload failed',e);url='';}
+    }
+    if(!url){
+      let q=0.8,d=r.canvas.toDataURL('image/jpeg',q);
+      while(d.length>800000&&q>0.4){q-=0.1;d=r.canvas.toDataURL('image/jpeg',q);}
+      if(d.length>800000)throw new Error('사진이 너무 큽니다');
+      url=d;delete ED.photo_path;
+    }
+    ED.photo=url;dirty=true;renderPhoto();refresh();
+    st.textContent='✅ 사진을 바꿨습니다 — 아래 「저장 / 공개하기」를 눌러야 홈페이지에 반영됩니다.';
+  }catch(e){console.error(e);st.textContent='⚠️ 사진을 올리지 못했습니다 — '+(e.message||e);}
+  up.classList.remove('busy');$('f-photo').value='';
 }
 function refresh(){
   const st=P.stateOf(ED);
@@ -916,6 +987,9 @@ function bindFields(){
   });
   $('f-min_on').addEventListener('change',e=>{ED.min_on=e.target.checked;if(ED.min_on&&!ED.min_charge){ED.min_charge=320;$('f-min_charge').value=320;}dirty=true;refresh();});
   $('f-min_charge').addEventListener('input',e=>{ED.min_charge=+e.target.value||0;dirty=true;refresh();});
+  $('f-photo').addEventListener('change',e=>{const f=e.target.files&&e.target.files[0];if(f)phUpload(f);});
+  $('ph-reset').addEventListener('click',()=>{if(!ED)return;delete ED.photo;delete ED.photo_path;dirty=true;renderPhoto();refresh();
+    $('ph-st').textContent='기본 사진으로 바꿨습니다 — 「저장 / 공개하기」를 눌러야 반영됩니다.';});
 }
 function renderEmoji(){
   const cur=ED.emoji||'🎁';
@@ -1347,6 +1421,7 @@ if(isPreviewEnv&&window.__DEMO){LIST=window.__DEMO;renderList();}
 else{
   try{
     const app=initializeApp(FIREBASE_CFG);db=getFirestore(app);
+    try{ST=getStorage(app);}catch(e){ST=null;}
     onSnapshot(collection(db,'promos'),snap=>{
       $('fb-dot').classList.add('on');
       window.__hhcReady&&window.__hhcReady();
