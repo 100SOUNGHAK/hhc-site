@@ -16,10 +16,10 @@
 <meta property="og:locale" content="ko_KR">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230f2540'/%3E%3Cg fill='%23e3c98a' transform='translate(20 20) scale(0.6)'%3E%3Crect x='15' y='14' width='19' height='74' rx='3.5'/%3E%3Crect x='66' y='14' width='19' height='74' rx='3.5'/%3E%3Cpath d='M50 28 85 51v16L50 43 15 67V51Z'/%3E%3C/g%3E%3C/svg%3E">
 <script>
-/* 기간 한정 이벤트 표시 — .evt-oct = 10월 한정 특별가 (~10/31)
+/* 기간 한정 이벤트 표시 — .evt-oct = 10월 한정 특별가 (~10/31) · nov = 11월 전 품목 10% 첫 화면 팝업 (11/1~11/30)
    마감일이 지나면 자동으로 숨겨집니다. 다음 이벤트 때는 이 한 줄과 해당 블록만 추가하면 됩니다. */
 (function(){var d=new Date(),t=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
-document.documentElement.setAttribute('data-evt',t<='2026-10-31'?'oct':'none');})();
+document.documentElement.setAttribute('data-evt',t<='2026-10-31'?'oct':((t>='2026-11-01'&&t<='2026-11-30')?'nov':'none'));})();
 </script>
 <script type="application/ld+json">
 {
@@ -4284,6 +4284,81 @@ setTimeout(function(){var d=document.getElementById('dcard');if(d)d.classList.ad
   document.addEventListener('keydown',function(e){ if(e.key==='Escape') close(); });
 })();
 
+/* ---------- 🎉 11월 한정 전 품목 10% — 첫 화면 이벤트 팝업 (2026.10.31 ~ 11.30 표시) ----------
+   · 홈페이지를 열면 이벤트 이미지를 먼저 보여 줍니다. 이미지를 누르면 의뢰신청서로 갑니다.
+   · 「오늘 하루 보지 않기」를 누르면 그날은 다시 뜨지 않습니다 (이 기기 · 이 브라우저 기준).
+   · 이 팝업이 뜨는 동안에는 해피포인트 안내 팝업(3초)은 띄우지 않습니다.
+   · 전자명함 팝업(iframe) 안이나 ?embed=1 로 열린 경우에는 띄우지 않습니다. */
+(function(){
+  try{
+    var q=new URLSearchParams(location.search);
+    if(q.get('embed')==='1'||window.top!==window.self)return;
+  }catch(e){return;}
+  var d=new Date(),TD=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+  if(TD<'2026-10-31'||TD>'2026-11-30')return;   /* 10/31(오늘)부터 표시 · 12/1 이 되면 자동으로 사라집니다 */
+  var KEY='hhc_evpop_2026_11';
+  try{if(localStorage.getItem(KEY)===TD)return;}catch(e){}
+  /* 한국어 / English — 홈페이지 언어(EN 버튼 · ?lang=en)에 맞춰 이미지와 버튼 글자가 바뀝니다 */
+  function isEn(){var l=document.documentElement.lang;if(l==='en')return true;if(l==='ko'&&window.currentSiteLang)return false;
+    return window.currentSiteLang==='en'||/[?&]lang=en(&|$)/.test(location.search);}
+  var TX={ko:{img:'nov-popup.jpg',alt:'11월 한정 특별 할인 이벤트 · 모든 서비스 10% 할인 · 11월 1일 ~ 11월 30일',lab:'11월 한정 전 품목 10% 할인 이벤트',
+             today:'오늘 하루 보지 않기',close:'닫기',href:'request.html'},
+          en:{img:'nov-popup-en.jpg',alt:'November special — 10% off all services, 1 to 30 November',lab:'November special: 10% off all services',
+             today:'Don\u2019t show today',close:'Close',href:'request.html?lang=en'}};
+  var st=document.createElement('style');
+  st.textContent='.evpop{position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;padding:18px;'+
+    'background:rgba(6,14,28,.62);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);opacity:0;transition:opacity .25s cubic-bezier(.22,.61,.36,1)}'+
+    '.evpop.on{opacity:1}'+
+    '.evpop .ebox{position:relative;width:min(420px,100%);border-radius:20px;overflow:hidden;background:#0f2540;'+
+    'box-shadow:0 2px 6px rgba(0,0,0,.3),0 30px 70px -20px rgba(0,0,0,.75);transform:translateY(14px) scale(.98);transition:transform .3s cubic-bezier(.22,.61,.36,1)}'+
+    '.evpop.on .ebox{transform:none}'+
+    '.evpop .eimg{display:block;width:100%;height:auto;max-height:calc(100vh - 120px);max-height:calc(100dvh - 120px);object-fit:contain;background:#0f2540}'+
+    '.evpop .ebar{display:grid;grid-template-columns:1fr 1fr;background:#fff}'+
+    '.evpop .ebar button{font:inherit;font-size:14px;font-weight:800;padding:14px 8px;border:0;background:#fff;color:#4d5866;cursor:pointer}'+
+    '.evpop .ebar button+button{border-left:1px solid #e8e2d4;color:#0f2540}'+
+    '.evpop .ebar button:active{background:#f6f3ec}'+
+    '.evpop .ebar button:focus-visible{outline:2px solid #c9a44c;outline-offset:-3px}'+
+    '@media (prefers-reduced-motion:reduce){.evpop,.evpop .ebox{transition:none}}';
+  document.head.appendChild(st);
+  var pop=document.createElement('div');
+  pop.className='evpop';pop.setAttribute('role','dialog');pop.setAttribute('aria-modal','true');
+  pop.innerHTML='<div class="ebox"><a><img class="eimg" width="1080" height="1350"></a>'+
+    '<div class="ebar"><button type="button" data-k="today"></button><button type="button" data-k="close"></button></div></div>';
+  var curL='';
+  function paint(){
+    var L=isEn()?'en':'ko';if(L===curL)return;curL=L;var t=TX[L];
+    pop.setAttribute('aria-label',t.lab);
+    pop.querySelector('a').setAttribute('href',t.href);
+    var im=pop.querySelector('.eimg');im.setAttribute('src',t.img);im.setAttribute('alt',t.alt);
+    pop.querySelector('[data-k="today"]').textContent=t.today;
+    pop.querySelector('[data-k="close"]').textContent=t.close;
+  }
+  paint();
+  var langObs=null;
+  try{langObs=new MutationObserver(function(){curL='';paint();});
+    langObs.observe(document.documentElement,{attributes:true,attributeFilter:['lang']});}catch(e){}
+  try{(new Image()).src=TX[isEn()?'ko':'en'].img;}catch(e){}   /* 언어를 바꿔도 바로 보이도록 다른 쪽 이미지도 미리 받아 둡니다 */
+  function close(today){
+    if(today){try{localStorage.setItem(KEY,TD);}catch(e){}}
+    pop.classList.remove('on');document.removeEventListener('keydown',onKey);
+    try{langObs&&langObs.disconnect();}catch(e){}
+    setTimeout(function(){if(pop.parentNode)pop.parentNode.removeChild(pop);document.body.style.overflow='';},260);
+  }
+  function onKey(e){if(e.key==='Escape')close(false);}
+  pop.addEventListener('click',function(e){
+    var b=e.target.closest('button[data-k]');
+    if(b){close(b.getAttribute('data-k')==='today');return;}
+    if(e.target===pop)close(false);
+  });
+  window.__evPopShown=true;
+  function show(){
+    document.body.appendChild(pop);document.body.style.overflow='hidden';
+    requestAnimationFrame(function(){pop.classList.add('on');});
+    document.addEventListener('keydown',onKey);
+  }
+  if(document.body)show();else document.addEventListener('DOMContentLoaded',show);
+})();
+
 /* ---------- 첫 화면 해피포인트 안내 팝업 (3초) ---------- */
 (function(){
   /* 전자명함의 팝업(iframe) 안에서 열린 경우에는 띄우지 않는다 —
@@ -4292,6 +4367,7 @@ setTimeout(function(){var d=document.getElementById('dcard');if(d)d.classList.ad
     var _q=new URLSearchParams(location.search);
     if(_q.get('embed')==='1' || window.top!==window.self) return;
   }catch(e){ return; }
+  if(window.__evPopShown) return;   /* 🎉 이벤트 팝업이 뜬 날에는 해피포인트 팝업을 쉬게 합니다 */
   var HOLD=3000;
   var pop=document.createElement('div');
   pop.className='ipop'; pop.id='ipop';
