@@ -813,6 +813,9 @@ function renderPromo(){
   var facts=T.slice(0,2).map(function(t){return t.kind==='pct'?(ko?'✓ '+t.cko+' '+t.val+'% 할인':'✓ '+t.cen+' '+t.val+'% off')
       :(ko?'✓ '+t.cko+' '+P.perUnit(t.unit,'ko')+' '+money(t.fin):'✓ '+t.cen+' '+money(t.fin)+'/'+P.unitTxt(t.unit,'en'));}).concat([L.auto]);
   var line=P.cardLine(p,T,LANG).replace(/ · (\d+\/\d+까지|until .+)$/,'');
+  /* 모든 품목이 같은 할인율이면 「전 품목 10% 할인」처럼 한 줄로 (품목명 끝 글자만 잘려 「기종) 10%」로 보이는 것 방지) */
+  if(T.length&&T.every(function(t){return t.kind==='pct'&&t.val===T[0].val;}))
+    line=ko?'전 품목 '+T[0].val+'% 할인':T[0].val+'% off everything';
   var endTxt=ko?(+p.to.slice(5,7))+'월 '+(+p.to.slice(8,10))+'일':P.dateShort(p,'en').split(' – ')[1];
   var callout=over?L.calloutOver(title,endTxt):(esc(emo)+' <b>'+esc(line)+'</b>, '+(full?L.calloutFull(m):L.calloutPart(endTxt)));
   var sm,sn,sp;
@@ -870,6 +873,7 @@ function renderPromo(){
       '<p>'+P.subOf(p,T,LANG)+'</p>'+
       '<div class="facts">'+facts.map(function(f){return '<span>'+esc(f)+'</span>';}).join('')+'</div>'+
     '</div>'+
+    novBnHTML()+
     '<div class="callout'+(over?' over':'')+'">'+callout+'</div>'+
     sh('disc','01',L.s1,full?L.s1sFull(m):L.s1sPart,16)+
     '<div class="stage'+(over?' over':'')+'">'+(over?'<div class="ended">'+esc(L.ended)+'</div>':'')+
@@ -917,6 +921,11 @@ var NV={
     perV:'Sun 1 Nov – Mon 30 Nov 2026',
     notes:['Parts, materials and repair charges are excluded from the discount.','No request needed — applied automatically at booking and shown on your invoice.']}
 };
+/* 🎉 11월 배너 — 관리자 화면에서 공개한 11월 이벤트 안내장에도 같은 배너를 보여 줍니다 (11/1 ~ 11/30) */
+function novBnHTML(){
+  var td=P.today();if(td<NOV_EVT.from||td>NOV_EVT.to)return '';
+  return '<a class="nvbn" href="'+q(REQ)+'"><img src="'+NOV_EVT.img[LANG]+'" width="1500" height="840" alt="'+esc(NV[LANG].title)+'"></a>';
+}
 function renderNov(){
   var L=UI[LANG],N=NV[LANG],ko=LANG==='ko',mc=money(NOV_EVT.min);
   document.title=N.title+L.tSuffix;
