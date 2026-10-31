@@ -4542,12 +4542,28 @@ setTimeout(function(){var d=document.getElementById('dcard');if(d)d.classList.ad
   }
   window.__qmClose=close;
 
+  /* 견적 계산기 버튼(data-qcalc)으로 열었으면 팝업 안 계산기를 펼쳐 둡니다 */
+  function openCalc(a){
+    if(!a||!a.hasAttribute('data-qcalc'))return;
+    setTimeout(function(){var t=document.getElementById('calcToggle');if(t&&t.getAttribute('aria-expanded')!=='true')t.click();},60);
+  }
   document.querySelectorAll('[data-qm]').forEach(function(a){
+    a.__qmBound=true;
     a.addEventListener('click',function(e){
       e.preventDefault();
       var v=a.dataset.qm.split('|');
       open(v[0],v[1],v[2],a);
+      openCalc(a);
     });
+  });
+  /* 나중에 그려지는 버튼(관리자 화면에서 공개한 이달 이벤트 무대 등)도 팝업으로 엽니다 */
+  document.addEventListener('click',function(e){
+    var a=e.target.closest?e.target.closest('[data-qm]'):null;
+    if(!a||a.__qmBound||mod.contains(a))return;
+    e.preventDefault();
+    var v=a.dataset.qm.split('|');
+    open(v[0],v[1],v[2],a);
+    openCalc(a);
   });
 
   mod.querySelector('.x').addEventListener('click',function(){ close(true); });
@@ -4871,40 +4887,25 @@ var HHCPromo=(function(){
   }
 
   /* ── 화면 HTML (home.html 기존 마크업과 같은 구조) ── */
+  /* 이벤트 무대 (홈페이지 이벤트 섹션 맨 위)
+     · 왼쪽에는 관리자 화면 「1 기간 · 제목」에서 입력한 내용(아이콘 · 기간 · 제목 · 큰 글씨 문구 · 설명)만 보여 줍니다.
+       (품목별 할인 칩은 아래 품목 카드와 겹쳐 보이지 않습니다)
+     · 오른쪽 「💡 꼭 확인하세요 · 최소 청구금액」 상자는 항상 보여 줍니다 (금액 예시 목록은 넣지 않음)
+       금액은 관리자 화면 「3 최소 청구금액」의 금액, 비어 있으면 RM 320 */
   function heroHTML(p,T,L,t0){
     var dd=dday(p,L,t0),ko=L!=='en';
-    var tp=T.slice(0,4).map(function(t){
-      if(t.kind==='pct')return '<span class="pm-tp'+(t.best?' best':'')+'"><b>'+t.val+'%</b>'+esc(ko?t.cko:t.cen)+'</span>';
-      return '<span class="pm-tp'+(t.best?' best':'')+'"><b>'+money(t.fin)+'</b>'+esc(ko?t.cko:t.cen)+'<span class="was">'+(ko?'정상 ':'Reg. ')+'<s>'+money(t.base)+'</s></span></span>';
-    }).join('');
-    var right;
-    if(minOn(p)){
-      var mc=+p.min_charge,ex=[];
-      T.filter(function(t){return t.kind!=='pct';}).slice(0,2).forEach(function(t){
-        var lo=t.q;if(lo*t.fin>=mc){ex.push([t,lo,false]);return;}
-        var hi=lo;while(hi*t.fin<mc&&hi<30)hi++;
-        var below=hi-1>=t.q?hi-1:null;if(below!=null)ex.push([t,below,true]);ex.push([t,hi,false]);
-      });
-      right='<div class="pm-pts oct" data-emoji="'+esc(p.emoji||'🎁')+'"><div class="pp-tag">'+(ko?'💡 꼭 확인하세요':'💡 Please note')+'</div>'+
+    var mc=(+p.min_charge>0)?+p.min_charge:320;
+    var right='<div class="pm-pts oct" data-emoji="'+esc(p.emoji||'🎁')+'"><div class="pp-tag">'+(ko?'💡 꼭 확인하세요':'💡 Please note')+'</div>'+
         '<div class="pp-mc"><small>'+(ko?'최소 청구금액':'Minimum charge')+'</small>'+money(mc)+'</div>'+
         '<div class="pp-was">'+(ko?'할인된 최종 청구금액이 '+money(mc)+' 이하인 경우 '+money(mc)+'이 청구됩니다.':'If the final amount after discount is '+money(mc)+' or less, '+money(mc)+' is charged.')+'</div>'+
-        (ex.length?'<ul class="pp-ex">'+ex.slice(0,4).map(function(e){var t=e[0],n=e[1],u=unitTxt(t.unit,L),nm=(ko?t.cko+' '+n+u:t.cen+' × '+n);
-          return '<li><span>'+esc(nm)+'</span><span>'+(e[2]?'<s>'+money(n*t.fin)+'</s><b>'+money(mc)+(ko?' 청구':' charged')+'</b>':'<b>'+money(n*t.fin)+(ko?' 청구':' charged')+'</b>')+'</span></li>';}).join('')+'</ul>':'')+
-        '<a class="pp-go" href="#pricing" data-qm="pricing|🏷️|가격정보">'+(ko?'견적 계산기로 확인하기':'Check with the quote calculator')+' <span class="ar">›</span></a></div>';
-    }else{
-      right='<div class="pm-pts oct" data-emoji="'+esc(p.emoji||'🎁')+'"><div class="pp-tag">'+(ko?'💡 이렇게 적용됩니다':'💡 How it works out')+'</div>'+
-        '<ul class="pp-ex">'+T.slice(0,4).map(function(t){var n=exQty(t,p),u=unitTxt(t.unit,L);
-          return '<li><span>'+esc(ko?t.cko+' '+n+u:t.cen+' × '+n)+'</span><span><s>'+money(n*t.base)+'</s><b>'+money(n*t.fin)+'</b></span></li>';}).join('')+'</ul>'+
-        '<a class="pp-go" href="#pricing" data-qm="pricing|🏷️|가격정보">'+(ko?'견적 계산기로 확인하기':'Check with the quote calculator')+' <span class="ar">›</span></a></div>';
-    }
+        '<a class="pp-go" href="#pricing" data-qm="pricing|🏷️|가격정보" data-qcalc="1">'+(ko?'견적 계산기로 확인하기':'Check with the quote calculator')+' <span class="ar">›</span></a></div>';
     return '<div class="pm-hero evt-dyn'+(dd.end?' ended':'')+'" id="pm-hero-dyn"><div class="pm-left">'+
       '<div class="pm-chips"><span class="pm-chip">'+esc(chipOf(p,L))+'</span><span class="pm-chip dday'+(dd.end?' end':'')+'">'+esc(dd.txt)+'</span></div>'+
       '<h3 class="pm-title"><span class="t1">'+esc(titleOf(p,L))+'</span><span class="t2">'+headOf(p,T,L)+'</span></h3>'+
       '<p class="pm-sub">'+subOf(p,T,L)+'</p>'+
-      '<div class="pm-tiers">'+tp+'</div>'+
       '<p class="pm-date">📅 '+esc(dateLine(p,L))+(ko?' · 기간 내 완료된 서비스':' · services completed within the period')+'</p>'+
-      '<div class="pm-cta"><a class="btn btn-gold" href="#pricing" data-qm="pricing|🏷️|가격정보">'+(ko?'📐 견적 계산기로 내 할인 확인':'📐 Check my discount in the estimator')+'</a>'+
-      '<a class="btn btn-onnavy" href="request.html'+(ko?'':'?lang=en')+'">'+(ko?'예약 신청하기':'Book now')+' <span class="ar">→</span></a></div>'+
+      '<div class="pm-cta"><a class="btn btn-gold" href="#pricing" data-qm="pricing|🏷️|가격정보" data-qcalc="1">'+(ko?'📐 견적 계산기로 내 할인 확인':'📐 Check my discount in the estimator')+'</a>'+
+      '<a class="btn btn-onnavy" href="#contact" data-qm="contact|📅|예약 신청">'+(ko?'예약 신청하기':'Book now')+' <span class="ar">→</span></a></div>'+
       '</div>'+right+'</div>';
   }
   function gridHTML(p,T,L){
@@ -4914,6 +4915,8 @@ var HHCPromo=(function(){
       var big=t.kind==='pct'?t.val+'%':'<small>RM</small>'+(money(t.fin).slice(3));
       var was=t.kind==='pct'?(ko?'정상가 ':'Regular ')+(t.bmin<t.base?money(t.bmin)+' ~ ':'')+money(t.base)+' · '+perUnit(t.unit,L)
         :(ko?'정상가 <s>'+money(t.base)+'</s> · '+perUnit(t.unit,L):'Regular <s>'+money(t.base)+'</s> · '+perUnit(t.unit,L));
+      /* % 할인 품목은 정상가 · 예시 금액을 표시하지 않습니다 */
+      if(t.kind==='pct')return '<div class="pm-tier'+(t.best?' best':'')+'">'+rib+'<div class="pct">'+big+'</div><div class="thr">'+esc(ko?t.lko:t.len)+'</div></div>';
       return '<div class="pm-tier'+(t.best?' best':'')+'">'+rib+'<div class="pct">'+big+'</div><div class="thr">'+esc(ko?t.lko:t.len)+'</div>'+
         '<div class="was">'+was+'</div><div class="save">'+esc(exLine(t,p,L))+'</div></div>';
     }).join('')+'</div>';
