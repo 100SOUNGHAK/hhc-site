@@ -5142,13 +5142,16 @@ function initials(name){
 
 let reviewLimit=9;
 let allReviews=[];
+let rvRawN=0;          // 숨김 포함 받아 온 개수 (더보기 버튼 판단용)
 let unsubReviews=null;
 
 function subscribeReviews(){
   if(unsubReviews)unsubReviews();
   var q=query(collection(db,'reviews'),orderBy('created_at','desc'),limit(reviewLimit));
   unsubReviews=onSnapshot(q,function(snap){
-    allReviews=snap.docs.map(function(d){return Object.assign({},d.data(),{__id:d.id});});
+    // 🙈 리뷰관리에서 「숨김」 처리한 리뷰는 고객 화면에 보이지 않습니다
+    rvRawN=snap.size;
+    allReviews=snap.docs.map(function(d){return Object.assign({},d.data(),{__id:d.id});}).filter(function(r){return !r.hidden;});
     renderReviews();
   },function(err){
     console.error('reviews load error:',err);
@@ -5197,7 +5200,7 @@ function renderReviews(){
         '</div>'+
       '</div>';
     }).join('');
-    if(moreWrap)moreWrap.style.display=(allReviews.length>=reviewLimit)?'block':'none';
+    if(moreWrap)moreWrap.style.display=(rvRawN>=reviewLimit)?'block':'none';
   }
   var sc=document.getElementById('rsScore'),stx=document.getElementById('rsStars'),mt=document.getElementById('rsMeta');
   if(allReviews.length){
