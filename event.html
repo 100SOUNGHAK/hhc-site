@@ -738,6 +738,7 @@ var CATS=[
 var Q=new URLSearchParams(location.search);
 var LANG=(Q.get('lang')==='en')?'en':'ko';
 var PREVIEW=Q.get('promo_preview')==='1';
+var VIEW_ALW=Q.get('view')==='always';   /* 상시 혜택 안내장만 보기 */
 var PROMO=null, STATE='loading', ALW=null;   /* ALW : 관리자 「상시 혜택」 목록 (없으면 아래 기본 3개) */
 var P=HHCPromo, esc=P.esc, money=P.money;
 
@@ -762,6 +763,7 @@ var UI={
     loading:'이벤트를 불러오는 중입니다…',
     noneK:'HAPPY HOME CARE',noneH:'지금은 진행 중인 할인 이벤트가 없습니다',noneS:'다음 이벤트를 준비하고 있습니다. 아래 상시 혜택은 언제든 받으실 수 있어요.',
     alw:'상시 혜택',alwS:'언제든 적용',
+    alwK:'ALWAYS-ON BENEFITS',alwT:'상시 혜택',alwH:'기간 없이 언제든 받으실 수 있어요',alwP:'해피홈케어 고객이라면 누구나 — 이달의 할인 이벤트와 함께 받으실 수 있습니다.',
     a1t:'커튼 현장세탁 30% 할인',a1d:'떼지 않고 그 자리에서 · 종료 안내 시까지',
     a2t:'이웃과 공동의뢰 최대 10%',a2d:'5세대 이상 · 에어컨 3대 이상 함께 신청',
     a3t:'해피포인트 1% 적립',a3d:'결제 RM 100마다 RM 1 · 현금처럼 사용',
@@ -786,6 +788,7 @@ var UI={
     loading:'Loading the current promotion…',
     noneK:'HAPPY HOME CARE',noneH:'No discount event is running right now',noneS:'The next one is on its way. These always-on benefits apply any time.',
     alw:'Always-on benefits',alwS:'Any time',
+    alwK:'ALWAYS-ON BENEFITS',alwT:'Always-on Benefits',alwH:'Available any time, no end date',alwP:'For every Happy Home Care customer — and they can be combined with this month’s promotion.',
     a1t:'Curtain on-site cleaning 30% off',a1d:'Cleaned where they hang · until further notice',
     a2t:'Joint booking up to 10% off',a2d:'5+ households · 3+ air-con units together',
     a3t:'Happy Points 1% back',a3d:'RM 1 for every RM 100 · use like cash',
@@ -870,6 +873,7 @@ function renderPromo(){
   var dupHtml=dup?'<div class="cond"><div class="k">'+esc(L.dupK)+'</div><div class="v sm">'+esc(dup)+'</div></div>'
     :'<div class="cond"><div class="k">'+esc(L.dupK)+'</div><div class="v sm">'+esc(L.dup)+'</div><span class="ok">'+esc(L.dupOk)+'</span></div>';
 
+  var alw=alwItems(L);
   document.getElementById('pg').innerHTML=
     '<div class="hero">'+lgb()+LOGO+
       '<div class="kick">'+esc(P.MON[m-1].toUpperCase()+L.kickS)+'</div>'+
@@ -885,6 +889,7 @@ function renderPromo(){
     '<div class="cond"><div class="k">'+esc(L.perK)+'</div><div class="v">'+esc(P.dateLine(p,LANG))+'</div><div class="d">'+esc(L.perD)+'</div></div>'+
     dupHtml+
     '<div class="note">'+notes.map(function(n){return '<p>'+esc(n)+'</p>';}).join('')+'</div>'+
+    (alw?sh('alw','04',L.alw,L.alwS)+'<div class="alws">'+alw+'</div>':'')+
     foot(L);
   bar(L,minOn?L.bPts:L.bEx);
 }
@@ -952,9 +957,8 @@ function renderNov(){
   bar(L,L.bPts);
 }
 
-function renderNone(){
-  var L=UI[LANG];
-  document.title=(LANG==='en'?'Promotions':'이달의 이벤트')+L.tSuffix;
+/* 상시 혜택 카드 목록 — 혜택 없음 화면 · 이달의 이벤트 04 · 상시 혜택 안내장에서 함께 씁니다 */
+function alwItems(L){
   var a=function(href,v,t,d,teal){var lng=String(v).replace(/<[^>]+>/g,'').replace(/&[a-z]+;/g,'_').length>3&&!/<small>/.test(v);
     return '<a class="alw" href="'+q(SITE+href)+'"><span class="av'+(teal?' teal':'')+(lng?' lng':'')+'">'+v+'</span><span class="at"><b>'+esc(t)+'</b><span>'+esc(d)+'</span></span><span class="aa">›</span></a>';};
   var list;
@@ -963,10 +967,29 @@ function renderNone(){
       var lk=/^\/[A-Za-z0-9_\-\/#?=&.]*$/.test(x.link||'')?x.link:'/home';
       return a(lk,P.valHTML(x.val),P.aTxt(x,'ct',LANG)||P.aTxt(x,'t',LANG),P.aTxt(x,'cd',LANG)||P.aTxt(x,'d',LANG),x.teal);}).join('');
   }else list=a('/curtain','30<small>%</small>',L.a1t,L.a1d)+a('/group','10<small>%</small>',L.a2t,L.a2d)+a('/points','P',L.a3t,L.a3d,true);
+  return list;
+}
+function renderNone(){
+  var L=UI[LANG];
+  document.title=(LANG==='en'?'Promotions':'이달의 이벤트')+L.tSuffix;
+  var list=alwItems(L);
   document.getElementById('pg').innerHTML=
     '<div class="hero">'+lgb()+LOGO+'<div class="kick">'+esc(L.noneK)+'</div>'+
       '<h1><em>'+esc(L.noneH)+'</em></h1><p>'+esc(L.noneS)+'</p></div>'+
     (list?sh('alw','01',L.alw,L.alwS,16):'')+
+    '<div class="alws">'+list+
+      '<a class="alw sub" href="'+q(SITE+'/pricing')+'"><span class="av">🧾</span><span class="at"><b>'+esc(L.seePrice)+'</b></span><span class="aa">›</span></a></div>'+
+    foot(L);
+  bar(L,null);
+}
+/* ♾️ 상시 혜택 안내장 (event.html?view=always · 관리자 「상시 혜택」 미리보기 · PNG) */
+function renderAlways(){
+  var L=UI[LANG],list=alwItems(L);
+  document.title=L.alwT+L.tSuffix;
+  document.getElementById('pg').innerHTML=
+    '<div class="hero">'+lgb()+LOGO+'<div class="kick">'+esc(L.alwK)+'</div>'+
+      '<h1 class="nvh"><em>'+esc(L.alwT)+'</em><span class="t2">'+esc(L.alwH)+'</span></h1><p>'+esc(L.alwP)+'</p></div>'+
+    sh('alw','01',L.alw,L.alwS,16)+
     '<div class="alws">'+list+
       '<a class="alw sub" href="'+q(SITE+'/pricing')+'"><span class="av">🧾</span><span class="at"><b>'+esc(L.seePrice)+'</b></span><span class="aa">›</span></a></div>'+
     foot(L);
@@ -999,7 +1022,8 @@ function wire(){
 }
 function render(){
   document.documentElement.lang=UI[LANG].htmlLang;
-  if(STATE==='loading')renderLoading();
+  if(VIEW_ALW&&STATE!=='loading')renderAlways();
+  else if(STATE==='loading')renderLoading();
   else if(STATE==='live'&&PROMO&&P.tiers(PROMO,CATS).length)renderPromo();
   else if(STATE==='nov')renderNov();
   else renderNone();
@@ -1016,7 +1040,8 @@ render();
 if(PREVIEW){
   window.addEventListener('message',function(e){
     if(e.origin!==location.origin||!e.data||e.data.type!=='hhc-promo-preview')return;
-    PROMO=e.data.promo||null;STATE=PROMO?'live':'none';if('always' in e.data)ALW=e.data.always||null;render();
+    PROMO=e.data.promo||null;STATE=PROMO?'live':'none';if('always' in e.data)ALW=e.data.always||null;
+    VIEW_ALW=e.data.view==='alw';render();
   });
   var rdy=function(){try{if(window.parent!==window)window.parent.postMessage({type:'hhc-promo-ready'},location.origin);}catch(e){}};
   if(document.readyState==='complete')rdy();else window.addEventListener('load',rdy);
@@ -1024,7 +1049,7 @@ if(PREVIEW){
   P.fetchAll(function(list){
     var live=list?P.pickLive(list):null;
     ALW=list?P.alwaysOf(list):null;
-    if(!live&&P.today()<=OCT_FALLBACK_END){location.replace('event-oct.html'+location.search+location.hash);return;}
+    if(!live&&!VIEW_ALW&&P.today()<=OCT_FALLBACK_END){location.replace('event-oct.html'+location.search+location.hash);return;}
     var td=P.today();
     PROMO=live;STATE=live?'live':((td>=NOV_EVT.from&&td<=NOV_EVT.to)?'nov':'none');render();
   });

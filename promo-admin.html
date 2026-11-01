@@ -292,6 +292,11 @@ select.in{text-overflow:ellipsis;padding-right:28px}
       <button class="ghost" onclick="previewAlw()">👁 미리보기</button>
       <button class="ghost" onclick="resetAlw()">기본 내용으로 되돌리기</button>
     </div>
+    <div class="row-btns" style="margin-top:8px">
+      <button class="ghost" onclick="alwEvt()">📄 상시 혜택 안내장</button>
+      <button class="ghost" onclick="alwPng()">🖼️ 안내장 PNG</button>
+      <button class="ghost" onclick="copyAlw()">🔗 링크</button>
+    </div>
   </div>
 </div>
 
@@ -1180,7 +1185,8 @@ function pvSend(){const f=$('pv-fr');if(!f.contentWindow)return;
     const L=clone(alwList());if(AED){if(AEDI<0)L.push(clone(AED));else L[AEDI]=clone(AED);}
     always=L.map(a=>cleanAlw(a));promo=pvP==='event'?null:(P.pickLive(LIST)||null);
   }else{promo=ED?clean(ED):(P.pickLive(LIST)||null);always=ALW;}   // 목록 화면(작성 중 아님)에서는 지금 공개 중인 이벤트
-  f.contentWindow.postMessage({type:'hhc-promo-preview',promo:promo,always:always,lang:pvL},location.origin);}
+  /* 상시 혜택 미리보기에서 「안내장」은 상시 혜택만 담은 안내장(event.html?view=always)으로 보여 줍니다 */
+  f.contentWindow.postMessage({type:'hhc-promo-preview',promo:promo,always:always,lang:pvL,view:pvMode==='alw'?'alw':''},location.origin);}
 window.openPreview=function(){
   $('pv').hidden=false;document.body.style.overflow='hidden';
   const f=$('pv-fr');pvReady=false;$('pv').querySelector('.ld').style.display='flex';
@@ -1201,6 +1207,7 @@ window.addEventListener('message',e=>{if(e.data&&e.data.type==='hhc-promo-ready'
 const H2C_SRC='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
 function pvWaitReady(ms){return new Promise(res=>{const t0=Date.now();(function chk(){if(pvReady||Date.now()-t0>ms)return res(pvReady);setTimeout(chk,150);})();});}
 window.evtPng=async function(){
+  pvMode='m';   // 위쪽 버튼은 이달의 이벤트 안내장 (상시 혜택은 상시 혜택 탭의 버튼)
   pvPage('event');
   await pvWaitReady(15000);
   await new Promise(r=>setTimeout(r,900));   // 받은 내용으로 다시 그리는 시간
@@ -1222,7 +1229,9 @@ window.savePng=async function(){
       width:520,windowWidth:520,scrollX:0,scrollY:-w.scrollY,   // 휴대폰에서 만들어도 항상 같은 크기(1040px 폭)
       onclone:function(cd){
         const st=cd.createElement('style');
-        st.textContent='.bar,.lgb{display:none!important}html,body{background:#fff!important}.pg{padding-bottom:0!important;min-height:0!important;box-shadow:none!important;width:520px!important;max-width:520px!important;margin:0!important}';
+        st.textContent='.bar,.lgb{display:none!important}html,body{background:#fff!important}.pg{padding-bottom:0!important;min-height:0!important;box-shadow:none!important;width:520px!important;max-width:520px!important;margin:0!important}'+
+          /* 할인율 배지 : 이미지 도구가 그림자를 배지 안쪽에 어두운 네모로 그리므로 이미지에서는 그림자를 뺍니다 */
+          '.lrow .pc{box-shadow:none!important}';
         cd.head.appendChild(st);
         // 글자에 그라데이션을 입힌 곳(background-clip:text)은 이미지 도구가 네모로 칠해 버리므로 금색 글자로 바꿉니다
         const cw=cd.defaultView;
@@ -1237,7 +1246,7 @@ window.savePng=async function(){
     const blob=await new Promise(r=>canvas.toBlob(r,'image/png'));
     if(!blob)throw new Error('이미지를 만들지 못했습니다');
     const ym=(ED&&ED.from?String(ED.from).slice(0,7):new Date().toISOString().slice(0,7));
-    const name='HHC_Event_'+ym+(pvL==='en'?'_EN':'_KO')+'.png';   // 영문 파일명 — 한글 이름은 일부 브라우저에서 「download」로 바뀝니다
+    const name=(pvMode==='alw'?'HHC_Always':'HHC_Event_'+ym)+(pvL==='en'?'_EN':'_KO')+'.png';   // 영문 파일명 — 한글 이름은 일부 브라우저에서 「download」로 바뀝니다
     const file=new File([blob],name,{type:'image/png'});
     const mobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||(navigator.maxTouchPoints>1&&/Mac/.test(navigator.platform));
     if(mobile&&navigator.canShare&&navigator.canShare({files:[file]})){
@@ -1414,6 +1423,17 @@ window.translateAlw=async function(){
   await runTranslate(jobs,$('a-tr-btn'),()=>{const y=window.scrollY,d=adirty;showAlw();adirty=true;window.scrollTo(0,y);});
 };
 window.previewAlw=function(){pvMode='alw';openPreview();};
+/* ♾️ 상시 혜택 안내장 — 미리보기 · PNG · 고객용 주소 */
+window.alwEvt=function(){pvMode='alw';pvPage('event');};
+window.alwPng=async function(){
+  pvMode='alw';pvPage('event');
+  await pvWaitReady(15000);
+  await new Promise(r=>setTimeout(r,900));
+  savePng();
+};
+window.copyAlw=async function(){const u='https://happyhomecare.com.my/event?view=always';
+  try{await navigator.clipboard.writeText(u);toast('상시 혜택 안내장 주소를 복사했습니다\n'+u+'\n(영문: 뒤에 &lang=en)');}
+  catch(e){prompt('상시 혜택 안내장 주소',u);}};
 
 /* ── 시작 ── */
 bindFields();bindAlw();
