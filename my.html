@@ -1887,6 +1887,8 @@ const RP_EN={
   '필터':'filter','청소':'cleaning','세척':'cleaning','점검':'inspection','수리':'repair',
   '교체 완료':'replaced','교체':'replacement','냉매 보충':'refrigerant top-up','냉매':'refrigerant',
   '가스 충전':'gas charging','가스':'gas','충전':'charging','보충':'top-up','누설':'leak',
+  '물 떨어짐':'water dripping','물떨어짐':'water dripping','물이 떨어짐':'water dripping','물샘':'water leak',
+  '펌프':'pump','모터':'motor','팬모터':'fan motor','교체수리':'replacement & repair',
   '배관':'piping','드레인 배관':'drain piping','드레인':'drain','배수':'drainage','급수':'water supply',
   '탈수':'spin','팬모터':'fan motor','컴프레서':'compressor','콘덴서':'condenser',
   '기판':'PCB','캐패시터':'capacitor','센서':'sensor','온도':'temperature','습도':'humidity',
@@ -1911,9 +1913,11 @@ const _RPK=Object.keys(RP_EN).sort(function(a,b){return b.length-a.length;});
 function toEn(t){
   t=String(t||'');
   if(!/[\uAC00-\uD7A3]/.test(t))return t;      // 이미 영문이면 그대로
-  for(var i=0;i<_RPK.length;i++){if(t.indexOf(_RPK[i])>=0)t=t.split(_RPK[i]).join(RP_EN[_RPK[i]]);}
+  // 단어 사이에 띄어쓰기가 없어도 붙지 않게 앞뒤로 한 칸씩 띄워 바꿉니다 (예: 교체수리 → replacement repair)
+  for(var i=0;i<_RPK.length;i++){if(t.indexOf(_RPK[i])>=0)t=t.split(_RPK[i]).join(' '+RP_EN[_RPK[i]]+' ');}
   t=t.replace(/(\d+)\s*\uB300(?![\uAC00-\uD7A3])/g,function(m,q){return q+(q==='1'?' unit':' units');});
   t=t.replace(/(\d+)\s*\uAC1C(?![\uAC00-\uD7A3])/g,function(m,q){return q+(q==='1'?' item':' items');});
+  t=t.replace(/\(\s+/g,'(').replace(/\s+\)/g,')');
   // 남은 한국어 조사·어미를 정리합니다
   t=t.replace(/[\uAC00-\uD7A3]+/g,' ')
      .replace(/\s{2,}/g,' ')
@@ -2386,6 +2390,58 @@ function showCpPopup(){
   ov.querySelector('#cp-go').addEventListener('click',()=>setTimeout(close,400));
 }
 
+/* 견적서 대상 작업 사전 — quote.html 의 SUBJ_EN 과 같은 내용 (견적서 화면과 같은 영문이 나오게) */
+var Q_SUBJ_EN={
+  '냉매배관&전기배선':'refrigerant piping & electrical wiring','냉매·드레인 배관':'refrigerant & drain piping',
+  '냉매 배관':'refrigerant piping','냉매배관':'refrigerant piping','드레인 배관':'drain piping','드레인배관':'drain piping',
+  '전기 배선':'electrical wiring','전기배선':'electrical wiring','전원 배선':'power wiring','배관 매립':'concealed piping',
+  '천정형 (카세트)':'Ceiling Cassette','천정형(카세트)':'Ceiling Cassette','매립형 (덕트)':'Ducted','매립형(덕트)':'Ducted',
+  '에어컨(가정용)':'AC (Home)','에어컨(매장용)':'AC (Commercial)','벽걸이형':'Wall-mounted','벽걸이':'Wall-mounted',
+  '스탠드형':'Floor Standing','카세트형':'Ceiling Cassette','덕트형':'Ducted','실외기':'outdoor unit','실내기':'indoor unit',
+  '에어컨':'AC','세탁기':'washing machine','건조기':'dryer','냉장고':'refrigerator','공기청정기':'air purifier',
+  '주방후드':'kitchen hood','실링팬':'ceiling fan','매트리스':'mattress','카페트':'carpet','쇼파':'sofa','커튼':'curtain',
+  '신규 설치':'new installation','재설치':'reinstallation','이전 설치':'relocation','이전설치':'relocation',
+  '교체 설치':'replacement installation','교체설치':'replacement installation',
+  '설치 작업':'installation work','설치':'installation','철거':'removal','수리':'repair','점검':'inspection',
+  '출장 점검':'call-out inspection','출장점검':'call-out inspection','청소':'cleaning','세척':'cleaning',
+  '교체':'replacement','보충':'top-up','충전':'charging','누설':'leak','진공':'vacuuming','타공':'drilling',
+  '거치대':'bracket','본체 포함':'unit included','본체포함':'unit included','자재 포함':'materials included',
+  '인건비':'labor','자재':'materials','추가':'additional','기본':'basic',
+  '전체분해세척':'full disassembly cleaning','완전분해세척':'full disassembly cleaning',
+  '분해청소':'disassembly cleaning','분해세척':'disassembly cleaning','간이청소':'quick cleaning',
+  '스팀살균세척':'steam sterilize cleaning','습식살균방식':'wet sterilize method',
+  '스팀그릴세척':'steam grill cleaning','스팀청소':'steam cleaning','스팀세척':'steam cleaning',
+  '약품세척':'chemical cleaning','화학세척':'chemical cleaning','기본세척':'basic cleaning',
+  '고압세척':'high-pressure cleaning','살균':'sterilization','분해':'disassembly',
+  '통돌이세탁기':'top-load washing machine','드럼세탁기':'front-load washing machine',
+  '현장세탁':'on-site wash','수거세탁':'take-away wash','카페트 세탁':'carpet cleaning',
+  '식탁의자':'dining chair','전등교체':'light replacement','콘센트 교체':'socket replacement',
+  '추가 공사':'additional work','추가공사':'additional work','마감 작업':'finishing work',
+  '복원 작업':'restoration work','복원':'restoration','시공':'installation work','공사':'work',
+  '작업':'work','서비스':'service','현장':'site','정리':'arrangement','및':'and','외':'etc.',
+  '미포함':'not included','포함':'included','별도':'separate','기준':'basis','무상':'free','유상':'chargeable',
+  '보증':'warranty','개월':'months','주차':'parking','당일':'same day','사전':'prior','협의':'consultation',
+  '가능':'available','불가':'not available','부품':'parts','정품':'genuine','고객':'customer','회원':'member'
+};
+var _QSK=Object.keys(Q_SUBJ_EN).sort(function(a,b){return b.length-a.length;});
+// 🧾 견적서 제목 — 영문 화면 : 관리자가 적은 영문 → 없으면 용어 사전으로 자동 번역 (한글이 남지 않게)
+function qtSubj(q){
+  const ko=String((q&&q.subject)||'').trim();
+  if(LANG!=='en')return ko||String((q&&q.qno)||'');
+  const en=String((q&&q.subjectEn)||'').trim();
+  if(en)return en;
+  // ① 견적서 화면과 같은 사전(Q_SUBJ_EN)으로 먼저 → 한글이 남으면 ② 서비스명 · 수리 용어 사전으로
+  let q1=ko;
+  for(let i=0;i<_QSK.length;i++){if(q1.indexOf(_QSK[i])>=0)q1=q1.split(_QSK[i]).join(' '+Q_SUBJ_EN[_QSK[i]]+' ');}
+  q1=q1.replace(/(\d+)\s*\uB300(?![\uAC00-\uD7A3])/g,function(m,n){return n+(n==='1'?' unit':' units');})
+       .replace(/\s{2,}/g,' ').replace(/\(\s+/g,'(').replace(/\s+\)/g,')').trim();
+  if(q1&&!/[\uAC00-\uD7A3]/.test(q1))return q1;
+  let t=ko;
+  for(let i=0;i<_IEK.length;i++){if(t.indexOf(_IEK[i])>=0)t=t.split(_IEK[i]).join(' '+ITEM_EN[_IEK[i]]+' ');}
+  t=toEn(t).replace(/\s{2,}/g,' ').replace(/\(\s+/g,'(').replace(/\s+\)/g,')').trim();
+  if(/[\uAC00-\uD7A3]/.test(t))t='';
+  return t||('Quotation '+String((q&&q.qno)||'')).trim();
+}
 // 🪪 작업방문등록 안내장 주소 (예약 확정 카드 포함) — v:{d 날짜, t 시간 표시, it 품목}
 // 주소 값 인코딩 — 괄호 ( ) 도 %28 %29 로 바꿔 메시지 속 주소가 중간에 끊기지 않게 합니다
 const wpEnc=function(v){return encodeURIComponent(v).replace(/[()'!*]/g,function(c){return '%'+c.charCodeAt(0).toString(16).toUpperCase();});};
@@ -2502,7 +2558,7 @@ function render(){
      '<div class="ava">'+esc(init)+'</div>'+
      '<div class="who2"><div class="hi">'+(LANG==='en'?'Hello,':'안녕하세요,')+'</div>'+
      '<div class="nm">'+esc(name)+(LANG==='ko'?' 님':'')+'</div>'+
-     '<div class="sub">'+(LANG==='en'?(todayStr()+' '+L.asof):(todayStr()+' '+L.asof))+'</div>'+
+     '<div class="sub">'+(LANG==='en'?('As of '+todayStr()):(todayStr()+' '+L.asof))+'</div>'+
      (member?'<div class="mem">👑 '+esc(memLb(member))+'</div>':'')+'<!--@HST@--></div>'+
      '</div></div>';
   h+='<div class="body nb">';
@@ -3003,7 +3059,7 @@ function render(){
          '<span class="stripe '+(exp?'warn':'ok')+'"></span><div class="nbody">'+
          '<div class="nrow1"><div class="ntile '+(exp?'warn':'ok')+'">\uD83E\uDDFE</div>'+
          '<div style="flex:1;min-width:0"><div class="nid">'+esc(x.qno||dfmt(x.issueDate)||'')+'</div>'+
-         '<div class="ndate">'+esc(dfmt(x.issueDate)||'')+(x.subject?' \u00b7 '+esc(trIt(x.subject)):'')+'</div></div>'+
+         '<div class="ndate">'+esc(dfmt(x.issueDate)||'')+(x.subject?' \u00b7 '+esc(qtSubj(x)):'')+'</div></div>'+
          '<span class="nst '+(exp?'warn':'ok')+'">'+(exp?qL.expired:qL.valid)+'</span></div>'+
          (x.validUntil?'<div class="npd"><span class="t">'+qL.until+' '+esc(dfmt(x.validUntil))+'</span></div>':'')+
          '<div class="nfoot"><div><div class="nlb">'+qL.amt+'</div>'+
@@ -3246,7 +3302,7 @@ function render(){
         const dd=q.validUntil?dayDiff(q.validUntil):null;
         B.push({k:'quote',tone:'blue',ic:'🧾',tag:en?'Quotation':'견적서 확인',
           big:'RM '+fmt0(qtTotal(q)),
-          sub:esc(q.subject?(en&&q.subjectEn?q.subjectEn:q.subject):(q.qno||''))+(dd!=null?(' · '+(en?'valid '+dd+' more day'+(dd===1?'':'s'):dd+'일 남음')):''),
+          sub:esc(qtSubj(q))+(dd!=null?(' · '+(en?'valid '+dd+' more day'+(dd===1?'':'s'):dd+'일 남음')):''),
           cta:en?'View quote':'견적서 보기',act:'data-qt="qt"'});
       }
     }
