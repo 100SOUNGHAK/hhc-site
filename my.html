@@ -1797,6 +1797,31 @@ function rcCatPath(li){
   if(!a.length)return '';
   return (LANG==='en'?a.map(v=>RC_CAT_EN[v]||v):a).join(' · ');
 }
+// 🧾 인보이스 품목 → 큰 분류 이름 (최근 서비스 : 「에어컨 · 세탁기」처럼 보여 줍니다)
+const INV_CATS=[
+  [/에어컨|실외기|air.?con|aircond|\bA\/?C\b/i,'에어컨','Air-con'],
+  [/세탁기|washing.?machine|washer/i,'세탁기','Washing machine'],
+  [/건조기|dryer/i,'건조기','Dryer'],
+  [/냉장고|refrigerator|fridge/i,'냉장고','Refrigerator'],
+  [/후드|hood/i,'주방후드','Kitchen hood'],
+  [/공기청정기|air.?purifier/i,'공기청정기','Air purifier'],
+  [/매트리스|mattress/i,'매트리스','Mattress'],
+  [/쇼파|소파|sofa/i,'쇼파','Sofa'],
+  [/식탁의자|dining.?chair/i,'식탁의자','Dining chairs'],
+  [/커튼|curtain/i,'커튼','Curtain'],
+  [/카펫|카페트|carpet|rug/i,'카펫','Carpet'],
+  [/실링팬|ceiling.?fan/i,'실링팬','Ceiling fan'],
+  [/전등|콘센트|조명|light|socket/i,'전등 · 콘센트','Lights · sockets']
+];
+function invCatLine(items){
+  const out=[];
+  (items||[]).forEach(li=>{
+    const n=String((li||{}).name||'')+' '+String((li||{}).cat||'')+' '+String((li||{}).subcat||'');
+    for(const c of INV_CATS){if(c[0].test(n)){const nm=LANG==='en'?c[2]:c[1];if(out.indexOf(nm)<0)out.push(nm);break;}}
+  });
+  if(!out.length)return '';
+  return out.length>3?out.slice(0,3).join(' · ')+(LANG==='en'?' +'+(out.length-3):' 외 '+(out.length-3)):out.join(' · ');
+}
 function rcItemName(li){
   let n=String((li||{}).name||'').trim();
   const st=n.replace(/^[A-Z]{2,}[-]?\d+[A-Za-z0-9-]*[\s:·-]*/,'').trim();   // 관리 코드(HHCPL1002 등) 제거
@@ -2399,6 +2424,7 @@ document.addEventListener('visibilitychange',function(){
 });
 
 function render(){
+  let H_REC='';   // 최근 서비스 카드 — 아래에서 만들어 우리집 케어 현황 위에 넣습니다
   const L=T[LANG];
   const m=DATA.m;
   const name=m.name||(LANG==='en'?'Customer':'고객');
@@ -2566,7 +2592,7 @@ function render(){
   }
   h+='<!--@PT@-->';
   if(_duo)h+='</div>';
-  h+='<!--@CARE@-->';   // 예약 카드는 위쪽 「지금 확인하실 일」 배너가 대신합니다
+  h+='<!--@REC@--><!--@CARE@-->';   // 최근 서비스 → 우리집 케어 현황 순서   // 예약 카드는 위쪽 「지금 확인하실 일」 배너가 대신합니다
   // ── contracts ──
   // 위 요약 카드(회원권 잔액)가 보이는 경우 유효 계약 상세 카드는 숨깁니다 (같은 금액 중복 표시 방지).
   //  · 종료된 계약이 있으면 그 자리에 「종료된 계약서 확인」 한 줄 버튼만 두고, 눌렀을 때 카드가 나옵니다.
@@ -2694,7 +2720,7 @@ function render(){
       if(x.status==='draft')return;
       const d=String(x.date||'').slice(0,10);if(!d)return;
       const li=(x.items||[])[0]||null;
-      const nm=li?rcItemName(li):'';
+      const nm=invCatLine(x.items)||(li?rcItemName(li):'');   // 품목 분류(에어컨 · 세탁기 …), 없으면 첫 품목 이름
       RC.push({d:d,k:LANG==='en'?'Invoice':'인보이스',ico:'\u{1F9FE}',t:nm||((LANG==='en'?'Invoice ':'인보이스 ')+(x.id||'')),
         u:BASE+'/hhc-invoice.html?view='+encodeURIComponent(x.id||x.__id)+'&lang='+LANG,
         mv:(LANG==='en'?'\u{1F9FE} Invoice ':'\u{1F9FE} 인보이스 ')+(x.id||''),
@@ -2729,7 +2755,7 @@ function render(){
       const _rcDy=_rd?_rd.getDate():'';
       const _rcLong=_rd?(LANG==='en'?(WD_EN[_rd.getDay()]+', '+_rd.getDate()+' '+MN_EN[_rd.getMonth()]):((_rd.getMonth()+1)+'월 '+_rd.getDate()+'일 '+WD_KO[_rd.getDay()]+'요일')):'';
       const _rcAgo=_ago<=0?(LANG==='en'?'Today':'오늘'):(LANG==='en'?(_ago===1?'Yesterday':_ago+' days ago'):(_ago===1?'어제':_ago+'일 전'));
-      h+='<div class="rcx-s"><div class="sxh"><b>'+L.recT+'</b>'+
+      H_REC+='<div class="rcx-s"><div class="sxh"><b>'+L.recT+'</b>'+
          '<button type="button" class="dh-all" data-qt="iv">'+L.recAll+' \u203A</button></div>'+
          '<div class="rcx"><div class="rcx-d"><span class="rcx-cal"><i>'+esc(_rcMo)+'</i><b>'+_rcDy+'</b></span>'+
          '<span class="rcx-dt"><b>'+esc(_rcLong)+'</b><i>'+esc(_rcAgo)+' · '+(LANG==='en'?'last visit':'마지막 방문')+'</i></span>'+
@@ -2738,11 +2764,11 @@ function render(){
         const inner='<span class="rcx-ic">'+r.ico+'</span>'+
           '<span class="rcx-x"><i>'+esc(r.k||'')+'</i><b>'+esc(r.t)+'</b></span>'+
           '<span class="pill2 '+r.pc+'">'+esc(r.pill)+'</span><span class="rcx-ar">\u203A</span>';
-        h+=r.u
+        H_REC+=r.u
           ?'<a class="rcx-r" href="'+esc(r.u)+'" target="_blank" rel="noopener" data-mvt="'+esc(r.mv||'')+'">'+inner+'</a>'
           :'<button type="button" class="rcx-r" data-qt="'+esc(r.qt||'mm')+'">'+inner+'</button>';
       });
-      h+='</div></div>';
+      H_REC+='</div></div>';
     }
     h+='<div class="sxh doc"><b>'+L.docHd+'</b><span>'+(LANG==='en'?'Tap to open':'눌러서 내역 보기')+'</span></div>';
   }
@@ -3273,7 +3299,7 @@ function render(){
   // 결제 배너가 있으면 위쪽 청구 카드는 배너가 대신합니다 (같은 금액이 두 번 나오지 않게)
   const _hasPayB=H_BRIEF.indexOf('data-pay=')>=0;
   const _hst=BRIEF_N?('<button type="button" class="hst" data-brief="1"><i>'+BRIEF_N+'</i>'+(LANG==='en'?(BRIEF_N===1?'item to check':'items to check'):'확인하실 일')+' <b>›</b></button>'):'';
-  h=h.replace('<!--@HQS@-->',HQ).replace('<!--@BRIEF@-->',H_BRIEF).replace('<!--@CARE@-->',H_CARE).replace('<!--@HST@-->',_hst).replace('<!--@PYX@-->',_hasPayB?'':H_PYX).replace('<!--@PT@-->',H_PT);
+  h=h.replace('<!--@HQS@-->',HQ).replace('<!--@BRIEF@-->',H_BRIEF).replace('<!--@REC@-->',H_REC).replace('<!--@CARE@-->',H_CARE).replace('<!--@HST@-->',_hst).replace('<!--@PYX@-->',_hasPayB?'':H_PYX).replace('<!--@PT@-->',H_PT);
   document.getElementById('page').innerHTML=h;
   document.getElementById('l-ko').onclick=()=>{LANG='ko';render();};
   document.getElementById('l-en').onclick=()=>{LANG='en';render();};
