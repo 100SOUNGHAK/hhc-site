@@ -254,7 +254,7 @@ textarea.fi{resize:vertical;line-height:1.6}
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDocs, onSnapshot, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, query, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getStorage, ref as sref, uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
 // ⚡ 빠른 열기 : 데이터베이스 내용을 이 기기 안에 저장해 둡니다(IndexedDB).
 //    다음부터는 저장된 내용으로 화면을 먼저 그리고, 서버에서는 바뀐 부분만 받아 옵니다.
@@ -852,9 +852,52 @@ function who(m){
   if(c&&n)return c+'('+n+')';
   return c||n||'고객';
 }
+// 🪪 작업방문등록 안내장 주소 — 표지 위에 방문 일정 카드(호칭 · 방문일 · 내용 · 상태)가 함께 나옵니다
+// 주소 값 인코딩 — 괄호 ( ) 도 %28 %29 로 바꿔 메시지 속 주소가 중간에 끊기지 않게 합니다
+const wpEnc=function(v){return encodeURIComponent(v).replace(/[()'!*]/g,function(c){return '%'+c.charCodeAt(0).toString(16).toUpperCase();});};
+function wpLinkMemo(m){
+  const q=['bk=1'];
+  if(m.visit_date)q.push('d='+wpEnc(m.visit_date));
+  const t=String(m.visit_time||'').trim();
+  if(t)q.push('t='+wpEnc(/전후/.test(t)?t:(t+' 전후')));
+  q.push('nm='+wpEnc(who(m)));
+  const it=String(m.symptom||'').trim().split('\n')[0].slice(0,60);
+  if(it)q.push('it='+wpEnc(it));
+  return 'https://happyhomecare.com.my/workpermit.html?'+q.join('&');
+}
+function wpLine(m){return '\n\n🪪 작업방문등록 안내장 (복사 · 전달용)\n🔗 '+(_hhcShortCache[wpLinkMemo(m)]||wpLinkMemo(m));}
+// ── 🔗 발송 주소 단축 (customer-admin.html 과 같은 저장소 shorts · r.html) ──
+const HHC_SHORT_BASE='https://happyhomecare.com.my/r?k=';
+const _hhcShortCache={};
+async function hhcShortUrl(url){
+  url=String(url||'');
+  if(_hhcShortCache[url])return _hhcShortCache[url];
+  if(url.length<=40||!/^https:\/\/(www\.)?happyhomecare\.com\.my\//.test(url)||/\/r(\.html)?\?k=/.test(url))return url;
+  try{
+    const col=collection(db,'shorts');
+    const ex=await getDocs(query(col,where('url','==',url)));
+    let key='';
+    if(!ex.empty){key=ex.docs[0].data().key;}
+    else{
+      for(let n=4;n<=8&&!key;n++){
+        const k=Math.random().toString(36).slice(2,2+n);if(k.length<n)continue;
+        const dup=await getDocs(query(col,where('key','==',k)));
+        if(dup.empty){await addDoc(col,{key:k,url:url,created:new Date().toISOString()});key=k;}
+      }
+      if(!key)return url;
+    }
+    return (_hhcShortCache[url]=HHC_SHORT_BASE+key);
+  }catch(e){return url;}
+}
+async function hhcShortLinks(text){
+  text=String(text==null?'':text);
+  const found=text.match(/https:\/\/(?:www\.)?happyhomecare\.com\.my\/[^\s'"<>)\]]+/g)||[];
+  for(const u of found.filter((u,i)=>found.indexOf(u)===i)){const sh=await hhcShortUrl(u);if(sh!==u)text=text.split(u).join(sh);}
+  return text;
+}
 function tplText(m,n){
   const name=who(m);
-  if(n===3)return '네. 감사합니다. 저희 점검직원 방문 전까지 매니지먼트에 작업방문등록을 반드시 완료 부탁드립니다\n'+regBody();
+  if(n===3)return '네. 감사합니다. 저희 점검직원 방문 전까지 매니지먼트에 작업방문등록을 반드시 완료 부탁드립니다\n'+regBody()+wpLine(m);
   if(n===1)return name+'님. 지금 방문드릴수 있을꺼 같아 가능하신지 확인 연락드립니다.';
   const d=String(m.visit_date||'');const t=String(m.visit_time||'');
   const mo=parseInt(d.slice(5,7),10)||0, dy=parseInt(d.slice(8,10),10)||0;
@@ -863,7 +906,7 @@ function tplText(m,n){
 }
 function tplHtml(m,n){
   const name=esc(who(m));
-  if(n===3)return '네. 감사합니다. 저희 점검직원 방문 전까지 매니지먼트에 <span class="hl">작업방문등록</span>을 반드시 완료 부탁드립니다\n'+esc(regBody());
+  if(n===3)return '네. 감사합니다. 저희 점검직원 방문 전까지 매니지먼트에 <span class="hl">작업방문등록</span>을 반드시 완료 부탁드립니다\n'+esc(regBody())+'<span class="hl">'+esc(wpLine(m))+'</span>';
   if(n===1)return '<span class="hl">'+name+'</span>님. 지금 방문드릴수 있을꺼 같아 가능하신지 확인 연락드립니다.';
   const d=String(m.visit_date||'');const t=String(m.visit_time||'');
   const mo=parseInt(d.slice(5,7),10)||0, dy=parseInt(d.slice(8,10),10)||0;
@@ -1510,6 +1553,7 @@ window.sdOpenCust=function(){const m=MEMOS.find(x=>x.__id===sendId);if(m)window.
 
 function paintSend(){
   const m=MEMOS.find(x=>x.__id===sendId);if(!m)return;
+  try{const _wu=wpLinkMemo(m);if(!_hhcShortCache[_wu])hhcShortUrl(_wu).then(sh=>{if(sh!==_wu&&sendId===m.__id)try{paintSend();}catch(_){}});}catch(_){}
   const ok2=canTpl2(m);
   if(!ok2&&sendTpl===2)sendTpl=1;
   const ch=m.channel||'other';
@@ -1577,7 +1621,7 @@ document.getElementById('sd-body').addEventListener('click',async ev=>{
   }
   const b=ev.target.closest('[data-send]');if(!b)return;
   const m=MEMOS.find(x=>x.__id===sendId);if(!m)return;
-  const txt=msgText(m,sendTpl);
+  const txt=await hhcShortLinks(msgText(m,sendTpl));   // 🔗 안내장 주소는 짧은 주소로
   if(b.dataset.send==='wa'){
     let wa='https://wa.me/';const ph=pn(m.phone);if(ph)wa+='60'+ph;
     window.open(wa+'?text='+encodeURIComponent(txt),'_blank');

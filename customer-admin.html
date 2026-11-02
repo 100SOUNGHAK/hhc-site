@@ -897,6 +897,7 @@ function msgSlim(m,dropLink){
     t=t.replace(/^.*https?:\/\/\S+.*$/gm,'')      // 링크가 들어간 줄 통째로 제거
        .replace(/^\s*📱\s*(MY ?PAGE|My Page|마이페이지)\s*$/gim,'')   // 주소 줄과 짝인 제목 줄
        .replace(/^\s*👑\s*(MEMBERSHIP|멤버십 안내장)\s*$/gim,'')      // 안내장 주소 줄과 짝인 제목 줄
+       .replace(/^\s*🪪\s*(WORK PERMIT GUIDE|Work permit guide|작업방문등록 안내장)\s*$/gim,'')   // 작업방문등록 안내장 제목 줄
        .replace(/^\s*🎁\s*(GIFT ?VOUCHER|전자상품권 안내)\s*$/gim,'')   // 전자상품권 안내장 제목 줄
        .replace(/^\s*💎\s*(REWARD ?POINTS|적립포인트 안내)\s*$/gim,'')  // 적립포인트 안내장 제목 줄
        .replace(/^\s*📝\s*(SERVICE REQUEST FORM|의뢰 요청서 작성)\s*$/gim,''); // 요청서 주소 줄과 짝인 제목 줄
@@ -943,7 +944,7 @@ function kkText(m,feed){
     //    카드에 사진과 버튼이 이미 있으므로 주소 안내줄·회사 서명은 빼고,
     //    안내 문구 4줄을 그대로 살립니다. (글자 수 제한은 없습니다)
     t=t.split('\n').filter(x=>!(
-        /^\s*[\u{1F300}-\u{1FAFF}\u2600-\u27BF]?\s*(전자명함|MY ?PAGE|DIGITAL NAME CARD|MEMBERSHIP|멤버십 안내장|GIFT VOUCHER|전자상품권 안내|REWARD POINTS|적립포인트 안내)\s*$/iu.test(x) ||
+        /^\s*[\u{1F300}-\u{1FAFF}\u2600-\u27BF]?\s*(전자명함|MY ?PAGE|DIGITAL NAME CARD|MEMBERSHIP|멤버십 안내장|GIFT VOUCHER|전자상품권 안내|REWARD POINTS|적립포인트 안내|WORK PERMIT GUIDE|작업방문등록 안내장)\s*$/iu.test(x) ||
         /📞\s*\+?\s*60[\s-]*17[\s-]*247[\s-]*2774/.test(x) ||
         /^\s*Happy Home Care\s*$/i.test(x)
       )).join('\n');
@@ -3367,7 +3368,28 @@ window.caSendModal=async function(idx){
     // basic · wp 는 특정 섹션을 가리키지 않으므로 강조하지 않습니다.
     // (마이페이지에 해당 섹션이 없으면 강조 없이 평소처럼 열립니다)
   };
+  // 🪪 작업방문등록 안내장 주소 — 확정 예약이 있으면 표지 위에 예약 확정 카드(이름 · 예약일 · 품목 · 상태)를 함께 보여 줍니다
+  // 주소 값 인코딩 — 괄호 ( ) 도 %28 %29 로 바꿔 메시지 속 주소가 중간에 끊기지 않게 합니다
+  const wpEnc=function(v){return encodeURIComponent(v).replace(/[()'!*]/g,function(c){return '%'+c.charCodeAt(0).toString(16).toUpperCase();});};
+  function wpLink(en){
+    const x=BKCU[0]||null,q=[];
+    if(x){
+      q.push('bk=1');
+      if(x.booking_date)q.push('d='+wpEnc(x.booking_date));
+      let t=String(x.booking_time||'').trim();
+      if(t.indexOf('|')>=0)t=String((en?t.split('|')[1]:t.split('|')[0])||t.split('|')[0]).trim();
+      if(t)q.push('t='+wpEnc(t));
+      if(e.name)q.push('nm='+wpEnc(e.name));
+      let it=String(x.booking_items||'').trim();
+      if(en&&it)it=trItemsEn(it);
+      if(it)q.push('it='+wpEnc(it));
+    }
+    if(en)q.push('lang=en');
+    return BASE+'/workpermit.html'+(q.length?'?'+q.join('&'):'');
+  }
   function link(){
+    // 🪪 작업방문등록 — 고객 마이페이지가 아니라 작업방문등록 안내장을 보냅니다.
+    if(state.tpl==='wp')return wpLink(!!state.en);
     // 👑 멤버십 안내 — 고객 마이페이지가 아니라 패키지 상품 안내장을 보냅니다.
     //   · 영문 발송은 미리보기 카드(그림·제목)까지 영어로 나오도록 membership-en.html 을 거칩니다.
     if(state.tpl==='mem')return BASE+(state.en?'/membership-en.html?lang=en':'/membership');
@@ -3564,6 +3586,9 @@ window.caSendModal=async function(idx){
   //  · WhatsApp : 아래 🔗 주소가 그대로 발송됩니다.
   //  · 카카오톡 : kkText 가 주소 줄을 걷어내고 「마이페이지 열기」 버튼이 대신합니다.
   function msgTail(en){
+    if(state.tpl==='wp'){
+      return '\n\n'+(en?'🪪 WORK PERMIT GUIDE':'🪪 작업방문등록 안내장')+'\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
+    }
     if(state.tpl==='mem'){
       return '\n\n'+(en?'👑 MEMBERSHIP':'👑 멤버십 안내장')+'\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
     }
@@ -3973,11 +3998,13 @@ window.caSendModal=async function(idx){
         ?('Hello, '+nm+' 😊\n\n✅ Your booking has been confirmed.\n'+
           (bkcW?'\n📅 '+bkcW+'\n':'')+
           '\n⚠️ Please complete your Work Permit (visit registration) in advance for smooth entry.\n'+
+          '🪪 Work permit guide\n🔗 '+wpLink(true)+'\n'+
           '\n📋 Full details are available on your My Page below.\n📱 My Page\n🔗 '+l+
           '\nThank you.\nHappy Home Care\n📞 +60 17-247 2774')
         :('안녕하세요, '+nm+' 고객님 😊\n\n✅ 예약이 확정되었습니다.\n'+
           (bkcW?'\n📅 '+bkcW+'\n':'')+
           '\n⚠️ 원활한 출입을 위해 사전에 Work Permit(작업 방문 등록)을 반드시 완료해 주시기 바랍니다.\n'+
+          '🪪 작업방문등록 안내장\n🔗 '+wpLink(false)+'\n'+
           '\n📋 상세 정보는 아래 마이페이지에서 확인해 주세요.\n📱 My Page\n🔗 '+l+
           '\n감사합니다.\nHappy Home Care\n📞 +60 17-247 2774');
     }
@@ -4315,7 +4342,10 @@ window.caSendModal=async function(idx){
       if(careCur())setTimeout(()=>toast('🖼 안내장 이미지를 내려받았습니다 · 카카오톡 대화방에 첨부해 주세요'),2600);
     }
     const en=!!state.en;
-    const kkT=(state.tpl==='mem')
+    const kkT=(state.tpl==='wp')
+      ?{t:(en?'[Happy Home Care] Work Permit Guide':'[Happy Home Care] 작업방문등록 안내'),
+        btn:(en?'View work permit':'등록 정보 보기')}
+      :(state.tpl==='mem')
       ?{t:(en?'[Happy Home Care] Membership Packages':'[Happy Home Care] 해피 멤버십 패키지 안내'),
         btn:(en?'View membership':'멤버십 안내 보기')}
       :(state.tpl==='evi')

@@ -1278,6 +1278,9 @@ body.popon .topbar,body.popon .fixbar,body.popon .qtiles{display:none!important}
 .brf.t-navy{background:linear-gradient(145deg,#0E2350,#16346E 60%,#1D4090);color:#fff;border-color:transparent}
 .brf.t-navy .brf-ic{background:rgba(255,255,255,.14)}.brf.t-navy .brf-tag{color:#F3D89A}.brf.t-navy .brf-cta{color:#fff}
 .brf.t-navy .brf-sub{opacity:.78}
+.brf-wp{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:900;letter-spacing:.01em;color:#1d1606;background:#E3C98A;border-radius:999px;padding:4px 11px}
+.brf.t-navy .brf-sub:has(.brf-wp){opacity:1}
+.brf-big small.brf-nw{display:inline-block;white-space:nowrap}
 .brf.t-blue{background:linear-gradient(150deg,#F2F6FF,#E3ECFF);border-color:#D2DEFA}
 .brf.t-blue .brf-ic{background:#D6E3FF}.brf.t-blue .brf-tag,.brf.t-blue .brf-cta{color:#1D4ED8}
 .brf.t-teal{background:linear-gradient(150deg,#EFFAF8,#DDF3EF);border-color:#C5E8E1}
@@ -2006,6 +2009,7 @@ function memLb(v){
 // ── 🕘 예약 시간 문구 영문 변환 : "09:00 전후" → "Around 09:00" ──
 function bkTimeLb(t){
   t=String(t==null?'':t);
+  if(LANG!=='en'&&t.indexOf('|')>=0)return t.split('|')[0].trim();   // 「13:30 전후|Around 13:30」 → 한국어 쪽만
   if(LANG!=='en'||!t)return t;
   if(t.indexOf('|')>=0)return t.split('|')[1].trim()||t.split('|')[0].trim();
   var m=t.match(/^\s*(.+?)\s*전후\s*$/);
@@ -2382,6 +2386,19 @@ function showCpPopup(){
   ov.querySelector('#cp-go').addEventListener('click',()=>setTimeout(close,400));
 }
 
+// 🪪 작업방문등록 안내장 주소 (예약 확정 카드 포함) — v:{d 날짜, t 시간 표시, it 품목}
+// 주소 값 인코딩 — 괄호 ( ) 도 %28 %29 로 바꿔 메시지 속 주소가 중간에 끊기지 않게 합니다
+const wpEnc=function(v){return encodeURIComponent(v).replace(/[()'!*]/g,function(c){return '%'+c.charCodeAt(0).toString(16).toUpperCase();});};
+function wpUrl(v){
+  const q=['bk=1'];
+  if(v&&v.d)q.push('d='+wpEnc(v.d));
+  if(v&&v.t)q.push('t='+wpEnc(v.t));
+  const nm=(DATA&&DATA.m&&DATA.m.name)||'';
+  if(nm)q.push('nm='+wpEnc(nm));
+  if(v&&v.it)q.push('it='+wpEnc(v.it));
+  if(LANG==='en')q.push('lang=en');
+  return BASE+'/workpermit.html?'+q.join('&');
+}
 // ── 예약 확정 시 : 콘도 매니지먼트 작업방문등록 안내 (회사·차량·직원 정보) ──
 //    정보가 바뀌면 여기만 수정하면 된다
 const VISIT_REG={
@@ -3196,9 +3213,11 @@ function render(){
       if(v){
         const dd=dayDiff(v.d);
         B.push({k:'visit',tone:'navy',ic:'🗓️',tag:dd===0?(en?'Visit today':'오늘 방문'):(dd===1?(en?'Visit tomorrow':'내일 방문'):(en?'Upcoming visit · D-'+dd:'방문 예정 · D-'+dd)),
-          big:esc(dLong(v.d))+(v.t?' <small>'+esc(v.t)+'</small>':''),
-          sub:(v.it?esc(v.it)+' · ':'')+(en?'Please check your Work Permit':'Work Permit 등록을 확인해 주세요'),
-          cta:en?'Details':'예약 보기',act:v.u?('href="'+esc(v.u)+'"'):('data-qt="'+v.qt+'"')});
+          // 첫 줄 : 「11월 6일 (금) 13:30 전후 예약확정」 · 다음 줄 : 「WORK PERMIT 사전등록 필수」
+          big:esc(dLong(v.d))+' <small class="brf-nw">'+(v.t?esc(v.t)+' ':'')+(bk?(en?'· Confirmed':'예약확정'):(en?'· Visit confirmed':'방문확정'))+'</small>',
+          sub:'<b class="brf-wp">'+(en?'Pre-register your WORK PERMIT':'WORK PERMIT 사전등록 필수')+'</b>',
+          // 🪪 누르면 작업방문등록 안내장 — 맨 위에 예약 확정 카드(이름 · 예약일 · 품목 · 상태)가 함께 나옵니다
+          cta:en?'Booking & work permit':'예약 · 작업방문등록',act:'href="'+esc(wpUrl(v))+'" data-mvt="'+(en?'🪪 Work permit':'🪪 작업방문등록 안내')+'"'});
       }
     }
     // ②-1 예약 신청서 작성 대기 · 확인 중 (관리자가 보낸 예약 링크)
