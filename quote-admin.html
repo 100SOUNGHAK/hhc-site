@@ -328,10 +328,17 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
       <label style="flex:1;display:flex;align-items:center;gap:6px;font-size:12.5px;cursor:pointer;padding:8px;border:1px solid var(--bdr);border-radius:8px"><input type="radio" name="qlang" value="en" onchange="updateQuoteMsg()">🇬🇧 English</label>
     </div>
     <textarea id="sm-msg" rows="7" style="font-size:11.5px;line-height:1.6;margin-bottom:10px"></textarea>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-      <button onclick="sendQuoteWa()" style="padding:11px;background:#25D366;color:#fff;border:none;border-radius:10px;font-size:12.5px;font-weight:700">💬 WhatsApp</button>
-      <button onclick="sendQuoteKakao()" style="padding:11px;background:#FEE500;color:#3A1D1D;border:none;border-radius:10px;font-size:12.5px;font-weight:700">카카오 복사</button>
+    <!-- 📧 이메일 발송 : 고객 이메일이 등록돼 있으면 자동으로 채워집니다 -->
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+      <span style="flex:none;font-size:12px;font-weight:800;color:var(--navy)">📧</span>
+      <input type="email" id="sm-email" inputmode="email" autocomplete="email" placeholder="고객 이메일 주소 (이메일 발송 시)" style="padding:9px 11px;font-size:13px">
     </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+      <button onclick="sendQuoteWa()" style="padding:11px 6px;background:#25D366;color:#fff;border:none;border-radius:10px;font-size:12.5px;font-weight:700">💬 WhatsApp</button>
+      <button onclick="sendQuoteKakao()" style="padding:11px 6px;background:#FEE500;color:#3A1D1D;border:none;border-radius:10px;font-size:12.5px;font-weight:700">카카오 복사</button>
+      <button onclick="sendQuoteEmail()" style="padding:11px 6px;background:#0F1729;color:#fff;border:none;border-radius:10px;font-size:12.5px;font-weight:700">📧 이메일</button>
+    </div>
+    <div id="sm-email-note" style="display:none;margin:-2px 0 8px;font-size:11px;line-height:1.55;color:var(--gray)"></div>
     <button onclick="document.getElementById('send-modal').classList.remove('open')" style="width:100%;padding:10px;background:#f0f2f8;color:var(--gray);border:1px solid var(--bdr);border-radius:10px;font-size:12.5px">닫기</button>
   </div>
 </div>
@@ -1262,6 +1269,27 @@ function openQuotePreview(){var l=gid('sm-link').textContent;if(l)window.open(l,
 function copyQuoteLink(){var l=gid('sm-link').textContent;if(l)navigator.clipboard.writeText(l).then(function(){toast('✓ 링크 복사됨');});}
 function sendQuoteWa(){window.open('https://wa.me/?text='+encodeURIComponent(gid('sm-msg').value),'_blank');}
 function sendQuoteKakao(){navigator.clipboard.writeText(gid('sm-msg').value).then(function(){toast('✓ 카카오 메시지 복사됨');});}
+/* 📧 이메일 발송 — 휴대폰 · PC의 메일 앱이 받는 사람 · 제목 · 본문이 채워진 채로 열립니다 (보내기만 누르면 됩니다)
+   · 보낸 이메일 주소는 견적서와 고객 마스터(비어 있을 때만)에 저장해 다음 발송 때 자동으로 채웁니다 */
+function sendQuoteEmail(){
+  var el=gid('sm-email'),to=String(el.value||'').trim();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)){toast('이메일 주소를 확인해 주세요');el.focus();return;}
+  var l=document.querySelector('input[name="qlang"]:checked'),en=l&&l.value==='en';
+  var ctx=window._quoteCtx||{},nm=ctx.client||'';
+  var sub=en?('[Happy Home Care] Your Quotation'+(nm?' — '+nm:'')):('[Happy Home Care] 견적서 안내'+(nm?' — '+nm+'님':''));
+  window.location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(gid('sm-msg').value);
+  try{if(window.__qSaveEmail)window.__qSaveEmail(ctx.id,to,ctx.client,ctx.phone);}catch(e){}
+  var nt=gid('sm-email-note');
+  if(nt){nt.style.display='block';nt.textContent='메일 앱이 열렸습니다 — 받는 사람 · 제목 · 내용을 확인하고 「보내기」를 눌러 주세요. 메일 앱이 열리지 않으면 「링크 복사」로 보내 주세요.';}
+}
+/* 발송 창을 열 때 이메일 칸 채우기 : 견적서에 저장된 이메일 → 고객 마스터 이메일 */
+async function fillQuoteEmail(){
+  var el=gid('sm-email');if(!el)return;
+  var ctx=window._quoteCtx||{};el.value=ctx.email||'';
+  var nt=gid('sm-email-note');if(nt)nt.style.display='none';
+  if(el.value||!window.HHCC_fill)return;
+  try{var r=await window.HHCC_fill({name:ctx.client||'',phone:ctx.phone||''});if(r&&r.email&&!el.value)el.value=r.email;}catch(e){}
+}
 
 // ── 목록 렌더 (module에서 데이터 주입)
 window.renderQuoteList=function(list){
@@ -1775,6 +1803,7 @@ window.__saveQuote=async function(){
       data.customerChoice=(old&&old.customerChoice)||null;
       data.createdAt=(old&&old.createdAt)||new Date().toISOString();
       data.updatedAt=new Date().toISOString();
+      if(old&&old.email&&!data.email)data.email=old.email;   // 📧 발송에 쓴 이메일 주소는 수정 저장해도 남깁니다
       await setDoc(doc(DB,'quotes',id),data);
     }else{
       data.qno=await genQno(data.issueDate);
@@ -1790,9 +1819,9 @@ window.__saveQuote=async function(){
     const enUrl='https://happyhomecare.com.my/quote.html?id='+id+'&lang=en';
     shortUrls.ko=await shorten(koUrl);
     shortUrls.en=await shorten(enUrl);
-    window._quoteCtx={client:data.client,hasAc:!!data.acSelect};
+    window._quoteCtx={id:id,client:data.client,phone:data.phone||'',email:data.email||'',hasAc:!!data.acSelect};
     const koR=document.querySelector('input[name="qlang"][value="ko"]');if(koR)koR.checked=true;
-    updateQuoteMsg();
+    updateQuoteMsg();fillQuoteEmail();
     document.getElementById('send-modal').classList.add('open');
     toast('✓ 저장 완료');
     document.getElementById('save-btn').textContent='수정 저장 & 발송';
@@ -1879,6 +1908,11 @@ window.__delQuote=async function(id){
     window.__loadQuotes();
   }catch(e){alert('삭제 실패: '+e.message);}
 };
+window.__qSaveEmail=async function(id,email,client,phone){
+  try{if(id)await updateDoc(doc(DB,'quotes',id),{email:email});}catch(e){}
+  try{const q=quoteList.find(x=>x._id===id);if(q)q.email=email;}catch(e){}
+  try{if(window.HHCC_upsert&&(client||phone))await window.HHCC_upsert(client,phone,{email:email});}catch(e){}
+};
 window.__sendQuoteFor=async function(id){
   const q=quoteList.find(x=>x._id===id);
   if(!q)return;
@@ -1889,9 +1923,9 @@ window.__sendQuoteFor=async function(id){
     shortUrls.ko=await shorten(koUrl);
     shortUrls.en=await shorten(enUrl);
   }catch(e){shortUrls.ko=koUrl;shortUrls.en=enUrl;}
-  window._quoteCtx={client:q.client,hasAc:!!q.acSelect};
+  window._quoteCtx={id:id,client:q.client,phone:q.phone||'',email:q.email||'',hasAc:!!q.acSelect};
   const koR=document.querySelector('input[name="qlang"][value="ko"]');if(koR)koR.checked=true;
-  updateQuoteMsg();
+  updateQuoteMsg();fillQuoteEmail();
   document.getElementById('send-modal').classList.add('open');
 };
 
