@@ -1630,7 +1630,7 @@ const CARE_IMG={
 };
 // ═══ 📘 에어컨 안내장 (홈페이지 · 전자명함과 같은 그림) ═══
 //  · 그림을 바꿔 올렸는데 예전 그림이 나가면 GD_VER 숫자만 바꾸면 됩니다
-const GD_VER='20261102';
+const GD_VER='20261104';
 const GDS={
   // 📚 전체 — 그림 없이 문구 + 링크를 보내고, 고객이 링크를 열어 보고 싶은 안내장을 고릅니다 (home.html ?g=all)
   gd_all:    {g:'all',    img:'',                 ko:'에어컨 궁금증 안내장', en:'Air-con guides', all:true},
@@ -3844,21 +3844,24 @@ window.caSendModal=async function(idx){
       ?('Hello, '+nm+' 😊\n\nHere is our guide: ['+G.en+'].\n'+G.den+'\nFeel free to ask us anything.'+msgTail(en))
       :('안녕하세요, '+nm+' 고객님 😊\n\n['+G.ko+'] 안내장 보내드립니다.\n'+G.dko+'\n궁금하신 점은 편하게 문의해 주세요.'+msgTail(en));
   }
-  const gdImgUrl=en=>GDS[state.tpl].img?BASE+'/'+GDS[state.tpl].img+(en?'-en':'')+'.png?v='+GD_VER:'';
+  // 💎 적립포인트 안내도 안내장 그림(guide-points.png)을 함께 보냅니다
+  const IMG_TPL={pti:'guide-points'};
+  const gdImgOf=t=>(GDS[t]&&GDS[t].img)||IMG_TPL[t]||'';
+  const gdImgUrl=en=>gdImgOf(state.tpl)?BASE+'/'+gdImgOf(state.tpl)+(en?'-en':'')+'.png?v='+GD_VER:'';
   const _gdFile={};
   function gdPrefetch(en){
-    const G=GDS[state.tpl];if(!G||!G.img)return Promise.resolve(null);
+    const img=gdImgOf(state.tpl);if(!img)return Promise.resolve(null);
     const k=state.tpl+(en?'|en':'|ko');
     if(_gdFile[k])return _gdFile[k];
     _gdFile[k]=fetch(gdImgUrl(en),{cache:'no-cache'})
       .then(r=>r.ok?r.blob():null)
-      .then(b=>b?new File([b],'happyhomecare-'+G.img+(en?'-en':'')+'.png',{type:'image/png'}):null)
+      .then(b=>b?new File([b],'happyhomecare-'+img+(en?'-en':'')+'.png',{type:'image/png'}):null)
       .catch(()=>null);
     return _gdFile[k];
   }
   async function gdWa(){
     const en=!!state.en,txt=await hhcShortLinks(waText(msg()));
-    if(GDS[state.tpl].all){   // 📚 전체 : 문구 + 링크만 (고객이 링크에서 골라 봅니다)
+    if((GDS[state.tpl]||{}).all){   // 📚 전체 : 문구 + 링크만 (고객이 링크에서 골라 봅니다)
       const ph=pn(e.phone);
       window.open('https://wa.me/'+(ph?'60'+ph:'')+'?text='+encodeURIComponent(txt),'_blank');
       return;
@@ -3968,8 +3971,8 @@ window.caSendModal=async function(idx){
     if(state.tpl==='pti'){
       // 💎 적립포인트 안내 — 적립 비율·사용 방법을 짧게 안내하고 자세한 내용은 안내장에서 보게 합니다.
       return en
-        ?('Hello, '+nm+' 😊\n\nOur [Reward Points] programme:\nEarn RM 1 for every RM 100 you spend on our services — automatically.\n\n✓ No sign-up, no card to carry\n✓ No expiry — spend whenever it suits you\n✓ Use like cash from RM 10 onwards'+msgTail(en))
-        :('안녕하세요, '+nm+' 고객님 😊\n\n[적립포인트] 안내드립니다.\n\n서비스 결제 RM 100 당 RM 1이 자동으로 적립됩니다.\n\n✓ 따로 신청하실 것도, 카드를 챙기실 것도 없습니다\n✓ 유효기간이 없어 필요하실 때 쓰시면 됩니다\n✓ RM 10 이상 모이면 다음 결제에 현금처럼 사용'+msgTail(en));
+        ?('Hello, '+nm+' 😊\n\nOur [Reward Points] programme:\nEarn RM 1 for every RM 100 you spend on our services — automatically.\n\n✓ No sign-up, no card to carry\n✓ No expiry — spend whenever it suits you\n✓ Use like cash once your first points reach RM 10'+msgTail(en))
+        :('안녕하세요, '+nm+' 고객님 😊\n\n[적립포인트] 안내드립니다.\n\n서비스 결제 RM 100 당 RM 1이 자동으로 적립됩니다.\n\n✓ 따로 신청하실 것도, 카드를 챙기실 것도 없습니다\n✓ 유효기간이 없어 필요하실 때 쓰시면 됩니다\n✓ 최초 적립 RM 10 이상 모인 후 다음 결제부터 현금처럼 사용'+msgTail(en));
     }
     if(state.tpl==='fee'){
       // 💡 추가비용 안내 — 최소청구금액 · 주차비용 · 예약보증금
@@ -4181,13 +4184,13 @@ window.caSendModal=async function(idx){
     if(!_isRev)raw=hhcShortSync(raw);
     mk.querySelector('#cs-msg').innerHTML=
       (_isRev?'<img class="sm-revimg" src="'+revImgUrl(!!state.en)+'" alt="">':'')+
-      (GDS[state.tpl]&&GDS[state.tpl].img?'<img class="sm-revimg sm-gdimg" id="cs-gdprev" src="'+gdImgUrl(!!state.en)+'" alt="" title="눌러서 크게 보기">':'')+
+      (gdImgOf(state.tpl)?'<img class="sm-revimg sm-gdimg" id="cs-gdprev" src="'+gdImgUrl(!!state.en)+'" alt="" title="눌러서 크게 보기">':'')+
       (GDS[state.tpl]&&GDS[state.tpl].all?'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;max-width:240px;margin-bottom:8px">'+
         ['avoid','leak','cool','odour','gas','outdoor','inspection'].map(k=>'<img src="'+BASE+'/gth-'+k+'.jpg" alt="" style="width:100%;aspect-ratio:3/2;object-fit:cover;border-radius:5px;display:block">').join('')+
         '<span style="grid-column:span 1;display:flex;align-items:center;justify-content:center;font-size:9.5px;font-weight:800;color:var(--ink3);text-align:center;line-height:1.2">고객이<br>선택</span></div>':'')+
       carePrevHtml()+msgHtml(raw);
     if(_isRev)revPrefetch(!!state.en);
-    if(GDS[state.tpl])gdPrefetch(!!state.en);
+    if(gdImgOf(state.tpl))gdPrefetch(!!state.en);
     const ln=mk.querySelector('#cs-len');
     if(ln){
       // 카카오톡은 200자까지만 보여 주므로, 줄여서 나가는 경우 그 사실을 알려 줍니다
@@ -4338,7 +4341,7 @@ window.caSendModal=async function(idx){
   });
   mk.querySelector('#cs-wa').addEventListener('click',async()=>{
     if(state.tpl==='rev'){revWa();return;}   // ⭐ 리뷰 이벤트 : 이미지 + 문구
-    if(GDS[state.tpl]){gdWa();return;}       // 📘 에어컨 안내장 : 그림 + 문구
+    if(GDS[state.tpl]||state.tpl==='pti'){gdWa();return;}   // 📘 에어컨 안내장 · 💎 적립포인트 : 그림 + 문구
     if(careOn()&&await careSend('wa'))return;   // 🌿 정기관리 : 안내장 이미지 + 문구
     let wa='https://wa.me/';
     const ph=pn(e.phone);
@@ -4351,6 +4354,14 @@ window.caSendModal=async function(idx){
   mk.querySelector('#cs-kk').addEventListener('click',async()=>{
     if(state.tpl==='rev'){revKk();return;}   // ⭐ 리뷰 이벤트 : 배너 사진 카드
     if(GDS[state.tpl]){gdKk();return;}       // 📘 에어컨 안내장 : 그림 + 링크 카드
+    if(state.tpl==='pti'){                   // 💎 적립포인트 : 휴대폰은 공유창(그림 + 문구), PC 는 그림을 내려받고 카드 발송
+      const _f=await gdPrefetch(!!state.en);
+      if(_f&&navigator.canShare&&navigator.canShare({files:[_f]})&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
+        try{await navigator.share({files:[_f],text:await hhcShortLinks(waText(msg()))});return;}
+        catch(err){if(err&&err.name==='AbortError')return;}
+      }
+      if(_f){careDownload(_f);setTimeout(()=>toast('🖼 안내장 그림을 내려받았습니다 · 카카오톡 대화방에 첨부해 주세요'),2600);}
+    }
     if(careOn()){
       if(await careSend('kk'))return;           // 🌿 휴대폰 : 공유창에서 카카오톡 선택
       if(careCur())setTimeout(()=>toast('🖼 안내장 이미지를 내려받았습니다 · 카카오톡 대화방에 첨부해 주세요'),2600);
