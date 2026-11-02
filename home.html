@@ -2049,13 +2049,13 @@ html[lang="en"] .ba-item.on::after{content:"Viewing"}
 </style>
 <style id="pt-css">
 /* ═══ HHC 서비스 요금표 (pt-) — 배너 → 품목 → 서비스별 가격 ═══ */
-.pt{--pn:#0f2540;--pn9:#08172b;--pt7:#0b5f59;--pt6:#0f766e;--pg5:#c9a44c;--pg3:#e3c98a;--pg1:#f4e7c4;--pg05:#fbf5e6;
+.pt-root{--pn:#0f2540;--pn9:#08172b;--pt7:#0b5f59;--pt6:#0f766e;--pg5:#c9a44c;--pg3:#e3c98a;--pg1:#f4e7c4;--pg05:#fbf5e6;
   --pink:#161d27;--pink6:#4d5866;--pink4:#8891a0;--pline:#ece6d8;--ppaper:#fdfcf9;--pr:#c0392b;
   --pe1:0 1px 2px rgba(8,23,43,.10),0 6px 14px -6px rgba(8,23,43,.28);
   --pe2:0 1px 2px rgba(8,23,43,.12),0 10px 22px -8px rgba(8,23,43,.38),0 30px 60px -24px rgba(8,23,43,.55);
   position:relative;color:var(--pink);font-variant-numeric:tabular-nums;scroll-margin-top:90px}
-.pt *{box-sizing:border-box}
-.pt button{font-family:inherit}
+.pt-root *{box-sizing:border-box}
+.pt-root button{font-family:inherit}
 .pt-stage{animation:ptIn .22s cubic-bezier(.22,.61,.36,1)}
 @keyframes ptIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
@@ -2174,6 +2174,7 @@ html.pt-lock,html.pt-lock body{overflow:hidden}
 .pt-seg button{flex:1;border:0;border-radius:10px;padding:10px 8px;background:none;color:rgba(255,255,255,.7);font-size:13px;font-weight:800;cursor:pointer}
 .pt-seg button.on{background:#fff;color:var(--pn);box-shadow:0 2px 6px rgba(0,0,0,.25)}
 .pt-cta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:auto;padding-top:6px}
+.pt-cta.one{grid-template-columns:1fr}
 .pt-cta a{display:flex;align-items:center;justify-content:center;gap:6px;padding:13px 10px;border-radius:13px;font-size:13.5px;font-weight:900;text-decoration:none;text-align:center}
 .pt-cta .a1{background:linear-gradient(145deg,#e3c98a,#c9a44c 60%,#b08d3a);color:#1d1606;box-shadow:0 8px 18px -8px rgba(201,164,76,.8)}
 .pt-cta .a2{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2)}
@@ -2247,7 +2248,7 @@ html.pt-lock,html.pt-lock body{overflow:hidden}
 @media (prefers-reduced-motion:reduce){.pt-stage{animation:none}.pt-ban,.pt-it{transition:none}}
 
 /* 가격 영역 배치 : 새 요금표 → 견적 계산기 → 비즈니스·매장형 (접힘) */
-#pricing .pt{margin-top:26px}
+#pricing .pt-root{margin-top:26px}
 .pt-legacy{display:none!important}
 #pricing .ppanel.bz{margin-top:26px}
 #pricing .ppanel.bz .bz-more{display:flex;align-items:center;justify-content:center;gap:8px;width:calc(100% - 68px);margin:0 34px 30px;padding:14px 16px;border-radius:14px;cursor:pointer;
@@ -3652,7 +3653,7 @@ body.gqp-open{overflow:hidden}
     </div>
 
     <!-- 📋 서비스 요금표 : 배너 → 품목 → 서비스별 가격 (아래 스크립트 HHCPriceTable 이 그립니다) -->
-    <div class="pt" id="ptbl"></div>
+    <div class="pt-root" id="ptbl"></div>
 
     <!-- ⬇ 예전 가정용 탭 요금표 — 화면에는 보이지 않습니다. 「서비스」 카드 팝업이 이 내용을 복사해 보여 주므로 남겨 둡니다 -->
     <div class="pt-legacy" aria-hidden="true">
@@ -6587,8 +6588,10 @@ window.PT_IMG={ban:'price-banner.jpg'};
     PROMO.forEach(function(r){
       if(!s.ck||r.it!==s.ck[0]||r.m!==s.ck[1]||(r.q||1)>1)return;
       if(r.from&&t<r.from)return;if(r.to&&t>=r.to)return;
-      var fin=r.pct?s.p*(100-r.pct)/100:s.p-(+r.off||0);
-      if(fin>=0&&fin<s.p&&(!best||fin<best.fin))best={fin:fin,nm:(S.lang==='en'?(r.nm_en||r.nm):r.nm)||'',pct:r.pct};
+      var fin=r.kind?(r.kind==='pct'?s.p*(100-(+r.val||0))/100:(r.kind==='off'?s.p-(+r.val||0):+r.val))
+                    :(r.pct?s.p*(100-r.pct)/100:s.p-(+r.off||0));
+      var pc=r.kind?(r.kind==='pct'?+r.val:0):r.pct;
+      if(fin>=0&&fin<s.p&&(!best||fin<best.fin))best={fin:fin,nm:(S.lang==='en'?(r.nm_en||r.nm):r.nm)||'',pct:pc};
     });
     if(!best&&s.pct&&!PROMO_SET)best={fin:s.p*(100-s.pct)/100,pct:s.pct,always:1};
     return best;
@@ -6609,7 +6612,7 @@ window.PT_IMG={ban:'price-banner.jpg'};
   function ensureMod(){
     if(mod)return;
     mod=document.createElement('div');mod.className='pt-mod';mod.setAttribute('role','dialog');mod.setAttribute('aria-modal','true');
-    mod.innerHTML='<div class="pt-mbd" data-close="1"></div><div class="pt-msh" tabindex="-1"><div class="pt-mtop"></div><div class="pt pt-mbody"></div></div>';
+    mod.innerHTML='<div class="pt-mbd" data-close="1"></div><div class="pt-msh pt-root" tabindex="-1"><div class="pt-mtop"></div><div class="pt-mbody"></div></div>';
     document.body.appendChild(mod);
     mBody=mod.querySelector('.pt-mbody');mTop=mod.querySelector('.pt-mtop');
     mod.addEventListener('click',onClick);
@@ -6702,6 +6705,11 @@ window.PT_IMG={ban:'price-banner.jpg'};
     if(s.tb)tb='<div class="pt-tb">'+s.tb.map(function(r){return '<div><span>'+esc(en?r[1]:r[0])+'</span><b>'+rm(r[2])+'</b></div>';}).join('')+'</div>';
     return '<div class="pt-sv"><div class="x"><b>'+esc(N(s))+'</b>'+tag+(s.d?'<p>'+esc(L(s.d))+'</p>':'')+lv+'</div><div class="p">'+p+'</div>'+tb+'</div>';
   }
+  function ctaHTML(kind){
+    var en=S.lang==='en',calc=!!document.getElementById('calcBox');
+    return '<div class="pt-cta '+kind+(calc?'':' one')+'"><a class="a1" data-book="1" href="'+(window.PT_BOOK_URL||'request.html')+(en?'?lang=en':'')+'">'+(en?'Book now':'예약 신청하기')+'</a>'+
+      (calc?'<a class="a2" href="#calcBox" data-calc="1">'+(en?'Estimate':'견적 계산기')+'</a>':'')+'</div>';
+  }
   function detHTML(){
     var en=S.lang==='en',it=BYK[S.k];if(!it)return itemsHTML();
     var ty=it.types[S.t]||it.types[0],list=svcs(it);
@@ -6721,8 +6729,7 @@ window.PT_IMG={ban:'price-banner.jpg'};
       '<p class="ds">'+esc(L(it.ds))+'</p>'+
       '<div class="rg"><span>'+(en?'Price':'가격')+'</span><b>'+rg+'</b><i>'+esc(uu)+'</i></div>'+
       (hasBiz?'<div class="pt-seg"><button type="button" data-biz="0" class="'+(S.biz?'':'on')+'">🏠 '+(en?'Home':'가정용')+'</button><button type="button" data-biz="1" class="'+(S.biz?'on':'')+'">🏢 '+(en?'Business':'매장 · 사무실')+'</button></div>':'')+
-      '<div class="pt-cta d"><a class="a1" href="'+(en?'request.html?lang=en':'request.html')+'">'+(en?'Book now':'예약 신청하기')+'</a>'+
-      '<a class="a2" href="#calcBox" data-calc="1">'+(en?'Estimate':'견적 계산기')+'</a></div></div>';
+      ctaHTML('d')+'</div>';
     var main='<div class="pt-main">';
     if(it.types.length>1){
       main+='<div class="pt-types" style="--n:'+it.types.length+'">'+it.types.map(function(t,i){return '<button type="button" data-t="'+i+'" class="'+(i===S.t?'on':'')+'">'+esc(t.sh?L(t.sh):N(t))+'</button>';}).join('')+'</div>';
@@ -6730,8 +6737,7 @@ window.PT_IMG={ban:'price-banner.jpg'};
     main+='<div class="pt-cap"><b>'+(en?'Services & prices':'서비스별 가격')+'</b>'+(list.length>1?(en?list.length+' options':list.length+'가지'):'')+'</div>';
     main+=list.map(function(s){return svcHTML(s,it);}).join('');
     if(notes.length)main+='<div class="pt-nt">'+notes.map(function(n){return '<div><i>ℹ︎</i><span>'+esc(L(n))+'</span></div>';}).join('')+'</div>';
-    main+='<div class="pt-cta m"><a class="a1" href="'+(en?'request.html?lang=en':'request.html')+'">'+(en?'Book now':'예약 신청하기')+'</a>'+
-      '<a class="a2" href="#calcBox" data-calc="1">'+(en?'Estimate':'견적 계산기')+'</a></div>';
+    main+=ctaHTML('m');
     var others=ITEMS.filter(function(x){return x.k!==it.k;});
     main+='<div class="pt-more"><div class="h">'+(en?'Other items':'다른 품목')+'</div><div class="r">'+
       others.map(function(x){return '<button type="button" data-go="det" data-k="'+x.k+'">'+x.ic+' '+esc(N(x))+'</button>';}).join('')+'</div></div>';
@@ -6746,8 +6752,7 @@ window.PT_IMG={ban:'price-banner.jpg'};
       '<button type="button" class="pt-x" data-close="1" aria-label="'+(en?'Close':'닫기')+'"><span>✕</span>'+(en?'Close':'닫기')+'</button>';
   }
   function render(){
-    if(!root)return;
-    root.innerHTML=banHTML();
+    if(root)root.innerHTML=banHTML();
     if(mod&&isOpen()){
       mod.setAttribute('aria-label',S.lang==='en'?'Service price list':'서비스 요금표');
       mTop.innerHTML=topHTML();
@@ -6756,7 +6761,8 @@ window.PT_IMG={ban:'price-banner.jpg'};
   }
   function onClick(e){
     var t=e.target.closest?e.target:null;if(!t)return;
-    var b=t.closest('[data-go],[data-t],[data-biz],[data-calc],[data-close]');if(!b||!(root.contains(b)||(mod&&mod.contains(b))))return;
+    var b=t.closest('[data-go],[data-t],[data-biz],[data-calc],[data-close],[data-book]');if(!b||!((root&&root.contains(b))||(mod&&mod.contains(b))))return;
+    if(b.hasAttribute('data-book')&&typeof window.PT_BOOK==='function'){e.preventDefault();closeMod(false);window.PT_BOOK();return;}
     if(b.hasAttribute('data-close')){closeMod(false);return;}
     if(b.hasAttribute('data-calc')){   // 견적 계산기 (홈페이지에 있으면 팝업을 닫고 열어 줍니다)
       var cb=document.getElementById('calcBox');if(!cb)return;
@@ -6770,6 +6776,7 @@ window.PT_IMG={ban:'price-banner.jpg'};
   }
   window.HHCPriceTable={
     mount:function(el,lang){S.lang=lang==='en'?'en':'ko';el.addEventListener('click',onClick);mount(el);},
+    init:function(lang){S.lang=lang==='en'?'en':'ko';},   // 배너 없이 팝업만 쓰는 화면(전자명함 등)
     setLang:function(lang){S.lang=lang==='en'?'en':'ko';render();},
     open:function(k){go(k?'det':'items',k||null);},
     close:function(){closeMod(false);},
