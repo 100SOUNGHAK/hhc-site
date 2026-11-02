@@ -1302,6 +1302,38 @@ body.popon .topbar,body.popon .fixbar,body.popon .qtiles{display:none!important}
 .brf-dots i.on{width:18px;background:var(--ink)}
 /* 🏡 우리집 케어 현황 */
 .hcs{margin:14px 0 14px}
+.sitm{font-size:11px;font-weight:800;color:var(--ink2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.01em}
+/* ☑ 여러 개 선택해서 PDF 공유 */
+.lssum .msb{margin-left:auto;font-family:inherit;font-size:10.5px;font-weight:900;border-radius:999px;padding:5px 11px;cursor:pointer;
+  background:#0E2350;color:#fff;border:1px solid #0E2350;box-shadow:0 4px 10px -4px rgba(14,35,80,.5)}
+.lssum .msb:active{transform:translateY(1px)}
+.hubls.msel .lssum .msb{background:#fff;color:#0E2350}
+.mck{display:none}
+.hubls.msel .mck{display:flex;position:absolute;left:-2px;top:50%;transform:translateY(-50%);z-index:3;width:24px;height:24px;border-radius:50%;
+  background:#fff;border:2px solid #C3CCDC;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(11,24,51,.12);pointer-events:none}
+.hubls.msel .dcw{padding-left:30px;cursor:pointer;-webkit-user-select:none;user-select:none}
+.hubls.msel .dcw .sft{display:none}
+.hubls.msel .dcw .ncard{pointer-events:none;transition:box-shadow .14s ease}
+.hubls.msel .dcw.on .mck{background:#0E2350;border-color:#0E2350}
+.hubls.msel .dcw.on .mck:after{content:'';width:9px;height:5px;border:solid #fff;border-width:0 0 2.5px 2.5px;transform:translate(0,-1px) rotate(-45deg)}
+.hubls.msel .dcw.on .ncard{box-shadow:0 0 0 2px #0E2350,0 6px 16px -6px rgba(14,35,80,.35)}
+.hubls.msel{padding-bottom:calc(96px + env(safe-area-inset-bottom))!important}
+#msbar{position:fixed;left:0;right:0;bottom:0;z-index:280;display:none;background:rgba(255,255,255,.97);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-top:1px solid #E4E9F2;box-shadow:0 -12px 28px -14px rgba(11,24,51,.35);
+  padding:10px max(14px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+#msbar.on{display:block}
+#msbar .in{max-width:520px;margin:0 auto;display:flex;align-items:center;gap:8px}
+#msbar .c{flex:1;min-width:0;font-size:12px;font-weight:800;color:var(--ink2)}
+#msbar .c b{color:#0E2350;font-size:15px;font-weight:900;margin-right:2px}
+#msbar .c button{display:block;border:0;background:none;padding:2px 0 0;font-family:inherit;font-size:11px;font-weight:800;color:#2563EB;cursor:pointer}
+#msbar .x{border:1px solid #DDE4F2;background:#fff;color:var(--ink2);font-family:inherit;font-size:12.5px;font-weight:800;border-radius:12px;padding:12px 13px;cursor:pointer}
+#msbar .go{border:0;background:linear-gradient(145deg,#16346E,#0E2350);color:#fff;font-family:inherit;font-size:13px;font-weight:900;border-radius:12px;padding:12px 16px;cursor:pointer;
+  box-shadow:0 6px 14px -6px rgba(14,35,80,.6)}
+#msbar .go[disabled]{opacity:.4;box-shadow:none}
+#sh-bx .acts .mg{background:linear-gradient(145deg,#16346E,#0E2350);color:#fff;border-color:transparent}
+#sh-bx .flist{margin:12px 0 0;padding:9px 11px;background:#F6F8FC;border-radius:11px;text-align:left;font-size:11px;font-weight:700;color:var(--ink2);line-height:1.7;max-height:120px;overflow:auto}
+#sh-bx .flist .bad{color:#DC2626}
+@media (prefers-reduced-motion:reduce){.hubls.msel .dcw .ncard{transition:none}}
 .hc-cy{font-size:10px;font-weight:700;color:var(--ink3);margin-left:6px;letter-spacing:0}
 .hc{background:#fff;border-radius:18px;padding:14px 15px 6px;box-shadow:0 1px 2px rgba(11,24,51,.08),0 8px 18px -8px rgba(11,24,51,.2)}
 .hc-h{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
@@ -2802,6 +2834,7 @@ function render(){
          '<span>'+(LANG==='en'?'All ':'전체 ')+DATA.invoices.length+L.caseU+'</span>'+
          (_ivUnp.length?'<span class="bad">'+(LANG==='en'?'Unpaid ':'미납 ')+_ivUnp.length+L.caseU+' · RM '+fmt(_ivUnpAmt)+'</span>':'')+
          (_ivPaidN?'<span class="ok">'+(LANG==='en'?'Paid ':'결제완료 ')+_ivPaidN+L.caseU+'</span>':'')+
+         (DATA.invoices.length>1?'<button type="button" class="msb" data-ms="iv">'+(LANG==='en'?'Select & share PDFs':'여러 개 선택해서 공유')+'</button>':'')+
        '</div>';
     let _ivMon='';
     DATA.invoices.slice(0,20).forEach(x=>{
@@ -2814,7 +2847,9 @@ function render(){
       const st=L.st[x.status]||x.status||'';
       const stc=x.status==='paid'?'ok':(x.status==='overdue'?'bad':'warn');
       const ico=x.status==='paid'?'✅':(x.status==='overdue'?'⚠️':'🧾');
-      // 품목(HHC1102[WASHING MACHINE] 등)은 고객 화면에서 노출하지 않는다
+      // 🧾 품목 : 관리 코드(HHC1102[WASHING MACHINE] 등) 대신 「에어컨 · 세탁기」처럼 분류 이름으로 보여 줍니다
+      const _li0=(x.items||[])[0]||null;
+      const _itm=invCatLine(x.items)||(_li0?rcItemName(_li0):'');
       const ib='';
       const dAgo=daysAgo(x.date);
       const sub=(x.status==='overdue'&&dAgo!=null&&dAgo>0)?(dAgo+L.dayAgo):wdLb(x.date);
@@ -2827,11 +2862,12 @@ function render(){
       const _shown=x.status==='paid'?invTotal(x):xDue;
       const cuTag=(_cu>0&&_shown<0.005)?'<span class="ncu">( '+L.crUsed+' RM '+fmt(_cu)+L.crUsedSuf+' )</span>':'';
       const _ivU=BASE+'/hhc-invoice.html?view='+encodeURIComponent(x.id||x.__id)+'&lang='+LANG;
-      h+='<div class="dcw sm"><a class="ncard nsm" target="_blank" rel="noopener" href="'+_ivU+'">'+
+      h+='<div class="dcw sm" data-msk="iv"><span class="mck" aria-hidden="true"></span><a class="ncard nsm" target="_blank" rel="noopener" href="'+_ivU+'">'+
          '<span class="stripe '+stc+'"></span><div class="nbody">'+
          '<div class="srow"><div class="ntile sm '+stc+'">'+ico+'</div>'+
          '<div class="smain"><div class="sdt">'+esc(dfmt(x.date))+(sub?'<span class="swd">'+esc(sub)+'</span>':'')+
          (((x.files||[]).length)?'<span class="satt">\uD83D\uDCCE '+(x.files||[]).length+'</span>':'')+'</div>'+
+         (_itm?'<div class="sitm">'+esc(_itm)+'</div>':'')+
          '<div class="ssub">'+amLb+'</div></div>'+
          '<div class="samt"><div class="snum'+(x.status==='overdue'?' bad':'')+'"><span class="cu">RM</span>'+rs[0]+'.'+(rs[1]||'00')+'</div>'+
          (st?'<span class="nst sm '+stc+'">'+esc(st)+'</span>':'')+'</div></div>'+ib+
@@ -3328,6 +3364,7 @@ function render(){
     setSt();   // 언어 전환 등으로 다시 그려져도 열림 상태가 화면에 그대로 반영되게
     const closeUi=()=>{
       if(!OPEN[k])return;
+      try{if(window.__mselOff)window.__mselOff(ls);}catch(e){}
       OPEN[k]=false;setSt();
       window.__popUnlock();
       // ⚠️ history.back() 을 쓰지 않습니다 — 카카오톡 내부 브라우저처럼
@@ -4080,6 +4117,154 @@ boot();
         title=b.getAttribute('data-sht'),url=b.getAttribute('data-shu');
     shareDoc(kind,id,title,url);
   },true);
+
+  /* ── ☑ 여러 개 선택해서 한 번에 공유 ──
+     ① 내역 화면에서 「여러 개 선택해서 공유」 → 카드를 눌러 고르고
+     ② 「PDF 공유」를 누르면 고른 문서를 차례로 PDF로 만든 뒤
+     ③ 「각각 보내기(파일 여러 개)」 또는 「한 파일로 합쳐서 보내기」를 고릅니다.
+     (휴대폰 공유창은 버튼을 「누른 순간」에만 열 수 있어, 다 만든 뒤 한 번 더 누르게 합니다) */
+  var MS_MAX=10;
+  var bar=document.createElement('div');bar.id='msbar';document.body.appendChild(bar);
+  function msList(){return document.querySelector('.hubls.open.msel');}
+  function msSel(ls){return ls?Array.prototype.slice.call(ls.querySelectorAll('.dcw[data-msk].on')):[];}
+  function msBar(){
+    var ls=msList();
+    if(!ls){bar.classList.remove('on');bar.innerHTML='';return;}
+    var n=msSel(ls).length,all=ls.querySelectorAll('.dcw[data-msk]').length;
+    bar.innerHTML='<div class="in"><div class="c"><b>'+n+'</b>'+T('개 선택',' selected')+
+      '<button type="button" data-msa="1">'+(n&&n>=Math.min(all,MS_MAX)?T('선택 해제','Clear all'):T('전체 선택','Select all')+(all>MS_MAX?T(' (최근 '+MS_MAX+'개)',' (latest '+MS_MAX+')'):''))+'</button></div>'+
+      '<button type="button" class="x" data-msx="1">'+T('취소','Cancel')+'</button>'+
+      '<button type="button" class="go" data-msg="1"'+(n?'':' disabled')+'>📤 '+T('PDF 공유','Share PDFs')+(n?' '+n:'')+'</button></div>';
+    bar.classList.add('on');
+  }
+  function msOff(ls){
+    ls=ls||document.querySelector('.hubls.msel');
+    if(ls){ls.classList.remove('msel');Array.prototype.forEach.call(ls.querySelectorAll('.dcw.on'),function(d){d.classList.remove('on');});
+      var b=ls.querySelector('.msb');if(b)b.textContent=T('여러 개 선택해서 공유','Select & share PDFs');}
+    msBar();
+  }
+  window.__mselOff=msOff;
+  var tst=null;
+  function toast(m){
+    if(!tst){tst=document.createElement('div');tst.style.cssText='position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:290;background:rgba(14,35,80,.94);color:#fff;font-size:12px;font-weight:800;border-radius:999px;padding:9px 15px;max-width:86vw;text-align:center;word-break:keep-all;display:none';document.body.appendChild(tst);}
+    tst.textContent=m;tst.style.display='block';clearTimeout(tst._h);tst._h=setTimeout(function(){tst.style.display='none';},2200);
+  }
+  // 카드·버튼 누름 — 문서 열기보다 먼저 받습니다
+  window.addEventListener('click',function(ev){
+    var t=ev.target;if(!t||!t.closest)return;
+    var mb=t.closest('.msb');
+    if(mb){
+      ev.preventDefault();ev.stopImmediatePropagation();
+      var ls=mb.closest('.hubls');if(!ls)return;
+      if(ls.classList.contains('msel')){msOff(ls);return;}
+      ls.classList.add('msel');mb.textContent=T('선택 끝내기','Done');
+      toast(T('공유할 인보이스를 눌러 선택하세요','Tap the invoices you want to share'));
+      msBar();return;
+    }
+    if(t.closest('#msbar')){
+      var ls2=msList();if(!ls2)return;
+      if(t.closest('[data-msx]')){msOff(ls2);return;}
+      if(t.closest('[data-msa]')){
+        var cards=Array.prototype.slice.call(ls2.querySelectorAll('.dcw[data-msk]'));
+        var sel=msSel(ls2);
+        if(sel.length&&sel.length>=Math.min(cards.length,MS_MAX))sel.forEach(function(d){d.classList.remove('on');});
+        else cards.forEach(function(d,i){d.classList.toggle('on',i<MS_MAX);});
+        msBar();return;
+      }
+      if(t.closest('[data-msg]')){
+        var items=msSel(ls2).map(function(d){var b=d.querySelector('.shb');return b?{kind:b.getAttribute('data-shk'),id:b.getAttribute('data-shi'),
+          title:b.getAttribute('data-sht'),url:b.getAttribute('data-shu')}:null;}).filter(Boolean);
+        if(items.length)shareMany(items);
+        return;
+      }
+      return;
+    }
+    var d=t.closest('.hubls.msel .dcw[data-msk]');
+    if(d){
+      ev.preventDefault();ev.stopImmediatePropagation();
+      if(!d.classList.contains('on')&&msSel(d.closest('.hubls')).length>=MS_MAX){toast(T('한 번에 최대 '+MS_MAX+'개까지 보낼 수 있습니다','Up to '+MS_MAX+' at a time'));return;}
+      d.classList.toggle('on');msBar();
+    }
+  },true);
+
+  var PDFLIB='https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+  async function mergePdfs(blobs){
+    if(!window.PDFLib)await loadIn(window,PDFLIB);
+    var L2=window.PDFLib,out=await L2.PDFDocument.create();
+    for(var i=0;i<blobs.length;i++){
+      var src=await L2.PDFDocument.load(await blobs[i].arrayBuffer());
+      var pg=await out.copyPages(src,src.getPageIndices());
+      pg.forEach(function(p){out.addPage(p);});
+    }
+    return new Blob([await out.save()],{type:'application/pdf'});
+  }
+  function dl(blob,nm){
+    try{var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=nm;
+      document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},4000);}catch(e){}
+  }
+  function canFiles(fs){try{return !!(navigator.canShare&&navigator.canShare({files:fs}));}catch(e){return false;}}
+
+  async function shareMany(items){
+    var n=items.length,ok=[],bad=[];
+    for(var i=0;i<n;i++){
+      var it=items[i],lg=shLang(it.kind),u=withLang(it.url,lg);
+      busy(T('PDF 만드는 중 ('+(i+1)+' / '+n+')','Creating PDF ('+(i+1)+' / '+n+')'),
+        esc2(it.title)+'<br>'+T('문서마다 몇 초씩 걸립니다. 화면을 닫지 말고 기다려 주세요.','Each document takes a few seconds. Please keep this screen open.'));
+      var blob=null;
+      try{blob=await makePdf(u);}catch(e){blob=null;}
+      // 숨은 화면(iframe)이 지워지면 그 안에서 만든 파일은 읽을 수 없게 되므로 바로 이 화면 쪽으로 옮겨 둡니다
+      try{if(blob)blob=new Blob([await blob.arrayBuffer()],{type:'application/pdf'});}catch(e){blob=null;}
+      if(blob)ok.push({it:it,blob:blob,nm:fname(it.kind,it.id,lg)});else bad.push(it);
+    }
+    if(!ok.length){
+      shShow('<div class="t1">'+T('PDF를 만들지 못했습니다','Could not create the PDFs')+'</div>'+
+        '<div class="t2">'+T('잠시 후 다시 시도하시거나, 문서를 하나씩 공유해 주세요.','Please try again shortly, or share the documents one at a time.')+'</div>'+
+        '<div class="acts"><button data-c="1">'+T('닫기','Close')+'</button></div>');
+      box().querySelector('[data-c]').onclick=shHide;return;
+    }
+    busy(T('PDF 준비 중…','Preparing PDFs…'),'');
+    var kind=ok[0].it.kind,lg0=shLang(kind);
+    var files=ok.map(function(o){try{return new File([o.blob],o.nm,{type:'application/pdf'});}catch(e){return null;}}).filter(Boolean);
+    var merged=null,mFile=null,mName='HHC_'+({iv:'Invoices',ip:'Reports',qt:'Quotations'}[kind]||'Documents')+'_'+ok.length+'_'+(lg0==='ko'?'KO':'EN')+'.pdf';
+    if(ok.length>1){try{merged=await mergePdfs(ok.map(function(o){return o.blob;}));mFile=new File([merged],mName,{type:'application/pdf'});}catch(e){merged=null;mFile=null;}}
+    var title='Happy Home Care · '+(ok.length===1?ok[0].it.title:(kind==='iv'?'Invoices':'Documents')+' ('+ok.length+')');
+    var txt='Happy Home Care · '+ok.map(function(o){return o.it.title;}).join(', ');
+    var shareFiles=files.length===ok.length&&canFiles(files);
+    var shareMerged=mFile&&canFiles([mFile]);
+    var h='<div class="t1">✅ '+T('PDF '+ok.length+'개가 준비되었습니다','PDF'+(ok.length>1?'s':'')+' ready ('+ok.length+')')+'</div>'+
+      '<div class="flist">'+ok.map(function(o){return '📄 '+esc2(o.nm);}).join('<br>')+
+      (bad.length?'<br><span class="bad">⚠️ '+T('만들지 못함 : ','Failed: ')+bad.map(function(b){return esc2(b.title);}).join(', ')+'</span>':'')+'</div>'+
+      '<div class="acts">';
+    if(shareFiles)h+='<button class="mg" data-a="each">📤 '+T(ok.length>1?'각각 보내기 (파일 '+ok.length+'개)':'보내기',ok.length>1?'Send as '+ok.length+' files':'Send')+'</button>';
+    if(shareMerged)h+='<button data-a="one">📎 '+T('한 파일로 합쳐서 보내기','Send as one combined PDF')+'</button>';
+    if(!shareFiles&&!shareMerged){
+      if(merged)h+='<button class="mg" data-a="dlone">⬇️ '+T('한 파일로 내려받기','Download as one PDF')+'</button>';
+      h+='<button'+(merged?'':' class="mg"')+' data-a="dleach">⬇️ '+T(ok.length>1?'각각 내려받기 ('+ok.length+'개)':'내려받기',ok.length>1?'Download '+ok.length+' files':'Download')+'</button>';
+    }
+    h+='<button data-a="close">'+T('닫기','Close')+'</button></div>';
+    shShow(h);
+    box().querySelectorAll('[data-a]').forEach(function(b){
+      b.onclick=async function(){
+        var a=b.getAttribute('data-a');
+        if(a==='close'){shHide();return;}
+        if(a==='each'||a==='one'){
+          try{await navigator.share({files:a==='one'?[mFile]:files,title:title,text:txt});shHide();msOff();}
+          catch(e){ if(e&&e.name==='AbortError')return;
+            // 공유창이 거절되면 내려받기로 대신합니다
+            if(a==='one'&&merged)dl(merged,mName);else ok.forEach(function(o,i){setTimeout(function(){dl(o.blob,o.nm);},i*450);});
+            shHide();msOff();}
+          return;
+        }
+        if(a==='dlone'){dl(merged,mName);}
+        else ok.forEach(function(o,i){setTimeout(function(){dl(o.blob,o.nm);},i*450);});
+        shShow('<div class="t1">'+T('✅ PDF가 저장되었습니다','✅ PDFs saved')+'</div>'+
+          '<div class="t2">'+T('저장된 PDF를 왓츠앱·카카오톡·메일에 첨부해 보내실 수 있습니다.','You can attach the saved PDFs in WhatsApp, email or any app.')+'</div>'+
+          '<div class="acts"><button data-c="1">'+T('닫기','Close')+'</button></div>');
+        box().querySelector('[data-c]').onclick=shHide;msOff();
+      };
+    });
+  }
+  function esc2(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 
   async function shareDoc(kind,id,title,url){
     var lg=shLang(kind);          // iv·ip = 항상 en
