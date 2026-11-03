@@ -3606,6 +3606,16 @@ window.caSendModal=async function(idx){
     }
     return '\n\n📱 MY PAGE\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
   }
+  // ✂️ 짧은 발송 문구 (📄 문서 보내기 · 💰 청구 결제 · 📅 예약 의뢰 전용)
+  //  · 인사 한 줄 → 핵심 한 줄 → 할 일 → 👉 주소 → 연락처 한 줄
+  //  · 카카오톡 : 👉 주소 줄은 msgSlim 이 걷어내고 「마이페이지 열기」 버튼이 대신합니다.
+  const SIG='📞 +60 17-247 2774 · Happy Home Care';
+  function sHi(en,nm){return en?('Hello, '+nm+' 😊'):('안녕하세요, '+nm+' 고객님 😊');}
+  function sTail(){return '\n👉 '+dLink()+'\n\n'+SIG;}
+  // 영문 발송 품목명 — 사전(trItemsEn)에 없는 말이 남으면 문장 사전(toEn)으로 한 번 더 바꿔
+  // 영문 문구에 한글이 섞여 나가지 않게 합니다.
+  function sEnIt(x){let t=trItemsEn(String(x||''));if(/[\uAC00-\uD7A3]/.test(t))t=toEn(t);return t;}
+  function sDot(d){return String(d||'').replace(/^(\d{4})-(\d{2})-(\d{2})$/,'$1.$2.$3');}
   // ── 🔧 점검보고서 발송 ──────────────────────
   function insMsg(en){
     const x=curCoupon();
@@ -3614,25 +3624,26 @@ window.caSendModal=async function(idx){
     const dt=String(x.date||'');
     const tl=en?({install:'Installation Report',washer:'Washing Machine Report',dispatch:'Service Visit Report'}[x.type]||'Air-Con Inspection Report')
               :({install:'설치 기술보고서',washer:'세탁기 점검 보고서',dispatch:'출장 보고서'}[x.type]||'에어컨 점검보고서');
+    const dd=dt?('('+sDot(dt)+')'):'';
     return en
-      ?('Hello, '+nm+' 😊\n\n'+dt+' your ['+tl+'] is ready.\n\n[Full report details]\n\nare available on your personal [MY PAGE] below.'+msgTail(en))
-      :('안녕하세요, '+nm+' 고객님 😊\n\n'+dt+' ['+tl+'] 준비되었습니다.\n\n[점검보고서 상세 내용]은\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.'+msgTail(en));
+      ?(sHi(en,nm)+'\n📋 Your '+tl+(dd?' '+dd:'')+' is ready.\n\nPlease check it on your My Page.'+sTail())
+      :(sHi(en,nm)+'\n📋 '+tl+dd+'가 준비되었습니다.\n\n마이페이지에서 확인해 주세요.'+sTail());
   }
   function qtMsg(en){
     const x=curCoupon();
     if(!x)return en?'No quotation available to send.':'발송 가능한 견적서가 없습니다.';
     const nm=e.name||'';
     return en
-      ?('Hello, '+nm+' 😊\n\nHere is the [Quotation] you requested.\n\n[Full quotation details]\n\nare available on your personal [MY PAGE] below.\n\n* Once you install MY PAGE, you can check it anytime with a single tap.'+msgTail(en))
-      :('안녕하세요, '+nm+' 고객님 😊\n\n요청하신 [견적서] 보내드립니다.\n\n[상세 견적내용]은\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.\n\n* MY PAGE 설치하시면 클릭 한번으로 언제든 확인 가능합니다.'+msgTail(en));
+      ?(sHi(en,nm)+'\n📄 The quotation you requested is ready.\n\n👉 '+dLink()+'\n\nIf it looks good, just reply and we\'ll book your visit right away!\n'+SIG)
+      :(sHi(en,nm)+'\n📄 요청하신 견적서가 준비되었습니다.\n\n👉 '+dLink()+'\n\n괜찮으시면 회신 주세요. 바로 일정 잡아 드리겠습니다!\n'+SIG);
   }
   function ctMsg(en){
     const x=curCoupon();
     if(!x)return en?'No contract available to send.':'발송 가능한 계약서가 없습니다.';
     const nm=e.name||'';
     return en
-      ?('Hello, '+nm+' 😊\n\nHere is your [Membership Contract].\n\n[Contract details / credit balance & usage history]\n\nare available on your personal [MY PAGE] below.\n\n* Once you install MY PAGE, you can check it anytime with a single tap.'+msgTail(en))
-      :('안녕하세요, '+nm+' 고객님 😊\n\n[회원제 상품 계약서] 보내드립니다.\n\n[계약내용/적립금 잔액&이용내역]은\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.\n\n* MY PAGE 설치하시면 클릭 한번으로 언제든 확인 가능합니다.'+msgTail(en));
+      ?(sHi(en,nm)+'\n📑 Here is your membership contract. Thank you!\n\nYour contract, credit balance and usage history are on your My Page.'+sTail())
+      :(sHi(en,nm)+'\n📑 회원제 상품 계약서를 보내드립니다. 감사합니다!\n\n계약 내용, 적립금 잔액, 이용 내역은 마이페이지에서 확인하세요.'+sTail());
   }
   function awMsg(en){
     const x=curCoupon();
@@ -3656,9 +3667,10 @@ window.caSendModal=async function(idx){
     const recv=c.receiver||c.name||e.name||'';
     let val=String(c.value||'').trim();
     if(/^[0-9,.]+$/.test(val))val='RM'+val;          // 숫자만 있으면 RM 붙임 (10% 등은 그대로)
+    const ic=isD?'🏷️':'🎁';
     return en
-      ?('Hello, '+recv+' 😊\n\nAs a token of our appreciation, we are sending you a '+val+' '+tl+'.\n\nIt can be used like cash for any of our services.\n\n['+dl+' details]\n\nare available on your personal [MY PAGE] below.'+msgTail(en))
-      :('안녕하세요, '+recv+' 고객님 😊\n\n감사의 마음을 담아 '+val+' '+tl+'을 보내드립니다.\n\n서비스 이용시 현금처럼 사용 가능합니다.\n\n['+dl+' 상세정보]는\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.'+msgTail(en));
+      ?(sHi(en,recv)+'\n'+ic+' As a thank-you, here is a '+val+' '+dl+' for you!\n'+(isD?'Use it on your next service.':'Use it like cash for any of our services.')+'\n\nDetails are on your My Page.'+sTail())
+      :(sHi(en,recv)+'\n'+ic+' 감사의 마음을 담아 '+val+' '+dl+'을 보내드립니다.\n'+(isD?'다음 서비스 이용 시 할인받으실 수 있습니다.':'서비스 이용 시 현금처럼 쓰실 수 있습니다.')+'\n\n상세 내용은 마이페이지에서 확인해 주세요.'+sTail());
   }
   function billList(){return (D.invoices||[]).filter(x=>(x.status==='billing'||x.status==='overdue')&&invDue(x)>0.005);}
   function billAmt(){return billList().reduce((a,x)=>a+invDue(x),0);}
@@ -3708,22 +3720,22 @@ window.caSendModal=async function(idx){
     const nm=e.name||'';
     const when=mmvWhen(x,en);
     const symKo=String(x.symptom||'').trim();
-    const sym=en?(String(x.symptom_en||'').trim()||toEn(symKo)):symKo;
+    const sym=en?toEn(String(x.symptom_en||'').trim()||symKo):symKo;
     const symLine=sym?('\n🔧 '+(en?'Request':'요청 내용')+' : '+sym.split('\n')[0]):'';
     const addr=String(x.condo||e.addr||'').trim();
     const adLine=addr?('\n📍 '+(en?'Address':'방문 장소')+' : '+addr):'';
     return en
-      ?('🚗[ Service Visit Confirmation]\n\nHello, '+nm+' 😊\nHere is the schedule for your service visit.\n\n📅 Visit : '+when+symLine+adLine+
-        '\n\nPlease be sure to complete the work-visit registration (Work Permit) in advance.\n🪪 Work permit guide\n🔗 '+wpLinkMemo(x,true)+'\n\nThe diagnosis and result will be posted on your My Page after the visit.'+msgTail(en))
-      :('🚗[ 점검 · 출장 방문 안내]\n\n안녕하세요, '+nm+' 고객님 😊\n요청하신 점검방문 일정 안내드립니다.\n\n📅 방문일시 : '+when+symLine+adLine+
-        '\n\n작업방문등록 사전등록 반드시 부탁드립니다.\n🪪 작업방문등록 안내장\n🔗 '+wpLinkMemo(x,false)+'\n\n방문 후 진단 및 처리 결과는 아래 마이페이지에서 확인하실 수 있습니다.'+msgTail(en));
+      ?(sHi(en,nm)+'\n🚗 Here is your service visit schedule.\n\n📅 '+when+symLine+adLine+
+        '\n\n⚠️ Work Permit required before our visit.\n🪪 Work permit guide\n🔗 '+wpLinkMemo(x,true)+'\n\nResults → your My Page after the visit.'+sTail())
+      :(sHi(en,nm)+'\n🚗 점검 방문 일정 안내드립니다.\n\n📅 '+when+symLine+adLine+
+        '\n\n⚠️ 방문 전 작업방문등록(Work Permit)을 꼭 완료해 주세요.\n🪪 작업방문등록 안내장\n🔗 '+wpLinkMemo(x,false)+'\n\n진단·처리 결과는 방문 후 마이페이지에서 확인하실 수 있습니다.'+sTail());
   }
   // 🔍 점검 접수완료 안내
   function iprMsg(en){
     const nm=e.name||'';
     return en
-      ?('Hello, '+nm+' 😊\n\nYour inspection (repair) request has been received.\nWe will check and let you know the visit schedule.\n\n※ Please note that an inspection fee applies. See Price Info > Call-out Inspection Fee on the website at the bottom of MY PAGE. (Excluded during the free-inspection period or for package members)'+msgTail(en))
-      :('안녕하세요. '+nm+'님 😊\n\n점검(수리) 요청 접수되었습니다.\n확인후 방문 일정 안내드리겠습니다.\n\n※ 참고로 점검비용 발생되며 MY PAGE  하단 웹사이트의  가격정보>출장점검비용 참조 부탁드립니다.( 무상점검 기간내 또는 패키지 회원인 경우 제외)'+msgTail(en));
+      ?(sHi(en,nm)+'\n🔍 Your inspection (repair) request has been received.\nWe\'ll confirm the visit time soon.\n\n※ Call-out fee applies (free for members / in free-inspection period).\nSee My Page › Price Info.'+sTail())
+      :(sHi(en,nm)+'\n🔍 점검(수리) 요청이 접수되었습니다.\n확인 후 방문 일정 안내드리겠습니다.\n\n※ 출장점검비가 발생합니다 (무상점검 기간·패키지 회원 제외).\n금액은 마이페이지 하단 홈페이지 › 가격정보에서 확인하실 수 있습니다.'+sTail());
   }
   // 🚗 점검방문 안내 — 「2026.08.19 수요일 오후13:00 전후」 형식
   // ✅ 예약 확정 방문일시 — 「2026년 8월 22일(토) 오전 11:30 전후」 / 「Sat, 22 Aug 2026, around 11:30 AM」
@@ -3777,8 +3789,8 @@ window.caSendModal=async function(idx){
     if(!x)return en?'No scheduled visit to send.':'방문 예정일이 잡힌 메모가 없습니다.';
     const nm=e.name||'',when=ipvWhen(x,en);
     return en
-      ?('Hello, '+nm+' 😊\n\nWe can visit for the inspection around '+when+'.\nDoes this schedule work for you?'+msgTail(en))
-      :('안녕하세요. '+nm+'님 😊\n\n'+when+' 전후 점검방문 가능합니다.\n일정 가능하시나요?'+msgTail(en));
+      ?(sHi(en,nm)+'\n🚗 We can visit for the inspection around '+when+'.\nDoes this time work for you? Please reply 🙏'+sTail())
+      :(sHi(en,nm)+'\n🚗 '+when+' 전후 점검 방문 가능합니다.\n일정 괜찮으신지 회신 부탁드립니다 🙏'+sTail());
   }
   // ⭐ 리뷰 이벤트 — 카드 이미지(review-event-ko/en.png) + 아래 두 줄 문구를 함께 보냅니다
   function revMsg(en){
@@ -3920,21 +3932,21 @@ window.caSendModal=async function(idx){
       const amt=billAmt();
       const amtEn=amt.toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
       return en
-        ?('Hello, '+nm+' 😊\n\nYour current amount due is RM '+amtEn+'.\n\n[Payment account information and full breakdown]\n\nare available on your personal [MY PAGE] below.'+msgTail(en))
-        :('안녕하세요, '+nm+' 고객님 😊\n\n금차 청구금액 RM '+amtEn+'입니다.\n\n[결제 계좌 정보 및 상세 내역]은\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.'+msgTail(en));
+        ?(sHi(en,nm)+'\n💳 Your amount due is RM '+amtEn+'.\n\nPayment account and full details are on your My Page.'+sTail())
+        :(sHi(en,nm)+'\n💳 이번 청구 금액은 RM '+amtEn+'입니다.\n\n결제 계좌와 상세 내역은 마이페이지에서 확인해 주세요.'+sTail());
     }
     if(state.tpl==='rebill'){
       // 결제내역이 확인되지 않은 고객에게 이체 영수증을 다시 요청하는 안내
       const amt=billAmt();
       const amtEn=amt.toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
       return en
-        ?('Hello, '+nm+' 😊\n\nWe could not confirm your payment record.\nCould you kindly send us the transfer receipt?\n\nThe outstanding amount is RM '+amtEn+'.\n\n[Payment account information and full breakdown]\nare available on your personal [MY PAGE] below.'+msgTail(en))
-        :('안녕하세요, '+nm+' 고객님 😊\n\n결재내역이 확인되지 않아 연락드립니다.\n이체 영수증 부탁드립니다.\n\n청구 대상 금액 RM '+amtEn+'입니다.\n\n[결제 계좌 정보 및 상세 내역]은\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.'+msgTail(en));
+        ?(sHi(en,nm)+'\n🔔 We haven\'t been able to confirm payment of RM '+amtEn+' yet.\n\nIf you have already paid, please send us the transfer receipt 🙏\nPayment account details are on your My Page.'+sTail())
+        :(sHi(en,nm)+'\n🔔 RM '+amtEn+' 청구 건의 입금이 아직 확인되지 않아 연락드립니다.\n\n이미 결제하셨다면 이체 영수증을 보내 주세요 🙏\n결제 계좌는 마이페이지에서 확인하실 수 있습니다.'+sTail());
     }
     if(state.tpl==='pay'){
       return en
-        ?('Hello, '+nm+' 😊\n\nYour payment for this service has been confirmed. Thank you.\n\n[Full invoice details]\n\nare available on your personal [MY PAGE] below.'+msgTail(en))
-        :('안녕하세요, '+nm+' 고객님 😊\n\n고객님의 금차 서비스청구 [결제내역] 확인되었습니다. 감사합니다.\n\n[인보이스 상세내역]은\n\n아래 고객님 [전용 MY PAGE] 에서 확인하실수 있습니다.'+msgTail(en));
+        ?(sHi(en,nm)+'\n✅ Your payment has been confirmed. Thank you!\n\nYour invoice is available on your My Page.'+sTail())
+        :(sHi(en,nm)+'\n✅ 결제가 확인되었습니다. 감사합니다!\n\n인보이스는 마이페이지에서 확인하실 수 있습니다.'+sTail());
     }
     if(state.tpl==='care3'||state.tpl==='care6'){
       // 🌿 정기관리 알림 — 최종 인보이스(청소) 후 3·6개월이 지난 고객에게 정기 청소를 권합니다.
@@ -3953,8 +3965,8 @@ window.caSendModal=async function(idx){
     if(state.tpl==='rqf'){
       // 서비스 의뢰 요청서 안내 — 고객이 직접 품목을 고르고 접수하도록 안내합니다.
       return en
-        ?('Hello, '+nm+' \uD83D\uDE0A\n\nOur [Service Request Form]:\n\n\u2713 1 minute, no sign-up needed\n\u2713 Instant price in the calculator\n\u2713 We will suggest visit dates'+msgTail(en))
-        :('안녕하세요, '+nm+' 고객님 \uD83D\uDE0A\n\n[서비스 의뢰 요청서] 보내드립니다.\n필요하신 품목만 선택하시면 접수됩니다.\n\n\u2713 회원가입 없이 1분이면 작성 완료\n\u2713 견적계산기에서 가격 바로 확인됩니다\n\u2713 접수 후 방문 가능 일정 안내드립니다'+msgTail(en));
+        ?(sHi(en,nm)+'\n📨 Here is the Happy Home Care [Service Request Form].\n\nPick your items → see the price → done!\n(No sign-up · about 1 minute)'+sTail())
+        :(sHi(en,nm)+'\n📨 Happy Home Care [서비스 의뢰서]입니다.\n\n필요한 품목만 선택 → 견적 바로 확인 → 접수 완료!\n(회원가입 없이 1분이면 됩니다)'+sTail());
     }
     if(state.tpl==='mem'){
       // 패키지(멤버십) 상품 안내 — 안내장 한 장으로 등급·혜택을 모두 볼 수 있게 안내합니다.
@@ -3999,52 +4011,39 @@ window.caSendModal=async function(idx){
     }
     if(state.tpl==='bk'){
       let bi=BKP[0]&&BKP[0].booking_items?String(BKP[0].booking_items):'';
-      if(en&&bi)bi=trItemsEn(bi);
-      const inst=en?'\n\nOnce you install MY PAGE, you can check it anytime with a single tap.'
-                  :'\n\nMY PAGE 설치하시면 클릭 한번으로 언제든 확인 가능합니다.';
+      if(en&&bi)bi=sEnIt(bi);
       return en
-        ?('Hello, '+nm+' 😊\n\nYour service request has been completed. Thank you.\n\nOpen your personal MY PAGE below and the \u300C📅 Booking Request\u300D screen appears right at the top. Please choose a date that suits you.'+
-          (bi?'\n\n●Service: '+bi:'')+inst+msgTail(en))
-        :('안녕하세요, '+nm+' 고객님 😊\n\n의뢰신청 완료되었습니다. 감사합니다.\n\n아래 고객님 전용 마이페이지를 열면 상단에 \u300C📅 예약 신청\u300D 화면이 바로 표시됩니다. 가능하신 일정 선택해주시면 감사합니다.'+
-          (bi?'\n\n●신청 품목: '+bi:'')+inst+msgTail(en));
+        ?(sHi(en,nm)+'\nYour request has been received. Thank you!\n'+(bi?'\n🧾 '+bi+'\n':'')+'\nPlease just choose your visit date at the link below 📅'+sTail())
+        :(sHi(en,nm)+'\n의뢰가 접수되었습니다. 감사합니다!\n'+(bi?'\n🧾 '+bi+'\n':'')+'\n아래 링크에서 방문 일정만 선택해 주세요 📅'+sTail());
     }
     if(state.tpl==='bkc'){
       // ✅ 예약 확정 안내 — 방문일시를 본문에 넣고, 상세는 마이페이지에서 확인하도록 짧게 유지
       const bkcW=bkcWhen(BKCU[0]||BKC[0],en);
       return en
-        ?('Hello, '+nm+' 😊\n\n✅ Your booking has been confirmed.\n'+
-          (bkcW?'\n📅 '+bkcW+'\n':'')+
-          '\n⚠️ Please complete your Work Permit (visit registration) in advance for smooth entry.\n'+
+        ?(sHi(en,nm)+'\n✅ Your booking has been confirmed.\n'+(bkcW?'📅 '+bkcW+'\n':'')+
+          '\n⚠️ Please complete the Work Permit (visit registration) before we arrive.\n'+
           '🪪 Work permit guide\n🔗 '+wpLink(true)+'\n'+
-          '\n📋 Full details are available on your My Page below.\n📱 My Page\n🔗 '+l+
-          '\nThank you.\nHappy Home Care\n📞 +60 17-247 2774')
-        :('안녕하세요, '+nm+' 고객님 😊\n\n✅ 예약이 확정되었습니다.\n'+
-          (bkcW?'\n📅 '+bkcW+'\n':'')+
-          '\n⚠️ 원활한 출입을 위해 사전에 Work Permit(작업 방문 등록)을 반드시 완료해 주시기 바랍니다.\n'+
+          '\nFull details are on your My Page.'+sTail())
+        :(sHi(en,nm)+'\n✅ 예약이 확정되었습니다.\n'+(bkcW?'📅 '+bkcW+'\n':'')+
+          '\n⚠️ 방문 전 작업방문등록(Work Permit)을 꼭 완료해 주세요.\n'+
           '🪪 작업방문등록 안내장\n🔗 '+wpLink(false)+'\n'+
-          '\n📋 상세 정보는 아래 마이페이지에서 확인해 주세요.\n📱 My Page\n🔗 '+l+
-          '\n감사합니다.\nHappy Home Care\n📞 +60 17-247 2774');
+          '\n상세 정보는 마이페이지에서 확인하세요.'+sTail());
     }
     if(state.tpl==='rq'){
       const r=RQP[0]||{};
-      const ri=rqItemLines2(r,en);                  // 품목 한 줄에 하나
-      const items=String(ri||'').split('\n').filter(Boolean);
-      // 품목이 하나면 「접수 정보」 제목과 같은 줄에, 여러 개면 다음 줄부터 나열합니다.
-      const head=(en?'📝 Request':'📝 접수 정보')+
-        (items.length===1?('      '+items[0])
-         :(items.length?('\n'+items.join('\n')):''));
-      const inst=en?'\n\nOnce you install MY PAGE, you can check it anytime with a single tap.'
-                  :'\n\nMY PAGE 설치하시면 클릭 한번으로 언제든 확인 가능합니다.';
+      const ri=rqItemLines2(r,en);                  // 품목 한 줄에 하나 (앞에 품목 아이콘)
+      const items=String(ri||'').split('\n').filter(Boolean).map(x=>en?sEnIt(x):x);
+      const il=items.length?('\n'+items.join('\n')):'';
       return en
-        ?('Hello, '+nm+' 😊\n\nYour service request has been received successfully.\n\n'+head+
-          '\n\n📅 Visit Schedule\nOnce our team has reviewed your request,\nwe will let you know the available visit date & time.'+inst+msgTail(en))
-        :('안녕하세요, '+nm+' 고객님 😊\n\n의뢰신청 정상적으로 접수되었습니다.\n\n'+head+
-          '\n\n📅 방문 일정 안내\n담당자가 접수 내용을 확인한 후,\n방문 가능한 날짜와 시간을 안내드리겠습니다.'+inst+msgTail(en));
+        ?(sHi(en,nm)+'\nYour request has been received. Thank you!\n'+il+
+          '\n📅 Our team will check and contact you with a visit time.\n\n📱 Track progress 👉 '+dLink()+'\n'+SIG)
+        :(sHi(en,nm)+'\n의뢰가 접수되었습니다. 감사합니다!\n'+il+
+          '\n📅 방문 일정은 담당자가 확인 후 연락드리겠습니다.\n\n📱 진행 상황 확인 👉 '+dLink()+'\n'+SIG);
     }
     if(state.tpl==='revisit'){
       return en
-        ?('Hello, '+nm+' 😊\n\nThank you very much for choosing us again.\n\n[Service booking request]\n\ncan be submitted on your personal [MY PAGE] below.'+msgTail(en))
-        :('안녕하세요, '+nm+' 고객님 😊\n\n다시 찾아주셔서 진심으로 감사합니다.\n\n[서비스 예약 의뢰]는\n\n아래 고객님 [전용 MY PAGE] 에서 신청하실수 있습니다.'+msgTail(en));
+        ?(sHi(en,nm)+'\nThank you for choosing us again!\n\nYou can book your next service at the link below 📅'+sTail())
+        :(sHi(en,nm)+'\n다시 찾아주셔서 진심으로 감사합니다!\n\n아래 링크에서 서비스 예약을 신청하실 수 있습니다 📅'+sTail());
     }
     return en
       ?('Hello, '+nm+' 😊\n\nOn your personal MY PAGE you can conveniently use everything in one place — [Booking][Prices][Invoices][Inspection Reports][Reward Points] and more.'+msgTail(en))
