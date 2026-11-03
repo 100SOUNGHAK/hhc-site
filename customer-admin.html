@@ -1626,7 +1626,8 @@ function careSentOf(e,k,since){
 const CARE_IMG={
   ko:{u:'/care-cycle-ko.png',l1:769,l2:835},
   en:{u:'/care-cycle-en.png',l1:769,l2:831},
-  x:76,fs:40,navy:'#0f2540'
+  x:76,fs:40,navy:'#0f2540',
+  bx:1086,by:705,gold:'#F5C55A'   // ⏰ 경과 개월 배지 — 오른쪽 끝 x · 제목 줄 가운데 y
 };
 // ═══ 📘 에어컨 안내장 (홈페이지 · 전자명함과 같은 그림) ═══
 //  · 그림을 바꿔 올렸는데 예전 그림이 나가면 GD_VER 숫자만 바꾸면 됩니다
@@ -1661,6 +1662,15 @@ function careDateTxt(v,en){
   const y=m[1],mo=parseInt(m[2],10),d=parseInt(m[3],10);
   return en?(d+' '+CARE_MN[mo-1]+' '+y):(y+'년 '+mo+'월 '+d+'일');
 }
+// 마지막 관리일부터 오늘까지 지난 개월 수 — careDue 와 같은 기준(같은 날짜가 되어야 한 달)
+function careMonths(v){
+  const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v||''));
+  if(!m)return 0;
+  const t=new Date();
+  let mo=(t.getFullYear()-parseInt(m[1],10))*12+(t.getMonth()+1-parseInt(m[2],10));
+  if(t.getDate()<parseInt(m[3],10))mo--;
+  return Math.max(0,mo);
+}
 let _careFontP=null;
 function careFont(){
   if(_careFontP)return _careFontP;
@@ -1692,7 +1702,7 @@ function careBlobImg(b){
 // 안내장 PNG 만들기 → File
 const _careFile={};
 function careFile(en,date){
-  const key=(en?'en':'ko')+'|'+date;
+  const key=(en?'en':'ko')+'|'+date+'|'+careMonths(date);   // 경과 개월 수가 바뀌면 그림도 새로 만듭니다
   if(_careFile[key])return _careFile[key];
   _careFile[key]=(async()=>{
     await careFont();
@@ -1720,6 +1730,28 @@ function careFile(en,date){
     }else{
       run(L.l1,[{t:'고객님 댁 에어컨은 '},{t:D,d:1},{t:'에'}]);
       run(L.l2,[{t:'마지막으로 관리받으셨습니다.'}]);
+    }
+    // ⏰ 경과 개월 수 배지 — 「관리 이력」 제목 줄 오른쪽 끝 (1개월 이상일 때만)
+    const MO=careMonths(date);
+    if(MO>=1){
+      const parts=en?[{t:MO+(MO===1?' month':' months'),n:1},{t:' since service'}]
+                    :[{t:'청소 후 '},{t:MO+'개월',n:1},{t:' 경과'}];
+      const bf=30,bh=60,px=24,right=CARE_IMG.bx,cy=CARE_IMG.by;
+      let w=0;parts.forEach(pt=>{x.font='900 '+bf+'px '+F;w+=x.measureText(pt.t).width;});
+      const bw=w+px*2,bx0=right-bw,by0=cy-bh/2,r=bh/2;
+      x.fillStyle=CARE_IMG.navy;
+      x.beginPath();
+      if(x.roundRect)x.roundRect(bx0,by0,bw,bh,r);
+      else{x.moveTo(bx0+r,by0);x.arcTo(bx0+bw,by0,bx0+bw,by0+bh,r);x.arcTo(bx0+bw,by0+bh,bx0,by0+bh,r);x.arcTo(bx0,by0+bh,bx0,by0,r);x.arcTo(bx0,by0,bx0+bw,by0,r);x.closePath();}
+      x.fill();
+      let cx=bx0+px;
+      parts.forEach(pt=>{
+        x.font='900 '+bf+'px '+F;
+        x.fillStyle=pt.n?CARE_IMG.gold:'#ffffff';
+        x.fillText(pt.t,cx,cy+1);
+        cx+=x.measureText(pt.t).width;
+      });
+      x.fillStyle=CARE_IMG.navy;
     }
     const b=await new Promise(r=>cv.toBlob(r,'image/png'));
     if(!b)throw new Error('이미지를 만들지 못했습니다');
