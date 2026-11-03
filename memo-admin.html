@@ -895,23 +895,35 @@ async function hhcShortLinks(text){
   for(const u of found.filter((u,i)=>found.indexOf(u)===i)){const sh=await hhcShortUrl(u);if(sh!==u)text=text.split(u).join(sh);}
   return text;
 }
-function tplText(m,n){
-  const name=who(m);
-  if(n===3)return '네. 감사합니다. 저희 점검직원 방문 전까지 매니지먼트에 작업방문등록을 반드시 완료 부탁드립니다\n'+regBody()+wpLine(m);
-  if(n===1)return name+'님. 지금 방문드릴수 있을꺼 같아 가능하신지 확인 연락드립니다.';
-  const d=String(m.visit_date||'');const t=String(m.visit_time||'');
-  const mo=parseInt(d.slice(5,7),10)||0, dy=parseInt(d.slice(8,10),10)||0;
-  const hh=parseInt(t.slice(0,2),10), mi=t.slice(3,5)||'00';
-  return name+'님. '+mo+'월'+dy+'일 '+(isNaN(hh)?'00':hh)+'시'+mi+'분 전후 방문드릴수 있을꺼 같아 가능하신지 확인 연락드립니다';
+// ✂️ 짧은 발송 문구 — 인사 → 핵심 한 줄 → 할 일 → (주소) → 연락처 한 줄
+const SIG='📞 +60 17-247 2774 · Happy Home Care';
+const TPL_DOW=['일','월','화','수','목','금','토'];
+// 「11월 5일(목) 오전 10:00 전후」 — 날짜가 없으면 빈 값
+function tplWhen(m){
+  const d=String(m.visit_date||''),t=String(m.visit_time||'');
+  const x=/^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  if(!x)return '';
+  const w=TPL_DOW[new Date(+x[1],+x[2]-1,+x[3]).getDay()];
+  let out=parseInt(x[2],10)+'월 '+parseInt(x[3],10)+'일('+w+')';
+  const hh=parseInt(t.slice(0,2),10),mi=t.slice(3,5)||'00';
+  if(!isNaN(hh))out+=' '+(hh<12?'오전':'오후')+' '+((hh%12)||12)+':'+mi;
+  return out+' 전후';
 }
+function tplText(m,n){
+  const hi='안녕하세요, '+who(m)+' 고객님 😊\n';
+  const when=tplWhen(m);
+  if(n===3)return hi+'✅ '+(when?when+' ':'')+'방문 일정이 확정되었습니다.\n\n'+
+    '⚠️ 방문 전 매니지먼트에 작업방문등록(Work Permit)을 꼭 완료해 주세요.\n'+
+    '🪪 작업방문등록 안내장\n🔗 '+(_hhcShortCache[wpLinkMemo(m)]||wpLinkMemo(m))+'\n\n'+SIG;
+  if(n===1)return hi+'🚗 지금 바로 방문 가능할 것 같습니다.\n괜찮으신지 회신 부탁드립니다 🙏\n\n'+SIG;
+  return hi+'🚗 '+(when||'안내드린 일정')+' 방문 가능합니다.\n일정 괜찮으신지 회신 부탁드립니다 🙏\n\n'+SIG;
+}
+// 미리보기용 — 같은 문구에 고객명·일시·작업방문등록만 강조합니다
 function tplHtml(m,n){
-  const name=esc(who(m));
-  if(n===3)return '네. 감사합니다. 저희 점검직원 방문 전까지 매니지먼트에 <span class="hl">작업방문등록</span>을 반드시 완료 부탁드립니다\n'+esc(regBody())+'<span class="hl">'+esc(wpLine(m))+'</span>';
-  if(n===1)return '<span class="hl">'+name+'</span>님. 지금 방문드릴수 있을꺼 같아 가능하신지 확인 연락드립니다.';
-  const d=String(m.visit_date||'');const t=String(m.visit_time||'');
-  const mo=parseInt(d.slice(5,7),10)||0, dy=parseInt(d.slice(8,10),10)||0;
-  const hh=parseInt(t.slice(0,2),10), mi=t.slice(3,5)||'00';
-  return '<span class="hl">'+name+'</span>님. <span class="hl">'+mo+'월'+dy+'일 '+(isNaN(hh)?'00':hh)+'시'+mi+'분</span> 전후 방문드릴수 있을꺼 같아 가능하신지 확인 연락드립니다';
+  let h=esc(tplText(m,n));
+  const hl=v=>{v=esc(v);if(v)h=h.replace(v,'<span class="hl">'+v+'</span>');};
+  hl(who(m));hl(tplWhen(m));if(n===3)hl('작업방문등록(Work Permit)');
+  return h;
 }
 function canTpl2(m){return !!(m.visit_date);}
 
@@ -932,51 +944,28 @@ function hmKo(t){
   if(isNaN(hh))return '';
   return hh+'시 '+(mi||'00')+'분';
 }
+function ctDay(d){                       // 「11월 5일(목)」
+  const x=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(d||''));
+  if(!x)return '';
+  return parseInt(x[2],10)+'월 '+parseInt(x[3],10)+'일('+TPL_DOW[new Date(+x[1],+x[2]-1,+x[3]).getDay()]+')';
+}
 function ctText(m,n){
-  var name=who(m);
-  var dReinst=mdKo(m.visit_date), tReinst=hmKo(m.visit_time);
-  var dWash=mdKo(m.wash_date)||dReinst;
-  var when=dReinst+(tReinst?(' '+tReinst):'')+' 전후';
-  if(n===2){
-    return '안녕하세요, '+name+' 고객님.\n'+
-      '📅 세탁 완료 예정: '+dWash+'\n'+
-      '커튼 재설치를 위해\n'+
-      '📅 '+when+' 방문 가능하실까요?\n'+
-      '가능 여부 회신 부탁드립니다.';
-  }
-  if(n===3){
-    return '안녕하세요, '+name+' 고객님.\n'+
-      '🔔 커튼 재설치 방문 안내\n'+
-      '📅 '+when+' 방문 예정입니다.\n'+
-      '원활한 출입을 위해 Work Permit(작업 방문 등록) 상태를 다시 한번 확인 부탁드립니다.';
-  }
+  const hi='안녕하세요, '+who(m)+' 고객님 😊\n';
+  const when=tplWhen(m);                  // 재설치 방문 일시
+  const wash=ctDay(m.wash_date)||ctDay(m.visit_date);
+  if(n===2)return hi+'🧺 커튼 세탁 완료 예정: '+(wash||'확인 중')+'\n'+
+    '🚗 재설치 방문 '+(when||'일정')+' 가능하실까요?\n회신 부탁드립니다 🙏\n\n'+SIG;
+  if(n===3)return hi+'🔔 커튼 재설치 방문 안내\n📅 '+(when||'안내드린 일정')+' 방문 예정입니다.\n\n'+
+    '⚠️ 원활한 출입을 위해 작업방문등록(Work Permit) 상태를 다시 한번 확인해 주세요.\n\n'+SIG;
   if(n===4)return tplText(m,3);   // ④ 작업방문등록 안내 — 수리요청과 같은 내용
-  return '안녕하세요, '+name+' 고객님.\n'+
-    '✅ 커튼 세탁 접수가 완료되었습니다.\n'+
-    '세탁 완료 일정이 확인되는 대로 커튼 재설치 방문 일정을 안내드리겠습니다.';
+  return hi+'🧺 커튼 세탁 접수가 완료되었습니다. 감사합니다!\n세탁이 끝나는 대로 재설치 방문 일정을 안내드리겠습니다.\n\n'+SIG;
 }
 function ctHtml(m,n){
-  var name='<span class="hl">'+esc(who(m))+'</span>';
-  var dReinst=mdKo(m.visit_date), tReinst=hmKo(m.visit_time);
-  var dWash=mdKo(m.wash_date)||dReinst;
-  var when='<span class="hl">'+esc(dReinst+(tReinst?(' '+tReinst):'')+' 전후')+'</span>';
-  if(n===2){
-    return '안녕하세요, '+name+' 고객님.\n'+
-      '📅 세탁 완료 예정: <span class="hl">'+esc(dWash)+'</span>\n'+
-      '커튼 재설치를 위해\n'+
-      '📅 '+when+' 방문 가능하실까요?\n'+
-      '가능 여부 회신 부탁드립니다.';
-  }
-  if(n===3){
-    return '안녕하세요, '+name+' 고객님.\n'+
-      '🔔 커튼 재설치 방문 안내\n'+
-      '📅 '+when+' 방문 예정입니다.\n'+
-      '원활한 출입을 위해 <span class="hl">Work Permit(작업 방문 등록)</span> 상태를 다시 한번 확인 부탁드립니다.';
-  }
-  if(n===4)return tplHtml(m,3);   // ④ 작업방문등록 안내 — 수리요청과 같은 내용
-  return '안녕하세요, '+name+' 고객님.\n'+
-    '✅ 커튼 세탁 접수가 완료되었습니다.\n'+
-    '세탁 완료 일정이 확인되는 대로 커튼 재설치 방문 일정을 안내드리겠습니다.';
+  if(n===4)return tplHtml(m,3);
+  let h=esc(ctText(m,n));
+  const hl=v=>{v=esc(v);if(v)h=h.replace(v,'<span class="hl">'+v+'</span>');};
+  hl(who(m));hl(tplWhen(m));if(n===2)hl(ctDay(m.wash_date)||ctDay(m.visit_date));if(n===3)hl('작업방문등록(Work Permit)');
+  return h;
 }
 // 종류에 맞는 메시지를 돌려줍니다 (수리요청 ↔ 커튼세탁)
 function msgText(m,n){if(n===5||n===6)return rpText(m,n===6?'en':'ko');return isCt(m)?ctText(m,n):tplText(m,n);}
