@@ -3565,6 +3565,24 @@ window.caSendModal=async function(idx){
     return '🧾';
   }
   // 접수 정보에 넣을 품목 줄 — 「🧼 기본세척 × 5대」 형태 (수량이 없으면 「× -」)
+  // 예약 품목(booking_items) → 품목 한 줄에 하나 「❄️ 에어컨(가정용) · 벽걸이형 · 전체분해세척 × 4대」
+  //  · 예약 화면 형식  「에어컨(가정용)(4대/벽걸이형 · 전체분해세척), 냉장고(1대/양문형)」
+  //  · 관리자 작성 형식 「에어컨(가정용) - 벽걸이형 · 전체분해세척 × 4, …」
+  //  · 그 밖의 글은 그대로 한 줄로 둡니다
+  function bkItemLines(bi,en){
+    const src=String(bi||'').trim();if(!src)return '';
+    const parts=src.split(/,\s*(?![^()]*\))|\n/).map(x=>x.trim()).filter(Boolean);
+    const un=q=>en?(q+(q==='1'?' unit':' units')):(q+'대');
+    return parts.map(x=>{
+      let nm='',sv='',q='';
+      let m=/^(.*?)\(\s*(\d+)\s*(?:대|units?)?\s*\/\s*(.*)\)\s*$/.exec(x);
+      if(m){nm=m[1].trim();q=m[2];sv=m[3].trim();}
+      else if((m=/^(.*?)\s+-\s+(.*?)\s*×\s*(\d+)\s*(?:대|units?)?\s*$/.exec(x))){nm=m[1].trim();sv=m[2].trim();q=m[3];}
+      if(!q)return rqIcon(x)+' '+x;
+      const t=(sv&&sv.indexOf(nm)<0)?(nm?nm+' · '+sv:sv):(sv||nm);
+      return rqIcon(t)+' '+t+' × '+un(q);
+    }).join('\n');
+  }
   function rqItemLines2(x,en){
     let a=[];
     try{a=JSON.parse(String((x&&x.items)||'[]'));}catch(_){a=[];}
@@ -4053,10 +4071,12 @@ window.caSendModal=async function(idx){
     }
     if(state.tpl==='bk'){
       let bi=BKP[0]&&BKP[0].booking_items?String(BKP[0].booking_items):'';
-      if(en&&bi)bi=sEnIt(bi);
+      // 아이콘은 한글 원본 기준으로 고른 뒤, 영문 발송이면 줄마다 영문으로 바꿉니다
+      let il=bkItemLines(bi,false);
+      if(en&&il)il=il.split('\n').map(sEnIt).join('\n');
       return en
-        ?(sHi(en,nm)+'\nYour request has been received. Thank you!\n'+(bi?'\n🧾 '+bi+'\n':'')+'\nPlease just choose your visit date at the link below 📅'+sTail())
-        :(sHi(en,nm)+'\n의뢰가 접수되었습니다. 감사합니다!\n'+(bi?'\n🧾 '+bi+'\n':'')+'\n아래 링크에서 방문 일정만 선택해 주세요 📅'+sTail());
+        ?(sHi(en,nm)+'\nYour request has been received. Thank you!\n'+(il?'\n'+il+'\n':'')+'\nPlease just choose your visit date at the link below 📅'+sTail())
+        :(sHi(en,nm)+'\n의뢰가 접수되었습니다. 감사합니다!\n'+(il?'\n'+il+'\n':'')+'\n아래 링크에서 방문 일정만 선택해 주세요 📅'+sTail());
     }
     if(state.tpl==='bkc'){
       // ✅ 예약 확정 안내 — 방문일시를 본문에 넣고, 상세는 마이페이지에서 확인하도록 짧게 유지
