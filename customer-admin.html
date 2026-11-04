@@ -952,6 +952,18 @@ function kkText(m,feed){
   }
   const MAX=195;                                  // 카카오 제한 200자 — 여유
   const len=x=>Array.from(x).length;
+  // ⓪ 품목이 여러 줄(「… × 4대」)이라 넘치면 「첫 품목 외 N건」 한 줄로 줄입니다.
+  //    (왓츠앱은 전체 목록 그대로 · 카카오만 줄입니다)
+  if(len(t)>MAX){
+    const Ls=t.split('\n'),isIt=x=>/\s×\s*(\d+\s*(대|units?)|-|\S+)\s*$/.test(x.trim());
+    const ix=[];Ls.forEach((x,i)=>{if(isIt(x))ix.push(i);});
+    if(ix.length>=2){
+      const en=/\bunits?\s*$/.test(Ls[ix[0]].trim()),n=ix.length-1;
+      Ls[ix[0]]=Ls[ix[0]].replace(/\s+$/,'')+(en?(' + '+n+' more'):(' 외 '+n+'건'));
+      for(let k=ix.length-1;k>=1;k--)Ls.splice(ix[k],1);
+      t=Ls.join('\n');
+    }
+  }
   // 200자를 넘을 때 빼는 순서 (안내 내용을 최대한 살립니다)
   //  ① 맨 끝 회사명·연락처 서명(Happy Home Care 📞 +60 17-247 2774) — 가장 먼저 뗍니다.
   //     카카오 카드에는 「마이페이지 열기」 버튼이 있고, 마이페이지에도 같은 연락처가 있습니다.
