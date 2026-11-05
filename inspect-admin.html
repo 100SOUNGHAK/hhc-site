@@ -388,6 +388,22 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 .ivl-empty{text-align:center;color:#8a8a9a;font-size:12px;padding:26px 10px;line-height:1.7}
 .lcard-inv{margin-top:6px}
 </style>
+<style id="fixb-css">
+/* 🔧 수리 전 · 후 기록 */
+.fixb{margin-top:10px;border:1px dashed #c9d1e3;border-radius:10px;background:#fbfcfe;overflow:hidden}
+.fixb.on{border-style:solid;border-color:#9fb4e8;background:#f3f6ff}
+.fixb-tg{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border:0;background:transparent;cursor:pointer;font-family:inherit;text-align:left}
+.fixb-tg span{font-size:12.5px;font-weight:800;color:#1d3fd6}
+.fixb-tg em{font-style:normal;font-size:10.5px;font-weight:700;color:#8a94a6}
+.fixb.on .fixb-tg em{color:#c0392b}
+.fixb-body{display:none;padding:0 12px 12px}
+.fixb.on .fixb-body{display:block}
+.fixb-k{font-size:10px;font-weight:800;color:#4b5563;letter-spacing:.02em;margin:8px 0 5px}
+.fixb-k.b{color:#c0392b}.fixb-k.a{color:#0a7a4a}
+.fixb-note{width:100%;padding:7px 9px;font-size:12px;border:0.5px solid #dde1ee;border-radius:6px;background:#fff;resize:none;font-family:inherit;line-height:1.5}
+.fixb-ph{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fixb .mvb{background:#fff}
+</style>
 </head>
 <body>
 
@@ -1903,7 +1919,7 @@ function renumberUnits(){
 }
 window.renumberUnits=renumberUnits;
 
-function addCoolUnit(label,a,b,loc,result){
+function addCoolUnit(label,a,b,loc,result,fix){
   coolCount++;
   var lbl=label||'A'+coolCount;
   var id='cu'+coolCount;
@@ -1983,6 +1999,8 @@ function addCoolUnit(label,a,b,loc,result){
   phRow.appendChild(phAdd);
   phDiv.appendChild(phLbl);phDiv.appendChild(phRow);
   body.appendChild(phDiv);
+  var cuFix=makeFixBlock('cool',id,fix);
+  body.appendChild(cuFix.el);
 
   div.appendChild(hdr);div.appendChild(body);
 
@@ -2022,7 +2040,8 @@ function addCoolUnit(label,a,b,loc,result){
       b:tb?tb.value:'',
       result:warnBtn.classList.contains('warn')?'warn':'ok',
       loc:ddCuLoc.getDdVal(),
-      photoKey:'cool-'+id
+      photoKey:'cool-'+id,
+      fix:cuFix.get()
     };
   };
 
@@ -3315,7 +3334,96 @@ function makeUnitPhotoSlots(keyPrefix,count){
   return {grid:grid,slots:slots,keys:slots.map(function(s){return s.key;})};
 }
 
-function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl,spec){
+
+// ═══════════════════════════════════════════
+// 🔧 수리 전 · 후 기록 — 냉방 성능 측정 · 실외기 측정 공통
+//   · 위에 입력한 측정값이 「수리 전」, 이 칸의 측정값이 「수리 후」입니다
+//   · 사진 키: fix-<유닛id>-b-<n> (수리 전) · fix-<유닛id>-a-<n> (수리 후)
+// ═══════════════════════════════════════════
+function makeFixBlock(kind,uid,init){
+  init=init||{};
+  var on=!!init.on;
+  var box=document.createElement('div');box.className='fixb'+(on?' on':'');
+  var tg=document.createElement('button');tg.type='button';tg.className='fixb-tg';
+  var body=document.createElement('div');body.className='fixb-body';
+  function paintTg(){
+    tg.innerHTML=on?'<span>🔧 수리 전 · 후 기록</span><em>기록 지우기</em>':'<span>🔧 수리 전 · 후 기록 추가</span><em>수리했을 때만</em>';
+    box.classList.toggle('on',on);
+  }
+  // 수리 후 측정값
+  var F=kind==='cool'
+    ?[['a','수리 후 흡입 A (°C)','27.0'],['b','수리 후 토출 B (°C)','11.5']]
+    :[['hp','수리 후 고압 (PSI)','380'],['lp','수리 후 저압 (PSI)','120'],['current','수리 후 전류 (A)','5.2/6.8'],['insulation','수리 후 절연 (MΩ)','>500']];
+  var hd=document.createElement('div');hd.className='fixb-k';hd.textContent='수리 후 측정값 (위 측정값 = 수리 전)';
+  var grid=document.createElement('div');grid.className='mv-grid '+(kind==='cool'?'mv3':'mv4');
+  var inps={};
+  F.forEach(function(f){
+    var b=document.createElement('div');b.className='mvb';
+    var l=document.createElement('div');l.className='mvl';l.textContent=f[1];
+    var i=document.createElement('input');i.type='text';i.placeholder=f[2];if(init[f[0]])i.value=init[f[0]];
+    i.addEventListener('input',function(){calc();if(window.__scheduleDraft)window.__scheduleDraft();});
+    b.appendChild(l);b.appendChild(i);grid.appendChild(b);inps[f[0]]=i;
+  });
+  var dv=null;
+  if(kind==='cool'){
+    var d=document.createElement('div');d.className='mvb';
+    d.innerHTML='<div class="mvl">수리 후 온도차</div>';
+    dv=document.createElement('div');dv.className='diff-val';dv.textContent='—';d.appendChild(dv);grid.appendChild(d);
+  }
+  function calc(){
+    if(!dv)return;
+    var a=parseFloat(inps.a.value),b=parseFloat(inps.b.value);
+    if(!isFinite(a)||!isFinite(b)){dv.textContent='—';dv.className='diff-val';return;}
+    var x=Math.round((a-b)*10)/10;dv.textContent=x+'°C';
+    dv.className='diff-val '+(x>=15?'diff-ok':x>=12?'diff-warn':'diff-bad');
+  }
+  // 수리 내용
+  var nl=document.createElement('div');nl.className='fixb-k';nl.textContent='수리 내용';
+  var note=document.createElement('textarea');note.rows=2;note.className='fixb-note';
+  note.placeholder=kind==='cool'?'예: 냉매 누설 수리 후 R32 보충 · 온도차 9.8 → 14.6°C 개선':'예: 실외기 팬모터 교체 · 저압 정상 범위로 회복';
+  if(init.note)note.value=init.note;
+  if(window.attachMic)window.attachMic(note);
+  note.addEventListener('input',function(){if(window.__scheduleDraft)window.__scheduleDraft();});
+  // 사진 (수리 전 2장 · 수리 후 2장)
+  var pg=document.createElement('div');pg.className='fixb-ph';
+  function phCol(tag,lbl,pref){
+    var c=document.createElement('div');
+    var l=document.createElement('div');l.className='fixb-k '+tag;l.textContent=lbl;
+    var s=makeUnitPhotoSlots(pref,2);
+    c.appendChild(l);c.appendChild(s.grid);pg.appendChild(c);return s;
+  }
+  var bPh=phCol('b','수리 전 사진','fix-'+uid+'-b-');
+  var aPh=phCol('a','수리 후 사진','fix-'+uid+'-a-');
+  body.appendChild(hd);body.appendChild(grid);body.appendChild(nl);body.appendChild(note);body.appendChild(pg);
+  box.appendChild(tg);box.appendChild(body);
+  tg.onclick=function(){
+    if(on){
+      var has=note.value.trim()||Object.keys(inps).some(function(k){return inps[k].value.trim();})||bPh.slots.concat(aPh.slots).some(function(x){return !x.isEmpty();});
+      if(has&&!confirm('수리 전 · 후 기록(측정값 · 내용 · 사진)을 지울까요?'))return;
+      on=false;
+      Object.keys(inps).forEach(function(k){inps[k].value='';});note.value='';
+      bPh.slots.concat(aPh.slots).forEach(function(s){s.reset();});
+      calc();
+    }else on=true;
+    paintTg();
+    if(window.updatePhotoBadges)updatePhotoBadges();
+    if(window.__scheduleDraft)window.__scheduleDraft();
+  };
+  paintTg();calc();
+  // 저장된 사진 복원 (Storage URL)
+  setTimeout(function(){
+    (init.bPhotos||[]).forEach(function(u,i){if(bPh.slots[i]&&u)bPh.slots[i].set(u);});
+    (init.aPhotos||[]).forEach(function(u,i){if(aPh.slots[i]&&u)aPh.slots[i].set(u);});
+  },120);
+  return {el:box,get:function(){
+    if(!on)return null;
+    var o={on:true,note:note.value,bKeys:bPh.keys.slice(),aKeys:aPh.keys.slice()};
+    Object.keys(inps).forEach(function(k){o[k]=inps[k].value;});
+    return o;
+  }};
+}
+
+function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl,spec,fix){
   msrCount++;
   var id='msr'+msrCount;
   var wrap=document.createElement('div');wrap.className='unit-item';
@@ -3405,6 +3513,8 @@ function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl,spec){
   msrPh.grid.style.marginBottom='6px';
   wrap._photoSlots=msrPh.slots;
   wrap.appendChild(msrPh.grid);
+  var msrFix=makeFixBlock('msr',id,fix);
+  wrap.appendChild(msrFix.el);
 
   wrap._getMsrData=function(){
     var inps=grid.querySelectorAll('input');
@@ -3419,7 +3529,8 @@ function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl,spec){
       spec_hp:specSels.hp.get(),spec_lp:specSels.lp.get(),spec_cu:specSels.cu.get(),spec_in:specSels['in'].get(),
       judgment:activeJdg?activeJdg.dataset.jdg:'ok',
       memo:memoInp.value,
-      photoKeys:photoKeys
+      photoKeys:photoKeys,
+      fix:msrFix.get()
     };
   };
 
@@ -5356,8 +5467,8 @@ async function translateData(data){
   pt('dispatchReason_en',data.dispatchReason);pt('dispatchWork_en',data.dispatchWork);
   (data.results||[]).forEach(function(r,i){pt('r_'+i+'_cat',r.cat);pt('r_'+i+'_name',r.name);pt('r_'+i+'_note',r.note);});
   (data.equipments||[]).forEach(function(e,i){pt('e_'+i+'_type',e.type);pt('e_'+i+'_loc',e.loc);});
-  (data.coolUnits||[]).forEach(function(u,i){pt('c_'+i+'_loc',u.loc);});
-  (data.measurements||[]).forEach(function(m,i){pt('m_'+i+'_label',m.label);});
+  (data.coolUnits||[]).forEach(function(u,i){pt('c_'+i+'_loc',u.loc);if(u.fix&&u.fix.note)pt('c_'+i+'_fix',u.fix.note);});
+  (data.measurements||[]).forEach(function(m,i){pt('m_'+i+'_label',m.label);if(m.fix&&m.fix.note)pt('m_'+i+'_fix',m.fix.note);});
   (data.defects||[]).forEach(function(d,i){pt('d_'+i+'_defect',d.defect);pt('d_'+i+'_loc',d.loc);pt('d_'+i+'_action',d.action);});
   (data.recommendations||[]).forEach(function(r,i){pt('rec_'+i+'_title',r.title);pt('rec_'+i+'_desc',r.desc);});
   var translated=await Promise.all(tasks.map(function(t){return t.src?tr(t.src):Promise.resolve('');}));
@@ -5366,8 +5477,8 @@ async function translateData(data){
   data.dispatchReason_en=map.dispatchReason_en||'';data.dispatchWork_en=map.dispatchWork_en||'';
   (data.results||[]).forEach(function(r,i){r.cat_en=map['r_'+i+'_cat']||'';r.name_en=map['r_'+i+'_name']||'';r.note_en=map['r_'+i+'_note']||'';});
   (data.equipments||[]).forEach(function(e,i){e.type_en=map['e_'+i+'_type']||'';e.loc_en=map['e_'+i+'_loc']||'';});
-  (data.coolUnits||[]).forEach(function(u,i){u.loc_en=map['c_'+i+'_loc']||'';});
-  (data.measurements||[]).forEach(function(m,i){m.label_en=map['m_'+i+'_label']||'';});
+  (data.coolUnits||[]).forEach(function(u,i){u.loc_en=map['c_'+i+'_loc']||'';if(u.fix)u.fix.note_en=map['c_'+i+'_fix']||'';});
+  (data.measurements||[]).forEach(function(m,i){m.label_en=map['m_'+i+'_label']||'';if(m.fix)m.fix.note_en=map['m_'+i+'_fix']||'';});
   (data.defects||[]).forEach(function(d,i){d.defect_en=map['d_'+i+'_defect']||'';d.loc_en=map['d_'+i+'_loc']||'';d.action_en=map['d_'+i+'_action']||'';});
   (data.recommendations||[]).forEach(function(r,i){r.title_en=map['rec_'+i+'_title']||'';r.desc_en=map['rec_'+i+'_desc']||'';});
   return data;
@@ -5495,6 +5606,15 @@ window.saveReport=async function(){
           }
           return u;
         });
+      }
+      else if(key.startsWith('fix-')){
+        // 🔧 수리 전 · 후 사진 : 냉방 유닛 · 실외기 측정의 fix.bKeys / fix.aKeys 로 연결
+        var _fx=function(arr){return (arr||[]).map(function(u){
+          var f=u&&u.fix;if(!f)return u;
+          if((f.bKeys||[]).indexOf(key)>=0)f.bPhotos=(f.bPhotos||[]).concat(url2);
+          if((f.aKeys||[]).indexOf(key)>=0)f.aPhotos=(f.aPhotos||[]).concat(url2);
+          return u;});};
+        data.coolUnits=_fx(data.coolUnits);data.measurements=_fx(data.measurements);
       }
       else if(key.startsWith('msr-unit-')){
         // 유닛별 사진 (최대 3장): measurements에서 photoKeys 배열로 매핑
@@ -6018,7 +6138,7 @@ window.loadIntoForm=function(data){
   sortResultRows(true); // 기본적으로 구분별 정렬된 상태로 표시
   // 냉방검사
   coolCount=0;document.getElementById('cool-units').innerHTML='';
-  (data.coolUnits||[]).forEach(function(u){addCoolUnit(u.label,u.a,u.b,u.loc,u.result);});
+  (data.coolUnits||[]).forEach(function(u){addCoolUnit(u.label,u.a,u.b,u.loc,u.result,u.fix);});
   // 실외기 측정
   msrCount=0;document.getElementById('msr-rows').innerHTML='';
   (data.measurements||[]).forEach(function(m){
@@ -6029,7 +6149,7 @@ window.loadIntoForm=function(data){
       cu:m.spec_cu||'normal',
       inl:m.spec_in||'normal'
     };
-    addMsrRow(m.label,m.hp,m.lp,m.current,m.insulation,m.judgment,m.memo,m.photo,sp);
+    addMsrRow(m.label,m.hp,m.lp,m.current,m.insulation,m.judgment,m.memo,m.photo,sp,m.fix);
   });
   // msr 유닛별 사진 복원
   setTimeout(function(){
