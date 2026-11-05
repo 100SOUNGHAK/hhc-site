@@ -388,6 +388,21 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 .ivl-empty{text-align:center;color:#8a8a9a;font-size:12px;padding:26px 10px;line-height:1.7}
 .lcard-inv{margin-top:6px}
 </style>
+<style id="acp-css">
+/* 🏷 해당 에어컨 선택 */
+.acp{border:1px solid #dfe5f2;border-radius:10px;background:#f7f9fe;padding:8px 10px 9px}
+.acp-k{font-size:11px;font-weight:800;color:#1d3fd6;margin-bottom:6px}
+.acp-k em{font-style:normal;font-weight:600;color:#8a94a6;font-size:10px;margin-left:4px}
+.acp-row{display:flex;flex-wrap:wrap;gap:6px}
+.acp-c{display:inline-flex;align-items:baseline;gap:5px;padding:6px 10px;border-radius:999px;border:1.5px solid #d8dce8;background:#fff;cursor:pointer;font-family:inherit;line-height:1.2}
+.acp-c b{font-size:12px;font-weight:800;color:#374151}
+.acp-c span{font-size:11px;font-weight:600;color:#8a94a6}
+.acp-c.on{border-color:#0F1C3F;background:#0F1C3F}
+.acp-c.on b{color:#fff}.acp-c.on span{color:#c9d3ea}
+.acp-none{font-size:11px;color:#8a94a6;line-height:1.5}
+.rcard .acp{margin-bottom:8px}
+.rc-ac{font-size:10.5px;font-weight:700;color:#1d3fd6;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+</style>
 <style id="fixb-css">
 /* 🔧 수리 전 · 후 기록 */
 .fixb{margin-top:10px;border:1px dashed #c9d1e3;border-radius:10px;background:#fbfcfe;overflow:hidden}
@@ -1789,7 +1804,73 @@ function ipCustomAdd(){
 }
 window.ipAddSet=ipAddSet;window.ipAllOk=ipAllOk;window.ipCustomAdd=ipCustomAdd;
 
-function addResultRow(cat,name,status,risk,note){
+
+// ═══════════════════════════════════════════
+// 🏷 해당 에어컨 선택 — 냉방능력 점검상태의 A1 · A2 … (설치 위치)를 기준으로
+//   점검 항목(주의 · 정비필요) · 실외기 · 발견 결함 · 권장 정비를 같은 에어컨에 묶습니다.
+//   고객 보고서 「우리 집 에어컨 상태」에서 해당 에어컨 카드에 함께 표시됩니다.
+//   저장값 : units:['A1','A2']  (저장 시점의 번호 · 삭제로 번호가 바뀌어도 고른 에어컨을 따라갑니다)
+// ═══════════════════════════════════════════
+var __acPickers=[];
+function acUnitList(){
+  return [].slice.call(document.querySelectorAll('#cool-units .cu-item')).map(function(w){
+    return {el:w,label:w._cuLbl?w._cuLbl():'',loc:w._cuLoc?w._cuLoc():''};
+  });
+}
+function refreshAcPickers(){
+  __acPickers=__acPickers.filter(function(p){return p.alive();});
+  __acPickers.forEach(function(p){p.render();});
+}
+window.refreshAcPickers=refreshAcPickers;
+function makeAcPicker(init,opt){
+  opt=opt||{};
+  var sel=(init||[]).map(function(l){return {el:null,label:String(l)};});   // 아직 못 찾은 번호는 label로 보관
+  var box=document.createElement('div');box.className='acp';
+  var hd=document.createElement('div');hd.className='acp-k';hd.innerHTML='🏷 해당 에어컨 <em>'+(opt.hint||'여러 대 선택 가능')+'</em>';
+  var row=document.createElement('div');row.className='acp-row';
+  box.appendChild(hd);box.appendChild(row);
+  var onCh=opt.onChange||function(){};
+  function resolve(list){
+    sel=sel.filter(function(s){return !s.el||document.body.contains(s.el);});
+    sel.forEach(function(s){if(!s.el){var f=list.find(function(u){return u.label===s.label;});if(f)s.el=f.el;}});
+  }
+  function render(){
+    var list=acUnitList();resolve(list);
+    row.innerHTML='';
+    if(!list.length){row.innerHTML='<span class="acp-none">냉방능력 점검상태에 에어컨(A1 · A2 …)을 먼저 추가하면 여기서 고를 수 있어요</span>';if(opt.onRender)try{opt.onRender();}catch(e){}return;}
+    list.forEach(function(u){
+      var on=sel.some(function(s){return s.el===u.el;});
+      var b=document.createElement('button');b.type='button';b.className='acp-c'+(on?' on':'');
+      b.innerHTML='<b>'+u.label+'</b>'+(u.loc?'<span>'+u.loc+'</span>':'');
+      b.onclick=function(e){
+        e.stopPropagation();
+        if(on)sel=sel.filter(function(s){return s.el!==u.el;});else sel.push({el:u.el,label:u.label});
+        render();onCh();if(window.__scheduleDraft)window.__scheduleDraft();
+      };
+      row.appendChild(b);
+    });
+    if(opt.onRender)try{opt.onRender();}catch(e){}
+  }
+  var api={el:box,render:render,
+    alive:function(){if(box.isConnected){api._seen=true;return true;}return !api._seen;},
+    get:function(){
+      var list=acUnitList();resolve(list);
+      return sel.map(function(s){
+        if(s.el){var f=list.find(function(u){return u.el===s.el;});return f?f.label:'';}
+        return s.label;                                    // 에어컨이 아직 그려지기 전(불러오는 중)
+      }).filter(Boolean);
+    },
+    text:function(){
+      var list=acUnitList();
+      return api.get().map(function(l){var f=list.find(function(u){return u.label===l;});return l+(f&&f.loc?' '+f.loc:'');}).join(', ');
+    }
+  };
+  __acPickers.push(api);
+  setTimeout(render,0);
+  return api;
+}
+
+function addResultRow(cat,name,status,risk,note,units){
   var card=document.createElement('div');card.className='rcard';
 
   // 숨김 결과 select — 기존 저장/일괄적용/복제 코드와의 호환용 (_statusSel.value + change 이벤트)
@@ -1813,8 +1894,18 @@ function addResultRow(cat,name,status,risk,note){
   var chev=document.createElement('div');chev.className='rc-chev';chev.textContent='▼';
   main.appendChild(dot);main.appendChild(mid);main.appendChild(seg);main.appendChild(chev);
   main.onclick=function(){card.classList.toggle('open');};
+  var acTag=document.createElement('div');acTag.className='rc-ac';acTag.style.display='none';mid.appendChild(acTag);
+  var acPick=makeAcPicker(units,{hint:'주의 · 정비필요 항목이 어느 에어컨인지',onRender:function(){paintAc();}});
+  function paintAc(){
+    var bad=stSel.value==='warn'||stSel.value==='bad';
+    acPick.el.style.display=bad?'':'none';
+    var t=bad?acPick.text():'';
+    acTag.textContent=t?'🏷 '+t:'';acTag.style.display=t?'':'none';
+  }
   function paintSeg(){['ok','warn','bad'].forEach(function(k){segBtns[k].className=(stSel.value===k)?('on-'+k):'';});}
-  stSel.addEventListener('change',function(){paintSeg();updateStats();});
+  stSel.addEventListener('change',function(){paintSeg();updateStats();
+    var bad=stSel.value==='warn'||stSel.value==='bad';
+    paintAc();if(bad&&!acPick.get().length)card.classList.add('open');});
 
   // ── 펼침 상세 ──
   var det=document.createElement('div');det.className='rc-detail';
@@ -1858,7 +1949,7 @@ function addResultRow(cat,name,status,risk,note){
   del.textContent='🗑 항목 삭제';del.onclick=function(){card.remove();updateStats();};
   delWrap.appendChild(del);
 
-  det.appendChild(row1);det.appendChild(nameDiv);det.appendChild(noteDiv);
+  det.appendChild(row1);det.appendChild(acPick.el);det.appendChild(nameDiv);det.appendChild(noteDiv);
   var _noteReg=null;
   if(typeof attachPhraseChips==='function')_noteReg=attachPhraseChips(function(){var nm=(nameInp.value||'').trim();return nm?('note:'+nm):'';},noteInp,{mode:'replace',compact:true,parent:noteDiv,extraKey:'note',scope:true});
   det.appendChild(delWrap);
@@ -1867,10 +1958,11 @@ function addResultRow(cat,name,status,risk,note){
   card._nameInp=nameInp;
   card._getCatSel=function(){return catSel;};
   card._getNoteInp=function(){return noteInp;};
+  card._acPick=acPick;card._paintAc=paintAc;
 
   card.appendChild(stSel);card.appendChild(main);card.appendChild(det);
   gid('result-rows').appendChild(card);
-  paintSeg();syncViews();
+  paintSeg();syncViews();setTimeout(paintAc,0);
   if(!name)card.classList.add('open'); // 새 빈 항목은 펼친 상태로 시작
   updateStats();
   return card;
@@ -1916,6 +2008,7 @@ function renumberUnits(){
       });
     }
   });
+  if(window.refreshAcPickers)refreshAcPickers();
   if(window.__scheduleDraft)window.__scheduleDraft();
 }
 window.renumberUnits=renumberUnits;
@@ -1933,7 +2026,7 @@ function addCoolUnit(label,a,b,loc,result,fix){
   var tit=document.createElement('div');tit.style='flex:1;font-size:13px;font-weight:500';tit.textContent='에어컨 '+lbl+' 유닛';
   var badge=document.createElement('span');badge.style='font-size:10px;padding:2px 8px;border-radius:10px;background:#f0f0f0;color:#8a8a9a';badge.textContent='미측정';badge.id='cu-badge-'+id;
   var chev=document.createElement('span');chev.style='font-size:12px;color:#8a8a9a;margin-left:4px';chev.textContent='▼';
-  var del=document.createElement('button');del.className='btn-del';del.style='margin-left:6px';del.textContent='×';del.onclick=function(e){e.stopPropagation();div.remove();if(window.renumberUnits)renumberUnits();if(window.updateInspProgress)updateInspProgress();};
+  var del=document.createElement('button');del.className='btn-del';del.style='margin-left:6px';del.textContent='×';del.onclick=function(e){e.stopPropagation();div.remove();if(window.renumberUnits)renumberUnits();if(window.updateInspProgress)updateInspProgress();refreshAcPickers();};
   // 번호 재정렬용 — 자동 라벨(A1,A2...)일 때만 다시 매긴다
   div._renumCu=function(n){
     if(!/^A\d+$/.test(lbl))return;
@@ -1956,7 +2049,7 @@ function addCoolUnit(label,a,b,loc,result,fix){
     var lv=ddCuLoc.getDdVal();
     tit.textContent='에어컨 '+lbl+' 유닛'+(lv?' · '+lv:'');
   }
-  ddCuLoc.addEventListener('change',function(){syncCuTitle();if(window.__scheduleDraft)window.__scheduleDraft();});
+  ddCuLoc.addEventListener('change',function(){syncCuTitle();refreshAcPickers();if(window.__scheduleDraft)window.__scheduleDraft();});
   ddCuLoc.addEventListener('input',syncCuTitle);
 
   // 온도 입력
@@ -2031,6 +2124,8 @@ function addCoolUnit(label,a,b,loc,result,fix){
 
   div._syncCuTitle=syncCuTitle;
   syncCuTitle();
+  div._cuLbl=function(){return lbl;};div._cuLoc=function(){return ddCuLoc.getDdVal();};
+  refreshAcPickers();
 
   // 저장용 getter
   div._getCuData=function(){
@@ -3453,7 +3548,7 @@ function makeFixBlock(kind,uid,init){
   }};
 }
 
-function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl,spec,fix){
+function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl,spec,fix,units){
   msrCount++;
   var id='msr'+msrCount;
   var wrap=document.createElement('div');wrap.className='unit-item';
@@ -3466,6 +3561,8 @@ function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl,spec,fix){
   var del=document.createElement('button');del.className='btn-del';del.textContent='×';del.onclick=function(){wrap.remove();if(window.renumberUnits)renumberUnits();};
   hdr.appendChild(num);hdr.appendChild(ddLoc);hdr.appendChild(del);
   wrap.appendChild(hdr);
+  var msrAc=makeAcPicker(units,{hint:'이 실외기와 연결된 에어컨'});
+  msrAc.el.style.marginBottom='8px';wrap.appendChild(msrAc.el);
 
   // 측정값 grid — 각 값 아래에 「정상 범위 · 기준 미달 · 기준 초과」 판정 선택
   spec=spec||{};
@@ -3560,6 +3657,7 @@ function addMsrRow(label,hp,lp,curr,ins,jdg,memo,photoUrl,spec,fix){
       judgment:activeJdg?activeJdg.dataset.jdg:'ok',
       memo:memoInp.value,
       photoKeys:photoKeys,
+      units:msrAc.get(),
       fix:msrFix.get()
     };
   };
@@ -4016,7 +4114,7 @@ function addLeakRow(label,loc,status){
 // ═══════════════════════════════════════════
 // 발견 결함
 // ═══════════════════════════════════════════
-function addDefectRow(defect,loc,risk,action,status){
+function addDefectRow(defect,loc,risk,action,status,units){
   defectCount++;
   var wrap=document.createElement('div');wrap.className='unit-item';wrap.style.paddingTop='40px';
 
@@ -4041,6 +4139,8 @@ function addDefectRow(defect,loc,risk,action,status){
 
   r1.appendChild(defDiv);r1.appendChild(locDiv);
   wrap.appendChild(r1);
+  var defAc=makeAcPicker(units,{hint:'결함이 있는 에어컨'});
+  defAc.el.style.marginBottom='8px';wrap.appendChild(defAc.el);
 
   // 위험도 + 조치
   var r2=document.createElement('div');r2.className='fgrid f2';r2.style.marginBottom='8px';
@@ -4088,7 +4188,8 @@ function addDefectRow(defect,loc,risk,action,status){
     stBtns.forEach(function(b){if(b.className.length>'dst-btn'.length)activeBtn=b;});
     return {
       defect:defInp.value,loc:ddLoc.getDdVal(),risk:rkSel.value,
-      action:actInp.value,status:activeBtn?activeBtn.dataset.stval:'plan'
+      action:actInp.value,status:activeBtn?activeBtn.dataset.stval:'plan',
+      units:defAc.get()
     };
   };
 
@@ -4098,7 +4199,7 @@ function addDefectRow(defect,loc,risk,action,status){
 // ═══════════════════════════════════════════
 // 권장 정비
 // ═══════════════════════════════════════════
-function addRecRow(type,title,desc){
+function addRecRow(type,title,desc,units){
   recCount++;
   var wrap=document.createElement('div');wrap.className='unit-item';wrap.style.paddingTop='40px';
   var del=document.createElement('button');del.className='btn-del';
@@ -4128,10 +4229,12 @@ function addRecRow(type,title,desc){
   g.appendChild(tLbl);g.appendChild(tInp);g.appendChild(dLbl);g.appendChild(dInp);
   wrap.appendChild(g);
   if(typeof attachPhraseChips==='function')attachPhraseChips('rectitle',tInp,{mode:'replace',compact:true});
+  var recAc=makeAcPicker(units,{hint:'정비 · 교체 대상 에어컨'});
+  recAc.el.style.marginTop='8px';wrap.appendChild(recAc.el);
 
   wrap._getRecData=function(){
     var ab=typeBtns.find(function(b){return b.className.length>'rt-btn'.length;});
-    return {type:ab?ab.dataset.tv:'regular',title:tInp.value,desc:dInp.value};
+    return {type:ab?ab.dataset.tv:'regular',title:tInp.value,desc:dInp.value,units:recAc.get()};
   };
 
   gid('rec-rows').appendChild(wrap);
@@ -4828,7 +4931,7 @@ function injectQuickButtons(){
   // 발견 결함: 마지막 결함 복제
   var dBtn=_findAddBtn('결함 추가');
   if(dBtn&&!dBtn._qaDone){dBtn._qaDone=true;var bar4=_qaBar();
-    bar4.appendChild(_qaBtn('⧉ 마지막 결함 복제','dup',function(){var ws=document.querySelectorAll('#defect-rows .unit-item');var l=ws[ws.length-1];if(!l||!l._getDefectData){addDefectRow();return;}var d=l._getDefectData();addDefectRow('',d.loc,d.risk,'',d.status);toast('결함 복제됨');}));
+    bar4.appendChild(_qaBtn('⧉ 마지막 결함 복제','dup',function(){var ws=document.querySelectorAll('#defect-rows .unit-item');var l=ws[ws.length-1];if(!l||!l._getDefectData){addDefectRow();return;}var d=l._getDefectData();addDefectRow('',d.loc,d.risk,'',d.status,d.units);toast('결함 복제됨');}));
     _insertAfter(bar4,dBtn);}
   // 냉방검사: 마지막 유닛 복제 (위치만 유지, 측정값은 새로 입력)
   var cuBtn=_findBtnByOnclick('addCoolUnit()');
@@ -5430,7 +5533,9 @@ function collectData(){
   document.getElementById('result-rows').querySelectorAll('.rcard').forEach(function(c){
     if(!c._nameInp)return;
     var nm=c._nameInp.value.trim();if(!nm)return;
-    results.push({cat:c._getCatSel().value,name:nm,status:c._statusSel.value,note:c._getNoteInp().value});
+    var st=c._statusSel.value;
+    results.push({cat:c._getCatSel().value,name:nm,status:st,note:c._getNoteInp().value,
+      units:(c._acPick&&(st==='warn'||st==='bad'))?c._acPick.get():[]});
   });
   // 냉방검사
   var coolUnits=[];
@@ -6165,7 +6270,7 @@ window.loadIntoForm=function(data){
   (data.equipments||[]).forEach(function(e){addEquip(e.unit,e.type,e.loc,e.model,e.capacity);});
   // 결과
   document.getElementById('result-rows').innerHTML='';
-  if((data.results||[]).length){data.results.forEach(function(r){addResultRow(r.cat,r.name,r.status,r.risk,r.note);});}
+  if((data.results||[]).length){data.results.forEach(function(r){addResultRow(r.cat,r.name,r.status,r.risk,r.note,r.units);});}
   sortResultRows(true); // 기본적으로 구분별 정렬된 상태로 표시
   // 냉방검사
   coolCount=0;document.getElementById('cool-units').innerHTML='';
@@ -6180,7 +6285,7 @@ window.loadIntoForm=function(data){
       cu:m.spec_cu||'normal',
       inl:m.spec_in||'normal'
     };
-    addMsrRow(m.label,m.hp,m.lp,m.current,m.insulation,m.judgment,m.memo,m.photo,sp,m.fix);
+    addMsrRow(m.label,m.hp,m.lp,m.current,m.insulation,m.judgment,m.memo,m.photo,sp,m.fix,m.units);
   });
   // msr 유닛별 사진 복원
   setTimeout(function(){
@@ -6209,10 +6314,10 @@ window.loadIntoForm=function(data){
   },100);
   // 발견결함
   defectCount=0;document.getElementById('defect-rows').innerHTML='';
-  (data.defects||[]).forEach(function(d){addDefectRow(d.defect,d.loc,d.risk,d.action,d.status);});
+  (data.defects||[]).forEach(function(d){addDefectRow(d.defect,d.loc,d.risk,d.action,d.status,d.units);});
   // 권장정비
   recCount=0;document.getElementById('rec-rows').innerHTML='';
-  (data.recommendations||[]).forEach(function(r){addRecRow(r.type,r.title,r.desc);});
+  (data.recommendations||[]).forEach(function(r){addRecRow(r.type,r.title,r.desc,r.units);});
   // 실외기 사진 세트 (photos URL 포함) — 기존 자료가 있을 때만 카드 표시
   outdoorCount=0;document.getElementById('outdoor-sets').innerHTML='';
   var _ocard=document.getElementById('outdoor-card');

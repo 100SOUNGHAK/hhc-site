@@ -890,6 +890,8 @@ body{background:var(--page)}
 .glu-r li.warn{color:#8A5A0C}
 .glu-r li.rp{color:#1D4ED8;font-weight:700}
 .glu-r li.rp::before{content:"🔧";background:#E8F0FF;font-size:8px}
+.glu-r li.tip{color:var(--ink-soft)}
+.glu-r li.tip::before{content:"i";background:#EEF1F6;color:var(--ink-soft);font-style:italic;font-family:Georgia,serif}
 .gl-foot{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;padding:10px 14px 14px;border-top:1px dashed var(--line);font-size:11px;color:var(--ink-mute);font-weight:600}
 .gl-foot span{display:inline-flex;align-items:center;gap:5px}
 .gl-foot span::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ok)}
@@ -2371,30 +2373,38 @@ window.getSampleData=function getSampleData(){
   }
   function unitNm(s){s=String(s||'').trim();return en()?s.replace(/(\d+)\s*호기/g,'Unit $1').replace(/(\d+)\s*대/g,'$1 units'):s;}
   function build(d){
-    var U=[];
-    function find(locs,num,make){
+    /* ── 기본 분류 = 냉방능력 점검상태의 에어컨(A1 · A2 …)과 설치 위치 ──
+       「점검 대상 설비」 목록은 쓰지 않습니다.
+       점검 항목 · 실외기 · 발견 결함 · 권장 정비는 관리자가 고른 「해당 에어컨」(units: ['A1',…])으로 붙이고,
+       고르지 않은 예전 자료만 설치 위치 → 번호 순으로 찾아 붙입니다. */
+    var U=[],byLbl={},cu=d.coolUnits||[],base=cu.length>0;
+    function mk(nm,loc,num){var u={keys:[],num:num||0,nm:nm||'',loc:loc||'',dt:null,rs:[],lv:0,done:[],tips:[]};U.push(u);return u;}
+    function keys(u,arr){arr.map(nrm).forEach(function(k){if(k&&u.keys.indexOf(k)<0)u.keys.push(k);});}
+    function byLoc(locs,num){
       var ks=locs.map(nrm).filter(Boolean),i,u;
-      for(i=0;i<U.length;i++){u=U[i];                       /* ① 위치가 같거나 한쪽이 다른 쪽을 포함 */
+      for(i=0;i<U.length;i++){u=U[i];
         if(ks.some(function(k){return u.keys.some(function(x){return x===k||(k.length>1&&x.length>1&&(x.indexOf(k)>=0||k.indexOf(x)>=0));});}))return u;}
-      if(num)for(i=0;i<U.length;i++){if(U[i].num===num)return U[i];}   /* ② 번호(AC 1 · 1호기)가 같음 */
-      if(!make)return null;
-      u={keys:ks,num:num,nm:'',loc:'',type:'',cnt:0,dt:null,rs:[],lv:0,done:[]};U.push(u);return u;
+      if(num)for(i=0;i<U.length;i++){if(U[i].num===num)return U[i];}
+      return null;
     }
-    function link(u,locs,num,locTxt){if(!u)return;locs.map(nrm).forEach(function(k){if(k&&u.keys.indexOf(k)<0)u.keys.push(k);});if(num&&!u.num)u.num=num;if(!u.loc&&locTxt)u.loc=locTxt;}
+    function refs(x){
+      var out=[];((x&&x.units)||[]).forEach(function(l){var u=byLbl[nrm(l)];if(u&&out.indexOf(u)<0)out.push(u);});
+      return out;
+    }
+    function tgt(x,locTxt,num,make){
+      var r=refs(x);if(r.length)return r;
+      var locs=locParts(locTxt),u=byLoc(locs,num);
+      if(!u&&make&&!base&&locs.length){u=mk('',tx(locs.join(' · '),''),num);keys(u,locs);}
+      return u?[u]:[];
+    }
     function add(u,lv,txt){if(!u)return;u.lv=Math.max(u.lv,lv);if(txt&&!u.rs.some(function(r){return r.t===txt;}))u.rs.push({lv:lv,t:txt});}
-    /* 1) 설비 목록 — 카드의 이름 · 형식 · 대수 */
-    (d.equipments||[]).forEach(function(e){
-      var locs=locParts(e.loc),num=numOf(e.unit);
-      var u=find(locs,num,true);link(u,locs,num,tx(e.loc,e.loc_en));
-      var m=String(e.unit||'').match(/(\d+)\s*대/);
-      if(num&&!u.nm)u.nm=String(e.unit).match(/\d+\s*호기/)?String(e.unit).match(/\d+\s*호기/)[0]:'';
-      if(!u.type)u.type=tx(e.type,e.type_en);
-      if(m)u.cnt+=parseInt(m[1],10);
-    });
-    /* 2) 냉방 성능 측정 — 온도차(흡입 − 토출) */
-    (d.coolUnits||[]).forEach(function(c){
-      var locs=locParts(c.loc),num=numOf(c.loc)||numOf(c.label);
-      var u=find(locs,num,true);link(u,locs,num,tx(locParts(c.loc).join(' · '),''));
+    function tip(u,txt){if(u&&txt&&u.tips.indexOf(txt)<0)u.tips.push(txt);}
+    /* 1) 냉방능력 점검상태 — 카드의 기준 (A1 · 설치 위치 · 온도차) */
+    cu.forEach(function(c,i){
+      var lbl=String(c.label||'').trim()||('A'+(i+1));
+      var mn=lbl.match(/^A\s*(\d+)$/i);
+      var u=mk(lbl,tx(c.loc,c.loc_en),mn?parseInt(mn[1],10):numOf(c.loc));
+      keys(u,locParts(c.loc));byLbl[nrm(lbl)]=u;
       var a=parseFloat(c.a),b=parseFloat(c.b),fx=c.fix&&c.fix.on?c.fix:null;
       var fa=fx?parseFloat(fx.a):NaN,fb=fx?parseFloat(fx.b):NaN;
       if(fx&&isFinite(fa)&&isFinite(fb)){              /* 수리했으면 수리 후 값으로 판정 */
@@ -2405,34 +2415,43 @@ window.getSampleData=function getSampleData(){
       }else if(isFinite(a)&&isFinite(b)){var dt=Math.round((a-b)*10)/10;u.dt=dt;
         if(dt<12)add(u,1,L('냉방 성능 저하 (온도차 '+dt+'°C)','Weak cooling (ΔT '+dt+'°C)'));}
       if(fx&&!(isFinite(fa)&&isFinite(fb)))u.done.push(L('수리 완료','Repaired')+(fx.note?' · '+tx(fx.note,fx.note_en):''));
-      if(!u.nm&&/^A\d+$/.test(String(c.label||''))&&!u.loc)u.nm=c.label;
     });
-    /* 3) 냉매 누설 검사 */
+    /* 2) 점검 항목 — 주의 · 정비필요로 고르고 해당 에어컨을 지정한 항목 */
+    (d.results||[]).forEach(function(r){
+      if(r.status!=='warn'&&r.status!=='bad')return;
+      var t=tx(r.name,r.name_en),n=r.note?tx(r.note,r.note_en):'';
+      refs(r).forEach(function(u){add(u,r.status==='bad'?2:1,t+(n?' — '+n:''));});
+    });
+    /* 3) 냉매 누설 검사 (해당 에어컨 지정 기능 없음 → 위치 · 번호로 찾기) */
     (d.leakUnits||[]).forEach(function(l){
-      var locs=locParts(l.loc),num=numOf(l.label)||numOf(l.loc);
-      var u=find(locs,num,true);link(u,locs,num,tx(locParts(l.loc).join(' · '),''));
-      if(!u.nm&&/^\s*AC\s*\d+/i.test(String(l.label||''))&&!u.loc)u.nm=String(l.label).trim();
-      if(l.status==='bad')add(u,2,L('냉매 누설 감지','Refrigerant leak detected'));
+      tgt(null,l.loc,numOf(l.label)||numOf(l.loc),true).forEach(function(u){
+        if(l.status==='bad')add(u,2,L('냉매 누설 감지','Refrigerant leak detected'));
+      });
     });
-    /* 4) 실외기 측정 — 관찰 · 수리 판정 */
+    /* 4) 실외기 점검상태 */
     (d.measurements||[]).forEach(function(m){
-      var locs=locParts(m.label),num=numOf(m.label);
-      var u=find(locs,num,true);link(u,locs,num,tx(locParts(m.label).join(' · '),''));
-      if(!u.type&&!u.cnt&&u.dt==null)u.type=L('실외기','Outdoor unit');
-      if(m.fix&&m.fix.on)u.done.push(L('실외기 수리 완료','Outdoor unit repaired')+(m.fix.note?' · '+tx(m.fix.note,m.fix.note_en):''));
-      else if(m.judgment==='repair')add(u,2,tx(m.memo,m.memo_en)||L('실외기 수리 필요','Outdoor unit needs repair'));
-      else if(m.judgment==='watch')add(u,1,tx(m.memo,m.memo_en)||L('실외기 관찰 필요','Outdoor unit — keep an eye on it'));
+      tgt(m,m.label,numOf(m.label),true).forEach(function(u){
+        if(m.fix&&m.fix.on)u.done.push(L('실외기 수리 완료','Outdoor unit repaired')+(m.fix.note?' · '+tx(m.fix.note,m.fix.note_en):''));
+        else if(m.judgment==='repair')add(u,2,tx(m.memo,m.memo_en)||L('실외기 수리 필요','Outdoor unit needs repair'));
+        else if(m.judgment==='watch')add(u,1,tx(m.memo,m.memo_en)||L('실외기 관찰 필요','Outdoor unit — keep an eye on it'));
+      });
     });
-    /* 5) 발견 결함 — 이미 있는 카드에만 붙입니다 (자유 입력 위치로 새 카드를 만들지 않음) */
+    /* 5) 발견 결함 및 조치내역 */
     (d.defects||[]).forEach(function(f){
-      var u=find(locParts(f.loc),numOf(f.loc),false);if(!u)return;
       var t=tx(f.defect,f.defect_en);
-      if(f.status==='done')u.done.push(t);else add(u,f.risk==='h'?2:1,t);
+      tgt(f,f.loc,numOf(f.loc),false).forEach(function(u){
+        if(f.status==='done')u.done.push(t+(f.action?' · '+tx(f.action,f.action_en):''));else add(u,(f.risk==='vh'||f.risk==='h')?2:1,t);
+      });
+    });
+    /* 6) 권장 정비 · 교체 제안 — 우선은 정비 필요, 정기 · 검토는 상태를 바꾸지 않고 「권장」으로 표시 */
+    (d.recommendations||[]).forEach(function(r){
+      var t=tx(r.title,r.title_en);if(!t)return;
+      refs(r).forEach(function(u){if(r.type==='urgent')add(u,2,t);else tip(u,t);});
     });
     return U.map(function(u){
       var nm=u.nm||u.loc||(u.num?(en()?'Unit ':'')+u.num+(en()?'':'번 에어컨'):L('에어컨','Air-con'));
-      var sub=[u.nm?u.loc:'',u.type+(u.cnt>1?' '+u.cnt+L('대',' units'):'')].filter(Boolean).join(' · ');
-      return {nm:nm,sub:sub,dt:u.dt,rs:u.rs,lv:u.lv,done:u.done};
+      var sub=u.nm?u.loc:(base?'':L('실외기','Outdoor unit'));
+      return {nm:nm,sub:sub,dt:u.dt,rs:u.rs,lv:u.lv,done:u.done,tips:u.tips};
     });
   }
   var IC='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="9" rx="2.5"/><path d="M6 11h12M8 17.5c0 1-1 1.5-1 2.5M12 17c0 1.2-1 1.8-1 3M16 17.5c0 1-1 1.5-1 2.5"/></svg>';
@@ -2459,7 +2478,8 @@ window.getSampleData=function getSampleData(){
           li='<li>'+esc(L('점검 항목 모두 양호','All checks passed'))+'</li>';
           if(dn.length)li+=dn.slice(0,2).map(function(x){return '<li class="rp">'+esc(x)+'</li>';}).join('');
           else if(u.done&&u.done.length)li+='<li>'+esc(L('조치 완료 · ','Fixed · ')+u.done[0])+'</li>';
-        }else if(dn.length&&rs.length<3)li+='<li class="rp">'+esc(dn[0])+'</li>';
+        }else if(dn.length)li+='<li class="rp">'+esc(dn[0])+'</li>';
+        li+=(u.tips||[]).slice(0,2).map(function(t){return '<li class="tip">'+esc(L('권장 · ','Suggested · ')+t)+'</li>';}).join('');
         var dt='';
         if(u.dt!=null){
           var p=Math.max(6,Math.min(100,u.dt/20*100)),k=u.dt<12?'bad':'',jt=u.dt<12?L('저하','Low'):(u.dt<15?L('정상','Normal'):L('양호','Good'));
