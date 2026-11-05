@@ -401,7 +401,8 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 .fixb-k{font-size:10px;font-weight:800;color:#4b5563;letter-spacing:.02em;margin:8px 0 5px}
 .fixb-k.b{color:#c0392b}.fixb-k.a{color:#0a7a4a}
 .fixb-note{width:100%;padding:7px 9px;font-size:12px;border:0.5px solid #dde1ee;border-radius:6px;background:#fff;resize:none;font-family:inherit;line-height:1.5}
-.fixb-ph{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fixb-ph1{margin-top:2px}
+.fixb-ph1 .ocr-status{margin:6px 0 0}
 .fixb .mvb{background:#fff}
 </style>
 </head>
@@ -3280,7 +3281,7 @@ function tryOcrFillCoolUnitPair(id,urlA,urlB){
 // 측정 데이터 (실외기)
 // ═══════════════════════════════════════════
 // 유닛별 사진 슬롯 (최대 n장) — 한 번에 여러 장 선택 가능
-function makeUnitPhotoSlots(keyPrefix,count){
+function makeUnitPhotoSlots(keyPrefix,count,onFiles){
   var grid=document.createElement('div');
   grid.style='display:grid;grid-template-columns:repeat('+count+',1fr);gap:6px';
   var slots=[];
@@ -3307,6 +3308,7 @@ function makeUnitPhotoSlots(keyPrefix,count){
           if(window.__scheduleDraft)window.__scheduleDraft();
         });
       });
+      if(onFiles)try{onFiles(files);}catch(e){console.warn(e);}
     });
     addBtn.appendChild(inp);
     slot.appendChild(addBtn);
@@ -3384,22 +3386,51 @@ function makeFixBlock(kind,uid,init){
   if(init.note)note.value=init.note;
   if(window.attachMic)window.attachMic(note);
   note.addEventListener('input',function(){if(window.__scheduleDraft)window.__scheduleDraft();});
-  // 사진 (수리 전 2장 · 수리 후 2장)
-  var pg=document.createElement('div');pg.className='fixb-ph';
-  function phCol(tag,lbl,pref){
-    var c=document.createElement('div');
-    var l=document.createElement('div');l.className='fixb-k '+tag;l.textContent=lbl;
-    var s=makeUnitPhotoSlots(pref,2);
-    c.appendChild(l);c.appendChild(s.grid);pg.appendChild(c);return s;
+  // 수리 후 사진 (2장) — 냉방은 계측기 사진을 올리면 흡입 · 토출 온도를 자동 인식합니다
+  var pg=document.createElement('div');pg.className='fixb-ph1';
+  var pl=document.createElement('div');pl.className='fixb-k a';
+  pl.textContent=kind==='cool'?'수리 후 사진 — 계측기 사진을 올리면 흡입 · 토출 자동 입력':'수리 후 사진';
+  var ost=document.createElement('div');ost.className='ocr-status';
+  function ocrAfter(files){
+    if(kind!=='cool'||!files||!files.length)return;
+    if(inps.a.value||inps.b.value)return;                 // 이미 입력했으면 덮어쓰지 않습니다
+    var f=files[0],origUrl=URL.createObjectURL(f);
+    var rel=function(){try{URL.revokeObjectURL(origUrl);}catch(e){}};
+    showCropModal(origUrl,{
+      title:'📐 수리 후 계측기의 <b style="color:#f0c040">화면(검은 LCD) 전체</b>를 박스로 감싸주세요<br><span style="font-weight:400;font-size:11px;color:#ccc">숫자 줄은 자동으로 찾아드려요</span>',
+      storageKey:'insp_ocr_crop_rect_scr'
+    },function(scrCrop){
+      rel();
+      ost.className='ocr-status on busy';ost.style.color='';ost.textContent='🔍 화면에서 숫자 줄 찾는 중...';
+      splitScreenRegions(scrCrop).then(function(sp){
+        if(!sp){ost.className='ocr-status on';ost.style.color='#b36000';ost.textContent='⚠ 숫자 줄을 찾지 못했습니다 — 직접 입력해주세요';return null;}
+        ost.textContent='🔍 숫자 판독 중...';
+        return Promise.all([sp.temp?readNumberFromCrop(sp.temp):null,sp.big?readNumberFromCrop(sp.big):null]);
+      }).then(function(r){
+        if(!r)return;
+        var msgs=[],unsure=false;
+        function put(inp,v,lb){if(!v||inp.value)return;inp.value=String(v.val);inp.classList.add('ocr-filled');
+          if(typeof v.conf==='number'&&v.conf<0.55){unsure=true;inp.style.borderColor='#e08600';inp.style.background='#fff8ec';}
+          msgs.push(lb+' '+v.val+'°C');}
+        put(inps.a,r[0],'흡입');put(inps.b,r[1],'토출');
+        var nA=parseFloat(inps.a.value),nB=parseFloat(inps.b.value);
+        if(isFinite(nA)&&isFinite(nB)&&(nA-nB<3||nA-nB>30)){unsure=true;[inps.a,inps.b].forEach(function(x){x.style.borderColor='#e08600';x.style.background='#fff8ec';});}
+        calc();if(window.__scheduleDraft)window.__scheduleDraft();
+        ost.className='ocr-status on';ost.style.color=unsure?'#b36000':'';
+        ost.textContent=msgs.length?((unsure?'⚠':'✓')+' 자동인식: '+msgs.join(' / ')+' — 확인해주세요'):'⚠ 숫자 판독 실패 — 직접 입력해주세요';
+        if(msgs.length&&window.toast)toast('🔍 수리 후 '+msgs.join(' / ')+' 자동인식 — 확인해주세요');
+      }).catch(function(){ost.className='ocr-status on';ost.style.color='#b36000';ost.textContent='⚠ 자동인식 실패 — 직접 입력해주세요';});
+    },function(){rel();});
   }
-  var bPh=phCol('b','수리 전 사진','fix-'+uid+'-b-');
-  var aPh=phCol('a','수리 후 사진','fix-'+uid+'-a-');
-  body.appendChild(hd);body.appendChild(grid);body.appendChild(nl);body.appendChild(note);body.appendChild(pg);
+  var aPh=makeUnitPhotoSlots('fix-'+uid+'-a-',2,ocrAfter);
+  var bPh={slots:[],keys:[]};
+  pg.appendChild(pl);pg.appendChild(aPh.grid);
+  body.appendChild(hd);body.appendChild(grid);if(kind==='cool')body.appendChild(ost);body.appendChild(pg);body.appendChild(nl);body.appendChild(note);
   box.appendChild(tg);box.appendChild(body);
-  tg.onclick=function(){
+  tg.onclick=async function(){
     if(on){
       var has=note.value.trim()||Object.keys(inps).some(function(k){return inps[k].value.trim();})||bPh.slots.concat(aPh.slots).some(function(x){return !x.isEmpty();});
-      if(has&&!confirm('수리 전 · 후 기록(측정값 · 내용 · 사진)을 지울까요?'))return;
+      if(has&&!(await inspAsk('수리 기록을 지울까요?',['입력한 수리 후 측정값 · 수리 내용 · 사진이 모두 지워집니다.'],'지우기','취소')))return;
       on=false;
       Object.keys(inps).forEach(function(k){inps[k].value='';});note.value='';
       bPh.slots.concat(aPh.slots).forEach(function(s){s.reset();});
@@ -3412,12 +3443,11 @@ function makeFixBlock(kind,uid,init){
   paintTg();calc();
   // 저장된 사진 복원 (Storage URL)
   setTimeout(function(){
-    (init.bPhotos||[]).forEach(function(u,i){if(bPh.slots[i]&&u)bPh.slots[i].set(u);});
     (init.aPhotos||[]).forEach(function(u,i){if(aPh.slots[i]&&u)aPh.slots[i].set(u);});
   },120);
   return {el:box,get:function(){
     if(!on)return null;
-    var o={on:true,note:note.value,bKeys:bPh.keys.slice(),aKeys:aPh.keys.slice()};
+    var o={on:true,note:note.value,aKeys:aPh.keys.slice()};
     Object.keys(inps).forEach(function(k){o[k]=inps[k].value;});
     return o;
   }};
@@ -5508,7 +5538,7 @@ window.saveReport=async function(){
       btn.disabled=false;btn.textContent=btnLabel;return;
     }
     if(vres.soft.length){
-      if(!confirm('아래 항목을 확인해 주세요:\n\n· '+vres.soft.join('\n· ')+'\n\n그래도 저장할까요?')){
+      if(!(await inspAsk('저장 전에 확인해 주세요',vres.soft,'그래도 저장','다시 확인'))){
         btn.disabled=false;btn.textContent=btnLabel;return;
       }
     }
@@ -5664,7 +5694,7 @@ window.saveReport=async function(){
         '이 인터넷 연결 문제로 업로드되지 못했습니다.\n\n'+
         '고객에게 보내기 전에 해당 사진/동영상을 다시 첨부하고 한 번 더 저장해 주세요.\n'+
         '(나머지 내용과 정상 업로드된 사진은 그대로 저장되었습니다)';
-      alert(_failMsg);
+      inspAsk('⚠️ 일부 사진 · 동영상이 올라가지 않았습니다',_failMsg.split('\n').filter(function(x){return x.trim();}),'확인',null);
     }
     var pageFile=isInstall?'install.html':(isWasher?'washer.html':'inspect.html');
     var koUrl='https://happyhomecare.com.my/'+pageFile+'?id='+rid+'&lang=ko';
@@ -5693,7 +5723,8 @@ window.saveReport=async function(){
     window._sendCtx={client:data.client||'',type:(isInstall?'install':(isWasher?'washer':(reportType==='dispatch'?'dispatch':'inspect')))};
     updateSendMsg();
     document.getElementById('send-modal').style.display='flex';
-  }catch(e){console.error(e);hideSaveProg();alert('저장 실패: '+e.message);btn.disabled=false;btn.textContent=btnLabel;}
+  }catch(e){console.error(e);hideSaveProg();btn.disabled=false;btn.textContent=btnLabel;
+    inspAsk('⚠️ 저장하지 못했습니다',['오류 내용: '+((e&&e.message)||e),'인터넷 연결을 확인한 뒤 다시 저장해 주세요. 작성한 내용은 화면에 그대로 남아 있습니다.'],'확인',null);}
 };
 
 // ── 목록 로딩
@@ -6398,11 +6429,29 @@ function validateBeforeSave(data,isInstall,isWasher){
   if(!isInstall&&!isWasher){
     if(!data.eval)soft.push('종합판정이 선택되지 않았습니다');
     if(!(data.results||[]).length)soft.push('항목별 점검 결과가 비어 있습니다');
-    (data.measurements||[]).forEach(function(m){var lp=parseFloat(m.lp);if(lp>0&&lp<80&&m.spec_lp!=='under')soft.push((m.label||'실외기')+' 저압('+m.lp+' PSI)이 80 미만인데 판정이 「'+(m.spec_lp==='over'?'기준 초과':'정상 범위')+'」로 선택되어 있습니다');});
-    (data.coolUnits||[]).forEach(function(u){var a=parseFloat(u.a),b=parseFloat(u.b);if(a&&b&&(a-b)<12)soft.push((u.label||'냉방')+' 온도차('+(a-b).toFixed(1)+'°C)가 12°C 미만');});
+    (data.measurements||[]).forEach(function(m){if(m.fix&&m.fix.on&&m.fix.lp)return;var lp=parseFloat(m.lp);if(lp>0&&lp<80&&m.spec_lp!=='under')soft.push((m.label||'실외기')+' 저압('+m.lp+' PSI)이 80 미만인데 판정이 「'+(m.spec_lp==='over'?'기준 초과':'정상 범위')+'」로 선택되어 있습니다');});
+    (data.coolUnits||[]).forEach(function(u){var a=parseFloat(u.a),b=parseFloat(u.b);var fx=u.fix&&u.fix.on&&u.fix.a&&u.fix.b;if(fx){a=parseFloat(u.fix.a);b=parseFloat(u.fix.b);}if(a&&b&&(a-b)<12)soft.push((u.label||'냉방')+' 온도차('+(a-b).toFixed(1)+'°C)가 12°C 미만');});
   }
   return {hard:hard,soft:soft};
 }
+// 화면 안 확인창 — 앱(웹뷰)·탭 화면 안에서도 확실히 보이도록 브라우저 기본 확인창 대신 사용합니다
+function inspAsk(title,lines,okLbl,noLbl){
+  return new Promise(function(res){
+    var m=document.createElement('div');
+    m.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:16px';
+    var esc=function(t){return String(t).replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});};
+    m.innerHTML='<div style="background:#fff;border-radius:14px;max-width:420px;width:100%;box-shadow:0 18px 60px rgba(0,0,0,.3);overflow:hidden;font-family:inherit">'+
+      '<div style="padding:14px 16px;font-size:14.5px;font-weight:800;color:#111827;border-bottom:1px solid #e5e9f2">'+esc(title)+'</div>'+
+      '<div style="padding:12px 16px;max-height:50vh;overflow:auto">'+lines.map(function(l){return '<div style="font-size:12.5px;line-height:1.6;color:#374151;padding:4px 0 4px 12px;position:relative"><span style="position:absolute;left:0;color:#e08600">•</span>'+esc(l)+'</div>';}).join('')+'</div>'+
+      '<div style="display:flex;gap:8px;padding:12px 16px;border-top:1px solid #e5e9f2">'+
+        (noLbl?'<button type="button" data-v="0" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#4b5563;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">'+esc(noLbl)+'</button>':'')+
+        '<button type="button" data-v="1" style="flex:1;padding:11px;border-radius:10px;border:0;background:#0F1C3F;color:#fff;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit">'+esc(okLbl||'확인')+'</button>'+
+      '</div></div>';
+    m.addEventListener('click',function(ev){var b=ev.target.closest('button[data-v]');if(!b)return;m.remove();res(b.dataset.v==='1');});
+    document.body.appendChild(m);
+  });
+}
+window.inspAsk=inspAsk;
 function highlightMissing(isInstall,isWasher,noClient,noDate){
   var cid=isInstall?'if-client':(isWasher?'w-client':'f-client');
   var did=isInstall?'if-date':(isWasher?'w-date':'f-date');
