@@ -6824,7 +6824,7 @@ setTimeout(function(){
     n=n.replace(/^([^\d]+)(\d+)$/,'$1 $2');
     return n+' 에어컨';
   }
-  var GEN_RE=/전반|배수.{0,6}(기울기|구배|경사)|(기울기|구배)\s*(불량|부족)/;
+  var GEN_RE=/전반|배수.{0,6}(기울기|구배|경사)|(기울기|구배)\s*(불량|부족)|(단열|보온).{0,6}(불량|손상|미흡|부족)/;
   var OUT_RE=/실외기|응축기|콘덴서/;
   // ── 실외기 오염 정도
   function outLevel(t){
@@ -6847,7 +6847,7 @@ setTimeout(function(){
 
   // ── 한 대의 에어컨에서 찾는 것들
   function scanUnit(u,t){
-    var f=u.f;
+    var f=u.f,before=JSON.stringify(f);
     if(/토출/.test(t)){if(/정상|양호/.test(t))f.dtOk=1;else if(/높|불량|이상/.test(t))f.dtBad=1;}
     if(/BT|냉방\s*성능\s*테스트/i.test(t)&&/못|불가|안\s*됨|하지\s*못/.test(t))f.btFail=1;
     if(/냉매|가스/.test(t)){
@@ -6879,7 +6879,12 @@ setTimeout(function(){
     if(/소음|진동|떨림/.test(t))f.noise=1;
     if(/단열|보온|결로/.test(t))f.insul=1;
     if(/냉방.{0,6}(약|저하|불량|부족)|시원하지/.test(t))f.coolWeak=1;
+    if(/아이싱|결빙|성에|얼음|얼어|icing/i.test(t))f.icing=1;
+    if(/루버|풍향|날개/.test(t)&&/불량|고장|안\s*(움직|돌)|작동\s*(안|않|불)|미작동|멈춤/.test(t))f.louver=1;
+    if(/(스텝|스탭|스테핑|step)\s*모터/i.test(t)&&/고장|불량|이상|원인/.test(t))f.stepBad=1;
     u.raw.push(t);
+    // 사전에 없는 내용은 버리지 않고 그대로 점검결과에 남깁니다
+    if(JSON.stringify(f)===before&&t.replace(/\s/g,'').length>1)(u.extra=u.extra||[]).push(t);
   }
   function unitText(u){
     var f=u.f,R=[],C=[],A=[],n=u.name,inUnit=true;
@@ -6892,7 +6897,7 @@ setTimeout(function(){
     if(f.btFail)R.push((f.fanStopFinal||f.fanStop?'최종 점검 시 팬모터가 작동하지 않는 상태로, 정상적인 송풍이 이루어지지 않아 ':'')+'BT 측정법에 의한 냉방 성능 테스트는 진행하지 못함.');
     if(f.evDev)R.push('에바포레이터(Evaporator) 부위별 냉각 온도 편차가 확인됨.');
     if(f.evOk)R.push((f.btFail?'다만, ':'')+'에바포레이터(Evaporator)의 냉각 상태는 정상적으로 확인됨.');
-    if(f.gasLow)R.push((f.gasPsi?((f.gasType?f.gasType+' ':'')+'냉매 압력 약 '+f.gasPsi+' PSI로 측정되어 '):'냉매 압력이 낮아 ')+'냉매 보유량이 부족한 상태로 판단됨.');
+    if(f.gasLow)R.push((f.gasPsi?((f.gasType?f.gasType+' ':'')+'냉매 압력 약 '+f.gasPsi+' PSI로 측정되어 '):'점검 결과 ')+(f.gasPsi?'냉매 보유량이 부족한 상태로 판단됨.':'냉매 보유량이 부족한 상태로 확인됨.'));
     if(f.gasOk)R.push('냉매 보유량은 정상 범위로 확인됨.');
     if(f.amp){
       var a=f.amp,std=a.lo!=null?(a.lo===a.hi?fmtA(a.lo):a.lo+'~'+fmtA(a.hi)):'';
@@ -6909,12 +6914,17 @@ setTimeout(function(){
     if(f.leak)R.push('실내기에서 물이 떨어지는 증상이 확인됨.');
     if(f.noise)R.push('운전 중 소음 또는 진동이 확인됨.');
     if(f.insul)R.push('배관 단열재(보온재)의 손상 또는 결로가 확인됨.');
+    if(f.icing)R.push('에바포레이터(Evaporator)에 아이싱(결빙) 현상이 확인됨.');
+    if(f.louver)R.push('루버(풍향 날개)가 정상적으로 작동하지 않는 상태가 확인됨.');
+    if(f.stepBad)R.push('점검 결과 루버를 움직이는 스텝모터(Step Motor) 고장이 원인으로 확인됨.');
+    (u.extra||[]).forEach(function(t){R.push(t.replace(/\.?$/,'.'));});
     if(f.coolWeak&&!f.dtBad)R.push('냉방 성능이 정상보다 저하된 상태가 확인됨.');
 
     // ── 원인 및 상태분석 (증상을 묶어서 판단)
     if(f.gasLow){
       var w=[];if(f.evDev)w.push('에바포레이터 냉각 편차');if(f.ampLow)w.push('낮은 소비전류');
-      C.push(n+': '+(f.dtOk?'현재 토출 온도는 정상 범위이나, ':'')+'냉매 압력이 낮'+(w.length?'고 '+J(w.join(' 및 '),'가')+' 함께 확인됨.':'은 상태로 확인됨.')+(f.evDev?' 냉매 부족에 따른 냉매 순환 불균형이 에바포레이터 냉각 편차에 영향을 주고 있을 가능성이 있음.':' 냉매가 부족하면 증발 압력이 낮아져 냉방 능력이 떨어지고 압축기 부하가 불안정해질 수 있음.'));
+      if(w.length||!f.icing)C.push(n+': '+(f.dtOk?'현재 토출 온도는 정상 범위이나, ':'')+(w.length?(f.gasPsi?'냉매 압력이 낮':'냉매 보유량이 부족하')+'고 '+J(w.join(' 및 '),'가')+' 함께 확인됨.':(f.gasPsi?'냉매 압력이 낮은':'냉매 보유량이 부족한')+' 상태로 확인됨.')+(f.evDev?' 냉매 부족에 따른 냉매 순환 불균형이 에바포레이터 냉각 편차에 영향을 주고 있을 가능성이 있음.':f.icing?'':' 냉매가 부족하면 증발 압력이 낮아져 냉방 능력이 떨어지고 압축기 부하가 불안정해질 수 있음.'));
+      if(f.icing)C.push(n+': 냉매가 부족하면 증발 압력과 온도가 정상보다 낮아져 에바포레이터 표면이 얼어붙는 아이싱(결빙) 현상이 발생할 수 있음. 아이싱이 진행되면 바람이 열교환기를 통과하지 못해 냉방 성능이 떨어지고, 얼음이 녹으면서 물 떨어짐이 생길 수 있음. 현재 확인된 아이싱 현상은 냉매 부족이 주요 원인으로 판단됨.');
       C.push('냉매는 정상적인 밀폐 시스템에서 지속적으로 소모되지 않으므로, 향후 냉매량이 추가로 감소할 경우 냉매 누설 가능성에 대한 정밀점검이 필요함.');
       if(f.dtOk&&!f.coolWeak){
         A.push(jo(n)+' 현재 냉방 성능은 정상이나 '+J('냉매 부족'+(f.evDev?' 및 에바포레이터 냉각 편차':''),'가')+' 확인된 상태이므로 냉방 상태를 지속적으로 관찰할 것을 권장함.');
@@ -6930,7 +6940,10 @@ setTimeout(function(){
       C.push(n.replace(/ 에어컨$/,'')+'의 경우 현 단계에서 정확한 원인을 단정하기보다는 실내기 풍량 저하, 냉매 순환 상태 또는 기타 운전 조건에 의한 냉각 편차 가능성을 고려할 필요가 있음.');
       A.push(jo(n)+' '+(f.fanSlow?'실내기 팬모터 회전속도 및 풍량 상태를':'냉각 편차와 냉방 상태를')+' 지속적으로 관찰하고, 풍량 감소·냉각 편차 증가 또는 냉방 성능 저하가 발생할 경우 팬모터 및 관련 전기 부품, 냉매 순환 상태에 대한 정밀점검을 권장함.');
     }else{
-      if(f.evDev)C.push(n+': 에바포레이터 부위별 냉각 편차는 풍량 불균형, 열교환기 오염, 냉매 순환 상태 등에 의해 나타날 수 있음.');
+      if(f.evDev&&f.gasOk)C.push(n+': '+(f.dtOk?'냉매 보유량과 토출 온도는 정상 범위이나':'냉매 보유량은 정상 범위이나')+' 에바포레이터 부위별 냉각 편차가 확인됨. 냉매량이 정상이므로 풍량 불균형, 열교환기 표면 오염 등 냉매 외 요인에 의한 편차 가능성을 우선 고려할 필요가 있음.');
+      else if(f.evDev)C.push(n+': 에바포레이터 부위별 냉각 편차는 풍량 불균형, 열교환기 오염, 냉매 순환 상태 등에 의해 나타날 수 있음.');
+      if(f.icing)C.push(n+': 아이싱(결빙)은 냉매 부족, 필터·열교환기 오염에 따른 풍량 부족, 팬모터 이상 등으로 발생할 수 있으며, 진행되면 냉방 성능 저하와 물 떨어짐으로 이어질 수 있음.');
+      if(f.icing)A.push(jo(n)+' 아이싱 원인 확인을 위해 냉매 압력과 풍량 상태에 대한 정밀점검을 권장함.');
       if(f.ampLow&&!f.fanStop&&!f.fanBad)C.push(n+': 소비전류가 기준보다 낮게 측정되어 압축기 운전 부하가 평소와 다른 상태일 가능성이 있으므로 냉방 상태와 함께 관찰이 필요함.');
       if(f.fanSlow&&!f.fanStop&&!f.fanBad)C.push(n+': 팬모터 회전속도가 느리면 실내기 풍량이 줄어 냉방 성능이 떨어지고, 에바포레이터 표면 온도가 고르지 않게 될 수 있음.');
       if(f.evDev||(f.ampLow&&!f.fanBad)||(f.fanSlow&&!f.fanBad))A.push(jo(n)+' 냉방 상태를 지속적으로 관찰하고, 냉방 성능 저하가 발생할 경우 정밀점검을 권장함.');
@@ -6957,7 +6970,11 @@ setTimeout(function(){
     if(f.leak){C.push(n+': 실내기 누수는 주로 배수 배관 막힘, 배수 구배 불량, 드레인 팬 오염, 배관 단열 불량에 따른 결로 등으로 발생함.');A.push(n+'의 배수 경로를 점검하여 원인 부위를 세정하거나 보수할 것을 권장함.');}
     if(f.noise){C.push(n+': 소음·진동은 송풍팬 오염에 따른 회전 불균형, 고정 부위 풀림, 모터 베어링 노후 등에서 주로 발생함.');A.push(n+'의 소음 발생 부위를 확인하여 세척·재고정 또는 부품 교체를 권장함.');}
     if(f.insul){C.push(n+': 단열재가 손상되면 배관 표면에 결로가 생겨 물이 떨어질 수 있고 냉기 손실로 냉방 효율이 떨어짐.');A.push(n+'의 손상된 단열재 보수 또는 교체를 권장함.');}
-    if(f.replace&&!(f.fanStop||f.fanBad))A.push(n+'의 해당 부품 교체를 권장함.');
+    if(f.louver||f.stepBad){
+      C.push(n+': 루버는 스텝모터로 각도를 조절해 바람 방향을 바꾸는 장치로, 스텝모터가 고장 나면 루버가 움직이지 않거나 한 위치에 멈춰 바람 방향 조절이 되지 않음. 이 경우 냉기가 실내에 고르게 퍼지지 않아 냉방이 고르지 않게 느껴질 수 있음.');
+      A.push(jo(n)+' 정상적인 풍향 조절을 위해 루버 스텝모터 교체를 권장함.');
+    }
+    if(f.replace&&!(f.fanStop||f.fanBad||f.louver||f.stepBad))A.push(n+'의 해당 부품 교체를 권장함.');
     if(!R.length)u.raw.forEach(function(t){R.push(t.replace(/\.?$/,'.'));});
     return {R:R,C:C,A:A};
   }
@@ -7036,7 +7053,10 @@ setTimeout(function(){
     });
     function scanGen(t){
       if(/전반/.test(t)&&/양호|정상|이상\s*없/.test(t)){G.good=1;if(/정상/.test(t)&&!/양호/.test(t))G.goodWord='정상';}
-      if(/기울기|구배|경사/.test(t)){G.slope=1;if(/전체|모든|전부/.test(t))G.slopeAll=1;else if(/일부\s*에어컨/.test(t))G.slopePart=1;}
+      var hit=/전반/.test(t);
+      if(/기울기|구배|경사/.test(t)){hit=1;G.slope=1;if(/전체|모든|전부/.test(t))G.slopeAll=1;else if(/일부\s*에어컨/.test(t))G.slopePart=1;}
+      if(/단열|보온/.test(t)){hit=1;G.insul=1;if(/전체|모든|전부/.test(t))G.insulAll=1;}
+      if(!hit)G.free.push(t);
     }
     var R=[],C=[],A=[];
     var hasMeas=units.some(function(u){return u.f.dtOk||u.f.gasLow||u.f.amp;});
@@ -7045,6 +7065,11 @@ setTimeout(function(){
       R.push(G.slopeAll?'전체 에어컨의 배수 배관 기울기(구배)가 적절하지 않은 상태로 확인됨.':G.slopePart?'일부 에어컨의 배수 배관 기울기(구배)가 적절하지 않은 상태로 확인됨.':'일부 배수 배관의 기울기(구배)가 적절하지 않은 상태가 확인됨.');
       C.push((G.slopeAll?'전체적으로 ':'')+'배수 배관은 응축수가 자연스럽게 흘러 나가도록 배출 방향으로 최소 1/100(1%) 이상의 하향 기울기가 필요하며, 기울기가 적절하지 않으면 응축수 배출이 원활하지 않아 향후 물 떨어짐 또는 누수 증상이 발생할 가능성이 있음.');
       A.push('배수 문제가 반복적으로 발생할 경우 '+(G.slopeAll?'전체 에어컨의 ':'')+'배수 배관 기울기 조정 또는 재시공을 권장함.');
+    }
+    if(G.insul){
+      R.push((G.insulAll?'전체 에어컨의 ':'일부 ')+'배관 단열 처리 상태가 불량한 것으로 확인됨.');
+      C.push('배관 단열 처리가 불량하면 차가운 배관 표면에 결로(이슬)가 맺혀 물 떨어짐이 생길 수 있고, 냉기가 새어 나가 냉방 효율이 떨어질 수 있음.');
+      A.push('결로나 물 떨어짐이 발생하는 구간은 배관 단열재 보수 또는 재시공을 권장함.');
     }
     G.free.forEach(function(t){R.push(t.replace(/\.?$/,'.'));});
     var blocks=[];
@@ -7076,7 +7101,6 @@ setTimeout(function(){
     op.dispatchEvent(new Event('input',{bubbles:true}));
     if(typeof toast==='function')toast('✍ 작성 완료 — 확인 후 필요하면 고쳐 주세요');
   };
-
   // 메모로 자동 작성 ↔ 직접 작성 (기기에 마지막 선택을 기억합니다)
   window.setOpMode=function(m){
     var box=document.getElementById('opm-box'),a=document.getElementById('opm-t-memo'),b=document.getElementById('opm-t-self'),op=document.getElementById('f-opinion');
