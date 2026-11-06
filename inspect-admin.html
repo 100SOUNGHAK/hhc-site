@@ -45,6 +45,14 @@ textarea{resize:vertical;line-height:1.6}
 .rr-note{margin-top:8px;background:#FFFBEB;border:0.5px solid #FCD34D;border-radius:8px;padding:9px 11px;font-size:11.5px;line-height:1.6;color:#7C4A03}
 .btn-add{display:flex;align-items:center;gap:5px;width:100%;padding:11px;border-radius:8px;border:1.5px dashed #0D9488;background:#f0fdfb;color:#0D9488;font-size:13px;cursor:pointer;justify-content:center;transition:background .15s;margin-top:6px}
 .btn-add:hover{background:#e0faf5}
+.opm{background:#F6F8FC;border-radius:10px;padding:12px;margin-bottom:12px}
+.opm-hd{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
+.opm-hd b{font-size:13px;color:#0E2350}
+.opm-hd span{font-size:11.5px;color:#5A6478}
+.opm textarea{background:#fff}
+.opm-go{width:100%;margin-top:8px;padding:11px;border:0;border-radius:8px;background:#0E2350;color:#fff;font-size:13.5px;font-weight:700;cursor:pointer;font-family:inherit;transition:transform .14s}
+.opm-go:active{transform:scale(.98)}
+@media (prefers-reduced-motion:reduce){.opm-go{transition:none}}
 .btn-del{width:28px;height:28px;border-radius:6px;background:#fde8e8;color:#c0392b;border:none;font-size:14px;font-weight:700;cursor:pointer;flex-shrink:0}
 .btn-save-main{width:100%;padding:15px;background:#0F1C3F;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;margin-top:4px}
 /* 항목별 점검결과 카드 (컴팩트: 한 줄 요약 + 펼침 상세) */
@@ -693,6 +701,11 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 <div class="card">
   <div class="card-hdr"><div class="card-icon">📑</div><div class="card-title">최종 의견</div></div>
   <div class="card-body">
+    <div class="opm">
+      <div class="opm-hd"><b>✍ 점검 메모로 자동 작성</b><span>짧게 적으면 보고서 문장으로 바꿔 아래에 넣어 줍니다</span></div>
+      <textarea id="f-opmemo" rows="2" placeholder="예) 전반적 양호. 배수배관 기울기 불량. 실외기 일정수준 오염, 현 세척 불필요. 6개월 이내 재확인 후 세척 권장"></textarea>
+      <button type="button" class="opm-go" onclick="genOpinionFromMemo()">최종 의견 문장 만들기</button>
+    </div>
     <textarea id="f-opinion" rows="4" placeholder="전반적인 상태 및 권장 사항을 입력하세요..." oninput="updateInspProgress()"></textarea>
   </div>
 </div>
@@ -5042,7 +5055,7 @@ function _setupSectionObserver(cards){
 }
 
 function initEnhancements(){
-  ['f-opinion','d-work','w-opinion'].forEach(function(id){var el=gid(id);if(el)window.attachMic(el);});
+  ['f-opinion','f-opmemo','d-work','w-opinion'].forEach(function(id){var el=gid(id);if(el)window.attachMic(el);});
   initPhraseChipsStatic();
   injectQuickButtons();
   buildSectionNav();
@@ -6749,6 +6762,153 @@ setTimeout(function(){
     if(navigator.onLine===false||document.visibilityState!=='visible'){post({hhcStuck:1,soft:1});return;}
     post({hhcStuck:1});
   },40000);
+})();
+</script>
+<script>
+// ═══════════════════════════════════════════
+// ✍ 점검 메모 → 최종 의견 문장 자동 작성
+//  · 짧은 메모(예: "전반적 양호. 배수배관 기울기 불량. 실외기 일정수준 오염, 현 세척 불필요. 6개월이내 재확인후 세척권장")를
+//    [종합 판정] + 「1. 점검 결과 / 2. 원인 및 상태 분석 / 3. 조치 및 권장 사항」 보고서 문장으로 바꿔 최종 의견란에 넣습니다
+//  · 점검 결과 줄은 【양호】【관찰】【주의】【조치 필요】【조치 완료】 표시 + 「항목 : 내용」 형식입니다
+//    (고객용 보고서 inspect.html 이 이 형식을 알아보고 색 배지로 보여 줍니다 — 몰라도 글자 그대로 읽힙니다)
+//  · 인터넷·AI 없이 이 화면 안의 문장 사전으로만 작성합니다 (현장에서 바로, 비용 없이)
+//  · 사전에 없는 메모는 「기타 확인 사항」으로 그대로 살려 둡니다 — 만든 뒤 직접 고칠 수 있습니다
+// ═══════════════════════════════════════════
+(function(){
+  // 각 항목: 찾는 말(k) · 항목명(n) · 표시(g) · 점검 결과(r) · 원인/상태 분석(c) · 조치/권장(a)
+  var OPR=[
+    {id:'good',n:'작동 및 냉방 성능',k:/(전반|전체).{0,6}(양호|정상)|^(양호|정상|이상\s*없)/,
+      g:function(){return '양호';},
+      r:function(){return '전반적으로 정상 작동하며, 냉방 성능이 양호함.';}},
+    {id:'slope',n:'배수 배관',k:/(배수|드레인|배관).{0,10}(기울기|구배|경사|처짐)|(기울기|구배|경사).{0,6}(불량|부족|역구배)/,
+      g:function(o){return o.done?'조치 완료':'주의';},
+      r:function(o){return o.done?'기울기(구배)가 부족한 구간을 바로잡음.':'일부 구간의 기울기(구배)가 기준보다 부족함.';},
+      c:function(){return '에어컨이 냉방할 때 생기는 물(응축수)은 배관의 기울기를 따라 자연스럽게 흘러 나감. 배관은 1m당 약 1cm(1%) 이상 아래로 기울어져 있어야 하며, 기울기가 부족하거나 처진 구간에는 물이 고이고 물때·먼지가 쌓여 배관이 막힐 수 있음. 막히면 실내기에서 물이 떨어지는 누수로 이어질 수 있음.';},
+      a:function(o){return o.done?'구배 조정을 완료함. 이후 물 떨어짐 증상이 다시 나타나면 배수 경로 점검을 권장함.':'물 떨어짐이나 누수가 반복되면 기울기 조정 또는 배관 재시공을 권장함. 배관이 처지지 않도록 고정 상태도 함께 점검하는 것이 좋음.';}},
+    {id:'clog',n:'배수 배관',k:/(배수|드레인).{0,8}(막힘|막혀|슬라임|물때|이물)|(슬라임|물때).{0,6}(누적|막힘)/,
+      g:function(o){return o.done?'조치 완료':'조치 필요';},
+      r:function(){return '배관 안에 물때(슬라임)와 이물질이 쌓여 물이 잘 빠지지 않음.';},
+      c:function(){return '에어컨에서 생기는 물에는 먼지와 곰팡이 포자가 섞여 있어, 시간이 지나면 배관과 물받이(드레인 팬)에 물때로 쌓임. 막힘이 심해지면 물이 넘쳐 실내기에서 물이 떨어지는 누수로 이어질 수 있음.';},
+      a:function(o){return o.done?'배수 배관 세정을 완료함. 정기 세척 때 배수 상태를 함께 점검하는 것이 좋음.':'배수 배관 세정을 권장함. 정기 세척 때 배수 상태를 함께 점검하는 것이 좋음.';}},
+    {id:'leak',n:'누수',k:/누수|물\s*(떨어|샘|흐름)|물방울/,
+      g:function(o){return o.done?'조치 완료':'조치 필요';},
+      r:function(){return '실내기에서 물이 떨어지는 증상이 확인됨.';},
+      c:function(){return '실내기 누수는 대부분 배수 배관 막힘, 배관 기울기 부족, 물받이(드레인 팬) 오염, 배관 단열 불량으로 생기는 이슬(결로) 때문에 발생함. 그대로 두면 벽지·천장·가구 등이 젖어 손상될 수 있음.';},
+      a:function(o){return o.done?'누수 원인 부위 조치를 완료함.':'배수 경로(물받이·배수 배관·기울기)를 점검해 원인을 찾은 뒤, 해당 부위를 세정하거나 보수할 것을 권장함.';}},
+    {id:'outdoor',n:'실외기',k:/실외기|응축기|콘덴서/,
+      g:function(o){if(o.done)return '조치 완료';if(o.bad)return '조치 필요';if(o.noWash)return '관찰';if(o.dirty)return '주의';return '양호';},
+      r:function(o){
+        if(o.bad)return '열교환기(코일)에 오염이 많이 쌓여 열이 잘 빠져나가지 못함.';
+        if(o.noWash)return '열교환기(코일)에 가벼운 오염이 있으나, 현재 세척이 필요한 수준은 아님.';
+        if(o.dirty)return '열교환기(코일)에 오염이 쌓여 있음.';
+        return '정상 운전 중이며 상태가 양호함.';},
+      c:function(o){
+        if(!o.dirty&&!o.bad)return '';
+        var base='냉매가 실내에서 흡수한 열을 바깥 공기로 내보내는 장치로, 코일에 쌓인 먼지는 열이 빠져나가는 것을 막는 덮개 역할을 함. ';
+        if(o.bad)return base+'오염이 심하면 압축기가 더 오래, 더 힘들게 운전하게 되어 전기 사용량이 늘고 냉방 능력이 떨어지며, 장기적으로 압축기 수명에도 영향을 줄 수 있음.';
+        return base+'지금처럼 가벼운 오염은 성능에 큰 영향이 없으나, 오염이 계속 쌓이면 압축기가 더 오래, 더 힘들게 운전하게 되어 전기 사용량이 늘고 냉방 능력이 떨어질 수 있음.';},
+      a:function(o){
+        var p=o.period?o.period+' 이내에 ':'';
+        if(o.noWash)return '현재는 세척하지 않아도 됨. '+(p||'일정 기간 후 ')+'오염 상태를 다시 확인한 후, 필요하면 세척을 권장함.';
+        if(o.done)return '실외기 세척을 완료함.'+(p?' '+p+'상태를 다시 확인하는 것이 좋음.':'');
+        if(o.dirty||o.bad)return (p||'')+'실외기 고압 세척을 권장함.';
+        return p?p+'상태를 다시 확인하는 것이 좋음.':'';}},
+    {id:'filter',n:'필터',k:/필터/,
+      g:function(o){if(o.done)return '조치 완료';return (o.ok&&!o.dirty)?'양호':'주의';},
+      r:function(o){if(o.done)return '먼지가 많이 쌓여 공기 흐름이 막혀 있어 세척함.';return (o.ok&&!o.dirty)?'깨끗한 상태로 양호함.':'먼지가 많이 쌓여 공기 흐름이 막혀 있음.';},
+      c:function(o){return (o.ok&&!o.dirty)?'':'막히면 에어컨이 빨아들이는 바람의 양이 줄어 냉방이 약해지고 전기 사용량이 늘어남. 심하면 실내기 열교환기가 얼거나, 걸러지지 못한 먼지가 내부까지 쌓일 수 있음.';},
+      a:function(o){return (o.ok&&!o.dirty)?'':(o.done?'필터 세척을 완료함. ':'')+'필터는 2~4주에 한 번 청소하는 것을 권장함.';}},
+    {id:'evap',n:'실내기 내부',k:/(실내기|열교환기|증발기|에바|코일|송풍팬|블로워|팬).{0,8}(오염|곰팡이|먼지|때|검은)|곰팡이|악취|냄새/,
+      g:function(o){return o.done?'조치 완료':'주의';},
+      r:function(o){return o.done?'열교환기와 송풍팬의 먼지·곰팡이 오염을 세척함.':'열교환기와 송풍팬에 먼지와 곰팡이 오염이 확인됨.';},
+      c:function(){return '냉방 중 생기는 물기로 늘 습해, 먼지가 쌓이면 곰팡이와 세균이 번식하기 쉬움. 이 때문에 에어컨을 켤 때 냄새가 나거나 실내 공기가 나빠질 수 있으며, 송풍팬이 오염되면 바람이 약해져 냉방 성능도 떨어짐.';},
+      a:function(o){return o.done?'실내기 분해 세척을 완료함. 쾌적한 상태를 유지하려면 정기적인 분해 세척을 권장함.':'실내기 분해 세척(열교환기·송풍팬·물받이)을 권장함.';}},
+    {id:'gas',n:'냉매',k:/냉매|가스|저압|압력.{0,4}(낮|저하|부족)/,
+      g:function(o){if(o.done)return '조치 완료';return (o.ok&&!o.bad)?'양호':'조치 필요';},
+      r:function(o){return (o.ok&&!o.bad)?'냉매 압력이 정상 범위임.':'냉매 압력이 정상보다 낮아 냉매 부족이 의심됨.';},
+      c:function(o){return (o.ok&&!o.bad)?'':'밀폐된 배관 안을 계속 도는 것으로, 쓰면서 줄어드는 소모품이 아님. 냉매가 부족하다는 것은 배관 연결부 등 어딘가에서 새고 있을 가능성이 크다는 뜻이며, 부족한 채로 운전하면 냉방이 약해지고 압축기가 과열될 수 있음.';},
+      a:function(o){return (o.ok&&!o.bad)?'':(o.done?'냉매 조치를 완료함. 일정 기간 후 압력을 다시 확인하는 것이 좋음.':'새는 곳을 먼저 찾아 수리한 뒤 냉매를 보충할 것을 권장함. 수리 없이 보충만 하면 같은 증상이 다시 나타날 수 있음.');}},
+    {id:'noise',n:'소음·진동',k:/소음|진동|떨림|덜컹|이음/,
+      g:function(o){return o.done?'조치 완료':'주의';},
+      r:function(){return '운전 중 소음 또는 진동이 확인됨.';},
+      c:function(){return '소음·진동은 송풍팬 오염으로 인한 회전 불균형, 고정 나사·브래킷 풀림, 모터 베어링 노후 등에서 주로 발생함. 그대로 두면 부품이 빨리 닳을 수 있음.';},
+      a:function(o){return o.done?'소음 원인 부위 조치를 완료함.':'소음이 나는 부위를 확인해 세척·재고정 또는 부품 교체를 권장함.';}},
+    {id:'insul',n:'배관 단열재',k:/단열|보온|결로/,
+      g:function(o){return o.done?'조치 완료':'주의';},
+      r:function(){return '단열재(보온재)가 손상되었거나 배관에 이슬이 맺혀 있음.';},
+      c:function(){return '단열재가 손상되면 차가운 배관 표면에 이슬(결로)이 맺혀 물이 떨어질 수 있고, 냉기가 새어 나가 냉방 효율이 떨어짐.';},
+      a:function(o){return o.done?'단열재 보수를 완료함.':'손상된 단열재의 보수 또는 교체를 권장함.';}},
+    {id:'cool',n:'냉방 성능',k:/냉방.{0,6}(약|저하|불량|부족|안\s*됨)|시원하지/,
+      g:function(){return '조치 필요';},
+      r:function(){return '정상보다 냉방이 약한 상태임.';},
+      c:function(){return '냉방이 약해지는 원인은 필터·열교환기 오염, 실외기 열 배출 불량, 냉매 부족 등이며, 여러 원인이 겹쳐 나타나는 경우가 많음.';},
+      a:function(){return '오염 부위를 세척한 뒤에도 회복되지 않으면 냉매 압력 등 정밀 점검을 권장함.';}}
+  ];
+  function flags(t){
+    var o={};
+    o.noWash=/(세척|청소)\s*(불필요|필요\s*없|안\s*해도|하지\s*않아도)/.test(t);
+    o.done=/(세척|청소|세정|교체|보수|조치|수리|조정|보충).{0,3}(완료|했|실시)/.test(t);
+    o.bad=/심함|심각|과다|많이|불량|부족|저하|낮/.test(t);
+    o.dirty=/오염|먼지|때|이물|곰팡/.test(t);
+    o.ok=/양호|정상|이상\s*없/.test(t);
+    var m=t.match(/(\d+)\s*(개월|달|주|년)/);
+    if(m)o.period=m[1]+(m[2]==='달'?'개월':m[2]);
+    return o;
+  }
+  function split(memo){
+    return String(memo||'').split(/\n|[.。]|,|;|\//).map(function(s){return s.trim();}).filter(Boolean);
+  }
+  // 주어 없이 「6개월 이내 재확인 후 세척 권장」처럼만 적은 조각은 바로 앞 항목에 붙입니다
+  var FOLLOW=/^(현\s*|현재\s*|지금\s*)?(\d+\s*(개월|달|주|년)|재\s*확인|재\s*점검|세척|청소|교체|보수|권장|필요|불필요|완료|관찰)/;
+  var RANK={'조치 필요':4,'주의':3,'관찰':2,'조치 완료':1,'양호':0};
+  window.buildOpinion=function(memo){
+    var parts=split(memo), hits=[], byId={}, last=null, free=[];
+    parts.forEach(function(p){
+      var found=null;
+      for(var i=0;i<OPR.length;i++){if(OPR[i].k.test(p)){found=OPR[i];break;}}
+      if(found){
+        if(byId[found.id]){byId[found.id].t+=' '+p;last=byId[found.id];return;}
+        var h={rule:found,t:p};hits.push(h);byId[found.id]=h;last=h;return;
+      }
+      if(last&&FOLLOW.test(p)){last.t+=' '+p;return;}
+      free.push(p);
+    });
+    if(!hits.length&&!free.length)return '';
+    var R=[],C=[],A=[],worst=-1;
+    hits.forEach(function(h){
+      var o=flags(h.t),ru=h.rule,g=ru.g(o);
+      worst=Math.max(worst,RANK[g]);
+      R.push('【'+g+'】 '+ru.n+' : '+ru.r(o));
+      var c=ru.c&&ru.c(o),a=ru.a&&ru.a(o);
+      if(c)C.push(ru.n+' : '+c); if(a)A.push(ru.n+' : '+a);
+    });
+    free.forEach(function(p){
+      p=p.replace(/\s+/g,' ').trim();
+      R.push('【참고】 기타 : '+p.replace(/\.?$/,'.'));
+    });
+    var verdict= worst>=4?'조치가 필요한 항목이 있음 · 아래 권장 사항 확인 요망'
+               : worst===3?'정상 사용 가능 · 일부 관리 권장'
+               : worst===2?'정상 사용 가능 · 정기 관찰 권장'
+               : '정상 사용 가능';
+    var out=['[종합 판정] '+verdict,'','1. 점검 결과'].concat(R.map(function(x){return '- '+x;}));
+    var n=2;
+    if(C.length)out=out.concat(['',(n++)+'. 원인 및 상태 분석'],C.map(function(x){return '- '+x;}));
+    if(A.length)out=out.concat(['',(n++)+'. 조치 및 권장 사항'],A.map(function(x){return '- '+x;}));
+    return out.join('\n');
+  };
+  window.genOpinionFromMemo=function(){
+    var m=document.getElementById('f-opmemo'),op=document.getElementById('f-opinion');
+    if(!m||!op)return;
+    var memo=(m.value||'').trim();
+    if(!memo){if(typeof toast==='function')toast('점검 메모를 먼저 입력해 주세요');m.focus();return;}
+    var txt=window.buildOpinion(memo);
+    if(!txt){if(typeof toast==='function')toast('문장을 만들 수 없는 메모입니다');return;}
+    if((op.value||'').trim()&&!confirm('최종 의견란에 이미 내용이 있습니다.\n새로 만든 문장으로 바꿀까요?'))return;
+    op.value=txt;
+    op.style.height='auto';op.style.height=Math.min(op.scrollHeight+4,1000)+'px';
+    op.dispatchEvent(new Event('input',{bubbles:true}));
+    if(typeof toast==='function')toast('✍ 작성 완료 — 확인 후 필요하면 고쳐 주세요');
+  };
 })();
 </script>
 </body>

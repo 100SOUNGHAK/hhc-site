@@ -612,6 +612,31 @@ body{font-family:'Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;back
 .dn-name{font-family:'Noto Serif KR',serif;font-size:13.5px;font-weight:700;color:var(--gold-lt)}
 .dn-role{font-size:11.5px;color:rgba(255,255,255,.62);margin-top:2px}
 
+
+/* ━━━ 최종 의견 — 「점검 메모로 자동 작성」 형식(종합 판정 · 번호 제목 · 【상태】 항목 : 내용)을 보기 좋게 ━━━ */
+.opinion-box.opf{white-space:normal}
+.opf-vd{display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:10px;background:rgba(255,255,255,.08);border:1px solid rgba(201,169,89,.35);margin-bottom:16px}
+.opf-vd i{font-style:normal;font-size:11px;font-weight:700;letter-spacing:.02em;color:var(--gold);flex-shrink:0}
+.opf-vd b{font-size:14.5px;font-weight:700;line-height:1.5}
+.opf-h{font-size:13px;font-weight:700;color:var(--gold);margin:18px 0 8px;display:flex;align-items:center;gap:7px}
+.opf-h:first-child{margin-top:0}
+.opf-h em{font-style:normal;width:20px;height:20px;border-radius:6px;background:rgba(201,169,89,.18);display:inline-flex;align-items:center;justify-content:center;font-size:11.5px}
+.opf-r{padding:9px 0;border-top:1px solid rgba(255,255,255,.08);line-height:1.75}
+.opf-h+.opf-r{border-top:0;padding-top:2px}
+.opf-l{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:2px}
+.opf-l b{font-size:14px;font-weight:700}
+.opf-p{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;line-height:1.5;white-space:nowrap}
+.opf-p.ok{background:var(--ok-bg);color:var(--ok)}
+.opf-p.wa{background:var(--warn-bg);color:var(--warn)}
+.opf-p.bd{background:var(--bad-bg);color:var(--bad)}
+.opf-p.ob{background:#E8EFFC;color:#2557B8}
+.opf-p.dn{background:#E3F3F1;color:#0F766E}
+.opf-p.nt{background:var(--neu-bg);color:var(--neu)}
+.opf-t{font-size:14px;opacity:.9}
+html.pdfdoc .opf-vd{background:#fff;border-color:#E9DDBA}
+html.pdfdoc .opf-h,html.pdfdoc .opf-vd i{color:#8A6410}
+html.pdfdoc .opf-r{border-top-color:#EFE6CC}
+@media print{.opf-r{break-inside:avoid}}
 /* ━━━ 사진 ━━━ */
 .photo-record-sec{background:var(--card);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-bottom:14px;box-shadow:0 1px 2px rgba(16,30,60,.03),0 12px 28px -22px rgba(16,30,60,.24)}
 .photo-section-hdr{display:flex;align-items:center;gap:10px;padding:14px 18px 12px;border-bottom:1px solid var(--line-2)}
@@ -1630,7 +1655,7 @@ window.renderReport=function renderReport(data){
   setTxt('r-eng-footer',data.engineer||'');
 
   // 최종 의견
-  autoTr(data.opinion,data.opinion_en,function(v){setTxt('r-opinion',v||'—');});
+  autoTr(data.opinion,data.opinion_en,function(v){if(window.fmtOpinion)window.fmtOpinion(G('r-opinion'),v||'—');else setTxt('r-opinion',v||'—');});
   var engName=(data.engineer||'').trim();
   setTxt('dn-name',engName||(isEn?'HHC Service Team':'HHC 정비팀'));
   setTxt('dn-role',isEn?'On-site Technician':'현장 담당 기사');
@@ -2875,6 +2900,45 @@ if(rid){
 }else{
   window.addEventListener('load',function(){window.renderReport(window.getSampleData());});
 }
+</script>
+
+<script>
+// ━━━ 최종 의견 보기 좋게 그리기 ━━━
+//  관리자 화면 「점검 메모로 자동 작성」이 만든 형식이면 판정 상자 · 제목 · 상태 배지로 그리고,
+//  기사가 자유롭게 적은 글이면 지금처럼 글자 그대로 보여 줍니다 (영문 번역본도 같은 방식)
+window.fmtOpinion=function(el,v){
+  if(!el)return;
+  v=String(v==null?'':v);
+  var lines=v.split(/\r?\n/);
+  var structured=lines.some(function(l){return /^\s*\d+\.\s+\S/.test(l);})&&lines.some(function(l){return /^\s*-\s+/.test(l);});
+  if(!structured){el.classList.remove('opf');el.textContent=v;return;}
+  var esc=function(s){return String(s).replace(/[&<>"]/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m];});};
+  function cls(t){
+    t=t.toLowerCase();
+    if(/조치\s*완료|완료|complet|done|resolved/.test(t))return 'dn';
+    if(/조치\s*필요|필요|required|need|action/.test(t))return 'bd';
+    if(/주의|caution|warning|attention/.test(t))return 'wa';
+    if(/관찰|observ|monitor/.test(t))return 'ob';
+    if(/양호|정상|good|normal|ok/.test(t))return 'ok';
+    return 'nt';
+  }
+  var out=[],m;
+  lines.forEach(function(raw,i){
+    var l=raw.trim(); if(!l)return;
+    if(i<3&&(m=l.match(/^\[([^\]]{1,40})\]\s*(.+)$/))){out.push('<div class="opf-vd"><i>'+esc(m[1])+'</i><b>'+esc(m[2])+'</b></div>');return;}
+    if(m=l.match(/^(\d+)\.\s+(.+)$/)){out.push('<div class="opf-h"><em>'+m[1]+'</em>'+esc(m[2])+'</div>');return;}
+    if(m=l.match(/^-\s*(.+)$/)){
+      var body=m[1],pill='',lab='',k;
+      if(k=body.match(/^[【\[]([^】\]]{1,24})[】\]]\s*(.*)$/)){pill='<span class="opf-p '+cls(k[1])+'">'+esc(k[1])+'</span>';body=k[2];}
+      if(k=body.match(/^([^:：]{1,24}?)\s*[:：]\s*(.+)$/)){lab='<b>'+esc(k[1])+'</b>';body=k[2];}
+      out.push('<div class="opf-r">'+((pill||lab)?'<div class="opf-l">'+pill+lab+'</div>':'')+'<div class="opf-t">'+esc(body)+'</div></div>');
+      return;
+    }
+    out.push('<div class="opf-r"><div class="opf-t">'+esc(l)+'</div></div>');
+  });
+  el.classList.add('opf');
+  el.innerHTML=out.join('');
+};
 </script>
 </body>
 </html>
