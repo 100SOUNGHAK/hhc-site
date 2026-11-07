@@ -1357,6 +1357,37 @@ body.popon .topbar,body.popon .fixbar,body.popon .qtiles{display:none!important}
 .hc-r.warn .hc-bar i{background:linear-gradient(90deg,#F7C55A,#E19A0C)}
 .hc-r.bad .hc-bar i{background:linear-gradient(90deg,#F59393,#E5484D)}
 .hc-d{display:flex;justify-content:space-between;gap:8px;margin-top:5px;font-size:10.5px;font-weight:700;color:var(--ink3);font-variant-numeric:tabular-nums}
+
+/* 🏡 우리집 케어 현황 — 원형 게이지 (V2) */
+.hcg{background:#fff;border-radius:18px;padding:12px 12px 11px;box-shadow:0 1px 2px rgba(11,24,51,.08),0 8px 18px -8px rgba(11,24,51,.2)}
+.hcg-h{display:flex;align-items:center;gap:6px;margin-bottom:9px}
+.hcg-tt{display:flex;flex-direction:column;gap:1px;min-width:0}
+.hcg-b{font-size:10px;font-weight:700;color:var(--ink3);white-space:nowrap;padding-left:1px}
+.hcg-h b{font-size:14px;font-weight:900;letter-spacing:-.03em;white-space:nowrap}
+.hcg-sum{margin-left:auto;display:flex;gap:4px;flex:none}
+.hcg-sum i{font-style:normal;font-size:9.5px;font-weight:900;border-radius:999px;padding:2px 7px;white-space:nowrap}
+.hcg-sum i.bad{background:#FFE4E4;color:#C42B2B}.hcg-sum i.warn{background:#FFF1D6;color:#9A5B00}.hcg-sum i.ok{background:var(--ok-bg);color:var(--ok)}
+.hcg-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.hcg-t{display:flex;flex-direction:column;align-items:center;text-align:center;gap:0;padding:8px 4px 7px;border-radius:12px;background:#F6F8FC;min-width:0}
+.hcg-t.bad{background:#FFF4F4}.hcg-t.warn{background:#FFF9EC}
+.hcg-ring{position:relative;width:40px;height:40px;margin-bottom:4px}
+.hcg-ring svg{width:40px;height:40px;transform:rotate(-90deg);display:block}
+.hcg-ring circle{fill:none;stroke-width:4.4;stroke-linecap:round}
+.hcg-ring .bg{stroke:#E3E8F0}
+.hcg-t.ok .fg{stroke:#10A06B}.hcg-t.warn .fg{stroke:#E5A010}.hcg-t.bad .fg{stroke:#E5484D}
+.hcg-ring em{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-style:normal;font-size:16px;line-height:1}
+.hcg-dot{position:absolute;top:-3px;right:-4px;width:14px;height:14px;border-radius:50%;background:#E5484D;color:#fff;font-size:9.5px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px #fff}
+.hcg-n{font-size:11.5px;font-weight:900;color:var(--ink);letter-spacing:-.03em;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hcg-s{font-size:10.5px;font-weight:900;letter-spacing:-.02em}
+.hcg-t.ok .hcg-s{color:var(--ok)}.hcg-t.warn .hcg-s{color:#9A5B00}.hcg-t.bad .hcg-s{color:#C42B2B}
+.hcg-d{font-size:9.5px;font-weight:700;color:var(--ink3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.hcg-go{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding:9px 13px;border-radius:11px;
+  background:linear-gradient(145deg,#16346E,#0E2350);color:#fff;text-decoration:none;font-size:12px;font-weight:900;letter-spacing:-.02em;box-shadow:0 6px 14px -8px rgba(14,35,80,.7)}
+.hcg-go b{font-size:16px;color:#E3C98A}
+.hcg-go:active{transform:translateY(1px)}
+.hcg-ok{margin-top:8px;text-align:center;font-size:11.5px;font-weight:800;color:var(--ok)}
+.hcg-f{margin-top:7px;text-align:center;font-size:9.5px;font-weight:700;color:var(--ink3)}
+@media (max-width:340px){.hcg-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (prefers-reduced-motion:reduce){.brf,.brf-dots i{transition:none}}
 </style>
 <style id="sect-css">
@@ -3395,15 +3426,36 @@ function render(){
       '<div class="brf-rail" id="brf-rail">'+B.map(slide).join('')+'</div>'+
       (B.length>1?'<div class="brf-dots" id="brf-dots">'+B.map((b,i)=>'<i'+(i===0?' class="on"':'')+'></i>').join('')+'</div>':'')+
       '</div>';
-    // 우리집 케어 현황 카드
+    // 우리집 케어 현황 — 품목별 원형 게이지 (관리 필요 → 곧 관리 → 양호 순)
     if(careRows.length){
-      H_CARE+='<div class="sec hcs"><div class="hc">'+
-        '<div class="hc-h"><b>🏡 '+(en?'Home care status':'우리집 케어 현황')+'</b><span>'+(en?'Based on your last service':'마지막 서비스 기준')+'</span></div>'+
-        careRows.map(r=>'<div class="hc-r '+r.st+'"><span class="hc-ic">'+r.c.ic+'</span>'+
-          '<div class="hc-x"><div class="hc-t"><b>'+esc(en?r.c.en:r.c.ko)+'<small class="hc-cy">'+cyc(r.c)+'</small></b><span class="hc-st">'+
-            (r.left<0?(en?'Due now':'관리 필요'):(r.left<=30?(en?'Soon':'곧 관리'):(en?'Good':'양호')))+'</span></div>'+
-          '<div class="hc-bar"><i style="width:'+r.pct+'%"></i></div>'+
-          '<div class="hc-d"><span>'+(en?'Last ':'마지막 ')+esc(dfmt(r.last))+'</span><span>'+(en?'Next ':'다음 권장 ')+esc(dfmt(r.next))+'</span></div></div></div>').join('')+
+      const R=16,CIR=2*Math.PI*R;
+      const rk={bad:0,warn:1,ok:2};
+      const rows=careRows.slice().sort((a,b)=>rk[a.st]-rk[b.st]||a.left-b.left);
+      const cnt={bad:0,warn:0,ok:0};rows.forEach(r=>cnt[r.st]++);
+      const SUM={bad:en?'Due':'필요',warn:en?'Soon':'임박',ok:en?'Good':'양호'};
+      const gap=r=>{                                  // 남은 · 지난 기간을 짧게
+        const n=Math.abs(r.left);
+        const t=n>=60?(en?Math.round(n/30)+' mo':Math.round(n/30)+'개월'):(en?n+' d':n+'일');
+        if(r.left<0)return en?t+' over':t+' 지남';
+        if(r.left===0)return en?'Today':'오늘';
+        return en?t+' left':t+' 남음';
+      };
+      const sd=s=>{const x=dfmt(s);return x.length===10?x.slice(2):x;};
+      H_CARE+='<div class="sec hcs"><div class="hcg">'+
+        '<div class="hcg-h"><div class="hcg-tt"><b>🏡 '+(en?'Home care status':'우리집 케어 현황')+'</b>'+
+          '<small class="hcg-b">'+(en?'Based on your last service':'마지막 서비스 기준 · 권장 관리 주기')+'</small></div><span class="hcg-sum">'+['bad','warn','ok'].filter(k=>cnt[k]).map(k=>'<i class="'+k+'">'+SUM[k]+' '+cnt[k]+'</i>').join('')+'</span></div>'+
+        '<div class="hcg-grid">'+rows.map(r=>{
+          const p=r.st==='bad'?100:Math.max(4,r.pct);
+          return '<div class="hcg-t '+r.st+'" title="'+esc((en?'Last ':'마지막 ')+dfmt(r.last)+' · '+(en?'Next ':'다음 권장 ')+dfmt(r.next))+'">'+
+            '<span class="hcg-ring"><svg viewBox="0 0 42 42" aria-hidden="true"><circle class="bg" cx="21" cy="21" r="'+R+'"/>'+
+              '<circle class="fg" cx="21" cy="21" r="'+R+'" stroke-dasharray="'+(CIR*p/100).toFixed(1)+' '+CIR.toFixed(1)+'"/></svg>'+
+              '<em>'+r.c.ic+'</em>'+(r.st==='bad'?'<b class="hcg-dot">!</b>':'')+'</span>'+
+            '<span class="hcg-n">'+esc(en?(r.c.k==='wm'?'Washer':r.c.en):r.c.ko)+'</span>'+
+            '<span class="hcg-s">'+gap(r)+'</span></div>';
+        }).join('')+'</div>'+
+        ((cnt.bad||cnt.warn)?'<a class="hcg-go" href="'+esc(BASE+'/request.html?lang='+LANG+'&nm='+encodeURIComponent(m.name||'')+'&ph='+encodeURIComponent(m.phone||''))+'" target="_blank" rel="noopener">'+
+          '<span>'+(en?'Book care for '+(cnt.bad+cnt.warn)+' item'+((cnt.bad+cnt.warn)>1?'s':''):'관리할 때가 된 '+(cnt.bad+cnt.warn)+'개 품목 예약하기')+'</span><b>›</b></a>':
+          '<div class="hcg-ok">'+(en?'Everything is within its care cycle ✓':'모든 품목이 관리 주기 안에 있어요 ✓')+'</div>')+
         '</div></div>';
     }
     BRIEF_N=todo;
