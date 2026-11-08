@@ -1639,7 +1639,9 @@ function careSentOf(e,k,since){
 //  · 마지막 관리일 = 마지막 에어컨 인보이스 날짜 (발송 화면에서 고쳐 쓸 수 있습니다)
 //  · 바탕 그림을 다시 만들면 아래 글자 위치(l1·l2·x)도 함께 확인할 것 — 1170px 기준 픽셀
 const CARE_IMG={
-  ko:{u:'/care-cycle-ko.png',l1:769,l2:835},
+  // 🇰🇷 새 안내장(2026-11-08) — 빈칸 「__월 __일」 · 「마지막 관리 후 __개월 경과」에 숫자만 써 넣습니다
+  //    v2 : 각 빈칸 밑줄의 가운데 x · 글자 가운데 y (1170px 기준) / c1 월·일 글자색 · c2 개월 글자색(금색)
+  ko:{u:'/care-cycle-v2-ko.jpg',v2:{mo:[593.5,788],dy:[776.5,788],el:[551.5,909],c1:'#2A1F08',c2:'#E3C98A',fs:56}},
   en:{u:'/care-cycle-en.png',l1:769,l2:831},
   x:76,fs:40,navy:'#0f2540',
   bx:1086,by:705,gold:'#F5C55A'   // ⏰ 경과 개월 배지 — 오른쪽 끝 x · 제목 줄 가운데 y
@@ -1739,16 +1741,22 @@ function careFile(en,date){
         cx+=w;
       });
     }
-    if(en){
+    if(L.v2){
+      // 🇰🇷 새 안내장 : 빈칸 세 곳에 월 · 일 · 경과 개월 수를 가운데 맞춰 씁니다
+      const V=L.v2,dm=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date||''));
+      const put=(t,p,c)=>{x.font='900 '+V.fs+'px '+F;x.fillStyle=c;x.textAlign='center';x.fillText(t,p[0],p[1]+2);x.textAlign='left';};
+      if(dm){put(String(parseInt(dm[2],10)),V.mo,V.c1);put(String(parseInt(dm[3],10)),V.dy,V.c1);}
+      put(String(careMonths(date)),V.el,V.c2);
+    }else if(en){
       run(L.l1,[{t:'Your air-con was last serviced'}]);
       run(L.l2,[{t:'on '},{t:D,d:1},{t:'.'}]);
     }else{
       run(L.l1,[{t:'고객님 댁 에어컨은 '},{t:D,d:1},{t:'에'}]);
       run(L.l2,[{t:'마지막으로 관리받으셨습니다.'}]);
     }
-    // ⏰ 경과 개월 수 배지 — 「관리 이력」 제목 줄 오른쪽 끝 (1개월 이상일 때만)
+    // ⏰ 경과 개월 수 배지 — 「관리 이력」 제목 줄 오른쪽 끝 (1개월 이상일 때만 · 새 안내장은 빈칸에 이미 들어가므로 생략)
     const MO=careMonths(date);
-    if(MO>=1){
+    if(MO>=1&&!L.v2){
       const parts=en?[{t:MO+(MO===1?' month':' months'),n:1},{t:' since service'}]
                     :[{t:'청소 후 '},{t:MO+'개월',n:1},{t:' 경과'}];
       const bf=30,bh=60,px=24,right=CARE_IMG.bx,cy=CARE_IMG.by;
