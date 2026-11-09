@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>HHC 백업 · 복원</title>
+<style>
+:root{--bg:#f4f6fa;--card:#fff;--ink:#1a2233;--ink2:#4b5563;--ink3:#8a94a6;--bdr:#e3e8f0;--pri:#2563eb;--pri-bg:#eff6ff;--ok:#059669;--ok-bg:#ecfdf5;--warn:#b45309;--warn-bg:#fff7e6;--bad:#dc2626;--bad-bg:#fef2f2;--n:#0E2350;--n2:#16346E;--gold:#C9A44C;
+--e1:0 1px 2px rgba(11,24,51,.07),0 6px 14px -6px rgba(11,24,51,.14)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;background:var(--bg);color:var(--ink);padding:16px 14px calc(40px + env(safe-area-inset-bottom));-webkit-text-size-adjust:100%}
+.bk-wrap{max-width:720px;margin:0 auto}
+.bk-hdr{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.bk-hdr h1{font-size:19px;font-weight:900}
+.bk-dot{width:9px;height:9px;border-radius:50%;background:#d1d5db}
+.bk-dot.on{background:#34d399}
+.bk-hdr .bk-sp{flex:1}
+.bk-hdr small{font-size:11.5px;color:var(--ink3);font-weight:700}
+
+.bk-hero{position:relative;overflow:hidden;background:linear-gradient(150deg,var(--n),var(--n2));color:#fff;border-radius:16px;padding:20px 18px 18px;box-shadow:0 1px 2px rgba(11,24,51,.1),0 8px 16px -4px rgba(11,24,51,.16),0 26px 44px -14px rgba(11,24,51,.34);margin-bottom:16px}
+.bk-hero:after{content:'';position:absolute;right:-60px;top:-60px;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(201,164,76,.22),transparent 70%)}
+.bk-lb{font-size:11px;font-weight:800;color:rgba(255,255,255,.62)}
+.bk-when{font-size:24px;font-weight:900;letter-spacing:-.02em;margin-top:4px;font-variant-numeric:tabular-nums}
+.bk-st{display:inline-block;font-size:11px;font-weight:800;border-radius:999px;padding:3px 10px;margin-top:8px}
+.bk-st.ok{background:rgba(52,211,153,.18);color:#6ee7b7}
+.bk-st.warn{background:rgba(240,180,41,.2);color:#fcd34d}
+.bk-st.bad{background:rgba(248,113,113,.2);color:#fca5a5}
+.bk-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px;position:relative;z-index:1}
+.bk-grid div{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:11px;padding:9px 10px}
+.bk-grid span{display:block;font-size:10px;font-weight:800;color:rgba(255,255,255,.58)}
+.bk-grid b{display:block;font-size:16px;font-weight:900;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bk-go{position:relative;z-index:1;display:block;width:100%;margin-top:16px;border:none;cursor:pointer;font-family:inherit;font-size:16px;font-weight:900;color:var(--n);background:linear-gradient(180deg,#e3c98a,var(--gold));border-radius:13px;padding:15px;box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 6px 14px -6px rgba(0,0,0,.45);transition:transform .14s}
+.bk-go:active{transform:scale(.98)}
+.bk-go:disabled{opacity:.6;cursor:default}
+.bk-dest{position:relative;z-index:1;display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:rgba(255,255,255,.75);flex-wrap:wrap}
+.bk-dest b{color:#fff;font-weight:800;word-break:break-all}
+.bk-dest button{margin-left:auto;border:1px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-family:inherit;font-size:11.5px;font-weight:800;border-radius:8px;padding:6px 10px;cursor:pointer}
+
+.bk-card{background:#fff;border-radius:14px;box-shadow:var(--e1);margin-bottom:16px;overflow:hidden}
+.bk-ch{display:flex;align-items:center;gap:8px;padding:14px 16px 10px}
+.bk-ch h2{font-size:15px;font-weight:900}
+.bk-ch .bk-sp{flex:1}
+.bk-ch .bk-mini{font-size:11.5px;font-weight:800;color:var(--pri);background:none;border:none;cursor:pointer;font-family:inherit}
+.bk-desc{font-size:12.5px;color:var(--ink2);line-height:1.6;padding:0 16px 12px}
+.bk-grp{font-size:10.5px;font-weight:900;color:var(--ink3);padding:10px 16px 4px;letter-spacing:.02em}
+.bk-row{display:flex;align-items:center;gap:10px;padding:9px 16px;border-top:1px solid #f0f3f8;cursor:pointer}
+.bk-row input{width:17px;height:17px;accent-color:var(--pri);flex:none}
+.bk-row .bk-nm{flex:1;min-width:0}
+.bk-row .bk-nm b{display:block;font-size:14px;font-weight:800}
+.bk-row .bk-nm span{display:block;font-size:11px;color:var(--ink3);margin-top:1px}
+.bk-row .bk-n{font-size:14px;font-weight:900;font-variant-numeric:tabular-nums;color:var(--ink)}
+.bk-row .bk-n.z{color:var(--ink3);font-weight:700}
+
+.bk-drop{display:block;cursor:pointer;margin:0 16px 16px;border:1.5px dashed #c8d2e3;border-radius:12px;padding:18px 14px;text-align:center;background:#fafbfd}
+.bk-drop b{display:block;font-size:14px;font-weight:800}
+.bk-drop span{display:block;font-size:12px;color:var(--ink3);margin-top:3px}
+.bk-btn{border:none;cursor:pointer;font-family:inherit;font-size:13px;font-weight:800;border-radius:10px;padding:11px 16px;background:#fff;border:1.5px solid var(--bdr);color:var(--ink2);transition:transform .14s}
+.bk-btn:active{transform:scale(.97)}
+.bk-btn.p{background:var(--pri);border-color:var(--pri);color:#fff}
+.bk-btn.bad{background:var(--bad);border-color:var(--bad);color:#fff}
+.bk-btn:disabled{opacity:.5;cursor:default}
+.bk-drop .bk-btn{margin-top:12px}
+
+.bk-fileinfo{margin:0 16px 12px;background:var(--pri-bg);border-radius:10px;padding:10px 12px;font-size:12.5px;color:#1e3a8a;line-height:1.6}
+.bk-sum{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 10px}
+.bk-pill{font-size:11px;font-weight:800;border-radius:999px;padding:4px 10px}
+.bk-pill.del{background:var(--bad-bg);color:var(--bad)}
+.bk-pill.chg{background:var(--warn-bg);color:var(--warn)}
+.bk-pill.new{background:#f1f5f9;color:#475569}
+.bk-pill.same{background:var(--ok-bg);color:var(--ok)}
+.bk-cmp{border-top:1px solid #f0f3f8}
+.bk-cmp summary{list-style:none;display:flex;align-items:center;gap:8px;padding:11px 16px;cursor:pointer}
+.bk-cmp summary::-webkit-details-marker{display:none}
+.bk-cmp summary b{flex:1;font-size:14px;font-weight:800}
+.bk-cmp summary:after{content:'›';font-size:18px;color:var(--ink3);transition:transform .18s}
+.bk-cmp[open] summary:after{transform:rotate(90deg)}
+.bk-it{display:flex;align-items:center;gap:10px;padding:8px 16px 8px 22px;font-size:13px;border-top:1px dashed #eef1f6}
+.bk-it input{width:16px;height:16px;accent-color:var(--pri);flex:none}
+.bk-it .bk-tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bk-it .bk-tx small{color:var(--ink3);margin-left:6px}
+.bk-tag{font-size:10px;font-weight:800;border-radius:5px;padding:2px 6px;flex:none}
+.bk-tag.del{background:var(--bad-bg);color:var(--bad)}
+.bk-tag.chg{background:var(--warn-bg);color:var(--warn)}
+.bk-foot{display:flex;gap:8px;align-items:center;padding:12px 16px 16px;flex-wrap:wrap;border-top:1px solid #f0f3f8}
+.bk-foot .bk-sp{flex:1}
+.bk-foot small{font-size:12px;color:var(--ink2);font-weight:700}
+
+.bk-note{font-size:12px;color:var(--ink2);line-height:1.7;padding:12px 16px 16px}
+.bk-note li{margin-left:16px}
+.bk-empty{padding:18px 16px;text-align:center;font-size:13px;color:var(--ink3)}
+
+.bk-prog{position:relative;z-index:1;height:6px;border-radius:6px;background:rgba(255,255,255,.14);margin-top:12px;overflow:hidden;display:none}
+.bk-prog i{display:block;height:100%;width:0;background:#e3c98a;transition:width .2s}
+.bk-msg{position:relative;z-index:1;font-size:12px;color:rgba(255,255,255,.8);margin-top:6px;min-height:16px}
+
+#bk-mask{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:900;display:none;align-items:center;justify-content:center;padding:16px}
+#bk-mask.open{display:flex}
+.bk-dlg{background:#fff;border-radius:16px;max-width:400px;width:100%;padding:20px;box-shadow:0 24px 60px -12px rgba(0,0,0,.4)}
+.bk-dlg h3{font-size:16px;font-weight:900;margin-bottom:8px}
+.bk-dlg p{font-size:13px;color:var(--ink2);line-height:1.65}
+.bk-dlg input{width:100%;margin-top:12px;border:1.5px solid var(--bdr);border-radius:10px;padding:11px 12px;font-size:16px;font-family:inherit}
+.bk-dlg .bk-db{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+#bk-toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:#1a2233;color:#fff;font-size:13px;font-weight:700;padding:11px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:all .2s;z-index:950;max-width:90vw;text-align:center}
+#bk-toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media (max-width:380px){.bk-grid b{font-size:14px}.bk-when{font-size:21px}}
+</style>
+</head>
+<body>
+<div class="bk-wrap">
+  <div class="bk-hdr">
+    <span class="bk-dot" id="bk-dot"></span>
+    <h1>백업 · 복원</h1>
+    <span class="bk-sp"></span>
+    <small>해피홈케어 고객관리</small>
+  </div>
+
+  <!-- ① 지금 백업 -->
+  <div class="bk-hero">
+    <div class="bk-lb">이 기기의 마지막 백업</div>
+    <div class="bk-when" id="bk-when">아직 없음</div>
+    <span class="bk-st warn" id="bk-st">백업을 한 번 받아 두세요</span>
+    <div class="bk-grid">
+      <div><span>전체 문서</span><b id="bk-total">–</b></div>
+      <div><span>고객</span><b id="bk-cust">–</b></div>
+      <div><span>파일 크기</span><b id="bk-size">–</b></div>
+    </div>
+    <button class="bk-go" id="bk-go" disabled>지금 백업하기</button>
+    <div class="bk-prog" id="bk-prog"><i></i></div>
+    <div class="bk-msg" id="bk-msg"></div>
+    <div class="bk-dest" id="bk-dest"></div>
+  </div>
+
+  <!-- ② 백업 항목 -->
+  <div class="bk-card">
+    <div class="bk-ch"><h2>백업 항목</h2><span class="bk-sp"></span><button class="bk-mini" id="bk-all">전체 선택</button></div>
+    <div class="bk-desc">체크된 항목이 한 파일에 함께 저장됩니다. 평소에는 전체를 그대로 두세요.</div>
+    <div id="bk-list"><div class="bk-empty">불러오는 중…</div></div>
+  </div>
+
+  <!-- ③ 복원 -->
+  <div class="bk-card">
+    <div class="bk-ch"><h2>백업 파일로 복원</h2></div>
+    <div class="bk-desc">파일을 고르면 지금 데이터와 먼저 비교합니다. <b>고른 항목만</b> 되살리고, 나머지는 건드리지 않습니다.</div>
+    <div id="bk-rs">
+      <label class="bk-drop" for="bk-file">
+        <b>백업 파일 선택</b>
+        <span>HHC-backup-날짜.json</span>
+        <span class="bk-btn" style="display:inline-block">파일 고르기</span>
+      </label>
+    </div>
+    <input type="file" id="bk-file" accept=".json,application/json" hidden>
+  </div>
+
+  <div class="bk-card">
+    <div class="bk-ch"><h2>꼭 알아 두기</h2></div>
+    <ul class="bk-note">
+      <li>백업 파일에는 고객 개인정보가 모두 들어 있습니다. PC·비공개 구글 드라이브에만 보관하고, GitHub나 메신저 단체방에는 올리지 마세요.</li>
+      <li>점검보고서·인보이스의 <b>사진</b>은 주소만 저장됩니다. 사진 파일 자체는 PC 자동 백업으로 따로 지킵니다.</li>
+      <li>복원하기 직전에는 지금 상태가 자동으로 한 번 더 저장됩니다. 복원을 잘못해도 되돌릴 수 있습니다.</li>
+      <li>큰 작업(일괄 수정·병합·삭제) 전에는 백업을 먼저 받아 두세요.</li>
+    </ul>
+  </div>
+</div>
+
+<div id="bk-mask"><div class="bk-dlg" id="bk-dlg"></div></div>
+<div id="bk-toast"></div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, getDocs, getCountFromServer, doc, writeBatch, Timestamp, GeoPoint, DocumentReference, Bytes } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+/* ── 백업 대상 (홈페이지 코드에서 쓰는 저장소 전체) ── */
+const GROUPS=[
+  {g:'고객 · 문서',items:[
+    ['customers','회원정보','고객·패키지·VVIP·적립'],
+    ['invoices','인보이스','청구·결제 내역'],
+    ['inspections','점검보고서','점검·출장점검·설치·세탁기 보고서'],
+    ['contracts','계약서','계약·서명'],
+    ['quotes','견적서',''],
+    ['coupons','상품권',''],
+  ]},
+  {g:'운영',items:[
+    ['bookings','예약',''],['requests','서비스 의뢰',''],['schedules','일정',''],
+    ['reviews','후기',''],['memos','메모',''],['memo_snippets','메모 문구',''],
+    ['promos','프로모션',''],['services','서비스 항목',''],['settings','설정 · 가격',''],
+    ['shorts','단축 주소',''],['push_subs','알림 구독',''],
+  ]},
+  {g:'지출',items:[
+    ['expense_items','지출 내역',''],['expense_claims','지출 청구',''],
+    ['expense_bank_accounts','지출 계좌',''],['banks','은행 정보',''],
+  ]},
+];
+const NAME={};GROUPS.forEach(g=>g.items.forEach(i=>NAME[i[0]]=i[1]));
+const ALL=Object.keys(NAME);
+const LS_LAST='hhc_backup_last', IDB='hhc-backup', FMT='hhc-backup-v1';
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtN=n=>Number(n||0).toLocaleString('en-US');
+const fmtSize=b=>b<1024*1024?Math.max(1,Math.round(b/1024))+' KB':(b/1024/1024).toFixed(1)+' MB';
+const pad=n=>String(n).padStart(2,'0');
+const stamp=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'_'+pad(d.getHours())+pad(d.getMinutes());
+function toast(t){const e=$('#bk-toast');e.textContent=t;e.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>e.classList.remove('on'),2600);}
+
+/* ── Firestore 값 ↔ JSON (날짜 등 특수 값 보존) ── */
+function enc(v){
+  if(v===null||typeof v!=='object')return v;
+  if(v instanceof Timestamp)return {__hhc:'ts',s:v.seconds,n:v.nanoseconds};
+  if(v instanceof GeoPoint)return {__hhc:'geo',la:v.latitude,lo:v.longitude};
+  if(v instanceof DocumentReference)return {__hhc:'ref',p:v.path};
+  if(v instanceof Bytes)return {__hhc:'bytes',b:v.toBase64()};
+  if(Array.isArray(v))return v.map(enc);
+  const o={};for(const k of Object.keys(v))o[k]=enc(v[k]);return o;
+}
+function dec(v){
+  if(v===null||typeof v!=='object')return v;
+  if(Array.isArray(v))return v.map(dec);
+  if(v.__hhc==='ts')return new Timestamp(v.s,v.n);
+  if(v.__hhc==='geo')return new GeoPoint(v.la,v.lo);
+  if(v.__hhc==='ref')return doc(db,v.p);
+  if(v.__hhc==='bytes')return Bytes.fromBase64String(v.b);
+  const o={};for(const k of Object.keys(v))o[k]=dec(v[k]);return o;
+}
+function canon(v){ // 비교용: 키 순서를 맞춘 문자열
+  if(v===null||typeof v!=='object')return JSON.stringify(v);
+  if(Array.isArray(v))return '['+v.map(canon).join(',')+']';
+  return '{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+canon(v[k])).join(',')+'}';
+}
+function labelOf(col,d){
+  const pick=['name','nameKo','customerName','custName','title','no','invoiceNo','number','docNo','phone','date'];
+  const bits=[];for(const k of pick){if(d&&typeof d[k]==='string'&&d[k].trim()){bits.push(d[k].trim());if(bits.length>=2)break;}}
+  return bits.join(' · ');
+}
+
+/* ── 저장 폴더 (PC: Chrome·Edge) ── */
+function idb(){return new Promise((ok,no)=>{const r=indexedDB.open(IDB,1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error);});}
+async function kvGet(k){try{const d=await idb();return await new Promise(ok=>{const r=d.transaction('kv').objectStore('kv').get(k);r.onsuccess=()=>ok(r.result);r.onerror=()=>ok(null);});}catch(e){return null;}}
+async function kvSet(k,v){try{const d=await idb();d.transaction('kv','readwrite').objectStore('kv').put(v,k);}catch(e){}}
+const canPickDir='showDirectoryPicker' in window;
+let dirHandle=null;
+
+async function renderDest(){
+  const el=$('#bk-dest');
+  if(canPickDir){
+    dirHandle=await kvGet('dir');
+    el.innerHTML=dirHandle
+      ?'저장 위치 <b>📁 '+esc(dirHandle.name)+'</b><button id="bk-pick">폴더 바꾸기</button>'
+      :'저장 위치 <b>다운로드 폴더</b><button id="bk-pick">PC 폴더 지정</button>';
+    $('#bk-pick').onclick=async()=>{
+      try{dirHandle=await window.showDirectoryPicker({id:'hhc-backup',mode:'readwrite'});await kvSet('dir',dirHandle);renderDest();toast('저장 폴더를 지정했습니다');}catch(e){}
+    };
+  }else{
+    const share=navigator.canShare&&navigator.canShare({files:[new File(['x'],'a.json',{type:'application/json'})]});
+    el.innerHTML='저장 위치 <b>'+(share?'저장 후 구글 드라이브로 보내기':'다운로드 폴더')+'</b>';
+  }
+}
+async function saveFile(name,text){
+  const blob=new Blob([text],{type:'application/json'});
+  if(dirHandle){
+    try{
+      let p=await dirHandle.queryPermission({mode:'readwrite'});
+      if(p!=='granted')p=await dirHandle.requestPermission({mode:'readwrite'});
+      if(p==='granted'){
+        const fh=await dirHandle.getFileHandle(name,{create:true});
+        const w=await fh.createWritable();await w.write(blob);await w.close();
+        return '📁 '+dirHandle.name+' 폴더에 저장했습니다';
+      }
+    }catch(e){console.warn(e);}
+  }
+  if(!canPickDir&&navigator.canShare){
+    const f=new File([blob],name,{type:'application/json'});
+    if(navigator.canShare({files:[f]})){
+      try{await navigator.share({files:[f],title:name});return '보내기 완료 — 드라이브에 저장됐는지 확인하세요';}
+      catch(e){if(e&&e.name==='AbortError'){/* 취소 → 다운로드로 */}}
+    }
+  }
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
+  return '다운로드 폴더에 저장했습니다';
+}
+
+/* ── 마지막 백업 표시 ── */
+function renderLast(){
+  let last=null;try{last=JSON.parse(localStorage.getItem(LS_LAST)||'null');}catch(e){}
+  const w=$('#bk-when'),s=$('#bk-st');
+  if(!last){w.textContent='아직 없음';s.className='bk-st warn';s.textContent='백업을 한 번 받아 두세요';return;}
+  const d=new Date(last.at),days=Math.floor((Date.now()-d)/864e5);
+  w.textContent=d.getFullYear()+'.'+pad(d.getMonth()+1)+'.'+pad(d.getDate())+'  '+pad(d.getHours())+':'+pad(d.getMinutes());
+  if(days<1){s.className='bk-st ok';s.textContent='오늘 백업함 · '+fmtN(last.n)+'건';}
+  else if(days<7){s.className='bk-st ok';s.textContent=days+'일 전 · '+fmtN(last.n)+'건';}
+  else{s.className='bk-st bad';s.textContent=days+'일 지남 — 새로 백업하세요';}
+}
+
+/* ── 목록 · 건수 ── */
+let db=null; const COUNT={}; const SEL=new Set(ALL);
+function renderList(){
+  $('#bk-list').innerHTML=GROUPS.map(g=>'<div class="bk-grp">'+esc(g.g)+'</div>'+g.items.map(([k,nm,sub])=>{
+    const n=COUNT[k];
+    return '<label class="bk-row"><input type="checkbox" data-k="'+k+'"'+(SEL.has(k)?' checked':'')+'>'+
+      '<span class="bk-nm"><b>'+esc(nm)+'</b>'+(sub?'<span>'+esc(sub)+'</span>':'')+'</span>'+
+      '<span class="bk-n'+(n?'':' z')+'">'+(n==null?'…':fmtN(n))+'</span></label>';
+  }).join('')).join('');
+  $('#bk-list').querySelectorAll('input').forEach(c=>c.onchange=()=>{c.checked?SEL.add(c.dataset.k):SEL.delete(c.dataset.k);});
+  const tot=ALL.reduce((a,k)=>a+(COUNT[k]||0),0);
+  $('#bk-total').textContent=fmtN(tot);
+  $('#bk-cust').textContent=COUNT.customers==null?'–':fmtN(COUNT.customers);
+}
+$('#bk-all').onclick=()=>{const all=SEL.size===ALL.length;SEL.clear();if(!all)ALL.forEach(k=>SEL.add(k));renderList();};
+
+async function readAll(keys,onStep){
+  const out={};let i=0;
+  for(const k of keys){
+    const snap=await getDocs(collection(db,k));
+    out[k]={};snap.forEach(d=>{out[k][d.id]=enc(d.data());});
+    COUNT[k]=snap.size;i++;onStep&&onStep(i,keys.length,k);
+  }
+  return out;
+}
+function pack(data){
+  const counts={};for(const k in data)counts[k]=Object.keys(data[k]).length;
+  return JSON.stringify({format:FMT,project:'happywork-packageplan',createdAt:new Date().toISOString(),counts,data});
+}
+
+/* ── 지금 백업 ── */
+async function doBackup(keys,prefix){
+  const prog=$('#bk-prog'),bar=prog.firstElementChild,msg=$('#bk-msg');
+  prog.style.display='block';bar.style.width='0';
+  const data=await readAll(keys,(i,n,k)=>{bar.style.width=Math.round(i/n*100)+'%';msg.textContent=NAME[k]+' 읽는 중… ('+i+'/'+n+')';});
+  const text=pack(data);
+  const n=Object.values(data).reduce((a,c)=>a+Object.keys(c).length,0);
+  const name=(prefix||'HHC-backup-')+stamp(new Date())+'.json';
+  const where=await saveFile(name,text);
+  $('#bk-size').textContent=fmtSize(new Blob([text]).size);
+  prog.style.display='none';msg.textContent='';
+  return {n,name,where};
+}
+$('#bk-go').onclick=async()=>{
+  const keys=ALL.filter(k=>SEL.has(k));if(!keys.length){toast('백업할 항목을 하나 이상 고르세요');return;}
+  const b=$('#bk-go');b.disabled=true;b.textContent='백업하는 중…';
+  try{
+    const r=await doBackup(keys);
+    if(keys.length===ALL.length)localStorage.setItem(LS_LAST,JSON.stringify({at:Date.now(),n:r.n}));
+    renderLast();renderList();toast(r.where+' · '+fmtN(r.n)+'건');
+  }catch(e){$('#bk-msg').textContent='';$('#bk-prog').style.display='none';toast('백업 실패: '+(e.message||e));}
+  b.disabled=false;b.textContent='지금 백업하기';
+};
+
+/* ── 복원: 파일 → 비교 → 선택 복원 ── */
+let FILE=null, DIFF=null;
+$('#bk-file').onchange=async e=>{
+  const f=e.target.files[0];e.target.value='';if(!f)return;
+  let j;try{j=JSON.parse(await f.text());}catch(err){toast('백업 파일을 읽을 수 없습니다');return;}
+  if(!j||j.format!==FMT||!j.data){toast('해피홈케어 백업 파일이 아닙니다');return;}
+  FILE={name:f.name,json:j};
+  $('#bk-rs').innerHTML='<div class="bk-empty">지금 데이터와 비교하는 중…</div>';
+  try{
+    const keys=Object.keys(j.data).filter(k=>NAME[k]);
+    const now=await readAll(keys);
+    DIFF={};
+    for(const k of keys){
+      const B=j.data[k],N=now[k],items=[];let same=0,added=0;
+      for(const id in B){
+        if(!(id in N))items.push({id,t:'del',d:B[id]});
+        else if(canon(B[id])!==canon(N[id]))items.push({id,t:'chg',d:B[id],cur:N[id]});
+        else same++;
+      }
+      for(const id in N)if(!(id in B))added++;
+      DIFF[k]={items,same,added};
+    }
+    renderDiff();renderList();
+  }catch(err){toast('비교 실패: '+(err.message||err));setTimeout(()=>location.reload(),2200);}
+};
+function renderDiff(){
+  const j=FILE.json,d=new Date(j.createdAt);
+  let del=0,chg=0,add=0,same=0;
+  for(const k in DIFF){DIFF[k].items.forEach(x=>x.t==='del'?del++:chg++);add+=DIFF[k].added;same+=DIFF[k].same;}
+  let h='<div class="bk-fileinfo">📄 <b>'+esc(FILE.name)+'</b><br>백업 시각 '+d.getFullYear()+'.'+pad(d.getMonth()+1)+'.'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes())+'</div>';
+  h+='<div class="bk-sum"><span class="bk-pill del">지금은 없는 문서 '+fmtN(del)+'</span><span class="bk-pill chg">내용이 바뀐 문서 '+fmtN(chg)+'</span><span class="bk-pill same">같음 '+fmtN(same)+'</span>'+(add?'<span class="bk-pill new">백업 후 새로 생김 '+fmtN(add)+' (그대로 둠)</span>':'')+'</div>';
+  const keys=Object.keys(DIFF).filter(k=>DIFF[k].items.length);
+  if(!keys.length){h+='<div class="bk-empty">지금 데이터가 백업과 같습니다. 되살릴 것이 없습니다.</div><div class="bk-foot"><span class="bk-sp"></span><button class="bk-btn" id="bk-x">닫기</button></div>';}
+  else{
+    for(const k of keys){
+      const it=DIFF[k].items,nd=it.filter(x=>x.t==='del').length,nc=it.length-nd;
+      h+='<details class="bk-cmp"'+(keys.length<=2?' open':'')+'><summary><b>'+esc(NAME[k])+'</b>'+(nd?'<span class="bk-tag del">없음 '+nd+'</span>':'')+(nc?'<span class="bk-tag chg">바뀜 '+nc+'</span>':'')+'</summary>'+
+        it.slice(0,300).map((x,i)=>'<label class="bk-it"><input type="checkbox" data-k="'+k+'" data-i="'+i+'"'+(x.t==='del'?' checked':'')+'><span class="bk-tag '+x.t+'">'+(x.t==='del'?'없음':'바뀜')+'</span><span class="bk-tx">'+esc(labelOf(k,x.d)||x.id)+'<small>'+esc(x.id)+'</small></span></label>').join('')+
+        (it.length>300?'<div class="bk-empty">외 '+fmtN(it.length-300)+'건은 「모두 선택」으로 함께 복원됩니다</div>':'')+'</details>';
+    }
+    h+='<div class="bk-foot"><button class="bk-btn" id="bk-x">취소</button><button class="bk-btn" id="bk-selall">모두 선택</button><span class="bk-sp"></span><small id="bk-cnt"></small><button class="bk-btn p" id="bk-do">선택 항목 복원</button></div>';
+  }
+  $('#bk-rs').innerHTML=h;
+  $('#bk-x').onclick=()=>location.reload();
+  if(!keys.length)return;
+  const upd=()=>{const n=$('#bk-rs').querySelectorAll('.bk-it input:checked').length;$('#bk-cnt').textContent=fmtN(n)+'건 선택';$('#bk-do').disabled=!n;};
+  $('#bk-rs').querySelectorAll('.bk-it input').forEach(c=>c.onchange=upd);upd();
+  $('#bk-selall').onclick=()=>{$('#bk-rs').querySelectorAll('.bk-it input').forEach(c=>c.checked=true);SELALL=true;upd();};
+  $('#bk-do').onclick=confirmRestore;
+}
+let SELALL=false;
+function picked(){
+  const out=[];
+  if(SELALL){for(const k in DIFF)DIFF[k].items.forEach(x=>out.push([k,x]));return out;}
+  $('#bk-rs').querySelectorAll('.bk-it input:checked').forEach(c=>out.push([c.dataset.k,DIFF[c.dataset.k].items[+c.dataset.i]]));
+  return out;
+}
+function confirmRestore(){
+  const list=picked(),nd=list.filter(x=>x[1].t==='del').length,nc=list.length-nd;
+  $('#bk-dlg').innerHTML='<h3>'+fmtN(list.length)+'건을 복원할까요?</h3><p>'+
+    (nd?'· 지금은 없는 문서 <b>'+nd+'건</b>을 되살립니다<br>':'')+
+    (nc?'· 바뀐 문서 <b>'+nc+'건</b>을 백업 당시 내용으로 되돌립니다<br>':'')+
+    '· 복원 직전 지금 상태를 자동으로 한 번 더 저장합니다<br><br>계속하려면 <b>복원</b>이라고 입력하세요.</p>'+
+    '<input id="bk-cf" autocomplete="off" placeholder="복원"><div class="bk-db"><button class="bk-btn" id="bk-cn">취소</button><button class="bk-btn bad" id="bk-ok" disabled>복원하기</button></div>';
+  $('#bk-mask').classList.add('open');
+  $('#bk-cf').oninput=e=>$('#bk-ok').disabled=e.target.value.trim()!=='복원';
+  $('#bk-cn').onclick=()=>$('#bk-mask').classList.remove('open');
+  $('#bk-ok').onclick=()=>runRestore(list);
+}
+async function runRestore(list){
+  const ok=$('#bk-ok');ok.disabled=true;ok.textContent='안전 백업 중…';
+  try{
+    await doBackup(ALL,'HHC-before-restore-');
+    ok.textContent='복원 중…';
+    for(let i=0;i<list.length;i+=400){
+      const b=writeBatch(db);
+      list.slice(i,i+400).forEach(([k,x])=>b.set(doc(db,k,x.id),dec(x.d)));
+      await b.commit();
+    }
+    $('#bk-mask').classList.remove('open');
+    toast(fmtN(list.length)+'건 복원 완료');
+    setTimeout(()=>location.reload(),1600);
+  }catch(e){ok.textContent='복원하기';ok.disabled=false;toast('복원 실패: '+(e.message||e)+' — 지금 데이터는 바뀌지 않았거나 일부만 바뀌었습니다');}
+}
+
+/* ── 시작 ── */
+renderLast();renderList();renderDest();
+try{
+  const app=initializeApp({
+    apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
+    authDomain:"happywork-packageplan.firebaseapp.com",
+    projectId:"happywork-packageplan",
+    storageBucket:"happywork-packageplan.firebasestorage.app",
+    messagingSenderId:"553635350672",
+    appId:"1:553635350672:web:e601b74b96b83e0d4d2b83"
+  });
+  db=getFirestore(app);
+  $('#bk-dot').classList.add('on');
+  // 건수만 먼저 보여 주기
+  Promise.all(ALL.map(k=>getCountFromServer(collection(db,k)).then(r=>{COUNT[k]=r.data().count;renderList();})))
+    .then(()=>{renderList();$('#bk-go').disabled=false;}).catch(e=>{$('#bk-list').innerHTML='<div class="bk-empty">데이터를 불러오지 못했습니다 — 인터넷 연결을 확인하고 새로고침하세요.<br><small>'+esc(e.message)+'</small></div>';});
+}catch(e){$('#bk-list').innerHTML='<div class="bk-empty">Firebase 연결 실패: '+esc(e.message)+'</div>';}
+</script>
+</body>
+</html>
