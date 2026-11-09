@@ -1158,7 +1158,7 @@ img{image-rendering:auto}
         <div class="cv-bn"><b id="cv-bn-name" style="font-weight:inherit">해피홈케어</b><span>HAPPY WORKS SERVICES SDN. BHD.</span></div>
       </div>
       <div class="cover-tag" id="cover-tag">INSPECTION REPORT</div>
-      <div class="cover-h1" id="cover-h1">에어컨 점검 보고서</div>
+      <div class="cover-h1" id="cover-h1">에어컨 점검보고서</div>
       <div class="cv-rule"></div>
       <div class="cv-subj">
         <div class="cv-sr" id="cv-sr-addr"><div class="cv-k" id="lbl-addr">점검 장소</div><div class="cv-v" id="r-addr">—</div></div>
@@ -1366,7 +1366,7 @@ var currentLang='ko';
 var T={
   ko:{
     'top-brand-name':'해피홈케어 점검보고서','cv-bn-name':'해피홈케어',
-    'cover-h1':'에어컨 점검 보고서',
+    'cover-h1':'에어컨 점검보고서',
     'cover-tag':'INSPECTION REPORT',
     'lbl-report-num':'보고서 번호','lbl-date':'점검일자','lbl-client':'고객명',
     'lbl-addr':'점검 장소',
@@ -1414,8 +1414,9 @@ var T={
     stDone:'조치완료',stPlan:'조치예정',stRecommend:'조치권유',stAdvise:'조치권고',
     good:'양호',degrade:'저하',leakOk:'이상없음',leakBad:'누설감지',
     watch:'관찰',repair:'수리요망',
-    evalLabels:{normal:'정상 · 양호',preventive:'예방정비 권장',repair:'수리 권장',urgent:'즉시수리 필요'},
+    evalLabels:{repaired:'수리 완료',normal:'정상 · 양호',preventive:'예방정비 권장',repair:'수리 권장',urgent:'즉시수리 필요'},
     evalSubs:{
+      repaired:'요청하신 수리를 마쳤으며, 정상 작동을 확인했습니다.',
       normal:'점검 결과 모든 항목이 정상입니다. 특별한 조치 없이 안심하고 사용하셔도 됩니다.',
       preventive:'현재 사용에는 문제가 없으나, 효율 저하를 막기 위한 예방 정비를 권장합니다.',
       repair:'일부 항목에서 수리가 필요한 상태가 확인되었습니다. 빠른 정비를 권장합니다.',
@@ -1474,8 +1475,9 @@ var T={
     stDone:'Completed',stPlan:'Planned',stRecommend:'Recommended',stAdvise:'Advised',
     good:'Good',degrade:'Degraded',leakOk:'No Leakage',leakBad:'Leakage',
     watch:'Monitor',repair:'Repair',
-    evalLabels:{normal:'Normal · Good',preventive:'Preventive Maint.',repair:'Repair Needed',urgent:'Urgent Repair'},
+    evalLabels:{repaired:'Repair Completed',normal:'Normal · Good',preventive:'Preventive Maint.',repair:'Repair Needed',urgent:'Urgent Repair'},
     evalSubs:{
+      repaired:'The requested repair has been completed and normal operation has been confirmed.',
       normal:'All items passed inspection. No action needed — your units are in good condition.',
       preventive:'No current issues, but preventive maintenance is recommended to keep efficiency up.',
       repair:'Some items need repair. We recommend servicing them soon.',
@@ -1652,6 +1654,22 @@ window.renderReport=function renderReport(data){
     setTxt('r-d-result',data.dispatchResult==='revisit'?(isEn?'⏳ Revisit Required':'⏳ 재방문 필요')+(data.dispatchRevisitDate?' ('+data.dispatchRevisitDate+')':''):(isEn?'✅ Completed':'✅ 완료'));
   }else{dsec.style.display='none';}
 
+  // 보고서 제목 — 점검 / 출장점검 / 수리
+  var rKind=data.type==='dispatch'?(data.dispatchKind==='repair'?'repair':'dispatch'):'inspect';
+  var RT_TITLE={inspect:['에어컨 점검보고서','AC Inspection Report','점검보고서'],
+                dispatch:['에어컨 출장점검보고서','AC On-site Inspection Report','출장점검보고서'],
+                repair:['에어컨 수리보고서','AC Repair Report','수리보고서']}[rKind];
+  setTxt('cover-h1',isEn?RT_TITLE[1]:RT_TITLE[0]);
+  setTxt('cover-tag',{inspect:'INSPECTION REPORT',dispatch:'ON-SITE INSPECTION',repair:'REPAIR REPORT'}[rKind]);
+  if(!isEn)setTxt('top-brand-name','해피홈케어 '+RT_TITLE[2]);
+  try{document.title='HHC '+(isEn?RT_TITLE[1]:RT_TITLE[0]);}catch(e){}
+  // 출장점검/수리 보고서: 「점검/수리 사진」 · 수리 전/후
+  if(data.type==='dispatch'){
+    setTxt('photo-clean-title',isEn?'Inspection / Repair Photos':'점검/수리 사진');
+    setTxt('lbl-clean-before',isEn?'Before Repair':'수리 전 · Before');
+    setTxt('lbl-clean-after',isEn?'After Repair':'수리 후 · After');
+  }
+
   // 표지
   var dateStr=(data.date||'').replace(/-/g,'.');
   setTxt('r-num','HHC-INS-'+dateStr.replace(/\./g,'').slice(2)+'-001');
@@ -1701,7 +1719,7 @@ window.renderReport=function renderReport(data){
   }
 
   // ── HERO 종합 판정
-  var evalMap={normal:{cls:'ok',letter:'A',icon:'✅'},preventive:{cls:'warn',letter:'B',icon:'⚡'},repair:{cls:'repair',letter:'C',icon:'🔧'},urgent:{cls:'bad',letter:'D',icon:'🚨'}};
+  var evalMap={repaired:{cls:'ok',letter:'A',icon:'🛠️'},normal:{cls:'ok',letter:'A',icon:'✅'},preventive:{cls:'warn',letter:'B',icon:'⚡'},repair:{cls:'repair',letter:'C',icon:'🔧'},urgent:{cls:'bad',letter:'D',icon:'🚨'}};
   var evk=data.eval||'preventive';
   var ev=evalMap[evk]||evalMap.preventive;
   var hero=G('hero-box');
@@ -1729,7 +1747,7 @@ window.renderReport=function renderReport(data){
   setTxt('hero-recs',recsArr.length);
 
   // 종합 점수 링 (양호 항목 비율 기반)
-  var scorePct=results.length?Math.round(okN/results.length*100):{normal:96,preventive:80,repair:58,urgent:32}[evk]||80;
+  var scorePct=results.length?Math.round(okN/results.length*100):{repaired:96,normal:96,preventive:80,repair:58,urgent:32}[evk]||80;
   var ringColor=ev.cls==='ok'?'var(--ok)':(ev.cls==='warn'?'var(--warn)':'var(--bad)');
   var ringEl=G('score-ring');
   if(ringEl)ringEl.style.background='conic-gradient('+ringColor+' 0% '+scorePct+'%, rgba(0,0,0,.08) '+scorePct+'% 100%)';

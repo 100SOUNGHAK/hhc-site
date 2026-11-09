@@ -277,6 +277,12 @@ input.ocr-filled{background:#fff8e0!important;border-color:#f0c040!important}
 .ev-y{background:#fffae0;color:#856600;border-color:#f1c40f}
 .ev-o{background:#fff4e0;color:#b36000;border-color:#e67e22}
 .ev-r{background:#fde8e8;color:#c0392b;border-color:#e74c3c}
+.ev-row.ev5{grid-template-columns:repeat(5,1fr)}
+.ev-d{background:#e6f0ff;color:#1d4ed8;border-color:#3b82f6}
+/* 출장점검 / 수리 구분 */
+.dk-row{display:flex;gap:8px;margin:-6px 0 14px}
+.dk-btn{flex:1;padding:9px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:12.5px;cursor:pointer}
+.dk-btn.on{border-color:#7c3aed;background:#f3efff;color:#6d28d9}
 /* 통계 */
 .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px}
 .stat-cell{text-align:center}
@@ -472,9 +478,14 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 
 <div style="display:flex;gap:8px;margin-bottom:14px">
   <button class="rtype-btn on" id="rtype-inspect" onclick="switchReportType('inspect')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #4F6EF7;background:#eef1ff;color:#1d3fd6;font-weight:700;font-size:13px;cursor:pointer">📋 점검보고서</button>
-  <button class="rtype-btn" id="rtype-dispatch" onclick="switchReportType('dispatch')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer">🚐 출장점검보고서</button>
+  <button class="rtype-btn" id="rtype-dispatch" onclick="switchReportType('dispatch')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer">🚐 출장점검/수리</button>
   <button class="rtype-btn" id="rtype-install" onclick="switchReportType('install')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer">🔧 설치보고서</button>
   <button class="rtype-btn" id="rtype-washer" onclick="switchReportType('washer')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer">🌀 세탁기/건조기</button>
+</div>
+
+<div class="dk-row" id="dispatch-kind-row" style="display:none">
+  <button type="button" class="dk-btn on" id="dk-check" onclick="setDispatchKind('check')">🚐 출장점검</button>
+  <button type="button" class="dk-btn" id="dk-repair" onclick="setDispatchKind('repair')">🔧 수리</button>
 </div>
 
 <div id="section-nav" class="section-nav"></div>
@@ -548,11 +559,12 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 <div class="card">
   <div class="card-hdr"><div class="card-icon">⭐</div><div class="card-title">종합 판정 · 종합 평가</div></div>
   <div class="card-body">
-    <div class="ev-row">
+    <div class="ev-row" id="ev-row">
       <div class="ev-btn ev-g" data-val="normal" onclick="setEval(this)">🟢<br>정상</div>
       <div class="ev-btn ev-y" data-val="preventive" onclick="setEval(this)">🟡<br>예방정비<br>권장</div>
       <div class="ev-btn ev-o" data-val="repair" onclick="setEval(this)">🟠<br>수리 권장</div>
       <div class="ev-btn ev-r" data-val="urgent" onclick="setEval(this)">🔴<br>즉시수리<br>필요</div>
+      <div class="ev-btn ev-d" data-val="repaired" id="ev-repaired" onclick="setEval(this)" style="display:none">🛠️<br>수리<br>완료</div>
     </div>
     <div class="fl" style="margin-bottom:6px">점검 통계 (자동 집계)</div>
     <div class="stat-row">
@@ -686,14 +698,14 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 
 <!-- 청소 사진 -->
 <div class="card">
-  <div class="card-hdr"><div class="card-icon">🧹</div><div class="card-title">청소 사진</div></div>
+  <div class="card-hdr"><div class="card-icon" id="clean-card-icon">🧹</div><div class="card-title" id="clean-card-title">청소 사진</div></div>
   <div class="card-body" style="padding:0">
     <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:0.5px solid #f0f0f0">
       <!-- 청소 전 -->
       <div style="padding:10px 12px;border-right:0.5px solid #f0f0f0">
         <div style="display:flex;align-items:center;gap:5px;margin-bottom:8px">
           <div style="width:3px;height:14px;background:#e74c3c;border-radius:2px;flex-shrink:0"></div>
-          <span style="font-size:11px;font-weight:600;color:#c0392b">청소 전</span>
+          <span style="font-size:11px;font-weight:600;color:#c0392b" id="clean-before-lbl">청소 전</span>
         </div>
         <div class="photo-row" id="clean-before-photos" style="flex-wrap:wrap">
           <div class="photo-add-group"><div class="ph-add">📷<span>촬영</span><input type="file" accept="image/*" capture="environment" multiple data-container="clean-before-photos"></div><div class="ph-add">📁<span>앨범</span><input type="file" accept="image/*" multiple data-container="clean-before-photos"></div></div>
@@ -703,7 +715,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
       <div style="padding:10px 12px">
         <div style="display:flex;align-items:center;gap:5px;margin-bottom:8px">
           <div style="width:3px;height:14px;background:#2ecc71;border-radius:2px;flex-shrink:0"></div>
-          <span style="font-size:11px;font-weight:600;color:#0a7a4a">청소 후</span>
+          <span style="font-size:11px;font-weight:600;color:#0a7a4a" id="clean-after-lbl">청소 후</span>
         </div>
         <div class="photo-row" id="clean-after-photos" style="flex-wrap:wrap">
           <div class="photo-add-group"><div class="ph-add">📷<span>촬영</span><input type="file" accept="image/*" capture="environment" multiple data-container="clean-after-photos"></div><div class="ph-add">📁<span>앨범</span><input type="file" accept="image/*" multiple data-container="clean-after-photos"></div></div>
@@ -3715,7 +3727,7 @@ window.switchReportType=function(t){
   var _sb=document.getElementById('btn-save');
   if(_sb){
     _sb.style.background='';
-    _sb.textContent=t==='install'?'💾 설치보고서 저장하고 고객 링크 생성':(t==='dispatch'?'💾 출장점검보고서 저장하고 고객 링크 생성':(t==='washer'?'💾 세탁기/건조기 점검보고서 저장하고 고객 링크 생성':'💾 저장하고 고객 링크 생성'));
+    _sb.textContent=saveBtnTxt(t);
   }
   // 📋 기본 정보(고객명·연락처·점검일·주소) 자동 반영 — 지금 화면에 적어 둔 값을 새로 고른 보고서에 옮겨 줍니다
   //    (옮겨 갈 칸이 비어 있을 때만 채웁니다 · 연락처 「+60 」만 있는 칸은 빈 칸으로 봅니다)
@@ -3745,9 +3757,44 @@ window.switchReportType=function(t){
   document.getElementById('rtype-install').style.cssText=t==='install'?onCss:offCss;
   document.getElementById('rtype-washer').style.cssText=t==='washer'?onCss:offCss;
   var btn=document.getElementById('btn-save');
-  if(btn)btn.textContent=t==='install'?'💾 설치보고서 저장하고 고객 링크 생성':(t==='dispatch'?'💾 출장점검보고서 저장하고 고객 링크 생성':(t==='washer'?'💾 세탁기/건조기 점검보고서 저장하고 고객 링크 생성':'💾 저장하고 고객 링크 생성'));
+  if(btn)btn.textContent=saveBtnTxt(t);
   if(t==='washer'&&!document.getElementById('w-checklist').children.length)renderWasherChecklist();
+  applyDispatchUi();
   if(window.buildSectionNav)window.buildSectionNav();
+};
+
+// 출장점검 / 수리 구분 (출장점검/수리 보고서 안에서 선택)
+var dispatchKind='check';
+function saveBtnTxt(t){
+  if(t==='install')return '💾 설치보고서 저장하고 고객 링크 생성';
+  if(t==='washer')return '💾 세탁기/건조기 점검보고서 저장하고 고객 링크 생성';
+  if(t==='dispatch')return dispatchKind==='repair'?'💾 수리보고서 저장하고 고객 링크 생성':'💾 출장점검보고서 저장하고 고객 링크 생성';
+  return '💾 저장하고 고객 링크 생성';
+}
+window.saveBtnTxt=saveBtnTxt;
+// 출장점검/수리 보고서일 때만: 수리완료 판정 · 「점검/수리 사진」 · 수리 전/후
+function applyDispatchUi(){
+  var isD=reportType==='dispatch';
+  var kr=gid('dispatch-kind-row');if(kr)kr.style.display=isD?'flex':'none';
+  var a=gid('dk-check'),b=gid('dk-repair');
+  if(a)a.className='dk-btn'+(dispatchKind!=='repair'?' on':'');
+  if(b)b.className='dk-btn'+(dispatchKind==='repair'?' on':'');
+  var er=gid('ev-repaired'),row=gid('ev-row');
+  if(er)er.style.display=isD?'':'none';
+  if(row)row.classList.toggle('ev5',isD);
+  if(!isD&&evalVal==='repaired'){if(er)er.classList.remove('sel');evalVal='';}
+  var tt=gid('clean-card-title'),ic=gid('clean-card-icon'),bl=gid('clean-before-lbl'),al=gid('clean-after-lbl');
+  if(tt)tt.textContent=isD?'점검/수리 사진':'청소 사진';
+  if(ic)ic.textContent=isD?'🔧':'🧹';
+  if(bl)bl.textContent=isD?'수리 전':'청소 전';
+  if(al)al.textContent=isD?'수리 후':'청소 후';
+  var sb=gid('btn-save');if(sb&&!currentEditId&&!sb.disabled)sb.textContent=saveBtnTxt(reportType);
+}
+window.applyDispatchUi=applyDispatchUi;
+window.setDispatchKind=function(k){
+  dispatchKind=(k==='repair')?'repair':'check';
+  applyDispatchUi();
+  if(window.__scheduleDraft)window.__scheduleDraft();
 };
 
 window.setDispatchResult=function(done){
@@ -4018,7 +4065,7 @@ window.newReport=function(){
   var sb=gid('btn-save');
   if(sb){
     sb.style.background='';
-    sb.textContent=reportType==='install'?'💾 설치보고서 저장하고 고객 링크 생성':(reportType==='dispatch'?'💾 출장점검보고서 저장하고 고객 링크 생성':(reportType==='washer'?'💾 세탁기/건조기 점검보고서 저장하고 고객 링크 생성':'💾 저장하고 고객 링크 생성'));
+    sb.textContent=saveBtnTxt(reportType);
   }
   var db=gid('dup-box');if(db)db.style.display='none';
   updateEditTag();
@@ -4759,7 +4806,7 @@ function filterList(){
   else items.sort(function(a,b){return(b.date||'').localeCompare(a.date||'');});
   renderList(items);
 }
-var EVAL_LBL={normal:'🟢 정상',preventive:'🟡 예방정비 권장',repair:'🟠 수리 권장',urgent:'🔴 즉시수리 필요'};
+var EVAL_LBL={repaired:'🛠️ 수리완료',normal:'🟢 정상',preventive:'🟡 예방정비 권장',repair:'🟠 수리 권장',urgent:'🔴 즉시수리 필요'};
 function renderList(items,targetId){
   var el=gid(targetId||'list-container');
   if(!items.length){el.innerHTML='<div style="text-align:center;padding:40px;color:#8a8a9a">보고서 없음</div>';return;}
@@ -4771,7 +4818,7 @@ function renderList(items,targetId){
     var typeBadge=isInstall
       ?'<span style="display:inline-block;margin-bottom:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#fef3c7;color:#b45309">🔧 설치</span>'
       :isDispatch
-      ?'<span style="display:inline-block;margin-bottom:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#ede9fe;color:#6d28d9">🚐 출장점검</span>'
+      ?'<span style="display:inline-block;margin-bottom:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#ede9fe;color:#6d28d9">'+(r.dispatchKind==='repair'?'🔧 수리':'🚐 출장점검')+'</span>'
       :isWasher
       ?'<span style="display:inline-block;margin-bottom:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#e0f7fa;color:#00767b">🌀 세탁기/건조기</span>'
       :'<span style="display:inline-block;margin-bottom:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#e0f2fe;color:#0369a1">📋 점검</span>';
@@ -4889,7 +4936,8 @@ window.REPORT_TYPE_LABEL={
   install:{ko:'에어컨 설치보고서',en:'AC Installation Report'},
   washer:{ko:'세탁기/건조기 점검보고서',en:'Washer/Dryer Inspection Report'},
   dispatch:{ko:'에어컨 출장점검보고서',en:'AC On-site Inspection Report'},
-  inspect:{ko:'에어컨 기술점검보고서',en:'AC Technical Inspection Report'}
+  repair:{ko:'에어컨 수리보고서',en:'AC Repair Report'},
+  inspect:{ko:'에어컨 점검보고서',en:'AC Inspection Report'}
 };
 var REPORT_TYPE_LABEL=window.REPORT_TYPE_LABEL;
 function updateSendMsg(){
@@ -5626,6 +5674,7 @@ function collectData(){
     leakUnits:leakUnits,defects:defects,recommendations:recommendations,problemPhotos:problemPhotos,outdoorSets:outdoorSets,
     dispatchDatetime:gv('d-datetime'),dispatchTech:gv('d-tech'),dispatchReason:gv('d-reason'),
     dispatchWork:gv('d-work'),dispatchResult:dispatchDone?'done':'revisit',dispatchRevisitDate:gv('d-revisit-date'),
+    dispatchKind:reportType==='dispatch'?dispatchKind:'',
     createdAt:new Date().toISOString()
   });
 }
@@ -5862,7 +5911,7 @@ window.saveReport=async function(){
     var sbtn=document.getElementById('btn-save');
     if(sbtn){sbtn.textContent='💾 수정 저장';sbtn.style.background='#1e40af';}
     document.getElementById('sm-link').textContent=shortUrls.ko;
-    window._sendCtx={client:data.client||'',type:(isInstall?'install':(isWasher?'washer':(reportType==='dispatch'?'dispatch':'inspect')))};
+    window._sendCtx={client:data.client||'',type:(isInstall?'install':(isWasher?'washer':(reportType==='dispatch'?(dispatchKind==='repair'?'repair':'dispatch'):'inspect')))};
     updateSendMsg();
     document.getElementById('send-modal').style.display='flex';
   }catch(e){console.error(e);hideSaveProg();btn.disabled=false;btn.textContent=btnLabel;
@@ -6229,7 +6278,7 @@ window.openSendModalFor=async function(id){
   }catch(e){shortUrls.ko=koUrl;shortUrls.en=enUrl;}
   window._sendCtx={
     client:r.client||'',
-    type:(r.type==='install')?'install':((r.type==='washer')?'washer':((r.type==='dispatch')?'dispatch':'inspect'))
+    type:(r.type==='install')?'install':((r.type==='washer')?'washer':((r.type==='dispatch')?(r.dispatchKind==='repair'?'repair':'dispatch'):'inspect'))
   };
   var koRadio=document.querySelector('input[name="slang"][value="ko"]');
   if(koRadio)koRadio.checked=true;
@@ -6300,6 +6349,7 @@ window.loadIntoForm=function(data){
   gv2('d-datetime',data.dispatchDatetime);gv2('d-tech',data.dispatchTech);gv2('d-reason',data.dispatchReason);
   gv2('d-work',data.dispatchWork);gv2('d-revisit-date',data.dispatchRevisitDate);
   setDispatchResult(data.dispatchResult!=='revisit');
+  dispatchKind=data.dispatchKind==='repair'?'repair':'check';applyDispatchUi();
   // 종합평가
   if(data.eval){var eb=document.querySelector('.ev-btn[data-val="'+data.eval+'"]');if(eb)setEval(eb);}
   // 설비
@@ -6659,7 +6709,7 @@ function restoreDraftBanner(){
       currentEditId=null; // 임시저장 복구 → 새 보고서로 저장
       updateEditTag();
       if(d._evalVal){var eb=document.querySelector('.ev-btn[data-val="'+d._evalVal+'"]');if(eb)setEval(eb);}
-      var sb=document.getElementById('btn-save');if(sb){sb.style.background='';sb.textContent=rt==='install'?'💾 설치보고서 저장하고 고객 링크 생성':(rt==='dispatch'?'💾 출장점검보고서 저장하고 고객 링크 생성':(rt==='washer'?'💾 세탁기/건조기 점검보고서 저장하고 고객 링크 생성':'💾 저장하고 고객 링크 생성'));}
+      var sb=document.getElementById('btn-save');if(sb){sb.style.background='';sb.textContent=saveBtnTxt(rt);}
       toast('임시저장 내용을 복구했습니다'+(parsed.photoCount?' (사진은 다시 첨부해 주세요)':''));
     },220);
   };
@@ -6679,7 +6729,7 @@ window.__cloneReport=function(id){
     currentEditId=null; // 새 보고서로 저장
     updateEditTag();
     var dt=document.getElementById(rt==='install'?'if-date':(rt==='washer'?'w-date':'f-date'));if(dt)dt.value=new Date().toISOString().split('T')[0];
-    var sb=document.getElementById('btn-save');if(sb){sb.style.background='';sb.textContent=rt==='install'?'💾 설치보고서 저장하고 고객 링크 생성':(rt==='dispatch'?'💾 출장점검보고서 저장하고 고객 링크 생성':(rt==='washer'?'💾 세탁기/건조기 점검보고서 저장하고 고객 링크 생성':'💾 저장하고 고객 링크 생성'));}
+    var sb=document.getElementById('btn-save');if(sb){sb.style.background='';sb.textContent=saveBtnTxt(rt);}
     var db=document.getElementById('dup-box');if(db)db.style.display='none';
     toast('이전 보고서를 복제했습니다 — 결과 값만 수정 후 저장하세요');
   },220);
