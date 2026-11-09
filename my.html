@@ -1025,6 +1025,9 @@ body{background:#E7EBF4}
 .hi-chip.inset{top:11px}
 /* 문서가 짧아 마지막 카드가 화면 가운데까지 올라오지 못할 때 쓰는 임시 여백 */
 #hi-spacer{height:0;transition:height .35s ease}
+/* 「지금 확인하실 일」 전체를 강조할 때는 제목·숫자를 가리지 않도록 배지를 제목 줄 오른쪽 빈자리에 둡니다 */
+.brf-s.hi-focus{padding:8px 6px 4px}
+.brf-s>.hi-chip{left:auto;right:8px;top:4px;transform:none}
 .hi-chip{position:absolute;top:-13px;left:50%;transform:translateX(-50%);z-index:6;pointer-events:none;
   display:inline-flex;align-items:center;gap:5px;white-space:nowrap;max-width:94%;
   font-size:11px;font-weight:900;letter-spacing:-.01em;color:#4A3200;
@@ -3357,8 +3360,8 @@ function render(){
         '<span class="brf-sub">'+b.sub+'</span>'+
         '<span class="brf-cta">'+b.cta+' <b>›</b></span>';
       return /^href=/.test(b.act)
-        ?'<a class="brf t-'+b.tone+'" '+b.act+' target="_blank" rel="noopener">'+inner+'</a>'
-        :'<button type="button" class="brf t-'+b.tone+'" '+b.act+'>'+inner+'</button>';
+        ?'<a class="brf t-'+b.tone+'" data-k="'+b.k+'" '+b.act+' target="_blank" rel="noopener">'+inner+'</a>'
+        :'<button type="button" class="brf t-'+b.tone+'" data-k="'+b.k+'" '+b.act+'>'+inner+'</button>';
     };
     H_BRIEF+='<div class="sec brf-s" id="brief">'+
       '<div class="brf-h"><b>'+(en?'For you today':'지금 확인하실 일')+'</b>'+(todo?'<i>'+todo+'</i>':'<span class="brf-h-ok">'+(en?'All caught up ✓':'모두 확인했어요 ✓')+'</span>')+'</div>'+
@@ -3596,8 +3599,9 @@ function render(){
 //  · 주소의 f= 값(iv·ip·ct·cp·qt·bk·mm·pt)에 해당하는 섹션을 화면 가운데로 옮기고
 //    테두리를 깜빡여 눈에 띄게 합니다. 화면을 한 번 누르면 표시가 사라집니다.
 var FOCUS_SEC={iv:'sec-iv',ip:'sec-ip',ct:'sec-ct',cp:'sec-cp',qt:'sec-qt',
-               bk:'bk-sec',mm:'sec-mm',pt:'pyx-sec',ap:'a2hs-card',sv:'sec-sv',fee:'sec-fee'};
-var _hiDone=false;
+               bk:'brief',mm:'sec-mm',pt:'pyx-sec',ap:'a2hs-card',sv:'sec-sv',fee:'sec-fee',
+               td:'brief'};   // td = 「지금 확인하실 일」 전체 (의뢰 접수 안내) · bk 는 예약 카드가 없으면 여기로
+var _hiDone=false,_hiActive=false;
 function hiClear(){
   document.querySelectorAll('.hi-focus').forEach(function(el){el.classList.remove('hi-focus','done','hi-inset');});
   document.querySelectorAll('.hi-chip').forEach(function(el){el.remove();});
@@ -3605,13 +3609,22 @@ function hiClear(){
   if(sp){sp.style.height='0px';setTimeout(function(){if(sp.parentNode)sp.parentNode.removeChild(sp);},420);}
 }
 function _hiOff(){
+  _hiActive=false;
   hiClear();
   ['pointerdown','click','touchstart'].forEach(function(ev){window.removeEventListener(ev,_hiOff,true);});
+}
+// 예약 안내(f=bk)는 「지금 확인하실 일」 배너 안의 예약 카드로 데려갑니다.
+//  작성 대기(bkw) → 확인 중(bkp) → 방문 예정(visit) 순으로 있는 카드를 고릅니다.
+function bkBrief(){
+  if(FOCUS!=='bk')return null;
+  return document.querySelector('#brf-rail .brf[data-k="bkw"]')||
+         document.querySelector('#brf-rail .brf[data-k="bkp"]')||
+         document.querySelector('#brf-rail .brf[data-k="visit"]');
 }
 function focusSection(){
   if(!FOCUS||_hiDone)return;
   var id=FOCUS_SEC[FOCUS];if(!id)return;
-  var el=document.getElementById(id);
+  var el=bkBrief()||document.getElementById(id);
   if(!el){                       // ① 계약서 요약 카드만 있는 경우 등 대체 위치
     if(FOCUS==='ct')el=document.getElementById('duo')||document.querySelector('.mbx');
     if(FOCUS==='pt')el=document.querySelector('.ptc');
@@ -3619,14 +3632,21 @@ function focusSection(){
   }
   // 예약·상품권·청구 안내 팝업이 떠 있으면 그것을 먼저 보시게 하고, 닫은 뒤에 강조합니다.
   if(document.querySelector('.pmx-ov.on')){setTimeout(focusSection,600);return;}
-  _hiDone=true;
+  _hiDone=true;_hiActive=true;
   // 인보이스·점검보고서·수리요청은 내역까지 펼쳐 바로 보이게 합니다.
   if(FOCUS==='iv'||FOCUS==='ip'||FOCUS==='mm'){
     var b=document.getElementById('hub-btn-'+FOCUS);
     if(b&&!OPEN[FOCUS]){OPEN[FOCUS]=true;b.click();OPEN[FOCUS]=true;}
   }
+  var _pick=function(){return bkBrief()||document.getElementById(id)||el;};
   var _center=function(){
-    var t=document.getElementById(id)||el;if(!t)return;
+    var t=_pick();if(!t)return;
+    // 배너(가로로 넘기는 칸) 안의 카드면 먼저 그 카드가 보이도록 가로로 넘깁니다.
+    var rail=t.parentNode&&t.parentNode.id==='brf-rail'?t.parentNode:null;
+    if(rail&&rail.children[0]){
+      var lx=t.offsetLeft-rail.children[0].offsetLeft;
+      try{rail.scrollTo({left:lx,behavior:'smooth'});}catch(e){rail.scrollLeft=lx;}
+    }
     var r=t.getBoundingClientRect();
     var y=r.top+window.scrollY-Math.max(60,(window.innerHeight-r.height)/2);
     if(y>0){
@@ -3643,7 +3663,7 @@ function focusSection(){
     try{window.scrollTo({top:y<0?0:y,behavior:'smooth'});}catch(e){window.scrollTo(0,y<0?0:y);}
   };
   setTimeout(function(){
-    var t=document.getElementById(id)||el;
+    var t=_pick();
     _center();
     setTimeout(_center,650);      // 내역이 펼쳐지며 높이가 바뀐 경우 한 번 더 맞춥니다
     t.classList.add('hi-focus');
@@ -3705,7 +3725,15 @@ async function boot(){
     const prevSig=DATA?DATA._sig:'';
     await loadWithRetry();
     clearTimeout(persistTimer);persistTimer=null;
-    if(shown){ if(DATA&&DATA._sig!==prevSig)render(); return; }   // 바뀐 것이 있을 때만 조용히 다시 그립니다
+    if(shown){
+      if(DATA&&DATA._sig!==prevSig){
+        render();                                   // 바뀐 것이 있을 때만 조용히 다시 그립니다
+        // 📌 저장된(예전) 내용에는 방금 보낸 항목이 없어 강조를 못 했거나, 다시 그리면서 강조가 지워졌으면
+        //    새 내용 기준으로 한 번 더 찾아가 가운데로 옮깁니다. (고객이 이미 화면을 만졌으면 그대로 둡니다)
+        if(FOCUS&&(!_hiDone||_hiActive)){_hiDone=false;hiClear();setTimeout(focusSection,300);}
+      }
+      return;
+    }
     render();
     afterShow();
   }catch(e){
