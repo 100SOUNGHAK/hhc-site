@@ -88,6 +88,8 @@ async function call(env, method, path, body, query){
 // 문서 1건 → 객체(없으면 null)
 export async function getDoc(env, coll, id){
   if(!id) return null;
+  // Firestore 가 거부하는 문서 ID(예약어 __x__ · 슬래시 포함)는 조회하지 않고 「없음」으로 처리 (500 대신 404)
+  if(/^__.*__$/.test(id) || id.includes('/')) return null;
   const r=await call(env,'GET','/'+coll+'/'+encodeURIComponent(id));
   return r.status===404?null:docToObj(r.json);
 }
