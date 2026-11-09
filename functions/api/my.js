@@ -18,6 +18,16 @@ const PICK = {   // 각 문서에서 고객명·전화를 읽는 자리
   quotes:      x => [x.client, x.phone],
   memos:       x => [x.name, x.phone],
 };
+// 의뢰서(requests)의 고객명 — 관리자 화면 reqName() 과 같은 규칙 (콘도명 + 호수)
+const reqNames = x => {
+  const n = String((x && x.condo_name) || '').trim(), u = String((x && x.condo_unit) || '').trim();
+  const c = String((x && x.condo) || '').trim().replace(/\s*\(\s*(.+?)\s*\)\s*$/, ' $1').trim();
+  const out = [];
+  if (n && u) { if (nn(n).indexOf(nn(u)) >= 0) out.push(n); else out.push(n + ' ' + u, u + ' ' + n); }
+  else if (n) out.push(n);
+  if (c) out.push(c);
+  return out;
+};
 // 1차로 가볍게 훑을 때 받는 필드 (매칭에 필요한 것만 — 전체 컬렉션을 통째로 변환하면 무료 플랜 CPU 한도(10ms)를 넘김)
 const LINK = ['ca_link', 'ca_links', 'ca_off'];
 const MASK = {
@@ -28,6 +38,7 @@ const MASK = {
   quotes:      ['client', 'phone', ...LINK],
   memos:       ['name', 'phone', ...LINK],
   coupons:     ['name', 'receiver', ...LINK],
+  requests:    ['condo_name', 'condo_unit', 'condo', 'phone', 'submitted_at', ...LINK],
 };
 
 export async function onRequestGet(context){
@@ -64,7 +75,9 @@ export async function onRequestGet(context){
     return ids.length ? batchGet(env, coll, ids) : [];
   };
   try {
-    const [ps, invs, insps, cts, cps, bks, qts, mms, prs] = await Promise.all([
+    // 서비스 의뢰서 — 최근 30일 안에 접수된 것만 (마이페이지 「지금 확인하실 일」의 「의뢰 접수 완료」 카드용)
+    const rqFrom = new Date(Date.now() - 30 * 86400000).toISOString();
+    const [ps, invs, insps, cts, cps, bks, qts, mms, prs, rqs] = await Promise.all([
       getDoc(env, 'settings', 'points').catch(() => null),
       want.invoices    ? pick('invoices',    x => { const [n, p] = PICK.invoices(x);    return hit(n, p, x); }) : [],
       want.inspections ? pick('inspections', x => { const [n, p] = PICK.inspections(x); return hit(n, p, x); }) : [],
@@ -74,6 +87,8 @@ export async function onRequestGet(context){
       pick('quotes',   x => { const [n, p] = PICK.quotes(x);   return hit(n, p, x); }),
       pick('memos',    x => { const [n, p] = PICK.memos(x);    return hit(n, p, x); }),
       listAll(env, 'promos'),
+      pick('requests', x => String(x.submitted_at || '') >= rqFrom && (inLinks(x) || (x.ca_link ? linked(x) : (!offMine(x) &&
+        ((mp && pn(x.phone) === mp) || reqNames(x).some(v => keys.includes(nn(v)))))))).catch(() => []),
     ]);
     const out = {
       ok: true,
@@ -89,6 +104,9 @@ export async function onRequestGet(context){
       memos:       mms.map(x => { const y = { ...x }; delete y.memo; delete y.sent_log; return y; })
                      .sort((a, b) => String(b.req_date || '').localeCompare(String(a.req_date || ''))),
       promos:      prs,
+      // 의뢰서: 카드에 필요한 필드만 (요청사항·연락처 등은 보내지 않음)
+      requests:    rqs.map(x => ({ __id: x.__id, status: x.status || 'pending', submitted_at: x.submitted_at || '', items: x.items || '', lang: x.lang || '' }))
+                     .sort((a, b) => String(b.submitted_at).localeCompare(String(a.submitted_at))),
     };
     return json(out);
   } catch (e) {

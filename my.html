@@ -2178,7 +2178,8 @@ function applyData(j){
   DATA={
     m:j.m||{},ptStart:String(j.ptStart||''),
     invoices:j.invoices||[],inspections:j.inspections||[],contracts:j.contracts||[],coupons:j.coupons||[],
-    bookings:j.bookings||[],quotes:j.quotes||[],memos:j.memos||[],promos:j.promos||[]
+    bookings:j.bookings||[],quotes:j.quotes||[],memos:j.memos||[],promos:j.promos||[],
+    requests:j.requests||[]
   };
   DATA._sig=dataSig(DATA);
 }
@@ -2205,7 +2206,7 @@ async function load(fromCache){
   return true;
 }
 // 화면을 다시 그릴 필요가 있는지 비교하기 위한 요약 (내용이 같으면 깜빡임 없이 그대로 둡니다)
-function dataSig(d){try{return JSON.stringify([d.m,d.ptStart,d.invoices,d.inspections,d.contracts,d.coupons,d.bookings,d.quotes,d.memos,d.promos]);}catch(e){return String(Math.random());}}
+function dataSig(d){try{return JSON.stringify([d.m,d.ptStart,d.invoices,d.inspections,d.contracts,d.coupons,d.bookings,d.quotes,d.memos,d.promos,d.requests]);}catch(e){return String(Math.random());}}
 
 function balCalc(c){
   const paid=parseFloat(c.amount_paid)||0,bonus=(parseFloat(c.bonus_credit)||0)+(parseFloat(c.special_bonus_credit)||0);
@@ -3250,6 +3251,31 @@ function render(){
           cta:en?'Booking & work permit':'예약 · 작업방문등록',act:'href="'+esc(wpUrl(v))+'" data-mvt="'+(en?'🪪 Work permit':'🪪 작업방문등록 안내')+'"'});
       }
     }
+    // ②-0 서비스 의뢰 접수 완료 — 의뢰서를 낸 뒤, 그 의뢰로 예약 신청서가 만들어지기 전까지 보입니다
+    //   · 접수 후 14일이 지났거나, 접수 「이후에」 만들어진 예약(작성 대기·확인 중·확정)이 있으면 처리된 것으로 봅니다
+    {
+      const _t=v=>{const x=Date.parse(String(v||''));return isNaN(x)?0:x;};
+      const rq=(DATA.requests||[]).filter(x=>{
+        const at=_t(x.submitted_at);if(!at)return false;
+        if(Date.now()-at>14*86400000)return false;
+        if(x.status&&x.status!=='pending'&&x.status!=='completed')return false;
+        return !(DATA.bookings||[]).some(b=>_t(b.created_at)>at);
+      })[0];
+      if(rq){
+        let its=[];try{its=JSON.parse(String(rq.items||'[]'));}catch(e){its=[];}
+        if(!Array.isArray(its))its=[];
+        const nm=its.map(it=>{const c=String((it&&it.cat)||'').trim(),v=String((it&&it.svc)||'').trim();
+          const t=(c&&v.indexOf(c)<0)?(c+' · '+v):(v||c);return t?trIt(t)+((it&&it.qty&&it.qty!=='0')?' × '+it.qty:''):'';}).filter(Boolean);
+        const itTxt=nm.length?(nm[0]+(nm.length>1?(en?' + '+(nm.length-1)+' more':' 외 '+(nm.length-1)+'건'):'')):'';
+        const sd=new Date(_t(rq.submitted_at));
+        const when=en?('Received '+MN_EN[sd.getMonth()]+' '+sd.getDate()):((sd.getMonth()+1)+'월 '+sd.getDate()+'일 접수');
+        const ok=rq.status==='completed';
+        B.push({k:'rq',tone:'teal',ic:'📥',tag:en?'Request received':'의뢰 접수 완료',
+          big:ok?(en?'Confirmed · we\'ll contact you':'확인 완료 · 곧 연락드려요'):(en?'We\'re reviewing your request':'담당자가 확인하고 있어요'),
+          sub:(itTxt?esc(itTxt)+' · ':'')+esc(when),
+          cta:en?'Message us':'문의하기',act:'href="https://wa.me/60172472774"'});
+      }
+    }
     // ②-1 예약 신청서 작성 대기 · 확인 중 (관리자가 보낸 예약 링크)
     {
       const wt=(DATA.bookings||[]).filter(x=>x.status==='waiting')[0];
@@ -3600,7 +3626,7 @@ function render(){
 //    테두리를 깜빡여 눈에 띄게 합니다. 화면을 한 번 누르면 표시가 사라집니다.
 var FOCUS_SEC={iv:'sec-iv',ip:'sec-ip',ct:'sec-ct',cp:'sec-cp',qt:'sec-qt',
                bk:'brief',mm:'sec-mm',pt:'pyx-sec',ap:'a2hs-card',sv:'sec-sv',fee:'sec-fee',
-               td:'brief'};   // td = 「지금 확인하실 일」 전체 (의뢰 접수 안내) · bk 는 예약 카드가 없으면 여기로
+               td:'brief',rq:'brief'};   // rq = 의뢰 접수 완료 카드 (없으면 「지금 확인하실 일」 전체)   // td = 「지금 확인하실 일」 전체 (의뢰 접수 안내) · bk 는 예약 카드가 없으면 여기로
 var _hiDone=false,_hiActive=false;
 function hiClear(){
   document.querySelectorAll('.hi-focus').forEach(function(el){el.classList.remove('hi-focus','done','hi-inset');});
@@ -3615,11 +3641,12 @@ function _hiOff(){
 }
 // 예약 안내(f=bk)는 「지금 확인하실 일」 배너 안의 예약 카드로 데려갑니다.
 //  작성 대기(bkw) → 확인 중(bkp) → 방문 예정(visit) 순으로 있는 카드를 고릅니다.
+//  의뢰 접수 안내(f=rq)는 「의뢰 접수 완료」 카드로 데려갑니다.
+var BRIEF_KEYS={bk:['bkw','bkp','visit'],rq:['rq','bkw','bkp','visit']};
 function bkBrief(){
-  if(FOCUS!=='bk')return null;
-  return document.querySelector('#brf-rail .brf[data-k="bkw"]')||
-         document.querySelector('#brf-rail .brf[data-k="bkp"]')||
-         document.querySelector('#brf-rail .brf[data-k="visit"]');
+  var ks=BRIEF_KEYS[FOCUS];if(!ks)return null;
+  for(var i=0;i<ks.length;i++){var c=document.querySelector('#brf-rail .brf[data-k="'+ks[i]+'"]');if(c)return c;}
+  return null;
 }
 function focusSection(){
   if(!FOCUS||_hiDone)return;
