@@ -3244,15 +3244,31 @@ window.caSendModal=async function(idx){
     return _bkMin(x.booking_time)>_nowMin;
   });
   // 접수된 서비스 의뢰 (「의뢰 접수 안내」 발송용) — 최근 접수 순
-  // 접수 이후에 예약이 확정된 의뢰는 이미 처리된 건이므로 목록에서 제외합니다
-  const _rqDone=rd=>{
-    if(!BKC.length)return false;
-    if(!rd)return true;
-    return BKC.some(b=>String(b.booking_date||'')>=rd||String(b.created_at||'').slice(0,10)>=rd);
+  // 접수 「이후에 만들어진」 확정 예약이 있는 의뢰는 이미 처리된 건이므로 목록에서 제외합니다
+  //  (2026-11-09 수정) 예전에는 날짜만 비교해서, 오늘·미래 날짜로 확정된 예약이 하나라도 있으면
+  //  그 날짜까지 새로 들어온 의뢰가 모두 숨겨져 「의뢰 접수」 버튼이 꺼졌습니다.
+  //  이제는 의뢰 접수 시각과 예약이 만들어진 시각을 초 단위로 비교합니다.
+  const _ms=v=>{
+    if(!v)return 0;
+    if(typeof v.toMillis==='function')return v.toMillis();
+    if(typeof v==='object'&&v.seconds!=null)return v.seconds*1000;
+    const sv=String(v);
+    // 「2026. 11. 9. 오후 3:39:45」 같은 한국어 표기 (예전 의뢰서)
+    const k=sv.match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.?\s*(오전|오후)?\s*(\d{1,2})?:?(\d{2})?/);
+    if(k&&/\d{4}\.\s/.test(sv)){
+      let h=parseInt(k[5]||'0',10);if(k[4]==='오후'&&h<12)h+=12;if(k[4]==='오전'&&h===12)h=0;
+      return new Date(+k[1],+k[2]-1,+k[3],h,parseInt(k[6]||'0',10)).getTime();
+    }
+    const t=Date.parse(sv);return isNaN(t)?0:t;
+  };
+  const _rqDone=x=>{
+    const at=_ms(x.submitted_at||x.created_at);
+    if(!at)return false;                      // 접수 시각을 모르면 숨기지 않고 보여 줍니다
+    return BKC.some(b=>_ms(b.created_at)>at);
   };
   const RQP=(D.requests||[]).slice()
-    .filter(x=>!_rqDone(String(x.submitted_at||x.created_at||'').slice(0,10)))
-    .sort((a,b)=>String(b.submitted_at||b.created_at||'').localeCompare(String(a.submitted_at||a.created_at||'')));
+    .filter(x=>!_rqDone(x))
+    .sort((a,b)=>_ms(b.submitted_at||b.created_at)-_ms(a.submitted_at||a.created_at));
   // 발송 가능한 쿠폰 — 사용/만료되지 않은 것만, 최근 발급 순
   const _cpSort=a=>a.slice().sort((x,y)=>String(y.createdAt||y.issuedAt||'').localeCompare(String(x.createdAt||x.issuedAt||'')));
   const _cpLive=(D.coupons||[]).filter(x=>String(x.status||'active')!=='used'&&!(x.expiry&&String(x.expiry)<_tdy));
