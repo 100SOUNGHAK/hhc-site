@@ -93,13 +93,48 @@ async function deleteSub(docName){
   try{await fetch('https://firestore.googleapis.com/v1/'+docName+'?key='+FS_KEY,{method:'DELETE'});}catch(e){}
 }
 
+// ---------- 호출 보호 (2026-11-09 추가) ----------
+// 이 주소는 고객용 예약서·의뢰서(booking.html / request.html)가 접수 직후 호출합니다.
+// 누구나 POST 할 수 있는 주소라, 아래 두 가지로 「알림 폭탄」을 막습니다.
+//  1) 출처 검사: 우리 도메인(정식·옛 주소·미리보기 배포)에서 열린 화면의 요청만 받습니다.
+//  2) 호출 횟수 제한: 같은 IP 에서 10분에 10회, 전체로는 1분에 30회까지만 보냅니다.
+//     (메모리 기반이라 완벽하진 않지만, 대량 호출을 크게 줄여 줍니다)
+const ALLOWED_HOSTS=['happyhomecare.com.my','www.happyhomecare.com.my','hhc-3p8.pages.dev'];
+function originAllowed(req){
+  let src=req.headers.get('Origin')||'';
+  if(!src){const ref=req.headers.get('Referer')||'';try{src=new URL(ref).origin;}catch(e){src='';}}
+  if(!src)return false;
+  let h='';try{const u=new URL(src);if(u.protocol!=='https:')return false;h=u.hostname;}catch(e){return false;}
+  return ALLOWED_HOSTS.includes(h)||h.endsWith('.hhc-3p8.pages.dev');
+}
+const RL_IP=new Map();   // ip → [호출 시각 …]
+let RL_ALL=[];           // 전체 호출 시각
+function rateLimited(req){
+  const now=Date.now();
+  RL_ALL=RL_ALL.filter(t=>now-t<60e3);
+  if(RL_ALL.length>=30)return true;
+  const ip=req.headers.get('CF-Connecting-IP')||'?';
+  const arr=(RL_IP.get(ip)||[]).filter(t=>now-t<600e3);
+  if(arr.length>=10){RL_IP.set(ip,arr);return true;}
+  arr.push(now);RL_IP.set(ip,arr);RL_ALL.push(now);
+  if(RL_IP.size>5000)RL_IP.clear();   // 메모리가 무한히 늘지 않게
+  return false;
+}
+
 // ---------- 핸들러 ----------
 export async function onRequestPost(context){
+  if(!originAllowed(context.request))return json({ok:false,error:'forbidden'},403);
+  if(rateLimited(context.request))return json({ok:false,error:'too many requests'},429);
   const priv=context.env.VAPID_PRIVATE_KEY;
   if(!priv)return json({ok:false,error:'VAPID_PRIVATE_KEY 환경변수가 설정되지 않았습니다'},500);
-  let type='request';
-  try{const b=await context.request.json();type=b.edit?'booking_edit':(b.type==='booking'?'booking':'request');}catch(e){}
-  const msg=MSG[type]||MSG.request;
+  let type='';
+  try{
+    const b=await context.request.json();
+    if(b&&b.type==='booking')type=b.edit?'booking_edit':'booking';
+    else if(b&&b.type==='request')type='request';
+  }catch(e){}
+  if(!type)return json({ok:false,error:'bad request'},400);   // type 은 'request' 또는 'booking' 만 허용
+  const msg=MSG[type];
   const {subs,error}=await listSubs();
   if(error)return json({ok:false,error},500);
   let sent=0,removed=0;
