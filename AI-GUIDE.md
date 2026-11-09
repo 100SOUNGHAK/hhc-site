@@ -78,6 +78,11 @@
   frame-ancestors·nosniff·Referrer-Policy·HSTS·Permissions-Policy) + 관리자·고객 개인문서 화면의 `X-Robots-Tag: noindex`.
   올린 파일이 화면에 바로 반영되게 하는 장치다. `_redirects` 와 **다른 파일**이니 헷갈리지 말 것.
   **새 관리자 화면을 만들면 `_headers` 의 noindex 목록에도 추가할 것.** 카메라·마이크는 점검보고서가 쓰므로 막지 말 것.
+- `hhc-auth.js` / `hhc-auth-boot.js` — **관리자 화면 공통 로그인**(Firebase Auth, 2026-11-09). 관리자 화면 `<head>` 의
+  `<script type="module" src="/hhc-auth.js">` 한 줄로 붙는다(다른 module 스크립트보다 앞). compat 화면(hhc-invoice·expense-admin)은
+  본문 firestore-compat 뒤에 auth-compat + `/hhc-auth-boot.js` 두 줄이 더 있다. 허용 계정 목록은 hhc-auth.js 의 `ALLOWED`.
+  **모든 관리자 화면의 Firebase 설정은 appId 까지 hhc-auth.js 의 CFG 와 동일해야 한다**(다르면 duplicate-app 오류).
+  고객이 여는 `admin.html?view=` · `hhc-invoice.html?view=` 에는 로그인 화면이 뜨지 않는다. 새 관리자 화면을 만들면 이 한 줄도 넣는다.
 - `robots.txt` — `Allow: /` 만. 관리자 파일명을 여기에 나열하지 말 것(주소를 알려 주는 꼴). 검색 차단은 `_headers` 로.
 - `functions/api/notify.js` — 새 의뢰·예약 푸시 알림(Pages Function). 우리 도메인 출처 요청만 받고 호출 횟수를 제한한다.
   루트에 같은 이름의 사본을 두지 말 것(2026-11-09 예전 사본 삭제).
