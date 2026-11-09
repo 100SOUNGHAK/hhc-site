@@ -93,6 +93,9 @@
   **고객 화면(my·inv·inspect·install·washer·repair·quote·coupon·customer·booking·request·r, hhc-invoice?view, admin?view)은 더 이상 Firestore 를
   직접 읽지 않는다 — 고객 화면에 Firestore import 를 다시 넣지 말 것.** 공개 자료(promos·services·reviews·settings 일부)는 예외로 직접 읽는다.
   로컬 테스트는 `.dev.vars`(HHC_FS_BASE·HHC_TOKEN_URL 로 가짜 Firestore 지정) + `wrangler pages dev`.
+- `firestore.rules` / `storage.rules` — **Firestore·Storage 보안 규칙의 원본(2026-11-09 3단계).** 저장소에 두는 것은 기록용이고,
+  실제 적용은 Firebase 콘솔 규칙 탭에 붙여 넣어 게시해야 한다. 관리자 이메일 목록(ADMINS)은 hhc-auth.js 의 ALLOWED 와 항상 같게.
+  공개 읽기는 promos·services·reviews 뿐. 새 컬렉션을 고객 화면이 직접 읽어야 한다면 규칙에 추가하지 말고 functions/api 에 창구를 만든다.
 - `worker.js` — 구글 캘린더 → Firestore 동기화 Worker (웹사이트 아님)
 - 작업용 미리보기·백업 파일(`*-preview.html`, `my (30).html` 같은 것)은 저장소에 올리지 말 것 — 공개 주소로 그대로 서빙된다 (2026-11-09 정리)
 

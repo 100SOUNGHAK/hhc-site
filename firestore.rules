@@ -1,0 +1,72 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Happy Home Care — Firestore 보안 규칙 (보안 강화 3단계, 2026-11-09)
+//
+// 이 파일은 「기록·원본」입니다. 실제 적용은 Firebase 콘솔 → Firestore Database → 규칙 탭에
+// 이 내용을 그대로 붙여 넣고 「게시」해야 합니다. (저장소에 두는 것만으로는 적용되지 않음)
+//
+// 설계:
+//  · 관리자(아래 이메일 목록으로 로그인한 계정)만 모든 컬렉션을 읽고 쓴다.
+//    → 관리자 화면 16개는 hhc-auth.js 로 로그인한 뒤 Firestore 를 직접 쓴다.
+//  · 고객 화면은 Firestore 를 직접 읽지 않는다 → 서버 창구(functions/api, 서비스 계정)가 대신 읽어 준다.
+//    서비스 계정은 이 규칙의 영향을 받지 않는다(그래서 각 API 가 돌려줄 문서를 직접 거른다).
+//  · 개인정보가 없는 공개 자료만 누구나 읽는다: promos(이벤트) · services(가격표) · reviews(리뷰).
+//  · 리뷰는 누구나 쓸 수 있되(홈페이지 리뷰 등록), 형식을 검사하고 「좋아요 ±1」 외의 수정은 막는다.
+//
+// 직원을 추가할 때: 아래 ADMINS 목록 + hhc-auth.js 의 ALLOWED + Firebase 콘솔 「사용자 추가」 세 곳을 함께.
+// 되돌리기: 콘솔 규칙 탭 왼쪽 이력에서 이전 버전을 선택해 다시 게시하면 1분 안에 복구됩니다.
+// ─────────────────────────────────────────────────────────────────────────────
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── 관리자 판정: 로그인했고, 이메일이 목록에 있을 때 ──
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() in [
+          'kopeco100@gmail.com'
+        ];
+    }
+
+    // ── 공개 읽기: 이달의 이벤트 · 가격표 (쓰기는 관리자만) ──
+    match /promos/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /services/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── 리뷰: 누구나 읽기·등록, 좋아요(likes)만 ±1 수정 가능, 삭제·그 외 수정은 관리자 ──
+    function validReview() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'rating', 'text', 'photos', 'likes', 'created_at'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 60
+        && d.text is string && d.text.size() > 0 && d.text.size() <= 2000
+        && d.rating is number && d.rating >= 1 && d.rating <= 5
+        && d.likes == 0
+        && d.photos is list && d.photos.size() <= 4
+        && d.created_at is string && d.created_at.size() <= 40;
+    }
+    function likesOnly() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes'])
+        && request.resource.data.likes is int
+        && (request.resource.data.likes - resource.data.likes) in [-1, 1];
+    }
+    match /reviews/{doc} {
+      allow read: if true;
+      allow create: if isAdmin() || validReview();
+      allow update: if isAdmin() || likesOnly();
+      allow delete: if isAdmin();
+    }
+
+    // ── 그 밖의 전부(customers · invoices · inspections · contracts · quotes · coupons · bookings ·
+    //    requests · schedules · memos · memo_snippets · settings · shorts · push_subs · expense_* · banks …)
+    //    → 관리자만. 고객 화면은 서버 창구(/api)를 통해 받는다. ──
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+  }
+}
