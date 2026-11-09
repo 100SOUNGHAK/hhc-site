@@ -430,17 +430,19 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,BlinkMacSyst
 <div id="doc" style="display:none"></div>
 
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, doc, getDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+// (2026-11-09 보안 2단계) 문서는 서버 창구 /api/doc 에서 받습니다. Firestore 직접 접근 없음.
+//  snap.exists() / snap.data() 모양은 예전 그대로라 아래 코드는 바뀌지 않습니다.
+function apiDoc(t,id){
+  return fetch('/api/doc?t='+t+'&id='+encodeURIComponent(id),{cache:'no-store'}).then(function(r){
+    return r.json().catch(function(){return null;}).then(function(j){
+      if(r.status===404||(j&&j.error==='not-found'))return {exists:function(){return false;},data:function(){return null;}};
+      if(!r.ok||!j||!j.ok)throw new Error((j&&j.error)||('http '+r.status));
+      var d=j.doc||{};delete d.__id;
+      return {exists:function(){return true;},data:function(){return d;},extra:j};
+    });
+  });
+}
 
-const FIREBASE_CFG={
-  apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
-  authDomain:"happywork-packageplan.firebaseapp.com",
-  projectId:"happywork-packageplan",
-  storageBucket:"happywork-packageplan.firebasestorage.app",
-  messagingSenderId:"101289103022",
-  appId:"1:101289103022:web:d81aca7f3747dd26df673f"
-};
 
 const params=new URLSearchParams(location.search);
 const quoteId=params.get('id');
@@ -568,9 +570,7 @@ function showError(msg){
 if(!quoteId){showError();}
 else{
   try{
-    const app=initializeApp(FIREBASE_CFG);
-    DB=getFirestore(app);
-    getDoc(doc(DB,'quotes',quoteId)).then(snap=>{
+    apiDoc('quote',quoteId).then(snap=>{
       if(!snap.exists()){showError();return;}
       Q=snap.data();
       // 유닛 그룹 정규화 (구 스키마: 단일 그룹 → groups 배열로)
@@ -990,7 +990,9 @@ async function confirmChoice(){
   // label/price는 관리자 목록 호환용 (합계 요약)
   const choice={selections:selections,label:summary,price:acTotal(),at:new Date().toISOString()};
   try{
-    await updateDoc(doc(DB,'quotes',quoteId),{customerChoice:choice});
+    // (2026-11-09) 고객 선택은 서버 창구 /api/quote 로 저장
+    await fetch('/api/quote',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:quoteId,choice:choice})})
+      .then(r=>r.json().then(j=>{if(!r.ok||!j||!j.ok)throw new Error((j&&j.error)||('http '+r.status));}));
     Q.customerChoice=choice;
     acEditing=false;
     render();

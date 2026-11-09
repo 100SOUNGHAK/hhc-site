@@ -3034,25 +3034,16 @@ async function runCustomerView(id,mode,lang){
   let host=document.getElementById('cust-standalone');
   if(!host){host=document.createElement('div');host.id='cust-standalone';document.body.appendChild(host);}
   host.innerHTML='<div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;color:#0F1C3F;font-size:15px"><div style="width:22px;height:22px;border:2px solid #3D52A0;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></div>불러오는 중...</div>';
-  // 고객 조회는 단일 문서만 읽음 (전체 목록 구독 불필요)
-  try{ if(!db){const app=initializeApp(FIREBASE_CFG);db=hhcFastDb(app);} }catch(e){}
+  // (2026-11-09 보안 2단계) 고객 보기는 서버 창구 /api/doc 에서 계약서 + 연결 점검보고서 목록을 받습니다 (데이터베이스 직접 접근 없음)
   let c=null;
-  try{const snap=await getDoc(doc(db,'contracts',id));if(snap.exists())c=snap.data();}catch(e){console.error(e);}
-  if(!c){host.innerHTML='<div style="padding:64px 20px;text-align:center;color:#D6433F;font-size:15px">계약서를 찾을 수 없습니다.<br>Contract not found.</div>';return;}
-  // 이용내역의 인보이스에 연결된 점검보고서를 미리 조회해 「점검보고서 보기」 버튼을 만든다
   try{
-    const hist=typeof c.usage_history==='string'?JSON.parse(c.usage_history||'[]'):(c.usage_history||[]);
-    const ids=[...new Set(hist.map(u=>String(u.inv_id||'')).filter(Boolean))];
-    const map={};
-    for(let i=0;i<ids.length;i+=10){
-      const chunk=ids.slice(i,i+10);
-      try{
-        const s2=await getDocs(query(collection(db,'inspections'),where('invoice_id','in',chunk)));
-        s2.forEach(d=>{const x=d.data()||{};const k=String(x.invoice_id||'');(map[k]=map[k]||[]).push({id:d.id,type:x.type||'inspect',date:x.date||''});});
-      }catch(e2){}
-    }
-    window._cvInspMap=map;
-  }catch(e){window._cvInspMap={};}
+    const _rr=await fetch('/api/doc?t=contract&id='+encodeURIComponent(id),{cache:'no-store'});
+    let _j=null;try{_j=await _rr.json();}catch(e){_j=null;}
+    if(_rr.ok&&_j&&_j.ok&&_j.doc){c=Object.assign({},_j.doc);delete c.__id;window._cvInspMap=_j.inspMap||{};}
+    else if(!(_rr.status===404||(_j&&_j.error==='not-found')))throw new Error((_j&&_j.error)||('http '+_rr.status));
+  }catch(e){console.error(e);}
+  if(!c){host.innerHTML='<div style="padding:64px 20px;text-align:center;color:#D6433F;font-size:15px">계약서를 찾을 수 없습니다.<br>Contract not found.</div>';return;}
+  if(!window._cvInspMap)window._cvInspMap={};
   let curLang=lang;
   async function draw(){
     // EN 표시 시 특약사항·이용내역 설명을 자동 번역(캐시됨) 후 렌더 —

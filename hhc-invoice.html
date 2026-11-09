@@ -6847,45 +6847,36 @@ async function runInvoiceView(vid,lang){
   }
   var host=document.getElementById('ivx-host');
   try{
-    var fbApp;try{fbApp=firebase.app();}catch(e){fbApp=firebase.initializeApp(FB_CFG);}
-    var db=hhcPersist(firebase.firestore(fbApp));
-    // ⚡ 로고/서명 · 발행처 · 품목 카탈로그 · 인보이스를 한꺼번에 요청합니다 (예전엔 다섯 번 차례로 기다렸습니다)
-    var _nul=function(){return null;};
-    var _r=await Promise.all([
-      db.collection('settings').doc('images').get().catch(_nul),
-      db.collection('settings').doc('issuer').get().catch(_nul),
-      db.collection('services').get().catch(_nul),
-      db.collection('settings').doc('catalog').get().catch(_nul),
-      db.collection('invoices').where('id','==',vid).limit(1).get().catch(_nul)
-    ]);
-    var imgDoc=_r[0],issDoc=_r[1],svSnap=_r[2],ctDoc=_r[3],snap=_r[4];
-    // 로고/서명 이미지
-    try{if(imgDoc&&imgDoc.exists)imgData=Object.assign({logo:'',sign:''},imgDoc.data());}catch(e){}
-    try{if(issDoc&&issDoc.exists)issuer=Object.assign({},issuer,issDoc.data());}catch(e){}
+    // (2026-11-09 보안 2단계) 고객 보기는 서버 창구 /api/doc 에서 인보이스·발행처·이미지·카탈로그·연결 보고서를 한 번에 받습니다.
+    //  (데이터베이스 직접 접근 없음 — 관리자 작성 화면은 그대로 Firestore 를 씁니다)
+    var _rr=await fetch('/api/doc?t=invoice&id='+encodeURIComponent(vid),{cache:'no-store'});
+    var _j=null;try{_j=await _rr.json();}catch(e){_j=null;}
+    if(_rr.status===404||(_j&&_j.error==='not-found')){document.getElementById('ivx-host').innerHTML='<div style="padding:70px 20px;text-align:center;color:#D6433F;font-size:15px">Invoice not found.<br>인보이스를 찾을 수 없습니다.</div>';return;}
+    if(!_rr.ok||!_j||!_j.ok)throw new Error((_j&&_j.error)||('http '+_rr.status));
+    var _strip=function(o){if(!o)return null;var c=Object.assign({},o);delete c.__id;return c;};
+    // 로고/서명 이미지 · 발행처
+    try{var _im=_strip(_j.images);if(_im)imgData=Object.assign({logo:'',sign:''},_im);}catch(e){}
+    try{var _is=_strip(_j.issuer);if(_is)issuer=Object.assign({},issuer,_is);}catch(e){}
     // 항목 카탈로그 — 저장된 품목의 분류를 "지금의 분류"로 최신화해 보여주기 위해 함께 불러온다
     try{
-      if(svSnap&&!svSnap.empty){
-        var _all=svSnap.docs.map(function(d){return normSvc(Object.assign({},d.data(),{_docId:d.id}));});
+      if(_j.services&&_j.services.length){
+        var _all=_j.services.map(function(x){var id=x.__id;return normSvc(Object.assign({},_strip(x),{_docId:id}));});
         services=_all.filter(function(x){return !x._del;});
         trashSvcs=_all.filter(function(x){return !!x._del;});
       }
     }catch(e){}
-    try{if(ctDoc&&ctDoc.exists)applyCatalog(ctDoc.data());}catch(e){}
-    var inv=null;
-    if(snap&&!snap.empty)inv=snap.docs[0].data();
-    if(!inv){try{var d2=await db.collection('invoices').doc(vid).get();if(d2.exists)inv=d2.data();}catch(e){}}
-    if(!inv){document.getElementById('ivx-host').innerHTML='<div style="padding:70px 20px;text-align:center;color:#D6433F;font-size:15px">Invoice not found.<br>인보이스를 찾을 수 없습니다.</div>';return;}
+    try{var _ct=_strip(_j.catalog);if(_ct)applyCatalog(_ct);}catch(e){}
+    var inv=_strip(_j.doc);
     inv._t=calcTotals(inv);
     _ivaInv=inv;
     // 연결된 점검보고서 (inspections.invoice_id → 이 인보이스)
     try{
-      var isnap=await db.collection('inspections').where('invoice_id','==',inv.id||vid).get();
-      inv._insp=isnap.docs.map(function(d){
-        var x=d.data()||{};var ty=x.type||'inspect';
+      inv._insp=(_j.insp||[]).map(function(x){
+        var ty=x.type||'inspect';
         var pf=ty==='install'?'install.html':(ty==='washer'?'washer.html':'inspect.html');
         var tl=ty==='install'?'설치':(ty==='washer'?'세탁기':(ty==='dispatch'?'출장':'점검'));
-        return {_id:d.id,type:ty,typeLabel:tl,client:x.client||'',date:x.date||'',
-                url:BASE_URL+'/'+pf+'?id='+encodeURIComponent(d.id)+'&lang='+(lang||'ko')};
+        return {_id:x._id,type:ty,typeLabel:tl,client:x.client||'',date:x.date||'',
+                url:BASE_URL+'/'+pf+'?id='+encodeURIComponent(x._id)+'&lang='+(lang||'ko')};
       }).sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
     }catch(e){inv._insp=[];}
     if(inv.contract_id)inv._ctUrl=BASE_URL+'/admin.html?view='+encodeURIComponent(inv.contract_id)+'&mode=all&lang='+(lang||'ko');

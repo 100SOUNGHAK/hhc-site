@@ -465,17 +465,21 @@ body.pk-lock{overflow:hidden}
 </div>
 
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, doc, getDoc, updateDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+// (2026-11-09 보안 2단계) 예약은 서버 창구 /api/booking 으로 읽고 저장합니다. Firestore 직접 접근 없음.
+async function apiBookingGet(id){
+  const r=await fetch('/api/booking?id='+encodeURIComponent(id),{cache:'no-store'});
+  let j=null;try{j=await r.json();}catch(e){}
+  if(r.status===404||(j&&j.error==='not-found'))return null;
+  if(!r.ok||!j||!j.ok)throw new Error((j&&j.error)||('http '+r.status));
+  return j.doc;
+}
+async function apiBookingSave(id,payload){
+  const r=await fetch('/api/booking',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.assign({id:id},payload))});
+  let j=null;try{j=await r.json();}catch(e){}
+  if(!r.ok||!j||!j.ok)throw new Error((j&&j.error)||('http '+r.status));
+  return j.doc;
+}
 
-const FIREBASE_CFG={
-  apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
-  authDomain:"happywork-packageplan.firebaseapp.com",
-  projectId:"happywork-packageplan",
-  storageBucket:"happywork-packageplan.firebasestorage.app",
-  messagingSenderId:"101289103022",
-  appId:"1:101289103022:web:d81aca7f3747dd26df673f"
-};
 
 // ══ 품목 카탈로그 (KO/EN 쌍) — 인보이스·의뢰요청서와 동일 구성 ══
 const PK_CATS=[
@@ -549,12 +553,12 @@ function showError(title,desc){
 if(!bookingId){
   showError('링크가 올바르지 않습니다','예약 ID가 없습니다. 올바른 링크를 사용해주세요.');
 }else{
-  try{
-    const app=initializeApp(FIREBASE_CFG);
-    db=getFirestore(app);
-    onSnapshot(doc(db,'bookings',bookingId),(snap)=>{
-      if(!snap.exists()){showError('예약 정보를 찾을 수 없습니다','링크가 만료되었거나 잘못되었습니다. 관리자에게 문의해주세요.');return;}
-      bookingData={...snap.data(),__id:snap.id};
+  // 예약 내용을 받아 화면에 반영 (처음 한 번 + 화면이 보이는 동안 30초마다 — 관리자가 확정하면 반영됩니다)
+  let _lastRaw='';
+  const applyBooking=(d)=>{
+      if(!d){showError('예약 정보를 찾을 수 없습니다','링크가 만료되었거나 잘못되었습니다. 관리자에게 문의해주세요.');return;}
+      _lastRaw=JSON.stringify(d);
+      bookingData={...d,__id:bookingId};
       // URL의 ?lang= 파라미터가 있으면 우선 적용(발송 시 선택한 언어로 열림),
       // 이후 고객이 직접 전환한 언어(_userLang)가 있으면 그것을 최우선
       const urlLang=params.get('lang');
@@ -566,7 +570,13 @@ if(!bookingId){
 
       renderByStatus();
       ensureLangToggle();
-    },(err)=>showError('데이터 로드 실패',err.message));
+  };
+  try{
+    apiBookingGet(bookingId).then(applyBooking,(err)=>showError('데이터 로드 실패',err.message));
+    setInterval(()=>{
+      if(document.visibilityState!=='visible'||editMode||window._justSubmitted)return;
+      apiBookingGet(bookingId).then(d=>{ if(d&&JSON.stringify(d)!==_lastRaw)applyBooking(d); }).catch(()=>{});
+    },30000);
   }catch(e){showError('연결 실패',e.message);}
 }
 
@@ -1317,9 +1327,9 @@ async function submitBooking(){
       payload.edited_at=new Date().toISOString();
       payload.edit_count=(bookingData.edit_count||0)+1;
     }
-    await updateDoc(doc(db,'bookings',bookingId),payload);
-    // 관리자 기기로 서버 푸시 알림 (실패해도 예약에는 영향 없음)
-    try{fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'booking',edit:isEdit})});}catch(e2){}
+    // 서버 창구가 저장과 함께 관리자 기기로 푸시 알림까지 보냅니다
+    const savedDoc=await apiBookingSave(bookingId,Object.assign({},payload,{edit:isEdit}));
+    if(savedDoc)_lastRaw=JSON.stringify(savedDoc);
     // 로컬 상태도 즉시 반영 (메시지 생성 시 최신값 사용)
     Object.assign(bookingData,payload);
     editMode=false;

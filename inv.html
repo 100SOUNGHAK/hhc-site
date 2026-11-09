@@ -106,18 +106,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="loading-state"><div class="spinner"></div><div>Loading invoice...</div></div>
   </div>
 </div>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 (function(){
-var FB_CONFIG={
-  apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
-  authDomain:"happywork-packageplan.firebaseapp.com",
-  projectId:"happywork-packageplan",
-  storageBucket:"happywork-packageplan.firebasestorage.app",
-  messagingSenderId:"101289103022",
-  appId:"1:101289103022:web:d81aca7f3747dd26df673f"
-};
 
 function fmtDate(d){
   if(!d)return'';
@@ -298,25 +288,16 @@ async function loadInvoice(){
   var id=params.get('id');
   if(!id){showError('No invoice ID provided.');return;}
   try{
-    firebase.initializeApp(FB_CONFIG);
-    var db=firebase.firestore();
-    // 인보이스, 발행처 정보, 이미지 설정을 동시에 불러오기
-    var results=await Promise.all([
-      db.collection('invoices').where('id','==',id).limit(1).get(),
-      db.collection('settings').doc('issuer').get(),
-      db.collection('settings').doc('images').get()
-    ]);
-    var snap=results[0];
-    var issuerDoc=results[1];
-    var imagesDoc=results[2];
-    if(snap.empty){showError('Invoice '+id+' not found.');return;}
-    var invData=snap.docs[0].data();
+    // (2026-11-09 보안 2단계) 인보이스·발행처·이미지 설정을 서버 창구 /api/doc 에서 한 번에 받습니다
+    var r=await fetch('/api/doc?t=invoice&id='+encodeURIComponent(id),{cache:'no-store'});
+    var j=null;try{j=await r.json();}catch(e){j=null;}
+    if(r.status===404||(j&&j.error==='not-found')){showError('Invoice '+id+' not found.');return;}
+    if(!r.ok||!j||!j.ok)throw new Error((j&&j.error)||('http '+r.status));
+    var invData=j.doc||{};delete invData.__id;
     // 최신 발행처 정보 우선 적용
-    if(issuerDoc.exists){
-      invData.issuer=Object.assign({},invData.issuer||{},issuerDoc.data());
-    }
+    if(j.issuer){var iss=Object.assign({},j.issuer);delete iss.__id;invData.issuer=Object.assign({},invData.issuer||{},iss);}
     // 이미지 설정 적용
-    invData._images=imagesDoc.exists?imagesDoc.data():{};
+    invData._images=j.images?Object.assign({},j.images):{};delete invData._images.__id;
     renderInvoice(invData);
   }catch(e){showError('Failed to load: '+e.message);}
 }

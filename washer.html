@@ -506,18 +506,18 @@ window.getSampleData=function(){
 };
 </script>
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-var FB_CFG={
-  apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
-  authDomain:"happywork-packageplan.firebaseapp.com",
-  projectId:"happywork-packageplan",
-  storageBucket:"happywork-packageplan.firebasestorage.app",
-  messagingSenderId:"101289103022",
-  appId:"1:101289103022:web:d81aca7f3747dd26df673f"
-};
-var app=initializeApp(FB_CFG);
-var DB=getFirestore(app);
+// (2026-11-09 보안 2단계) 문서는 서버 창구 /api/doc 에서 받습니다. Firestore 직접 접근 없음.
+//  snap.exists() / snap.data() 모양은 예전 그대로라 아래 코드는 바뀌지 않습니다.
+function apiDoc(t,id){
+  return fetch('/api/doc?t='+t+'&id='+encodeURIComponent(id),{cache:'no-store'}).then(function(r){
+    return r.json().catch(function(){return null;}).then(function(j){
+      if(r.status===404||(j&&j.error==='not-found'))return {exists:function(){return false;},data:function(){return null;}};
+      if(!r.ok||!j||!j.ok)throw new Error((j&&j.error)||('http '+r.status));
+      var d=j.doc||{};delete d.__id;
+      return {exists:function(){return true;},data:function(){return d;},extra:j};
+    });
+  });
+}
 var params=new URLSearchParams(location.search);
 var rid=params.get('id');
 var initLang=params.get('lang')||'ko';
@@ -528,7 +528,7 @@ if(rid){
   lov.style='position:fixed;inset:0;background:#fff;display:flex;align-items:center;justify-content:center;z-index:9999;font-family:-apple-system,sans-serif;color:#0F1C3F;font-size:14px;gap:10px';
   lov.innerHTML='<div style="width:20px;height:20px;border:2px solid #0D9488;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></div>보고서 불러오는 중...';
   document.body.appendChild(lov);
-  getDoc(doc(DB,'inspections',rid)).then(function(snap){
+  apiDoc('inspection',rid).then(function(snap){
     lov.remove();
     if(snap.exists()){window.renderReport(snap.data());}
     else{

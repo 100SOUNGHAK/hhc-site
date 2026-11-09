@@ -35,7 +35,7 @@
 ### 고객용 화면
 | 파일 | 역할 |
 |---|---|
-| `my.html` | 고객 마이페이지 (핵심). 앱형 UI: 흰 상단바·남색 인사카드·납부예정·**상단 고정 빠른메뉴**·회원권잔액/포인트·문서현황 행·하단 4탭. PWA 설치 지원 |
+| `my.html` | 고객 마이페이지 (핵심). **자료는 `/api/my?c=` 에서 받음(2026-11-09)**. 앱형 UI: 흰 상단바·남색 인사카드·납부예정·**상단 고정 빠른메뉴**·회원권잔액/포인트·문서현황 행·하단 4탭. PWA 설치 지원 |
 | `hhc-invoice.html` | 인보이스 작성(관리자)+고객 보기(`?view=ID`). Firebase **compat SDK** 사용 (유일). 첨부 사진 기능 있음 |
 | `inspect.html` | 고객용 점검보고서 (부위 다이어그램·냉방성능·팝업). 관리자 화면은 inspect-admin |
 | `quote.html` | 고객용 견적서 (`?id=`) |
@@ -86,6 +86,13 @@
 - `robots.txt` — `Allow: /` 만. 관리자 파일명을 여기에 나열하지 말 것(주소를 알려 주는 꼴). 검색 차단은 `_headers` 로.
 - `functions/api/notify.js` — 새 의뢰·예약 푸시 알림(Pages Function). 우리 도메인 출처 요청만 받고 호출 횟수를 제한한다.
   루트에 같은 이름의 사본을 두지 말 것(2026-11-09 예전 사본 삭제).
+- `functions/api/` — **고객 화면용 서버 창구(Pages Functions, 2026-11-09 보안 2단계).** 서비스 계정(FIREBASE_CLIENT_EMAIL /
+  FIREBASE_PRIVATE_KEY, Pages 환경변수)으로 Firestore 를 읽고 쓴다. 공통 도구는 `functions/api/_lib/fs.js`(토큰·REST·값 변환·호출 제한·출처 검사),
+  푸시는 `_lib/push.js`. 라우트: `my.js`(마이페이지 자료 — 고객 매칭 규칙은 예전 my.html load() 와 동일), `doc.js`(문서 1건: invoice·inspection·
+  contract·quote·coupon·memo·booking), `booking.js`(GET/POST), `request.js`(POST 접수+푸시), `quote.js`(POST 고객 선택), `r.js`(단축주소), `notify.js`(호환용).
+  **고객 화면(my·inv·inspect·install·washer·repair·quote·coupon·customer·booking·request·r, hhc-invoice?view, admin?view)은 더 이상 Firestore 를
+  직접 읽지 않는다 — 고객 화면에 Firestore import 를 다시 넣지 말 것.** 공개 자료(promos·services·reviews·settings 일부)는 예외로 직접 읽는다.
+  로컬 테스트는 `.dev.vars`(HHC_FS_BASE·HHC_TOKEN_URL 로 가짜 Firestore 지정) + `wrangler pages dev`.
 - `worker.js` — 구글 캘린더 → Firestore 동기화 Worker (웹사이트 아님)
 - 작업용 미리보기·백업 파일(`*-preview.html`, `my (30).html` 같은 것)은 저장소에 올리지 말 것 — 공개 주소로 그대로 서빙된다 (2026-11-09 정리)
 

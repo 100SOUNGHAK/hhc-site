@@ -31,7 +31,7 @@
 <script>emailjs.init('O99J6X4SGYUPMfGQy');</script>
 <script type="module">
 import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import{getFirestore,addDoc,collection,getDocs}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import{getFirestore,collection,getDocs}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 const FIREBASE_CFG={apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",authDomain:"happywork-packageplan.firebaseapp.com",projectId:"happywork-packageplan",storageBucket:"happywork-packageplan.firebasestorage.app",messagingSenderId:"101289103022",appId:"1:101289103022:web:d81aca7f3747dd26df673f"};
 const app=initializeApp(FIREBASE_CFG);
 const db=getFirestore(app);
@@ -40,9 +40,12 @@ getDocs(collection(db,'promos')).then(s=>{
   const list=s.docs.map(d=>Object.assign({month:d.id},d.data()));
   if(window.__reqPromoApply)window.__reqPromoApply(list);else window.__reqPromoList=list;
 }).catch(e=>console.warn('promo load failed:',e));
+// (2026-11-09 보안 2단계) 의뢰 접수는 서버 창구 /api/request 로 저장합니다 (저장과 함께 관리자 푸시 알림까지 보냄)
 window._hhcSaveRequest=async(data)=>{
-  const ref=await addDoc(collection(db,'requests'),data);
-  return ref.id;
+  const r=await fetch('/api/request',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  let j=null;try{j=await r.json();}catch(e){}
+  if(!r.ok||!j||!j.ok)throw new Error((j&&j.error)||('http '+r.status));
+  return j.id;
 };
 </script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
@@ -1820,8 +1823,6 @@ $('btn-submit').addEventListener('click',async()=>{
         status:'pending',
         submitted_at:new Date().toISOString(),
       });
-      // 관리자 기기로 서버 푸시 알림 (실패해도 접수에는 영향 없음)
-      try{fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'request'})});}catch(e2){}
     }
   }catch(e){console.warn('Firebase save failed:',e);}
 

@@ -31,11 +31,8 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <!-- ⚡ 빠른 열기 : 데이터베이스·글꼴 서버에 미리 연결하고, 데이터베이스 라이브러리는 화면을 그리는 동안 함께 내려받습니다 -->
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-<link rel="preconnect" href="https://firestore.googleapis.com">
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js">
-<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js">
 <!-- 글꼴은 화면을 막지 않고 뒤에서 내려받습니다 (받기 전엔 기기 기본 글꼴로 먼저 보여줍니다) -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css"></noscript>
@@ -1493,8 +1490,6 @@ body.popon .topbar,body.popon .fixbar,body.popon .qtiles{display:none!important}
 </div>
 
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, getDoc, getDocs, getDocFromCache, getDocsFromCache } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const BASE='https://happyhomecare.com.my';
 const P=new URLSearchParams(location.search);
@@ -2163,103 +2158,47 @@ function hubBox(kind,cfg){
     '</div>';
 }
 
-// ═══ ⚡ 빠른 열기 ═══════════════════════════════════════════════════════════
-//  · 데이터베이스 내용을 이 기기 안에 저장해 둡니다(IndexedDB). 두 번째부터는 저장된 내용으로
-//    화면을 「먼저」 그리고, 서버에서 바뀐 부분만 받아 조용히 갱신합니다.
-//  · 저장소를 쓸 수 없는 환경(시크릿 모드 등)에서는 예전처럼 서버에서만 읽습니다.
-//  · 저장소가 멈춰 화면이 12초 넘게 안 뜨면(일부 iOS 버그) 한 번 저장소 없이 다시 엽니다.
+// ═══ ⚡ 빠른 열기 ═══════════════════════════════════════════════════════
+//  · (2026-11-09) 자료는 서버 창구 /api/my 에서 「이 고객 것만」 받습니다. 예전처럼 데이터베이스
+//    전체를 내려받아 브라우저에서 거르지 않습니다. (보안 강화 2단계)
+//  · 받은 내용을 이 기기(localStorage)에 저장해 두고, 두 번째부터는 저장된 내용으로 화면을 「먼저」
+//    그리고 서버 내용은 뒤에서 받아 바뀐 것만 반영합니다.
+//  · 저장소를 쓸 수 없는 환경(시크릿 모드 등)에서는 서버에서만 읽습니다.
 const PERSIST_OFF_KEY='hhc_my_nopersist';
-function persistAllowed(){
-  try{const v=localStorage.getItem(PERSIST_OFF_KEY);if(!v)return true;if(Date.now()-(parseInt(v,10)||0)>86400000){localStorage.removeItem(PERSIST_OFF_KEY);return true;}return false;}catch(e){return true;}
+const CACHE_KEY='hhc_my_cache_'+CID;
+let _persist=false,_srvDone=false;
+function getDb(){   // 이름은 예전 그대로 둠(boot 가 부름) — 이제는 「저장소 사용 가능 여부」만 정합니다
+  try{localStorage.setItem('hhc_my_t','1');localStorage.removeItem('hhc_my_t');_persist=true;}catch(e){_persist=false;}
+  return null;
 }
-let _db=null,_persist=false,_srvDone=false;
-function getDb(){
-  if(_db)return _db;
-  const app=initializeApp({
-    apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
-    authDomain:"happywork-packageplan.firebaseapp.com",
-    projectId:"happywork-packageplan",
-    storageBucket:"happywork-packageplan.firebasestorage.app",
-    messagingSenderId:"553635350672",
-    appId:"1:553635350672:web:e601b74b96b83e0d4d2b83"
-  });
-  if(persistAllowed()){
-    try{
-      _db=initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager(),cacheSizeBytes:150*1024*1024}),experimentalAutoDetectLongPolling:true});
-      _persist=true;return _db;
-    }catch(e){}
-  }
-  _db=getFirestore(app);return _db;
+function applyData(j){
+  DATA={
+    m:j.m||{},ptStart:String(j.ptStart||''),
+    invoices:j.invoices||[],inspections:j.inspections||[],contracts:j.contracts||[],coupons:j.coupons||[],
+    bookings:j.bookings||[],quotes:j.quotes||[],memos:j.memos||[],promos:j.promos||[]
+  };
+  DATA._sig=dataSig(DATA);
 }
 // 저장된 내용 → 서버 순서로 읽습니다. fromCache=true 면 이 기기에 저장된 내용만 읽습니다(없으면 null).
 async function load(fromCache){
-  const db=getDb();
-  if(fromCache&&!_persist)return null;
-  const gd=fromCache?getDocFromCache:getDoc, gds=fromCache?getDocsFromCache:getDocs;
-  async function fetchColl(n){try{const s=await gds(collection(db,n));return s.docs.map(d=>{const x=d.data()||{};x.__id=d.id;return x;});}catch(e){return [];}}
-  // 고객 · 설정 · 문서 목록을 한꺼번에 요청합니다 (예전엔 세 번 차례로 기다렸습니다)
-  const [snap,ps,invs,insps,cts,cps,bks,qts,mms,prs]=await Promise.all([
-    gd(doc(db,'customers',CID)).catch(e=>{if(fromCache)return null;throw e;}),
-    gd(doc(db,'settings','points')).catch(()=>null),
-    VIS.includes('iv')?fetchColl('invoices'):[],
-    VIS.includes('ip')?fetchColl('inspections'):[],
-    VIS.includes('ct')?fetchColl('contracts'):[],
-    fetchColl('coupons'),    // 🎫 상품권·할인권 — 발행받은 고객은 v= 설정과 무관하게 항상 확인
-    fetchColl('bookings'),   // 예약 신청 — 관리자가 만든 예약 링크는 v= 설정과 무관하게 항상 확인
-    fetchColl('quotes'),     // 🧾 견적서 — 항상 확인
-    fetchColl('memos'),      // 🛠️ 수리요청(메모장) — 항상 확인
-    fetchColl('promos')      // 🎁 이벤트관리에 등록한 이달의 이벤트
-  ]);
-  if(fromCache&&(!snap||!snap.exists()||_srvDone))return null;   // 저장된 내용이 없거나, 서버 내용이 이미 도착함 → 건너뜀
-  if(!snap.exists())throw new Error('not-found');
-  const m=snap.data()||{};
-  // 📅 포인트 적립 적용시작일 (관리자 설정 · 발행일 기준)
-  let _ptStart='';
-  try{if(ps&&ps.exists&&ps.exists())_ptStart=String((ps.data()||{}).pt_start||'');}catch(e){}
-  const keys=[nn(m.name)].concat((m.aliases||[]).map(nn)).filter(Boolean);
-  const mp=pn(m.phone);
-  // ── 총괄 고객관리에서 수기로 연결(ca_link)한 문서도 함께 보여줍니다 ──
-  //  · 문서에 ca_link 가 있으면 그 값이 이 고객을 가리킬 때만 포함합니다.
-  //    (고객명·연락처가 달라도 포함 / 다른 고객에게 연결된 문서는 이름이 같아도 제외)
-  //  · ca_link 가 없으면 기존처럼 이름·연락처로 찾습니다.
-  const MYK=['m:'+CID,'k:'+nn(m.name)+'#'+pn(m.phone)];
-  const linked=x=>MYK.indexOf(x&&x.ca_link)>=0;
-  // ca_links (배열) = 원래 고객은 그대로 두고 「추가로」 함께 보여줄 고객들 (중복 연결)
-  const inMyLinks=x=>{
-    const ls=(x&&Array.isArray(x.ca_links))?x.ca_links:[];
-    for(let i=0;i<ls.length;i++){if(MYK.indexOf(ls[i])>=0)return true;}
-    return false;
-  };
-  // 🔓 총괄 고객관리에서 「자동연결 해제」한 문서(ca_off)는 이 고객 화면에서 빼 줍니다
-  //    (다른 고객 이름·별칭이 겹쳐 잘못 붙은 문서를 관리자가 떼어내면 고객 화면에도 바로 반영됩니다)
-  const offMine=x=>{
-    const ls=(x&&Array.isArray(x.ca_off))?x.ca_off:[];
-    for(let i=0;i<ls.length;i++){if(MYK.indexOf(ls[i])>=0)return true;}
-    return false;
-  };
-  const hit=(name,phone,x)=>{
-    if(inMyLinks(x))return true;          // 관리자가 추가로 연결한 문서
-    if(x&&x.ca_link)return linked(x);     // 소속을 옮긴 문서
-    if(offMine(x))return false;           // 이 고객에서 떼어낸 문서
-    return (mp&&pn(phone)===mp)||(!!name&&keys.includes(nn(name)));
-  };
-  DATA={
-    m,ptStart:_ptStart,
-    invoices:invs.filter(x=>hit(x.customer&&x.customer.name,x.customer&&x.customer.phone,x)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),
-    inspections:insps.filter(x=>hit(x.client,x.phone,x)).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),
-    contracts:cts.filter(x=>hit(x.name,x.phone,x)),
-    coupons:cps.filter(x=>inMyLinks(x)||(x.ca_link?linked(x):(!offMine(x)&&(keys.includes(nn(x.name))||keys.includes(nn(x.receiver)))))),
-    // 예약 : 작성 대기(waiting) · 확인 중(booked) · 확정(confirmed) 만
-    bookings:bks.filter(x=>hit(x.customer_name,x.customer_phone,x)&&['waiting','booked','confirmed'].indexOf(x.status)>=0)
-      .sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''))),
-    // 🧾 견적서 — 고객명·연락처 일치 + 수동 연결(ca_link/ca_links) 포함
-    quotes:qts.filter(x=>hit(x.client,x.phone,x)).sort((a,b)=>String(b.issueDate||'').localeCompare(String(a.issueDate||''))),
-    // 🛠️ 수리요청(메모장) — 고객명·연락처 일치. 내부 메모(memo)·발송이력(sent_log)은 화면에 쓰지 않는다.
-    memos:mms.filter(x=>hit(x.name,x.phone,x)).sort((a,b)=>String(b.req_date||'').localeCompare(String(a.req_date||''))),
-    promos:prs||[]
-  };
-  DATA._sig=dataSig(DATA);
-  if(!fromCache)_srvDone=true;
+  if(fromCache){
+    if(!_persist||_srvDone)return null;
+    let j=null;try{j=JSON.parse(localStorage.getItem(CACHE_KEY)||'null');}catch(e){j=null;}
+    if(!j||!j.m)return null;
+    applyData(j);return true;
+  }
+  const u='/api/my?c='+encodeURIComponent(CID)+'&v='+encodeURIComponent(VIS.join(','));
+  const ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  const timer=ctrl?setTimeout(function(){ctrl.abort();},20000):null;
+  let res,j=null;
+  try{res=await fetch(u,{cache:'no-store',signal:ctrl?ctrl.signal:undefined});}
+  finally{if(timer)clearTimeout(timer);}
+  try{j=await res.json();}catch(e){j=null;}
+  if(res.status===404||(j&&j.error==='not-found'))throw new Error('not-found');
+  if(!res.ok||!j||!j.ok)throw new Error((j&&j.error)||('http '+res.status));
+  applyData(j);
+  _srvDone=true;
+  if(_persist){try{localStorage.setItem(CACHE_KEY,JSON.stringify(j));}catch(e){}}
   return true;
 }
 // 화면을 다시 그릴 필요가 있는지 비교하기 위한 요약 (내용이 같으면 깜빡임 없이 그대로 둡니다)

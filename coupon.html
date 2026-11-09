@@ -661,23 +661,24 @@ function renderQR(){
 })();
 </script>
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+// (2026-11-09 보안 2단계) 문서는 서버 창구 /api/doc 에서 받습니다. Firestore 직접 접근 없음.
+//  snap.exists() / snap.data() 모양은 예전 그대로라 아래 코드는 바뀌지 않습니다.
+function apiDoc(t,id){
+  return fetch('/api/doc?t='+t+'&id='+encodeURIComponent(id),{cache:'no-store'}).then(function(r){
+    return r.json().catch(function(){return null;}).then(function(j){
+      if(r.status===404||(j&&j.error==='not-found'))return {exists:function(){return false;},data:function(){return null;}};
+      if(!r.ok||!j||!j.ok)throw new Error((j&&j.error)||('http '+r.status));
+      var d=j.doc||{};delete d.__id;
+      return {exists:function(){return true;},data:function(){return d;},extra:j};
+    });
+  });
+}
 
 (async function(){
   var id=new URLSearchParams(location.search).get('id');
   if(!id){window.__renderFail();return;}
   try{
-    var app=initializeApp({
-      apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
-      authDomain:"happywork-packageplan.firebaseapp.com",
-      projectId:"happywork-packageplan",
-      storageBucket:"happywork-packageplan.firebasestorage.app",
-      messagingSenderId:"553635350672",
-      appId:"1:553635350672:web:e601b74b96b83e0d4d2b83"
-    });
-    var db=getFirestore(app);
-    var snap=await getDoc(doc(db,'coupons',id));
+    var snap=await apiDoc('coupon',id);
     if(!snap.exists()){window.__renderFail();return;}
     window.__renderCoupon(Object.assign({_id:id},snap.data()));
   }catch(e){window.__renderFail();}

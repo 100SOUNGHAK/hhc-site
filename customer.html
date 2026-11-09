@@ -426,9 +426,18 @@ window.addEventListener('load',function(){
 });
 </script>
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
-var CFG={apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",authDomain:"happywork-packageplan.firebaseapp.com",projectId:"happywork-packageplan",storageBucket:"happywork-packageplan.firebasestorage.app",messagingSenderId:"101289103022",appId:"1:101289103022:web:d81aca7f3747dd26df673f"};
+// (2026-11-09 보안 2단계) 문서는 서버 창구 /api/doc 에서 받습니다. Firestore 직접 접근 없음.
+//  snap.exists() / snap.data() 모양은 예전 그대로라 아래 코드는 바뀌지 않습니다.
+function apiDoc(t,id){
+  return fetch('/api/doc?t='+t+'&id='+encodeURIComponent(id),{cache:'no-store'}).then(function(r){
+    return r.json().catch(function(){return null;}).then(function(j){
+      if(r.status===404||(j&&j.error==='not-found'))return {exists:function(){return false;},data:function(){return null;}};
+      if(!r.ok||!j||!j.ok)throw new Error((j&&j.error)||('http '+r.status));
+      var d=j.doc||{};delete d.__id;
+      return {exists:function(){return true;},data:function(){return d;},extra:j};
+    });
+  });
+}
 var params=new URLSearchParams(location.search);
 var id=params.get('id');
 currentMode=params.get('mode')||'all';
@@ -442,8 +451,7 @@ if(id){
   ov.innerHTML='<div style="width:22px;height:22px;border:2px solid #3D52A0;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></div>불러오는 중...';
   document.body.appendChild(ov);
   try{
-    var app=initializeApp(CFG);var db=getFirestore(app);
-    getDoc(doc(db,'contracts',id)).then(function(snap){
+    apiDoc('contract',id).then(function(snap){
       ov.remove();
       if(snap.exists()){reportData=snap.data();render();}
       else{ov.style.color='#c0392b';ov.innerHTML='계약서를 찾을 수 없습니다.';document.body.appendChild(ov);}
