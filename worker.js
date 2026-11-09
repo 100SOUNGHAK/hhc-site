@@ -5,6 +5,8 @@
 
 const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks.readonly';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const SITE = 'https://happyhomecare.com.my';
+const TOMORROW_CRON = '0 15 * * *';   // UTC 15:00 = 말레이시아 23:00 (wrangler.toml crons 와 같은 글자여야 함)
 
 function b64url(bytes) {
   let bin = '';
@@ -294,6 +296,20 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
+    // 매일 밤 11시(말레이시아) = UTC 15:00 → 관리자 기기에 「내일 일정 단체방 보내기」 알림 (2026-11-09)
+    //   알림 발송·건수 계산은 홈페이지 서버(/api/notify, type:tomorrow)가 한다. 동기화를 먼저 한 번 돌려 최신 일정으로 센다.
+    if (event.cron === TOMORROW_CRON) {
+      ctx.waitUntil((async () => {
+        try { await runSync(env, { pastDays: 1, futureDays: 3 }); } catch (e) { console.log('pre-sync 오류: ' + e.message); }
+        const r = await fetch(SITE + '/api/notify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Origin': SITE },
+          body: JSON.stringify({ type: 'tomorrow' })
+        });
+        console.log('내일 일정 알림: ' + r.status + ' ' + (await r.text()));
+      })());
+      return;
+    }
     ctx.waitUntil(runSync(env, { pastDays: 7, futureDays: 180 }));
   }
 };

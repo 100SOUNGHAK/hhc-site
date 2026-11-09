@@ -12,6 +12,7 @@ export const MSG={
   request:{title:'📥 새 의뢰요청 도착',body:'새 의뢰요청서가 접수되었습니다 — 눌러서 확인하세요',tab:'request'},
   booking:{title:'🗓️ 새 예약신청 도착',body:'고객이 예약 신청을 완료했습니다 — 눌러서 확인하세요',tab:'booking'},
   booking_edit:{title:'🗓️ 예약 변경',body:'고객이 예약 내용을 수정했습니다 — 눌러서 확인하세요',tab:'booking'},
+  tomorrow:{title:'📤 내일 일정 단체방 보내기',body:'눌러서 영문 일정을 직원 단체방에 보내세요',tab:'sched'},   // 매일 밤 11시 (캘린더 Worker)
 };
 
 // ---------- base64url ----------
@@ -83,11 +84,12 @@ export async function listSubs(env){
 }
 
 // ---------- 관리자 전체에 발송 ----------
-// type: 'request' | 'booking' | 'booking_edit'   → {ok,sent,removed,total} 또는 {ok:false,error}
-export async function sendAdminPush(env,type){
+// type: 'request' | 'booking' | 'booking_edit' | 'tomorrow'   → {ok,sent,removed,total} 또는 {ok:false,error}
+// extra: 알림 문구·열 주소 덮어쓰기 (예: {body:'…', url:'/sched-send.html?d=…'})
+export async function sendAdminPush(env,type,extra){
   const priv=env&&env.VAPID_PRIVATE_KEY;
   if(!priv) return {ok:false,error:'VAPID_PRIVATE_KEY 환경변수가 설정되지 않았습니다'};
-  const msg=MSG[type]||MSG.request;
+  const msg=Object.assign({},MSG[type]||MSG.request,extra||{});
   const {subs,error}=await listSubs(env);
   if(error) return {ok:false,error};
   let sent=0,removed=0;

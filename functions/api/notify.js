@@ -7,7 +7,7 @@
 //   예전 화면(캐시)이 남아 있을 때를 위한 호환용이다. 보호(출처 검사·호출 제한)는 그대로 둔다.
 // 필요 설정: VAPID_PRIVATE_KEY · FIREBASE_CLIENT_EMAIL · FIREBASE_PRIVATE_KEY (Pages 환경변수)
 import { sendAdminPush, listSubs } from './_lib/push.js';
-import { json, originAllowed } from './_lib/fs.js';
+import { json, originAllowed, queryEq } from './_lib/fs.js';
 
 // 호출 횟수 제한: 같은 IP 10분 10회 · 전체 1분 30회 (메모리 기반 · 알림 폭탄 완화용)
 const RL_IP=new Map(); let RL_ALL=[];
@@ -31,10 +31,31 @@ export async function onRequestPost(context){
     const b=await context.request.json();
     if(b&&b.type==='booking')type=b.edit?'booking_edit':'booking';
     else if(b&&b.type==='request')type='request';
+    else if(b&&b.type==='tomorrow')type='tomorrow';
   }catch(e){}
   if(!type)return json({ok:false,error:'bad request'},400);
+  if(type==='tomorrow')return tomorrowPush(context.env);
   const r=await sendAdminPush(context.env,type);
   return json(r,r.ok?200:500);
+}
+
+// ── 매일 밤 11시: 내일 일정 건수를 세어 「단체방 보내기」 알림 (캘린더 Worker 의 cron 이 호출) ──
+//    · 말레이시아 시각 22:00~23:59 에만 받음(엉뚱한 시간의 알림 방지) · 내일 일정이 0건이면 보내지 않음
+//    · 세는 규칙은 sched-send.html 과 같음: 예약 미러 일정·휴일·완료(✅) 할 일 제외, 확정 예약 포함
+async function tomorrowPush(env){
+  const my=new Date(Date.now()+8*3600e3);                     // UTC+8 을 UTC 필드로 읽음
+  const h=my.getUTCHours();
+  if(h<22)return json({ok:false,error:'not now'},409);
+  const t=new Date(my.getTime()+86400e3);
+  const ds=t.getUTCFullYear()+'-'+String(t.getUTCMonth()+1).padStart(2,'0')+'-'+String(t.getUTCDate()).padStart(2,'0');
+  const [sch,bk]=await Promise.all([queryEq(env,'schedules','date',ds,300),queryEq(env,'bookings','booking_date',ds,300)]);
+  const n=sch.filter(s=>!s.booking_id&&s.type!=='holiday'&&!/^✅/.test(String(s.title||''))).length
+         +bk.filter(b=>b.status==='confirmed').length;
+  if(!n)return json({ok:true,skipped:'no schedules',date:ds});
+  const D=['일','월','화','수','목','금','토'];
+  const label=(t.getUTCMonth()+1)+'/'+t.getUTCDate()+'('+D[t.getUTCDay()]+')';
+  const r=await sendAdminPush(env,'tomorrow',{body:'내일 '+label+' 일정 '+n+'건 — 눌러서 직원 단체방에 영어로 보내세요',url:'/sched-send.html?d='+ds});
+  return json(Object.assign({date:ds,count:n},r),r.ok?200:500);
 }
 
 export async function onRequestGet(context){

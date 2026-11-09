@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0E2350">
+<title>HHC 내일 일정 보내기</title>
+<script type="module" src="/hhc-auth.js"></script>
+<style>
+/* ─────────────────────────────────────────────────────────────
+   sched-send.html — 내일 일정(영문)을 직원 WhatsApp 단체방으로 보내는 화면 (2026-11-09)
+   · 매일 밤 11시 캘린더 Worker → /api/notify(type:tomorrow) → 관리자 기기 알림 → 이 화면
+   · 일정(schedules) + 확정 예약(bookings)에서 시간·장소·작업내용만 뽑아 영어로 정리
+   · 고객 이름·전화번호는 넣지 않는다
+   ───────────────────────────────────────────────────────────── */
+:root{--n:#0E2350;--n2:#16346E;--ink:#14192A;--ink2:#5A6478;--ink3:#98A1B4;--line:#E4E9F2;--soft:#F6F8FC;
+--ok:#0E9B63;--red:#DC2626;--gold:#C9A44C;--wa:#1FA855;
+--e1:0 1px 2px rgba(11,24,51,.09),0 5px 12px -3px rgba(11,24,51,.14);
+--e2:0 1px 2px rgba(11,24,51,.10),0 8px 16px -4px rgba(11,24,51,.16),0 26px 44px -14px rgba(11,24,51,.34)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;background:#F1F4F9;color:var(--ink);
+  padding:calc(14px + env(safe-area-inset-top)) 14px calc(40px + env(safe-area-inset-bottom));-webkit-text-size-adjust:100%}
+.ss-wrap{max-width:520px;margin:0 auto}
+.ss-hdr{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.ss-hdr h1{font-size:18px;font-weight:900;letter-spacing:-.02em}
+.ss-hdr .ss-sp{flex:1}
+.ss-hdr a{font-size:12px;font-weight:800;color:var(--ink2);text-decoration:none;padding:7px 10px;border-radius:9px;background:#fff;box-shadow:var(--e1)}
+
+/* 히어로 */
+.ss-hero{position:relative;overflow:hidden;background:linear-gradient(150deg,var(--n),var(--n2));color:#fff;border-radius:16px;padding:16px 16px 16px;box-shadow:var(--e2);margin-bottom:14px}
+.ss-hero:after{content:'';position:absolute;right:-70px;top:-70px;width:190px;height:190px;border-radius:50%;background:radial-gradient(circle,rgba(201,164,76,.22),transparent 70%);pointer-events:none}
+.ss-dn{display:flex;align-items:center;gap:8px;position:relative;z-index:1}
+.ss-dn button{flex:none;width:36px;height:36px;border-radius:10px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;font-size:16px;cursor:pointer;font-family:inherit}
+.ss-dn button:active{transform:scale(.95)}
+.ss-dmid{flex:1;text-align:center;min-width:0}
+.ss-lb{font-size:11px;font-weight:800;color:rgba(255,255,255,.6)}
+.ss-date{font-size:22px;font-weight:900;letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ss-cnt{display:flex;justify-content:center;gap:6px;margin-top:8px;position:relative;z-index:1}
+.ss-pill{font-size:11.5px;font-weight:800;border-radius:999px;padding:4px 11px;background:rgba(255,255,255,.1);color:rgba(255,255,255,.85)}
+.ss-pill b{color:#F3DDA6;font-size:13px}
+.ss-go{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:14px;border:none;cursor:pointer;font-family:inherit;
+  font-size:16px;font-weight:900;color:#fff;background:linear-gradient(180deg,#25C063,var(--wa));border-radius:13px;padding:15px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 6px 14px -6px rgba(0,0,0,.5);transition:transform .14s}
+.ss-go:active{transform:scale(.98)}
+.ss-go:disabled{opacity:.5;cursor:default}
+.ss-hint{position:relative;z-index:1;text-align:center;font-size:11.5px;color:rgba(255,255,255,.6);margin-top:9px;line-height:1.5}
+
+/* 카드 */
+.ss-card{background:#fff;border-radius:14px;box-shadow:var(--e1);margin-bottom:14px;overflow:hidden}
+.ss-ch{display:flex;align-items:center;gap:8px;padding:13px 15px 9px}
+.ss-ch h2{font-size:14.5px;font-weight:900}
+.ss-ch .ss-sp{flex:1}
+.ss-mini{font-size:12px;font-weight:800;color:var(--n2);background:var(--soft);border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-family:inherit}
+.ss-mini:active{transform:scale(.96)}
+.ss-msg{display:block;width:calc(100% - 30px);margin:0 15px 12px;min-height:240px;border:1.5px solid var(--line);border-radius:12px;padding:12px 13px;
+  font-family:-apple-system,'Segoe UI',Roboto,sans-serif;font-size:15px;line-height:1.55;color:var(--ink);background:#FBFCFE;resize:vertical}
+.ss-msg:focus{outline:none;border-color:#9DB3DA;background:#fff}
+.ss-note{font-size:11.5px;color:var(--ink3);padding:0 15px 13px;line-height:1.5}
+.ss-note.warn{color:#9A6A00}
+
+/* 일정 목록 */
+.ss-row{display:flex;gap:11px;padding:11px 15px;border-top:1px solid #F0F3F8;cursor:pointer;align-items:flex-start}
+.ss-row input{width:18px;height:18px;accent-color:var(--n);flex:none;margin-top:2px}
+.ss-tm{flex:none;width:52px;font-size:14px;font-weight:900;font-variant-numeric:tabular-nums;color:var(--ink)}
+.ss-tm small{display:block;font-size:11px;font-weight:700;color:var(--ink3)}
+.ss-bd{flex:1;min-width:0}
+.ss-bd b{display:block;font-size:14px;font-weight:800;line-height:1.35;word-break:break-word}
+.ss-bd>span{display:block;font-size:12px;color:var(--ink2);margin-top:2px;line-height:1.45;white-space:pre-line;word-break:break-word}
+.ss-tag{display:inline-block;font-size:10px;font-weight:800;border-radius:6px;padding:1px 6px;margin-left:5px;vertical-align:1px;background:#E6F6F3;color:#0A6B60}
+.ss-tag.g{background:#EAF0FB;color:#1E4FA8}
+.ss-tag.h{background:#FDECEC;color:#A21C1C}
+.ss-row.off .ss-tm,.ss-row.off .ss-bd{opacity:.42}
+.ss-empty{padding:26px 16px 24px;text-align:center}
+.ss-empty b{display:block;font-size:15px;font-weight:800}
+.ss-empty span{display:block;font-size:12.5px;color:var(--ink3);margin-top:4px}
+
+.ss-toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);opacity:0;
+  background:#14192A;color:#fff;font-size:13px;font-weight:700;padding:10px 16px;border-radius:999px;transition:all .22s;pointer-events:none;z-index:50}
+.ss-toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+.ss-load{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:ssr .8s linear infinite;vertical-align:-2px}
+@keyframes ssr{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="ss-wrap">
+  <div class="ss-hdr">
+    <h1>📤 일정 단체방 보내기</h1><span class="ss-sp"></span>
+    <a href="/schedule.html">📅 스케줄</a>
+  </div>
+
+  <div class="ss-hero">
+    <div class="ss-dn">
+      <button type="button" id="ss-prev" aria-label="전날">‹</button>
+      <div class="ss-dmid"><div class="ss-lb" id="ss-rel">내일</div><div class="ss-date" id="ss-date">—</div></div>
+      <button type="button" id="ss-next" aria-label="다음날">›</button>
+    </div>
+    <div class="ss-cnt"><span class="ss-pill">보낼 일정 <b id="ss-n">0</b>건</span></div>
+    <button type="button" class="ss-go" id="ss-go" disabled>💬 WhatsApp 단체방으로 보내기</button>
+    <div class="ss-hint">누르면 WhatsApp이 열립니다 → 직원 단체방 선택 → 보내기</div>
+  </div>
+
+  <div class="ss-card">
+    <div class="ss-ch"><h2>보낼 메시지 (영어)</h2><span class="ss-sp"></span>
+      <button type="button" class="ss-mini" id="ss-redo">↻ 다시 만들기</button>
+      <button type="button" class="ss-mini" id="ss-copy">복사</button></div>
+    <textarea class="ss-msg" id="ss-msg" spellcheck="false"></textarea>
+    <div class="ss-note" id="ss-note">시간 · 장소 · 작업내용만 넣습니다. 고객 이름과 전화번호는 넣지 않습니다. 필요하면 위 글을 직접 고친 뒤 보내세요.</div>
+  </div>
+
+  <div class="ss-card">
+    <div class="ss-ch"><h2>포함할 일정</h2><span class="ss-sp"></span><span style="font-size:11.5px;color:var(--ink3);font-weight:700">개인 일정은 체크 해제</span></div>
+    <div id="ss-list"><div class="ss-empty"><span>불러오는 중…</span></div></div>
+  </div>
+</div>
+<div class="ss-toast" id="ss-toast"></div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const $=s=>document.querySelector(s);
+const MY_TZ_OFFSET=480;                      // 말레이시아 UTC+8
+function myNow(){const n=new Date();return new Date(n.getTime()+(n.getTimezoneOffset()+MY_TZ_OFFSET)*60000);}
+function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function addDays(ds,n){const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return ymd(d);}
+const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DOW_KO=['일','월','화','수','목','금','토'];
+function enDate(ds){const d=new Date(ds+'T00:00:00');return DOW[d.getDay()]+', '+d.getDate()+' '+MON[d.getMonth()]+' '+d.getFullYear();}
+function koDate(ds){const d=new Date(ds+'T00:00:00');return (d.getMonth()+1)+'월 '+d.getDate()+'일 ('+DOW_KO[d.getDay()]+')';}
+function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function toast(t){const e=$('#ss-toast');e.textContent=t;e.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>e.classList.remove('on'),2200);}
+function bkTime(v){let t=String(v||'').trim();if(!t)return '';if(t.indexOf('|')>=0){const a=t.split('|');t=String(a[1]||a[0]||'').trim();}
+  const m=/(\d{1,2}):(\d{2})/.exec(t);if(m)return String(m[1]).padStart(2,'0')+':'+m[2];return t.replace(/[^0-9:]/g,'').slice(0,5);}
+
+// ── 상태 ──
+const qs=new URLSearchParams(location.search);
+let DAY=/^\d{4}-\d{2}-\d{2}$/.test(qs.get('d')||'')?qs.get('d'):addDays(ymd(myNow()),1);
+let ITEMS=[];             // {id,time_s,time_e,title,memo,addr,kind}
+let EN={};                // id → {place,work}  (영문 정리 결과)
+let db=null;
+const LS_OFF='hhc_ss_off';     // 체크 해제한 일정 id (날짜와 함께 기억)
+function getOff(){try{return JSON.parse(localStorage.getItem(LS_OFF)||'{}');}catch(e){return {};}}
+function setOff(o){try{const keep={};const lim=addDays(ymd(myNow()),-3);Object.keys(o).forEach(k=>{if(o[k]>=lim)keep[k]=o[k];});localStorage.setItem(LS_OFF,JSON.stringify(keep));}catch(e){}}
+
+// ── 일정 불러오기 (스케줄 화면과 같은 규칙: 예약 미러 일정 제외, 확정 예약 포함) ──
+async function load(){
+  $('#ss-list').innerHTML='<div class="ss-empty"><span>불러오는 중…</span></div>';
+  const [sSnap,bSnap]=await Promise.all([
+    getDocs(query(collection(db,'schedules'),where('date','==',DAY))),
+    getDocs(query(collection(db,'bookings'),where('booking_date','==',DAY)))
+  ]);
+  const arr=[];
+  bSnap.forEach(d=>{const b=d.data();if(b.status!=='confirmed')return;
+    arr.push({id:'bk_'+d.id,time_s:bkTime(b.booking_time),time_e:'',title:b.booking_items||'',memo:b.booking_memo||'',addr:b.customer_address||'',kind:'booking'});});
+  sSnap.forEach(d=>{const s=d.data();if(s.booking_id)return;
+    const title=String(s.title||'');
+    arr.push({id:d.id,time_s:s.time_s||'',time_e:s.time_e||'',title,memo:s.memo||'',addr:s.address||'',kind:s.type||'',
+      done:/^✅/.test(title)});});
+  arr.sort((a,b)=>(a.time_s||'99').localeCompare(b.time_s||'99'));
+  ITEMS=arr;
+  const off=getOff();
+  ITEMS.forEach(it=>{ it.on = off[it.id]? false : !(it.kind==='holiday'||it.done); });
+  renderList();
+  await buildEnglish();
+}
+
+function renderList(){
+  const n=ITEMS.filter(i=>i.on).length;
+  $('#ss-n').textContent=n;
+  $('#ss-go').disabled=!n;
+  if(!ITEMS.length){
+    $('#ss-list').innerHTML='<div class="ss-empty"><b>이 날은 일정이 없습니다</b><span>보낼 내용이 없어요. 날짜를 바꾸려면 위 ‹ › 를 누르세요.</span></div>';return;}
+  $('#ss-list').innerHTML=ITEMS.map(it=>{
+    const tag=it.kind==='booking'?'<span class="ss-tag">예약확정</span>':it.kind==='google'?'<span class="ss-tag g">구글</span>':it.kind==='holiday'?'<span class="ss-tag h">휴일</span>':'';
+    const sub=[it.addr?'📍 '+it.addr:'',it.memo].filter(Boolean).join('\n');
+    return `<label class="ss-row${it.on?'':' off'}"><input type="checkbox" data-id="${esc(it.id)}"${it.on?' checked':''}>
+      <div class="ss-tm">${esc(it.time_s||'—')}${it.time_e?'<small>~'+esc(it.time_e)+'</small>':''}</div>
+      <div class="ss-bd"><b>${esc(it.title||'(제목 없음)')}${tag}</b>${sub?'<span>'+esc(sub)+'</span>':''}</div></label>`;
+  }).join('');
+}
+
+// ── 영문 정리: Claude 로 「장소·작업내용」만 뽑아 영어로 ──
+async function buildEnglish(force){
+  const todo=ITEMS.filter(i=>force||!EN[i.id]);
+  const key=localStorage.getItem('hhc_ak')||'';
+  if(todo.length&&key){
+    $('#ss-note').className='ss-note';
+    $('#ss-note').innerHTML='<span class="ss-load" style="border-color:#D5DCE8;border-top-color:#0E2350"></span> 영어로 정리하는 중…';
+    try{
+      const input=todo.map(i=>({id:i.id,title:i.title,memo:i.memo,address:i.addr}));
+      const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:2000,messages:[{role:'user',content:
+`These are tomorrow's job schedule entries of a home appliance cleaning company in Kuala Lumpur (written in Korean). For each entry, extract for our field technicians:
+- "place": the job location (condo/building name, unit number, area). Keep building/condo names in their original English/Malay spelling. Empty string if unknown.
+- "work": the job content in short, clear English (e.g. "Aircon chemical cleaning ×3 (wall type)", "Washing machine (drum) cleaning"). Use × for quantities.
+Never include customer names, phone numbers, prices, payment info or internal notes. Do not invent anything.
+Return ONLY a JSON array: [{"id":"...","place":"...","work":"..."}]
+
+${JSON.stringify(input)}`}]})});
+      const data=await res.json();
+      if(data.error)throw new Error(data.error.message);
+      const txt=(data.content&&data.content[0]&&data.content[0].text)||'';
+      const arr=JSON.parse(txt.slice(txt.indexOf('['),txt.lastIndexOf(']')+1));
+      arr.forEach(r=>{if(r&&r.id)EN[r.id]={place:String(r.place||'').trim(),work:String(r.work||'').trim()};});
+      $('#ss-note').innerHTML='시간 · 장소 · 작업내용만 넣었습니다. 고객 이름과 전화번호는 넣지 않습니다. 필요하면 위 글을 직접 고친 뒤 보내세요.';
+    }catch(e){
+      $('#ss-note').className='ss-note warn';
+      $('#ss-note').textContent='⚠️ 영어 정리에 실패해 원문을 넣었습니다 ('+(e.message||'오류')+'). 위 글을 고쳐서 보내 주세요.';
+    }
+  }else if(todo.length&&!key){
+    $('#ss-note').className='ss-note warn';
+    $('#ss-note').textContent='⚠️ 이 기기에 번역 키가 없어 원문을 넣었습니다. 스케줄 화면에서 EN 을 한 번 켜 두면 다음부터 자동으로 영어가 됩니다.';
+  }
+  makeMsg();
+}
+
+function fallback(it){
+  const lines=String(it.memo||'').split('\n').map(s=>s.trim()).filter(Boolean);
+  const pin=lines.find(l=>l.indexOf('📍')===0);
+  const place=it.addr||(pin?pin.replace('📍','').trim():'');
+  const work=[it.title].concat(lines.filter(l=>l!==pin&&!/(\+?6?0\s?1\d[\d\s-]{6,})/.test(l))).filter(Boolean).join(' · ');
+  return {place,work};
+}
+
+function makeMsg(){
+  const list=ITEMS.filter(i=>i.on);
+  const out=['*Schedule for '+enDate(DAY)+'*',list.length+' job'+(list.length===1?'':'s'),''];
+  list.forEach((it,k)=>{
+    const e=EN[it.id]||fallback(it);
+    const t=it.time_s?(it.time_e?it.time_s+' – '+it.time_e:it.time_s):'Time TBC';
+    out.push('*'+(k+1)+') '+t+'*');
+    if(e.place)out.push('📍 '+e.place);
+    if(e.work)out.push('🔧 '+e.work);
+    out.push('');
+  });
+  out.push('Please be on time. Thank you!');
+  out.push('— Happy Home Care');
+  $('#ss-msg').value=out.join('\n');fit();
+}
+function fit(){const t=$('#ss-msg');t.style.height='auto';t.style.height=Math.min(t.scrollHeight+4,640)+'px';}
+$('#ss-msg').addEventListener('input',fit);
+
+function renderDate(){
+  const tm=addDays(ymd(myNow()),1),td=ymd(myNow());
+  $('#ss-rel').textContent=DAY===tm?'내일 · '+koDate(DAY):DAY===td?'오늘 · '+koDate(DAY):koDate(DAY);
+  $('#ss-date').textContent=enDate(DAY);
+}
+
+// ── 이벤트 ──
+$('#ss-list').addEventListener('change',e=>{
+  const id=e.target&&e.target.dataset&&e.target.dataset.id;if(!id)return;
+  const it=ITEMS.find(x=>x.id===id);if(!it)return;
+  it.on=e.target.checked;
+  const off=getOff();if(it.on)delete off[id];else off[id]=DAY;setOff(off);
+  renderList();makeMsg();
+});
+$('#ss-prev').onclick=()=>{DAY=addDays(DAY,-1);renderDate();load().catch(err);};
+$('#ss-next').onclick=()=>{DAY=addDays(DAY,1);renderDate();load().catch(err);};
+$('#ss-redo').onclick=()=>{buildEnglish(true);};
+$('#ss-copy').onclick=()=>{const t=$('#ss-msg').value;
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('✓ 복사했습니다 — 단체방에 붙여넣으세요')).catch(()=>{$('#ss-msg').select();toast('글을 길게 눌러 복사하세요');});};
+$('#ss-go').onclick=()=>{const t=$('#ss-msg').value.trim();if(!t)return;
+  location.href='https://wa.me/?text='+encodeURIComponent(t);};
+function err(e){$('#ss-list').innerHTML='<div class="ss-empty"><b>일정을 불러오지 못했습니다</b><span>'+esc(e&&e.message||'')+' — 새로고침 해 주세요.</span></div>';}
+
+// ── 시작 ──
+renderDate();
+if(window.__SS_DEMO){ITEMS=window.__SS_DEMO.items;EN=window.__SS_DEMO.en||{};ITEMS.forEach(i=>{if(i.on===undefined)i.on=!(i.kind==='holiday'||i.done);});renderList();makeMsg();}
+else{
+  try{
+    const app=initializeApp({
+      apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
+      authDomain:"happywork-packageplan.firebaseapp.com",
+      projectId:"happywork-packageplan",
+      storageBucket:"happywork-packageplan.firebasestorage.app",
+      messagingSenderId:"101289103022",
+      appId:"1:101289103022:web:d81aca7f3747dd26df673f"
+    });
+    db=getFirestore(app);
+    load().catch(err);
+  }catch(e){err(e);}
+}
+</script>
+</body>
+</html>
