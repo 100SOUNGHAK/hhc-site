@@ -2690,6 +2690,11 @@ function scheduleBkHide(){
     const at=bkHideAt(x);
     if(at!=null&&at>now&&(next==null||at<next))next=at;
   });
+  (DATA.memos||[]).forEach(x=>{
+    if(x.status==='done'||!x.visit_date)return;
+    const at=bkHideAt({booking_date:x.visit_date,booking_time:x.visit_time});
+    if(at!=null&&at>now&&(next==null||at<next))next=at;
+  });
   if(next==null)return;
   const wait=Math.min(next-now+400,21600000);   // 최대 6시간마다 다시 확인
   _bkTimer=setTimeout(bkRerender,wait);
@@ -3425,7 +3430,7 @@ function render(){
   try{
     const chips=[];
     if(PYX_DUE>0.005)chips.push('<span class="hq due" data-go="pyx-sec">💳 '+(LANG==='en'?'Due':'납부하실 금액')+' <b>RM '+fmt(PYX_DUE)+'</b></span>');
-    const _cf=(DATA.bookings||[]).find(x=>x.status==='confirmed'&&String(x.booking_date||'')>=todayISO());
+    const _cf=(DATA.bookings||[]).find(x=>{if(x.status!=='confirmed'||String(x.booking_date||'')<todayISO())return false;const at=bkHideAt(x);return at==null||Date.now()<at;});
     if(_cf){
       const _bd=dparse(_cf.booking_date);
       const _bl=_bd?(p2(_bd.getMonth()+1)+'.'+p2(_bd.getDate())):_cf.booking_date;
@@ -3458,9 +3463,12 @@ function render(){
     }
     // ② 방문 예정 (확정된 예약 → 없으면 수리요청 방문 예정)
     {
-      const bk=(DATA.bookings||[]).filter(x=>x.status==='confirmed'&&x.booking_date&&String(x.booking_date)>=td)
+      // 예약 시각(정시)이 되면 배너에서 사라집니다 — 시간 정보가 없으면 예약 당일까지 (bkHideAt 규칙과 같음)
+      const _bkOn=x=>{const at=bkHideAt(x);return at==null||Date.now()<at;};
+      const _mmOn=x=>_bkOn({booking_date:x.visit_date,booking_time:x.visit_time});
+      const bk=(DATA.bookings||[]).filter(x=>x.status==='confirmed'&&x.booking_date&&String(x.booking_date)>=td&&_bkOn(x))
         .sort((a,b)=>String(a.booking_date).localeCompare(String(b.booking_date)))[0];
-      const mm=(DATA.memos||[]).filter(x=>x.status!=='done'&&x.visit_date&&String(x.visit_date)>=td)
+      const mm=(DATA.memos||[]).filter(x=>x.status!=='done'&&x.visit_date&&String(x.visit_date)>=td&&_mmOn(x))
         .sort((a,b)=>String(a.visit_date).localeCompare(String(b.visit_date)))[0];
       const v=bk?{d:bk.booking_date,t:bkTimeLb(bk.booking_time||''),it:trIt(bk.booking_items||''),u:BASE+'/booking.html?id='+encodeURIComponent(bk.__id)+'&lang='+LANG}
              :(mm?{d:mm.visit_date,t:mm.visit_time||'',it:mmTx(mm.symptom,mm.symptom_en),qt:'mm'}:null);
