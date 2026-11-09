@@ -8,7 +8,8 @@
 // · 이 폴더(_lib)는 밑줄로 시작해 라우트가 되지 않는다(wrangler 로 확인함).
 // ─────────────────────────────────────────────────────────────────────────────
 const PROJECT = 'happywork-packageplan';
-const DEFAULT_BASE = 'https://firestore.googleapis.com/v1/projects/' + PROJECT + '/databases/(default)/documents';
+const DOC_PREFIX = 'projects/' + PROJECT + '/databases/(default)/documents';
+const DEFAULT_BASE = 'https://firestore.googleapis.com/v1/' + DOC_PREFIX;
 const DEFAULT_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
 export function fsBase(env){ return (env && env.HHC_FS_BASE) || DEFAULT_BASE; }
@@ -93,14 +94,26 @@ export async function getDoc(env, coll, id){
   const r=await call(env,'GET','/'+coll+'/'+encodeURIComponent(id));
   return r.status===404?null:docToObj(r.json);
 }
-// 컬렉션 전체 (페이지 넘김 포함)
-export async function listAll(env, coll, pageSize){
+// 컬렉션 전체 (페이지 넘김 포함). mask 를 주면 그 필드만 받는다 → 큰 컬렉션을 가볍게 훑을 때 CPU 절약
+export async function listAll(env, coll, pageSize, mask){
   const out=[]; let pageToken='';
   for(let i=0;i<50;i++){
-    const r=await call(env,'GET','/'+coll,null,{pageSize:String(pageSize||300),...(pageToken?{pageToken}:{})});
+    const q=new URLSearchParams({pageSize:String(pageSize||300)}); if(pageToken) q.set('pageToken',pageToken);
+    for(const m of (mask||[])) q.append('mask.fieldPaths',m);
+    const r=await call(env,'GET','/'+coll+'?'+q.toString());
     const j=r.json||{};
     for(const d of (j.documents||[])){ const o=docToObj(d); if(o) out.push(o); }
     pageToken=j.nextPageToken||''; if(!pageToken) break;
+  }
+  return out;
+}
+// 여러 문서를 한 번에 (최대 100개씩) — 가볍게 훑어 고른 ID 들의 전체 내용을 받을 때
+export async function batchGet(env, coll, ids){
+  const out=[]; const list=(ids||[]).filter(Boolean);
+  for(let i=0;i<list.length;i+=100){
+    const names=list.slice(i,i+100).map(id=>DOC_PREFIX+'/'+coll+'/'+id);
+    const r=await call(env,'POST',':batchGet',{documents:names});
+    for(const x of (Array.isArray(r.json)?r.json:[])) if(x.found){ const o=docToObj(x.found); if(o) out.push(o); }
   }
   return out;
 }

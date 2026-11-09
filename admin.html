@@ -3037,8 +3037,14 @@ async function runCustomerView(id,mode,lang){
   // (2026-11-09 보안 2단계) 고객 보기는 서버 창구 /api/doc 에서 계약서 + 연결 점검보고서 목록을 받습니다 (데이터베이스 직접 접근 없음)
   let c=null;
   try{
-    const _rr=await fetch('/api/doc?t=contract&id='+encodeURIComponent(id),{cache:'no-store'});
-    let _j=null;try{_j=await _rr.json();}catch(e){_j=null;}
+    let _rr=null,_j=null;
+    for(let _t=0;_t<3;_t++){   // 서버 일시 오류(5xx)·네트워크 오류는 0.8초 뒤 최대 2번 더 시도
+      try{_rr=await fetch('/api/doc?t=contract&id='+encodeURIComponent(id),{cache:'no-store'});}catch(e){_rr=null;}
+      if(_rr&&_rr.status<500)break;
+      await new Promise(res=>setTimeout(res,800));
+    }
+    if(!_rr)throw new Error('network');
+    try{_j=await _rr.json();}catch(e){_j=null;}
     if(_rr.ok&&_j&&_j.ok&&_j.doc){c=Object.assign({},_j.doc);delete c.__id;window._cvInspMap=_j.inspMap||{};}
     else if(!(_rr.status===404||(_j&&_j.error==='not-found')))throw new Error((_j&&_j.error)||('http '+_rr.status));
   }catch(e){console.error(e);}

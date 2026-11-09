@@ -663,15 +663,20 @@ function renderQR(){
 <script type="module">
 // (2026-11-09 보안 2단계) 문서는 서버 창구 /api/doc 에서 받습니다. Firestore 직접 접근 없음.
 //  snap.exists() / snap.data() 모양은 예전 그대로라 아래 코드는 바뀌지 않습니다.
-function apiDoc(t,id){
+function apiDoc(t,id,_try){
+  _try=_try||0;
   return fetch('/api/doc?t='+t+'&id='+encodeURIComponent(id),{cache:'no-store'}).then(function(r){
     return r.json().catch(function(){return null;}).then(function(j){
       if(r.status===404||(j&&j.error==='not-found'))return {exists:function(){return false;},data:function(){return null;}};
-      if(!r.ok||!j||!j.ok)throw new Error((j&&j.error)||('http '+r.status));
+      if(!r.ok||!j||!j.ok){
+        // 서버 쪽 일시 오류(5xx)는 0.8초 뒤 최대 2번 더 시도합니다
+        if(r.status>=500&&_try<2)return new Promise(function(res){setTimeout(res,800);}).then(function(){return apiDoc(t,id,_try+1);});
+        throw new Error((j&&j.error)||('http '+r.status));
+      }
       var d=j.doc||{};delete d.__id;
       return {exists:function(){return true;},data:function(){return d;},extra:j};
     });
-  });
+  },function(e){ if(_try<2)return new Promise(function(res){setTimeout(res,800);}).then(function(){return apiDoc(t,id,_try+1);}); throw e; });
 }
 
 (async function(){

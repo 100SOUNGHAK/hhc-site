@@ -38,7 +38,7 @@ export async function loadDoc(env, t, id){
       getDoc(env, 'settings', 'issuer').catch(() => null),
       getDoc(env, 'settings', 'images').catch(() => null),
       getDoc(env, 'settings', 'catalog').catch(() => null),
-      listAll(env, 'services').catch(() => []),
+      listAll(env, 'services', 300, ['id', 'cat', 'subcat', 'sub2', '_del']).catch(() => []),   // 고객 보기의 분류 최신화(svcById)에 필요한 필드만
       queryEq(env, 'inspections', 'invoice_id', invId, 50).catch(() => []),
     ]);
     out.issuer = issuer || null; out.images = images || null; out.catalog = catalog || null; out.services = services || [];

@@ -6849,8 +6849,14 @@ async function runInvoiceView(vid,lang){
   try{
     // (2026-11-09 보안 2단계) 고객 보기는 서버 창구 /api/doc 에서 인보이스·발행처·이미지·카탈로그·연결 보고서를 한 번에 받습니다.
     //  (데이터베이스 직접 접근 없음 — 관리자 작성 화면은 그대로 Firestore 를 씁니다)
-    var _rr=await fetch('/api/doc?t=invoice&id='+encodeURIComponent(vid),{cache:'no-store'});
-    var _j=null;try{_j=await _rr.json();}catch(e){_j=null;}
+    var _rr=null,_j=null;
+    for(var _t=0;_t<3;_t++){   // 서버 일시 오류(5xx)·네트워크 오류는 0.8초 뒤 최대 2번 더 시도
+      try{_rr=await fetch('/api/doc?t=invoice&id='+encodeURIComponent(vid),{cache:'no-store'});}catch(e){_rr=null;}
+      if(_rr&&_rr.status<500)break;
+      await new Promise(function(res){setTimeout(res,800);});
+    }
+    if(!_rr)throw new Error('network');
+    try{_j=await _rr.json();}catch(e){_j=null;}
     if(_rr.status===404||(_j&&_j.error==='not-found')){document.getElementById('ivx-host').innerHTML='<div style="padding:70px 20px;text-align:center;color:#D6433F;font-size:15px">Invoice not found.<br>인보이스를 찾을 수 없습니다.</div>';return;}
     if(!_rr.ok||!_j||!_j.ok)throw new Error((_j&&_j.error)||('http '+_rr.status));
     var _strip=function(o){if(!o)return null;var c=Object.assign({},o);delete c.__id;return c;};

@@ -467,8 +467,14 @@ body.pk-lock{overflow:hidden}
 <script type="module">
 // (2026-11-09 보안 2단계) 예약은 서버 창구 /api/booking 으로 읽고 저장합니다. Firestore 직접 접근 없음.
 async function apiBookingGet(id){
-  const r=await fetch('/api/booking?id='+encodeURIComponent(id),{cache:'no-store'});
-  let j=null;try{j=await r.json();}catch(e){}
+  let r=null,j=null;
+  for(let _t=0;_t<3;_t++){   // 서버 일시 오류(5xx)·네트워크 오류는 0.8초 뒤 최대 2번 더 시도
+    try{r=await fetch('/api/booking?id='+encodeURIComponent(id),{cache:'no-store'});}catch(e){r=null;}
+    if(r&&r.status<500)break;
+    await new Promise(res=>setTimeout(res,800));
+  }
+  if(!r)throw new Error('network');
+  try{j=await r.json();}catch(e){}
   if(r.status===404||(j&&j.error==='not-found'))return null;
   if(!r.ok||!j||!j.ok)throw new Error((j&&j.error)||('http '+r.status));
   return j.doc;

@@ -289,8 +289,14 @@ async function loadInvoice(){
   if(!id){showError('No invoice ID provided.');return;}
   try{
     // (2026-11-09 보안 2단계) 인보이스·발행처·이미지 설정을 서버 창구 /api/doc 에서 한 번에 받습니다
-    var r=await fetch('/api/doc?t=invoice&id='+encodeURIComponent(id),{cache:'no-store'});
-    var j=null;try{j=await r.json();}catch(e){j=null;}
+    var r=null,j=null;
+    for(var _t=0;_t<3;_t++){   // 서버 일시 오류(5xx)·네트워크 오류는 0.8초 뒤 최대 2번 더 시도
+      try{r=await fetch('/api/doc?t=invoice&id='+encodeURIComponent(id),{cache:'no-store'});}catch(e){r=null;}
+      if(r&&r.status<500)break;
+      await new Promise(function(res){setTimeout(res,800);});
+    }
+    if(!r)throw new Error('network');
+    try{j=await r.json();}catch(e){j=null;}
     if(r.status===404||(j&&j.error==='not-found')){showError('Invoice '+id+' not found.');return;}
     if(!r.ok||!j||!j.ok)throw new Error((j&&j.error)||('http '+r.status));
     var invData=j.doc||{};delete invData.__id;
