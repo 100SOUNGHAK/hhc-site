@@ -1699,6 +1699,12 @@ body.popon .topbar,body.popon .fixbar,body.popon .qtiles{display:none!important}
 .walx{margin:0 0 14px}
 .walx>.duo{margin-top:0}
 .walx>.ptsec{margin-top:0}
+/* 🧾 견적서 카드 — 달력 윗부분 금색, 만료는 흐리게 */
+.dl-cal.qo i{background:#B98A16;color:#fff}
+.dl-cal.qo.ex i{background:#98A1B4}
+.dl-st.z{background:#EEF1F6;color:#7A8499}
+.dl-x.warn{color:#B45309}
+.dcw.dl.qx>.dl-a{opacity:.62}
 /* 여러 개 선택 모드 */
 .hubls.msel .dcw.dl{padding-left:34px}
 .hubls.msel .dcw.dl .mck{left:8px}
@@ -2837,7 +2843,7 @@ function render(){
   //    지금 보고 있는 언어(LANG)를 그대로 문서에 넘겨 그 언어로 PDF를 만듭니다.
   const shLb=LANG==='en'?'Share PDF':'PDF 공유';
   const shBtn=(kind,id,title,url,ex)=>'<button type="button" class="shb" data-shk="'+kind+'" data-shi="'+esc(id)+
-    '" data-sht="'+esc(title)+'" data-shu="'+esc(url)+'"'+(ex||'')+'><span class="si">📤</span>'+(kind==='ip'?(LANG==='en'?'Share report':'보고서 공유'):shLb)+'</button>';
+    '" data-sht="'+esc(title)+'" data-shu="'+esc(url)+'"'+(ex||'')+'><span class="si">📤</span>'+(kind==='ip'?(LANG==='en'?'Share report':'보고서 공유'):(kind==='qt'?(LANG==='en'?'Share quote':'견적서 공유'):shLb))+'</button>';
   const bkList=(DATA.bookings||[]).filter(x=>{
     if(x.status==='confirmed'){const at=bkHideAt(x);return at!=null&&Date.now()<at;}
     return true;
@@ -3265,17 +3271,25 @@ function render(){
       const exp=_qexp(x);
       const rs=fmt(qtTotal(x)).split('.');
       const _qtU=BASE+'/quote.html?id='+encodeURIComponent(x.__id)+'&lang='+LANG;
-      H_QT+='<div class="dcw"><a class="ncard" target="_blank" rel="noopener"'+(exp?' style="opacity:.62"':'')+' href="'+_qtU+'">'+
-         '<span class="stripe '+(exp?'warn':'ok')+'"></span><div class="nbody">'+
-         '<div class="nrow1"><div class="ntile '+(exp?'warn':'ok')+'">\uD83E\uDDFE</div>'+
-         '<div style="flex:1;min-width:0"><div class="nid">'+esc(x.qno||dfmt(x.issueDate)||'')+'</div>'+
-         '<div class="ndate">'+esc(dfmt(x.issueDate)||'')+(x.subject?' \u00b7 '+esc(qtSubj(x)):'')+'</div></div>'+
-         '<span class="nst '+(exp?'warn':'ok')+'">'+(exp?qL.expired:qL.valid)+'</span></div>'+
-         (x.validUntil?'<div class="npd"><span class="t">'+qL.until+' '+esc(dfmt(x.validUntil))+'</span></div>':'')+
-         '<div class="nfoot"><div><div class="nlb">'+qL.amt+'</div>'+
-         '<div class="nam"><span class="cu">RM</span>'+rs[0]+'.'+(rs[1]||'00')+'</div></div>'+
-         '<span class="nbtn">'+qL.go+'</span></div></div></a>'+
-         shBtn('qt',x.__id,(LANG==='en'?'Quotation ':'견적서 ')+(x.qno||dfmt(x.issueDate)||''),_qtU)+'</div>';
+      // 🧾 견적서 카드 — 인보이스·점검보고서 내역과 같은 모양 (달력 날짜 · 공사명 · 상태 · 금액 / 아래 작은 버튼)
+      const _dc=dparse(x.issueDate);
+      const _qL=x.validUntil?daysLeft(x.validUntil):null;
+      const _cal='<div class="dl-cal qo'+(exp?' ex':'')+'"><i>'+(_dc?(LANG==='en'?MN_EN[_dc.getMonth()].toUpperCase():(_dc.getMonth()+1)+'월'):'—')+'</i><b>'+(_dc?p2(_dc.getDate()):'—')+'</b><em>'+(_dc?(LANG==='en'?WD_EN[_dc.getDay()]:WD_KO[_dc.getDay()]):'')+'</em></div>';
+      const _vu=x.validUntil?(exp?(LANG==='en'?'Expired '+dfmt(x.validUntil):dfmt(x.validUntil)+' 만료')
+                               :(qL.until+' '+dfmt(x.validUntil)+(_qL!=null&&_qL<=7?(_qL===0?(LANG==='en'?' · today':' · 오늘까지'):' · D-'+_qL):''))):'';
+      H_QT+='<div class="dcw dl'+(exp?' qx':'')+'"><a class="ncard dl-a" target="_blank" rel="noopener" href="'+_qtU+'">'+
+         _cal+
+         '<div class="dl-m"><div class="dl-t">'+esc(x.subject?qtSubj(x):(LANG==='en'?'Quotation':'견적서'))+'</div>'+
+         '<div class="dl-s"><span class="dl-st '+(exp?'z':'ok')+'">'+(exp?qL.expN:qL.validN)+'</span>'+
+           (_vu?'<span class="dl-x'+(!exp&&_qL!=null&&_qL<=7?' warn':'')+'">'+esc(_vu)+'</span>':'')+'</div>'+
+         '</div>'+
+         '<div class="dl-r"><span class="dl-lb">'+qL.amt+'</span><div class="dl-am"><span class="cu">RM</span>'+rs[0]+'<small>.'+(rs[1]||'00')+'</small></div></div>'+
+         '</a>'+
+         '<div class="sft dl-f"><span class="dl-no">'+esc(x.qno||'')+'</span>'+
+         shBtn('qt',x.__id,(LANG==='en'?'Quotation ':'견적서 ')+(x.qno||dfmt(x.issueDate)||''),_qtU,
+           ' data-shn="'+esc(m.name||'')+'" data-shd="'+esc(x.issueDate||'')+'" data-svu="'+esc(x.validUntil||'')+'" data-sam="'+esc(fmt(qtTotal(x)))+'"'+
+           ' data-sjk="'+esc(String(x.subject||'').trim())+'" data-sje="'+esc((()=>{const l0=LANG;LANG='en';try{return x.subject?qtSubj(x):'';}finally{LANG=l0;}})())+'"')+
+         '<a class="sfv" target="_blank" rel="noopener" href="'+_qtU+'">'+(LANG==='en'?'View quotation':'견적서 보기')+' <b>›</b></a></div></div>';
     });
     H_QT+='<button type="button" class="hubcls" id="hub-cls-qt"><span class="up">\u25B2</span>'+esc(qL.closeB)+'</button>';
     H_QT+='</div></div>';
@@ -4506,7 +4520,7 @@ boot();
     ev.preventDefault();ev.stopPropagation();
     var kind=b.getAttribute('data-shk'),id=b.getAttribute('data-shi'),
         title=b.getAttribute('data-sht'),url=b.getAttribute('data-shu');
-    if(kind==='ip'){linkSheet(b,EN?'en':'ko');return;}   // 점검보고서 = 반응형 보고서 링크로 공유
+    if(kind==='ip'||kind==='qt'){linkSheet(b,EN?'en':'ko');return;}   // 점검보고서 · 견적서 = 반응형 화면 링크로 공유
     shareDoc(kind,id,title,url);
   },true);
 
@@ -4672,12 +4686,26 @@ boot();
     return lg==='en'?(d+' '+MON3[mo-1]+' '+y):(y+'.'+(mo<10?'0':'')+mo+'.'+(d<10?'0':'')+d);
   }
   function rptMsg(b,lg){
+    if(b.getAttribute('data-shk')==='qt')return qtMsg(b,lg);
     var ty=b.getAttribute('data-sty')||'inspect',nm=(b.getAttribute('data-shn')||'').trim(),
         dt=rptDate(b.getAttribute('data-shd'),lg),url=withLang(b.getAttribute('data-shu'),lg).replace(/\.html\?/,'?');   // /inspect?id=… (짧은 주소)
     var hd=(lg==='en'?(RPT_EN[ty]||RPT_EN.inspect):(RPT_KO[ty]||RPT_KO.inspect));
     var br=[nm,dt].filter(Boolean).join(' / ');
     return {url:url,text:hd+(br?' [ '+br+' ]':'')+'\n\n'+
       (lg==='en'?'Tap the link below to view the report.':'아래 링크를 누르시면 보고서 확인 가능.')+'\n👉 '+url};
+  }
+  /* 🧾 견적서 링크 메시지 (2026-11-09)
+     「해피홈케어 견적서 [ 고객명 / 날짜 ]」 → 공사명 · 금액 → 유효기한 → 안내 한 줄 → 👉 링크 */
+  function qtMsg(b,lg){
+    var nm=(b.getAttribute('data-shn')||'').trim(),dt=rptDate(b.getAttribute('data-shd'),lg),
+        vu=b.getAttribute('data-svu')?rptDate(b.getAttribute('data-svu'),lg):'',am=b.getAttribute('data-sam')||'',
+        sj=(lg==='en'?(b.getAttribute('data-sje')||''):(b.getAttribute('data-sjk')||'')).trim(),
+        url=withLang(b.getAttribute('data-shu'),lg).replace(/\.html\?/,'?');   // /quote?id=… (짧은 주소)
+    var br=[nm,dt].filter(Boolean).join(' / ');
+    var ln=[sj,am?('RM '+am):''].filter(Boolean).join(' · ');
+    return {url:url,text:(lg==='en'?'Happy Home Care Quotation':'해피홈케어 견적서')+(br?' [ '+br+' ]':'')+'\n'+
+      (ln?ln+'\n':'')+(vu?(lg==='en'?'Valid until '+vu:'유효기한 '+vu)+'\n':'')+'\n'+
+      (lg==='en'?'Tap the link below to view the quotation.':'아래 링크를 누르시면 견적서 확인 가능.')+'\n👉 '+url};
   }
   function copyTx(t){
     if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(t);
@@ -4686,9 +4714,11 @@ boot();
   }
   function linkSheet(b,lg){
     var m=rptMsg(b,lg);
-    shShow('<div class="t1">'+T('점검보고서 보내기','Send report')+'</div>'+
-      '<div class="t2">'+T('받는 분이 링크를 누르면 지금 보시는 보고서 화면이 그대로 열립니다.','The recipient will see the same report page you see.')+'</div>'+
-      '<div class="lsg"><span>'+T('처음 열릴 언어','Report language')+'</span>'+
+    var _q=b.getAttribute('data-shk')==='qt';
+    shShow('<div class="t1">'+(_q?T('견적서 보내기','Send quotation'):T('점검보고서 보내기','Send report'))+'</div>'+
+      '<div class="t2">'+(_q?T('받는 분이 링크를 누르면 지금 보시는 견적서 화면이 그대로 열립니다.','The recipient will see the same quotation page you see.')
+                            :T('받는 분이 링크를 누르면 지금 보시는 보고서 화면이 그대로 열립니다.','The recipient will see the same report page you see.'))+'</div>'+
+      '<div class="lsg"><span>'+(_q?T('처음 열릴 언어','Quotation language'):T('처음 열릴 언어','Report language'))+'</span>'+
         '<button type="button" data-lg="ko"'+(lg==='ko'?' class="on"':'')+'>한국어</button>'+
         '<button type="button" data-lg="en"'+(lg==='en'?' class="on"':'')+'>English</button></div>'+
       '<div class="lmsg">'+esc2(m.text).replace(/\n/g,'<br>')+'</div>'+
@@ -4717,7 +4747,7 @@ boot();
       try{await copyTx(m.url);note(T('✅ 링크가 복사되었습니다.','✅ Link copied.'));}catch(e){note(m.url);}
     };
     bx.querySelector('[data-a="pdf"]').onclick=function(){
-      shareDoc('ip',b.getAttribute('data-shi'),b.getAttribute('data-sht'),b.getAttribute('data-shu'));
+      shareDoc(b.getAttribute('data-shk')||'ip',b.getAttribute('data-shi'),b.getAttribute('data-sht'),b.getAttribute('data-shu'));
     };
     bx.querySelector('[data-a="x"]').onclick=shHide;
   }
