@@ -16,7 +16,11 @@ export async function onRequestPost(context){
   let b; try { b = await request.json(); } catch (e) { return fail('bad request', 400); }
   const str = (k) => { const v = b && b[k]; return typeof v === 'string' ? v.slice(0, MAX[k]) : ''; };
   const condo_name = str('condo_name').trim(), condo_unit = str('condo_unit').trim(), phone = str('phone').trim();
-  if (!condo_name || !phone) return fail('missing-fields', 400);
+  // 고객 제출은 콘도명 · 동호수 · 전화번호 · 의뢰품목이 모두 있어야 접수됩니다 (화면 검사와 같은 기준)
+  if (!condo_name || !condo_unit || !phone) return fail('missing-fields', 400);
+  if (phone.replace(/\D/g, '').length < 9) return fail('invalid-phone', 400);
+  let itemsArr = null; try { itemsArr = JSON.parse(str('items') || '[]'); } catch (e) {}
+  if (!Array.isArray(itemsArr) || !itemsArr.length) return fail('missing-items', 400);
   const data = {
     condo_name, condo_unit,
     condo: condo_name + ' (' + condo_unit + ')',
