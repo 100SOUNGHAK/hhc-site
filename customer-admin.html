@@ -1295,10 +1295,16 @@ async function kkSend(title,desc,url,en,btn,img){
 async function kkShareMsg(name,message,url,en,title,img){
   // 클립보드에는 왓츠앱과 같은 간략한 내용(주소 포함)을 넣어, 손으로 붙여 보낼 때도 동일하게 나갑니다
   //  · 카카오 200자를 넘는 경우엔 품목 목록을 「첫 품목 외 N건」으로 줄인 문구를 복사합니다
-  let _cp=waText(message);
-  if(Array.from(msgSlim(message,true)).length>195)_cp=kkItemsShort(_cp);
-  try{await navigator.clipboard.writeText(await hhcShortLinks(_cp));}catch(_){}
-  toast('💛 카카오톡 공유창을 엽니다 · 전체 메시지도 복사되었습니다');
+  //  · 고객 발송 화면의 카카오톡 버튼은 메시지 대신 「고객명」을 복사해 둡니다 (공유창 검색칸에 붙여넣기용)
+  //    → window._kkNameClip 이 있으면 클립보드를 덮어쓰지 않습니다.
+  if(window._kkNameClip){
+    toast('💛 「'+window._kkNameClip+'」 이름이 복사되었습니다 · 공유창 검색칸에 붙여넣으세요');
+  }else{
+    let _cp=waText(message);
+    if(Array.from(msgSlim(message,true)).length>195)_cp=kkItemsShort(_cp);
+    try{await navigator.clipboard.writeText(await hhcShortLinks(_cp));}catch(_){}
+    toast('💛 카카오톡 공유창을 엽니다 · 전체 메시지도 복사되었습니다');
+  }
   const ok=await kkSend((title&&title.t)||(en?('[Happy Home Care] Notice for '+(name||'Customer'))
                           :('[Happy Home Care] '+(name||'고객')+'님 안내')),
                         kkText(message,!!img),url,en,(title&&title.btn)||'',img);
@@ -4218,8 +4224,11 @@ window.caSendModal=async function(idx){
   //    카카오 카드는 세로 사진을 잘라내므로 가로 배너(review-share-ko/en.jpg)를 씁니다.
   async function revKk(){
     const en=!!state.en,txt=revMsg(en);
-    try{await navigator.clipboard.writeText(txt);}catch(_){}
-    toast('💛 카카오톡 공유창을 엽니다 · 문구도 복사되었습니다');
+    if(window._kkNameClip)toast('💛 「'+window._kkNameClip+'」 이름이 복사되었습니다 · 공유창 검색칸에 붙여넣으세요');
+    else{
+      try{await navigator.clipboard.writeText(txt);}catch(_){}
+      toast('💛 카카오톡 공유창을 엽니다 · 문구도 복사되었습니다');
+    }
     await kkSend(en?'[Happy Home Care] Review Event':'[Happy Home Care] 리뷰 이벤트','',link(),en,
       en?'Write a review':'리뷰 작성하기',
       {u:BASE+'/review-share-'+(en?'en':'ko')+'.jpg',w:1200,h:600,
@@ -4728,9 +4737,21 @@ window.caSendModal=async function(idx){
     window.open(wa+'?text='+encodeURIComponent(_t),'_blank');
     careMark('wa');
   });
+  // 💛 카카오톡 : 누르자마자 고객명을 복사 → 공유창(카카오 · 휴대폰 공유창) 검색칸에 붙여넣어 대화방을 바로 찾습니다.
+  //    복사는 다른 기다림(await)보다 먼저 해야 휴대폰 브라우저가 막지 않습니다.
+  //    메시지 전체가 필요하면 아래 「📋 메시지 복사」 버튼을 씁니다.
   mk.querySelector('#cs-kk').addEventListener('click',async()=>{
-    if(state.tpl==='rev'){revKk();return;}   // ⭐ 리뷰 이벤트 : 배너 사진 카드
-    if(GDS[state.tpl]){gdKk();return;}       // 📘 에어컨 안내장 : 그림 + 링크 카드
+    const nm=String(e.name||'').trim();
+    if(nm){
+      window._kkNameClip=nm;
+      try{navigator.clipboard.writeText(nm).catch(()=>{});}catch(_){}
+      toast('💛 「'+nm+'」 이름이 복사되었습니다 · 공유창 검색칸에 붙여넣으세요');
+    }
+    try{await kkSendGo();}finally{setTimeout(()=>{window._kkNameClip='';},1500);}
+  });
+  const kkSendGo=async()=>{
+    if(state.tpl==='rev'){await revKk();return;}   // ⭐ 리뷰 이벤트 : 배너 사진 카드
+    if(GDS[state.tpl]){await gdKk();return;}       // 📘 에어컨 안내장 : 그림 + 링크 카드
     if(state.tpl==='pti'){                   // 💎 적립포인트 : 휴대폰은 공유창(그림 + 문구), PC 는 그림을 내려받고 카드 발송
       const _f=await gdPrefetch(!!state.en);
       if(_f&&navigator.canShare&&navigator.canShare({files:[_f]})&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
@@ -4771,9 +4792,9 @@ window.caSendModal=async function(idx){
         d:(en?'Tap [Service Request] below · see our care services & prices.'
              :'하단 [의뢰(예약) 신청] · [서비스·가격 확인] 가능합니다.')}
       :null;
-    kkShareMsg(e.name,msg(),link(),en,kkT,kkImg);
+    await kkShareMsg(e.name,msg(),link(),en,kkT,kkImg);
     careMark('kk');
-  });
+  };
   mk.querySelector('#cs-kkset').addEventListener('click',()=>{kkResetKey();});
   mk.querySelector('#cs-pv').addEventListener('click',()=>{window.caView(link(),'👁 고객 발송 화면 미리보기 — '+(e.name||''));});
   mk.querySelector('#cs-copylink').addEventListener('click',async()=>{
