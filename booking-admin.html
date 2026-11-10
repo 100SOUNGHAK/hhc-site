@@ -862,6 +862,12 @@ html.sa body:has(.app-body.active){padding-left:200px}
 #tab-new .cal-day.nb-act{background:var(--navy);box-shadow:0 0 0 2.5px #fff,0 0 0 4.5px var(--navy)}
 #tab-new .time-preset.on{background:var(--teal);border-color:var(--teal);color:#fff}
 #tab-new .time-preset:disabled{opacity:.45;cursor:default}
+.nx-fab{position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:50;display:inline-flex;align-items:center;gap:6px;height:48px;padding:0 18px;border-radius:999px;border:0;background:var(--teal);color:#fff;font-size:13.5px;font-weight:800;box-shadow:0 2px 6px rgba(11,24,51,.2),0 12px 24px -10px rgba(15,181,164,.7);transition:transform .2s,opacity .2s}
+.nx-fab .pl{font-size:20px;line-height:1;font-weight:700}
+.nx-fab.hide{transform:translateY(90px);opacity:0;pointer-events:none}
+#tab-list{padding-bottom:96px}
+@media(max-width:600px){.nx-fab{width:52px;height:52px;padding:0;justify-content:center}.nx-fab .tx{display:none}.nx-fab .pl{font-size:24px}}
+@media(prefers-reduced-motion:reduce){.nx-fab{transition:none}}
 </style>
 <script>
 // 고정 탭이 위쪽 머리글 아래에 붙도록 머리글 높이를 재서 맞춥니다
@@ -4271,11 +4277,25 @@ function resetNewForm(){
 
 // Add new button
 const newBtn=document.createElement('button');
-newBtn.className='btn-sm btn-sm-teal no-print';
-newBtn.style.cssText='position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:24px;font-size:13px;box-shadow:var(--shadow-lg);z-index:50;background:var(--teal);color:#fff;border:none';
-newBtn.textContent='+ 새 고객 등록';
+newBtn.className='btn-sm btn-sm-teal no-print nx-fab';
+newBtn.type='button';
+newBtn.setAttribute('aria-label','새 고객 등록');newBtn.title='새 고객 등록';
+newBtn.innerHTML='<span class="pl">＋</span><span class="tx">새 고객 등록</span>';
 newBtn.addEventListener('click',()=>{resetNewForm();switchTab('new');window.scrollTo({top:0,behavior:'smooth'});});
 document.body.appendChild(newBtn);
+// 목록을 아래로 내리는 동안은 숨기고, 위로 올리거나 맨 아래에 닿으면 다시 보입니다 — 줄 위를 가려 누르기 어렵던 문제
+(function(){
+  let lastY=window.scrollY;
+  function upd(){
+    const y=window.scrollY,atEnd=(window.innerHeight+y)>=(document.documentElement.scrollHeight-4);
+    const onNew=document.getElementById('tab-new')&&document.getElementById('tab-new').classList.contains('active');
+    newBtn.classList.toggle('hide',onNew||(y>lastY+2&&y>80&&!atEnd));
+    if(Math.abs(y-lastY)>2)lastY=y;
+  }
+  window.addEventListener('scroll',upd,{passive:true});
+  document.addEventListener('click',function(){setTimeout(upd,50);});
+  upd();
+})();
 
 // ── MODAL ──
 function showModal(title,msg,showCancel,onOk){
