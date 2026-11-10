@@ -1211,6 +1211,24 @@ var FB_CFG={apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",authDomain:"happywo
 // ⚡ 빠른 열기 : 데이터베이스 내용을 이 기기 안에 저장해 둡니다(IndexedDB).
 //    다음부터는 저장된 내용으로 화면을 먼저 그리고, 서버에서는 바뀐 부분만 받아 옵니다.
 //    (관리자 앱의 여러 화면이 같은 저장소를 함께 쓰므로 synchronizeTabs · 저장소를 못 쓰는 환경에서는 예전 방식으로 동작)
+// ═══ 💾 휴대폰 저장공간(localStorage) 안전 저장 — 2026-11-10 ═══
+//  저장공간(약 5MB)이 꽉 차면 setItem 이 오류를 내며 그 뒤 코드가 멈춘다.
+//  (인보이스 목록 갱신이 멈춰 「열기·수정」 화면이 빈칸으로 열리던 원인)
+//  → 오류를 삼키고, 인보이스 목록은 사진 미리보기(data:)를 뺀 가벼운 사본으로 다시 시도, 그래도 안 되면 캐시를 지운다.
+function lsSet(k,v){
+  try{localStorage.setItem(k,v);return true;}catch(e){}
+  try{
+    if(typeof LINV!=='undefined'&&k===LINV&&typeof invoices!=='undefined'&&invoices){
+      var slim=invoices.map(function(x){var y=Object.assign({},x);
+        ['files','cardSlips'].forEach(function(f){if(Array.isArray(y[f]))y[f]=y[f].map(function(a){a=Object.assign({},a||{});if(String(a.thumb||'').indexOf('data:')===0)a.thumb='';return a;});});
+        return y;});
+      localStorage.setItem(k,JSON.stringify(slim));return true;
+    }
+  }catch(e){}
+  try{localStorage.removeItem(k);}catch(e){}
+  try{console.warn('저장공간 부족 — 캐시 생략:',k);}catch(e){}
+  return false;
+}
 function hhcPersist(db){
   if(!db||db.__hhcP)return db; db.__hhcP=1;
   try{db.settings({cacheSizeBytes:150*1024*1024,experimentalAutoDetectLongPolling:true,merge:true});}catch(e){}
@@ -1297,7 +1315,7 @@ function catKoEn(n){var e=catEn(n);return e?(n+' · '+e):n;}
 function catOut(n){var v=catEn(n);if(v)return v;return (typeof ivEnTx==='function')?ivEnTx(n):n;}   // 영문명이 없으면 사전으로 한 번 더 바꿔 봅니다
 function loadCatalogLocal(){try{applyCatalog(JSON.parse(localStorage.getItem(LCAT)||'null'));}catch(e){}}
 function saveCatalog(){
-  localStorage.setItem(LCAT,JSON.stringify(catalogObj()));
+  lsSet(LCAT,JSON.stringify(catalogObj()));
   if(DB)return DB.collection('settings').doc('catalog').set(catalogObj());
   return Promise.resolve();
 }
@@ -1405,7 +1423,7 @@ function ivEnTx(s){
 //  · 온라인 번역 결과는 기기 안(localStorage)에 저장해 다음부터는 바로 영문으로 보입니다.
 var IV_TR_KEY='hhc_iv_tr';
 function ivTrCache(){try{var o=JSON.parse(localStorage.getItem(IV_TR_KEY)||'{}');return (o&&typeof o==='object')?o:{};}catch(e){return {};}}
-function ivTrSave(o){try{var cur=ivTrCache();Object.keys(o).forEach(function(k){cur[k]=o[k];});var ks=Object.keys(cur);if(ks.length>400)ks.slice(0,ks.length-400).forEach(function(k){delete cur[k];});localStorage.setItem(IV_TR_KEY,JSON.stringify(cur));}catch(e){}}   // 동시에 여러 번역이 끝나도 서로 덮어쓰지 않도록 합쳐서 저장
+function ivTrSave(o){try{var cur=ivTrCache();Object.keys(o).forEach(function(k){cur[k]=o[k];});var ks=Object.keys(cur);if(ks.length>400)ks.slice(0,ks.length-400).forEach(function(k){delete cur[k];});lsSet(IV_TR_KEY,JSON.stringify(cur));}catch(e){}}   // 동시에 여러 번역이 끝나도 서로 덮어쓰지 않도록 합쳐서 저장
 function ivFreeEn(ko,savedEn){
   ko=String(ko==null?'':ko);
   if(savedEn&&String(savedEn).trim()&&!ivHasKo(savedEn))return String(savedEn);
@@ -1673,7 +1691,7 @@ function cancelIssuer(){
 function saveIssuer(){
   issuer.name=val('iss-name');issuer.email=val('iss-email');
   issuer.phone=val('iss-phone');issuer.addr=val('iss-addr');issuer.biz=val('iss-biz');
-  localStorage.setItem(LISS,JSON.stringify(issuer));
+  lsSet(LISS,JSON.stringify(issuer));
   if(DB)DB.collection('settings').doc('issuer').set(issuer).catch(function(){});
   renderIssView();
   var ed=$('iss-edit'),btn=$('iss-toggle-btn');
@@ -2002,7 +2020,7 @@ window.openQuotePick=openQuotePick;
 function invMakeInspect(){
   var nm=val('c-name'),ph=val('c-phone'),ad=val('c-addr'),dt=val('inv-date');
   if(!String(nm||'').trim()&&String(ph||'').replace(/[^0-9]/g,'').length<4){showToast('고객명 또는 연락처를 먼저 입력하세요');return;}
-  try{localStorage.setItem('hhc_transfer_inspect',JSON.stringify({name:nm||'',phone:ph||'',addr:ad||'',date:dt||today()}));}catch(e){}
+  try{lsSet('hhc_transfer_inspect',JSON.stringify({name:nm||'',phone:ph||'',addr:ad||'',date:dt||today()}));}catch(e){}
   window.open('inspect-admin.html?from=hhc','_blank');
   showToast('📄 점검보고서 작성으로 이동 · 기본정보 자동 반영');
 }
@@ -2179,7 +2197,7 @@ function _adjpKey(n){return String(n||'').trim().toLowerCase();}
 function _adjpHas(n){var k=_adjpKey(n);return !!k&&adjPresets.some(function(p){return _adjpKey(p.name)===k;});}
 function adjpSaveAll(list,quiet){
   adjPresets=_adjpNorm(list);
-  try{localStorage.setItem(ADJP_K,JSON.stringify(adjPresets));}catch(e){}
+  try{lsSet(ADJP_K,JSON.stringify(adjPresets));}catch(e){}
   renderAdjPresets();renderAdjusts();
   if(DB)DB.collection('settings').doc('adj_presets').set({items:adjPresets,updatedAt:new Date().toISOString()})
     .then(function(){if(!quiet)showToast('✓ 자주 쓰는 항목 저장됨');})
@@ -2188,7 +2206,7 @@ function adjpSaveAll(list,quiet){
 }
 function adjpApply(items){       // 다른 기기에서 바뀐 목록 반영
   adjPresets=_adjpNorm(items);
-  try{localStorage.setItem(ADJP_K,JSON.stringify(adjPresets));}catch(e){}
+  try{lsSet(ADJP_K,JSON.stringify(adjPresets));}catch(e){}
   renderAdjPresets();renderAdjusts();
 }
 function renderAdjPresets(){
@@ -3846,7 +3864,7 @@ async function loadInspAll(force){
     var snap=await DB.collection('inspections').limit(600).get();
     INSP_ALL=snap.docs.map(function(d){return inspSlimV(d.data(),d.id);});
     INSP_ALL.sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
-    try{localStorage.setItem(INSP_CACHE_K,JSON.stringify(INSP_ALL.slice(0,600)));}catch(e){}
+    try{lsSet(INSP_CACHE_K,JSON.stringify(INSP_ALL.slice(0,600)));}catch(e){}
   }catch(e){}
   return INSP_ALL;
 }
@@ -4724,7 +4742,7 @@ function autoUpdateInvoiceStatus(){
       }
     }
   }
-  if(updated){localStorage.setItem(LINV,JSON.stringify(invoices));}
+  if(updated){lsSet(LINV,JSON.stringify(invoices));}
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -5011,7 +5029,7 @@ async function saveCust(){
     // 로컬 업데이트
     if(ex){Object.assign(ex,data);}else{customers.push(data);}
     customers.sort(function(a,b){return(a.name||'').localeCompare(b.name||'');});
-    localStorage.setItem(LCUST,JSON.stringify(customers));
+    lsSet(LCUST,JSON.stringify(customers));
     showToast('✓ 저장 완료');
     $('cust-modal').classList.add('hidden');
     renderCusts();
@@ -5020,7 +5038,7 @@ async function saveCust(){
     var ex2=customers.find(function(c){return c.id===id;});
     if(ex2){Object.assign(ex2,data);}else{customers.push(data);}
     customers.sort(function(a,b){return(a.name||'').localeCompare(b.name||'');});
-    localStorage.setItem(LCUST,JSON.stringify(customers));
+    lsSet(LCUST,JSON.stringify(customers));
     showToast('로컬 저장됨 ('+e.code+')');
     $('cust-modal').classList.add('hidden');
     renderCusts();
@@ -5187,7 +5205,7 @@ async function delCust(id){
   var c=customers.find(function(x){return x.id===id;});
   if(c&&c._docId&&DB){try{await DB.collection('customers').doc(c._docId).delete();}catch(e){}}
   customers=customers.filter(function(x){return x.id!==id;});
-  localStorage.setItem(LCUST,JSON.stringify(customers));
+  lsSet(LCUST,JSON.stringify(customers));
   renderCusts();showToast('삭제됨');
 }
 window.newInvFromCust=newInvFromCust;window.delCust=delCust;
@@ -5344,7 +5362,7 @@ async function renameTopCat(cat){
     await saveCatalog();
     var hit=services.concat(trashSvcs).filter(function(x){return x.cat===cat||CAT_MIGRATE[x.cat]===cat;});
     for(var i=0;i<hit.length;i++){hit[i].cat=n;if(hit[i]._docId&&DB)await DB.collection('services').doc(hit[i]._docId).update({cat:n});}
-    localStorage.setItem(LSVC,JSON.stringify(services));
+    lsSet(LSVC,JSON.stringify(services));
     renderSvcs();showToast('✓ 「'+n+'」(으)로 변경 · 항목 '+hit.length+'개');
   }catch(e){showToast('변경 실패: '+e.message);}finally{hideLoad();}
 }
@@ -5387,7 +5405,7 @@ async function renameSubcat(cat,sub){
     await saveCatalog();
     var hit=services.concat(trashSvcs).filter(function(x){return (x.cat===cat||CAT_MIGRATE[x.cat]===cat)&&x.subcat===sub;});
     for(var i=0;i<hit.length;i++){hit[i].subcat=n;if(hit[i]._docId&&DB)await DB.collection('services').doc(hit[i]._docId).update({subcat:n});}
-    localStorage.setItem(LSVC,JSON.stringify(services));
+    lsSet(LSVC,JSON.stringify(services));
     renderSvcs();showToast('✓ 「'+n+'」(으)로 변경 · 항목 '+hit.length+'개');
   }catch(e){showToast('변경 실패: '+e.message);}finally{hideLoad();}
 }
@@ -5428,7 +5446,7 @@ async function renameSub2(sub,s2){
     await saveCatalog();
     var hit=services.concat(trashSvcs).filter(function(x){return x.subcat===sub&&x.sub2===s2;});
     for(var i=0;i<hit.length;i++){hit[i].sub2=n;if(hit[i]._docId&&DB)await DB.collection('services').doc(hit[i]._docId).update({sub2:n});}
-    localStorage.setItem(LSVC,JSON.stringify(services));
+    lsSet(LSVC,JSON.stringify(services));
     renderSvcs();showToast('✓ 「'+n+'」(으)로 변경 · 항목 '+hit.length+'개');
   }catch(e){showToast('변경 실패: '+e.message);}finally{hideLoad();}
 }
@@ -5553,7 +5571,7 @@ async function doSvcMv(id){
   if(!c||!sub){showToast('분류를 선택하세요');return;}
   s.cat=c;s.subcat=sub;s.sub2=s2||'';
   if(s._docId&&DB){try{await DB.collection('services').doc(s._docId).update({cat:c,subcat:sub,sub2:s.sub2});}catch(e){showToast('이동 실패: '+e.message);return;}}
-  localStorage.setItem(LSVC,JSON.stringify(services));
+  lsSet(LSVC,JSON.stringify(services));
   renderSvcs();showToast('✓ '+[c,sub,s2].filter(Boolean).join(' › ')+' (으)로 이동');
 }
 
@@ -5567,7 +5585,7 @@ function dupSvc(id){
   if(s.sub2)ns.sub2=s.sub2;
   DB.collection('services').add(ns).then(function(ref){
     ns._docId=ref.id;services.push(ns);
-    localStorage.setItem(LSVC,JSON.stringify(services));
+    lsSet(LSVC,JSON.stringify(services));
     renderSvcs();showToast('복사됨 — 이름을 바꿔주세요');
   }).catch(function(e){showToast('복사 실패: '+e.message);});
 }
@@ -5589,7 +5607,7 @@ async function restoreSvc(id){
   var s=trashSvcs[i];s._del=false;s._delAt='';
   if(s._docId&&DB){try{await DB.collection('services').doc(s._docId).update({_del:false,_delAt:''});}catch(e){}}
   trashSvcs.splice(i,1);services.push(s);services.sort(byOrd);
-  localStorage.setItem(LSVC,JSON.stringify(services));
+  lsSet(LSVC,JSON.stringify(services));
   renderSvcs();openTrash(true);showToast('되살렸습니다 ✓');
 }
 async function purgeSvc(id){
@@ -5662,7 +5680,7 @@ async function syncDocsCats(){
 function saveSvcFld(id,f,v){
   var s=services.find(function(x){return x.id===id;});if(!s)return;
   s[f]=f==='price'?parseFloat(v)||0:v;
-  localStorage.setItem(LSVC,JSON.stringify(services));
+  lsSet(LSVC,JSON.stringify(services));
   if(s._docId&&DB)DB.collection('services').doc(s._docId).update({[f]:s[f]}).catch(function(){});
   showToast('저장됨 ✓');
 }
@@ -5673,7 +5691,7 @@ function addSvcTo(cat,subcat,sub2){
   if(sub2)ns.sub2=sub2;
   DB.collection('services').add(ns).then(function(ref){
     ns._docId=ref.id;services.push(ns);
-    localStorage.setItem(LSVC,JSON.stringify(services));
+    lsSet(LSVC,JSON.stringify(services));
     renderSvcs();showToast('추가됨');
   }).catch(function(e){showToast('추가 실패: '+e.message);});
 }
@@ -5687,7 +5705,7 @@ function moveSvc(id,dir){
   if(s._docId&&DB)DB.collection('services').doc(s._docId).update({order:s.order}).catch(function(){});
   if(other._docId&&DB)DB.collection('services').doc(other._docId).update({order:other.order}).catch(function(){});
   services.sort(function(a,b){return(a.order||0)-(b.order||0);});
-  localStorage.setItem(LSVC,JSON.stringify(services));
+  lsSet(LSVC,JSON.stringify(services));
   renderSvcs();
 }
 // 기존 에어컨 서비스에 소분류 배정
@@ -5703,7 +5721,7 @@ async function migrateCats(){
       s.cat=newCat;
       if(s._docId&&DB)await DB.collection('services').doc(s._docId).update({cat:newCat});
     }
-    localStorage.setItem(LSVC,JSON.stringify(services));
+    lsSet(LSVC,JSON.stringify(services));
     renderSvcs();
     showToast('✓ '+toMigrate.length+'개 항목 마이그레이션 완료');
   }catch(e){showToast('마이그레이션 실패: '+e.message);}
@@ -5716,7 +5734,7 @@ async function assignSub2(id, sub2){
   var s=services.find(function(x){return x.id===id;});if(!s)return;
   s.sub2=sub2;
   if(s._docId&&DB){try{await DB.collection('services').doc(s._docId).update({sub2:sub2});}catch(e){}}
-  localStorage.setItem(LSVC,JSON.stringify(services));
+  lsSet(LSVC,JSON.stringify(services));
   renderSvcs();showToast('소분류 배정됨: '+sub2);
 }
 window.assignSub2=assignSub2;
@@ -5729,7 +5747,7 @@ async function delSvc(id){
   if(s._docId&&DB){try{await DB.collection('services').doc(s._docId).update({_del:true,_delAt:st});}catch(e){}}
   trashSvcs.push(s);
   services=services.filter(function(x){return x.id!==id;});
-  localStorage.setItem(LSVC,JSON.stringify(services));
+  lsSet(LSVC,JSON.stringify(services));
   renderSvcs();showToast('휴지통으로 이동됨 — 🗑 휴지통에서 되살릴 수 있습니다');
 }
 // QR코드 업로드 — Firebase Storage에 저장
@@ -5809,7 +5827,7 @@ function renderBanks(){
 function saveBnkFld(id,f,v){
   var b=banks.find(function(x){return x.id===id;});if(!b)return;
   b[f]=v;
-  localStorage.setItem(LBANK,JSON.stringify(banks));
+  lsSet(LBANK,JSON.stringify(banks));
   if(b._docId&&DB)DB.collection('banks').doc(b._docId).update({[f]:v}).catch(function(){});
   renderBankSel();showToast('저장됨 ✓');
 }
@@ -5819,14 +5837,14 @@ async function addBank(){
     try{var r=await DB.collection('banks').add(nb);nb._docId=r.id;}
     catch(e){showToast('저장 실패: '+e.message);return;}
   }
-  banks.push(nb);localStorage.setItem(LBANK,JSON.stringify(banks));renderBanks();showToast('추가됨');
+  banks.push(nb);lsSet(LBANK,JSON.stringify(banks));renderBanks();showToast('추가됨');
 }
 async function delBank(id){
   if(!confirm('삭제?'))return;
   var b=banks.find(function(x){return x.id===id;});
   if(b&&b._docId&&DB){try{await DB.collection('banks').doc(b._docId).delete();}catch(e){}}
   banks=banks.filter(function(x){return x.id!==id;});
-  localStorage.setItem(LBANK,JSON.stringify(banks));renderBanks();showToast('삭제됨');
+  lsSet(LBANK,JSON.stringify(banks));renderBanks();showToast('삭제됨');
 }
 window.delBank=delBank;
 
@@ -5853,7 +5871,7 @@ function renderImgPreview(type){
 }
 function delImg(type){
   imgData[type]='';
-  localStorage.setItem(LIMG,JSON.stringify(imgData));
+  lsSet(LIMG,JSON.stringify(imgData));
   if(DB)DB.collection('settings').doc('images').set(imgData).catch(function(){});
   renderImgPreview(type);showToast('삭제됨');
 }
@@ -5866,7 +5884,7 @@ function bindImgEvents(){
       var reader=new FileReader();
       reader.onload=function(e){
         imgData[type]=e.target.result;
-        localStorage.setItem(LIMG,JSON.stringify(imgData));
+        lsSet(LIMG,JSON.stringify(imgData));
         if(DB)DB.collection('settings').doc('images').set(imgData).catch(function(){});
         renderImgPreview(type);showToast('✓ '+( type==='logo'?'로고':'서명')+' 저장됨');
       };
@@ -6660,7 +6678,7 @@ function migrateUnitSik(){
       if(s._docId)DB.collection('services').doc(s._docId).update({unit:'대'}).catch(function(){});
     }
   });
-  localStorage.setItem(LSVC,JSON.stringify(services));
+  lsSet(LSVC,JSON.stringify(services));
 }
 // ═══ 📎 총괄 고객관리 등에서 「수정」으로 열기 : hhcinvoice.html?edit=<문서ID 또는 인보이스번호> ═══
 //     해당 인보이스를 작성 화면에 그대로 불러와 모든 항목을 수정할 수 있습니다.
@@ -6724,7 +6742,7 @@ async function init(){
     DB.collection('invoices').orderBy('createdAt','desc').onSnapshot(function(snap){
       window.__hhcReady&&window.__hhcReady();
       invoices=snap.docs.map(function(d){return Object.assign({},d.data(),{_docId:d.id});});
-      localStorage.setItem(LINV,JSON.stringify(invoices));
+      lsSet(LINV,JSON.stringify(invoices));
       autoUpdateInvoiceStatus();
       renderList();renderAcc();renderYearTabs();setSS('on');
       renderRecentCustChips();
@@ -6742,18 +6760,18 @@ async function init(){
       if(doc.exists)adjpApply((doc.data()||{}).items||[]);
     },function(){});
     DB.collection('settings').doc('issuer').onSnapshot(function(doc){
-      if(doc.exists){issuer=Object.assign({},issuer,doc.data());localStorage.setItem(LISS,JSON.stringify(issuer));renderIssView();}
+      if(doc.exists){issuer=Object.assign({},issuer,doc.data());lsSet(LISS,JSON.stringify(issuer));renderIssView();}
     },function(){});
     // 카테고리 구조 실시간 구독 — 다른 기기에서 분류를 바꿔도 즉시 반영된다
     DB.collection('settings').doc('catalog').onSnapshot(function(doc){
       if(!doc.exists)return;
       applyCatalog(doc.data());
-      localStorage.setItem(LCAT,JSON.stringify(catalogObj()));
+      lsSet(LCAT,JSON.stringify(catalogObj()));
       var f=document.activeElement;
       if(!($('services-list')&&$('services-list').contains(f)))renderSvcs();
     },function(){});
     DB.collection('settings').doc('images').get().then(function(doc){
-      if(doc.exists){imgData=Object.assign({logo:'',sign:''},doc.data());localStorage.setItem(LIMG,JSON.stringify(imgData));renderImgPreview('logo');renderImgPreview('sign');}
+      if(doc.exists){imgData=Object.assign({logo:'',sign:''},doc.data());lsSet(LIMG,JSON.stringify(imgData));renderImgPreview('logo');renderImgPreview('sign');}
     }).catch(function(){});
 
     DB.collection('services').orderBy('order','asc').onSnapshot(function(snap){
@@ -6767,7 +6785,7 @@ async function init(){
         services=_all.filter(function(x){return !x._del;});
         services.sort(function(a,b){return(a.order||0)-(b.order||0);});
         purgeOldTrash();
-        localStorage.setItem(LSVC,JSON.stringify(services));
+        lsSet(LSVC,JSON.stringify(services));
         if(!inSvc)renderSvcs();
         retryBookingMatch();   // 실제 카탈로그 도착 → 예약 품목 재매칭
         migrateUnitSik();      // 단위 "식" → "대" 일괄 정리 (최초 1회 실행되면 이후엔 대상 없음)
@@ -6779,7 +6797,7 @@ async function init(){
       var inBnk=$('banks-list')&&$('banks-list').contains(focused);
       if(snap.docs.length){
         banks=snap.docs.map(function(d){return Object.assign({},d.data(),{_docId:d.id});});
-        localStorage.setItem(LBANK,JSON.stringify(banks));
+        lsSet(LBANK,JSON.stringify(banks));
         if(!inBnk)renderBanks();
       }
     },function(){});
@@ -6787,7 +6805,7 @@ async function init(){
     DB.collection('customers').onSnapshot(function(snap){
       customers=snap.docs.map(function(d){return Object.assign({},d.data(),{_docId:d.id});});
       customers.sort(function(a,b){return(a.name||'').localeCompare(b.name||'');});
-      localStorage.setItem(LCUST,JSON.stringify(customers));
+      lsSet(LCUST,JSON.stringify(customers));
       renderCusts();
     },function(){});
 
@@ -6910,7 +6928,7 @@ function saveInvDraft(){
     var d=getInvData();
     var has=(d.customer.name||'').trim()||d.items.length||(d.notes||'').trim();
     if(!has)return;
-    localStorage.setItem(INV_DRAFT,JSON.stringify({data:d,t:Date.now()}));
+    lsSet(INV_DRAFT,JSON.stringify({data:d,t:Date.now()}));
     var ind=$('inv-autosave-ind');
     if(ind)ind.textContent='✓ 임시저장 '+new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   }catch(e){}
