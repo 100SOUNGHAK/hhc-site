@@ -3,7 +3,7 @@
 // · 수신 기기 목록(push_subs)은 서비스 계정으로 읽는다 (3단계에서 규칙을 잠가도 동작)
 // · 필요 설정: VAPID_PRIVATE_KEY (Pages 환경변수)
 // ─────────────────────────────────────────────────────────────────────────────
-import { listAll, deleteDoc } from './fs.js';
+import { listAll, deleteDoc, patchDoc } from './fs.js';
 
 const VAPID_PUBLIC='BE5OUy5k4wwsty8t7vBJ1IH-9LMpqzKI66QAV78Z39lGhYRBImjekMHVyJMhqUDsHJvvwIIVbb-YT-gRtwL5O74';
 const SUBJECT='mailto:kopeco100@gmail.com';
@@ -78,7 +78,7 @@ export async function listSubs(env){
   try{
     const rows=await listAll(env,'push_subs');
     const subs=[];
-    for(const r of rows){ try{ subs.push({id:r.__id,endpoint:r.endpoint,keys:{p256dh:r.keys.p256dh,auth:r.keys.auth}}); }catch(e){} }
+    for(const r of rows){ try{ subs.push({id:r.__id,endpoint:r.endpoint,keys:{p256dh:r.keys.p256dh,auth:r.keys.auth},ua:r.ua||'',updated_at:r.updated_at||'',last_status:r.last_status||0,last_at:r.last_at||''}); }catch(e){} }
     return {subs};
   }catch(e){ return {error:e.message||'firestore',subs:[]}; }
 }
@@ -97,8 +97,12 @@ export async function sendAdminPush(env,type,extra){
     try{
       const st=await sendPush(s,msg,priv);
       if(st===404||st===410){ await deleteDoc(env,'push_subs',s.id).catch(()=>{}); removed++; }
-      else if(st>=200&&st<300) sent++;
-    }catch(e){}
+      else{
+        if(st>=200&&st<300) sent++;
+        // 기기별 마지막 발송 결과 — /api/notify 상태 화면에서 「어느 기기가 못 받는지」 확인용
+        await patchDoc(env,'push_subs',s.id,{last_status:st,last_at:new Date().toISOString()}).catch(()=>{});
+      }
+    }catch(e){ await patchDoc(env,'push_subs',s.id,{last_status:-1,last_at:new Date().toISOString()}).catch(()=>{}); }
   }));
   return {ok:true,sent,removed,total:subs.length};
 }

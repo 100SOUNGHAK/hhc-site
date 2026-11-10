@@ -42,18 +42,31 @@ self.addEventListener('push', function (e) {
   var url = (typeof d.url === 'string' && d.url.charAt(0) === '/') ? d.url : '';   // 우리 사이트 안 주소만
   var tab = url ? (d.tab || 'link') : (d.tab === 'booking' ? 'booking' : 'request');
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
-    // 관리자 앱이 화면에 열려 있으면 앱 내 알림(토스트·소리)이 처리하므로 중복 표시하지 않음
-    // (주소가 정해진 알림은 앱 안에서 따로 알려 주지 않으므로 항상 표시)
-    for (var i = 0; !url && i < list.length; i++) {
+    // 2026-11-10: 알림은 항상 표시합니다.
+    //  · 예전에는 앱 창이 「보이는 중」이면 건너뛰었는데, 화면이 꺼지거나 다른 앱으로 넘어간 뒤에도
+    //    기기가 「보이는 중」으로 잘못 알려 주는 경우가 있어 알림이 안 울리고, 앱을 열어야 울리는 일이 있었습니다.
+    //  · 알림을 띄우지 않고 넘어가는 푸시가 반복되면 휴대폰·브라우저가 이 사이트의 푸시를 늦추거나 끊습니다.
+    //  · 관리자 앱을 실제로 보고 있을 때(focused)만 소리 없이 띄우고 잠시 뒤 지웁니다 — 앱 안의 알림음이 대신 울립니다.
+    var focused = false;
+    for (var i = 0; i < list.length; i++) {
       var c = list[i];
-      if (c.visibilityState === 'visible' && c.url && (c.url.indexOf('staff-app') >= 0 || c.url.indexOf('staffapp') >= 0)) return;
+      if (c.focused && c.visibilityState === 'visible' && c.url && (c.url.indexOf('staff-app') >= 0 || c.url.indexOf('staffapp') >= 0)) focused = true;
     }
-    try { if (navigator.setAppBadge) navigator.setAppBadge(1); } catch (err) {}   // 앱 아이콘 배지 (지원 기기)
-    return self.registration.showNotification(d.title || 'HHC 알림', {
+    if (url) focused = false;   // 주소가 정해진 알림은 앱 안에서 따로 알려 주지 않으므로 항상 소리
+    if (!focused) { try { if (navigator.setAppBadge) navigator.setAppBadge(1); } catch (err) {} }   // 앱 아이콘 배지 (지원 기기)
+    var tag = 'hhc-push-' + tab;
+    var opt = {
       body: d.body || '눌러서 바로 확인하세요',
       icon: 'icon-admin-192.png', badge: 'icon-admin-192.png',
-      tag: 'hhc-push-' + tab, renotify: true, vibrate: [220, 110, 220],
+      tag: tag, renotify: !focused, requireInteraction: !focused, timestamp: Date.now(),
       data: { tab: tab, url: url }
+    };
+    if (focused) opt.silent = true; else opt.vibrate = [300, 120, 300, 120, 300];   // silent 와 vibrate 는 함께 쓸 수 없음
+    return self.registration.showNotification(d.title || 'HHC 알림', opt).then(function () {
+      if (!focused) return;
+      return new Promise(function (res) { setTimeout(res, 4000); }).then(function () {
+        return self.registration.getNotifications({ tag: tag });
+      }).then(function (ns) { (ns || []).forEach(function (n) { try { n.close(); } catch (err) {} }); }).catch(function () {});
     });
   }));
 });

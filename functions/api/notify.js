@@ -58,6 +58,20 @@ async function tomorrowPush(env){
   return json(Object.assign({date:ds,count:n},r),r.ok?200:500);
 }
 
+// 기기별 상태 — 기기 종류(OS)만 표시하고 주소·키는 보여 주지 않습니다
+function devKind(ua){ua=String(ua||'');if(/iPhone|iPad/i.test(ua))return '📱 iPhone';if(/Android/i.test(ua))return '📱 Android';if(/Windows/i.test(ua))return '💻 Windows';if(/Mac/i.test(ua))return '💻 Mac';return '기기';}
+function myTime(iso){if(!iso)return '—';const d=new Date(Date.parse(iso)+8*3600e3);if(isNaN(d))return '—';return (d.getUTCMonth()+1)+'/'+d.getUTCDate()+' '+String(d.getUTCHours()).padStart(2,'0')+':'+String(d.getUTCMinutes()).padStart(2,'0');}
+function devTable(subs){
+  if(!subs||!subs.length)return '';
+  const rows=subs.slice().sort((a,b)=>String(b.updated_at).localeCompare(String(a.updated_at))).map(s=>{
+    const st=s.last_status;
+    const res=!st?'<span style="color:#999">아직 없음</span>':(st>=200&&st<300?'✅ 전달됨':'❌ 실패('+st+')');
+    return '<tr><td>'+devKind(s.ua)+'</td><td>'+myTime(s.updated_at)+'</td><td>'+myTime(s.last_at)+' '+res+'</td></tr>';
+  }).join('');
+  return '<table style="width:100%;border-collapse:collapse;font-size:13px" border="1" cellpadding="6"><tr style="background:#f4f6fa"><th>기기</th><th>앱 연 시각</th><th>마지막 알림</th></tr>'+rows+'</table>'+
+    '<p style="color:#666;font-size:12px">「앱 연 시각」이 오래된 기기는 알림이 늦거나 안 올 수 있습니다 — 그 기기에서 관리자 앱을 한 번 열면 다시 등록됩니다.</p>';
+}
+
 export async function onRequestGet(context){
   const env=context.env||{};
   const priv=env.VAPID_PRIVATE_KEY;
@@ -68,7 +82,7 @@ export async function onRequestGet(context){
     '<h2>🔔 HHC 푸시 알림 상태</h2>'+
     '<p>서버 키(VAPID): '+(priv?'✅ 설정됨':'❌ <b>미설정</b> — Cloudflare Pages → Settings → Variables 에 <code>VAPID_PRIVATE_KEY</code> 추가 후 재배포 필요')+'</p>'+
     '<p>서비스 계정(FIREBASE_CLIENT_EMAIL / FIREBASE_PRIVATE_KEY): '+(sa?'✅ 설정됨':'❌ <b>미설정</b>')+'</p>'+
-    '<p>등록된 수신 기기: '+(error?('❌ 조회 실패 ('+error+')'):('<b>'+subs.length+'대</b>'))+'</p>'+
+    '<p>등록된 수신 기기: '+(error?('❌ 조회 실패 ('+error+')'):('<b>'+subs.length+'대</b>'))+'</p>'+devTable(subs)+
     '<p style="color:#666;font-size:13px">관리자 앱에서 알림을 허용하면 기기가 자동 등록됩니다.<br>의뢰요청·예약신청이 접수되면 등록된 모든 기기로 알림이 발송됩니다.</p></body>';
   return new Response(html,{headers:{'content-type':'text/html; charset=utf-8','cache-control':'no-store'}});
 }

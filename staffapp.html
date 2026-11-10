@@ -526,12 +526,19 @@ function clearSysNotifs(){
   }catch(e){}
 }
 document.addEventListener('visibilitychange',function(){
-  if(document.visibilityState==='visible')clearSysNotifs();
+  if(document.visibilityState==='visible'){clearSysNotifs();try{setupPush();}catch(e){}}   // 다시 볼 때마다 기기 등록을 새로 고침
 });
 function setupPush(){
   try{
     if(!db||!SWREG||!SWREG.pushManager||notifPerm()!=='granted')return;
-    SWREG.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToU8(VAPID_PUB)}).then(function(sub){
+    // 3일이 지난 등록은 새로 발급받아 둡니다 — 서버에서 끊긴(만료된) 등록을 기기가 계속 붙들고 있으면
+    // 앱을 열기 전까지 알림이 오지 않기 때문입니다. (새 등록이 저장되면 예전 등록은 서버가 알아서 지웁니다)
+    var RK='hhc_push_at',age=0;try{age=Date.now()-(parseInt(localStorage.getItem(RK),10)||0);}catch(e){}
+    var renew=SWREG.pushManager.getSubscription().then(function(old){
+      if(old&&age>3*864e5)return old.unsubscribe().catch(function(){});
+    }).catch(function(){});
+    renew.then(function(){return SWREG.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToU8(VAPID_PUB)});}).then(function(sub){
+      try{if(age>3*864e5||!localStorage.getItem(RK))localStorage.setItem(RK,String(Date.now()));}catch(e){}
       var j=sub.toJSON();
       var id=(j.endpoint||'').replace(/[^a-zA-Z0-9]/g,'').slice(-48)||'dev';
       setDoc(doc(db,'push_subs',id),{endpoint:j.endpoint,keys:j.keys,

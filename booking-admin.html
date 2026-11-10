@@ -810,6 +810,28 @@ html.sa body:has(.app-body.active){padding-left:200px}
 .nx-nm small{white-space:nowrap;display:inline-block}
 .nx-r1 .nx-lb,.nx-r1 .nx-mt,.nx-r1 .nx-tag{margin-top:2px}
 .nx-today span{white-space:normal}
+/* ✏️ 수정 화면 예약일·시간 선택 */
+.nxdp{background:var(--surface);border-radius:12px;padding:10px}
+.nxdp-sel{display:flex;align-items:center;gap:8px;background:#fff;border-radius:10px;padding:9px 11px;font-size:13.5px;color:var(--text);margin-bottom:8px;box-shadow:0 1px 2px rgba(11,24,51,.06)}
+.nxdp-sel b{font-weight:800}
+.nxdp-sel button{margin-left:auto;border:0;background:var(--red-bg);color:var(--red);border-radius:8px;padding:5px 9px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}
+.nxdp-cal{background:#fff;border-radius:10px;padding:8px}
+.nxdp-cal .cal-day{aspect-ratio:auto;height:38px}
+.nxdp-cal .cal-day.nxdp-past{cursor:pointer;color:#AEB8CC}
+.nxdp-cal .cal-day.nxdp-past.selected{color:#fff}
+.nxdp-cand{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:#2563EB}
+.cal-day.selected .nxdp-cand{background:#fff}
+.nxdp-lg{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text3);margin-top:6px;padding-left:2px}
+.nxdp-lg .nxdp-cand{position:static;transform:none;display:inline-block}
+.nxdp-th{font-size:12px;font-weight:800;color:var(--text2);margin:10px 2px 6px}
+.nxdp-th span{font-weight:600;color:var(--text3)}
+.nxdp-ts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}
+.nxdp-t{height:36px;border:1.5px solid var(--border);background:#fff;border-radius:9px;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer;font-family:inherit;font-variant-numeric:tabular-nums;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nxdp-t.cand{border-color:#93B4F5;color:#2563EB;background:#EAF1FE}
+.nxdp-t.on{background:var(--teal);border-color:var(--teal);color:#fff}
+.nxdp-cu{display:flex;gap:6px;margin-top:8px}
+.nxdp-cu input{flex:1;min-width:0;height:36px;border:1px solid var(--border);border-radius:9px;padding:0 10px;font-size:15px;font-family:inherit;background:#fff}
+.nxdp-cu button{height:36px;border:0;border-radius:9px;background:var(--teal);color:#fff;font-size:12.5px;font-weight:800;padding:0 12px;cursor:pointer;font-family:inherit;white-space:nowrap}
 </style>
 <script>
 // 고정 탭이 위쪽 머리글 아래에 붙도록 머리글 높이를 재서 맞춥니다
@@ -2802,15 +2824,11 @@ function renderList(){
             </label>
           </div>
         </div>
-        <div class="fg c2" style="margin-bottom:8px">
-          <div class="field">
-            <label class="field-label">예약일</label>
-            <input type="date" class="field-input sm" id="el-bdate-${b.__id}" value="${escAttr(b.booking_date)}">
-          </div>
-          <div class="field">
-            <label class="field-label">예약 시간</label>
-            <input class="field-input sm" id="el-btime-${b.__id}" placeholder="예: 오전 9시, 14:00" value="${escAttr(b.booking_time)}">
-          </div>
+        <div class="field" style="margin-bottom:8px">
+          <label class="field-label">예약일 · 예약 시간</label>
+          <div class="nxdp" id="nxdp" data-bid="${b.__id}"></div>
+          <input type="hidden" id="el-bdate-${b.__id}" value="${escAttr(b.booking_date)}">
+          <input type="hidden" id="el-btime-${b.__id}" value="${escAttr(b.booking_time)}">
         </div>
         <div style="margin-bottom:10px">
           <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px">
@@ -2951,7 +2969,7 @@ function renderList(){
   else if(LF==='waiting')el.innerHTML=secTodoFull;
   else if(LF==='confirmed')el.innerHTML=secUp;
   else el.innerHTML=secPast;
-  if(editingListId)renderEditPicked();
+  if(editingListId){renderEditPicked();nxDpInit();}
 }
 
 // ── 새 목록 화면: 주간 띠 → 그날로 이동 · 카드 눌러 펼치기 ──
@@ -2968,13 +2986,85 @@ document.getElementById('customer-list').addEventListener('click',function(e){
   if(e.target.closest('button,a,details,input,textarea,select,label,.ca-open'))return;
   const c=e.target.closest('.customer-item.nx-row');if(c){if(e.target.closest('.nx-ex'))return;c.classList.toggle('open');}
 });
+// ── ✏️ 수정 화면 · 예약일/예약 시간 선택 (새 예약 등록처럼 달력 + 시간 버튼) ──────────
+//  · 고객에게 보낸 후보 날짜는 파란 점, 고른 날짜는 청록색으로 표시
+//  · 시간은 새 예약 등록의 시간 버튼과 같은 목록 + 그 날짜의 후보 시간 + 직접 입력
+//  · 저장 값은 기존 칸(el-bdate-·el-btime-)에 그대로 들어가므로 저장 방식은 바뀌지 않습니다
+let NXDP={bid:'',y:0,m:0};
+function nxDpPresets(){
+  const a=[...document.querySelectorAll('#tab-new .time-presets .time-preset')].map(x=>(x.dataset.timeKo||'')+'|'+(x.dataset.timeEn||''));
+  return a.length?a:['09:00 전후|Around 09:00','10:00 전후|Around 10:00','11:00 전후|Around 11:00','13:00 전후|Around 13:00','14:00 전후|Around 14:00','15:00 전후|Around 15:00','16:00 전후|Around 16:00'];
+}
+function nxDpInit(){
+  const box=document.getElementById('nxdp');if(!box)return;
+  const bid=box.dataset.bid;
+  if(NXDP.bid!==bid){
+    const d=document.getElementById('el-bdate-'+bid).value;
+    const b=allBookings.find(x=>x.__id===bid)||{};
+    let cands=[];try{cands=b.schedule_dates?JSON.parse(b.schedule_dates):[];}catch(e){}
+    const base=d||cands.find(x=>x>=today())||today();
+    NXDP={bid:bid,y:+base.slice(0,4),m:+base.slice(5,7)-1};
+  }
+  nxDpRender();
+}
+function nxDpRender(){
+  const box=document.getElementById('nxdp');if(!box)return;
+  const bid=NXDP.bid,b=allBookings.find(x=>x.__id===bid)||{};
+  const dEl=document.getElementById('el-bdate-'+bid),tEl=document.getElementById('el-btime-'+bid);
+  if(!dEl||!tEl)return;
+  const selD=dEl.value,selT=tEl.value;
+  let cands=[],ctimes={};
+  try{cands=b.schedule_dates?JSON.parse(b.schedule_dates):[];}catch(e){}
+  try{ctimes=b.schedule_times?JSON.parse(b.schedule_times):{};}catch(e){}
+  const Y=NXDP.y,M=NXDP.m,T0=today();
+  const first=new Date(Y,M,1).getDay(),dim=new Date(Y,M+1,0).getDate();
+  let g='';
+  ['일','월','화','수','목','금','토'].forEach(n=>g+=`<div class="cal-day-name">${n}</div>`);
+  for(let i=0;i<first;i++)g+='<div class="cal-day empty"></div>';
+  for(let d=1;d<=dim;d++){
+    const ds=`${Y}-${String(M+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    let c='cal-day';if(ds<T0)c+=' past nxdp-past';if(ds===selD)c+=' selected';if(ds===T0)c+=' today';
+    g+=`<button type="button" class="${c}" data-nxdp-d="${ds}"><span class="day-num">${d}</span>${cands.indexOf(ds)>=0?'<i class="nxdp-cand"></i>':''}</button>`;
+  }
+  const tkey=v=>String(v||'').split('|')[0].trim();
+  const pres=nxDpPresets();
+  const candT=(selD&&Array.isArray(ctimes[selD]))?ctimes[selD]:[];
+  const all=[];[...candT,...pres].forEach(v=>{if(!all.some(x=>tkey(x)===tkey(v)))all.push(v);});
+  if(selT&&!all.some(x=>tkey(x)===tkey(selT)))all.unshift(selT);
+  const chips=all.map(v=>`<button type="button" class="nxdp-t${tkey(v)===tkey(selT)?' on':''}${candT.some(x=>tkey(x)===tkey(v))?' cand':''}" data-nxdp-t="${escAttr(v)}">${escHtml(tkey(v))}</button>`).join('');
+  const dd=selD?new Date(selD+'T00:00:00'):null;
+  const selTxt=selD?`${dd.getMonth()+1}월 ${dd.getDate()}일 (${'일월화수목금토'[dd.getDay()]})${selT?' · '+escHtml(tkey(selT)):' · 시간 미정'}`:'날짜 미정';
+  box.innerHTML=`<div class="nxdp-sel"><span>📅 <b>${selTxt}</b></span>${selD?'<button type="button" data-nxdp-clear="1">날짜 지우기</button>':''}</div>
+    <div class="cal-wrap nxdp-cal"><div class="cal-header"><button type="button" class="cal-nav" data-nxdp-nav="-1">&#8249;</button><span class="cal-month">${Y}년 ${M+1}월</span><button type="button" class="cal-nav" data-nxdp-nav="1">&#8250;</button></div>
+    <div class="cal-grid">${g}</div>${cands.length?'<div class="nxdp-lg"><i class="nxdp-cand"></i> 고객에게 보낸 후보 날짜</div>':''}</div>
+    <div class="nxdp-th">시간 선택${candT.length?' <span>· 파란 버튼 = 이 날짜의 후보 시간</span>':''}</div>
+    <div class="nxdp-ts">${chips}<button type="button" class="nxdp-t${selT?'':' on'}" data-nxdp-t="">미정</button></div>
+    <div class="nxdp-cu"><input type="text" id="nxdp-cu" placeholder="직접 입력 (예: 12, 12:30)"><button type="button" data-nxdp-add="1">+ 적용</button></div>`;
+}
+document.addEventListener('click',function(e){
+  const box=e.target.closest('#nxdp');if(!box)return;
+  const bid=NXDP.bid,dEl=document.getElementById('el-bdate-'+bid),tEl=document.getElementById('el-btime-'+bid);
+  if(!dEl||!tEl)return;
+  let x;
+  if((x=e.target.closest('[data-nxdp-nav]'))){NXDP.m+=+x.dataset.nxdpNav;if(NXDP.m<0){NXDP.m=11;NXDP.y--;}if(NXDP.m>11){NXDP.m=0;NXDP.y++;}nxDpRender();return;}
+  if((x=e.target.closest('[data-nxdp-d]'))){dEl.value=(dEl.value===x.dataset.nxdpD)?'':x.dataset.nxdpD;nxDpRender();return;}
+  if((x=e.target.closest('[data-nxdp-t]'))){tEl.value=x.dataset.nxdpT;nxDpRender();return;}
+  if(e.target.closest('[data-nxdp-clear]')){dEl.value='';tEl.value='';nxDpRender();return;}
+  if(e.target.closest('[data-nxdp-add]')){
+    const inp=document.getElementById('nxdp-cu');const v=formatTimeInput(String((inp&&inp.value)||''));
+    if(!v){showToast('시간을 입력하세요 (예: 12, 12:30)');return;}
+    tEl.value=v;nxDpRender();
+  }
+});
+document.addEventListener('keydown',function(e){if(e.key==='Enter'&&e.target&&e.target.id==='nxdp-cu'){e.preventDefault();const bt=document.querySelector('[data-nxdp-add]');if(bt)bt.click();}});
+
 window.startEditList=function(id){
   const b=allBookings.find(x=>x.__id===id);
   pkSetArr('edit',b?buildEditPickedFromBooking(b):[]);
   pkCat='ac_home';
   editingListId=id;renderList();
 };
-window.cancelEditList=function(){editingListId=null;pkSetArr('edit',[]);renderList();};
+window.cancelEditList=function(){editingListId=null;NXDP.bid='';pkSetArr('edit',[]);renderList();};
 window.saveEditList=async function(id){
   const name=document.getElementById('el-name-'+id).value.trim();
   let phone=document.getElementById('el-phone-'+id).value.trim();
