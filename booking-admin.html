@@ -849,6 +849,19 @@ html.sa body:has(.app-body.active){padding-left:200px}
 .nxdp-hint{font-size:12.5px;color:var(--text3);padding:4px 2px}
 .nxdp-copy{display:block;width:100%;margin-top:8px;height:36px;border:1px dashed var(--border);background:#fff;border-radius:9px;font-size:12.5px;font-weight:700;color:var(--text2);cursor:pointer;font-family:inherit}
 .nxdp-note{font-size:11.5px;color:var(--text3);margin-top:8px;padding:0 2px}
+.nb-tok{cursor:pointer;font-variant-numeric:tabular-nums}
+.nb-tok b{display:inline-block;min-width:18px;text-align:center;border-radius:9px;background:rgba(255,255,255,.7);font-size:11px;padding:0 4px}
+.nb-tok.empty b{background:var(--red-bg);color:var(--red)}
+.nb-tok.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.nb-tok.on button{color:#fff}
+.nb-tok.on b{background:rgba(255,255,255,.2);color:#fff}
+.nb-th{font-size:12.5px;color:var(--text3);margin:2px 0 8px;line-height:1.6}
+.nb-th b{color:var(--text);font-size:13.5px}
+.nb-th span{color:var(--text3)}
+.nb-copy{margin-left:6px;border:1px dashed var(--border);background:#fff;border-radius:8px;padding:3px 8px;font-size:11.5px;font-weight:700;color:var(--text2);cursor:pointer;font-family:inherit}
+#tab-new .cal-day.nb-act{background:var(--navy);box-shadow:0 0 0 2.5px #fff,0 0 0 4.5px var(--navy)}
+#tab-new .time-preset.on{background:var(--teal);border-color:var(--teal);color:#fff}
+#tab-new .time-preset:disabled{opacity:.45;cursor:default}
 </style>
 <script>
 // 고정 탭이 위쪽 머리글 아래에 붙도록 머리글 높이를 재서 맞춥니다
@@ -1065,7 +1078,8 @@ html.sa body:has(.app-body.active){padding-left:200px}
           <!-- Time slots per date -->
           <div style="margin-top:14px" id="time-section">
             <div class="sec-div">방문 가능 시간 설정</div>
-            <div class="field">
+            <div class="nb-th" id="nb-th">위 달력에서 날짜를 누르면 바로 시간을 고를 수 있습니다</div>
+            <div class="field" style="display:none">
               <label class="field-label">날짜 선택</label>
               <select id="date-for-time" class="field-input sm">
                 <option value="">날짜를 먼저 선택하세요</option>
@@ -2283,20 +2297,27 @@ function renderCalendar(){
     if(isPast)cls+=' past';
     if(isSel)cls+=' selected';
     if(isToday)cls+=' today';
+    if(isSel&&dateStr===currentDateForTime)cls+=' nb-act';   // 지금 시간을 고르는 날짜
     btn.className=cls;
     if(!isPast){
       btn.addEventListener('click',()=>{
         if(selectedDates.includes(dateStr)){
-          selectedDates=selectedDates.filter(x=>x!==dateStr);
-          delete scheduleMap[dateStr];
+          if(currentDateForTime!==dateStr){currentDateForTime=dateStr;}           // 이미 고른 날짜 → 그 날짜의 시간 고르기
+          else{                                                                  // 시간 고르는 중인 날짜를 한 번 더 → 빼기
+            selectedDates=selectedDates.filter(x=>x!==dateStr);
+            delete scheduleMap[dateStr];
+            currentDateForTime=selectedDates[selectedDates.length-1]||'';
+          }
         }else{
           selectedDates.push(dateStr);
           selectedDates.sort();
           scheduleMap[dateStr]=[];
+          currentDateForTime=dateStr;                                            // 새로 고른 날짜 → 바로 시간 선택
         }
         renderCalendar();
         renderSelDates();
         updateDateForTimeSelect();
+        renderTimeChips();nbTimeUI();
       });
     }
     const busyCount=getDayBusyItems(dateStr).length;
@@ -2403,10 +2424,10 @@ document.getElementById('cal-next').addEventListener('click',()=>{calMonth++;if(
 function renderSelDates(){
   const el=document.getElementById('sel-dates');
   if(!selectedDates.length){el.innerHTML='<span style="font-size:12px;color:var(--text3)">캘린더에서 날짜를 선택하세요</span>';return;}
-  el.innerHTML=selectedDates.map(d=>`
-    <span class="sel-date-chip">${d}
-      <button type="button" onclick="removeDate('${d}')">✕</button>
-    </span>`).join('');
+  el.innerHTML=selectedDates.map(d=>{const n=(scheduleMap[d]||[]).length;return `
+    <span class="sel-date-chip nb-tok${d===currentDateForTime?' on':''}${n?'':' empty'}" onclick="nbActDate('${d}')">${nbMd(d)} <b>${n}</b>
+      <button type="button" onclick="event.stopPropagation();removeDate('${d}')" title="날짜 빼기">✕</button>
+    </span>`;}).join('');
   updateNewBookingProgress();
 }
 
@@ -2439,11 +2460,28 @@ function updateNewBookingProgress(){
   const pf=document.getElementById('nb-progress-fill');if(pf)pf.style.width=(n/checks.length*100)+'%';
 }
 
+
+// ── 새 예약 등록 · 날짜 토큰 → 바로 시간 고르기 (2026-11-10) ──
+function nbMd(d){const x=new Date(d+'T00:00:00');return isNaN(x)?d:(x.getMonth()+1)+'/'+x.getDate()+' ('+'일월화수목금토'[x.getDay()]+')';}
+window.nbActDate=function(d){currentDateForTime=d;const sel=document.getElementById('date-for-time');if(sel)sel.value=d;renderCalendar();renderSelDates();renderTimeChips();nbTimeUI();};
+function nbTimeUI(){
+  try{const _sd=document.getElementById('sel-dates');if(_sd&&selectedDates.length)_sd.querySelectorAll('.nb-tok').forEach(t=>{const d=(t.getAttribute('onclick')||'').match(/'([^']+)'/);if(!d)return;const n=(scheduleMap[d[1]]||[]).length;const b=t.querySelector('b');if(b)b.textContent=n;t.classList.toggle('empty',!n);t.classList.toggle('on',d[1]===currentDateForTime);});}catch(_e){}
+  const th=document.getElementById('nb-th');
+  const d=currentDateForTime,cur=(d&&scheduleMap[d])||[];
+  if(th)th.innerHTML=d?('📅 <b>'+nbMd(d)+'</b> 방문 가능 시간 <span>· 여러 개 선택 · 다시 누르면 빼기</span>'+(selectedDates.length>1&&cur.length?' <button type="button" class="nb-copy" onclick="nbCopyTimes()">이 시간을 모든 날짜에 적용</button>':'')):'위 달력에서 날짜를 누르면 바로 시간을 고를 수 있습니다';
+  document.querySelectorAll('#tab-new .time-preset').forEach(b=>{b.classList.toggle('on',cur.indexOf(b.dataset.timeKo+'|'+b.dataset.timeEn)>=0);b.disabled=!d;});
+}
+window.nbCopyTimes=function(){
+  const src=(scheduleMap[currentDateForTime]||[]).slice();
+  selectedDates.forEach(d=>{scheduleMap[d]=src.slice();});
+  renderSelDates();renderTimeChips();nbTimeUI();showToast('✓ 모든 날짜에 같은 시간을 적용했습니다');
+};
+
 window.removeDate=function(d){
   selectedDates=selectedDates.filter(x=>x!==d);
   delete scheduleMap[d];
-  if(currentDateForTime===d){currentDateForTime='';renderTimeChips();}
-  renderCalendar();renderSelDates();updateDateForTimeSelect();
+  if(currentDateForTime===d){currentDateForTime=selectedDates[selectedDates.length-1]||'';}
+  renderCalendar();renderSelDates();updateDateForTimeSelect();renderTimeChips();nbTimeUI();
   updateNewBookingProgress();
 };
 
@@ -2466,14 +2504,15 @@ document.querySelectorAll('.time-preset').forEach(btn=>{
     const tEn=btn.dataset.timeEn;
     const tVal=`${tKo}|${tEn}`;
     if(!scheduleMap[currentDateForTime])scheduleMap[currentDateForTime]=[];
-    if(!scheduleMap[currentDateForTime].includes(tVal)){
-      scheduleMap[currentDateForTime].push(tVal);
-      renderTimeChips();
-    }
+    const _a=scheduleMap[currentDateForTime],_i=_a.indexOf(tVal);
+    if(_i<0)_a.push(tVal);else _a.splice(_i,1);                               // 다시 누르면 빼기
+    _a.sort((x,y)=>bkTimeMin(x.split('|')[0])-bkTimeMin(y.split('|')[0]));
+    renderTimeChips();renderSelDates();nbTimeUI();
   });
 });
 
 function renderTimeChips(){
+  try{nbTimeUI();}catch(_e){}
   const el=document.getElementById('time-chips');
   if(!currentDateForTime||!scheduleMap[currentDateForTime]||!scheduleMap[currentDateForTime].length){
     el.innerHTML='<div style="font-size:12px;color:var(--text3);grid-column:1/-1;padding:8px 0">날짜를 선택하고 위 버튼으로 시간을 추가하세요</div>';
