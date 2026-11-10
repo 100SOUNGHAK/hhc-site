@@ -1491,6 +1491,37 @@ async function translateItem(s){
   }catch(e){console.warn('Translation failed:',e);return s;}
 }
 
+
+// 🧹 일정 항목 표시 정리 — 저장된 내용은 그대로 두고 화면·이미지에서만 「가정용/매장용」을 뺍니다
+function schCleanTxt(t){
+  if(t==null||t==='')return t;
+  return String(t).split('\n').map(function(l){
+    return l.replace(/\s*\(\s*(가정용|매장용|Home|Commercial)\s*\)/gi,'').replace(/(가정용|매장용)/g,'').replace(/[ \t]{2,}/g,' ').replace(/\(\s+/g,'(').trim();
+  }).join('\n');
+}
+function schCleanItem(s){return Object.assign({},s,{title:schCleanTxt(s.title),memo:schCleanTxt(s.memo)});}
+// 🔤 영어 일정표 이미지용 줄임말 (AC · Wall · Cassette · FCU · Outdoor · WC(Top) · WC(Front) · Dryer · MC · Sofa · CT)
+const SCH_ABBR=[
+  [/(통돌이\s*세탁기|top[- ]?load(?:ing|er)?\s*(?:type\s*)?(?:washing\s*machines?|washers?)?)/gi,'WC(Top)'],
+  [/(드럼\s*세탁기|(?:front[- ]?load(?:ing|er)?\s*(?:\(\s*drum\s*\))?|drum(?:[- ]type)?)\s*(?:washing\s*machines?|washers?)?)/gi,'WC(Front)'],
+  [/(세탁기|washing\s*machines?|washers?)/gi,'WC'],
+  [/(건조기|tumble\s*dryers?|drying\s*machines?|clothes\s*dryers?|dryers?)/gi,'Dryer'],
+  [/(매트리스|mattress(?:es)?)/gi,'MC'],
+  [/(쇼파|소파|sofas?|couch(?:es)?)/gi,'Sofa'],
+  [/(커튼|curtains?)/gi,'CT'],
+  [/(실외기|outdoor\s*units?|outdoor\s*condensers?|condensers?)/gi,'Outdoor'],
+  [/(벽걸이형?|wall[- ]?mounted(?:\s*type)?|wall[- ]type|split\s*wall)/gi,'Wall'],
+  [/(천정형\s*\(\s*카세트\s*\)|천정형|카세트|ceiling\s*cassette(?:\s*type)?|cassette(?:\s*type)?|ceiling[- ](?:mounted|type))/gi,'Cassette'],
+  [/(매립형\s*\(\s*덕트\s*\)|매립형|덕트형|ducted\s*\(\s*concealed\s*\)|concealed\s*\(\s*ducted\s*\)|FCU\s*[·\/]\s*duct(?:\s*type)?|concealed(?:\s*type)?|ducted(?:\s*type)?|built[- ]in(?:\s*type)?|recessed(?:\s*type)?)/gi,'FCU'],
+  [/(에어컨|air[- ]?conditioners?|air[- ]?cons?|aircons?|A\/C)/gi,'AC'],
+  [/\b(home[- ]use|household|residential|commercial|for\s+(?:home|store|shop)\s+use|store[- ]use|shop[- ]use)\b\s*/gi,''],
+  [/\bAC\s+AC\b/g,'AC'],
+  // 「WC (1 unit/WC(Front))」 → 「WC(Front) (1 unit)」
+  [/\bWC\s*\(\s*((?:[^()\/]|\(s\))*?)\s*\/\s*(WC\((?:Top|Front)\))\s*\)/g,'$2 ($1)'],
+  [/[ \t]{2,}/g,' ']
+];
+function schAbbrEn(t){if(t==null||t==='')return t;let r=String(t);SCH_ABBR.forEach(function(a){r=r.replace(a[0],a[1]);});return r.split('\n').map(function(l){return l.trim();}).join('\n');}
+
 // ── 일정 패널
 async function renderDay(ds){
   const rdTok=window._rdTok=(window._rdTok||0)+1;   // 늦게 끝난 이전 날짜 화면이 새 화면을 덮어쓰지 않게
@@ -1518,7 +1549,7 @@ async function renderDay(ds){
 
   // 번역 처리
   // 번역 (한 번에 처리)
-  const displayList=await Promise.all(list.map(s=>translateItem(s)));
+  const displayList=await Promise.all(list.map(s=>translateItem(schCleanItem(s))));
   if(rdTok!==window._rdTok)return;
 
   let html='<div class="sch-list">'+hbn;
@@ -2138,7 +2169,8 @@ window.saveDayImage=async function(){
   if(!d||!d.list||!d.list.length){showToast(isEn?'Select a date with schedules':'일정이 있는 날짜를 선택하세요');return;}
   if(typeof html2canvas==='undefined'){showToast(isEn?'Image library not loaded':'이미지 기능 로드 실패 (인터넷 확인)');return;}
   const stage=document.getElementById('capture-stage');
-  stage.innerHTML=window.buildCaptureHTML(d.list,d.dateStr,d.ds);
+  const capList=isEn?d.list.map(function(s){return Object.assign({},s,{title:schAbbrEn(s.title),memo:schAbbrEn(s.memo)});}):d.list;
+  stage.innerHTML=window.buildCaptureHTML(capList,d.dateStr,d.ds);
   const node=stage.firstElementChild;
   showLoading(true);
   try{
