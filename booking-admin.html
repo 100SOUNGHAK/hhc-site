@@ -803,6 +803,13 @@ html.sa body:has(.app-body.active){padding-left:200px}
   .nx-row .nx-ic{display:none}
   .nx-ab .nx-b{font-size:12.5px;padding:0 6px}
 }
+/* 고객명(콘도명)은 줄이 늘어나더라도 전체 표시 */
+.nx-row .nx-r1,.nx-r1{align-items:flex-start}
+.nx-nm,.nx-row .nx-nm{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;word-break:keep-all;line-height:1.3}
+.nx-nm .ca-open{display:inline}
+.nx-nm small{white-space:nowrap;display:inline-block}
+.nx-r1 .nx-lb,.nx-r1 .nx-mt,.nx-r1 .nx-tag{margin-top:2px}
+.nx-today span{white-space:normal}
 </style>
 <script>
 // 고정 탭이 위쪽 머리글 아래에 붙도록 머리글 높이를 재서 맞춥니다
@@ -2929,7 +2936,7 @@ function renderList(){
   }).join('');
   const empty=t=>`<div class="nx-empty">${q?'검색 결과가 없습니다':t}</div>`;
   const secUp=sh('🗓️ 방문 일정','',up.length,'빠른 날짜 · 시간순')+(q?'':wk)+(dayPan?`<div class="nx-pan" style="margin-top:8px">${dayPan}</div>`:empty('예정된 방문이 없어요 · 「새 예약 등록」에서 등록하세요'));
-  const todayBar=(!q&&todayL.length)?`<button type="button" class="nx-today" onclick="setListFilter('confirmed')"><span class="e">🔔</span><span class="tx"><b>오늘 방문 ${todayL.length}건</b><span>${todayL.map(b=>{const t=tm(b.booking_time);return (t.na?'':t.big+' ')+escHtml(String(b.customer_name||'').split(' ').slice(0,2).join(' '));}).join(' · ')}</span></span><span class="go">일정 보기 ›</span></button>`:'';
+  const todayBar=(!q&&todayL.length)?`<button type="button" class="nx-today" onclick="setListFilter('confirmed')"><span class="e">🔔</span><span class="tx"><b>오늘 방문 ${todayL.length}건</b><span>${todayL.map(b=>{const t=tm(b.booking_time);return (t.na?'':t.big+' ')+escHtml(b.customer_name||'');}).join(' · ')}</span></span><span class="go">일정 보기 ›</span></button>`:'';
   const secTodo=todayBar
     +(tB.length?sh('🆕 고객이 날짜 선택 · 확정하세요','b',tB.length,'')+pan(tB,todoCard):'')
     +sh('⏳ 고객 응답 대기','a',tW.length,'링크 보낸 예약')+(tW.length?pan(tW,todoCard):empty('응답 기다리는 예약이 없습니다'))
@@ -3934,38 +3941,86 @@ window.deleteBooking=function(id){
   });
 };
 
-window.sendWA=function(id){
+// ── 📅 예약 신청서 (다시) 보내기 문구 ──────────────────────────────
+//  총괄 고객관리 「마이페이지 발송 → 예약 신청」 문구와 같은 형식을 씁니다.
+//  · 첫 줄만 「의뢰 접수 완료! 감사합니다」 → 「예약 완료 신청서 다시 보내드립니다」
+//  · 주소는 그 고객의 마이페이지(예약 카드 강조). 고객마스터에서 못 찾으면 예약 신청서 주소로 보냅니다.
+const BK_RQ_ICON_KW=[
+  ['건조기','♨️'],['세탁','🧺'],['냉장','🧊'],['냉동','🧊'],['후드','🍳'],['오븐','🍳'],
+  ['가스레인지','🔥'],['인덕션','🔥'],['전자레인지','🔥'],['공기청정','💨'],['제습','💧'],['가습','💧'],
+  ['정수기','🚰'],['실링팬','🌀'],['선풍기','🌀'],['환풍','🌀'],['식탁','🍽️'],['의자','🪑'],
+  ['소파','🛋️'],['쇼파','🛋️'],['침대','🛏️'],['매트리스','🛏️'],['이불','🛏️'],
+  ['카페트','🧶'],['카펫','🧶'],['러그','🧶'],['커튼','🪟'],['블라인드','🪟'],
+  ['실외기','🌬️'],['냉매','❄️'],['에어컨','❄️'],['필터','🧽'],['곰팡이','🧼'],['배수','🚿'],
+  ['철거','🔨'],['타공','🪛'],['복원','🛠️'],['도색','🎨'],['배관','🚰'],['누수','🚰'],['전기','⚡'],
+  ['세척','🧼'],['청소','🧹'],['설치','🔩'],['수리','🔧'],['교체','🔧'],['점검','🔍'],
+  ['자재','🧰'],['부품','🧰'],['인건','👷'],['운반','🚚'],['출장','🚗']
+];
+function bkRqIcon(t){t=String(t||'');for(let i=0;i<BK_RQ_ICON_KW.length;i++){if(t.indexOf(BK_RQ_ICON_KW[i][0])>=0)return BK_RQ_ICON_KW[i][1];}return '🧾';}
+// 예약 품목 → 한 줄에 하나 「❄️ 에어컨(가정용) · 벽걸이형 · 전체분해세척 × 4대」 (총괄 고객관리 bkItemLines 와 같은 규칙)
+function bkItemLinesMsg(bi,en){
+  const src=String(bi||'').trim();if(!src)return '';
+  const parts=src.split(/,\s*(?![^()]*\))|\n/).map(x=>x.trim()).filter(Boolean);
+  const un=q=>en?(q+(q==='1'?' unit':' units')):(q+'대');
+  return parts.map(x=>{
+    let nm='',sv='',q='';
+    let m=/^(.*?)\(\s*(\d+)\s*(?:대|units?)?\s*\/\s*(.*)\)\s*$/.exec(x);
+    if(m){nm=m[1].trim();q=m[2];sv=m[3].trim();}
+    else if((m=/^(.*?)\s+-\s+(.*?)\s*×\s*(\d+)\s*(?:대|units?)?\s*$/.exec(x))){nm=m[1].trim();sv=m[2].trim();q=m[3];}
+    let line;
+    if(!q)line=bkRqIcon(x)+' '+(en?trItemsEn(x):x);
+    else{const t=(sv&&sv.indexOf(nm)<0)?(nm?nm+' · '+sv:sv):(sv||nm);line=bkRqIcon(t)+' '+(en?trItemsEn(t):t)+' × '+un(q);}
+    return line;
+  }).join('\n');
+}
+// 이 예약 고객의 마이페이지 주소 (고객마스터: 연락처 → 이름·별칭 순으로 찾음)
+async function bkMyPageUrl(b){
+  const lang=(b.customer_lang||'ko')==='en'?'en':'ko';
+  try{
+    const list=(typeof hccLoad==='function')?await hccLoad():[];
+    const pn=hccPN(b.customer_phone),nn=hccNN(b.customer_name);
+    let m=null;
+    if(pn)m=list.find(c=>hccPN(c.phone)===pn)||null;
+    if(!m&&nn)m=list.find(c=>hccNameHit(c,nn))||null;
+    if(m&&m._docId)return BASE_URL+(lang==='en'?'my-en.html?c=':'my.html?c=')+encodeURIComponent(m._docId)+'&lang='+lang+'&f=bk';
+  }catch(e){}
+  return `${BASE_URL}booking.html?id=${b.__id}&lang=${lang}`;
+}
+async function bkResendMsg(b){
+  const en=(b.customer_lang||'ko')==='en';
+  const nm=b.customer_name||(en?'Customer':'고객');
+  const url=await hhcShortUrl(await bkMyPageUrl(b));
+  const il=bkItemLinesMsg(b.booking_items,en);
+  const SIG='📞 +60 17-247 2774 · Happy Home Care';
+  return en
+    ?('Hello, '+nm+' 😊\nHere is your booking request form again 🙏\n'+(il?'\n'+il+'\n':'')+'\n👇 Please choose your preferred visit date & time on your My Page below.\n👉 '+url+'\n\n'+SIG)
+    :('안녕하세요, '+nm+' 고객님 😊\n예약 완료 신청서 다시 보내드립니다 🙏\n'+(il?'\n'+il+'\n':'')+'\n👇 아래 마이페이지에서 원하시는 방문 날짜·시간을 선택해 주세요.\n👉 '+url+'\n\n'+SIG);
+}
+window.sendWA=async function(id){
   const b=allBookings.find(x=>x.__id===id);
   if(!b)return;
   const lang=b.customer_lang||'ko';
-  let msg;
   if(b.status==='confirmed'){
-    msg=getConfirmMsg(b.customer_name||'고객',b.booking_date||'—',b.booking_time||'—',b.booking_items||'—',lang);
-  }else{
-    const dates=b.schedule_dates?JSON.parse(b.schedule_dates):[];
-    const times=b.schedule_times?JSON.parse(b.schedule_times):{};
-    const url=`${BASE_URL}booking.html?id=${id}&lang=${lang==='en'?'en':'ko'}`;
-    msg=getMsg(b.customer_name||'고객',b.customer_phone||'',url,dates,times,lang);
+    const msg=getConfirmMsg(b.customer_name||'고객',b.booking_date||'—',b.booking_time||'—',b.booking_items||'—',lang);
+    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+    return;
   }
-  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+  // 예약 신청서 다시 보내기 — 주소를 찾는 동안 창이 막히지 않게 먼저 열어 두고 채웁니다
+  const w=window.open('about:blank','_blank');
+  const msg=await bkResendMsg(b);
+  const u=`https://wa.me/?text=${encodeURIComponent(msg)}`;
+  if(w&&!w.closed){try{w.location.href=u;}catch(e){window.open(u,'_blank');}}else window.open(u,'_blank');
 };
 
-window.sendKakao=function(id){
+window.sendKakao=async function(id){
   const b=allBookings.find(x=>x.__id===id);
   if(!b)return;
   const lang=b.customer_lang||'ko';
-  let msg;
-  if(b.status==='confirmed'){
-    msg=getConfirmMsg(b.customer_name||'고객',b.booking_date||'—',b.booking_time||'—',b.booking_items||'—',lang);
-  }else{
-    const dates=b.schedule_dates?JSON.parse(b.schedule_dates):[];
-    const times=b.schedule_times?JSON.parse(b.schedule_times):{};
-    const url=`${BASE_URL}booking.html?id=${id}&lang=${lang==='en'?'en':'ko'}`;
-    msg=getMsg(b.customer_name||'고객',b.customer_phone||'',url,dates,times,lang);
-  }
+  const msg=b.status==='confirmed'
+    ?getConfirmMsg(b.customer_name||'고객',b.booking_date||'—',b.booking_time||'—',b.booking_items||'—',lang)
+    :await bkResendMsg(b);
   navigator.clipboard.writeText(msg).then(()=>showToast('✓ 복사됨! 붙여넣기 하세요')).catch(()=>prompt('복사 후 붙여넣기:',msg));
 };
-
 // ── NEW BOOKING RESET ──
 document.getElementById('btn-save').addEventListener('click',()=>{},true);
 function resetNewForm(){
