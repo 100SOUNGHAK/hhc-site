@@ -470,12 +470,13 @@ body.pk-lock{overflow:hidden}
       <div class="card-body">
         <div class="field">
           <label class="field-label" id="lbl-condo-name">콘도명(상호) <span class="req">*</span></label>
-          <input id="f-condo-name" type="text" class="field-input" placeholder="콘도명(상호) 영문으로 기재">
+          <input id="f-condo-name" type="text" class="field-input" placeholder="예: ARCORIS MONT KIARA (영문 · 동호수 제외)">
           <div class="err-msg" id="err-condo-name">필수 입력 항목입니다</div>
+          <div id="condo-dedupe-note" style="display:none;margin-top:6px;font-size:12px;font-weight:700;color:#0f766e;background:#ECFDF5;border-radius:8px;padding:6px 9px;line-height:1.5"></div>
         </div>
         <div class="field">
           <label class="field-label" id="lbl-condo-unit">동호수 <span class="req">*</span></label>
-          <input id="f-condo-unit" type="text" class="field-input" placeholder="동호수만 기재">
+          <input id="f-condo-unit" type="text" class="field-input" placeholder="예: A-12-3 (동호수만)">
           <div class="err-msg" id="err-condo-unit">필수 입력 항목입니다</div>
         </div>
         <div class="field">
@@ -918,8 +919,8 @@ const L={
     calcNote3:'본 견적가격은 예상안내가격으로 실제 청구 금액과 다를 수 있습니다.',
     calcRemoveLbl:'삭제',
     infoTitle:'고객 정보',infoDesc:'연락드릴 정보를 입력해주세요',
-    condoNameLabel:'콘도명(상호)',condoNamePh:'콘도명(상호) 영문으로 기재',
-    condoUnitLabel:'동호수',condoUnitPh:'동호수만 기재',
+    condoNameLabel:'콘도명(상호)',condoNamePh:'예: ARCORIS MONT KIARA (영문 · 동호수 제외)',
+    condoUnitLabel:'동호수',condoUnitPh:'예: A-12-3 (동호수만)',
     phoneLabel:'전화번호',phonePh:'12-345 6789',phoneHint:'+60 없이 번호만 입력하셔도 자동으로 +60 이 붙습니다',
     itemsTitle:'의뢰 품목',itemsDesc:'버튼을 눌러 품목을 담아주세요',
     remarksTitle:'비고 및 요청사항',remarksDesc:'선택 사항입니다',
@@ -968,8 +969,8 @@ const L={
     calcNote3:'This is an estimated price only — the actual charge may differ.',
     calcRemoveLbl:'Remove',
     infoTitle:'Customer Information',infoDesc:'Enter your contact details',
-    condoNameLabel:'Condo Name',condoNamePh:'Condo / business name in English',
-    condoUnitLabel:'Unit No.',condoUnitPh:'Unit number only',
+    condoNameLabel:'Condo Name',condoNamePh:'e.g. ARCORIS MONT KIARA (no unit no.)',
+    condoUnitLabel:'Unit No.',condoUnitPh:'e.g. A-12-3 (unit no. only)',
     phoneLabel:'Phone Number',phonePh:'12-345 6789',phoneHint:'You may enter the number without +60 — it is added automatically',
     itemsTitle:'Service Items',itemsDesc:'Tap the button to add items',
     remarksTitle:'Remarks & Requests',remarksDesc:'Optional',
@@ -1698,6 +1699,7 @@ $('f-remarks').addEventListener('input',()=>{$('card-remarks').classList.toggle(
 function validate(){
   applyPhoneNorm();          // 제출 직전에도 +60 보정
   applyCondoUpper();         // 콘도명 대문자 통일
+  applyCondoDedupe();        // 콘도명 · 동호수 겹침 정리
   const l=L[currentLang];
   let valid=true,firstErr=null;
   [['f-condo-name','err-condo-name'],['f-condo-unit','err-condo-unit'],['f-phone','err-phone']].forEach(([fid,eid])=>{
@@ -1857,6 +1859,76 @@ if(currentLang!=='ko'){
 }
 applyLang();
 
+// ── 콘도명 · 동호수 겹침 정리 (2026-11-10) ─────────────────────────────
+//  · 콘도명 칸에 동호수가 같이 들어간 경우 → 콘도명에서 동호수를 뺍니다
+//  · 동호수 칸에 콘도명이 같이 들어간 경우 → 동호수에서 콘도명을 뺍니다
+//  · 대소문자 · 띄어쓰기 · 「-」 차이는 무시하고 비교합니다
+//  · 「12」처럼 숫자 두 자리 이하만 있는 동호수는 콘도명 속 숫자와 헷갈릴 수 있어 건드리지 않습니다
+//  같은 규칙: request.html · request-admin.html · functions/api/request.js
+var HHC_SEP='[\\s\\-–—_.,#\\/]*';
+function hhcCN(s){return String(s||'').toUpperCase().replace(/[\s\-–—_.,#\/()]/g,'');}
+function hhcPat(s){return hhcCN(s).split('').map(function(c){return c.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}).join(HHC_SEP);}
+function hhcTrimSep(s){return String(s||'').replace(/\(\s*\)|\[\s*\]/g,' ').replace(/^[\s,\-–—_.#\/()]+|[\s,\-–—_.#\/(]+$/g,'').replace(/\s{2,}/g,' ').trim();}
+function hhcUnitOk(u){var c=hhcCN(u);return c.length>=3||(/-/.test(String(u))&&c.length>=2)||/[A-Z]/i.test(c)&&/\d/.test(c);}
+function hhcCleanCondo(name,unit){
+  var n=String(name||'').trim(),u=String(unit||'').trim();
+  if(!n||!u)return {name:n,unit:u};
+  var Nn=hhcCN(n),Nu=hhcCN(u);
+  if(Nn===Nu)return {name:n,unit:u};
+  // ① 동호수 칸에 콘도명까지 적은 경우
+  if(Nn.length>=3&&Nu.indexOf(Nn)>=0){
+    var u2=hhcTrimSep(u.replace(new RegExp(hhcPat(n),'i'),' '));
+    if(u2&&/\d/.test(u2)){
+      // 남은 앞쪽 글자 단어(숫자 없는 단어)는 콘도명의 나머지로 보고 콘도명 뒤로 옮깁니다 — 「Verve」+「Verve Suites B-21-08」
+      var t2=u2.split(/\s+/),j=0,mv=[];
+      while(j<t2.length-1&&!/\d/.test(t2[j])&&t2[j].length>=3&&!/^(BLOCK|BLK|BLOK|TOWER|UNIT|NO\.?|LEVEL|FLOOR|LOT|WING)$/i.test(t2[j])){mv.push(t2[j]);j++;}
+      if(mv.length){n=hhcTrimSep(n+' '+mv.join(' '));Nn=hhcCN(n);u2=t2.slice(j).join(' ');}
+      u=u2;Nu=hhcCN(u);
+    }
+  }else if(Nn.length>=3){
+    // 콘도명 일부(첫 단어 등)만 동호수 앞에 붙인 경우 — 「Arcoris A-12-3」 → 「A-12-3」
+    var W=n.toUpperCase().split(/[\s,]+/).filter(function(w){return w.length>=3&&!/\d/.test(w);});
+    var tk=u.split(/\s+/),k=0;
+    while(k<tk.length-1&&!/\d/.test(tk[k])&&W.indexOf(tk[k].toUpperCase().replace(/[,.]/g,''))>=0)k++;
+    if(k>0){var u3=hhcTrimSep(tk.slice(k).join(' '));if(u3&&/\d/.test(u3)){u=u3;Nu=hhcCN(u);}}
+  }
+  // ② 콘도명 칸에 동호수까지 적은 경우
+  if(hhcUnitOk(u)&&Nn.indexOf(Nu)>=0){
+    var re=new RegExp('(^|[\\s,(\\/#-])(?:(?:UNIT|NO\\.?|BLK|BLOK|BLOCK)\\s*)?#?\\s*'+hhcPat(u)+'(?=$|[\\s,)\\/])','i');
+    var n2=hhcTrimSep(n.replace(re,'$1 '));
+    if(n2&&hhcCN(n2)!==Nn)n=n2;
+  }
+  return {name:n,unit:u};
+}
+// 이름 끝의 동호수 모양(A-12-3 · 12-3 · T2-15-02 · 3A-7 · C-23A-07)을 떼어냅니다 — 마이페이지 자동 입력용
+function hhcSplitTail(s){
+  var m=/^(.*?)[\s,]+(?:(?:UNIT|NO\.?)\s*)?#?([A-Z0-9]{1,4}(?:\s*-\s*[A-Z0-9]{1,4}){1,3})$/i.exec(String(s||'').trim());
+  if(m&&/\d/.test(m[2])&&hhcTrimSep(m[1]))return {name:hhcTrimSep(m[1]),unit:m[2].replace(/\s+/g,'')};
+  return null;
+}
+// 주소 칸 값이 동호수처럼 짧은지 (긴 주소면 동호수 칸에 넣지 않음)
+function hhcUnitLike(a){a=String(a||'').trim();return !!a&&a.length<=24&&/\d/.test(a)&&a.split(/\s+/).length<=3&&!/\b(JALAN|JLN|LORONG|LRG|PERSIARAN|ROAD|RD|STREET|ST|TAMAN|KL|KUALA|LUMPUR|SELANGOR|PETALING|JAYA)\b/i.test(a);}
+// 마이페이지에서 넘어온 고객명(nm) · 주소(ad) → 콘도명 · 동호수
+function hhcPrefillSplit(nm,ad){
+  var a=hhcUnitLike(ad)?String(ad).trim():'';
+  var c=hhcCleanCondo(nm,a);
+  var name=c.name,unit=a?c.unit:'';
+  if(!unit){var t=hhcSplitTail(name);if(t){name=t.name;unit=t.unit;}}
+  return {name:name,unit:unit};
+}
+
+// 입력칸을 벗어날 때 콘도명 · 동호수 겹침을 바로 정리하고, 콘도명에서 뺐으면 한 줄 안내
+function applyCondoDedupe(){
+  const a=$('f-condo-name'),b=$('f-condo-unit');if(!a||!b)return false;
+  const r=hhcCleanCondo(a.value,b.value);
+  let ch=false;
+  if(r.name!==a.value.trim()){a.value=r.name.toUpperCase();ch=true;}
+  if(r.unit!==b.value.trim()){b.value=r.unit;}
+  const nt=$('condo-dedupe-note');
+  if(ch&&nt){nt.textContent=currentLang==='ko'?'✂️ 동호수는 아래 「동호수」 칸에만 적어 주세요 — 콘도명에서 정리했습니다':'✂️ Please enter the unit number only in the 「Unit No.」 box — we tidied the condo name';nt.style.display='block';clearTimeout(window._cdnT);window._cdnT=setTimeout(function(){nt.style.display='none';},6000);}
+  return ch;
+}
+['f-condo-name','f-condo-unit'].forEach(function(id){const el=$(id);if(el)el.addEventListener('blur',applyCondoDedupe);});
 // ══ 고객정보 자동 반영 ══
 // 마이페이지의 「의뢰 요청서 작성」 버튼으로 열면 nm(이름)·ph(연락처)·ad(주소)가
 // 주소 파라미터로 함께 넘어온다. 세 칸을 미리 채우되, 일반 입력칸 그대로라서
@@ -1864,7 +1936,9 @@ applyLang();
 (function(){
   const q=new URLSearchParams(window.location.search);
   let any=false;
-  [['f-condo-name',String(q.get('nm')||'').toUpperCase()],['f-condo-unit',q.get('ad')],['f-phone',q.get('ph')]].forEach(function(pair){
+  // 고객명에는 「콘도명 + 동호수」가 함께 들어 있으므로 나눠서 넣습니다 (주소가 긴 주소면 동호수 칸에 넣지 않음)
+  const _sp=hhcPrefillSplit(q.get('nm')||'',q.get('ad')||'');
+  [['f-condo-name',String(_sp.name||'').toUpperCase()],['f-condo-unit',_sp.unit],['f-phone',q.get('ph')]].forEach(function(pair){
     const el=$(pair[0]),v=String(pair[1]||'').trim();
     if(el&&v&&!el.value.trim()){el.value=v;any=true;}
   });
