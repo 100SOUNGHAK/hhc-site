@@ -3346,7 +3346,7 @@ function rnNote(){
   el.innerHTML='<button type="button" class="x" id="rn-cancel">'+(tr?'양도':'갱신')+' 취소 ✕</button>'+
     (tr?'🔁 <b>양도양수 계약서 작성 중</b> — 양도자 <b>'+ncEsc(renewFrom.name)+'</b> · 기존 계약 <b>'+ncEsc(renewFrom.no)+'</b> (남은 잔액 RM '+fmt(rem)+')'+
         '<br>양도금액 <b>RM '+fmt(amt)+'</b>이 이월금액으로 들어갑니다. 저장하면 기존 계약에서 그만큼 차감'+(amt>=rem-0.005?'되고 「종료」로 정리됩니다.':'됩니다.')+
-        '<br>새 계약자(양수인) 이름 · 전화번호를 입력해 주세요.'
+        '<br>새로 내는 돈이 없으므로 납부금액 · 적립금은 0 으로 두었습니다(잔액 = 양도금액). 새 계약자(양수인) 이름 · 전화번호를 입력해 주세요.'
        :'♻️ <b>갱신 계약서 작성 중</b> — 기존 계약 <b>'+ncEsc(renewFrom.no)+'</b>'+
         (rem>0.005?'의 남은 잔액 <b>RM '+fmt(rem)+'</b>이 이월금액으로 들어갑니다.':'(남은 잔액 없음)')+
         '<br>저장하면 기존 계약은 잔액 0 · 「종료」로 정리됩니다.');
@@ -3372,7 +3372,7 @@ function startLinked(id,mode){
   document.querySelectorAll('.svc-opt').forEach((o,i)=>o.classList.toggle('sel',i===st));
   const bens=typeof c.benefits==='string'?JSON.parse(c.benefits||'{}'):(c.benefits||{});
   document.querySelectorAll('[data-benefit]').forEach(cb=>{const v=bens[cb.dataset.benefit]!==undefined?bens[cb.dataset.benefit]:true;cb.checked=v;cb.closest('.ben-item').classList.toggle('on',v);});
-  if(tr){ckSet('f-tr-from',c.name);ckSet('f-tr-amt',rem.toFixed(2));ckSet('f-tr-date',today());setContractKind('transfer');}
+  if(tr){ckSet('f-tr-from',c.name);ckSet('f-tr-amt',rem.toFixed(2));ckSet('f-tr-date',today());setContractKind('transfer');trZero();}
   else{ckSet('f-rn-date',c.contract_date);ckSet('f-rn-no',no);ckSet('f-rn-pkg',c.package_id);setContractKind('renewal');}
   renewFrom={id:c.__id,no:no,name:c.name||'',mode:tr?'transfer':'renewal'};
   lkSyncCarry();
@@ -3383,6 +3383,9 @@ function startLinked(id,mode){
   rnNote();rnBtn();window.scrollTo(0,0);
   if(tr)setTimeout(()=>{const n=document.getElementById('f-name');if(n)n.focus();},300);
 }
+// 양도양수는 새로 돈을 내는 계약이 아님 — 납부금액·적립금 0, 잔액은 양도금액(이월)만
+function trZero(){['f-paid','f-bonus','f-special-bonus'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='0';});updateTotal();}
+setTimeout(()=>{const fp=document.getElementById('f-package');if(fp)fp.addEventListener('change',()=>{if(renewFrom&&renewFrom.mode==='transfer'&&!currentEditId)trZero();});},0);
 function startRenewal(id){startLinked(id,'renewal');}
 function startTransfer(id){startLinked(id,'transfer');}
 window.startRenewal=startRenewal;window.startTransfer=startTransfer;
@@ -3871,7 +3874,7 @@ async function saveContract(){
     }catch(_e){}
   }
   // ── 패키지 계약이면 이용내역에 회원제상품(PACKAGE MEMBERSHIP) 항목을 자동 기록 (이미 있으면 건너뜀) ──
-  if(data.package_id&&!currentUsageHistory.some(isMemberEntry)){
+  if(data.package_id&&data.contract_kind!=='transfer'&&!currentUsageHistory.some(isMemberEntry)){
     const _pk=PACKAGES.find(p=>p.id===data.package_id);
     if(_pk){
       const _en=(_pk.label.split('/')[1]||_pk.label).trim().toUpperCase();
