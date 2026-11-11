@@ -594,6 +594,7 @@ function showPermHelp(state){
   d.addEventListener('click',function(e){if(e.target===d)d.remove();});
   document.body.appendChild(d);
 }
+window.showPermHelp=showPermHelp;   // 📱 휴대폰 알림 띠의 「켜는 방법」 버튼용 (m26)
 function updateNotifBar(){
   var st=notifPerm();
   var bar=document.getElementById('notif-bar');
@@ -795,5 +796,72 @@ window.__hhcAlertClear=function(tab){
 window.__hhcTestAlert=alertHit;   // 표시 점검용
 </script>
 
+
+<!-- ══ 📱 휴대폰 머리 줄이기 (2026-11-11) ═══════════════════════════════════════
+   폭 640px 이하에서만: 로고 · 갈래 5개 · 🔔 를 한 줄로, 그 아래 화면 탭 한 줄 (모두 남색 바탕).
+   예전: 앱 머리 + 갈래 줄 + 화면 줄 + 알림 띠 ≈ 230px → 지금 ≈ 105px.
+   알림 차단 안내 띠는 한 줄로 줄이고, ✕ 로 닫으면 7일 동안 다시 띄우지 않습니다.
+   ※ 이 블록만 지우면 예전 모양으로 돌아갑니다. -->
+<style id="m26-css">
+@media (max-width:640px){
+  .hdr{padding:calc(8px + var(--safe-top)) 10px 6px;gap:8px;background:linear-gradient(180deg,#0E2350,#13306A)}
+  .hdr>div:nth-child(2),.vtag,.hdr-cur{display:none}
+  .hdr-mark{width:28px;height:28px;border-radius:8px;background:#fff;color:#0E2350;box-shadow:none}
+  .hdr #grow{flex:1;min-width:0;padding:0;gap:2px;justify-content:space-between}
+  .hdr .gb{flex:1 1 0;min-width:0;padding:7px 2px;gap:4px;border:0;border-radius:10px;color:rgba(255,255,255,.72);font-size:13px;font-weight:800;background:none;box-shadow:none}
+  .hdr .gb .g-ico{font-size:14px}
+  .hdr .gb:hover{background:none}
+  .hdr .gb.on{background:rgba(255,255,255,.16);color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+  .hdr .gb .abdg{top:-4px;right:-2px}
+  #bell-test{margin-left:0;width:32px;height:32px;font-size:14px}
+  .tabbar{background:#13306A;border-bottom:0;box-shadow:0 6px 16px -10px rgba(6,18,45,.6)}
+  .s-row{border-top:0;padding:4px 10px 10px;gap:6px}
+  .tab{padding:8px 13px;border:0;background:rgba(255,255,255,.10);color:rgba(255,255,255,.82)}
+  .tab-lbl{font-size:13px;color:inherit}
+  .tab.active{background:#fff;border:0;color:#0E2350;box-shadow:0 4px 12px -4px rgba(0,0,0,.35)}
+  .tab.active .tab-lbl{color:#0E2350}
+  #notif-bar{padding:7px 10px;gap:8px;font-size:12px;line-height:1.35}
+  #notif-bar .btxt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #notif-bar .m26-how{background:none;box-shadow:none;color:#8A5A00;text-decoration:underline;padding:6px 4px;font-size:12px}
+  .ntoast{top:calc(64px + var(--safe-top))}
+}
+@media (max-width:360px){
+  .hdr .gb .g-ico{display:none}
+}
+</style>
+<script id="m26-js">
+(function(){
+  var mq=window.matchMedia('(max-width:640px)');
+  var grow=document.getElementById('grow'),tabbar=document.getElementById('tabbar'),hdr=document.querySelector('.hdr'),bell=document.getElementById('bell-test');
+  function place(){
+    if(!grow||!hdr||!tabbar)return;
+    if(mq.matches){if(grow.parentNode!==hdr)hdr.insertBefore(grow,bell);}
+    else if(grow.parentNode!==tabbar)tabbar.insertBefore(grow,tabbar.firstChild);
+  }
+  place();
+  if(mq.addEventListener)mq.addEventListener('change',place);else if(mq.addListener)mq.addListener(place);
+
+  /* 알림 안내 띠 — 휴대폰에서는 한 줄 + 「방법」, ✕ 로 닫으면 7일간 숨김 */
+  var KEY='hhc_nbar_hide_until';
+  function hidden(){try{return Date.now()<(+localStorage.getItem(KEY)||0);}catch(e){return false;}}
+  function tidy(){
+    var bar=document.getElementById('notif-bar');if(!bar)return;
+    if(hidden()){bar.remove();return;}
+    var x=bar.querySelector('#nb-x');if(!x||x.dataset.m26)return;
+    x.dataset.m26='1';
+    x.addEventListener('click',function(){try{localStorage.setItem(KEY,String(Date.now()+7*864e5));}catch(e){}});
+    if(mq.matches&&!bar.querySelector('#nb-on')){
+      var t=bar.querySelector('.btxt');if(t)t.textContent='알림이 꺼져 있어 새 의뢰·예약을 놓칠 수 있어요';
+      if(typeof window.showPermHelp==='function'){
+        var h=document.createElement('button');h.type='button';h.className='m26-how';h.textContent='켜는 방법';
+        h.addEventListener('click',function(){try{window.showPermHelp('denied');}catch(e){}});
+        bar.insertBefore(h,x);
+      }
+    }
+  }
+  new MutationObserver(tidy).observe(document.body,{childList:true,subtree:true});
+  tidy();
+})();
+</script>
 </body>
 </html>

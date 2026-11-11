@@ -7003,5 +7003,317 @@ if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded'
   },40000);
 })();
 </script>
+
+<!-- ══ 📱 휴대폰 화면 개선 (2026-11-11) ══════════════════════════════════════════
+   폭 767px 이하(휴대폰)에서만 적용됩니다. 컴퓨터 화면은 그대로입니다.
+   · 위: 「작성 · 목록 · 회계 · 고객 · 설정」을 한 줄로 (아래 탭 줄 없앰 → 화면이 넓어짐)
+   · 작성: 단계 칩 · 큰 입력칸(48px) · 하단 고정 바(합계 + 이전/다음)
+   · 목록: 두 줄 카드(고객명·금액 / 상태·번호·날짜), 받을 돈이 맨 위, 상태별 건수
+   · 카드를 누르면 아래에서 「할 일」 창이 올라옴 (보기·보내기·결제 받음·수정·삭제)
+   ※ 이 블록만 지우면 예전 화면으로 돌아갑니다. -->
+<style id="m26-css">
+.m26-fab,.m26-dim,.m26-sh{display:none}
+@media (max-width:767px){
+  .m26-dim,.m26-sh{display:block}
+  :root{--bb:0px;--m-n:#0E2350;--m-ink:#14192A;--m-ink2:#5A6478;--m-ink3:#98A1B4;--m-line:#E4E9F2;--m-soft:#F6F8FC;
+    --m-ok:#0E9B63;--m-red:#DC2626;--m-warn:#B86E00;--m-bl:#2563EB;
+    --m-e1:0 1px 2px rgba(11,24,51,.07),0 6px 14px -6px rgba(11,24,51,.16);
+    --m-e2:0 1px 2px rgba(11,24,51,.10),0 8px 16px -4px rgba(11,24,51,.16),0 26px 44px -14px rgba(11,24,51,.32)}
+  body{background:#F2F5FA}
+  /* ── 위 한 줄: 화면 전환 ── */
+  .topbar{background:#fff;border-bottom:1px solid var(--m-line);box-shadow:0 2px 10px -6px rgba(11,24,51,.18);position:relative;z-index:20}
+  .topbar .tbi{height:50px;padding:0 8px 0 2px;gap:4px}
+  .topbar .brand{display:none}
+  .topbar .ib{width:34px;height:34px;border-radius:10px;background:var(--m-soft);color:var(--m-n)}
+  .topbar .ib:active{transform:scale(.94)}
+  .tbi>.bnav{flex:1;min-width:0;height:50px!important;padding:0;border:0;background:none;display:flex;overflow-x:auto;scrollbar-width:none}
+  .tbi>.bnav::-webkit-scrollbar{display:none}
+  .tbi>.bnav .ni{flex:1 0 auto;min-width:46px;flex-direction:row;gap:0;padding:0 7px;position:relative;color:var(--m-ink3)}
+  .tbi>.bnav .ni svg{display:none}
+  .tbi>.bnav .nl{font-size:14.5px;font-weight:700;letter-spacing:-.02em}
+  .tbi>.bnav .ni.active{color:var(--m-n)}
+  .tbi>.bnav .ni.active .nl{font-weight:800}
+  .tbi>.bnav .ni.active::after{content:"";position:absolute;left:22%;right:22%;bottom:0;height:3px;border-radius:3px 3px 0 0;background:var(--m-n)}
+  .tbi>.bnav .ni .m26-c{font-size:11px;font-weight:700;color:var(--m-ink3);margin-left:3px}
+  .bnav{border-top:0}
+  /* ── 작성: 단계 칩 ── */
+  .fl{padding:12px 14px!important}
+  .stepbar{position:sticky;top:-12px;z-index:15;margin:-12px -14px 12px;padding:12px 14px 10px;background:#F2F5FA;border:0;border-radius:0;gap:6px;overflow-x:auto;scrollbar-width:none}
+  .stepbar::-webkit-scrollbar{display:none}
+  .stp{flex:0 0 auto;flex-direction:row;gap:5px;padding:8px 13px;border-radius:999px;background:#fff;box-shadow:var(--m-e1)}
+  .stp::before{display:none}
+  .stp-n{width:auto;height:auto;background:none!important;box-shadow:none!important;font-size:13.5px;color:var(--m-ink2)}
+  .stp-t{font-size:13.5px;font-weight:700;color:var(--m-ink2)}
+  .stp.active{background:var(--m-n)}
+  .stp.active .stp-n,.stp.active .stp-t{color:#fff}
+  .stp.done .stp-n{font-size:0;color:var(--m-ok)}
+  .stp.done .stp-n::after{font-size:13.5px;color:var(--m-ok)}
+  .stp.done .stp-t{color:var(--m-ok)}
+  .stp-cnt{position:static;margin-left:2px;min-width:18px;height:18px;font-size:11px}
+  .stp.active .stp-cnt{background:#C9A44C}
+  /* ── 카드 · 입력칸 ── */
+  .card{border:0;box-shadow:var(--m-e1);border-radius:14px}
+  .lb{font-size:12.5px;text-transform:none;letter-spacing:-.01em;color:var(--m-ink2);margin-bottom:6px}
+  #screen-new input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=color]):not([type=range]),
+  #screen-new select,#screen-new textarea,
+  #screen-customers input,#screen-customers select,#screen-list select{
+    min-height:46px;border-radius:12px;background:var(--m-soft);border:1.5px solid transparent;color:var(--m-ink)}
+  #screen-new textarea{padding:12px 14px}
+  #screen-new input:focus,#screen-new select:focus,#screen-new textarea:focus,#screen-customers input:focus{
+    background:#fff;border-color:var(--m-bl);box-shadow:0 0 0 4px rgba(37,99,235,.10)}
+  #screen-new input[readonly]{background:#EEF2FA}
+  #screen-new .qty-st input,#screen-new .disc-w>input{min-height:0;background:transparent;border:0}
+  .qty-st,.disc-w{height:44px;border-color:transparent;background:var(--m-soft)}
+  .qty-st button{width:38px;background:transparent;font-size:20px}
+  .pr-in input{height:auto}
+  .fold{border:0;background:var(--m-soft)}
+  .fold-h{background:transparent;font-size:13px;padding:13px 14px}
+  .big-add{border-radius:13px;background:var(--m-n);box-shadow:var(--m-e1)}
+  /* ── 작성: 하단 고정 바 ── */
+  .nxbar{bottom:0;padding:10px 14px calc(10px + env(safe-area-inset-bottom,0));background:rgba(255,255,255,.96);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-top:1px solid var(--m-line);box-shadow:0 -6px 20px -12px rgba(11,24,51,.25);gap:8px}
+  .nxbar .s span{color:var(--m-ink3);font-size:11.5px}
+  .nxbar .s b{color:var(--m-ink);font-size:20px;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+  .nxbar .nx-go{background:var(--m-n);color:#fff;height:48px;padding:0 18px;border-radius:13px;font-size:15px}
+  .nxbar .m26-back{width:48px;height:48px;border:0;border-radius:13px;background:var(--m-soft);color:var(--m-ink2);font-size:18px;font-weight:800;font-family:inherit;flex-shrink:0}
+  .nxbar .m26-back[hidden]{display:none}
+  #screen-new{padding-bottom:calc(84px + env(safe-area-inset-bottom,0))}
+  .toast{bottom:calc(96px + env(safe-area-inset-bottom,0))}
+  /* ── 목록 ── */
+  #screen-list{padding-bottom:calc(96px + env(safe-area-inset-bottom,0))}
+  #screen-list .sw{padding:12px 14px 8px}
+  #screen-list .sw input{min-height:46px;border-radius:12px;background:#fff;border:0;box-shadow:var(--m-e1);font-size:16px}
+  #screen-list .chs{padding:2px 14px 8px;gap:6px}
+  #screen-list .ch{padding:8px 12px;font-size:13px;font-weight:700;border:0;background:#fff;color:var(--m-ink2);box-shadow:var(--m-e1)}
+  #screen-list .ch b{font-weight:800;margin-left:4px}
+  #screen-list .ch#chip-billing b{color:var(--m-warn)}
+  #screen-list .ch#chip-overdue b{color:var(--m-red)}
+  #screen-list .ch.active{background:var(--m-n);color:#fff}
+  #screen-list .ch.active b{color:#fff!important}
+  #screen-list .sor{padding:0 14px 6px;gap:4px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  #screen-list .sor::-webkit-scrollbar{display:none}
+  #screen-list .sol{font-size:12px;color:var(--m-ink3)}
+  #screen-list .sob{font-size:12px;padding:5px 9px;border-radius:999px;border:0;background:transparent;color:var(--m-ink3);white-space:nowrap}
+  #screen-list .sob.active{background:#E7ECF6;color:var(--m-n)}
+  #screen-list > div[style*="padding:0 16px 10px"]{padding:0 14px 6px!important}
+  #screen-list #inv-member-filter{min-height:40px;font-size:14px!important;background:#fff;box-shadow:var(--m-e1)}
+  .m26-sum{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:6px 14px 2px}
+  .m26-sum div{background:#fff;border-radius:12px;box-shadow:var(--m-e1);padding:10px 12px;min-width:0}
+  .m26-sum small{display:block;font-size:11.5px;color:var(--m-ink3);font-weight:700}
+  .m26-sum b{display:block;font-size:17px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--m-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .m26-sum .rd b{color:var(--m-red)}
+  #inv-list.card{margin:0 14px!important;background:none;box-shadow:none;border:0}
+  .m26-dh{font-size:12.5px;font-weight:800;color:var(--m-ink3);margin:14px 4px 8px;display:flex;justify-content:space-between}
+  .m26-lc{display:block;width:100%;text-align:left;border:0;font-family:inherit;background:#fff;border-radius:14px;box-shadow:var(--m-e1);padding:13px 14px;margin-bottom:9px;cursor:pointer;transition:transform .14s}
+  .m26-lc:active{transform:scale(.985)}
+  .m26-l1{display:flex;align-items:baseline;gap:10px}
+  .m26-l1 b{flex:1;min-width:0;font-size:16px;font-weight:800;letter-spacing:-.02em;color:var(--m-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .m26-l1 .m{font-size:16.5px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--m-ink);white-space:nowrap}
+  .m26-l2{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:12.5px;color:var(--m-ink3);min-width:0}
+  .m26-l2 .id{font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .m26-l2 .sp{flex:1}
+  .m26-l2 .dt{white-space:nowrap}
+  .m26-l2 .bal{color:var(--m-red);font-weight:800;white-space:nowrap}
+  .m26-pl{flex-shrink:0;font-size:12px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .m26-pl.paid{background:#E3F5EC;color:var(--m-ok)}
+  .m26-pl.billing{background:#FFF1D6;color:var(--m-warn)}
+  .m26-pl.overdue{background:#FDE7E7;color:var(--m-red)}
+  .m26-pl.partial{background:#E6EEFE;color:#1D4ED8}
+  .m26-mb{flex-shrink:0;font-size:11px;font-weight:700;color:#4F6EF7;background:#EEF1FE;padding:2px 7px;border-radius:999px;white-space:nowrap}
+  .m26-empty{text-align:center;padding:40px 20px;color:var(--m-ink3);font-size:14px;line-height:1.6}
+  .m26-empty b{display:block;color:var(--m-ink);font-size:16px;margin-bottom:4px}
+  .m26-fab{position:fixed;right:16px;bottom:calc(18px + env(safe-area-inset-bottom,0));z-index:40;height:54px;padding:0 20px;border:0;border-radius:999px;
+    background:var(--m-n);color:#fff;font-family:inherit;font-size:15.5px;font-weight:800;box-shadow:var(--m-e2);display:none;align-items:center;gap:6px}
+  .m26-fab:active{transform:scale(.96)}
+  body.m26-onlist .m26-fab{display:flex}
+  /* ── 할 일 창 ── */
+  .m26-dim{position:fixed;inset:0;z-index:300;background:rgba(10,18,40,.45);opacity:0;pointer-events:none;transition:opacity .18s}
+  .m26-sh{position:fixed;left:0;right:0;bottom:0;z-index:301;background:#fff;border-radius:22px 22px 0 0;padding:10px 16px calc(14px + env(safe-area-inset-bottom,0));
+    transform:translateY(105%);transition:transform .22s cubic-bezier(.22,.61,.36,1);max-height:88vh;overflow-y:auto}
+  body.m26-shon .m26-dim{opacity:1;pointer-events:auto}
+  body.m26-shon .m26-sh{transform:none}
+  .m26-gr{width:40px;height:5px;border-radius:5px;background:var(--m-line);margin:0 auto 14px}
+  .m26-shh{display:flex;align-items:flex-start;gap:10px;margin-bottom:14px}
+  .m26-shh .t{flex:1;min-width:0}
+  .m26-shh .t b{display:block;font-size:18px;font-weight:800;letter-spacing:-.02em;color:var(--m-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .m26-shh .t small{font-size:12.5px;color:var(--m-ink3)}
+  .m26-shh .r{text-align:right;flex-shrink:0}
+  .m26-shh .r b{display:block;font-size:19px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;margin-bottom:4px}
+  .m26-ga{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+  .m26-ga button{border:0;font-family:inherit;background:var(--m-soft);border-radius:14px;padding:12px 2px 10px;font-size:12.5px;font-weight:700;color:var(--m-ink2);display:flex;flex-direction:column;align-items:center;gap:5px}
+  .m26-ga button i{font-style:normal;font-size:20px;line-height:1}
+  .m26-ga button.wa{background:#E3F7EA;color:#0E7A3E}
+  .m26-ga button.kk{background:#FEE500;color:#3A1D1D}
+  .m26-ga button:active,.m26-ls button:active,.m26-pay:active{transform:scale(.97)}
+  .m26-bf{display:flex;justify-content:space-between;font-size:13.5px;color:var(--m-ink2);padding:5px 2px}
+  .m26-bf b{color:var(--m-ink);font-variant-numeric:tabular-nums}
+  .m26-bf.rd b{color:var(--m-red)}
+  .m26-pay{width:100%;height:52px;border:0;border-radius:14px;background:var(--m-n);color:#fff;font-family:inherit;font-size:16px;font-weight:800;margin:10px 0 4px}
+  .m26-ls button{display:flex;align-items:center;gap:10px;width:100%;border:0;border-top:1px solid var(--m-line);background:none;font-family:inherit;text-align:left;padding:15px 4px;font-size:15.5px;font-weight:700;color:var(--m-ink)}
+  .m26-ls button span{margin-left:auto;font-size:12.5px;font-weight:500;color:var(--m-ink3)}
+  .m26-ls button.rd{color:var(--m-red)}
+}
+@media (max-width:767px) and (prefers-reduced-motion:reduce){
+  .m26-sh,.m26-dim,.m26-lc{transition:none}
+}
+</style>
+<script id="m26-js">
+(function(){
+  var mq=window.matchMedia('(max-width:767px)');
+  function M(){return mq.matches;}
+  function $$(id){return document.getElementById(id);}
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function todayS(){var d=new Date();return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
+  function md(s){if(!s)return '';var p=String(s).split('-');return p.length<3?s:(+p[1])+'/'+(+p[2]);}
+  function daysBetween(a,b){return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/86400000);}
+
+  /* ① 아래 탭 줄을 위 줄로 옮김 (휴대폰에서만 보임 — 컴퓨터는 왼쪽 메뉴를 그대로 씀) */
+  var tbi=document.querySelector('.topbar .tbi'),bnav=document.querySelector('.bnav');
+  if(tbi&&bnav)tbi.insertBefore(bnav,tbi.firstChild);
+
+  /* ② 하단 바에 「← 이전」 버튼 */
+  var nx=$$('nxbar');
+  if(nx&&!nx.querySelector('.m26-back')){
+    var bk=document.createElement('button');bk.type='button';bk.className='m26-back';bk.setAttribute('aria-label','이전 단계');bk.textContent='←';
+    bk.addEventListener('click',function(){var o=window.TAB_ORDER||['info','items','charges','send'];var i=o.indexOf(window._curTab||'info');if(i>0)window.Tab(o[i-1]);});
+    nx.insertBefore(bk,$$('nx-btn'));
+  }
+  function syncBack(){var b=nx&&nx.querySelector('.m26-back');if(b)b.hidden=!M()||(window._curTab||'info')==='info';}
+  if(typeof window.Tab==='function'){var _t=window.Tab;window.Tab=function(){var r=_t.apply(this,arguments);syncBack();return r;};}
+  syncBack();
+
+  /* ③ 목록 화면일 때만 「＋ 새 인보이스」 버튼 */
+  var fab=document.createElement('button');fab.type='button';fab.className='m26-fab';fab.innerHTML='＋ 새 인보이스';
+  fab.addEventListener('click',function(){window.Nav('new');if(window.App&&App.resetFormConfirm)App.resetFormConfirm();});
+  document.body.appendChild(fab);
+  if(typeof window.Nav==='function'){var _n=window.Nav;window.Nav=function(name){document.body.classList.remove('m26-shon');var r=_n.apply(this,arguments);document.body.classList.toggle('m26-onlist',name==='list');return r;};}
+
+  /* ④ 목록 — 두 줄 카드 */
+  var ST_LB={billing:'청구중',paid:'결제완료',overdue:'연체',partial:'일부결제'};
+  function bal(inv){return Math.max(0,(inv.total||0)-(parseFloat(inv.paidAmount)||0));}
+  function stKey(inv){var st=inv.status||'billing';var pa=parseFloat(inv.paidAmount)||0;if(st!=='paid'&&pa>0.005&&bal(inv)>0.005)return 'partial';return st;}
+  function pill(inv){
+    var k=stKey(inv),t=ST_LB[k]||'청구중';
+    if((inv.status==='overdue')&&inv.due){var n=daysBetween(inv.due,todayS());if(n>0)t='연체 '+n+'일';}
+    return '<span class="m26-pl '+k+'">'+t+'</span>';
+  }
+  function card(inv){
+    var unpaid=inv.status!=='paid',k=stKey(inv);
+    var right=unpaid&&inv.due?'만기 '+md(inv.due):md(inv.date);
+    return '<button type="button" class="m26-lc" data-id="'+esc(inv.id)+'">'+
+      '<div class="m26-l1"><b>'+esc(inv.customer&&inv.customer.name||'(이름 없음)')+'</b><span class="m">'+esc(fmtAmt(inv.total||0,inv.currency))+'</span></div>'+
+      '<div class="m26-l2">'+pill(inv)+'<span class="id">'+esc(inv.id||'')+'</span><span class="sp"></span>'+
+        (k==='partial'?'<span class="bal">잔액 '+esc(fmtAmt(bal(inv),inv.currency))+'</span>':'<span class="dt">'+right+'</span>')+'</div>'+
+    '</button>';
+  }
+  function chipCounts(){
+    var c={all:invoices.length,billing:0,paid:0,overdue:0};
+    invoices.forEach(function(i){var s=i.status||'billing';if(c[s]!=null)c[s]++;});
+    var lb={all:'전체',billing:'청구중',paid:'결제완료',overdue:'연체'};
+    ['all','billing','paid','overdue'].forEach(function(n){var el=$$('chip-'+n);if(el)el.innerHTML=lb[n]+'<b>'+c[n]+'</b>';});
+    var bl=$$('bn-list');if(bl){var s=bl.querySelector('.m26-c');if(!s){s=document.createElement('span');s.className='m26-c';bl.appendChild(s);}s.textContent=invoices.length;}
+  }
+  function mList(){
+    var q=(($$('search-input')||{}).value||'').toLowerCase().trim();
+    var mf=($$('inv-member-filter')||{}).value||'';
+    var f=invoices.filter(function(i){
+      var nm=(i.customer&&i.customer.name||'').toLowerCase(),ph=(i.customer&&i.customer.phone||'').replace(/\D/g,'');
+      var mq2=!q||(i.id||'').toLowerCase().indexOf(q)>=0||nm.indexOf(q)>=0||(q.replace(/\D/g,'').length>=3&&ph.indexOf(q.replace(/\D/g,''))>=0);
+      var mm=!mf||(i.customer&&i.customer.member)===mf;
+      return mq2&&mm&&(currentFilter==='all'||i.status===currentFilter);
+    });
+    f.sort(function(a,b){
+      if(currentSort==='date')return sortDir*(b.date||'').localeCompare(a.date||'');
+      if(currentSort==='num')return sortDir*(b.id||'').localeCompare(a.id||'');
+      if(currentSort==='alpha')return(a.customer&&a.customer.name||'').localeCompare(b.customer&&b.customer.name||'');
+      return 0;
+    });
+    chipCounts();
+    // 요약: 이번 달 청구 · 미수금
+    var ym=todayS().slice(0,7),mon=0,due=0,nd=0;
+    invoices.forEach(function(i){
+      if((i.date||'').slice(0,7)===ym)mon+=(i.total||0);
+      if(i.status==='billing'||i.status==='overdue'){var b=bal(i);if(b>0.005){due+=b;nd++;}}
+    });
+    var sb=$$('stats-bar');
+    if(sb)sb.innerHTML='<div class="m26-sum"><div><small>이번 달 청구</small><b>'+esc(fmtAmt(mon))+'</b></div>'+
+      '<div class="rd"><small>미수금 '+nd+'건</small><b>'+esc(fmtAmt(due))+'</b></div></div>';
+    var el=$$('inv-list');if(!el)return;
+    if(!f.length){
+      el.innerHTML='<div class="m26-empty"><b>'+(q?'「'+esc(q)+'」 검색 결과가 없습니다':'인보이스가 없습니다')+'</b>'+(q?'고객명 · 인보이스번호 · 전화번호로 찾을 수 있어요':'아래 「＋ 새 인보이스」로 작성해 보세요')+'</div>';
+      return;
+    }
+    var h='';
+    if(currentFilter==='all'&&!q){
+      var open=f.filter(function(i){return i.status==='billing'||i.status==='overdue';});
+      open.sort(function(a,b){var oa=a.status==='overdue'?0:1,ob=b.status==='overdue'?0:1;if(oa!==ob)return oa-ob;return (a.due||'9').localeCompare(b.due||'9');});
+      var rest=f.filter(function(i){return !(i.status==='billing'||i.status==='overdue');});
+      if(open.length)h+='<div class="m26-dh"><span>받을 돈 · '+open.length+'건</span></div>'+open.map(card).join('');
+      if(rest.length)h+='<div class="m26-dh"><span>'+(open.length?'그 외':'전체')+'</span></div>'+rest.map(card).join('');
+    }else{
+      h=f.map(card).join('');
+    }
+    el.innerHTML=h;
+  }
+  var _rl=window.renderList;
+  window.renderList=function(){if(!M())return _rl.apply(this,arguments);try{mList();}catch(e){console.warn('m26 list',e);return _rl.apply(this,arguments);}};
+  try{renderList=window.renderList;}catch(e){}
+
+  /* ⑤ 할 일 창 */
+  var dim=document.createElement('div');dim.className='m26-dim';
+  var sh=document.createElement('div');sh.className='m26-sh';sh.setAttribute('role','dialog');sh.setAttribute('aria-modal','true');
+  document.body.appendChild(dim);document.body.appendChild(sh);
+  var curId=null;
+  function closeSh(){document.body.classList.remove('m26-shon');curId=null;}
+  dim.addEventListener('click',closeSh);
+  function openSh(id){
+    var inv=invoices.find(function(i){return i.id===id;});if(!inv)return;
+    curId=id;
+    var cur=inv.currency,pa=parseFloat(inv.paidAmount)||0,unpaid=inv.status!=='paid';
+    sh.innerHTML='<div class="m26-gr"></div>'+
+      '<div class="m26-shh"><div class="t"><b>'+esc(inv.customer&&inv.customer.name||'(이름 없음)')+'</b><small>'+esc(inv.id||'')+(inv.due&&unpaid?' · 만기 '+md(inv.due):' · '+md(inv.date))+'</small></div>'+
+        '<div class="r"><b>'+esc(fmtAmt(inv.total||0,cur))+'</b>'+pill(inv)+'</div></div>'+
+      '<div class="m26-ga">'+
+        '<button type="button" data-a="view"><i>📄</i>보기</button>'+
+        '<button type="button" class="wa" data-a="wa"><i>💬</i>왓츠앱</button>'+
+        '<button type="button" class="kk" data-a="kk"><i>💬</i>카카오톡</button>'+
+        '<button type="button" data-a="mail"><i>✉️</i>메일</button>'+
+      '</div>'+
+      (unpaid?'<div class="m26-bf"><span>결제 받은 금액</span><b>'+esc(fmtAmt(pa,cur))+'</b></div>'+
+        '<div class="m26-bf rd"><span>남은 금액</span><b>'+esc(fmtAmt(bal(inv),cur))+'</b></div>'+
+        '<button type="button" class="m26-pay" data-a="paid">💰 결제 받음 처리</button>'
+       :'<div class="m26-bf"><span>결제일</span><b>'+esc(inv.paidDate?md(inv.paidDate):'-')+'</b></div>')+
+      '<div class="m26-ls">'+
+        '<button type="button" data-a="edit">✏️ 수정하기</button>'+
+        '<button type="button" data-a="status">🔄 상태 바꾸기 <span>청구중 · 결제완료 · 연체</span></button>'+
+        '<button type="button" data-a="cust">👤 고객 상세 보기</button>'+
+        '<button type="button" class="rd" data-a="del">🗑 삭제</button>'+
+      '</div>';
+    document.body.classList.add('m26-shon');
+  }
+  sh.addEventListener('click',function(e){
+    var b=e.target.closest('button[data-a]');if(!b||!curId)return;
+    var id=curId,a=b.dataset.a,inv=invoices.find(function(i){return i.id===id;});
+    closeSh();
+    if(a==='view')window.openInvView(id);
+    else if(a==='wa')window.shareWa(id);
+    else if(a==='kk')window.shareKakao(id);
+    else if(a==='mail')window.quickEmail(id);
+    else if(a==='paid'){if(confirm((inv&&inv.customer&&inv.customer.name||'')+'\n'+fmtAmt(inv?inv.total:0,inv&&inv.currency)+' — 결제완료로 바꿀까요?'))window.quickStatusChange(id,'paid');}
+    else if(a==='edit'){if(inv)loadInvToForm(inv);}
+    else if(a==='status')window.openStatusModal(id);
+    else if(a==='cust')window.invOpenCustAdmin(id);
+    else if(a==='del')window.delInv(id);
+  });
+  var lst=$$('inv-list');
+  if(lst)lst.addEventListener('click',function(e){var c=e.target.closest('.m26-lc');if(c)openSh(c.dataset.id);});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.body.classList.contains('m26-shon'))closeSh();});
+
+  /* 폭이 바뀌면(가로·세로 전환) 다시 그림 */
+  function onMq(){syncBack();try{if(window.currentNav==='list'||document.querySelector('#screen-list.active'))window.renderList();}catch(e){}}
+  if(mq.addEventListener)mq.addEventListener('change',onMq);else if(mq.addListener)mq.addListener(onMq);
+  document.body.classList.toggle('m26-onlist',!!document.querySelector('#screen-list.active'));
+})();
+</script>
 </body>
 </html>
