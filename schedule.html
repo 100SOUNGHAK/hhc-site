@@ -1988,9 +1988,24 @@ window.sendVisitReminder=function(itemId){
     logSend(t,'whatsapp');
   });
   // 💛 카카오톡 카드 발송 — 「마이페이지 열기」 버튼이 붙은 카드로 나갑니다
+  //    누르자마자 「고객명」을 복사해 둡니다 → 카카오 공유창 검색칸에 붙여넣어 대화방을 바로 찾습니다.
+  //    (복사는 다른 기다림보다 먼저 해야 휴대폰 브라우저가 막지 않습니다 · 메시지 전체는 「메시지 복사」 버튼)
+  //    수리 일정 제목 「콘도(고객명)」 이면 괄호 안 고객명을 씁니다.
   document.getElementById('visit-kakao-btn').addEventListener('click',async()=>{
     const m=getMsg();
-    try{await navigator.clipboard.writeText(vrWaText(m));}catch(_){}
+    const _pm=String(name||'').match(/\(([^()]+)\)\s*$/);
+    const kkNm=String(item.customer_name||(_pm?_pm[1]:name)||'').trim();
+    if(kkNm&&kkNm!=='고객'){
+      try{navigator.clipboard.writeText(kkNm).catch(()=>{});}catch(_){}
+      const tip=document.getElementById('visit-kakao-ok');
+      if(tip){
+        const _o=tip.textContent;
+        tip.textContent=(lang==='en'?'💛 "'+kkNm+'" copied · paste it into the KakaoTalk search box'
+                                     :'💛 「'+kkNm+'」 이름이 복사되었습니다 · 공유창 검색칸에 붙여넣으세요');
+        tip.style.display='block';
+        setTimeout(()=>{tip.style.display='none';tip.textContent=_o;},4500);
+      }
+    }
     const ok=await vrKkSend(m,VR_URL,lang==='en');
     if(ok!==false)logSend(vrWaText(m),'kakao');
   });
