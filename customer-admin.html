@@ -678,6 +678,21 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
 .btn.mor{height:36px;width:36px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-color:transparent;background:transparent;font-size:18px}
 .btn.mor:hover{background:#F2F4F8}
 .pager{border:none;border-radius:14px;box-shadow:var(--e1)}
+/* 🌿 청소 후 3·6개월 목록 — 행 안의 「안내장 보내기」 줄 (해당 구분을 골랐을 때만 표시) */
+.csend{grid-column:1/-1;display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:-2px;padding-top:10px;border-top:1px dashed #E3E7EF}
+.csend .cs-lb{font-size:12px;font-weight:800;color:var(--ink2);margin-right:auto;min-width:0}
+.csend .cs-lb small{display:block;font-size:11px;font-weight:700;color:var(--ink3);margin-top:1px}
+.csend .cs-b{height:36px;padding:0 13px;border-radius:10px;border:1.5px solid transparent;font-family:inherit;font-size:12.5px;
+  font-weight:900;cursor:pointer;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;line-height:1}
+.csend .cs-b.wa{background:#22c55e;color:#fff}
+.csend .cs-b.kk{background:#FEE500;color:#3C1E1E;border-color:#F5DC00}
+.csend .cs-b.pv{background:#fff;color:var(--ink2);border-color:#DCE2EC;padding:0 11px}
+.csend .cs-b:disabled{opacity:.55;cursor:wait}
+@media(max-width:760px){.csend .cs-lb{flex:1 1 100%;margin-right:0}.csend .cs-b.wa,.csend .cs-b.kk{flex:1 1 0;justify-content:center}}
+#care-pv{position:fixed;inset:0;z-index:2000;background:rgba(15,23,42,.72);display:flex;align-items:flex-start;justify-content:center;
+  overflow:auto;padding:18px 12px 40px;cursor:zoom-out}
+#care-pv img{width:min(420px,100%);height:auto;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.4);display:block}
+#care-pv .x{position:fixed;top:12px;right:14px;width:40px;height:40px;border-radius:50%;border:none;background:#fff;font-size:18px;font-weight:900;cursor:pointer}
 
 @media(max-width:760px){
   body{padding:10px 10px calc(70px + env(safe-area-inset-bottom))}
@@ -1898,7 +1913,10 @@ function careSentOf(e,k,since){
 const CARE_IMG={
   // 🇰🇷 새 안내장(2026-11-08) — 빈칸 「__월 __일」 · 「마지막 관리 후 __개월 경과」에 숫자만 써 넣습니다
   //    v2 : 각 빈칸 밑줄의 가운데 x · 글자 가운데 y (1170px 기준) / c1 월·일 글자색 · c2 개월 글자색(금색)
-  ko:{u:'/care-cycle-v2-ko.jpg',v2:{mo:[593.5,788],dy:[776.5,788],el:[551.5,909],c1:'#2A1F08',c2:'#E3C98A',fs:56}},
+  ko:{u:'/care-cycle-v2-ko.jpg',v2:{mo:[593.5,788],dy:[776.5,788],el:[551.5,909],c1:'#2A1F08',c2:'#E3C98A',fs:56},
+      //  hd : 「고객님 댁 에어컨 관리 이력」 줄 → 「○○○님 댁 에어컨 관리 이력」 (고객 이름이 없으면 그림 그대로)
+      //       x·y 글자 시작 x · 가운데 y / fs 글자 크기 / c 글자색 / er 지울 칸 [x0,y0,x1,y1] / mx 오른쪽 끝 한계
+      hd:{x:247,y:720,fs:33,c:'#584620',er:[240,697,606,743],mx:1060}},
   // 🇬🇧 새 영문 안내장(2026-11-08) — 「Last service __ / __」(DD/MM : 앞 칸 일 · 뒤 칸 월) · 「__ months since last service」
   en:{u:'/care-cycle-v2-en.jpg',v2:{dy:[590.5,852],mo:[731.5,852],el:[326.5,968],c1:'#2A1F08',c2:'#E3C98A',fs:56}},
   x:76,fs:40,navy:'#0f2540',
@@ -1953,7 +1971,8 @@ function careFont(){
     try{
       if(!window.FontFace||!document.fonts)return false;
       const src='https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/woff2/Pretendard-';
-      const fs=[new FontFace('HHCPret','url('+src+'ExtraBold.woff2)',{weight:'800'}),
+      const fs=[new FontFace('HHCPret','url('+src+'Bold.woff2)',{weight:'700'}),
+                new FontFace('HHCPret','url('+src+'ExtraBold.woff2)',{weight:'800'}),
                 new FontFace('HHCPret','url('+src+'Black.woff2)',{weight:'900'})];
       await Promise.race([Promise.all(fs.map(f=>f.load())),new Promise((_,r)=>setTimeout(()=>r(0),3500))]);
       fs.forEach(f=>document.fonts.add(f));
@@ -1976,8 +1995,11 @@ function careBlobImg(b){
 }
 // 안내장 PNG 만들기 → File
 const _careFile={};
-function careFile(en,date){
-  const key=(en?'en':'ko')+'|'+date+'|'+careMonths(date);   // 경과 개월 수가 바뀌면 그림도 새로 만듭니다
+// 안내장에 넣을 고객 이름 — 「고객님」·「님」으로 끝나면 떼고 씁니다
+function careNm(nm){return String(nm||'').trim().replace(/\s*(고객님|님)$/,'').trim();}
+function careFile(en,date,nm){
+  nm=careNm(nm);
+  const key=(en?'en':'ko')+'|'+date+'|'+careMonths(date)+'|'+nm;   // 경과 개월 수가 바뀌면 그림도 새로 만듭니다
   if(_careFile[key])return _careFile[key];
   _careFile[key]=(async()=>{
     await careFont();
@@ -2005,6 +2027,26 @@ function careFile(en,date){
       const put=(t,p,c)=>{x.font='900 '+V.fs+'px '+F;x.fillStyle=c;x.textAlign='center';x.fillText(t,p[0],p[1]+2);x.textAlign='left';};
       if(dm){put(String(parseInt(dm[2],10)),V.mo,V.c1);put(String(parseInt(dm[3],10)),V.dy,V.c1);}
       put(String(careMonths(date)),V.el,V.c2);
+      // 👤 「고객님 댁 에어컨 관리 이력」 → 「○○○님 댁 에어컨 관리 이력」
+      const H=L.hd;
+      if(H&&nm){
+        // 원래 글자 자리를 위·아래 바탕색으로 이어 칠해 지웁니다 (금색 그라데이션 유지)
+        const [ex0,ey0,ex1,ey1]=H.er,ew=ex1-ex0,eh=ey1-ey0;
+        const top=x.getImageData(ex0,ey0-1,ew,1).data,bot=x.getImageData(ex0,ey1+1,ew,1).data;
+        const id=x.createImageData(ew,eh),d=id.data;
+        for(let yy=0;yy<eh;yy++){const t=(yy+1)/(eh+1);
+          for(let xx=0;xx<ew;xx++){const i=xx*4,o=(yy*ew+xx)*4;
+            d[o]=top[i]+(bot[i]-top[i])*t;d[o+1]=top[i+1]+(bot[i+1]-top[i+1])*t;d[o+2]=top[i+2]+(bot[i+2]-top[i+2])*t;d[o+3]=255;}}
+        x.putImageData(id,ex0,ey0);
+        // 이름이 길면 글자를 줄이고, 그래도 넘치면 말줄임
+        const tail='님 댁 에어컨 관리 이력',maxW=H.mx-H.x;
+        let fs=H.fs,n=nm;
+        const wOf=()=>{x.font='700 '+fs+'px '+F;return x.measureText(n+tail).width;};
+        while(wOf()>maxW&&fs>24)fs--;
+        while(wOf()>maxW&&n.length>1)n=n.slice(0,-2)+'…';
+        x.font='700 '+fs+'px '+F;x.fillStyle=H.c;x.textAlign='left';
+        x.fillText(n+tail,H.x,H.y+1);
+      }
     }else if(en){
       run(L.l1,[{t:'Your air-con was last serviced'}]);
       run(L.l2,[{t:'on '},{t:D,d:1},{t:'.'}]);
@@ -2120,6 +2162,81 @@ window.caCareLog=async function(idx,k,ch){
     await updateDoc(doc(db,'customers',mid),{care_log:e.careLog,updated_at:new Date().toISOString()});
   }catch(err){toast('발송 이력 저장 실패: '+err.message);}
 };
+// ═══ 🌿 목록에서 바로 보내기 — 「청소 후 3개월 · 6개월」 구분을 골랐을 때 각 고객 행에 나타납니다 ═══
+//  · 문구 없이 안내장 이미지(○○○님 댁 · 마지막 관리일 · 경과 개월)만 보냅니다 (한국어 안내장)
+//  · 휴대폰 : 공유창(이미지 한 장) → WhatsApp / 카카오톡 선택 → 대화방 선택
+//  · 카카오톡 : 누르자마자 고객명 복사 (발송 화면 카카오톡 버튼과 같은 방식 — 공유창 검색칸에 붙여넣기)
+//  · PC 왓츠앱 : 이미지를 클립보드에 복사하고 그 고객 대화창을 엽니다 → Ctrl+V
+//  · PC 카카오톡 : 고객명 복사 + 이미지 내려받기 → 카카오톡 PC 에서 대화방 찾아 첨부
+//  · 보내면 발송 이력이 남아 목록에서 빠집니다 (발송 화면과 같은 이력 · 같은 되돌리기)
+const _caMob=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+function careRowSend(e,idx){
+  const c=careDue(e),d=careLastAc(e);
+  if(!c||!d)return '';
+  const md=parseInt(d.slice(5,7),10)+'월 '+parseInt(d.slice(8,10),10)+'일';
+  return '<div class="csend">'+
+    '<span class="cs-lb">🖼 '+(c.k===6?'6개월 정기관리':'3개월 건강관리')+' 안내장<small>마지막 관리 '+esc(md)+' · '+c.mo+'개월 경과 · 이미지만 발송</small></span>'+
+    '<button type="button" class="cs-b pv" onpointerdown="caCarePre('+idx+')" onclick="caCarePv(event,'+idx+')">👁 미리보기</button>'+
+    '<button type="button" class="cs-b wa" onpointerdown="caCarePre('+idx+')" onclick="caCareQuick(event,'+idx+',\'wa\')">💬 WhatsApp</button>'+
+    '<button type="button" class="cs-b kk" onpointerdown="caCarePre('+idx+')" onclick="caCareQuick(event,'+idx+',\'kk\')">💛 카카오톡</button>'+
+    '</div>';
+}
+function caCareImg(e){const d=careLastAc(e);return d?careFile(false,d,e.name):null;}
+// 손가락이 닿는 순간 이미지를 미리 만들기 시작합니다 (공유창이 늦게 떠서 막히는 일을 줄임)
+window.caCarePre=function(idx){const e=entries[idx];const p=e&&caCareImg(e);if(p)p.catch(()=>{});};
+window.caCarePv=async function(ev,idx){
+  ev.stopPropagation();
+  const e=entries[idx];const p=e&&caCareImg(e);
+  if(!p){toast('📅 마지막 에어컨 관리일이 없어 안내장을 만들 수 없습니다');return;}
+  let f;try{f=await p;}catch(err){toast('⚠️ 안내장 이미지를 만들지 못했습니다: '+((err&&err.message)||''));return;}
+  const u=URL.createObjectURL(f),o=document.createElement('div');o.id='care-pv';
+  o.innerHTML='<button class="x" aria-label="닫기">✕</button><img alt="" src="'+u+'">';
+  o.addEventListener('click',()=>{o.remove();URL.revokeObjectURL(u);});
+  const old=document.getElementById('care-pv');if(old)old.remove();
+  document.body.appendChild(o);
+};
+window.caCareQuick=async function(ev,idx,ch){
+  ev.stopPropagation();
+  const e=entries[idx];if(!e)return;
+  const btn=ev.currentTarget;
+  const c=careDue(e),k=c?c.k:(curFilter==='care6'?6:3);
+  const nm=String(e.name||'').trim();
+  // 💛 고객명 복사는 다른 기다림(await)보다 먼저 — 휴대폰 브라우저가 막지 않도록
+  if(ch==='kk'&&nm){try{navigator.clipboard.writeText(nm).catch(()=>{});}catch(_){}}
+  const p=caCareImg(e);
+  if(!p){toast('📅 마지막 에어컨 관리일이 없어 안내장을 만들 수 없습니다');return;}
+  const lb=btn.innerHTML;btn.disabled=true;btn.textContent='⏳ 준비 중';
+  let f;
+  try{f=await p;}
+  catch(err){toast('⚠️ 안내장 이미지를 만들지 못했습니다: '+((err&&err.message)||''));return;}
+  finally{btn.disabled=false;btn.innerHTML=lb;}
+  // 📱 휴대폰 : 공유창으로 이미지 한 장만
+  if(_caMob&&navigator.canShare&&navigator.canShare({files:[f]})){
+    if(ch==='kk'&&nm)toast('💛 「'+nm+'」 이름이 복사되었습니다 · 카카오톡 → 검색칸에 붙여넣으세요');
+    try{await navigator.share({files:[f]});caCareLog(idx,k,ch);return;}
+    catch(err){
+      if(err&&err.name==='AbortError')return;   // 공유창을 닫음 — 이력 남기지 않음
+      if(err&&err.name==='NotAllowedError'){toast('🖼 안내장이 준비되었습니다 · 버튼을 한 번 더 눌러 주세요');return;}
+    }
+  }
+  // 💻 PC
+  if(ch==='wa'){
+    let copied=false;
+    if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){
+      try{await navigator.clipboard.write([new ClipboardItem({'image/png':f})]);copied=true;}catch(_){}
+    }
+    if(!copied)careDownload(f);
+    const ph=pn(e.phone);
+    window.open('https://wa.me/'+(ph?'60'+ph:''),'_blank');
+    toast(copied?'🖼 안내장 이미지가 복사되었습니다 · 대화창에 붙여넣기(Ctrl+V) 후 보내세요'
+                :'🖼 안내장 이미지를 내려받았습니다 · 대화창에 첨부해 주세요');
+  }else{
+    careDownload(f);
+    toast(nm?('💛 「'+nm+'」 이름 복사 · 안내장 이미지 내려받음 → 카카오톡 PC 에서 대화방을 찾아 첨부해 주세요')
+            :'🖼 안내장 이미지를 내려받았습니다 · 카카오톡 대화방에 첨부해 주세요');
+  }
+  caCareLog(idx,k,ch);
+};
 window.caCareUndo=async function(idx,k){
   const e=entries[idx];if(!e)return;
   const c=careDue(e);
@@ -2202,6 +2319,7 @@ function renderList(){
         (e.ts?'<span class="dc dt">'+esc(String(e.ts).slice(0,10))+'</span>':'')+'</div>'+
       '<div class="cact"><button class="btn sm p dtl" onclick="openDrawer('+idx+')">상세 ›</button>'+
         '<button class="btn sm mor" onclick="caRowMenu(event,this,'+idx+')" title="더보기 메뉴" aria-label="더보기 메뉴">⋮</button></div>'+
+      ((curFilter==='care3'||curFilter==='care6')?careRowSend(e,idx):'')+
       '</div>';
   }).join('')+pagerHTML(list.length,pages);
 }
@@ -4671,13 +4789,13 @@ window.caSendModal=async function(idx){
   function careOn(){return state.tpl==='care3'||state.tpl==='care6';}
   function careCur(){
     if(!careOn()||!/^\d{4}-\d{2}-\d{2}$/.test(state.careDate||''))return null;
-    return careFile(!!state.en,state.careDate);
+    return careFile(!!state.en,state.careDate,e.name);
   }
   function carePrevHtml(){
     if(!careOn())return '';
     if(!/^\d{4}-\d{2}-\d{2}$/.test(state.careDate||''))
       return '<div class="sm-careph">📅 마지막 관리일을<br>입력하면 안내장<br>이미지가 함께 나갑니다</div>';
-    const key=(state.en?'en':'ko')+'|'+state.careDate;
+    const key=(state.en?'en':'ko')+'|'+state.careDate+'|'+careNm(e.name);
     if(_careUrl[key])return '<img class="sm-careimg" id="cs-careprev" src="'+_careUrl[key]+'" alt="" title="눌러서 크게 보기">';
     careCur().then(f=>{_careUrl[key]=URL.createObjectURL(f);paint();})
       .catch(err=>{const ph=mk.querySelector('.sm-careph');if(ph)ph.textContent='⚠️ 안내장 이미지를 만들지 못했습니다 ('+((err&&err.message)||'')+')';});
