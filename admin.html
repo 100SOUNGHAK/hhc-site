@@ -435,6 +435,7 @@ input[data-benefit]{display:none}
 .list-tbl td{padding:12px 14px;border-bottom:1px solid var(--surface2);vertical-align:middle}
 .list-tbl tr:last-child td{border-bottom:none}
 .list-tbl tr:hover td{background:var(--surface)}
+.lno{font-size:10.5px;font-weight:600;color:var(--text3);letter-spacing:.02em;margin-top:2px;font-variant-numeric:tabular-nums}
 .pkg-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:var(--lavender-lt);color:var(--indigo)}
 .bal-pos{color:var(--green);font-weight:700}
 .act-btns{display:flex;gap:5px}
@@ -530,6 +531,10 @@ input[data-benefit]{display:none}
 .seg-btn.active{background:var(--white);color:var(--indigo);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.1)}
 .ck-box{margin-top:10px;padding:12px 14px;border-radius:12px;background:#FBF6EA;border:1px solid #EBDDB8}
 .ck-box-t{font-size:12px;font-weight:800;color:#8F6F28;margin-bottom:10px}
+.btn-act-r{border-color:#E3C98A;color:#8F6F28;background:#FBF6EA}.btn-act-r:hover{border-color:#B08D3A}
+.rn-note{display:none;margin-bottom:12px;padding:12px 14px;border-radius:12px;background:#FBF6EA;border:1px solid #EBDDB8;font-size:12.5px;color:#6B5420;line-height:1.6}
+.rn-note b{color:#4A3A12}.rn-note .x{float:right;border:0;background:none;color:#8F6F28;font-size:12px;font-weight:800;cursor:pointer;padding:0 0 0 8px;font-family:inherit}
+#btn-renew,#btn-transfer{display:none;width:100%;margin-top:8px;padding:11px;border-radius:10px;border:1px solid #E3C98A;background:#FBF6EA;color:#8F6F28;font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer}
 .lb-ck{font-size:10px;font-weight:800;border-radius:5px;padding:2px 7px;background:#FBF3E0;color:#8F6F28;margin-left:5px;white-space:nowrap}
 .contract-doc{background:var(--white);border-radius:var(--radius-xl);border:1px solid var(--border);box-shadow:var(--shadow-lg);overflow:hidden}
 .doc-hd{background:var(--navy);padding:28px 32px;position:relative;overflow:hidden}
@@ -1686,6 +1691,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   </div>
   <div class="admin-grid view-form">
     <div>
+      <div class="rn-note" id="rn-note"></div>
       <div class="progress-box">
         <div class="progress-top">
           <span class="progress-lbl">계약서 입력 진행률</span>
@@ -1901,6 +1907,8 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
         계약 저장 / Save Contract
       </button>
       <div class="save-toast" id="save-toast">✓ 저장되었습니다 / Saved!</div>
+      <button type="button" id="btn-renew">♻️ 이 계약으로 갱신 계약서 만들기 / Renew</button>
+      <button type="button" id="btn-transfer">🔁 이 계약을 다른 분께 양도 (양도양수 계약서) / Transfer</button>
       <button type="button" class="avs-jump" onclick="setAdminView('usage')">📊 서비스 이용내역 보기 →</button>
     </div>
 
@@ -2107,7 +2115,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap" id="list-controls">
     <div style="position:relative;flex:1;min-width:180px">
       <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:13px;height:13px;stroke:var(--text3);fill:none;stroke-width:2" viewBox="0 0 13 13"><circle cx="5.5" cy="5.5" r="4"/><line x1="8.5" y1="8.5" x2="12" y2="12"/></svg>
-      <input id="list-search" type="text" placeholder="이름, 전화번호 검색..." class="field-input sm" style="padding-left:28px;font-size:13px">
+      <input id="list-search" type="text" placeholder="이름, 전화번호, 계약서번호 검색..." class="field-input sm" style="padding-left:28px;font-size:13px">
     </div>
     <select id="list-sort" class="field-input sm" style="width:auto;flex-shrink:0;font-size:13px">
       <option value="name">이름순 (가나다)</option>
@@ -3013,6 +3021,7 @@ async function connectFirebase(cfg){
     unsub=onSnapshot(collection(db,'contracts'),snap=>{
       window.__hhcReady&&window.__hhcReady();
       allContracts=snap.docs.map(d=>({...d.data(),__id:d.id}));
+      setTimeout(()=>{ctBackfillNo();},1500);   // 예전 계약에 계약서번호 한 번 붙이기
       allContracts.sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
       updateSelectLists();
       _hhcRunGoto();
@@ -3305,6 +3314,101 @@ setTimeout(()=>{const sel=document.getElementById('f-rn-pkg');if(sel&&sel.option
 function ckVal(id){const el=document.getElementById(id);return el?String(el.value||'').trim():'';}
 function ckSet(id,v){const el=document.getElementById(id);if(el)el.value=v||'';}
 
+// ── ♻️ 갱신 · 🔁 양도양수 계약 만들기 (2026-11-11) ──
+//  기존 계약에서 「갱신」 또는 「양도」 → 새 계약서 창에 정보 자동 입력 + 넘겨받는 잔액을 이월금액으로 추가.
+//  저장할 때 확인창 → 새 계약 저장 후 기존 계약에 「…잔액 이월/양도」 줄을 넣어 그만큼 차감하고,
+//  남은 잔액이 0 이 되면 「종료」로 바꿈. (갱신 = 잔액 전부, 양도 = 양도금액만큼)
+let renewFrom=null;   // {id,no,name,mode:'renewal'|'transfer'}
+let lkEntry=null;     // 이용내역에 넣은 이월 줄 (이 화면에서만 기억)
+function lkRemain(){const old=renewFrom&&allContracts.find(x=>x.__id===renewFrom.id);return old?Math.max(0,ncBalance(old).remain):0;}
+function lkAmount(){   // 이번에 넘겨받는 금액
+  if(!renewFrom)return 0;
+  const rem=lkRemain();
+  if(renewFrom.mode!=='transfer')return rem;
+  const v=parseFloat(ckVal('f-tr-amt'));return isNaN(v)?rem:Math.max(0,Math.min(v,rem));
+}
+function lkSyncCarry(){   // 이용내역의 이월 줄 금액을 지금 넘겨받는 금액으로 맞춤
+  if(!renewFrom)return;
+  const amt=lkAmount();
+  let e=(lkEntry&&currentUsageHistory.indexOf(lkEntry)>=0)?lkEntry:null;
+  if(amt>0.005){
+    if(!e){e={id:Date.now(),date:today(),amount:'0',discount:'0',member_amount:'0'};currentUsageHistory.unshift(e);lkEntry=e;}
+    e.carryover=amt.toFixed(2);
+    if(renewFrom.mode==='transfer'){e.desc='양도받은 잔액 (양도자 '+renewFrom.name+' · '+renewFrom.no+')';e.desc_en='Balance transferred from '+renewFrom.name+' ('+renewFrom.no+')';}
+    else{e.desc='기존 계약 잔액 이월 ('+renewFrom.no+')';e.desc_en='Balance carried over from previous contract ('+renewFrom.no+')';}
+  }else if(e){currentUsageHistory=currentUsageHistory.filter(u=>u!==e);lkEntry=null;}
+  updateTotal();renderUsage();
+}
+function rnNote(){
+  const el=document.getElementById('rn-note');if(!el)return;
+  if(!renewFrom){el.style.display='none';el.innerHTML='';return;}
+  const rem=lkRemain(),amt=lkAmount(),tr=renewFrom.mode==='transfer';
+  el.innerHTML='<button type="button" class="x" id="rn-cancel">'+(tr?'양도':'갱신')+' 취소 ✕</button>'+
+    (tr?'🔁 <b>양도양수 계약서 작성 중</b> — 양도자 <b>'+ncEsc(renewFrom.name)+'</b> · 기존 계약 <b>'+ncEsc(renewFrom.no)+'</b> (남은 잔액 RM '+fmt(rem)+')'+
+        '<br>양도금액 <b>RM '+fmt(amt)+'</b>이 이월금액으로 들어갑니다. 저장하면 기존 계약에서 그만큼 차감'+(amt>=rem-0.005?'되고 「종료」로 정리됩니다.':'됩니다.')+
+        '<br>새 계약자(양수인) 이름 · 전화번호를 입력해 주세요.'
+       :'♻️ <b>갱신 계약서 작성 중</b> — 기존 계약 <b>'+ncEsc(renewFrom.no)+'</b>'+
+        (rem>0.005?'의 남은 잔액 <b>RM '+fmt(rem)+'</b>이 이월금액으로 들어갑니다.':'(남은 잔액 없음)')+
+        '<br>저장하면 기존 계약은 잔액 0 · 「종료」로 정리됩니다.');
+  el.style.display='block';
+  const x=document.getElementById('rn-cancel');if(x)x.onclick=()=>{currentUsageHistory=currentUsageHistory.filter(u=>u!==lkEntry);lkEntry=null;renewFrom=null;rnNote();updateTotal();renderUsage();};
+}
+function rnBtn(){['btn-renew','btn-transfer'].forEach(id=>{const b=document.getElementById(id);if(b)b.style.display=currentEditId?'block':'none';});}
+function startLinked(id,mode){
+  const c=allContracts.find(x=>x.__id===id);if(!c)return;
+  const b=ncBalance(c),rem=Math.max(0,b.remain),no=cxaNo(c,c.__id),tr=mode==='transfer';
+  resetForm();lkEntry=null;
+  if(!tr){
+    document.getElementById('f-name').value=c.name||'';
+    document.getElementById('f-phone').value=c.phone||'+60 ';
+    currentContractType=c.contract_type||'residential';
+    document.querySelectorAll('[data-ctype]').forEach(x=>x.classList.toggle('active',x.dataset.ctype===currentContractType));
+  }
+  // 같은 패키지로 미리 선택 (금액·적립금은 패키지 기준으로 다시 채워짐 — 필요하면 바꾸기)
+  const fp=document.getElementById('f-package');
+  if(c.package_id&&fp){fp.value=c.package_id;fp.dispatchEvent(new Event('change'));}
+  const st=c.service_type||0;
+  document.querySelectorAll('input[name="svc"]').forEach(x=>{x.checked=parseInt(x.value)===st;});
+  document.querySelectorAll('.svc-opt').forEach((o,i)=>o.classList.toggle('sel',i===st));
+  const bens=typeof c.benefits==='string'?JSON.parse(c.benefits||'{}'):(c.benefits||{});
+  document.querySelectorAll('[data-benefit]').forEach(cb=>{const v=bens[cb.dataset.benefit]!==undefined?bens[cb.dataset.benefit]:true;cb.checked=v;cb.closest('.ben-item').classList.toggle('on',v);});
+  if(tr){ckSet('f-tr-from',c.name);ckSet('f-tr-amt',rem.toFixed(2));ckSet('f-tr-date',today());setContractKind('transfer');}
+  else{ckSet('f-rn-date',c.contract_date);ckSet('f-rn-no',no);ckSet('f-rn-pkg',c.package_id);setContractKind('renewal');}
+  renewFrom={id:c.__id,no:no,name:c.name||'',mode:tr?'transfer':'renewal'};
+  lkSyncCarry();
+  if(typeof syncTierUIFromSelect==='function')syncTierUIFromSelect();
+  if(typeof updateProgress==='function')updateProgress();
+  switchTab('admin');if(window.setAdminView)setAdminView('form');
+  const cb=document.getElementById('body-contractor');if(cb&&!cb.classList.contains('open')){const h=document.querySelector('[data-target="body-contractor"]');if(h)h.click();}
+  rnNote();rnBtn();window.scrollTo(0,0);
+  if(tr)setTimeout(()=>{const n=document.getElementById('f-name');if(n)n.focus();},300);
+}
+function startRenewal(id){startLinked(id,'renewal');}
+function startTransfer(id){startLinked(id,'transfer');}
+window.startRenewal=startRenewal;window.startTransfer=startTransfer;
+// 양도금액을 고치면 이월 줄 · 안내도 함께 맞춤
+setTimeout(()=>{const a=document.getElementById('f-tr-amt');if(a)a.addEventListener('input',()=>{if(renewFrom&&renewFrom.mode==='transfer'){lkSyncCarry();rnNote();}});},0);
+// 새 계약 저장 직후 — 기존 계약 정리 (넘겨준 금액만큼 차감, 잔액 0 이면 종료)
+async function rnCloseOld(newId,newData,amt){
+  const r=renewFrom;renewFrom=null;rnNote();
+  if(!r)return;
+  try{
+    const old=allContracts.find(x=>x.__id===r.id);if(!old)return;
+    const h=typeof old.usage_history==='string'?JSON.parse(old.usage_history||'[]'):(old.usage_history||[]);
+    const rem=Math.max(0,ncBalance(old).remain);
+    const give=Math.max(0,Math.min(amt,rem));
+    const newNo=cxaNo(newData,newId),tr=r.mode==='transfer';
+    if(give>0.005)h.push({id:Date.now(),date:today(),
+      desc:tr?('양수인에게 잔액 양도 ('+(newData.name||'')+' · '+newNo+')'):('갱신 계약으로 잔액 이월 ('+newNo+')'),
+      desc_en:tr?('Balance transferred to '+(newData.name||'')+' ('+newNo+')'):('Balance carried over to renewal contract ('+newNo+')'),
+      amount:give.toFixed(2),carryover:'0',discount:'0',member_amount:'0',link_move:'out'});
+    const upd={usage_history:JSON.stringify(h),updated_at:new Date().toISOString()};
+    if(rem-give<=0.005)upd.status='ended';
+    upd[tr?'transferred_to':'renewed_to']=newId;
+    await updateDoc(doc(db,'contracts',r.id),upd);
+  }catch(e){console.error('기존 계약 정리 실패',e);showModal('기존 계약 정리 실패','새 계약은 저장되었습니다. 기존 계약('+r.no+')의 잔액과 상태는 직접 정리해 주세요. '+(e.message||''),false);}
+}
+
 // ── FORM ──
 function getFormData(){
   const benefits={};
@@ -3370,6 +3474,8 @@ function loadFormData(r){
   // show customer link if editing saved contract
   if(currentEditId)updateCustomerLink(currentEditId);
   else document.getElementById('clink-box').style.display='none';
+  if(currentEditId){renewFrom=null;rnNote();}
+  rnBtn();
 }
 
 function resetForm(){
@@ -3392,6 +3498,7 @@ function resetForm(){
   updateTotal();renderUsage();
   if(typeof syncTierUIFromSelect==='function')syncTierUIFromSelect();
   if(typeof updateProgress==='function')updateProgress();
+  renewFrom=null;rnNote();rnBtn();
 }
 
 function updateTotal(){
@@ -3730,6 +3837,16 @@ async function saveContract(){
   if(!data.name||!data.package_id){showModal('입력 오류','계약자명과 패키지를 입력해주세요.',false);return;}
   if(!db){showModal('오류','Firebase가 연결되지 않았습니다. 새로고침 후 다시 시도해주세요.',false);return;}
   if(_isSaving)return; // 이미 저장 중이면 무시 (중복 저장 방지)
+  // ♻️ 갱신 · 🔁 양도양수 계약이면 저장 전에 한 번 확인 (기존 계약 정리 안내)
+  if(renewFrom&&!currentEditId&&!renewFrom.ok){
+    const _rem=lkRemain(),_amt=lkAmount(),_tr=renewFrom.mode==='transfer';
+    showModal(_tr?'양도양수 계약 저장':'갱신 계약 저장',
+      _tr?('양도자 '+renewFrom.name+'의 계약('+renewFrom.no+')에서 RM '+fmt(_amt)+'을 이 계약으로 넘기고'+(_amt>=_rem-0.005?', 기존 계약은 「종료」로 바꿉니다.':' 차감합니다.')+' 저장할까요?')
+         :('기존 계약('+renewFrom.no+')'+(_rem>0.005?'의 남은 잔액 RM '+fmt(_rem)+'을 이 계약으로 이월하고, ':'은 ')+'기존 계약은 「종료」로 바꿉니다. 저장할까요?'),
+      true,()=>{if(renewFrom){renewFrom.ok=true;renewFrom.amt=lkAmount();saveContract();}});
+    return;
+  }
+  if(renewFrom&&!currentEditId){data[renewFrom.mode==='transfer'?'transfer_from_id':'renew_from_id']=renewFrom.id;}
   _isSaving=true;
   // 연락처가 비어 있으면 고객 마스터에서 자동으로 가져옵니다
   if(window.HHCC_fill){
@@ -3777,9 +3894,12 @@ async function saveContract(){
       await updateDoc(doc(db,'contracts',currentEditId),data);
     }else{
       if(allContracts.length>=999){showLoading(false);document.getElementById('limit-warn').style.display='block';setTimeout(()=>document.getElementById('limit-warn').style.display='none',3000);return;}
+      if(!data.contract_no)data.contract_no=nextContractNo(data.contract_date);
       const ref=await addDoc(collection(db,'contracts'),{...data,created_at:new Date().toISOString()});
       currentEditId=ref.id;
       updateCustomerLink(currentEditId);
+      if(renewFrom&&renewFrom.ok)await rnCloseOld(ref.id,data,renewFrom.amt||0);
+      rnBtn();
     }
     if(window.HHCC_upsert)HHCC_upsert(data.name,data.phone);
     showLoading(false);
@@ -3900,8 +4020,10 @@ function renderList(){
   let filtered=allContracts.filter(c=>{
     if(listStFilter!=='all'&&stOf(c)!==listStFilter)return false;
     if(!searchVal)return true;
+    const _sq=searchVal.replace(/[\s\-]/g,'');
     return (c.name||'').toLowerCase().includes(searchVal)||
-           (c.phone||'').toLowerCase().includes(searchVal);
+           (c.phone||'').toLowerCase().includes(searchVal)||
+           (_sq.length>=2&&cxaNo(c,c.__id).toLowerCase().replace(/[\s\-]/g,'').includes(_sq));
   });
 
   // 정렬
@@ -3939,7 +4061,7 @@ function renderList(){
     const ckBadge=c.contract_kind==='transfer'?'<span class="lb-ck">🔁 양도양수</span>':(c.contract_kind==='renewal'?'<span class="lb-ck">♻️ 갱신</span>':'');
     return `<tr${ended?' style="opacity:.62;background:#f8fafc"':''}>
       <td>${c.contract_date||''}</td>
-      <td style="font-weight:600">${c.name||''}${stBadge}${ckBadge}</td>
+      <td style="font-weight:600">${c.name||''}${stBadge}${ckBadge}<div class="lno">${cxaNo(c,c.__id)}</div></td>
       <td style="color:var(--text3)">${c.phone||''}</td>
       <td><span class="pkg-badge">${pkg?pkg.label:'-'}</span></td>
       <td style="text-align:right">RM ${fmt(c.amount_paid)}</td>
@@ -3949,6 +4071,8 @@ function renderList(){
           <button class="btn-act btn-act-e" data-edit="${c.__id}">수정</button>
           <button class="btn-act btn-act-v" data-view="${c.__id}">보기</button>
           <button class="btn-act btn-act-c" data-cust="${c.__id}">👤 고객</button>
+          <button class="btn-act btn-act-r" data-renew="${c.__id}">♻️ 갱신</button>
+          <button class="btn-act btn-act-r" data-transfer="${c.__id}">🔁 양도</button>
           <button class="btn-act btn-act-d" data-del="${c.__id}">삭제</button>
         </div>
       </td>
@@ -3973,6 +4097,10 @@ document.getElementById('list-tbody').addEventListener('click',e=>{
   // 목록에서 다른 계약을 골랐으면 그 칸도 반드시 함께 바꿔 준다.
   // (안 그러면 두 번째부터는 처음 고른 계약이 계속 보인다)
   if(cu){const c=allContracts.find(x=>x.__id===cu.dataset.cust);if(c)window.hhcOpenCust(c.phone,c.name);return;}
+  const rn=e.target.closest('[data-renew]');
+  if(rn){startRenewal(rn.dataset.renew);return;}
+  const tf=e.target.closest('[data-transfer]');
+  if(tf){startTransfer(tf.dataset.transfer);return;}
   if(ed){const c=allContracts.find(x=>x.__id===ed.dataset.edit);if(c){currentEditId=c.__id;currentViewId=c.__id;hubSyncSelects(c.__id);loadFormData(c);switchTab('admin');}}
   else if(vi){currentViewId=vi.dataset.view;hubSyncSelects(currentViewId);switchTab('customer');}
   else if(dl){
@@ -4031,6 +4159,11 @@ const NC_RE_QTY=/[\s]([\d.]+)\s*(대|개|식|EA|unit\(s\)|units?|pcs?|sets?)\s*$
 const NC_RE_ADJ=/([+\-−]\s*RM\s*[\d,]+(?:\.\d+)?)\s*$/i;
 function ncStripCode(s){return String(s==null?'':s).replace(NC_RE_MEMCODE,'').replace(NC_RE_MEMPFX,'').replace(NC_RE_MEMQTY,' ').replace(NC_RE_CODE,'').replace(/\s{2,}/g,' ').trim();}
 // 회원제상품 이용내역 여부 — 목록 최하단 정렬 기준
+// 갱신·양도로 다른 계약에 넘겨준 잔액 줄 — 「이용 횟수」에서 뺌 (잔액 계산에는 그대로 반영)
+function isLinkMoveEntry(u){
+  if(u&&u.link_move)return true;
+  return /^(갱신 계약으로 잔액 이월|양수인에게 잔액 양도)/.test(String((u&&u.desc)||'').trim());
+}
 function isMemberEntry(u){
   if((parseFloat(u&&u.member_amount)||0)>0)return true;
   const d=String((u&&u.desc)||'')+' '+String((u&&u.desc_en)||'');
@@ -4258,7 +4391,40 @@ function ckInfo(c,isEn){
   if(c.renew_prev_pkg){const p=PACKAGES.find(x=>x.id===c.renew_prev_pkg);const a=String(p?p.label:c.renew_prev_pkg).split(' / ');rows.push([X('기존 상품명','Previous Package'),ncEsc(isEn?(a[1]||a[0]):a[0])]);}
   return {label:X('갱신 계약','Renewal Contract'),short:X('갱신계약','Renewal'),title:X('갱신 정보','Renewal Details'),rows};
 }
+// 계약서번호 (2026-11-11): HHC-연도-월일-순번 (예: HHC-2026-1111-01) — 저장 때 contract_no 로 고정 보관.
+//  예전 계약(contract_no 없음)은 관리자 화면이 처음 열릴 때 계약일·작성 순서대로 번호를 한 번 붙여 저장합니다.
+function ctNoPrefix(dateStr,createdAt){
+  var d=String(dateStr||'').replace(/[^0-9]/g,'');
+  if(d.length<8)d=String(createdAt||'').replace(/[^0-9]/g,'');
+  if(d.length<8){var t=new Date();d=t.getFullYear()+('0'+(t.getMonth()+1)).slice(-2)+('0'+t.getDate()).slice(-2);}
+  return 'HHC-'+d.slice(0,4)+'-'+d.slice(4,8);
+}
+function ctNoMax(prefix){
+  var mx=0;(allContracts||[]).forEach(function(x){var n=String(x.contract_no||'');if(n.indexOf(prefix+'-')===0){var k=parseInt(n.slice(prefix.length+1),10);if(k>mx)mx=k;}});return mx;
+}
+function nextContractNo(dateStr){var pf=ctNoPrefix(dateStr);return pf+'-'+('0'+(ctNoMax(pf)+1)).slice(-2);}
+let _ctNoFilling=false;
+async function ctBackfillNo(){
+  if(_ctNoFilling||!db)return;
+  var legacy=(allContracts||[]).filter(function(x){return !x.contract_no;});
+  if(!legacy.length)return;
+  _ctNoFilling=true;
+  try{
+    legacy.sort(function(a,b){return String(a.created_at||'').localeCompare(String(b.created_at||''));});
+    var next={};
+    for(var i=0;i<legacy.length;i++){
+      var c=legacy[i],pf=ctNoPrefix(c.contract_date,c.created_at);
+      if(next[pf]==null)next[pf]=ctNoMax(pf);
+      next[pf]++;
+      var no=pf+'-'+('0'+next[pf]).slice(-2);
+      c.contract_no=no;   // 화면에 바로 반영 (저장은 아래)
+      try{await updateDoc(doc(db,'contracts',c.__id),{contract_no:no});}catch(e){console.warn('계약서번호 저장 실패',c.__id,e);}
+    }
+  }finally{_ctNoFilling=false;}
+  try{if(document.getElementById('tab-list').classList.contains('active'))renderList();}catch(e){}
+}
 function cxaNo(c,id){
+  if(c&&c.contract_no)return String(c.contract_no);
   var d=String(c.contract_date||'').replace(/[^0-9]/g,'');
   if(d.length>=8)return 'HHC-'+d.slice(0,4)+'-'+d.slice(4,8);
   return 'HHC-'+String(id||'').slice(0,8).toUpperCase();
@@ -4402,7 +4568,7 @@ function buildCustomerAppHTML(c,L,mode,id){
   var _pkgNm=pkg?String(pkg.label).split(' / ')[isEn?1:0]||pkg.label:(isEn?'Membership':'회원권');
   var _crown=(NC_TIER_CROWN[(c.package_id||'').replace('-biz','')]||'\u{1F4B3}');
   var _left=Math.max(0,100-pct);
-  var _useN=(b.history||[]).filter(function(u){return !isMemberEntry(u)&&(parseFloat(u.amount)||0)>0;}).length;
+  var _useN=(b.history||[]).filter(function(u){return !isMemberEntry(u)&&!isLinkMoveEntry(u)&&(parseFloat(u.amount)||0)>0;}).length;
   h+='<div class="mbh">'+
      '<div class="mbh-top"><div class="mbh-tier"><span class="cr">'+_crown+'</span>'+ncEsc(_pkgNm)+'</div>'+
        '<span class="mbh-sts">'+(ckInfo(c,isEn)?'<span class="mbh-st ck">'+ckInfo(c,isEn).short+'</span>':'')+'<span class="mbh-st'+(ended?' off':'')+'">'+(ended?(isEn?'Ended':'종료'):(isEn?'Active':'이용 중'))+'</span></span></div>'+
@@ -4856,6 +5022,8 @@ document.getElementById('f-package').addEventListener('change',e=>{
 });
 ['f-paid','f-bonus','f-special-bonus'].forEach(id=>document.getElementById(id).addEventListener('input',updateTotal));
 document.getElementById('btn-save').addEventListener('click',saveContract);
+document.getElementById('btn-renew').addEventListener('click',()=>{if(currentEditId)startRenewal(currentEditId);});
+document.getElementById('btn-transfer').addEventListener('click',()=>{if(currentEditId)startTransfer(currentEditId);});
 // 계약서 폼 자동 임시저장 트리거
 document.getElementById('tab-admin').addEventListener('input',()=>{if(window.scheduleContractDraft)window.scheduleContractDraft();});
 
@@ -7173,7 +7341,7 @@ if('serviceWorker' in navigator){
   .m26-shh .r b{display:block;font-size:19px;font-weight:800;letter-spacing:-.03em;color:var(--m-ok);font-variant-numeric:tabular-nums}
   .m26-bf{display:flex;justify-content:space-between;font-size:13.5px;color:var(--m-ink2);padding:5px 2px}
   .m26-bf b{color:var(--m-ink);font-variant-numeric:tabular-nums}
-  .m26-ga{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 4px}
+  .m26-ga{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:10px 0 4px}
   .m26-ga button{border:0;font-family:inherit;background:var(--m-soft);border-radius:14px;padding:12px 2px 10px;font-size:12.5px;font-weight:700;color:var(--m-ink2);display:flex;flex-direction:column;align-items:center;gap:5px}
   .m26-ga button i{font-style:normal;font-size:20px;line-height:1}
   .m26-pri{width:100%;height:52px;border:0;border-radius:14px;background:var(--m-n);color:#fff;font-family:inherit;font-size:16px;font-weight:800;margin:10px 0 4px}
@@ -7261,9 +7429,9 @@ if('serviceWorker' in navigator){
   function openSh(tr){
     var td=tr.children;if(td.length<7)return;
     curRow=tr;
-    var nameEl=td[1].cloneNode(true);var st=Array.prototype.map.call(nameEl.querySelectorAll('span'),function(x){var t=x.textContent.trim();x.remove();return t;}).filter(Boolean).join(' · ');
+    var nameEl=td[1].cloneNode(true);var noEl=nameEl.querySelector('.lno');var cno=noEl?noEl.textContent.trim():'';if(noEl)noEl.remove();var st=Array.prototype.map.call(nameEl.querySelectorAll('span'),function(x){var t=x.textContent.trim();x.remove();return t;}).filter(Boolean).join(' · ');
     sh.innerHTML='<div class="m26-gr"></div>'+
-      '<div class="m26-shh"><div class="t"><b>'+esc(txt(nameEl))+'</b><small>'+esc(ko(txt(td[3])))+(st?' · '+esc(st):'')+'</small></div>'+
+      '<div class="m26-shh"><div class="t"><b>'+esc(txt(nameEl))+'</b><small>'+esc(ko(txt(td[3])))+(st?' · '+esc(st):'')+'</small>'+(cno?'<small>'+esc(cno)+'</small>':'')+'</div>'+
         '<div class="r"><small>잔액</small><b>'+esc(txt(td[5]))+'</b></div></div>'+
       '<div class="m26-bf"><span>계약일</span><b>'+esc(txt(td[0]))+'</b></div>'+
       '<div class="m26-bf"><span>전화번호</span><b>'+esc(txt(td[2])||'-')+'</b></div>'+
@@ -7273,6 +7441,8 @@ if('serviceWorker' in navigator){
         '<button type="button" data-a="edit"><i>✏️</i>수정</button>'+
         '<button type="button" data-a="usage"><i>📊</i>이용내역</button>'+
         '<button type="button" data-a="cust"><i>👤</i>고객</button>'+
+        '<button type="button" data-a="renew"><i>♻️</i>갱신</button>'+
+        '<button type="button" data-a="transfer"><i>🔁</i>양도</button>'+
       '</div>'+
       '<div class="m26-ls"><button type="button" data-a="del">🗑 삭제</button></div>';
     document.body.classList.add('m26-shon');
@@ -7285,6 +7455,8 @@ if('serviceWorker' in navigator){
     else if(a==='edit'){hit('[data-edit]');window.scrollTo(0,0);}
     else if(a==='usage'){if(hit('[data-edit]')&&window.setAdminView)setTimeout(function(){window.setAdminView('usage');window.scrollTo(0,0);},60);}
     else if(a==='cust')hit('[data-cust]');
+    else if(a==='renew'){hit('[data-renew]');window.scrollTo(0,0);}
+    else if(a==='transfer'){hit('[data-transfer]');window.scrollTo(0,0);}
     else if(a==='del')hit('[data-del]');
   });
   var tb=$$('list-tbody');
