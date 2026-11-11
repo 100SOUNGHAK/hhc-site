@@ -688,7 +688,12 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
 .csend .cs-b.kk{background:#FEE500;color:#3C1E1E;border-color:#F5DC00}
 .csend .cs-b.pv{background:#fff;color:var(--ink2);border-color:#DCE2EC;padding:0 11px}
 .csend .cs-b:disabled{opacity:.55;cursor:wait}
-@media(max-width:760px){.csend .cs-lb{flex:1 1 100%;margin-right:0}.csend .cs-b.wa,.csend .cs-b.kk{flex:1 1 0;justify-content:center}}
+.csend .cs-lg{display:inline-flex;background:#EEF1F6;border-radius:10px;padding:3px;gap:2px;height:36px;box-sizing:border-box}
+.csend .cs-lg button{border:none;background:transparent;font-family:inherit;font-size:12px;font-weight:900;color:var(--ink3);
+  border-radius:8px;padding:0 11px;cursor:pointer;line-height:1}
+.csend .cs-lg:not(.en) .ko,.csend .cs-lg.en .en{background:#fff;color:var(--nv);box-shadow:0 1px 3px rgba(15,23,42,.14)}
+.csend .cs-br{display:none}
+@media(max-width:760px){.csend .cs-lb{flex:1 1 0;margin-right:0}.csend .cs-br{display:block;flex:1 1 100%;height:0}.csend .cs-b.wa,.csend .cs-b.kk{flex:1 1 0;justify-content:center}}
 #care-pv{position:fixed;inset:0;z-index:2000;background:rgba(15,23,42,.72);display:flex;align-items:flex-start;justify-content:center;
   overflow:auto;padding:18px 12px 40px;cursor:zoom-out}
 #care-pv img{width:min(420px,100%);height:auto;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.4);display:block}
@@ -2176,12 +2181,30 @@ function careRowSend(e,idx){
   const md=parseInt(d.slice(5,7),10)+'월 '+parseInt(d.slice(8,10),10)+'일';
   return '<div class="csend">'+
     '<span class="cs-lb">🖼 '+(c.k===6?'6개월 정기관리':'3개월 건강관리')+' 안내장<small>마지막 관리 '+esc(md)+' · '+c.mo+'개월 경과 · 이미지만 발송</small></span>'+
+    // 🌐 안내장 언어 — 고객별로 기억합니다 (처음엔 한글)
+    '<span class="cs-lg'+(caCareEn(e)?' en':'')+'" role="group" aria-label="안내장 언어">'+
+      '<button type="button" class="ko" onclick="caCareLang(event,'+idx+',0)">한글</button>'+
+      '<button type="button" class="en" onclick="caCareLang(event,'+idx+',1)">EN</button></span>'+
+    '<span class="cs-br"></span>'+
     '<button type="button" class="cs-b pv" onpointerdown="caCarePre('+idx+')" onclick="caCarePv(event,'+idx+')">👁 미리보기</button>'+
     '<button type="button" class="cs-b wa" onpointerdown="caCarePre('+idx+')" onclick="caCareQuick(event,'+idx+',\'wa\')">💬 WhatsApp</button>'+
     '<button type="button" class="cs-b kk" onpointerdown="caCarePre('+idx+')" onclick="caCareQuick(event,'+idx+',\'kk\')">💛 카카오톡</button>'+
     '</div>';
 }
-function caCareImg(e){const d=careLastAc(e);return d?careFile(false,d,e.name):null;}
+// 🌐 고객별 안내장 언어 기억 (이 기기에만 저장 · 처음엔 한글)
+const CA_CARE_LG_KEY='hhc_ca_care_lang';
+let caCareLg={};
+try{caCareLg=JSON.parse(localStorage.getItem(CA_CARE_LG_KEY)||'{}')||{};}catch(_){caCareLg={};}
+function caCareEn(e){return caCareLg[mgSig(e)]===1;}
+window.caCareLang=function(ev,idx,en){
+  ev.stopPropagation();
+  const e=entries[idx];if(!e)return;
+  if(en)caCareLg[mgSig(e)]=1;else delete caCareLg[mgSig(e)];
+  try{localStorage.setItem(CA_CARE_LG_KEY,JSON.stringify(caCareLg));}catch(_){}
+  const g=ev.currentTarget.closest('.cs-lg');if(g)g.classList.toggle('en',!!en);
+  window.caCarePre(idx);   // 고른 언어의 안내장을 미리 만들어 둡니다
+};
+function caCareImg(e){const d=careLastAc(e);return d?careFile(caCareEn(e),d,e.name):null;}
 // 손가락이 닿는 순간 이미지를 미리 만들기 시작합니다 (공유창이 늦게 떠서 막히는 일을 줄임)
 window.caCarePre=function(idx){const e=entries[idx];const p=e&&caCareImg(e);if(p)p.catch(()=>{});};
 window.caCarePv=async function(ev,idx){
