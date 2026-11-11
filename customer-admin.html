@@ -1716,9 +1716,43 @@ function sortEntries(){
   });
   else if(curSort==='docs')   entries.sort((a,b)=>(docCount(b)-docCount(a))||byName(a,b));
   else                        entries.sort(byName);
+  // 🌿 「청소 후 3개월 · 6개월」 목록에서만 — 경과 개월 수 순서
+  //    (마지막 에어컨 관리일로 비교하므로 같은 개월 수 안에서도 날짜까지 정확히 정렬됩니다)
+  if(caCareFilter()&&curCareSort){
+    const hi=curCareSort==='moHi';
+    entries.sort((a,b)=>{
+      const da=careLastAc(a),dbb=careLastAc(b);
+      if(!da&&!dbb)return byName(a,b);
+      if(!da)return 1;            // 관리일을 알 수 없는 고객은 항상 뒤로
+      if(!dbb)return -1;
+      return (hi?da.localeCompare(dbb):dbb.localeCompare(da))||byName(a,b);
+    });
+  }
+}
+// 정렬 목록 — 「청소 후 3개월 · 6개월」을 골랐을 때만 「경과 많은순 · 적은순」이 나타납니다
+//  · 경과 정렬은 따로 기억하므로, 다른 목록으로 돌아가면 원래 정렬(이름순 등)이 그대로 적용됩니다
+const CA_SORT_OPTS=[['name','이름순'],['recent','최근 작성순'],['oldest','오래된 순'],['docs','기록 많은순']];
+const CA_CARE_SORT_OPTS=[['moHi','경과 많은순'],['moLo','경과 적은순']];
+let curCareSort=(function(){try{return localStorage.getItem('hhc_ca_care_sort')||'';}catch(e){return '';}})();
+function caCareFilter(){return curFilter==='care3'||curFilter==='care6';}
+let _caSortSig='';
+function caSortOpts(){
+  const sel=document.getElementById('sortby');if(!sel)return;
+  const care=caCareFilter(),val=(care&&curCareSort)?curCareSort:curSort;
+  const sig=(care?'c':'n')+'|'+val;
+  if(sig===_caSortSig)return;
+  _caSortSig=sig;
+  sel.innerHTML=(care?CA_CARE_SORT_OPTS:[]).concat(CA_SORT_OPTS)
+    .map(o=>'<option value="'+o[0]+'">'+(care&&o[0].slice(0,2)==='mo'?'⏱ ':'')+o[1]+'</option>').join('');
+  sel.value=val;
 }
 window.setSort=function(v){
-  curSort=v;try{localStorage.setItem('hhc_ca_sort',v);}catch(e){}
+  if(v==='moHi'||v==='moLo'){
+    curCareSort=v;try{localStorage.setItem('hhc_ca_care_sort',v);}catch(e){}
+  }else{
+    curSort=v;try{localStorage.setItem('hhc_ca_sort',v);}catch(e){}
+    if(caCareFilter()){curCareSort='';try{localStorage.removeItem('hhc_ca_care_sort');}catch(e){}}
+  }
   sortEntries();renderList();
 };
 function docCount(e){return Object.values(e.docs).reduce((a,arr)=>a+arr.length,0);}
@@ -2287,6 +2321,7 @@ function memberBadge(e){
   return '';
 }
 function renderList(){
+  caSortOpts();
   sortEntries();
   const qRaw=document.getElementById('q').value.trim();
   const q=sn(qRaw);
