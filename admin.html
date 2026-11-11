@@ -534,6 +534,8 @@ input[data-benefit]{display:none}
 .btn-act-r{border-color:#E3C98A;color:#8F6F28;background:#FBF6EA}.btn-act-r:hover{border-color:#B08D3A}
 .rn-note{display:none;margin-bottom:12px;padding:12px 14px;border-radius:12px;background:#FBF6EA;border:1px solid #EBDDB8;font-size:12.5px;color:#6B5420;line-height:1.6}
 .rn-note b{color:#4A3A12}.rn-note .x{float:right;border:0;background:none;color:#8F6F28;font-size:12px;font-weight:800;cursor:pointer;padding:0 0 0 8px;font-family:inherit}
+#btn-unlink{display:none;width:100%;margin-top:8px;padding:11px;border-radius:10px;border:1px solid #F3C4C4;background:#FDF2F2;color:#B42318;font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer}
+.btn-act-u{border-color:#F3C4C4;color:#B42318;background:#FDF2F2}
 #btn-renew,#btn-transfer{display:none;width:100%;margin-top:8px;padding:11px;border-radius:10px;border:1px solid #E3C98A;background:#FBF6EA;color:#8F6F28;font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer}
 .lb-ck{font-size:10px;font-weight:800;border-radius:5px;padding:2px 7px;background:#FBF3E0;color:#8F6F28;margin-left:5px;white-space:nowrap}
 .contract-doc{background:var(--white);border-radius:var(--radius-xl);border:1px solid var(--border);box-shadow:var(--shadow-lg);overflow:hidden}
@@ -1909,6 +1911,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
       <div class="save-toast" id="save-toast">✓ 저장되었습니다 / Saved!</div>
       <button type="button" id="btn-renew">♻️ 이 계약으로 갱신 계약서 만들기 / Renew</button>
       <button type="button" id="btn-transfer">🔁 이 계약을 다른 분께 양도 (양도양수 계약서) / Transfer</button>
+      <button type="button" id="btn-unlink">↩️ 이 갱신 · 양도 계약 취소 (기존 계약 되돌리기) / Undo</button>
       <button type="button" class="avs-jump" onclick="setAdminView('usage')">📊 서비스 이용내역 보기 →</button>
     </div>
 
@@ -3353,7 +3356,8 @@ function rnNote(){
   el.style.display='block';
   const x=document.getElementById('rn-cancel');if(x)x.onclick=()=>{currentUsageHistory=currentUsageHistory.filter(u=>u!==lkEntry);lkEntry=null;renewFrom=null;rnNote();updateTotal();renderUsage();};
 }
-function rnBtn(){['btn-renew','btn-transfer'].forEach(id=>{const b=document.getElementById(id);if(b)b.style.display=currentEditId?'block':'none';});}
+function rnBtn(){['btn-renew','btn-transfer'].forEach(id=>{const b=document.getElementById(id);if(b)b.style.display=currentEditId?'block':'none';});
+  const u=document.getElementById('btn-unlink');if(u){const c=currentEditId&&allContracts.find(x=>x.__id===currentEditId);u.style.display=isLinkedNew(c)?'block':'none';}}
 function startLinked(id,mode){
   const c=allContracts.find(x=>x.__id===id);if(!c)return;
   const b=ncBalance(c),rem=Math.max(0,b.remain),no=cxaNo(c,c.__id),tr=mode==='transfer';
@@ -3386,6 +3390,41 @@ function startLinked(id,mode){
 // 양도양수는 새로 돈을 내는 계약이 아님 — 납부금액·적립금 0, 잔액은 양도금액(이월)만
 function trZero(){['f-paid','f-bonus','f-special-bonus'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='0';});updateTotal();}
 setTimeout(()=>{const fp=document.getElementById('f-package');if(fp)fp.addEventListener('change',()=>{if(renewFrom&&renewFrom.mode==='transfer'&&!currentEditId)trZero();});},0);
+// ── ↩️ 갱신 · 양도 취소 (2026-11-11) ──
+//  갱신/양도로 만든 새 계약을 지우고, 기존 계약에서 차감했던 「…잔액 이월/양도」 줄을 빼서 잔액을 되돌리고 「유효」로 바꿈.
+//  새 계약에 이미 서비스 이용 기록이 있으면 취소하지 않음(직접 정리 안내).
+function isLinkedNew(c){return !!(c&&(c.renew_from_id||c.transfer_from_id));}
+function unlinkContract(id){
+  const c=allContracts.find(x=>x.__id===id);if(!isLinkedNew(c))return;
+  const tr=!!c.transfer_from_id,fromId=c.transfer_from_id||c.renew_from_id,old=allContracts.find(x=>x.__id===fromId);
+  const newNo=cxaNo(c,c.__id),word=tr?'양도양수':'갱신';
+  const h=typeof c.usage_history==='string'?JSON.parse(c.usage_history||'[]'):(c.usage_history||[]);
+  const used=h.filter(u=>!isMemberEntry(u)&&(parseFloat(u.amount)||0)>0);
+  if(used.length){showModal(word+' 취소 불가','이 계약('+newNo+')에 이미 서비스 이용 기록이 '+used.length+'건 있어 자동으로 취소할 수 없습니다. 이용 기록을 먼저 정리한 뒤 다시 시도해 주세요.',false);return;}
+  let give=0,oh=[];
+  if(old){
+    oh=typeof old.usage_history==='string'?JSON.parse(old.usage_history||'[]'):(old.usage_history||[]);
+    oh.forEach(u=>{if(u&&(u.link_to===c.__id||(u.link_move&&String(u.desc||'').indexOf(newNo)>=0)))give+=parseFloat(u.amount)||0;});
+  }
+  const msg='새 '+word+' 계약('+(c.name||'')+' · '+newNo+')을 삭제합니다.'+
+    (old?' 기존 계약('+(old.name||'')+' · '+cxaNo(old,old.__id)+')에서 넘겨준 RM '+fmt(give)+'을 되돌리고 「유효」로 바꿉니다.':' (기존 계약을 찾지 못해 새 계약만 삭제합니다.)')+' 진행할까요?';
+  showModal(word+' 취소',msg,true,async()=>{
+    showLoading(true);
+    try{
+      if(old){
+        const rest=oh.filter(u=>!(u&&(u.link_to===c.__id||(u.link_move&&String(u.desc||'').indexOf(newNo)>=0))));
+        const upd={usage_history:JSON.stringify(rest),status:'active',updated_at:new Date().toISOString()};
+        upd[tr?'transferred_to':'renewed_to']='';
+        await updateDoc(doc(db,'contracts',old.__id),upd);
+      }
+      await deleteDoc(doc(db,'contracts',c.__id));
+      if(currentEditId===c.__id)resetForm();
+      showLoading(false);
+      showModal(word+' 취소 완료',(old?'기존 계약 잔액을 되돌리고 「유효」로 바꿨습니다. ':'')+'새 계약은 삭제했습니다.',false);
+    }catch(e){showLoading(false);showModal('취소 실패',e.message||String(e),false);}
+  });
+}
+window.unlinkContract=unlinkContract;
 function startRenewal(id){startLinked(id,'renewal');}
 function startTransfer(id){startLinked(id,'transfer');}
 window.startRenewal=startRenewal;window.startTransfer=startTransfer;
@@ -3404,7 +3443,7 @@ async function rnCloseOld(newId,newData,amt){
     if(give>0.005)h.push({id:Date.now(),date:today(),
       desc:tr?('양수인에게 잔액 양도 ('+(newData.name||'')+' · '+newNo+')'):('갱신 계약으로 잔액 이월 ('+newNo+')'),
       desc_en:tr?('Balance transferred to '+(newData.name||'')+' ('+newNo+')'):('Balance carried over to renewal contract ('+newNo+')'),
-      amount:give.toFixed(2),carryover:'0',discount:'0',member_amount:'0',link_move:'out'});
+      amount:give.toFixed(2),carryover:'0',discount:'0',member_amount:'0',link_move:'out',link_to:newId});
     const upd={usage_history:JSON.stringify(h),updated_at:new Date().toISOString()};
     if(rem-give<=0.005)upd.status='ended';
     upd[tr?'transferred_to':'renewed_to']=newId;
@@ -4076,6 +4115,7 @@ function renderList(){
           <button class="btn-act btn-act-c" data-cust="${c.__id}">👤 고객</button>
           <button class="btn-act btn-act-r" data-renew="${c.__id}">♻️ 갱신</button>
           <button class="btn-act btn-act-r" data-transfer="${c.__id}">🔁 양도</button>
+          ${(c.renew_from_id||c.transfer_from_id)?`<button class="btn-act btn-act-u" data-unlink="${c.__id}">↩️ 취소</button>`:''}
           <button class="btn-act btn-act-d" data-del="${c.__id}">삭제</button>
         </div>
       </td>
@@ -4104,6 +4144,8 @@ document.getElementById('list-tbody').addEventListener('click',e=>{
   if(rn){startRenewal(rn.dataset.renew);return;}
   const tf=e.target.closest('[data-transfer]');
   if(tf){startTransfer(tf.dataset.transfer);return;}
+  const ul=e.target.closest('[data-unlink]');
+  if(ul){unlinkContract(ul.dataset.unlink);return;}
   if(ed){const c=allContracts.find(x=>x.__id===ed.dataset.edit);if(c){currentEditId=c.__id;currentViewId=c.__id;hubSyncSelects(c.__id);loadFormData(c);switchTab('admin');}}
   else if(vi){currentViewId=vi.dataset.view;hubSyncSelects(currentViewId);switchTab('customer');}
   else if(dl){
@@ -5027,6 +5069,7 @@ document.getElementById('f-package').addEventListener('change',e=>{
 document.getElementById('btn-save').addEventListener('click',saveContract);
 document.getElementById('btn-renew').addEventListener('click',()=>{if(currentEditId)startRenewal(currentEditId);});
 document.getElementById('btn-transfer').addEventListener('click',()=>{if(currentEditId)startTransfer(currentEditId);});
+document.getElementById('btn-unlink').addEventListener('click',()=>{if(currentEditId)unlinkContract(currentEditId);});
 // 계약서 폼 자동 임시저장 트리거
 document.getElementById('tab-admin').addEventListener('input',()=>{if(window.scheduleContractDraft)window.scheduleContractDraft();});
 
@@ -7447,7 +7490,7 @@ if('serviceWorker' in navigator){
         '<button type="button" data-a="renew"><i>♻️</i>갱신</button>'+
         '<button type="button" data-a="transfer"><i>🔁</i>양도</button>'+
       '</div>'+
-      '<div class="m26-ls"><button type="button" data-a="del">🗑 삭제</button></div>';
+      '<div class="m26-ls">'+(tr.querySelector('[data-unlink]')?'<button type="button" data-a="unlink">↩️ 갱신 · 양도 취소 (기존 계약 되돌리기)</button>':'')+'<button type="button" data-a="del">🗑 삭제</button></div>';
     document.body.classList.add('m26-shon');
   }
   sh.addEventListener('click',function(e){
@@ -7460,6 +7503,7 @@ if('serviceWorker' in navigator){
     else if(a==='cust')hit('[data-cust]');
     else if(a==='renew'){hit('[data-renew]');window.scrollTo(0,0);}
     else if(a==='transfer'){hit('[data-transfer]');window.scrollTo(0,0);}
+    else if(a==='unlink')hit('[data-unlink]');
     else if(a==='del')hit('[data-del]');
   });
   var tb=$$('list-tbody');
