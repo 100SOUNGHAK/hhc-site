@@ -2964,6 +2964,7 @@ document.addEventListener('visibilitychange',function(){
 });
 
 function render(){
+  window.HHC_LANG=LANG;try{document.documentElement.lang=LANG;}catch(e){}   // 공유 창·추천 창이 지금 화면 언어를 따르도록 (2026-11-13)
   let H_REC='';   // 최근 서비스 카드 — 아래에서 만들어 우리집 케어 현황 위에 넣습니다
   const L=T[LANG];
   const m=DATA.m;
@@ -3900,7 +3901,7 @@ function render(){
           cta:en?'See the offer':'이벤트 보기',act:'href="'+esc(BASE+'/event.html'+(en?'?lang=en':''))+'"',img:String(c.photo||'').replace(/'/g,'%27').replace(/"/g,'%22')});
       }
     }
-    // ⑥-2 🤝 지인 추천 (2026-11-13) — 추천 보상이 켜져 있을 때만. 누르면 추천 메시지 보내기 창(카드 아래 🤝 칸의 ✏️ 와 같음)
+    // ⑥-2 🤝 지인 추천 (2026-11-13) — 추천 보상이 켜져 있을 때만. 누르면 아래 「🤝 지인에게 추천하기」 칸(#rfc)으로 이동해 강조
     {
       const R=DATA.ref||null;
       if(R&&R.on&&R.code){
@@ -3908,7 +3909,7 @@ function render(){
         B.push({k:'ref',tone:'ref',ic:'🤝',tag:en?'Refer a friend':'지인 추천 혜택',
           big:en?'Refer a friend · earn <b>RM '+fm(R.pts)+'</b>':'지인 추천하고 <b>RM '+fm(R.pts)+'</b> 적립',
           sub:(en?'Happy Points after their first paid service':'신규 고객 첫 서비스 결제 후 해피포인트')+(R.newOn?(en?' · friend gets RM '+fm(R.newPts):' · 친구도 RM '+fm(R.newPts)):''),
-          cta:en?'Refer now':'추천하기',act:'data-rf="pv"'});
+          cta:en?'Refer now':'추천하기',act:'data-rfgo="1"'});   // 누르면 아래 「🤝 지인에게 추천하기」 칸을 화면 가운데로
       }
     }
     // ⑦ 상시 혜택(커튼 현장세탁) 배너는 2026-11-13 대표님 요청으로 뺐습니다
@@ -4288,6 +4289,33 @@ function focusSection(){
   },1200);
 }
 
+// ── 🤝 「지인 추천 혜택」 배너 → 아래 「지인에게 추천하기」 칸을 화면 가운데로 옮기고 잠깐 강조 (2026-11-13) ──
+function goRef(){
+  var t=document.getElementById('rfc');if(!t)return;
+  hiClear();
+  var r=t.getBoundingClientRect();
+  var y=r.top+window.scrollY-Math.max(60,(window.innerHeight-r.height)/2);
+  var max=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
+  var gap=Math.ceil(y-max);
+  if(gap>0){   // 맨 아래 가까이 있어 가운데까지 못 오면, 그만큼 잠시 여백을 둡니다(강조가 끝나면 없앰)
+    var sp=document.createElement('div');sp.id='hi-spacer';document.body.appendChild(sp);
+    sp.style.transition='none';sp.style.height=gap+'px';void sp.offsetHeight;sp.style.transition='';
+  }
+  try{window.scrollTo({top:y<0?0:y,behavior:'smooth'});}catch(e){window.scrollTo(0,y<0?0:y);}
+  _hiActive=true;
+  t.classList.add('hi-focus');
+  setTimeout(function(){t.classList.add('done');},2800);
+  setTimeout(function(){
+    ['pointerdown','click','touchstart'].forEach(function(ev){window.addEventListener(ev,_hiOff,true);});
+    setTimeout(function(){if(_hiActive)_hiOff();},8000);
+  },1200);
+}
+document.addEventListener('click',function(ev){
+  var b=ev.target&&ev.target.closest?ev.target.closest('[data-rfgo]'):null;
+  if(!b)return;
+  ev.preventDefault();goRef();
+});
+
 // ── 데이터 로딩 : 일시적 오류(네트워크 지연 등)는 화면에 보여주기 전에 잠깐 간격을 두고
 //    최대 2번 더 자동으로 다시 시도합니다. 「고객 정보 없음(not-found)」만 확정 오류로 보고
 //    곧바로 포기하며, 그 외 오류는 재시도 후에도 실패하면 화면에 「다시 시도」 버튼을 보여줍니다.
@@ -4387,13 +4415,13 @@ boot();
    「✕ 닫기」 · 「←」 · 휴대폰 뒤로가기 로 항상 마이페이지로 돌아옵니다.
    ───────────────────────────────────────────────────────────── */
 (function(){
-  var EN=(new URLSearchParams(location.search).get('lang')==='en');
+  function isEN(){return window.HHC_LANG?window.HHC_LANG==='en':(new URLSearchParams(location.search).get('lang')==='en');}   // 화면에서 한/EN 을 바꾸면 그 언어를 따름 (2026-11-13)
   var stack=[];             // 문서 이동 기록 (문서 안에서 또 문서를 열 때)
   var isOpen=false, pushed=false;
   var wrap,bar,body,ttlEl,backEl;
 
   function g(id){return document.getElementById(id);}
-  function T(ko,en){return EN?en:ko;}
+  function T(ko,en){return isEN()?en:ko;}
 
   // 문서 종류별 제목
   function titleOf(url){
@@ -4545,8 +4573,8 @@ boot();
     왓츠앱 링크·문서 링크를 함께 안내합니다.
    ───────────────────────────────────────────────────────────── */
 (function(){
-  var EN=(new URLSearchParams(location.search).get('lang')==='en');
-  function T(ko,en){return EN?en:ko;}
+  function isEN(){return window.HHC_LANG?window.HHC_LANG==='en':(new URLSearchParams(location.search).get('lang')==='en');}   // 화면에서 한/EN 을 바꾸면 그 언어를 따름 (2026-11-13)
+  function T(ko,en){return isEN()?en:ko;}
   function ov(){return document.getElementById('sh-ov');}
   function box(){return document.getElementById('sh-bx');}
   function shShow(html){box().innerHTML=html;ov().classList.add('on');}
@@ -4791,7 +4819,7 @@ boot();
      내 화면이 한국어여도 **영어를 기본값**으로 만들어 보냅니다.
      견적서(qt)는 지금처럼 화면 언어를 그대로 따릅니다. */
   var PDF_EN_ALWAYS={iv:1,ip:1};
-  function shLang(kind){ return PDF_EN_ALWAYS[kind]?'en':(EN?'en':'ko'); }
+  function shLang(kind){ return PDF_EN_ALWAYS[kind]?'en':(isEN()?'en':'ko'); }
   // 주소의 lang 값을 원하는 언어로 바꿔준다
   function withLang(url,lg){
     try{ var u=new URL(url,location.href); u.searchParams.set('lang',lg); return u.toString(); }
@@ -4803,7 +4831,7 @@ boot();
 
   function fname(kind,id,lg){
     var k={iv:'Invoice',ip:'Report',qt:'Quotation'}[kind]||'Document';
-    var sfx=(String(lg||(EN?'en':'ko')).toLowerCase()==='ko')?'KO':'EN';
+    var sfx=(String(lg||(isEN()?'en':'ko')).toLowerCase()==='ko')?'KO':'EN';
     return 'HHC_'+k+'_'+String(id||'').replace(/[^A-Za-z0-9_-]/g,'')+'_'+sfx+'.pdf';
   }
 
@@ -4813,7 +4841,7 @@ boot();
     ev.preventDefault();ev.stopPropagation();
     var kind=b.getAttribute('data-shk'),id=b.getAttribute('data-shi'),
         title=b.getAttribute('data-sht'),url=b.getAttribute('data-shu');
-    if(kind==='ip'||kind==='qt'){linkSheet(b,EN?'en':'ko');return;}   // 점검보고서 · 견적서 = 반응형 화면 링크로 공유
+    if(kind==='ip'||kind==='qt'){linkSheet(b,isEN()?'en':'ko');return;}   // 점검보고서 · 견적서 = 반응형 화면 링크로 공유
     shareDoc(kind,id,title,url);
   },true);
 
@@ -5127,7 +5155,7 @@ boot();
     try{await copyTx(t);toast(lg==='en'?'✅ Message copied. Paste it into KakaoTalk or any app.':'✅ 메시지가 복사되었습니다. 카카오톡 대화방에 붙여 넣어 보내 주세요.');}catch(e){sheet(lg);}
   }
   function sheet(lg){
-    var en=(document.documentElement.lang==='en')||(new URLSearchParams(location.search).get('lang')==='en');
+    var en=window.HHC_LANG?window.HHC_LANG==='en':((document.documentElement.lang==='en')||(new URLSearchParams(location.search).get('lang')==='en'));
     function T(k,e){return en?e:k;}
     var t=msg(lg);
     show('<div class="t1">'+T('추천 메시지 보내기','Send a referral')+'</div>'+
@@ -5156,7 +5184,7 @@ boot();
     var b=ev.target&&ev.target.closest?ev.target.closest('[data-rf]'):null;
     if(!b||!R()||!R().code)return;
     ev.preventDefault();
-    var lg=(new URLSearchParams(location.search).get('lang')==='en')?'en':'ko',a=b.getAttribute('data-rf');
+    var lg=(window.HHC_LANG?window.HHC_LANG==='en':(new URLSearchParams(location.search).get('lang')==='en'))?'en':'ko',a=b.getAttribute('data-rf');
     if(a==='wa'){window.open('https://wa.me/?text='+encodeURIComponent(msg(lg)),'_blank','noopener');return;}
     if(a==='kk'){sys(lg);return;}
     if(a==='cp'){copyTx(url(lg)).then(function(){toast(lg==='en'?'✅ Referral link copied':'✅ 추천 링크가 복사되었습니다');},function(){sheet(lg);});return;}
