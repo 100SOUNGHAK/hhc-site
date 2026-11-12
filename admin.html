@@ -1763,6 +1763,12 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
               <input id="f-phone" type="text" placeholder="+60 ···" class="field-input sm">
             </div>
           </div>
+          <div class="fg" style="margin-top:10px">
+            <div class="field">
+              <label class="field-label">서비스 대상 (콘도·주택명) / Service Property <span style="font-size:10px;color:var(--text3);font-weight:400">계약서에는 이름·서비스 대상, 전화번호는 받은 경우에만 표시 — 여권번호 등 신분 정보는 받지 않음 · 이사 시 고객 통보 받은 후 여기서 변경</span></label>
+              <input id="f-residence" type="text" placeholder="예: Pavilion Hilltop Mont Kiara" class="field-input sm" autocomplete="off">
+            </div>
+          </div>
           <div id="dupc-note" class="dupc-note" style="display:none"></div>
           <div class="fg" style="margin-top:10px">
             <div class="field">
@@ -3365,6 +3371,7 @@ function startLinked(id,mode){
   if(!tr){
     document.getElementById('f-name').value=c.name||'';
     document.getElementById('f-phone').value=c.phone||'+60 ';
+    document.getElementById('f-residence').value=c.residence||'';
     currentContractType=c.contract_type||'residential';
     document.querySelectorAll('[data-ctype]').forEach(x=>x.classList.toggle('active',x.dataset.ctype===currentContractType));
   }
@@ -3459,6 +3466,7 @@ function getFormData(){
     contract_date:document.getElementById('f-date').value,
     name:document.getElementById('f-name').value,
     phone:document.getElementById('f-phone').value,
+    residence:document.getElementById('f-residence').value.trim(),
     package_id:document.getElementById('f-package').value,
     amount_paid:document.getElementById('f-paid').value||'0',
     bonus_credit:document.getElementById('f-bonus').value||'0',
@@ -3486,6 +3494,7 @@ function loadFormData(r){
   document.getElementById('f-date').value=r.contract_date||today();
   document.getElementById('f-name').value=r.name||'';
   document.getElementById('f-phone').value=r.phone||'+60 ';
+  document.getElementById('f-residence').value=r.residence||'';
   document.getElementById('f-package').value=r.package_id||'';
   document.getElementById('f-paid').value=r.amount_paid||'';
   document.getElementById('f-bonus').value=r.bonus_credit||'';
@@ -3524,7 +3533,7 @@ function resetForm(){
   currentEditId=null;currentUsageHistory=[];
   if(typeof dupcClear==='function')dupcClear();
   document.getElementById('f-date').value=today();
-  ['f-name','f-terms','f-terms-en'].forEach(id=>document.getElementById(id).value='');
+  ['f-name','f-residence','f-terms','f-terms-en'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('f-phone').value='+60 ';
   setContractStatus('active');
   ['f-tr-from','f-tr-amt','f-tr-date','f-rn-date','f-rn-no','f-rn-pkg'].forEach(id=>ckSet(id,''));
@@ -3937,7 +3946,8 @@ async function saveContract(){
     }else{
       if(allContracts.length>=999){showLoading(false);document.getElementById('limit-warn').style.display='block';setTimeout(()=>document.getElementById('limit-warn').style.display='none',3000);return;}
       if(!data.contract_no)data.contract_no=nextContractNo(data.contract_date);
-      const ref=await addDoc(collection(db,'contracts'),{...data,created_at:new Date().toISOString()});
+      // ben_rev:2 = 2026-11-13 이후 새로 만든 계약서 → 「부가 서비스 및 혜택 변동·중단」 안내 적용 (기존 계약서에는 없음)
+      const ref=await addDoc(collection(db,'contracts'),{...data,ben_rev:2,created_at:new Date().toISOString()});
       currentEditId=ref.id;
       updateCustomerLink(currentEditId);
       if(renewFrom&&renewFrom.ok)await rnCloseOld(ref.id,data,renewFrom.amt||0);
@@ -4165,8 +4175,19 @@ const NC_TXT={
   ko:{title_contract:'서비스 계약서',title_usage:'서비스 이용내역 · 잔액',title_all:'서비스 계약서 · 이용내역',
     tag_contract:'MEMBERSHIP CONTRACT',tag_usage:'USAGE & BALANCE',
     lbl_name:'계약자명',lbl_phone:'전화번호',lbl_date:'계약일',lbl_pkg:'패키지',
-    sec_contractor:'계약자 정보',sec_pkg:'계약 상품',sec_svc:'제공 서비스',sec_how:'사용 방법',sec_valid:'계약 유효 및 종료',sec_effect:'계약 효력 및 소멸',sec_terms:'특약사항',sec_ben:'부가 서비스 및 혜택',
+    sec_contractor:'계약자 정보',sec_pkg:'계약 상품',sec_svc:'제공 서비스',sec_how:'사용 방법',sec_valid:'계약 유효 및 종료',sec_form:'계약 성립 (서명 생략)',sec_effect:'계약 효력 및 소멸',sec_terms:'특약사항',sec_ben:'부가 서비스 및 혜택',
     paid:'납부금액',bonus:'기본 적립금',spec:'특별 적립금',total:'총 사용가능금액',
+    sec_price:"차감 기준 (이용 시점 정상가)",
+    price:"서비스를 이용할 때 잔액에서 차감하는 금액은 이용 시점에 당사가 홈페이지 요금표 등으로 공지한 정상가를 기준으로 계산합니다. 정상가가 변경된 경우에는 변경 후 이용분부터 변경된 정상가를 적용하며, 이미 이용한 서비스의 차감 금액은 다시 계산하지 않습니다.",
+    sec_xfer:"잔액 양도 (사전 통보)",
+    xfer:"본 계약에 따라 남은 잔액을 다른 사람에게 양도하려면 계약자는 양도 전에 당사에 양도 사실과 양수인의 이름·전화번호를 미리 통보해야 합니다. 당사에 미리 통보하지 않은 양도는 당사에 대하여 효력이 없으며, 당사가 통보를 확인한 후에는 양수인이 남은 잔액과 본 계약의 조건을 그대로 이어받습니다.",
+    sec_chg:"계약 내용 변경 (서비스 대상 변경)",
+    chg:"이사 등의 사유로 서비스 대상(콘도·주택)이 바뀌는 경우 계약자는 당사에 미리 통보해야 합니다. 당사는 통보를 받은 후 본 계약서의 서비스 대상을 변경하며, 변경된 내용은 MY PAGE 의 계약서에 반영됩니다. 변경 전에 이루어진 서비스 이용과 잔액 차감에는 영향이 없습니다.",
+    ben_note:"부가 서비스 및 혜택은 당사의 사정에 의해 변동되거나 중단될 수 있습니다. 이 경우 당사는 MY PAGE 또는 메시지로 미리 안내하며, 이미 납부한 금액과 남은 잔액에는 영향이 없습니다.",
+    sec_priv:"개인정보 보호",
+    priv:"당사는 개인정보 보호를 위하여 여권번호·신분증 번호 등 계약자의 민감한 신분 식별 정보를 받지 않으며, 본 계약서에는 계약자의 이름과 서비스 대상인 콘도(주택)명을 기재하며, 계약자가 전화번호를 제공한 경우 전화번호를 추가로 기재합니다. 계약자는 계약이 성립하는 때(결제 확인 시) 이렇게 기재하는 것에 동의한 것으로 봅니다. 이 정보는 계약 확인, 서비스 예약·방문, 잔액·이용내역 안내에만 사용합니다.",
+    lbl_res:"서비스 대상",
+    form:'본 계약은 전자 문서로 체결하며 별도의 서명 절차를 두지 않습니다. 계약자가 본 계약서(계약 조건·특약사항·부가 혜택 포함)를 결제 전에 받아 확인한 뒤 해당 패키지의 납부금액 전액을 결제하고 당사가 그 입금을 확인한 때, 계약자가 본 계약서의 모든 조건에 동의한 것으로 보아 계약이 성립합니다. 당사는 입금 확인 후 계약번호가 표시된 계약서 링크(MY PAGE; 당사가 운영하며 고객에게 제공하는 개인별 전용 사이트)를 계약자에게 보내 드리며, 계약자는 이 링크에서 계약 내용과 잔액을 언제든지 확인하고 PDF 로 저장할 수 있습니다. 다른 사람이 대신 결제한 경우에도 계약 당사자는 본 계약서에 기재된 계약자로 합니다. 결제 전에는 계약 내용에 대해 언제든지 질문하거나 수정을 요청하실 수 있으며, 결제 전에 계약서를 받지 못하신 경우 결제하지 마시고 당사에 먼저 요청해 주십시오.',
     how:'계약시점 해당 적립금 납부 후, 총 사용가능금액에서 서비스 이용 시마다 차감하는 선불 적립식 상품입니다.',
     valid:'계약일로부터 잔액이 소진될 때까지 유효하며, 잔액 소진 시 자동 종료됩니다.',
     effect:'패키지는 적립금액 결제 확인 즉시 계약 효력이 발생하며, 계약서 첨부파일의 해당 규정에 동의한 것으로 간주합니다. 효력 발생 후에는 환불 및 환급이 불가합니다. 단, 불가피한 사유(귀국, 타 국가로 이주하는 경우)로 사전에 당사에 통보하는 경우 남은 잔액을 양도하거나 당사의 전자상품권으로 전환 발행할 수 있습니다.',
@@ -4179,8 +4200,19 @@ const NC_TXT={
   en:{title_contract:'Service Contract',title_usage:'Usage History · Balance',title_all:'Service Contract · Usage',
     tag_contract:'MEMBERSHIP CONTRACT',tag_usage:'USAGE & BALANCE',
     lbl_name:'Name',lbl_phone:'Phone',lbl_date:'Contract Date',lbl_pkg:'Package',
-    sec_contractor:'Contractor Information',sec_pkg:'Contract Package',sec_svc:'Services Provided',sec_how:'How to Use',sec_valid:'Validity & Termination',sec_effect:'Contract Effect & Expiry',sec_terms:'Special Terms',sec_ben:'Additional Benefits',
+    sec_contractor:'Contractor Information',sec_pkg:'Contract Package',sec_svc:'Services Provided',sec_how:'How to Use',sec_valid:'Validity & Termination',sec_form:'Formation of Contract (No Signature)',sec_effect:'Contract Effect & Expiry',sec_terms:'Special Terms',sec_ben:'Additional Benefits',
     paid:'Paid',bonus:'Base Bonus',spec:'Special Bonus',total:'Total Available',
+    sec_price:"Deduction Basis (Standard Price at Time of Use)",
+    price:"The amount deducted from your balance for each service is calculated at our standard price published at the time of use (e.g. the price list on our website). If the standard price changes, the new price applies to services used after the change; amounts already deducted for past services are not recalculated.",
+    sec_xfer:"Transfer of Balance (Prior Notice)",
+    xfer:"To transfer the remaining balance to another person under this contract, the Contractor must notify us in advance of the transfer and of the transferee's name and phone number. A transfer made without prior notice to us has no effect against us. Once we have confirmed the notice, the transferee takes over the remaining balance and the terms of this contract as they stand.",
+    sec_chg:"Changes to the Contract (Change of Service Property)",
+    chg:"If the service property (condominium or house) changes for reasons such as moving house, the Contractor must notify us in advance. After receiving the notice, we will update the service property in this contract, and the change will be shown in the contract on MY PAGE. Services already used and amounts already deducted before the change are not affected.",
+    ben_note:"Additional services and benefits may be changed or discontinued due to our circumstances. In that case we will inform you in advance via MY PAGE or message; the amount you have paid and your remaining balance are not affected.",
+    sec_priv:"Personal Data Protection",
+    priv:"To protect your personal data, we do not collect sensitive identification details such as your passport or ID number. This contract records the Contractor's name and the name of the condominium (house) where the services are provided; if the Contractor provides a phone number, it is also recorded. The Contractor is deemed to agree to this when the contract is formed (on payment confirmation). This information is used only to confirm the contract, book and carry out service visits, and inform you of your balance and usage.",
+    lbl_res:"Service Property",
+    form:"This contract is made electronically and no signature is required. The contract is formed when the Contractor, having received and reviewed this contract (including its terms, special terms and benefits) before payment, pays the full package amount and we confirm receipt of that payment; the Contractor is then deemed to have agreed to all terms of this contract. After confirming payment, we will send the Contractor a link to this contract showing the contract number (MY PAGE: a personal website operated by us and provided to each customer), where the contract and balance can be viewed and saved as a PDF at any time. If another person pays on the Contractor's behalf, the contracting party remains the Contractor named in this contract. Before paying, you may ask questions or request changes at any time. If you have not received this contract before payment, please do not pay and ask us for it first.",
     how:'This is a prepaid credit product. After payment, the total available amount is deducted each time a service is used.',
     valid:'Valid from the contract date until the balance is exhausted; it terminates automatically when the balance reaches zero.',
     effect:'The package takes effect as soon as payment is confirmed, and you are deemed to have agreed to the relevant provisions set out in the contract attachment. Once in effect, it cannot be refunded. However, with prior notice to us for unavoidable reasons (returning to your home country or relocating to another country), the remaining balance may be transferred or converted into our electronic gift voucher.',
@@ -4540,18 +4572,23 @@ function buildContractDocHX(c,L,mode,id){
     var bens=typeof c.benefits==='string'?JSON.parse(c.benefits||'{}'):(c.benefits||{});
     var benList=BENEFITS.filter(function(x){return bens[x.key];});
     var terms=[
+      {t:T.sec_form,x:E(T.form),cls:'w'},
       {t:T.sec_svc,x:E(svcLine),cls:'w'},
       {t:T.sec_how,x:E(T.how)},
+      {t:T.sec_price,x:E(T.price),cls:'w'},
       {t:T.sec_valid,x:E(T.valid)},
-      {t:T.sec_effect,x:E(T.effect),cls:'w'}
+      {t:T.sec_effect,x:E(T.effect),cls:'w'},
+      {t:T.sec_xfer,x:E(T.xfer),cls:'w'},
+      {t:T.sec_chg,x:E(T.chg),cls:'w'},
+      {t:T.sec_priv,x:E(T.priv),cls:'w'}
     ];
     if(c.special_terms&&c.special_terms.trim()){
       var tt=(isEn&&c.special_terms_en&&c.special_terms_en.trim())?c.special_terms_en:c.special_terms;
       terms.push({t:T.sec_terms,x:E(tt),cls:'g w'});
     }
-    terms.push({t:T.sec_ben,cls:'w',x:benList.length
+    terms.push({t:T.sec_ben,cls:'w',x:(benList.length
       ?H.list(benList.map(function(x){return '<b style="color:#14192A">'+E(isEn?x.en:x.ko)+'</b> — '+E(isEn?x.den:x.dko);}))
-      :E(T.ben_none)});
+      :E(T.ben_none))+((parseInt(c.ben_rev)||0)>=2?'<div style="margin-top:6px;font-size:.92em;color:#5B6478">※ '+E(T.ben_note)+'</div>':'')});
     blocks.push(H.sec(X('계약 조건','Terms & Conditions'),'',H.notes(terms).replace('class="hx-nt"','class="hx-nt" style="margin-top:7px"')));
   }
   if(showUsage){
@@ -4587,10 +4624,11 @@ function buildContractDocHX(c,L,mode,id){
     word:word,wordSub:sub,
     meta:[[X('계약번호','Contract No.'),E(cxaNo(c,id))],[T.lbl_date,E(c.contract_date||'—')],[T.lbl_pkg,E(pkgNm)]].concat(ckInfo(c,isEn)?[[X('계약 구분','Contract Kind'),ckInfo(c,isEn).label]]:[]).concat([
           [X('계약 상태','Status'),'<span class="hx-st '+(ended?'bad':'ok')+'">'+(ended?X('종료','Ended'):X('이용 중','Active'))+'</span>']]),
-    parties:[{l:X('계약자','Contractor'),n:E(c.name||'—'),d:[E(c.phone||'')]},
+    parties:[{l:X('계약자','Contractor'),n:E(c.name||'—'),d:(c.residence?[E(c.residence)]:[]).concat(String(c.phone||'').replace(/\D/g,'').length>4?[E(c.phone)]:[])},
              {l:X('공급자','Provider'),n:'HAPPY WORKS SERVICES SDN. BHD.',d:['Reg. No. 201801016892 (1278908-M)','Tel +60 17-247 2774']}],
     blocks:blocks,
-    sign:showContract?[{l:X('계약자 (서명 / 날짜)','Contractor (Signature / Date)'),n:E(c.name||'')},{l:X('공급자','Provider'),n:'Happy Home Care'}]:null,
+    // 서명 생략 — 결제(입금 확인)로 계약 성립 (「계약 성립」 조항, 2026-11-13)
+    sign:null,
     thanks:X('감사합니다','Thank you')
   });
 }
@@ -4636,7 +4674,7 @@ function buildCustomerAppHTML(c,L,mode,id){
     // ── (2026-11 개선) 계약서 내용 팝업 : 계약 정보 → 상품 구성 → 제공 서비스 → 약관 → 혜택
     var _row=function(k,v){return '<div class="mpd-r"><span>'+k+'</span><b>'+v+'</b></div>';};
     det+='<div class="mpd"><div class="mpd-h">'+(isEn?'Contract information':'계약 정보')+'</div>'+
-       _row(T.lbl_name,ncEsc(c.name||'—'))+_row(T.lbl_phone,ncEsc(c.phone||'—'))+
+       _row(T.lbl_name,ncEsc(c.name||'—'))+(c.residence?_row(T.lbl_res,ncEsc(c.residence)):'')+(String(c.phone||'').replace(/\D/g,'').length>4?_row(T.lbl_phone,ncEsc(c.phone)):'')+
        _row(T.lbl_date,ncEsc(c.contract_date||'—'))+_row(isEn?'Contract No.':'계약번호',cxaNo(c,id))+
        (function(){var ci=ckInfo(c,isEn);if(!ci)return '';return _row(isEn?'Contract Kind':'계약 구분',ci.label)+ci.rows.map(function(r){return _row(r[0],r[1]);}).join('');})()+
        _row(isEn?'Provider':'공급자','HAPPY WORKS SERVICES SDN. BHD.<small>1278908-M</small>')+'</div>';
@@ -4649,7 +4687,7 @@ function buildCustomerAppHTML(c,L,mode,id){
     var bens=typeof c.benefits==='string'?JSON.parse(c.benefits||'{}'):(c.benefits||{});
     var benList=BENEFITS.filter(function(x){return bens[x.key];});
     var _p=function(t,x,cls){return '<div class="mpd-p'+(cls?' '+cls:'')+'"><b>'+t+'</b><p>'+x+'</p></div>';};
-    var terms=_p(T.sec_svc,ncEsc(svcLine))+_p(T.sec_how,T.how)+_p(T.sec_valid,T.valid)+_p(T.sec_effect,T.effect);
+    var terms=_p(T.sec_form,ncEsc(T.form))+_p(T.sec_svc,ncEsc(svcLine))+_p(T.sec_how,T.how)+_p(T.sec_price,T.price)+_p(T.sec_valid,T.valid)+_p(T.sec_effect,T.effect)+_p(T.sec_xfer,T.xfer)+_p(T.sec_chg,T.chg)+_p(T.sec_priv,T.priv);
     if(c.special_terms&&c.special_terms.trim()){
       var tt=(isEn&&c.special_terms_en&&c.special_terms_en.trim())?c.special_terms_en:c.special_terms;
       terms+=_p(T.sec_terms,ncEsc(tt),'warn');
@@ -4658,7 +4696,8 @@ function buildCustomerAppHTML(c,L,mode,id){
     det+='<div class="mpd"><div class="mpd-h">'+T.sec_ben+(benList.length?'<span>'+benList.length+(isEn?'':'개')+'</span>':'')+'</div>'+
        (benList.length?'<ul class="mpd-ben">'+benList.map(function(x){
          return '<li><i>✓</i><div><b>'+ncEsc(isEn?x.en:x.ko)+'</b><span>'+ncEsc(isEn?x.den:x.dko)+'</span></div></li>';}).join('')+'</ul>'
-         :'<div class="mpd-none">'+T.ben_none+'</div>')+'</div>';
+         :'<div class="mpd-none">'+T.ben_none+'</div>')+
+       ((parseInt(c.ben_rev)||0)>=2?'<div style="margin-top:12px;padding:10px 12px;border-radius:10px;background:#F6F7FB;font-size:12px;line-height:1.6;color:#5B6478">※ '+T.ben_note+'</div>':'')+'</div>';
 
     // 버튼으로 감싸기 — 기본은 접힘, 누르면 계약 정보·계약 상품·제공 서비스와
     // 약관(사용 방법·계약 유효 및 종료·계약 효력 및 소멸·특약사항·부가 서비스)이 함께 펼쳐집니다.
