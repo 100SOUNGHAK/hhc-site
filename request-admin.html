@@ -608,6 +608,7 @@ html.sa body:has(.app-body.active){padding-left:200px}
 </head>
 <body>
 <script>if(self===top)document.documentElement.classList.add('sa');</script>
+<script src="/hhc-sendmsg.js"></script>
 <!-- ══ 좌측 고정 메뉴 (독립 실행 + 로그인 후에만 표시 — 관리자 허브 안에서는 자동 숨김) ══ -->
 <aside id="sb">
   <div class="bd"><span class="lg"><svg class="hhc-mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g fill="currentColor"><rect x="15" y="14" width="19" height="74" rx="3.5"/><rect x="66" y="14" width="19" height="74" rx="3.5"/><path d="M50 28 85 51v16L50 43 15 67V51Z"/></g></svg></span><div><b>Happy Home Care</b><span>의뢰 관리 시스템</span></div></div>
@@ -1838,6 +1839,23 @@ function buildMsg(r,isComplete){
   }
 }
 
+// 📥 접수완료 발송 문구 — 총괄 고객관리 「📱 마이페이지 발송 → 의뢰 접수 안내」와 같은 문구입니다.
+//    문구 원본은 /hhc-sendmsg.js 한 곳 (거기서 고치면 여기도 함께 바뀝니다).
+//    마이페이지 주소는 고객 마스터(customers)에서 찾고, 없으면 마이페이지 발송처럼 자동 등록합니다.
+async function buildDoneMsg(r){
+  const en=(r.lang||'ko')==='en';
+  const nm0=rqCustName(r)||(en?'Customer':'고객');
+  let m=null;
+  try{
+    if(window.HHCC_find)m=await window.HHCC_find(nm0,r.phone);
+    if(!m&&window.HHCC_upsert){await window.HHCC_upsert(nm0,r.phone,{addr:nm0});m=await window.HHCC_find(nm0,r.phone);}
+  }catch(e){}
+  const cid=m&&m._docId;
+  let link=cid?HHCMsg.myLink(cid,en,'rq'):(HHCMsg.BASE+'/home'+(en?'?lang=en':''));
+  try{link=await hhcShortUrl(link);}catch(e){}
+  return HHCMsg.rq({name:(m&&m.name)||nm0,en:en,req:r,link:link});
+}
+
 // ── 의뢰 링크 발송 ──
 var _sendLang='ko';
 var _sendMsgs={
@@ -1987,7 +2005,10 @@ document.getElementById('req-list').addEventListener('click',async e=>{
     const id=completeBtn.dataset.complete;
     const r=allRequests.find(x=>x.__id===id);
     if(!r)return;
-    const msg=buildMsg(r,true);
+    showLoading(true);
+    let msg='';
+    try{msg=await buildDoneMsg(r);}catch(err){console.error(err);msg=buildMsg(r,true);}
+    showLoading(false);
     showCompleteModal(r,msg,async()=>{
       showLoading(true);
       try{await updateDoc(doc(db,'requests',id),{status:'completed',completed_at:new Date().toISOString()});showToast('✓ 접수완료 처리되었습니다');}
@@ -2010,7 +2031,14 @@ document.getElementById('req-list').addEventListener('click',async e=>{
   if(waBtn){
     const r=allRequests.find(x=>x.__id===waBtn.dataset.wa);
     if(!r)return;
-    const msg=buildMsg(r,r.status==='completed');
+    if(r.status==='completed'){
+      // 주소를 찾는 동안 창이 막히지 않게 먼저 열어 두고 채웁니다
+      const w=window.open('about:blank','_blank');
+      const u=`https://wa.me/?text=${encodeURIComponent(await buildDoneMsg(r))}`;
+      if(w&&!w.closed){try{w.location.href=u;}catch(_e){window.open(u,'_blank');}}else window.open(u,'_blank');
+      return;
+    }
+    const msg=buildMsg(r,false);
     window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
     return;
   }
@@ -2020,7 +2048,7 @@ document.getElementById('req-list').addEventListener('click',async e=>{
   if(kakaoBtn){
     const r=allRequests.find(x=>x.__id===kakaoBtn.dataset.kakao);
     if(!r)return;
-    const msg=buildMsg(r,r.status==='completed');
+    const msg=r.status==='completed'?await buildDoneMsg(r):buildMsg(r,false);
     navigator.clipboard.writeText(msg).then(()=>showToast('✓ 복사됨! 카카오톡에 붙여넣기 하세요')).catch(()=>prompt('복사:',msg));
     return;
   }

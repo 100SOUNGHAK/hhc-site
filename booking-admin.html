@@ -880,6 +880,7 @@ html.sa body:has(.app-body.active){padding-left:200px}
 </head>
 <body>
 <script>if(self===top)document.documentElement.classList.add('sa');</script>
+<script src="/hhc-sendmsg.js"></script>
 <!-- ══ 좌측 고정 메뉴 (독립 실행 + 로그인 후에만 표시 — 관리자 허브 안에서는 자동 숨김) ══ -->
 <aside id="sb">
   <div class="bd"><span class="lg"><svg class="hhc-mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g fill="currentColor"><rect x="15" y="14" width="19" height="74" rx="3.5"/><rect x="66" y="14" width="19" height="74" rx="3.5"/><path d="M50 28 85 51v16L50 43 15 67V51Z"/></g></svg></span><div><b>Happy Home Care</b><span>예약 관리 시스템</span></div></div>
@@ -2708,7 +2709,7 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
     if(instantConfirm){
       t.textContent='✓ 즉시 확정 등록 완료! 예약목록·캘린더에 바로 반영되었습니다';
       // 예약전환으로 들어온 경우엔 창을 닫아도 고객관리로 넘어가지 않고 예약목록에 머뭅니다
-      setTimeout(()=>showConfirmMsgModal({customer_name:name,customer_phone:phone,customer_lang:lang,booking_date:bDate,booking_time:bTime,booking_items:bItems},_fromReq?false:undefined),600);
+      setTimeout(()=>showConfirmMsgModal({__id:docId,customer_name:name,customer_address:address,customer_phone:phone,customer_lang:lang,booking_date:bDate,booking_time:bTime,booking_items:bItems},_fromReq?false:undefined),600);
     }else{
       t.textContent='✓ 등록 완료! 고객 링크가 생성되었습니다';
     }
@@ -4119,15 +4120,11 @@ window.sendVisitReminder=function(scheduleItemId){
 // 확정 안내 메시지 모달
 //  · 이 모달을 닫으면(닫기·배경 클릭·👤 버튼) 총괄 고객관리의 해당 고객 상세가 자동으로 열립니다.
 //  · 안내 메시지 발송 단계를 건너뛰지 않도록, 확정 직후 바로가 아니라 모달을 닫을 때 이동합니다.
-function showConfirmMsgModal(b,goCust){
+async function showConfirmMsgModal(b,goCust){
   const lang=b.customer_lang||'ko';
-  const msg=getConfirmMsg(
-    b.customer_name||'고객',
-    b.booking_date||'—',
-    b.booking_time||'—',
-    b.booking_items||'—',
-    lang
-  );
+  let msg='';
+  try{msg=await bkConfirmMsg(b);}
+  catch(e){msg=getConfirmMsg(b.customer_name||'고객',b.booking_date||'—',b.booking_time||'—',b.booking_items||'—',lang);}
   const title=lang==='en'?'✅ Booking Confirmation Message':'✅ 예약 확정 안내 메시지';
   const subtitle=lang==='en'?`Please send the message below to ${b.customer_name||'customer'}`:`${b.customer_name||'고객'}님께 아래 메시지를 전송해 주세요`;
   const closeLabel=lang==='en'?'Close':'닫기';
@@ -4151,7 +4148,7 @@ function showConfirmMsgModal(b,goCust){
     <div style="background:#fff;border-radius:20px;padding:24px;max-width:420px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.14)">
       <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">${title}</div>
       <div style="font-size:12px;color:var(--text3);margin-bottom:12px">${subtitle}</div>
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-size:12px;color:var(--text2);line-height:1.8;white-space:pre-wrap;max-height:280px;overflow-y:auto;margin-bottom:12px">${msg}</div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-size:12px;color:var(--text2);line-height:1.8;white-space:pre-wrap;word-break:break-all;max-height:280px;overflow-y:auto;margin-bottom:12px">${escHtml(msg)}</div>
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px">
         <button id="confirm-wa-btn" style="flex:1;padding:10px;border:none;border-radius:8px;background:#25D366;color:#fff;font-size:13px;font-weight:600;cursor:pointer">
           ${waLabel}
@@ -4244,6 +4241,30 @@ async function bkMyPageUrl(b){
   }catch(e){}
   return `${BASE_URL}booking.html?id=${b.__id}&lang=${lang}`;
 }
+// ✅ 예약 확정 발송 문구 — 총괄 고객관리 「📱 마이페이지 발송 → 예약 확정 안내」와 같은 문구입니다.
+//    문구 원본은 /hhc-sendmsg.js 한 곳 (거기서 고치면 여기도 함께 바뀝니다).
+//    마이페이지 주소는 고객 마스터(customers)에서 찾고, 없으면 마이페이지 발송처럼 자동 등록합니다.
+async function bkConfirmMsg(b){
+  const en=(b.customer_lang||'ko')==='en';
+  const nm0=String(b.customer_name||'').trim()||(en?'Customer':'고객');
+  const find=async()=>{
+    const list=(typeof hccLoad==='function')?await hccLoad():[];
+    const pn=hccPN(b.customer_phone),nn=hccNN(b.customer_name);
+    let m=null;
+    if(pn)m=list.find(c=>hccPN(c.phone)===pn)||null;
+    if(!m&&nn)m=list.find(c=>hccNameHit(c,nn))||null;
+    return m;
+  };
+  let m=null;
+  try{
+    m=await find();
+    if(!m&&window.HHCC_upsert){await window.HHCC_upsert(b.customer_name,b.customer_phone,{addr:b.customer_address||''});m=await find();}
+  }catch(e){}
+  let link=(m&&m._docId)?HHCMsg.myLink(m._docId,en,'bk')
+    :(b.__id?`${BASE_URL}booking.html?id=${b.__id}&lang=${en?'en':'ko'}`:HHCMsg.BASE+'/home'+(en?'?lang=en':''));
+  try{link=await hhcShortUrl(link);}catch(e){}
+  return HHCMsg.bkc({name:(m&&m.name)||nm0,en:en,booking:b,link:link});
+}
 async function bkResendMsg(b){
   const en=(b.customer_lang||'ko')==='en';
   const nm=b.customer_name||(en?'Customer':'고객');
@@ -4259,8 +4280,10 @@ window.sendWA=async function(id){
   if(!b)return;
   const lang=b.customer_lang||'ko';
   if(b.status==='confirmed'){
-    const msg=getConfirmMsg(b.customer_name||'고객',b.booking_date||'—',b.booking_time||'—',b.booking_items||'—',lang);
-    window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
+    // 주소를 찾는 동안 창이 막히지 않게 먼저 열어 두고 채웁니다
+    const w0=window.open('about:blank','_blank');
+    const u0=`https://wa.me/?text=${encodeURIComponent(await bkConfirmMsg(b))}`;
+    if(w0&&!w0.closed){try{w0.location.href=u0;}catch(e){window.open(u0,'_blank');}}else window.open(u0,'_blank');
     return;
   }
   // 예약 신청서 다시 보내기 — 주소를 찾는 동안 창이 막히지 않게 먼저 열어 두고 채웁니다
@@ -4275,7 +4298,7 @@ window.sendKakao=async function(id){
   if(!b)return;
   const lang=b.customer_lang||'ko';
   const msg=b.status==='confirmed'
-    ?getConfirmMsg(b.customer_name||'고객',b.booking_date||'—',b.booking_time||'—',b.booking_items||'—',lang)
+    ?await bkConfirmMsg(b)
     :await bkResendMsg(b);
   navigator.clipboard.writeText(msg).then(()=>showToast('✓ 복사됨! 붙여넣기 하세요')).catch(()=>prompt('복사 후 붙여넣기:',msg));
 };
