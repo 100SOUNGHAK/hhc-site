@@ -926,6 +926,37 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
 
 </style>
 <script type="module" src="/hhc-auth.js"></script>
+<style>
+/* 🤝 추천 보상 (2026-11-12) */
+.hdr .btn.crf-hb{position:relative;background:rgba(201,164,76,.16);border-color:rgba(227,201,138,.45);font-size:15px}
+.hdr .btn.crf-hb .rft{font-size:13px}
+.crf-n{position:absolute;top:-6px;right:-6px;min-width:19px;height:19px;border-radius:999px;background:#DC2626;color:#fff;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 5px;box-shadow:0 0 0 2px #0E2350}
+.crf-n[hidden]{display:none}
+.crf-top{display:flex;align-items:center;gap:10px;justify-content:space-between;background:#FBF5E6;border-radius:12px;padding:10px 12px;font-size:12.5px;color:var(--ink2);margin-bottom:6px}
+.crf-top b{color:#8F6F28}
+.crf-emp{font-size:12.5px;color:var(--ink3);line-height:1.7;text-align:center;padding:26px 8px}
+.crf-r{display:flex;gap:10px;align-items:center;padding:12px 2px;border-top:1px solid #EEF1F6}
+.crf-r:first-of-type{border-top:0}
+.crf-l{flex:1;min-width:0}
+.crf-nm{font-size:14px;font-weight:800;color:var(--ink)}
+.crf-nm a{color:inherit;text-decoration:none}
+.crf-nm span{font-size:12.5px;color:var(--ink3);font-weight:700}
+.crf-nm span a{color:var(--ink2)}
+.crf-s{font-size:11.5px;color:var(--ink3);font-weight:600;margin-top:3px;line-height:1.5;word-break:keep-all}
+.crf-a{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0}
+.crf-a .pill{font-size:11px;padding:3px 8px;border-radius:999px}
+.crf-am{font-size:10.5px;color:var(--ink3);font-weight:800}
+.crf-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid #EEF1F6;cursor:default}
+.crf-row:first-child{border-top:0}
+.crf-row>div:first-child{flex:1}
+.crf-row b{display:block;font-size:13.5px;color:var(--ink)}
+.crf-row span{display:block;font-size:11.5px;color:var(--ink3);font-weight:600;margin-top:2px}
+.crf-row input[type=checkbox]{width:22px;height:22px;accent-color:#0F766E;flex-shrink:0}
+.crf-amt{display:flex;align-items:center;border:1.5px solid var(--bdr);border-radius:10px;overflow:hidden;flex-shrink:0}
+.crf-amt i{font-style:normal;font-size:12px;font-weight:800;color:var(--ink3);padding:0 6px 0 10px}
+.crf-amt input{width:64px;border:0;font:inherit;font-size:16px;font-weight:900;padding:8px 10px 8px 0;text-align:right;outline:none}
+.crf-note{font-size:11.5px;color:var(--ink2);line-height:1.7;background:#F6F8FC;border-radius:10px;padding:10px 12px;margin-top:6px}
+</style>
 </head>
 <body>
 <script>if(self===top)document.documentElement.classList.add('sa');</script>
@@ -957,6 +988,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
   <div class="hdr">
     <div class="ht"><span class="hk">HAPPY HOMECARE · CRM</span><h1>총괄 고객관리 <span class="fb-dot" id="fb-dot" title="실시간 연결"></span></h1><span class="hs" id="ca-hs">고객 정보와 서비스 기록을 한눈에</span></div>
     <span class="sp"></span>
+    <button class="btn crf-hb" id="crf-hb" onclick="caRefOpen()" title="추천 보상">🤝<span class="rft"> 추천 보상</span><span class="crf-n" id="crf-n" hidden></span></button>
     <button class="btn rf" onclick="loadAll(true)" title="새로고침" aria-label="새로고침">↻<span class="rft"> 새로고침</span></button>
     <button class="btn p nw" onclick="openNewModal()">＋ 신규<span class="nwt"> 고객</span></button>
   </div>
@@ -1478,6 +1510,7 @@ function qtTotal(x){const b=parseFloat(x&&x.baseTotal)||0;const c=(x&&x.customer
 //    → 📅 적용시작일 버튼으로 날짜를 바꾸면 제외 규칙 시점도 함께 움직인다.
 //    → 시작일 이전 발행분은 애초에 적립 대상이 아니므로 과거 적립금은 영향받지 않는다.
 function ptExclFrom(){return String(PT_START||'');}
+let REF_RAW={};   // 🤝 추천 보상 설정 (settings/points 의 ref_* — refCfg() 로 읽음)
 let PT_START='';   // 📅 적립 적용시작일 (YYYY-MM-DD · 빈값=전체 기간) — settings/points 에 저장, 발행일 기준
 // 적립 기준액 : 총 청구금액에서 세금·주차비용·최소청구·추가비용 제외
 //             실비 항목(자재비용·설치자재비용·에어컨구매비용)과 회원제상품 가입금액도 제외
@@ -1575,13 +1608,14 @@ window.loadAll=async function(force){
   const res=await Promise.all(COLL_NAMES.map(fetchColl));
   COLL_NAMES.forEach((n,i)=>RAW[n]=res[i]);
   // 📅 포인트 적립 적용시작일 불러오기
-  try{const s=await getDoc(doc(db,'settings','points'));PT_START=(s&&s.exists&&s.exists())?String((s.data()||{}).pt_start||''):'';}catch(e){}
+  try{const s=await getDoc(doc(db,'settings','points'));const _pd=(s&&s.exists&&s.exists())?(s.data()||{}):{};PT_START=String(_pd.pt_start||'');REF_RAW=_pd;}catch(e){}
   rebuildAndPaint();
 };
 // ── 실시간 구독: 어느 프로그램에서 저장·수정해도 이 화면이 즉시 갱신된다 ──
 let _rbTimer=null;
 function scheduleRebuild(){clearTimeout(_rbTimer);_rbTimer=setTimeout(rebuildAndPaint,250);}
 function rebuildAndPaint(){
+  setTimeout(()=>{try{caRefBadge();}catch(e){}},0);   // 🤝 추천 보상 대기 건수
   // 상세 화면이 열려 있으면 같은 고객으로 다시 그린다.
   // 목록 순서가 바뀌어도, 수정 과정에서 연락처·이름이 바뀌어도 놓치지 않도록
   // 「고객 문서 id → 연락처 → 이름」 순서로 다시 찾습니다.
@@ -3490,6 +3524,171 @@ window.caPtStartSave=async function(idx,clear){
     const mk=document.getElementById('ca-doc-mask');if(mk)mk.remove();
     renderAll();
     if(idx!=null&&entries[idx])openDrawer(idx);
+  }catch(err){toast('저장 실패: '+err.message);}
+};
+// ═══ 🤝 추천 보상 (2026-11-12) ═══════════════════════════════════════════════
+//  추천 링크(/nc?ref=코드)로 들어온 의뢰서(requests.ref_by = 추천인 고객 문서 ID)를 모아
+//  「신규 고객 · 추천 신청 뒤 첫 인보이스 결제완료」면 지급 대상으로 보여 줍니다. 지급은 대표님이 「지급」을 눌러서.
+//  · 신규 판정: 같은 고객(전화번호로 묶인 항목)에게 추천 신청일 이전의 서비스 기록이 없을 것
+//      서비스 기록 = 인보이스(작성중 제외) · 점검/설치보고서 · 계약서 · 작업완료 예약  (견적서·의뢰만 = 신규)
+//  · 확인 필요: 다른 고객의 서비스 기록 주소에 같은 동호수 + 콘도명이 있으면 → 대표님이 「신규로 인정」/「제외」
+//  · 본인 추천 · 이미 지급한 고객의 다른 신청 = 자동 제외
+//  · 지급: 추천인·신규 고객의 pt_adj(적립 조정)에 넣고, 의뢰서에 ref_status:'paid' 기록 (두 번 지급 안 됨)
+//  같은 규칙의 서버 쪽: functions/api/_lib/ref.js (설정 기본값 · 1차 판정)
+const REF_DEF={on:true,pts:10,newOn:true,newPts:5};
+function refCfg(){
+  const p=REF_RAW||{},num=(v,d)=>{const n=parseFloat(v);return isFinite(n)&&n>=0?Math.round(n):d;};
+  return {on:p.ref_on!==false,pts:num(p.ref_pts,REF_DEF.pts),newOn:p.ref_new_on!==false,newPts:num(p.ref_new_pts,REF_DEF.newPts)};
+}
+function crfCN(s){return String(s||'').toUpperCase().replace(/[^A-Z0-9가-힣]/g,'');}
+// 이 고객 항목에 「d 날짜 이전」 서비스 기록이 있는가 (d 빈값 = 날짜 무관)
+function crfSvcBefore(e,d){
+  const lt=v=>!d||(String(v||'').slice(0,10)&&String(v||'').slice(0,10)<d);
+  return e.docs.invoices.some(x=>x.status!=='draft'&&lt(x.date))
+      || e.docs.inspections.some(x=>lt(x.date))
+      || e.docs.contracts.some(x=>lt(x.contract_date||x.created_at))
+      || e.docs.bookings.some(x=>x.status==='done'&&lt(x.booking_date||x.date));
+}
+function crfAddrHay(e){
+  const a=[e.addr,e.master&&e.master.addr];
+  e.docs.invoices.forEach(x=>{a.push(x.customer&&x.customer.addr);});
+  e.docs.inspections.forEach(x=>{a.push(x.address,x.addr,x.condo);});
+  e.docs.requests.forEach(x=>{a.push(x.condo_name+' '+x.condo_unit,x.condo);});
+  e.docs.bookings.forEach(x=>{a.push(x.address,x.customer_address,x.condo);});
+  return crfCN(a.filter(Boolean).join(' '));
+}
+function crfRows(){
+  const out=[];const C=refCfg();
+  const byId={};entries.forEach(e=>{if(e.master&&e.master.__id)byId[e.master.__id]=e;});
+  (RAW.requests||[]).forEach(x=>{
+    if(!x.ref_by)return;
+    const e=entries.find(en=>en.docs.requests.indexOf(x)>=0);if(!e)return;
+    const rf=byId[x.ref_by]||null;
+    const d=String(x.submitted_at||'').slice(0,10);
+    const r={x,e,rf,d,idx:entries.indexOf(e),rfIdx:rf?entries.indexOf(rf):-1,inv:null,st:'',why:''};
+    const firstInv=e.docs.invoices.filter(v=>v.status!=='draft'&&String(v.date||'')>=d).sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')))[0]||null;
+    r.inv=firstInv;
+    if(x.ref_status==='paid'){r.st='paid';}
+    else if(x.ref_status==='excluded'){r.st='excluded';r.why='대표님이 제외';}
+    else if(!rf){r.st='excluded';r.why='추천인 고객을 찾을 수 없음';}
+    else if(x.ref_new==='self'||rf===e){r.st='excluded';r.why='본인 추천';}
+    else if(e.docs.requests.some(o=>o!==x&&o.ref_status==='paid')){r.st='excluded';r.why='이미 추천 보상을 받은 고객';}
+    else if(x.ref_status!=='approved'&&crfSvcBefore(e,d)){r.st='excluded';r.why='기존 고객 (신청 전 서비스 기록)';}
+    else{
+      let chk='';
+      if(x.ref_status!=='approved'){
+        const u=crfCN(x.condo_unit),w=String(x.condo_name||'').toUpperCase().split(/[^A-Z0-9가-힣]+/).filter(t=>t.length>=4).map(crfCN);
+        if(u.length>=3&&w.length){
+          const o=entries.find(en=>en!==e&&crfSvcBefore(en,d)&&(h=>h.indexOf(u)>=0&&w.some(t=>h.indexOf(t)>=0))(crfAddrHay(en)));
+          if(o)chk='같은 동호수 서비스 기록 — '+(o.name||'이름 없음')+(o.phone?' ('+o.phone+')':'');
+        }
+      }
+      if(chk){r.st='check';r.why=chk;}
+      else if(firstInv&&firstInv.status==='paid'){r.st='ready';}
+      else{r.st='wait';r.why=firstInv?('인보이스 '+(firstInv.id||'')+' 결제 전'):'인보이스 발행 전';}
+    }
+    out.push(r);
+  });
+  const RK={ready:0,check:1,wait:2,paid:3,excluded:4};
+  // 같은 고객이 여러 번 신청한 경우: 진행 중인 줄이 있으면 그 외의 「대기」 줄은 하나만
+  return out.sort((a,b)=>(RK[a.st]-RK[b.st])||String(b.x.submitted_at||'').localeCompare(String(a.x.submitted_at||'')))
+    .filter((r,i,arr)=>!(r.st==='wait'||r.st==='ready'||r.st==='check')||arr.findIndex(q=>q.e===r.e&&(q.st==='wait'||q.st==='ready'||q.st==='check'))===i);
+}
+window.caRefBadge=function(){
+  const n=document.getElementById('crf-n');if(!n)return;
+  const k=refCfg().on?crfRows().filter(r=>r.st==='ready'||r.st==='check').length:0;
+  n.hidden=!k;n.textContent=k;
+};
+window.caRefOpen=function(){
+  const C=refCfg(),rows=crfRows();
+  const ST={ready:['지급 가능','ok'],check:['확인 필요','warn'],wait:['결제 대기','warn'],paid:['지급 완료','ok'],excluded:['제외','bad']};
+  const fd=v=>String(v||'').slice(0,10);
+  let b='<div class="crf-top"><div><b>추천인 RM '+C.pts+'</b> · 신규 고객 '+(C.newOn&&C.newPts>0?'RM '+C.newPts:'혜택 없음')+(C.on?'':' · <span style="color:var(--bad)">추천 기능 꺼짐</span>')+'</div>'+
+    '<button class="btn sm" onclick="caRefCfg()">⚙️ 금액 설정</button></div>';
+  if(!rows.length){
+    b+='<div class="crf-emp">아직 추천 링크로 들어온 신청이 없습니다.<br>고객이 마이페이지 「🤝 지인에게 추천하기」로 보낸 링크에서 의뢰하면 여기에 나타납니다.</div>';
+  }else{
+    rows.forEach(r=>{
+      const x=r.x,id=esc(x.__id),s=ST[r.st];
+      let sub='';
+      if(r.st==='paid')sub=fd(x.ref_paid_at)+' 지급 · 추천인 RM '+(x.ref_paid_pts||0)+(parseFloat(x.ref_new_pts)>0?' · 신규 RM '+x.ref_new_pts:'');
+      else if(r.st==='ready')sub='첫 인보이스 '+esc(r.inv.id||'')+' 결제완료 ('+fd(r.inv.date)+')';
+      else sub=esc(r.why);
+      let act='<span class="pill '+s[1]+'">'+s[0]+'</span>';
+      if(r.st==='ready')act='<button class="btn p sm" onclick="caRefPay(\''+id+'\')">지급</button><div class="crf-am">RM '+C.pts+(C.newOn&&C.newPts>0?' + RM '+C.newPts:'')+'</div>';
+      else if(r.st==='check')act='<button class="btn p sm" onclick="caRefSet(\''+id+'\',\'approved\')">신규로 인정</button><button class="btn sm" onclick="caRefSet(\''+id+'\',\'excluded\')">제외</button>';
+      else if(r.st==='excluded'&&x.ref_status==='excluded')act+='<button class="btn sm" onclick="caRefSet(\''+id+'\',\'pending\')">다시 판정</button>';
+      b+='<div class="crf-r"><div class="crf-l">'+
+        '<div class="crf-nm"><a href="#" onclick="document.getElementById(\'ca-doc-mask\').remove();openDrawer('+r.idx+');return false">'+esc(r.e.name||x.condo||'(이름 없음)')+'</a>'+
+          ' <span>← 추천인 '+(r.rf?'<a href="#" onclick="document.getElementById(\'ca-doc-mask\').remove();openDrawer('+r.rfIdx+');return false">'+esc(r.rf.name||'')+'</a>':esc(x.ref_by_name||'?'))+'</span></div>'+
+        '<div class="crf-s">'+fd(x.submitted_at)+' 신청 · '+esc(x.condo||'')+(x.phone?' · '+esc(x.phone):'')+'</div>'+
+        '<div class="crf-s">'+sub+'</div></div>'+
+        '<div class="crf-a">'+act+'</div></div>';
+    });
+  }
+  genericModal('🤝 추천 보상',b,'<button class="btn" onclick="document.getElementById(\'ca-doc-mask\').remove()">닫기</button>');
+};
+window.caRefSet=async function(id,st){
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  try{
+    await updateDoc(doc(db,'requests',id),{ref_status:st,ref_set_at:new Date().toISOString()});
+    const x=(RAW.requests||[]).find(v=>v.__id===id);if(x)x.ref_status=st;
+    toast(st==='approved'?'✓ 신규 고객으로 인정했습니다':st==='excluded'?'추천 보상에서 제외했습니다':'다시 판정합니다');
+    caRefOpen();caRefBadge();
+  }catch(err){toast('저장 실패: '+err.message);}
+};
+window.caRefPay=async function(id){
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  const C=refCfg();
+  const r=crfRows().find(v=>v.x.__id===id);
+  if(!r||r.st!=='ready'){toast('지급 대상이 아닙니다 — 새로고침 후 다시 확인해 주세요');return;}
+  const nw=C.newOn&&C.newPts>0;
+  if(!confirm('추천 보상을 지급할까요?\n\n· 추천인 '+(r.rf.name||'')+' → 해피포인트 RM '+C.pts+(nw?'\n· 신규 고객 '+(r.e.name||'')+' → 해피포인트 RM '+C.newPts:'')+'\n\n지급하면 두 분의 마이페이지 포인트에 바로 반영됩니다.'))return;
+  const now=new Date().toISOString(),today=caToday();
+  try{
+    // 두 번 지급 막기 — 저장 직전에 의뢰서 상태를 다시 읽습니다
+    const fresh=await getDoc(doc(db,'requests',id));
+    if(fresh.exists()&&(fresh.data()||{}).ref_status==='paid'){toast('이미 지급된 건입니다');loadAll(true);return;}
+    const addPt=async(e,amt,memo)=>{
+      let mid=e.master&&e.master.__id,list=((e.master&&e.master.pt_adj)||[]).slice();
+      if(!mid){
+        const ref=await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name:e.name,phone:e.phone||'',member:e.member||'',email:'',addr:e.addr||'',memo:'',aliases:e.aliases||[],created_at:now,updated_at:now});
+        mid=ref.id;
+      }else{
+        const md=await getDoc(doc(db,'customers',mid));list=((md.exists()&&md.data().pt_adj)||[]).slice();
+      }
+      list.push({amount:amt,date:today,memo:memo,at:now,ref:id});
+      await updateDoc(doc(db,'customers',mid),{pt_adj:list,updated_at:now});
+    };
+    await addPt(r.rf,C.pts,'추천 보상 · '+(r.e.name||''));
+    if(nw)await addPt(r.e,C.newPts,'추천 신규 고객 혜택 · 추천인 '+(r.rf.name||''));
+    await updateDoc(doc(db,'requests',id),{ref_status:'paid',ref_paid_at:now,ref_paid_pts:C.pts,ref_new_pts:nw?C.newPts:0,ref_cust_name:r.e.name||'',ref_inv:(r.inv&&(r.inv.id||r.inv.__id))||''});
+    toast('🤝 추천 보상이 지급되었습니다');
+    const mk=document.getElementById('ca-doc-mask');if(mk)mk.remove();
+    await loadAll(true);
+    caRefOpen();
+  }catch(err){toast('지급 실패: '+err.message);}
+};
+window.caRefCfg=function(){
+  const C=refCfg();
+  genericModal('⚙️ 추천 보상 금액 설정',
+    '<label class="crf-row"><div><b>추천 기능 사용</b><span>끄면 마이페이지 추천 카드와 명함 추천 띠가 숨겨집니다</span></div><input type="checkbox" id="crf-on"'+(C.on?' checked':'')+'></label>'+
+    '<div class="crf-row"><div><b>추천인 보상</b><span>소개한 신규 고객의 첫 결제 완료 후</span></div><div class="crf-amt"><i>RM</i><input type="number" min="0" step="1" id="crf-pts" value="'+C.pts+'"></div></div>'+
+    '<label class="crf-row"><div><b>신규 고객 혜택</b><span>소개받은 신규 고객 · 첫 결제 완료 후</span></div><input type="checkbox" id="crf-non"'+(C.newOn?' checked':'')+'></label>'+
+    '<div class="crf-row"><div><b>신규 고객 혜택 금액</b><span>혜택을 끄면 이 금액은 쓰지 않습니다</span></div><div class="crf-amt"><i>RM</i><input type="number" min="0" step="1" id="crf-npts" value="'+C.newPts+'"></div></div>'+
+    '<div class="crf-note">· 금액을 바꾸면 <b>그 뒤에 지급하는 건</b>부터 새 금액이 적용됩니다 (이미 지급한 건은 그대로).<br>· 기존 고객(신청 전 서비스 기록이 있는 번호)과 본인 추천은 자동으로 제외됩니다.<br>· 해피포인트는 누적 RM 10 이상부터 사용 가능 — 추천 보상도 같은 기준입니다.</div>',
+    '<button class="btn" onclick="caRefOpen()">← 목록</button><button class="btn p" onclick="caRefCfgSave()">저장</button>');
+};
+window.caRefCfgSave=async function(){
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  const g=id=>document.getElementById(id);
+  const pts=Math.max(0,Math.round(parseFloat(g('crf-pts').value)||0)),npts=Math.max(0,Math.round(parseFloat(g('crf-npts').value)||0));
+  const v={ref_on:g('crf-on').checked,ref_pts:pts,ref_new_on:g('crf-non').checked,ref_new_pts:npts,updated_at:new Date().toISOString()};
+  try{
+    await setDoc(doc(db,'settings','points'),v,{merge:true});
+    Object.assign(REF_RAW,v);
+    toast('✓ 추천 보상 설정이 저장되었습니다');
+    caRefOpen();caRefBadge();
   }catch(err){toast('저장 실패: '+err.message);}
 };
 // ── 📜 포인트 내역 펼쳐보기 / 닫기 ──

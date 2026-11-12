@@ -8,7 +8,8 @@
 //   · 이 고객에서 떼어낸 문서(ca_off) → 제외
 //   · 그 외 → 전화번호 일치 또는 이름/별칭 일치
 // ─────────────────────────────────────────────────────────────────────────────
-import { getDoc, listAll, batchGet, json, fail, rateLimited, nn, pn } from './_lib/fs.js';
+import { getDoc, listAll, batchGet, queryEq, json, fail, rateLimited, nn, pn } from './_lib/fs.js';
+import { refCfg, ensureRefCode, maskName } from './_lib/ref.js';
 
 const PICK = {   // 각 문서에서 고객명·전화를 읽는 자리
   invoices:    x => [x.customer && x.customer.name, x.customer && x.customer.phone],
@@ -90,9 +91,31 @@ export async function onRequestGet(context){
       pick('requests', x => String(x.submitted_at || '') >= rqFrom && (inLinks(x) || (x.ca_link ? linked(x) : (!offMine(x) &&
         ((mp && pn(x.phone) === mp) || reqNames(x).some(v => keys.includes(nn(v)))))))).catch(() => []),
     ]);
+    // 🤝 지인 추천 (2026-11-12) — 설정 · 내 추천 코드(없으면 만듦) · 내가 추천한 신청 목록
+    const rc = refCfg(ps);
+    let refCode = '', refs = [];
+    if (rc.on) {
+      refCode = await ensureRefCode(env, m).catch(() => '');
+      const rr = await queryEq(env, 'requests', 'ref_by', m.__id, 50).catch(() => []);
+      refs = rr.filter(x => x.ref_new !== 'self').map(x => ({
+        date: x.submitted_at || '',
+        name: maskName(x.ref_cust_name || ''),
+        tail: String(pn(x.phone)).slice(-4),
+        st:   x.ref_status === 'paid' ? 'paid' : (x.ref_status === 'excluded' || (x.ref_status !== 'approved' && (x.ref_new === 'existing' || x.ref_new === 'self'))) ? 'excluded' : 'pending',
+        pts:  x.ref_status === 'paid' ? (parseFloat(x.ref_paid_pts) || 0) : 0,
+        paid_at: x.ref_paid_at || '',
+      }));
+      // 같은 분이 여러 번 신청했으면 한 줄만 (지급 → 대기 → 제외 순으로 남김), 그다음 최근순
+      const RK = { paid: 0, pending: 1, excluded: 2 };
+      refs.sort((a, b) => (RK[a.st] - RK[b.st]) || String(b.date).localeCompare(String(a.date)));
+      const seen = {}; refs = refs.filter(r => { const k = r.tail || r.date; if (seen[k]) return false; seen[k] = 1; return true; });
+      refs.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+    }
+    delete m.ref_code;
     const out = {
       ok: true,
       m,
+      ref: { on: rc.on, pts: rc.pts, newOn: rc.newOn && rc.newPts > 0, newPts: rc.newPts, code: refCode, list: refs },
       ptStart: String((ps && ps.pt_start) || ''),
       invoices:    invs.sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))),
       inspections: insps.sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))),

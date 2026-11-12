@@ -605,6 +605,15 @@ html.sa body:has(.app-body.active){padding-left:200px}
 })();
 </script>
 <script type="module" src="/hhc-auth.js"></script>
+<style>
+/* 🤝 추천 링크 의뢰 표시 (2026-11-12) */
+.nx-ref{display:flex;align-items:center;gap:7px;margin-top:6px;background:#FBF5E6;border-radius:9px;padding:6px 9px;font-size:12px;color:#5A6478;font-weight:600}
+.nx-ref .ic{font-size:14px}
+.nx-ref b{color:#14192A;font-weight:800}
+.nx-rfp{margin-left:auto;font-size:10.5px;font-weight:900;border-radius:999px;padding:2px 8px;white-space:nowrap}
+.nx-rfp.ok{background:#ECFDF5;color:#047857}
+.nx-rfp.no{background:#FEF2F2;color:#DC2626}
+</style>
 </head>
 <body>
 <script>if(self===top)document.documentElement.classList.add('sa');</script>
@@ -1629,6 +1638,17 @@ document.getElementById('btn-logout').addEventListener('click',()=>{setAuth(fals
 })();
 
 // ── STATS ──
+// 🤝 추천 링크로 들어온 의뢰 — 추천인 · 1차 신규 판정 (2026-11-12). 최종 판정·보상 지급은 총괄 고객관리 「🤝 추천 보상」
+function nxRefLine(r){
+  if(!r||!r.ref_by)return '';
+  let pl;
+  if(r.ref_status==='paid')pl='<span class="nx-rfp ok">보상 지급 완료</span>';
+  else if(r.ref_status==='excluded')pl='<span class="nx-rfp no">제외</span>';
+  else if(r.ref_new==='self')pl='<span class="nx-rfp no">본인 추천 · 제외</span>';
+  else if(r.ref_new==='existing'&&r.ref_status!=='approved')pl='<span class="nx-rfp no">기존 고객 · 제외</span>';
+  else pl='<span class="nx-rfp ok">신규 고객</span>';
+  return '<div class="nx-ref"><span class="ic">🤝</span><span class="t">추천인 <b>'+escHtml(r.ref_by_name||'—')+'</b></span>'+pl+'</div>';
+}
 function isUrgentReq(r){return r.status==='pending'&&r.submitted_at&&(Date.now()-new Date(r.submitted_at).getTime())/36e5>24;}
 // 🗓️ 예약전환 전 = 접수는 완료되었지만 아직 예약으로 전환하지 않은 의뢰
 function isToBookReq(r){return r.status==='completed'&&!r.converted_to_booking;}
@@ -1759,6 +1779,7 @@ function renderList(){
       <div class="nx-bd">
         <div class="nx-r1"><span class="nx-nm"><span class="ca-open" data-caopen="${r.__id}" title="총괄 고객관리에서 이 고객 상세 열기">${escHtml(r.condo_name||r.condo||'—')}${r.condo_unit&&hhcCN(r.condo_unit)!==hhcCN(r.condo_name||r.condo)?`<small>${escHtml(r.condo_unit)}</small>`:''}</span></span>${gradeBadge(rqCustName(r),r.phone)}${r.lang==='en'?'<span class="nx-lb en">EN</span>':''}<span class="nx-mt${mtCls}">${conv?'🗓️ 전환됨':agoTxt2}</span></div>
         <div class="nx-l2"><span class="nx-sm">${sum}</span>${qa}</div>
+        ${nxRefLine(r)}
         <div class="nx-ex">
           <div class="nx-dl">${r.remarks?`<span class="k">요청</span>${escHtml(r.remarks)}<br>`:''}<span class="k">연락처</span>${r.phone?`<a href="tel:${escAttr(String(r.phone).replace(/[^\d+]/g,''))}">${escHtml(r.phone)}</a>`:'<span style="color:var(--text3)">없음</span>'}<br><span class="k">접수</span>${date}${!isPending&&!conv?' · 접수완료됨':''}</div>
           ${ab1}

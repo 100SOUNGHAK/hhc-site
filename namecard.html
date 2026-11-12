@@ -1331,6 +1331,17 @@ a.nc-v{color:var(--navy-800)}
 }
 @media print{ .nc-cp{display:none} }
 </style>
+<script>
+/* 🤝 지인 추천 링크(/nc?ref=코드) — 주소가 정리되기 전에 코드를 읽어 이 휴대폰에 30일 보관 (2026-11-12)
+   명함의 「예약 신청하기」(request.html)가 같은 보관값을 읽어 의뢰서와 함께 보냅니다. */
+(function(){
+  try{
+    var k=(new URLSearchParams(location.search).get('ref')||'').trim().toUpperCase();
+    if(/^[A-Z2-9]{6}$/.test(k)){window.HHC_REFK=k;try{localStorage.setItem('hhc_ref',JSON.stringify({k:k,t:Date.now()}));}catch(e){}}
+    else{var o=JSON.parse(localStorage.getItem('hhc_ref')||'null');if(o&&o.k&&Date.now()-o.t<30*864e5)window.HHC_REFK=o.k;}
+  }catch(e){}
+})();
+</script>
 </head>
 <body>
 <div class="naw">
@@ -3180,7 +3191,7 @@ var POPS = {
 };
 function popUrl(k){
   var p = POPS[k]; if(!p) return '';
-  return p.file + '?embed=1' + (lang === 'en' ? '&lang=en' : '') + p.hash;
+  return p.file + '?embed=1' + (lang === 'en' ? '&lang=en' : '') + (k === 'book' && window.HHC_REFK ? '&ref=' + window.HHC_REFK : '') + p.hash;   /* 🤝 추천 코드 함께 */
 }
 var _popKey = '';
 function popOpen(k){
@@ -3313,5 +3324,44 @@ function acGuidesUrl(k){
 })();
 })();
 </script>
+<script>
+/* ═══ 🤝 추천 링크로 오신 분 — 「○○ 님이 소개해 주셨어요」 띠 (2026-11-12) ═══
+   추천인 이름은 가린 채(/api/ref) 보여 주고, 신규 고객 혜택(해피포인트)이 켜져 있으면 함께 안내합니다.
+   한국어/EN 전환 때 문구를 다시 씁니다(html lang 변경 감지). */
+(function(){
+  var K=window.HHC_REFK;if(!K)return;
+  var D=null;
+  function txt(){
+    var en=document.documentElement.lang==='en',b=document.getElementById('naRef');if(!b||!D)return;
+    var n=D.name||'';
+    b.querySelector('.t').textContent=en?(n?n+' referred you':'You were referred by a friend'):(n?n+' 님이 소개해 주셨어요':'지인 소개로 오셨어요');
+    var s=b.querySelector('.s'),x=b.querySelector('.x');
+    if(D.newOn){
+      s.hidden=false;x.hidden=false;
+      s.textContent=en?'First time with us? Get RM '+D.newPts+' in Happy Points after your first service':'처음 이용하시면 첫 서비스 후 해피포인트 RM '+D.newPts+'를 드려요';
+      x.textContent=en?'New customers only · usable once RM 10 or more is earned':'신규 고객만 해당 · 누적 RM 10 이상 적립되면 그때부터 사용 가능';
+    }else{s.hidden=true;x.hidden=true;}
+  }
+  fetch('/api/ref?k='+encodeURIComponent(K),{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
+    if(!j||!j.ok)return;D=j;
+    var nav=document.querySelector('.na-seg');if(!nav)return;
+    var d=document.createElement('div');d.id='naRef';d.className='na-ref';
+    d.innerHTML='<span class="ic" aria-hidden="true">🤝</span><div class="bx"><div class="t"></div><div class="s"></div><div class="x"></div></div>';
+    nav.parentNode.insertBefore(d,nav.nextSibling);txt();
+    try{new MutationObserver(txt).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});}catch(e){}
+  }).catch(function(){});
+})();
+</script>
+<style>
+/* 🤝 추천 띠 — 남색 판 위 금색 유리 카드 */
+.na-ref{margin:14px 0 4px;border-radius:16px;padding:13px 15px;display:flex;align-items:center;gap:12px;
+  background:linear-gradient(158deg,rgba(227,201,138,.22),rgba(201,164,76,.08) 60%);border:1px solid rgba(227,201,138,.42);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 2px 4px rgba(4,12,26,.35),0 20px 36px -18px rgba(4,12,26,.85)}
+.na-ref .ic{font-size:24px;flex-shrink:0}
+.na-ref .bx{min-width:0}
+.na-ref .t{font-size:14.5px;font-weight:800;color:#fff;letter-spacing:-.02em}
+.na-ref .s{font-size:12.5px;font-weight:700;color:#e3c98a;margin-top:3px;word-break:keep-all}
+.na-ref .x{font-size:11px;font-weight:600;color:rgba(206,216,230,.75);margin-top:4px;word-break:keep-all}
+</style>
 </body>
 </html>

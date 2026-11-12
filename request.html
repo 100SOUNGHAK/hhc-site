@@ -422,6 +422,16 @@ body{background:var(--rq-soft)}
 .nxbar .go{height:50px;border-radius:13px;font-size:15px;background:linear-gradient(135deg,var(--rq-tl2),var(--rq-tl))}
 @media(prefers-reduced-motion:reduce){.rq-pgb i{transition:none}}
 </style>
+<script>
+/* 🤝 지인 추천 코드 (2026-11-12) — 주소의 ?ref= 또는 전자명함에서 보관한 값(30일)을 읽어 의뢰서와 함께 보냅니다 */
+(function(){
+  try{
+    var k=(new URLSearchParams(location.search).get('ref')||'').trim().toUpperCase();
+    if(/^[A-Z2-9]{6}$/.test(k)){window.HHC_REFK=k;try{localStorage.setItem('hhc_ref',JSON.stringify({k:k,t:Date.now()}));}catch(e){}}
+    else{var o=JSON.parse(localStorage.getItem('hhc_ref')||'null');if(o&&o.k&&Date.now()-o.t<30*864e5)window.HHC_REFK=o.k;}
+  }catch(e){}
+})();
+</script>
 </head>
 <body>
 
@@ -1091,6 +1101,7 @@ function catCnt(catId){return picked.filter(p=>p.catId===catId).reduce((a,p)=>a+
 // ══ 언어 전환 ══
 function applyLang(){
   const l=L[currentLang];
+  if(window.__refTxt)window.__refTxt(currentLang);   // 🤝 추천 띠 문구
   $('hero-label').textContent=l.heroLabel;
   $('hero-title').textContent=l.heroTitle;
   $('hero-sub').innerHTML=esc(l.heroSub).replace(/\n/g,'<br>');
@@ -1917,6 +1928,7 @@ $('btn-submit').addEventListener('click',async()=>{
         lang:currentLang,
         items:JSON.stringify(itemsForSave),
         items_struct:JSON.stringify(itemsStruct),
+        ref:window.HHC_REFK||'',   // 🤝 추천 코드 (서버가 추천인을 찾아 저장)
         status:'pending',
         submitted_at:new Date().toISOString(),
       });
@@ -2122,5 +2134,39 @@ function setPrefillNote(){
   }catch(e){}
 })();
 </script>
+<script>
+/* ═══ 🤝 추천 링크로 오신 분 — 의뢰서 위쪽 「○○ 님 소개로 신청합니다」 (2026-11-12) ═══ */
+(function(){
+  var K=window.HHC_REFK;if(!K)return;
+  var D=null;
+  window.__refTxt=function(lg){
+    var b=document.getElementById('rqRef');if(!b||!D)return;
+    var en=(lg||(typeof currentLang!=='undefined'?currentLang:'ko'))==='en',n=D.name||'';
+    b.querySelector('.t').textContent=en?(n?'Referred by '+n:'Referred by a friend'):(n?n+' 님 소개로 신청합니다':'지인 소개로 신청합니다');
+    var s=b.querySelector('.s'),x=b.querySelector('.x');
+    s.hidden=x.hidden=!D.newOn;
+    if(D.newOn){
+      s.textContent=en?'First-time customers get RM '+D.newPts+' in Happy Points after their first paid service':'처음 이용하시는 분은 첫 서비스 결제 후 해피포인트 RM '+D.newPts+' 적립';
+      x.textContent=en?'New customers only · usable once RM 10 or more is earned':'신규 고객만 해당 · 누적 RM 10 이상 적립되면 그때부터 사용 가능';
+    }
+  };
+  fetch('/api/ref?k='+encodeURIComponent(K),{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
+    if(!j||!j.ok)return;D=j;
+    var h=document.querySelector('.hero');if(!h)return;
+    var d=document.createElement('div');d.id='rqRef';d.className='rq-ref';
+    d.innerHTML='<span class="ic" aria-hidden="true">🤝</span><div><div class="t"></div><div class="s"></div><div class="x"></div></div>';
+    h.parentNode.insertBefore(d,h.nextSibling);
+    window.__refTxt(typeof currentLang!=='undefined'?currentLang:'ko');
+  }).catch(function(){});
+})();
+</script>
+<style>
+.rq-ref{margin:0 0 12px;border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:10px;background:#FBF5E6;
+  box-shadow:0 1px 2px rgba(14,35,80,.06),0 8px 18px -8px rgba(14,35,80,.16)}
+.rq-ref .ic{font-size:20px;flex-shrink:0}
+.rq-ref .t{font-size:14px;font-weight:800;color:#14192A}
+.rq-ref .s{font-size:12px;font-weight:700;color:#8f6f28;margin-top:2px;word-break:keep-all}
+.rq-ref .x{font-size:11px;font-weight:700;color:#98A1B4;margin-top:3px;word-break:keep-all}
+</style>
 </body>
 </html>

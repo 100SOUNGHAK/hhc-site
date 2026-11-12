@@ -1,11 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/request — 고객 서비스 의뢰서(request.html) 접수 (2026-11-09)
-//  본문: {condo_name, condo_unit, phone, remarks, lang, items, items_struct}
+//  본문: {condo_name, condo_unit, phone, remarks, lang, items, items_struct, ref?}
+//  ref = 추천 코드 (2026-11-12 지인 추천) — 맞는 코드면 추천인(ref_by·ref_by_name)과 1차 신규 판정(ref_new)을 함께 저장
 //  → requests 컬렉션에 새 문서 생성(status:'pending') + 관리자 기기 푸시 알림
 //  응답: {ok:true, id}
 // ─────────────────────────────────────────────────────────────────────────────
 import { createDoc, json, fail, rateLimited, originAllowed } from './_lib/fs.js';
 import { sendAdminPush } from './_lib/push.js';
+import { findReferrer, loadRefCfg, hasServiceHistory } from './_lib/ref.js';
+import { pn } from './_lib/fs.js';
 
 // ── 콘도명 · 동호수 겹침 정리 (2026-11-10) ─────────────────────────────
 //  · 콘도명 칸에 동호수가 같이 들어간 경우 → 콘도명에서 동호수를 뺍니다
@@ -65,7 +68,7 @@ function hhcPrefillSplit(nm,ad){
   return {name:name,unit:unit};
 }
 
-const MAX = { condo_name: 200, condo_unit: 100, phone: 40, remarks: 3000, lang: 5, items: 8000, items_struct: 20000 };
+const MAX = { condo_name: 200, condo_unit: 100, phone: 40, remarks: 3000, lang: 5, items: 8000, items_struct: 20000, ref: 12 };
 
 export async function onRequestPost(context){
   const { request, env } = context;
@@ -92,6 +95,22 @@ export async function onRequestPost(context){
     status: 'pending',
     submitted_at: new Date().toISOString(),
   };
+  // 🤝 추천 코드 — 추천 정보가 잘못돼도 의뢰 접수는 그대로 진행합니다
+  const ref = str('ref').trim().toUpperCase();
+  if (ref) {
+    try {
+      const [rf, cfg] = await Promise.all([findReferrer(env, ref), loadRefCfg(env)]);
+      if (rf && cfg.on) {
+        data.ref_code = ref;
+        data.ref_by = rf.__id;
+        data.ref_by_name = String(rf.name || '');
+        // 1차 판정: 본인 추천 → self · 같은 번호로 서비스 기록 → existing · 그 외 → new
+        data.ref_new = (pn(rf.phone) && pn(rf.phone) === pn(phone)) ? 'self'
+                     : (await hasServiceHistory(env, phone)) ? 'existing' : 'new';
+        data.ref_status = 'pending';
+      }
+    } catch (e) {}
+  }
   try {
     const d = await createDoc(env, 'requests', data);
     const push = await sendAdminPush(env, 'request').catch(() => ({ ok: false }));
