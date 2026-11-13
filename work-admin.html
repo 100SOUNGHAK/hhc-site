@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0E2350">
+<title>HHC 직원 일정표</title>
+<script type="module" src="/hhc-auth.js"></script>
+<style>
+/* ─────────────────────────────────────────────────────────────
+   work-admin.html — 직원 일정표 링크 관리 (관리자 앱 「일정 → 직원 일정표」 탭, 2026-11-13)
+   · 직원용 화면 /work?k=열쇠 의 링크를 복사 · WhatsApp 으로 보내기 · 열쇠 바꾸기
+   · 열쇠는 Firestore settings/work_link {key, updated_at, by}
+     → /api/work 가 이 값과 비교해 맞을 때만 일정을 내려 줌
+   · 열쇠를 바꾸면 예전 링크(이미 설치한 홈 화면 아이콘 포함)는 더 이상 열리지 않음
+   ───────────────────────────────────────────────────────────── */
+:root{--n:#0E2350;--n2:#16346E;--ink:#14192A;--ink2:#5A6478;--ink3:#98A1B4;--line:#E4E9F2;--soft:#F6F8FC;
+--ok:#0E9B63;--red:#DC2626;--gold:#C9A44C;--wa:#1FA855;
+--e1:0 1px 2px rgba(11,24,51,.09),0 5px 12px -3px rgba(11,24,51,.14);
+--e2:0 1px 2px rgba(11,24,51,.10),0 8px 16px -4px rgba(11,24,51,.16),0 26px 44px -14px rgba(11,24,51,.34)}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;background:#F1F4F9;color:var(--ink);
+  padding:calc(14px + env(safe-area-inset-top)) 14px calc(40px + env(safe-area-inset-bottom));-webkit-text-size-adjust:100%}
+.wa-wrap{max-width:980px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+@media (min-width:820px){.wa-wrap{grid-template-columns:minmax(0,1fr) 380px;align-items:start}}
+.wa-hdr{display:flex;align-items:center;gap:10px;grid-column:1/-1}
+.wa-hdr h1{font-size:18px;font-weight:900;letter-spacing:-.02em}
+
+/* 링크 카드 (남색) */
+.wa-hero{position:relative;overflow:hidden;background:linear-gradient(150deg,var(--n),var(--n2));color:#fff;border-radius:16px;padding:18px 16px 16px;box-shadow:var(--e2)}
+.wa-hero:after{content:'';position:absolute;right:-70px;top:-70px;width:190px;height:190px;border-radius:50%;background:radial-gradient(circle,rgba(201,164,76,.22),transparent 70%);pointer-events:none}
+.wa-lb{position:relative;z-index:1;font-size:11.5px;font-weight:800;color:rgba(255,255,255,.62)}
+.wa-url{position:relative;z-index:1;margin-top:6px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:12px 13px;
+  font-size:14px;font-weight:700;line-height:1.45;word-break:break-all;font-variant-numeric:tabular-nums;color:#F3DDA6}
+.wa-url.none{color:rgba(255,255,255,.6);font-weight:600}
+.wa-btns{position:relative;z-index:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.wa-btn{display:flex;align-items:center;justify-content:center;gap:7px;border:none;cursor:pointer;font-family:inherit;font-size:15px;font-weight:900;
+  border-radius:13px;padding:14px 10px;transition:transform .14s;color:var(--n);background:#fff}
+.wa-btn:active{transform:scale(.97)}
+.wa-btn.wa{color:#fff;background:linear-gradient(180deg,#25C063,var(--wa));box-shadow:inset 0 1px 0 rgba(255,255,255,.3)}
+.wa-btn.full{grid-column:1/-1;color:#1B1405;background:linear-gradient(180deg,#E3C98A,var(--gold))}
+.wa-btn:disabled{opacity:.45;cursor:default}
+.wa-btn[hidden]{display:none}
+.wa-meta{position:relative;z-index:1;font-size:11.5px;color:rgba(255,255,255,.55);margin-top:10px;text-align:center}
+
+/* 흰 카드 */
+.wa-card{background:#fff;border-radius:14px;box-shadow:var(--e1);overflow:hidden}
+.wa-ch{display:flex;align-items:center;gap:8px;padding:14px 15px 4px}
+.wa-ch h2{font-size:14.5px;font-weight:900}
+.wa-body{padding:6px 15px 15px;font-size:13.5px;line-height:1.65;color:var(--ink2)}
+.wa-body b{color:var(--ink)}
+.wa-steps{list-style:none;display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.wa-steps li{display:flex;gap:10px;align-items:flex-start}
+.wa-steps i{flex:none;font-style:normal;width:22px;height:22px;border-radius:50%;background:var(--soft);color:var(--n);font-size:11.5px;font-weight:900;display:grid;place-items:center;margin-top:1px}
+.wa-rule{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin-top:4px;font-size:13px}
+@media (max-width:480px){.wa-rule{grid-template-columns:1fr;gap:2px}.wa-rule span:nth-child(even){margin-bottom:8px}}
+.wa-rule span:nth-child(odd){font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.wa-danger{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 15px;border-top:1px solid var(--line)}
+.wa-danger p{font-size:12.5px;color:var(--ink2);line-height:1.5}
+.wa-danger p b{display:block;font-size:13.5px;color:var(--ink)}
+.wa-rot{flex:none;border:1.5px solid #F2C9C9;background:#FFF6F6;color:var(--red);font-family:inherit;font-size:13px;font-weight:900;border-radius:11px;padding:10px 12px;cursor:pointer}
+.wa-rot:active{transform:scale(.96)}
+
+/* 직원 화면 미리보기 */
+.wa-pv{position:sticky;top:14px}
+.wa-phone{width:100%;max-width:380px;margin:0 auto;height:720px;border-radius:30px;background:#0B1730;padding:10px;box-shadow:var(--e2)}
+.wa-phone iframe{width:100%;height:100%;border:0;border-radius:22px;background:#F6F8FC;display:block}
+.wa-pvh{display:flex;align-items:center;justify-content:space-between;margin:0 4px 8px}
+.wa-pvh b{font-size:14px;font-weight:900}
+.wa-pvh button{font-size:12px;font-weight:800;color:var(--n2);background:#fff;border:none;border-radius:8px;padding:6px 10px;box-shadow:var(--e1);cursor:pointer;font-family:inherit}
+.wa-pvnone{height:100%;display:grid;place-items:center;text-align:center;color:#aebadb;font-size:13px;line-height:1.6;padding:20px}
+@media (max-width:819px){.wa-pv{position:static}.wa-phone{height:640px}}
+
+/* 확인 창 */
+.wa-ov{position:fixed;inset:0;background:rgba(8,23,43,.5);display:none;align-items:center;justify-content:center;padding:20px;z-index:60}
+.wa-ov.on{display:flex}
+.wa-dlg{width:100%;max-width:360px;background:#fff;border-radius:16px;padding:20px 18px 16px;box-shadow:var(--e2)}
+.wa-dlg b{display:block;font-size:16.5px;font-weight:900;margin-bottom:8px}
+.wa-dlg p{font-size:13.5px;color:var(--ink2);line-height:1.6}
+.wa-dlg div{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
+.wa-dlg button{border:none;border-radius:11px;padding:12px;font-family:inherit;font-size:14px;font-weight:900;cursor:pointer}
+.wa-dlg .no{background:var(--soft);color:var(--ink2)}
+.wa-dlg .yes{background:var(--red);color:#fff}
+
+.wa-toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);opacity:0;
+  background:#14192A;color:#fff;font-size:13px;font-weight:700;padding:10px 16px;border-radius:999px;transition:all .22s;pointer-events:none;z-index:70}
+.wa-toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wa-wrap">
+  <div class="wa-hdr"><h1>👷 직원 일정표</h1></div>
+
+  <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+    <div class="wa-hero">
+      <div class="wa-lb">직원에게 보낼 링크</div>
+      <div class="wa-url none" id="wa-url">불러오는 중…</div>
+      <div class="wa-btns">
+        <button type="button" class="wa-btn" id="wa-copy" disabled>🔗 링크 복사</button>
+        <button type="button" class="wa-btn wa" id="wa-send" disabled>💬 WhatsApp</button>
+        <button type="button" class="wa-btn full" id="wa-make" hidden>＋ 직원 링크 만들기</button>
+      </div>
+      <div class="wa-meta" id="wa-meta"></div>
+    </div>
+
+    <div class="wa-card">
+      <div class="wa-ch"><h2>직원 휴대폰에 설치하는 방법</h2></div>
+      <div class="wa-body">
+        <ol class="wa-steps">
+          <li><i>1</i><span>위 링크를 직원에게 WhatsApp으로 보냅니다.</span></li>
+          <li><i>2</i><span><b>안드로이드(Chrome)</b> — 링크를 열고 오른쪽 위 ⋮ → <b>홈 화면에 추가</b> (또는 「앱 설치」)</span></li>
+          <li><i>3</i><span><b>아이폰(Safari)</b> — 링크를 Safari에서 열고 아래 공유 버튼 → <b>홈 화면에 추가</b></span></li>
+          <li><i>4</i><span>홈 화면의 <b>HHC Jobs</b> 아이콘을 누르면 일정표가 바로 열립니다.</span></li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="wa-card">
+      <div class="wa-ch"><h2>직원 화면에 보이는 일정</h2></div>
+      <div class="wa-body">
+        <div class="wa-rule">
+          <span>오후 7시 ~ 다음 날 오후 6시</span><span>다음 날 일정 (자정이 지나면 「오늘」 일정)</span>
+          <span>오후 6시 ~ 7시</span><span>「준비 중입니다 (7시부터 확인 가능합니다)」</span>
+        </div>
+        <p style="margin-top:10px">확정된 예약과 스케줄 일정이 함께 나옵니다. 휴일 표시는 빠집니다. <b>고객 전화번호와 금액은 직원 화면에 보내지 않습니다.</b> 캘린더 메모에 전화번호나 RM 금액이 적힌 줄도 자동으로 뺍니다.</p>
+      </div>
+      <div class="wa-danger">
+        <p><b>링크 열쇠 바꾸기</b>직원이 그만두었거나 링크가 밖으로 퍼졌을 때 누릅니다. 예전 링크와 설치된 아이콘은 더 이상 열리지 않습니다.</p>
+        <button type="button" class="wa-rot" id="wa-rot" disabled>열쇠 바꾸기</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wa-pv">
+    <div class="wa-pvh"><b>직원 화면 미리보기</b><button type="button" id="wa-re">↻ 새로고침</button></div>
+    <div class="wa-phone" id="wa-phone"><div class="wa-pvnone">링크를 만들면<br>직원이 보는 화면이 여기에 나옵니다.</div></div>
+  </div>
+</div>
+
+<div class="wa-ov" id="wa-ov"><div class="wa-dlg" role="dialog" aria-modal="true">
+  <b>링크 열쇠를 바꿀까요?</b>
+  <p>지금 직원들이 쓰는 링크와 홈 화면 아이콘이 <b style="display:inline;font-size:inherit;color:var(--red)">모두 열리지 않게</b> 됩니다. 바꾼 뒤 새 링크를 직원들에게 다시 보내 주세요.</p>
+  <div><button type="button" class="no" id="wa-no">그대로 두기</button><button type="button" class="yes" id="wa-yes">바꾸기</button></div>
+</div></div>
+<div class="wa-toast" id="wa-toast"></div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const $=s=>document.querySelector(s);
+const SITE='https://happyhomecare.com.my';
+let db=null, KEY='', META=null;
+
+function toast(t){const e=$('#wa-toast');e.textContent=t;e.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>e.classList.remove('on'),2200);}
+function newKey(){const a=new Uint8Array(18);crypto.getRandomValues(a);let s='';a.forEach(b=>s+=String.fromCharCode(b));
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+function link(){return KEY?SITE+'/work?k='+KEY:'';}
+function fmt(iso){if(!iso)return '';const d=new Date(iso);if(isNaN(d))return '';
+  return d.getFullYear()+'. '+(d.getMonth()+1)+'. '+d.getDate()+'. '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+
+function render(){
+  const has=!!KEY;
+  $('#wa-url').textContent=has?link():'아직 직원 링크가 없습니다.';
+  $('#wa-url').classList.toggle('none',!has);
+  $('#wa-copy').disabled=!has;$('#wa-send').disabled=!has;$('#wa-rot').disabled=!has;
+  $('#wa-copy').hidden=!has;$('#wa-send').hidden=!has;
+  $('#wa-make').hidden=has;
+  $('#wa-meta').textContent=has&&META&&META.updated_at?'링크 만든 날 '+fmt(META.updated_at):'';
+  const ph=$('#wa-phone');
+  if(has){
+    const src='/work?k='+encodeURIComponent(KEY)+'&_='+Date.now();
+    const f=ph.querySelector('iframe');
+    if(f)f.src=src;else ph.innerHTML='<iframe title="직원 화면 미리보기" src="'+src+'"></iframe>';
+  }else ph.innerHTML='<div class="wa-pvnone">링크를 만들면<br>직원이 보는 화면이 여기에 나옵니다.</div>';
+}
+
+async function load(){
+  const s=await getDoc(doc(db,'settings','work_link'));
+  META=s.exists()?s.data():null;
+  KEY=META&&META.key&&META.off!==true?String(META.key):'';
+  render();
+}
+async function save(){
+  const k=newKey();
+  const by=String((window.HHCAuth&&window.HHCAuth.email)||'');
+  const data={key:k,updated_at:new Date().toISOString(),by};
+  await setDoc(doc(db,'settings','work_link'),data);
+  META=data;KEY=k;render();
+}
+
+// 직원에게 보내는 글 (직원용 앱은 영어가 기본)
+function waText(){
+  return ['*Happy Home Care – Work Schedule*','',
+    'Open this link to see your daily job schedule:',link(),'',
+    'Tip: tap ⋮ (Chrome) or Share (iPhone Safari) → "Add to Home Screen" so you can open it like an app.',
+    'Tomorrow\'s jobs are shown from 7:00 PM.','',
+    '— Happy Home Care'].join('\n');
+}
+
+$('#wa-copy').onclick=()=>{const t=link();
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('✓ 링크를 복사했습니다')).catch(()=>{
+    const r=document.createRange();r.selectNodeContents($('#wa-url'));const sel=getSelection();sel.removeAllRanges();sel.addRange(r);toast('링크를 길게 눌러 복사하세요');});};
+$('#wa-send').onclick=()=>{window.open('https://wa.me/?text='+encodeURIComponent(waText()),'_blank');};
+$('#wa-make').onclick=async()=>{try{$('#wa-make').disabled=true;await save();toast('✓ 직원 링크를 만들었습니다');}catch(e){toast('저장하지 못했습니다: '+(e.message||''));}finally{$('#wa-make').disabled=false;}};
+$('#wa-rot').onclick=()=>$('#wa-ov').classList.add('on');
+$('#wa-no').onclick=()=>$('#wa-ov').classList.remove('on');
+$('#wa-ov').onclick=e=>{if(e.target.id==='wa-ov')$('#wa-ov').classList.remove('on');};
+$('#wa-yes').onclick=async()=>{$('#wa-ov').classList.remove('on');
+  try{await save();toast('✓ 열쇠를 바꿨습니다 — 새 링크를 직원들에게 보내 주세요');}catch(e){toast('바꾸지 못했습니다: '+(e.message||''));}};
+$('#wa-re').onclick=()=>render();
+
+if(window.__WA_DEMO){KEY=window.__WA_DEMO.key||'';META=window.__WA_DEMO.meta||null;render();}
+else{
+  try{
+    const app=initializeApp({
+      apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
+      authDomain:"happywork-packageplan.firebaseapp.com",
+      projectId:"happywork-packageplan",
+      storageBucket:"happywork-packageplan.firebasestorage.app",
+      messagingSenderId:"101289103022",
+      appId:"1:101289103022:web:d81aca7f3747dd26df673f"
+    });
+    db=getFirestore(app);
+    load().catch(e=>{$('#wa-url').textContent='불러오지 못했습니다 — 새로고침 해 주세요 ('+(e.message||'')+')';});
+  }catch(e){$('#wa-url').textContent='연결 오류: '+(e.message||'');}
+}
+</script>
+</body>
+</html>

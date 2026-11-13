@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0E2350">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HHC 작업일정">
+<title>HHC Work Schedule</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<script>
+/* 직원 링크 열쇠(k) — 주소에 있으면 기억, 없으면 기억해 둔 값을 씀.
+   홈 화면에 설치할 때 열쇠가 붙은 주소로 열리도록 manifest 를 열쇠별로 받는다. */
+(function(){
+  var q=new URLSearchParams(location.search),k=(q.get('k')||'').trim();
+  try{ if(k) localStorage.setItem('hhc_work_k',k); else k=localStorage.getItem('hhc_work_k')||''; }catch(e){}
+  window.__WK=k;
+  var l=document.createElement('link');l.rel='manifest';
+  l.href='/api/work?manifest=1'+(k?'&k='+encodeURIComponent(k):'');
+  document.head.appendChild(l);
+})();
+</script>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>
+:root{
+  --n:#0E2350;--n2:#16346E;--bl:#2563EB;
+  --ink:#14192A;--ink2:#5A6478;--ink3:#98A1B4;
+  --line:#E4E9F2;--soft:#F6F8FC;
+  --ok:#0E9B63;--red:#DC2626;--gold:#B98A16;--gold5:#C9A44C;
+  --e1:0 1px 2px rgba(11,24,51,.09),0 5px 12px -3px rgba(11,24,51,.14);
+  --card:0 1px 2px rgba(14,35,80,.06),0 8px 18px -8px rgba(14,35,80,.16);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:var(--soft)}
+body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;color:var(--ink);min-height:100vh;-webkit-font-smoothing:antialiased}
+.wk{max-width:520px;margin:0 auto;padding-bottom:calc(32px + env(safe-area-inset-bottom))}
+
+/* 상단바 */
+#wk-top{position:sticky;top:0;z-index:20;background:linear-gradient(180deg,var(--n),var(--n2));color:#fff;
+  padding:calc(12px + env(safe-area-inset-top)) 16px 12px;display:flex;align-items:center;gap:10px}
+.wk-logo{width:30px;height:30px;border-radius:9px;background:rgba(255,255,255,.1);border:1px solid rgba(201,164,76,.55);
+  display:grid;place-items:center;color:var(--gold5);flex:none}
+.wk-logo svg{width:17px;height:17px}
+.wk-ttl{flex:1;min-width:0}
+.wk-ttl b{display:block;font-size:17px;font-weight:800;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wk-ttl small{display:block;font-size:10.5px;font-weight:600;color:#aebadb;letter-spacing:.06em;margin-top:1px}
+.wk-lang{display:flex;background:rgba(255,255,255,.1);border-radius:999px;padding:3px;flex:none}
+.wk-lang button{border:0;background:transparent;color:#aebadb;font:800 11px/1 inherit;font-family:inherit;padding:7px 10px;border-radius:999px;cursor:pointer}
+.wk-lang button.on{background:#fff;color:var(--n)}
+
+/* 날짜 */
+.wk-day{padding:22px 20px 10px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.wk-when{font-size:12.5px;font-weight:800;color:var(--gold);letter-spacing:.02em;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.wk-when i{width:6px;height:6px;border-radius:50%;background:var(--gold5);display:inline-block}
+.wk-date{font-size:34px;font-weight:800;letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums}
+.wk-dow{font-size:17px;font-weight:700;color:var(--ink2);margin-left:6px;letter-spacing:-.02em}
+.wk-cnt{text-align:right;flex:none}
+.wk-cnt b{display:block;font-size:26px;font-weight:800;letter-spacing:-.03em;line-height:1;font-variant-numeric:tabular-nums;color:var(--n)}
+.wk-cnt span{font-size:11.5px;font-weight:700;color:var(--ink3)}
+.wk-sub{padding:0 20px 14px;font-size:13px;color:var(--ink3);font-weight:600}
+
+/* 일정 목록 — 시간 · 콘도명 · 동호수만 크게 */
+.wk-list{padding:0 14px;display:flex;flex-direction:column;gap:10px}
+.wk-row{display:flex;align-items:center;gap:14px;width:100%;border:0;background:#fff;border-radius:14px;box-shadow:var(--card);text-align:left;
+  font-family:inherit;color:inherit;padding:18px 14px 18px 16px;cursor:pointer;transition:transform .14s,background .16s}
+.wk-row:active{transform:scale(.985);background:#FBFCFE}
+.wk-tm{flex:none;width:64px;font-variant-numeric:tabular-nums}
+.wk-tm b{display:block;font-size:21px;font-weight:800;letter-spacing:-.03em;color:var(--n);line-height:1.05}
+.wk-tm small{display:block;font-size:12px;font-weight:600;color:var(--ink3);margin-top:4px}
+.wk-tm .tbc{font-size:13px;color:var(--ink3);font-weight:700}
+.wk-bd{flex:1;min-width:0;border-left:1px solid var(--line);padding-left:14px}
+.wk-place{font-size:21px;font-weight:800;letter-spacing:-.03em;line-height:1.25;word-break:keep-all;overflow-wrap:anywhere}
+.wk-unit{display:inline-block;margin-top:7px;font-size:19px;font-weight:800;letter-spacing:-.01em;color:var(--n);background:#FBF5E6;
+  border:1px solid rgba(201,164,76,.45);border-radius:8px;padding:3px 10px;font-variant-numeric:tabular-nums}
+.wk-done{display:inline-block;font-size:11px;font-weight:800;color:var(--ok);background:rgba(14,155,99,.1);border-radius:999px;padding:3px 8px;margin-left:6px;vertical-align:3px}
+.wk-chev{flex:none;color:var(--ink3)}
+.wk-chev svg{width:18px;height:18px;display:block}
+.wk-row.done .wk-place,.wk-row.done .wk-tm b{color:var(--ink3)}
+
+/* 상세 팝업 (아래에서 올라오는 창) */
+.wk-ov{position:fixed;inset:0;z-index:50;background:var(--soft);display:flex;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity .2s}
+.wk-ov.on{opacity:1;pointer-events:auto}
+.wk-sh{width:100%;max-width:520px;height:100%;background:var(--soft);display:flex;flex-direction:column;
+  transform:translateY(16px);transition:transform .22s cubic-bezier(.22,.61,.36,1)}
+.wk-ov.on .wk-sh{transform:none}
+.wk-sh-bar{flex:none;background:linear-gradient(180deg,var(--n),var(--n2));color:#fff;display:flex;align-items:center;gap:8px;
+  padding:calc(10px + env(safe-area-inset-top)) 12px 10px}
+.wk-x{display:flex;align-items:center;gap:4px;border:0;background:rgba(255,255,255,.12);color:#fff;font:800 14px/1 inherit;font-family:inherit;
+  padding:9px 14px 9px 10px;border-radius:999px;cursor:pointer;transition:transform .14s}
+.wk-x:active{transform:scale(.95)}
+.wk-x svg{width:18px;height:18px}
+.wk-sh-tm{margin-left:auto;font-size:15px;font-weight:800;color:var(--gold5);font-variant-numeric:tabular-nums;padding-right:4px}
+.wk-sh-hd{flex:none;background:#fff;padding:20px 18px 18px;box-shadow:0 1px 0 var(--line)}
+.wk-sh-pl{font-size:26px;font-weight:800;letter-spacing:-.03em;line-height:1.22;word-break:keep-all;overflow-wrap:anywhere}
+.wk-sh-hd .wk-unit{margin-top:10px;font-size:21px}
+.wk-sh-bd{flex:1;padding:16px 16px calc(24px + env(safe-area-inset-bottom));overflow-y:auto;-webkit-overflow-scrolling:touch}
+
+/* 상세 — 고객용 인보이스 「서비스 내역」과 같은 모양 (금액 대신 수량) */
+.wk-ivc{background:#fff;border-radius:16px;box-shadow:var(--e1);overflow:hidden}
+.wk-ivc-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:15px 16px 13px;border-bottom:1px solid var(--line)}
+.wk-ivc-h b{font-size:15px;font-weight:800;letter-spacing:-.02em;color:var(--ink)}
+.wk-ivc-h span{font-size:12px;color:var(--ink3);font-weight:600}
+.wk-ivr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;align-items:start;padding:15px 16px;border-top:1px solid var(--line)}
+.wk-ivr:first-of-type{border-top:none}
+.wk-ivr .t{font-size:15px;font-weight:700;line-height:1.5;letter-spacing:-.015em;word-break:break-word}
+.wk-ivr .t em{font-style:normal;display:inline-block;font-size:11.5px;font-weight:700;color:var(--n2);background:#EEF2FA;
+  border-radius:6px;padding:2px 7px;margin-right:7px;vertical-align:2px;letter-spacing:0}
+.wk-ivr .q{font-size:16px;font-weight:800;color:var(--ink);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;padding-top:1px}
+.wk-ivr .q small{font-size:12px;font-weight:700;color:var(--ink2);margin-left:2px}
+.wk-ivtot{display:flex;justify-content:space-between;align-items:baseline;margin:0 16px;padding:13px 0 15px;border-top:1.5px solid var(--ink)}
+.wk-ivtot span{font-size:14px;font-weight:800}
+.wk-ivtot b{font-size:20px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.wk-ivtot b small{font-size:13px;font-weight:700;color:var(--ink2);margin-left:2px}
+.wk-txt{font-size:15px;line-height:1.6;color:var(--ink);white-space:pre-line;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.wk-lbl{font-size:11.5px;font-weight:800;color:var(--ink3);letter-spacing:.04em;margin:16px 0 6px}
+.wk-lbl:first-child{margin-top:0}
+.wk-addr{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 12px}
+.wk-addr span{flex:1;font-size:14px;font-weight:600;line-height:1.45}
+.wk-addr em{font-style:normal;flex:none;font-size:12.5px;font-weight:800;color:#fff;background:var(--bl);border-radius:999px;padding:7px 12px}
+
+/* 빈 상태 · 오류 */
+.wk-empty{margin:8px 14px;background:#fff;border-radius:14px;box-shadow:var(--card);padding:34px 22px;text-align:center}
+.wk-empty b{display:block;font-size:17px;font-weight:800;margin-bottom:6px}
+.wk-empty span{font-size:14px;color:var(--ink2);line-height:1.55}
+.wk-empty.err b{color:var(--red)}
+.wk-soon{padding:40px 22px}
+.wk-soon b{font-size:20px;color:var(--n)}
+.wk-soon span{font-size:15px;font-weight:600}
+.wk-soon-ic{width:52px;height:52px;border-radius:50%;background:#FBF5E6;color:var(--gold);display:grid;place-items:center;margin:0 auto 14px}
+.wk-soon-ic svg{width:26px;height:26px}
+.wk-load{width:22px;height:22px;border:3px solid var(--line);border-top-color:var(--n);border-radius:50%;margin:0 auto 12px;animation:wkspin .8s linear infinite}
+@keyframes wkspin{to{transform:rotate(360deg)}}
+
+.wk-foot{padding:18px 20px 0;display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--ink3);font-weight:600}
+.wk-foot button{border:0;background:#fff;box-shadow:var(--e1);color:var(--n);font:800 12.5px inherit;font-family:inherit;padding:9px 14px;border-radius:13px;cursor:pointer;transition:transform .14s}
+.wk-foot button:active{transform:scale(.96)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wk">
+  <header id="wk-top">
+    <div class="wk-logo" aria-hidden="true"><svg viewBox="0 0 100 100"><g fill="currentColor"><rect x="15" y="14" width="19" height="74" rx="3.5"/><rect x="66" y="14" width="19" height="74" rx="3.5"/><path d="M50 28 85 51v16L50 43 15 67V51Z"/></g></svg></div>
+    <div class="wk-ttl"><b id="wk-title">Work Schedule</b><small>HAPPY HOME CARE</small></div>
+    <div class="wk-lang"><button data-l="en" class="on">EN</button><button data-l="ko">한국어</button></div>
+  </header>
+
+  <section class="wk-day">
+    <div>
+      <div class="wk-when" id="wk-when"><i></i><span></span></div>
+      <div><span class="wk-date" id="wk-date">—</span><span class="wk-dow" id="wk-dow"></span></div>
+    </div>
+    <div class="wk-cnt" id="wk-cnt" hidden><b id="wk-n">0</b><span id="wk-nl"></span></div>
+  </section>
+  <div class="wk-sub" id="wk-sub"></div>
+
+  <main id="wk-main"><div class="wk-empty"><div class="wk-load"></div><span id="wk-loading">Loading…</span></div></main>
+
+  <div class="wk-ov" id="wk-ov" aria-hidden="true"><div class="wk-sh" role="dialog" aria-modal="true">
+    <div class="wk-sh-bar"><button class="wk-x" id="wk-x"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18"/></svg><span id="wk-x-t">Back</span></button><div class="wk-sh-tm" id="wk-sh-tm"></div></div>
+    <div class="wk-sh-hd"><div class="wk-sh-pl" id="wk-sh-pl"></div><div id="wk-sh-un"></div></div>
+    <div class="wk-sh-bd" id="wk-sh-bd"></div></div></div>
+
+  <div class="wk-foot"><span id="wk-upd"></span><button id="wk-re">Refresh</button></div>
+</div>
+
+<script>
+// ── 문구 ──
+const T={
+  ko:{title:'해피홈케어 작업일정',loading:'불러오는 중…',today:'오늘 작업',tomorrow:'내일 작업',
+      jobs:'건',units:'대',sub:'콘도명을 누르면 품목·서비스·수량이 보입니다.',
+      svcs:'서비스 내역',total:'합계',work:'작업 내용',close:'목록으로',addr:'주소',map:'지도',
+      done:'완료',tbc:'시간 미정',refresh:'새로고침',upd:'업데이트',
+      soonT:'준비 중입니다.',soonS:'(7시부터 확인 가능합니다.)',emptyT:'이 날은 잡힌 작업이 없습니다',emptyS:'일정이 추가되면 여기에 바로 나타납니다.\n저녁 7시부터는 다음 날 일정이 보입니다.',
+      keyT:'링크가 맞지 않습니다',keyS:'관리자에게 새 작업일정 링크를 받아 다시 열어 주세요.',
+      errT:'일정을 불러오지 못했습니다',errS:'인터넷 연결을 확인한 뒤 새로고침을 눌러 주세요.',
+      dow:['일요일','월요일','화요일','수요일','목요일','금요일','토요일']},
+  en:{title:'Work Schedule',loading:'Loading…',today:"Today's jobs",tomorrow:"Tomorrow's jobs",
+      jobs:'jobs',job:'job',units:'units',sub:'Tap a condo to see items, service and quantity.',
+      svcs:'Services',total:'Total',work:'Job details',close:'Back',addr:'Address',map:'Map',
+      done:'Done',tbc:'TBC',refresh:'Refresh',upd:'Updated',
+      soonT:'Coming Soon',soonS:'(Available from 7:00 PM)',emptyT:'No jobs on this day',emptyS:'New jobs will appear here automatically.\nFrom 7 PM, the next day\'s schedule is shown.',
+      keyT:'This link is not valid',keyS:'Please ask the office for a new schedule link.',
+      errT:'Could not load the schedule',errS:'Check your internet connection and tap Refresh.',
+      dow:['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
+      mon:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']}
+};
+// 품목 사전 (예약관리 PK_CATS 와 같은 이름)
+const CAT={ac_home:['에어컨(가정용)','Aircon (Home)','❄️'],ac_shop:['에어컨(매장용)','Aircon (Shop)','🏬'],washer:['세탁기','Washing machine','🧺'],
+  mattress:['매트리스','Mattress','🛏️'],sofa:['쇼파','Sofa','🛋️'],curtain:['커튼','Curtain','🪟'],dryer:['건조기','Dryer','🌀'],
+  hood:['주방후드','Kitchen hood','🍳'],fridge:['냉장고','Fridge','🧊'],purifier:['공기청정기','Air purifier','🌬️'],fan:['실링팬','Ceiling fan','🌀'],
+  chair:['식탁의자','Dining chair','🪑'],carpet:['카페트','Carpet','🧶'],etc:['기타서비스','Other','🔧']};
+const EN_W={'벽걸이형':'Wall-mounted','매립형 (덕트)':'Ducted','천정형 (카세트)':'Cassette','실외기':'Outdoor unit',
+  '건식방식':'Dry method','습식살균방식':'Wet sanitizing',
+  '기본세척':'Basic cleaning','약품세척':'Chemical cleaning','스팀살균세척':'Steam sanitizing','전체분해세척':'Full overhaul',
+  '스팀그릴세척':'Steam grille cleaning','분해세척':'Overhaul cleaning','드럼세탁기':'Front-load (drum)','통돌이세탁기':'Top-load',
+  'I 형':'I-shape','L 형':'L-shape','현장세탁':'On-site washing','수거세탁':'Pick-up laundry','약식 스팀 살균':'Quick steam sanitizing',
+  '완전분해세척':'Full overhaul','단문형':'Single door','양문형':'Side-by-side','공기청정기 청소':'Purifier cleaning',
+  '간이청소':'Simple cleaning','분해청소':'Overhaul cleaning','스팀세탁':'Steam cleaning','카페트 세탁':'Carpet cleaning',
+  '전등교체':'Light replacement','콘센트 교체':'Socket replacement','기타서비스':'Other service'};
+
+const $=s=>document.querySelector(s);
+const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+let L=(()=>{try{return localStorage.getItem('hhc_work_lang')||'en';}catch(e){return 'en';}})();
+let DATA=null,STATE='loading';
+
+// 예약 품목 → 인보이스와 같은 「[꼬리표] 서비스명」 (한글 / 영문 대문자)
+const AC_TAG={'벽걸이형':['벽걸이형 에어컨','Wall-Mounted AC'],'천정형 (카세트)':['카세트형 에어컨','Cassette AC'],
+  '매립형 (덕트)':['FCU 덕트형 에어컨','Ducted FCU AC'],'실외기':['실외기 에어컨','Outdoor Unit']};
+const SVC={'기본세척':['기본 세척','BASIC CLEANING'],'약품세척':['약품 세척','CHEMICAL CLEANING'],'스팀살균세척':['스팀살균 세척','STEAM CLEANING'],
+  '전체분해세척':['전체 분해 세척','OVERHAUL CLEANING'],'스팀그릴세척':['스팀 그릴 세척','STEAM GRILLE CLEANING'],'분해세척':['분해 세척','OVERHAUL CLEANING'],
+  '완전분해세척':['완전 분해 세척','FULL OVERHAUL CLEANING'],'건식방식':['건식 청소','DRY SUCTION CLEANING'],'습식살균방식':['습식 살균 청소','WET STEAM CLEANING'],
+  '현장세탁':['현장 세탁','ON-SITE WASHING'],'수거세탁':['수거 세탁','PICK-UP LAUNDRY'],'약식 스팀 살균':['약식 스팀 살균','QUICK STEAM SANITIZING'],
+  '간이청소':['간이 청소','SIMPLE CLEANING'],'분해청소':['분해 청소','OVERHAUL CLEANING'],'스팀세탁':['스팀 세탁','STEAM CLEANING'],
+  '카페트 세탁':['카페트 세탁','CARPET CLEANING'],'공기청정기 청소':['청소','CLEANING'],'전등교체':['전등 교체','LIGHT REPLACEMENT'],'콘센트 교체':['콘센트 교체','SOCKET REPLACEMENT']};
+const CAT_TAG={washer:['세탁기','Washer'],mattress:['매트리스','Mattress'],curtain:['커튼','Curtain'],dryer:['의류 건조기','Clothes Dryer'],
+  hood:['주방 후드','Kitchen Hood'],fridge:['냉장고','Refrigerator'],purifier:['공기청정기','Air Purifier'],fan:['실링팬','Ceiling Fan'],
+  chair:['식탁의자','Dining Chair'],carpet:['카페트','Carpet'],etc:['기타','Other']};
+function itemName(it){
+  const en=L==='en',p=v=>v?(en?v[1]:v[0]):'';
+  if(it.free)return {tag:'',name:(it.text||'').trim()||(en?'Other':'기타')};
+  const c=it.catId,g=it.grpKo,v=it.svcKo;
+  if(c==='ac_home'||c==='ac_shop')return {tag:p(AC_TAG[g])||g||'',name:p(SVC[v])||v||''};
+  if(c==='washer')return {tag:p(v==='드럼세탁기'?['드럼 세탁기','Front-Load Washer']:['통돌이 세탁기','Top-Load Washer']),name:p(['분해 세척','OVERHAUL CLEANING'])};
+  if(c==='sofa')return {tag:p(v==='L 형'?['쇼파-L형','Sofa · L-Shape']:['쇼파-I형','Sofa · I-Shape']),name:p(SVC[g])||g||''};
+  if(c==='fridge')return {tag:p(v==='양문형'?['냉장고-양문형','Side-by-Side Fridge']:['냉장고-단문형','Single-Door Fridge']),name:p(['청소','CLEANING'])};
+  return {tag:p(CAT_TAG[c])||'',name:p(SVC[v])||v||''};
+}
+function render(){
+  const t=T[L];
+  document.documentElement.lang=L;
+  $('#wk-title').textContent=t.title;
+  document.querySelectorAll('.wk-lang button').forEach(b=>b.classList.toggle('on',b.dataset.l===L));
+  $('#wk-re').textContent=t.refresh;
+  if(STATE==='loading'){$('#wk-loading')&&($('#wk-loading').textContent=t.loading);return;}
+  if(STATE==='key'||STATE==='err'){
+    $('#wk-cnt').hidden=true;$('#wk-sub').textContent='';
+    $('#wk-main').innerHTML=`<div class="wk-empty err"><b>${STATE==='key'?t.keyT:t.errT}</b><span>${STATE==='key'?t.keyS:t.errS}</span></div>`;return;}
+  const d=new Date(DATA.date+'T00:00:00');
+  $('#wk-when span').textContent=DATA.mode==='today'?t.today:t.tomorrow;
+  $('#wk-date').textContent=L==='en'?d.getDate()+' '+t.mon[d.getMonth()]:(d.getMonth()+1)+'월 '+d.getDate()+'일';
+  $('#wk-dow').textContent=t.dow[d.getDay()];
+  if(DATA.mode==='soon'){
+    $('#wk-cnt').hidden=true;$('#wk-sub').textContent='';closeSheet();
+    $('#wk-main').innerHTML=`<div class="wk-empty wk-soon"><div class="wk-soon-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg></div><b>${t.soonT}</b><span>${t.soonS}</span></div>`;
+    return;}
+  const jobs=DATA.jobs||[];
+  $('#wk-cnt').hidden=!jobs.length;
+  $('#wk-n').textContent=jobs.length;
+  $('#wk-nl').textContent=L==='en'?(jobs.length===1?t.job:t.jobs):'건';
+  $('#wk-sub').textContent=jobs.length?t.sub:'';
+  const up=new Date(DATA.at||Date.now());
+  $('#wk-upd').textContent=t.upd+' '+String(up.getHours()).padStart(2,'0')+':'+String(up.getMinutes()).padStart(2,'0');
+  if(!jobs.length){$('#wk-main').innerHTML=`<div class="wk-empty"><b>${t.emptyT}</b><span>${esc(t.emptyS).replace(/\n/g,'<br>')}</span></div>`;return;}
+  $('#wk-main').innerHTML='<div class="wk-list">'+jobs.map(j=>{
+    const tm=j.time_s?`<b>${esc(j.time_s)}</b>${j.time_e?'<small>~ '+esc(j.time_e)+'</small>':''}`:`<span class="tbc">${t.tbc}</span>`;
+    return `<button class="wk-row${j.done?' done':''}" data-id="${esc(j.id)}"><div class="wk-tm">${tm}</div>
+      <div class="wk-bd"><div class="wk-place">${esc(placeOf(j))}${j.done?'<span class="wk-done">'+t.done+'</span>':''}</div>${j.unit?'<span class="wk-unit">'+esc(j.unit)+'</span>':''}</div>
+      <span class="wk-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>`;
+  }).join('')+'</div>';
+  if(OPENID)openSheet(OPENID);
+}
+function placeOf(j){return j.place||'—';}
+
+// ── 상세 팝업 ──
+let OPENID=null;
+function openSheet(id){
+  const t=T[L],j=(DATA&&DATA.jobs||[]).find(x=>x.id===id);if(!j){closeSheet();return;}
+  OPENID=id;
+  $('#wk-sh-tm').textContent=j.time_s?(j.time_e?j.time_s+' ~ '+j.time_e:j.time_s):t.tbc;
+  $('#wk-sh-pl').textContent=placeOf(j);
+  $('#wk-sh-un').innerHTML=j.unit?'<span class="wk-unit">'+esc(j.unit)+'</span>':'';
+  $('#wk-x-t').textContent=t.close;
+  let det='';
+  if(j.items&&j.items.length){
+    const tot=j.items.reduce((a,x)=>a+(+x.qty||1),0),n=j.items.length,en=L==='en';
+    const u=q=>en?' unit'+(q===1?'':'s'):'대';
+    det+=`<div class="wk-ivc"><div class="wk-ivc-h"><b>${t.svcs}</b><span>${en?n+' item'+(n===1?'':'s'):n+'건'}</span></div>`+
+      j.items.map(it=>{const m=itemName(it),q=+it.qty||1;
+        return `<div class="wk-ivr"><div class="t">${m.tag?'<em>'+esc(m.tag)+'</em>':''}${esc(m.name)}</div><div class="q">${q}<small>${u(q)}</small></div></div>`;}).join('')+
+      (n>1?`<div class="wk-ivtot"><span>${t.total}</span><b>${tot}<small>${u(tot)}</small></b></div>`:'')+`</div>`;
+  }
+  const lines=j.lines;
+  if(lines&&lines.length)det+=`<div class="wk-lbl">${t.work}</div><div class="wk-txt">${esc(lines.join('\n'))}</div>`;
+  if(j.addr)det+=`<div class="wk-lbl">${t.addr}</div><a class="wk-addr" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(j.addr)}" target="_blank" rel="noopener"><span>${esc(j.addr)}</span><em>${t.map}</em></a>`;
+  $('#wk-sh-bd').innerHTML=det||'<div class="wk-txt">—</div>';
+  $('#wk-sh-bd').scrollTop=0;
+  const ov=$('#wk-ov');if(!ov.classList.contains('on')){ov.classList.add('on');ov.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';
+    try{history.pushState({wk:1},'');}catch(e){}}
+}
+function closeSheet(fromPop){
+  const ov=$('#wk-ov');if(!ov.classList.contains('on')){OPENID=null;return;}
+  ov.classList.remove('on');ov.setAttribute('aria-hidden','true');document.body.style.overflow='';OPENID=null;
+  if(!fromPop){try{if(history.state&&history.state.wk)history.back();}catch(e){}}
+}
+
+async function load(){
+  if(!window.__WK){STATE='key';render();return;}
+  for(let i=0;i<3;i++){
+    try{
+      const r=await fetch('/api/work?k='+encodeURIComponent(window.__WK),{cache:'no-store'});
+      if(r.status===403||r.status===401){STATE='key';render();return;}
+      if(!r.ok)throw new Error(r.status);
+      const d=await r.json();
+      if(DATA&&DATA.date!==d.date)closeSheet();
+      DATA=d;STATE='ok';render();return;
+    }catch(e){await new Promise(z=>setTimeout(z,800));}
+  }
+  if(!DATA){STATE='err';render();}
+}
+
+$('#wk-main').addEventListener('click',e=>{const row=e.target.closest('.wk-row');if(row)openSheet(row.dataset.id);});
+$('#wk-ov').addEventListener('click',e=>{if(e.target.id==='wk-ov')closeSheet();});
+$('#wk-x').onclick=()=>closeSheet();
+window.addEventListener('popstate',()=>closeSheet(true));   // 휴대폰 뒤로가기 = 팝업 닫기
+document.querySelector('.wk-lang').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  L=b.dataset.l;try{localStorage.setItem('hhc_work_lang',L);}catch(x){}render();});
+$('#wk-re').onclick=load;
+// 화면으로 돌아오면 다시 받기 + 5분마다 (저녁 7시에 다음 날로 넘어가도록)
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)load();});
+setInterval(()=>{if(!document.hidden)load();},5*60*1000);
+render();load();
+</script>
+</body>
+</html>
