@@ -1795,6 +1795,9 @@ a.gvb:active{transform:translateY(2px) scale(.995)}
 .brf.pic.t-ref{--ov:15,37,64;--tg:#F3D89A}
 .brf.pic .brf-big b{color:var(--tg,#F3D89A)}
 .brf.pic .brf-wp{text-shadow:none}
+/* 🖼️ 배너 사진 옅게 (2026-11-14) — 사진은 35% 진하기의 은은한 무늬, 바탕은 배너 종류별 색(--ov) */
+.brf.pic{background:rgb(var(--ov))}
+.brf.pic .brf-img{opacity:.35}
 /* 📐 지금 확인하실 일 — 좁고 높은 세로형 카드 (2026-11-13)
    · 폭을 줄이고(약 52%) 높이를 늘려, 옆 카드 제목까지 보이게 합니다 → 넘겨볼 카드가 있다는 신호
    · 제목은 줄바꿈 허용(잘리지 않음), 설명은 두 줄까지, 버튼은 맨 아래 줄(구분선 위)로 */
@@ -2016,6 +2019,14 @@ a.gvb:active{transform:translateY(2px) scale(.995)}
 .hcg.v4:before{inset:-6px;opacity:.8;-webkit-filter:blur(1.2px);filter:blur(1.2px)}
 .hcg.v4 .hcg-n{white-space:normal;line-height:1.18;word-break:keep-all;overflow:visible}
 @media (prefers-reduced-motion:reduce){.hcg.v4 .hcg-t{transition:none}}
+/* 🏡 케어 현황 v5 (2026-11-14) — 밝은 유리판: 배경 사진은 또렷하게(블러 없앰 · 흰 안개는 위쪽만 살짝)
+   · 「지금 확인하실 일」 카드처럼 사진이 카드 전체에 그대로 보이고, 품목 버튼은 흰 반투명 유리 */
+.hcg.v4:before{inset:0;opacity:1;-webkit-filter:none;filter:none;-webkit-mask-image:none;mask-image:none;background-position:center 40%}
+.hcg.v4:after{background:linear-gradient(180deg,rgba(255,255,255,.38) 0,rgba(255,255,255,.10) 45%,rgba(255,255,255,.18) 100%)}
+.hcg.v4 .hcg-t{background:rgba(255,255,255,.40);border:1px solid rgba(255,255,255,.9);-webkit-backdrop-filter:none;backdrop-filter:none}
+.hcg.v4 .hcg-t.bad{background:rgba(255,232,232,.55);border-color:rgba(205,55,55,.55)}
+.hcg.v4 .hcg-t.warn{background:rgba(255,244,218,.55);border-color:rgba(190,130,10,.55)}
+.hcg.v4 .hcg-b{color:#14192A}
 /* ═══ 🤝 지인에게 추천하기 (2026-11-12) — 최근 서비스 아래 · 앱 설치 위 ═══
    금색 바탕 카드 · 해피포인트 보상 금액이 주인공. 문구·금액은 /api/my 의 ref(설정: 고객관리 「추천 보상 → 금액 설정」) */
 .rfc{margin:16px 0 8px;border-radius:20px;background:linear-gradient(180deg,#FBF5E6,#fff 46%);overflow:hidden;
@@ -3976,14 +3987,35 @@ function render(){
           cta:en?'View quote':'견적서 보기',act:'data-qt="qt"'});
       }
     }
-    // ④ 최근 2주 안에 도착한 점검보고서
+    // ④ 최근 2주 안에 새로 작성된 보고서 — 종류별로 한 장씩 (2026-11-14)
+    //    에어컨 점검 · 출장점검 · 세탁기/건조기 · 설치 보고서(inspections)는 종류마다 가장 최근 것 하나,
+    //    수리 방문 결과 보고서(memos 의 result·사진)도 따로 한 장. 기준일: 보고서 날짜 / 수리는 방문일(없으면 수정일·요청일)
     {
-      const r=(DATA.inspections||[]).filter(x=>{const dd=dayDiff(x.date);return dd!=null&&dd<=0&&dd>=-14;})[0];
-      if(r){
-        B.push({k:'report',tone:'teal',ic:inspIco(r.type),tag:en?'New report':'새 점검보고서',
+      const RPT={inspect:{ko:'새 점검보고서',en:'New report',img:'act-insp.jpg'},
+        dispatch:{ko:'새 출장점검보고서',en:'New dispatch report',img:'ac-s-parts.jpg'},
+        washer:{ko:'새 세탁기·건조기 보고서',en:'New washer/dryer report',img:'card-washer.jpg'},
+        install:{ko:'새 설치보고서',en:'New installation report',img:'card-ac.jpg'}};
+      const in14=s=>{const dd=dayDiff(String(s||'').slice(0,10));return dd!=null&&dd<=0&&dd>=-14;};
+      const seenT={};
+      (DATA.inspections||[]).filter(x=>in14(x.date)).forEach(r=>{
+        const ty=RPT[r.type]?r.type:'inspect';
+        if(seenT[ty])return;seenT[ty]=1;
+        const R0=RPT[ty];
+        B.push({k:'report',tone:'teal',ic:inspIco(r.type),tag:en?R0.en:R0.ko,img:R0.img,pic:1,
           big:esc(L.insp[r.type]||L.insp.inspect),
           sub:esc(dfmt(r.date))+' · '+(en?'Check the results and photos':'점검 결과와 사진을 확인해 보세요'),
           cta:en?'Open':'보고서 보기',act:'href="'+esc(BASE+'/'+inspPage(r.type)+'?id='+encodeURIComponent(r.__id)+'&lang='+LANG)+'"'});
+      });
+      // 🔧 수리 보고서 — 진단 결과나 사진이 올라온 수리요청(커튼 재설치 제외) · 아래 「수리 요청 처리내역」의 「방문 결과 보고서 보기」와 같은 화면
+      const rpD=x=>String(x.visit_date||x.updated_at||x.req_date||'').slice(0,10);
+      const rp=(DATA.memos||[]).filter(x=>x.kind!=='curtain'&&(x.result||(x.result_photos||[]).length)&&in14(rpD(x)))
+        .sort((a,b)=>rpD(b).localeCompare(rpD(a)))[0];
+      if(rp){
+        const np=(rp.result_photos||[]).length;
+        B.push({k:'report',tone:'teal',ic:'🔧',tag:en?'New repair report':'새 수리보고서',img:'ac-s-wash.jpg',pic:1,
+          big:esc(mmTx(rp.symptom,rp.symptom_en)||(en?'Repair visit report':'수리 방문 결과 보고서')),
+          sub:esc(dfmt(rpD(rp)))+' · '+(en?(np?'Diagnosis & '+np+' photo'+(np>1?'s':''):'Check the diagnosis'):(np?'진단 결과 · 사진 '+np+'장':'진단 결과를 확인해 보세요')),
+          cta:en?'Open':'보고서 보기',act:'href="'+esc(BASE+'/repair?id='+encodeURIComponent(rp.__id)+(en?'&lang=en':''))+'"'});
       }
     }
     // ⑤ 사용 가능한 상품권 (만료가 가장 가까운 것)
