@@ -1379,7 +1379,7 @@ var IV_EN_PHRASE={
   '회원은 계약 기간 내 무제한 점검이 가능합니다.':'Members are eligible for unlimited inspections during the membership period.',
   '별도 협의':'By separate agreement','추후 협의':'To be discussed','부가세 별도':'Excluding tax','부가세 포함':'Including tax',
   '출장 점검비':'On-site Inspection Fee','출장비':'Call-out Fee','기술자 인건비':'Technician Labor',
-  '최소 청구 금액':'Minimum Charge','재방문':'Revisit','무상':'Free of charge'
+  '최소 청구 금액':'Minimum Charge','견적':'Quoted Work','재방문':'Revisit','무상':'Free of charge'
 };
 var IV_EN_WORD=[
   ['회원제상품','Membership'],['패키지(사업)','Business Package'],['패키지','Package'],['멤버십','Membership'],
@@ -3151,172 +3151,315 @@ function ivxEsc(s){return String(s==null?'':s).replace(/[&<>]/g,function(m){retu
 
 
 // ══════════════════════════════════════════════════════════════
-//  📱 고객용 인보이스 — 앱 화면형 (iva)
-//   기본 표기는 영어이고, 상단 EN/한 버튼으로 한국어로 바꿀 수 있습니다.
-//   기존 문서형(buildInvHTML)은 관리자 미리보기·인쇄용으로 그대로 둡니다.
+//  📱🖥 고객용 인보이스 — 앱 화면형 (iva) · 2026-11-13 재디자인
+//   · 휴대폰: 한 줄 흐름 (상태 → 청구 정보 → 서비스 내역 → 결제 요약 → 결제 안내 → 메모 …)
+//   · 컴퓨터(900px 이상): 왼쪽 본문 + 오른쪽 고정 결제 패널 두 칸
+//   · 기본 표기는 영어, 상단 EN/한 버튼으로 한국어 전환
+//   · 인쇄 · PDF 저장은 지금처럼 A4 문서 양식(buildInvDocHX)으로 나갑니다
 // ══════════════════════════════════════════════════════════════
-var IVA_CSS=""
-+".iva{--n:#0E2350;--n2:#16346E;--bl:#2563EB;--ink:#14192A;--ink2:#5A6478;--ink3:#98A1B4;"
-+"--line:#E4E9F2;--soft:#F6F8FC;--ok:#0E9B63;--ok-bg:#E6F7EF;--red:#DC2626;--gold:#B98A16;"
-+"font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;color:var(--ink);"
-+"max-width:520px;margin:0 auto;padding:0 12px 100px}"
-+".iva *{box-sizing:border-box;margin:0;padding:0;background-image:none}"
-+".iva .ivbrand>*,.iva .igv,.iva .igk{background:none}"
-+".iva .ivcard{background:#fff;border:1px solid var(--line);border-radius:14px;margin-bottom:11px;overflow:hidden;"
-+"box-shadow:0 1px 2px rgba(14,35,80,.06),0 8px 18px -8px rgba(14,35,80,.16)}"
-/* 브랜드 줄 */
-+".iva .ivbrand{display:flex;align-items:center;gap:10px;padding:11px 3px 12px}"
-+".iva .ivbrand .lg{width:40px;height:40px;border-radius:12px;flex:none;background:#fff;border:1px solid var(--line);"
-+"display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:var(--gold);overflow:hidden}"
-+".iva .ivbrand .lg img{width:100%;height:100%;object-fit:contain}"
-+".iva .ivbrand .bnm{font-size:15px;font-weight:900;letter-spacing:-.02em;flex:1;min-width:0;background:none;color:var(--ink)}"
-+".iva .ivbrand .ino{font-size:11.5px;font-weight:800;color:var(--ink3);white-space:nowrap;opacity:1}"
-/* 히어로 */
-+".iva .ivhero{background:linear-gradient(140deg,#0E2350,#16346E 65%,#1D4090);color:#fff;border-radius:16px;"
-+"padding:16px 16px 14px;margin-bottom:11px;box-shadow:0 3px 8px rgba(6,18,45,.3),0 18px 34px -14px rgba(6,18,45,.7)}"
-+".iva .ivh-t{display:flex;gap:12px;align-items:flex-start}"
-+".iva .ivh-l{flex:1;min-width:0}"
-+".iva .ivh-k{font-size:10px;font-weight:800;letter-spacing:.14em;color:#9FB6E8}"
-+".iva .ivh-n{font-size:20px;font-weight:900;letter-spacing:-.02em;margin-top:4px;line-height:1.2}"
-+".iva .ivh-r{flex:none;text-align:right;padding-left:13px;border-left:1px solid rgba(255,255,255,.18)}"
-+".iva .ivh-rk{font-size:11px;font-weight:800;color:#BBCCEF}"
-+".iva .ivh-rv{font-size:26px;font-weight:900;letter-spacing:-.035em;margin-top:3px;font-variant-numeric:tabular-nums}"
-+".iva .ivpill{display:inline-block;margin-top:9px;font-size:11px;font-weight:900;border-radius:999px;padding:5px 12px;"
-+"background:var(--ok);color:#fff}"
-+".iva .ivpill.billing{background:#F0B429;color:#3A2A00}"
-+".iva .ivpill.overdue{background:#E5484D}"
-+".iva .ivpill.partial{background:#4C7DF0}"
-+".iva .ivh-m{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(255,255,255,.15);"
-+"border-radius:11px;overflow:hidden;margin-top:13px}"
-+".iva .ivh-m>div{background:rgba(255,255,255,.06);padding:9px 8px}"
-+".iva .ivh-m .k{font-size:9.5px;font-weight:800;color:#A9BEE9;display:flex;align-items:center;gap:4px}"
-+".iva .ivh-m .v{font-size:12px;font-weight:900;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
-/* 공통 헤더 · 섹션 제목 */
-+".iva .ivh{display:flex;align-items:center;gap:7px;padding:12px 14px;border-bottom:1px solid var(--line);"
-+"font-size:13.5px;font-weight:900;letter-spacing:-.02em}"
-+".iva .ivsec{font-size:14px;font-weight:900;color:var(--n);letter-spacing:-.02em;margin:14px 3px 9px;"
-+"display:flex;align-items:center;gap:7px}"
+var IVA_FONT='https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css';
+var IVA_CSS=`
+.iva{--n:#0E2350;--n2:#16346E;--bl:#2563EB;--ink:#14192A;--ink2:#5A6478;--ink3:#98A1B4;
+  --line:#E6EAF2;--soft:#F6F8FC;--ok:#0E9B63;--ok-bg:#E7F6EF;--red:#DC2626;--red-bg:#FDECEC;
+  --amb:#F0B429;--amb-bg:#FFF6DD;--gold:#B98A16;--gold-l:#E3C98A;
+  --e1:0 1px 2px rgba(11,24,51,.07),0 6px 16px -8px rgba(11,24,51,.16);
+  --e2:0 1px 2px rgba(11,24,51,.10),0 10px 22px -8px rgba(11,24,51,.22),0 30px 50px -24px rgba(11,24,51,.40);
+  font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;
+  color:var(--ink);max-width:560px;margin:0 auto;padding:14px 14px calc(96px + env(safe-area-inset-bottom));
+  -webkit-font-smoothing:antialiased;word-break:keep-all}
+.iva *{box-sizing:border-box;margin:0;padding:0}
+.iva .num{font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.iva .ivg{display:flex;flex-direction:column;gap:12px}
+.iva .ivmain,.iva .ivside{display:contents}
+.iva .o1{order:1}.iva .o2{order:2}.iva .o3{order:3}.iva .o4{order:4}.iva .o5{order:5}
+.iva .o6{order:6}.iva .o7{order:7}.iva .o8{order:8}.iva .o9{order:9}.iva .o10{order:10}
+
+/* ── 히어로 ─────────────────────────────── */
+.iva .ivhero{position:relative;overflow:hidden;border-radius:20px;color:#fff;margin-bottom:12px;
+  background:linear-gradient(150deg,#0B1D44 0%,#0E2350 38%,#16346E 100%);box-shadow:var(--e2)}
+.iva .ivhero::before{content:"";position:absolute;right:-90px;top:-110px;width:280px;height:280px;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(227,201,138,.20),rgba(227,201,138,0));pointer-events:none}
+.iva .ivhero::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;
+  background:linear-gradient(90deg,rgba(201,164,76,0),#C9A44C 30%,#E3C98A 50%,#C9A44C 70%,rgba(201,164,76,0))}
+.iva .hr-in{position:relative;padding:18px 18px 16px}
+.iva .hr-top{display:flex;align-items:center;gap:10px}
+.iva .hr-lg{width:38px;height:38px;border-radius:11px;background:#fff;flex:none;display:flex;align-items:center;
+  justify-content:center;overflow:hidden;font-size:11px;font-weight:900;color:var(--n);box-shadow:0 2px 6px rgba(0,0,0,.25)}
+.iva .hr-lg img{width:100%;height:100%;object-fit:contain}
+.iva .hr-co{flex:1;min-width:0}
+.iva .hr-co b{display:block;font-size:15px;font-weight:800;letter-spacing:-.02em}
+.iva .hr-co span{display:none;font-size:11px;color:#9FB2DA;font-weight:500;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iva .hr-no{text-align:right;flex:none}
+.iva .hr-no i{display:block;font-style:normal;font-size:10px;font-weight:700;letter-spacing:.16em;color:var(--gold-l)}
+.iva .hr-no b{display:block;font-size:12.5px;font-weight:700;color:#DCE5F7;margin-top:2px}
+.iva .hr-mid{display:flex;align-items:flex-end;gap:12px;margin-top:22px}
+.iva .hr-amt{flex:1;min-width:0}
+.iva .hr-st{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;border-radius:999px;padding:5px 11px 5px 8px}
+.iva .hr-st .dot{width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;line-height:1}
+.iva .hr-st.paid{background:rgba(14,155,99,.20);color:#7BE3B5}.iva .hr-st.paid .dot{background:#22C17F;color:#06301E}
+.iva .hr-st.billing{background:rgba(240,180,41,.18);color:#FFD66E}.iva .hr-st.billing .dot{background:#F0B429;color:#3A2A00}
+.iva .hr-st.overdue{background:rgba(229,72,77,.22);color:#FFA3A6}.iva .hr-st.overdue .dot{background:#E5484D;color:#fff}
+.iva .hr-st.partial{background:rgba(99,140,245,.22);color:#B5CBFF}.iva .hr-st.partial .dot{background:#4C7DF0;color:#fff}
+.iva .hr-k{font-size:12.5px;color:#AFC0E3;font-weight:600;margin-top:14px}
+.iva .hr-v{color:#fff;font-size:38px;font-weight:800;letter-spacing:-.04em;line-height:1.1;margin-top:4px;white-space:nowrap}
+.iva .hr-v small{font-size:.5em;font-weight:700;color:#C7D3EE;margin-right:4px;letter-spacing:0}
+.iva .hr-sub{font-size:12.5px;color:#C7D3EE;font-weight:500;margin-top:6px}
+.iva .hr-sub b{color:#fff;font-weight:700}
+.iva .hr-sub.od b{color:#FFA3A6}
+.iva .hr-seal{flex:none;width:84px;height:84px;border-radius:50%;border:2px solid rgba(123,227,181,.55);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;transform:rotate(-12deg);
+  color:#7BE3B5;box-shadow:inset 0 0 0 4px rgba(14,35,80,1),inset 0 0 0 5px rgba(123,227,181,.35);margin-bottom:2px}
+.iva .hr-seal b{font-size:17px;font-weight:900;letter-spacing:.12em}
+.iva .hr-seal span{font-size:8.5px;font-weight:700;letter-spacing:.06em;margin-top:1px;opacity:.85}
+/* 금액 흐름 */
+.iva .hr-eq{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:6px;
+  margin-top:16px;padding:11px 12px;border-radius:13px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.10)}
+.iva .hr-eq>div{min-width:0}
+.iva .hr-eq span{display:block;font-size:10.5px;color:#AFC0E3;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.iva .hr-eq b{display:block;font-size:13px;color:#fff;font-weight:800;margin-top:3px;white-space:nowrap}
+.iva .hr-eq .m b{color:#8EE6BE}
+.iva .hr-eq .r b{color:#F3D58A}
+.iva .hr-eq i{font-style:normal;font-size:15px;font-weight:700;color:#6F86B8}
+.iva .ivver{display:flex;gap:11px;align-items:flex-start;margin:0 16px;padding:13px 0;border-bottom:1px solid var(--line)}
+.iva .ivver .ic{width:26px;height:26px;border-radius:50%;flex:none;background:var(--n);color:#F3D58A;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900}
+.iva .ivver b{display:block;font-size:13.5px;font-weight:800}
+.iva .ivver span{display:block;font-size:12px;color:var(--ink2);line-height:1.55;margin-top:2px}
+.iva .hr-flow{display:flex;flex-wrap:wrap;align-items:center;gap:5px 6px;margin-top:16px;padding:10px 12px;border-radius:12px;
+  background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10)}
+.iva .hr-flow span{font-size:11.5px;color:#AFC0E3;font-weight:500;white-space:nowrap}
+.iva .hr-flow span b{color:#fff;font-weight:700;margin-left:3px}
+.iva .hr-flow span.m b{color:#8EE6BE}
+.iva .hr-flow i{font-style:normal;color:#5F77A8;font-size:11px}
+/* 진행 단계 */
+.iva .hr-trk{display:grid;grid-template-columns:repeat(3,1fr);margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.12)}
+.iva .tk{position:relative;padding-top:20px}
+.iva .tk::before{content:"";position:absolute;top:6px;left:0;right:0;height:2px;background:rgba(255,255,255,.16)}
+.iva .tk:first-child::before{left:7px}.iva .tk:last-child::before{right:auto;width:7px}
+.iva .tk.done::before,.iva .tk.cur::before{background:#C9A44C}
+.iva .tk .d{position:absolute;top:0;left:0;width:14px;height:14px;border-radius:50%;background:#0E2350;border:2px solid rgba(255,255,255,.3)}
+.iva .tk.done .d{background:#C9A44C;border-color:#C9A44C}
+.iva .tk.cur .d{background:#0E2350;border-color:#E3C98A;box-shadow:0 0 0 4px rgba(227,201,138,.18)}
+.iva .tk.bad .d{border-color:#FF8A8E;box-shadow:0 0 0 4px rgba(229,72,77,.22)}
+.iva .tk .k{font-size:10.5px;color:#93A6CF;font-weight:600}
+.iva .tk .v{font-size:12.5px;color:#fff;font-weight:700;margin-top:2px;white-space:nowrap}
+.iva .tk.todo .v{color:#7F92BC;font-weight:600}
+.iva .tk.bad .v{color:#FFA3A6}
+
+/* ── 카드 공통 ─────────────────────────────── */
+.iva .ivc{background:#fff;border-radius:16px;box-shadow:var(--e1);overflow:hidden}
+.iva .ivc-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:15px 16px 0}
+.iva .ivc-h b{font-size:15px;font-weight:800;letter-spacing:-.02em;color:var(--ink)}
+.iva .ivc-h span{font-size:12px;color:var(--ink3);font-weight:600}
+.iva .ivc-b{padding:12px 16px 16px}
+
 /* 청구 정보 */
-+".iva .ivp{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}"
-+".iva .ivp>div{background:#fff;padding:13px 14px}"
-+".iva .ivp .k{font-size:10px;font-weight:900;color:var(--bl);letter-spacing:.06em}"
-+".iva .ivp .n{font-size:13.5px;font-weight:900;margin-top:6px;line-height:1.4;word-break:break-word}"
-+".iva .ivp .d{font-size:11px;color:var(--ink2);margin-top:4px;line-height:1.55;word-break:break-word;font-weight:600}"
-+".iva .ivp .mc{display:inline-block;margin-top:6px;font-size:10.5px;font-weight:900;background:#FFF6DC;"
-+"border:1px solid #F0DFA8;color:#8A6608;border-radius:999px;padding:3px 9px}"
-/* 품목 카드 */
-+".iva .ivit{position:relative;overflow:hidden}"
-+".iva .ivit .ihd{padding:13px 14px 11px;position:relative;z-index:1}"
-+".iva .ivit .igrid{position:relative;z-index:1;background:rgba(255,255,255,.55)}"
-+".iva .ivit .icode{font-size:12.5px;font-weight:900;color:var(--n);line-height:1.45;word-break:break-word}"
-+".iva .ivit .icode i{font-style:normal;color:var(--ink3);margin:0 5px;font-weight:700}"
-+".iva .ivit .isub{font-size:11px;color:var(--ink3);font-weight:700;margin-top:4px}"
-+".iva .ivit .igrid{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line)}"
-+".iva .ivit .igrid.n3{grid-template-columns:repeat(3,1fr)}"
-+".iva .ivit .igc{padding:8px 6px;text-align:center;border-left:1px solid var(--line)}"
-+".iva .ivit .igc:first-child{border-left:none}"
-+".iva .ivit .igk{font-size:10px;font-weight:800;color:var(--ink3)}"
-+".iva .ivit .igv{font-size:12.5px;font-weight:900;margin-top:4px;font-variant-numeric:tabular-nums}"
-+".iva .ivit .igv .un{font-size:10.5px;font-weight:700;color:var(--ink3)}"
-+".iva .ivit .igv.dc{color:var(--ok)}"
-+".iva .ivit .igv.amt{color:var(--ink);background:none;border:none;margin:0;border-radius:0}"
-+".iva .ivit .iwm{position:absolute;right:8px;top:30px;z-index:0;font-size:26px;font-weight:900;letter-spacing:.06em;"
-+"color:rgba(14,155,99,.13);transform:rotate(-16deg);pointer-events:none}"
-+".iva .ivit .iwm.od{color:rgba(229,72,77,.15)}"
-+".iva .ivit .iwm.bl{color:rgba(240,180,41,.22)}"
-+".iva .ivit .iwm.pt{color:rgba(76,125,240,.15)}"
+.iva .ivp{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 16px 16px}
+.iva .ivp>div{min-width:0}
+.iva .ivp .k{font-size:11px;font-weight:700;color:var(--ink3);letter-spacing:.02em}
+.iva .ivp .n{font-size:15px;font-weight:800;margin-top:5px;line-height:1.35;word-break:break-word;letter-spacing:-.02em}
+.iva .ivp .d{font-size:12.5px;color:var(--ink2);margin-top:4px;line-height:1.6;word-break:break-word}
+.iva .ivp .mc{display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:11.5px;font-weight:700;
+  background:#FBF5E6;color:#8F6F28;border-radius:999px;padding:4px 10px}
+.iva .ivp .sep{display:none}
+
+/* 서비스 내역 */
+.iva .ivt{padding:6px 0 4px}
+.iva .ivr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 14px;padding:13px 16px;border-top:1px solid var(--line)}
+.iva .ivr:first-child{border-top:none}
+.iva .ivr.th{display:none}
+.iva .ivr .nm .t{font-size:14.5px;font-weight:700;line-height:1.45;letter-spacing:-.015em;word-break:break-word}
+.iva .ivr .nm .t em{font-style:normal;display:inline-block;font-size:11px;font-weight:700;color:var(--n2);background:#EEF2FA;
+  border-radius:6px;padding:2px 6px;margin-right:6px;vertical-align:2px}
+.iva .ivr .nm .s{font-size:12px;color:var(--ink3);margin-top:3px;font-weight:500}
+.iva .ivr .nm .mm{font-size:12.5px;color:var(--ink2);margin-top:6px;font-weight:500}
+.iva .ivr .nm .mm .dc{color:var(--ok);font-weight:700;margin-left:6px}
+.iva .ivr .c{display:none;font-size:13.5px;text-align:right;color:var(--ink2)}
+.iva .ivr .c.a{display:block;font-size:15px;font-weight:800;color:var(--ink);align-self:start;padding-top:1px}
+.iva .ivr .c.dcv{color:var(--ok);font-weight:700}
+.iva .ivempty{padding:30px 16px;text-align:center;color:var(--ink3);font-size:13.5px}
+
 /* 결제 요약 */
-+".iva .ivsum{padding:12px 14px}"
-+".iva .ivsr{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;font-weight:700;padding:5px 0;color:var(--ink2)}"
-+".iva .ivsr b{color:var(--ink);font-weight:900;font-variant-numeric:tabular-nums}"
-+".iva .ivsr.mi b{color:var(--ok)}"
-+".iva .ivtot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:11px -14px -12px;"
-+"padding:14px;background:linear-gradient(140deg,#0E2350,#16346E);color:#fff}"
-+".iva .ivtot .k{font-size:12.5px;font-weight:900}"
-+".iva .ivtot .v{font-size:21px;font-weight:900;letter-spacing:-.03em;font-variant-numeric:tabular-nums}"
-+".iva .ivbal{display:flex;justify-content:space-between;font-size:13px;font-weight:900;color:var(--red);"
-+"padding:11px 0 2px;border-top:1px dashed var(--line);margin-top:11px}"
-/* 안내 박스 */
-+".iva .ivdtot{margin-top:10px;background:#E9F8F0;border:1px solid #BFE8D2;border-radius:11px;padding:9px 12px}"
-+".iva .ivdtot .r1{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;font-weight:800;color:#0E7A4E}"
-+".iva .ivdtot .r1 b{font-size:14px;font-weight:900;font-variant-numeric:tabular-nums}"
-+".iva .ivdtot .r2{font-size:10.5px;color:#3E8F69;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums}"
-+".iva .ivbox{display:flex;gap:11px;padding:13px 14px;align-items:flex-start}"
-+".iva .ivbox .bi{width:34px;height:34px;border-radius:11px;flex:none;display:flex;align-items:center;justify-content:center;font-size:15px}"
-+".iva .ivbox .bt{font-size:12.5px;font-weight:900}"
-+".iva .ivbox .bb{font-size:11.5px;color:var(--ink2);line-height:1.7;margin-top:3px;white-space:pre-line;word-break:break-word;font-weight:600}"
-+".iva .pmx{padding:13px 14px 12px;border-bottom:1px dashed rgba(185,138,22,.35)}"
-+".iva .pmx-t{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:900;color:#0E2350}"
-+".iva .pmx-t i{font-style:normal;font-size:9.5px;font-weight:900;letter-spacing:.1em;background:#0E2350;color:#F3D58A;border-radius:999px;padding:2px 7px}"
-+".iva .pmx-c{display:flex;flex-wrap:wrap;gap:4px;margin-top:9px}"
-+".iva .pmx-c span{font-size:10.5px;font-weight:800;border-radius:999px;padding:5px 8px;letter-spacing:-.02em;background:#fff;border:1px solid #E4E9F2;color:#5A6478}"
-+".iva .pmx-c span.h{background:#0E2350;border-color:#0E2350;color:#fff}"
-+".iva .pmx-d{font-size:11px;line-height:1.6;color:#5A6478;margin-top:8px;font-weight:600;word-break:keep-all}"
-+".iva .ivbox a{color:var(--bl);font-weight:800;text-decoration:none}"
-+".iva .ivcard.gold{background:#FFFDF6;border-color:#F0E3BC}"
-+".iva .ivslip{margin-top:10px;padding-top:10px;border-top:1px dashed #EADFBF}"
-+".iva .ivslip .k{font-size:11px;font-weight:800;color:#8A6608;margin-bottom:6px}"
-+".iva .ivslip .g{display:flex;gap:7px;flex-wrap:wrap}"
-+".iva .ivslip img{display:block;height:110px;max-width:140px;object-fit:contain;background:#fff;border:1px solid #EADFBF;border-radius:8px}"
-+".iva .ivslip .z{font-size:10px;color:#98A1B4;margin-top:4px}"
-+".iva .ivcard.gold .bi{background:#FDF3D8;color:#8A6608}"
-+".iva .ivcard.blue .bi{background:#EAF1FF;color:var(--bl)}"
-+".iva .ivatt{padding:12px 13px 13px}"
-+".iva .ivatt-g{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}"
-+".iva .ivatt-1 .ivatt-g{grid-template-columns:1fr}"
-+".iva .ivat{display:block;text-decoration:none;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#F6F8FC}"
-+".iva .ivat img{display:block;width:100%;height:132px;object-fit:cover;background:#EDF1F7}"
-+".iva .ivatt-1 .ivat img{height:216px;object-fit:contain;background:#0F1729}"
-+".iva .ivat .c{display:block;padding:7px 9px 7px;font-size:11px;font-weight:800;color:var(--ink2);line-height:1.5;word-break:break-word}"
-+".iva .ivat .z{display:block;padding:0 9px 8px;font-size:9.5px;font-weight:800;color:var(--bl)}"
-+".iva .ivsign{padding:13px 14px}"
-+".iva .ivsign .k{font-size:11px;font-weight:900;color:var(--bl)}"
-+".iva .ivsign img{max-height:62px;margin-top:7px}"
-+".iva .ivft{display:flex;gap:11px;align-items:center;padding:13px 14px}"
-+".iva .ivft .fi{width:34px;height:34px;border-radius:50%;background:var(--n);color:#fff;flex:none;"
-+"display:flex;align-items:center;justify-content:center;font-size:14px}"
-+".iva .ivft .ft1{font-size:11.5px;font-weight:800}"
-+".iva .ivft .ft2{font-size:11px;color:var(--ink2);font-weight:700;margin-top:2px}"
-+".iva .ivft .ft3{font-size:11px;color:var(--bl);font-weight:800;margin-top:5px;padding-top:6px;border-top:1px dashed var(--line)}"
-/* 상·하단 바 */
-+"#iva-top{position:sticky;top:0;z-index:60;background:linear-gradient(140deg,#0E2350,#16346E);color:#fff;"
-+"display:flex;align-items:center;gap:9px;padding:calc(12px + env(safe-area-inset-top)) 13px 12px;"
-+"box-shadow:0 4px 16px -6px rgba(6,18,45,.7)}"
-+"#iva-top .bk{border:none;background:none;color:#fff;font-size:19px;cursor:pointer;line-height:1;padding:0 2px}"
-+"#iva-top .ti{font-size:15.5px;font-weight:900;letter-spacing:-.02em;flex:1;min-width:0;overflow:hidden;"
-+"text-overflow:ellipsis;white-space:nowrap}"
-+"#iva-top .lgb{display:flex;gap:4px;background:rgba(255,255,255,.14);border-radius:999px;padding:3px}"
-+"#iva-top .lgb button{border:none;background:none;color:#C6D5F5;font-family:inherit;font-size:11.5px;font-weight:900;"
-+"border-radius:999px;padding:5px 11px;cursor:pointer}"
-+"#iva-top .lgb button.on{background:#fff;color:#0E2350}"
-+"#iva-bar{position:fixed;left:0;right:0;bottom:0;z-index:70;max-width:520px;margin:0 auto;display:flex;gap:9px;"
-+"padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(255,255,255,.94);"
-+"backdrop-filter:saturate(160%) blur(14px);-webkit-backdrop-filter:saturate(160%) blur(14px);"
-+"border-top:1px solid #E4E9F2;box-shadow:0 -14px 30px -16px rgba(14,35,80,.45)}"
-+"#iva-bar button{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;font-family:inherit;"
-+"font-size:14px;font-weight:900;border-radius:13px;padding:13px 8px;cursor:pointer;border:1.5px solid #2563EB;"
-+"background:#fff;color:#2563EB;transition:transform .14s}"
-+"#iva-bar button.prim{background:linear-gradient(140deg,#2563EB,#1740B8);color:#fff;border-color:transparent;"
-+"box-shadow:0 6px 16px -6px rgba(37,99,235,.7)}"
-+"#iva-bar button:active{transform:translateY(2px)}"
-+"@media print{#iva-top,#iva-bar{display:none!important}.iva{padding:0;max-width:none}"
-/* 인쇄·PDF 저장에서 카드가 두 페이지에 걸쳐 잘리지 않게 합니다.
-   (스크롤 상자 안에서는 페이지 나눔 규칙이 무시되는 브라우저가 있어 함께 풀어 줍니다) */
-+"html,body{overflow:visible!important;height:auto!important}"
-+".iva .ivcard,.iva .ivhero,.iva .ivit,.iva .ivbrand{break-inside:avoid!important;page-break-inside:avoid!important;"
-+"-webkit-column-break-inside:avoid;box-shadow:none}"
-+".iva .ivit .ihd,.iva .ivit .igrid,.iva .ivit .igc,.iva .ivp,.iva .ivp>div,.iva .ivsum,.iva .ivsr,.iva .ivtot,.iva .ivbal{"
-+"break-inside:avoid!important;page-break-inside:avoid!important;-webkit-column-break-inside:avoid}"
-+".iva .ivsec{break-after:avoid;page-break-after:avoid}"
-+".iva .ivcard{margin-bottom:9px}}";
+.iva .ivs{padding:10px 16px 0}
+.iva .ivsr{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;padding:6px 0;color:var(--ink2)}
+.iva .ivsr b{color:var(--ink);font-weight:700}
+.iva .ivsr.mi b{color:var(--ok)}
+.iva .ivtot{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-top:8px;padding:14px 0 4px;border-top:1.5px solid var(--ink)}
+.iva .ivtot .k{font-size:14px;font-weight:800}
+.iva .ivtot .k span{font-size:11.5px;color:var(--ink3);font-weight:600;margin-left:4px}
+.iva .ivtot .v{font-size:24px;font-weight:800;letter-spacing:-.035em}
+.iva .ivsave{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:10px 0 0;padding:10px 12px;
+  border-radius:12px;background:var(--ok-bg);color:#0B7A4E;font-size:12.5px;font-weight:700}
+.iva .ivsave small{display:block;font-size:11px;font-weight:500;color:#3E8F69;margin-top:1px}
+.iva .ivsave b{font-size:14px;font-weight:800;white-space:nowrap}
+.iva .ivpaid{margin-top:12px;padding-top:6px;border-top:1px dashed var(--line)}
+.iva .ivbal{display:flex;justify-content:space-between;align-items:baseline;font-size:14px;font-weight:800;color:var(--red);padding:8px 0 0}
+.iva .ivbal b{font-size:18px}
+.iva .ivdue{margin:14px -16px 0;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;
+  background:var(--soft);border-top:1px solid var(--line)}
+.iva .ivdue .k{font-size:13px;font-weight:700;color:var(--ink2)}
+.iva .ivdue .k small{display:block;font-size:11.5px;font-weight:500;color:var(--ink3);margin-top:2px}
+.iva .ivdue .v{font-size:20px;font-weight:800;letter-spacing:-.03em}
+.iva .ivdue.paid{background:var(--ok-bg);border-top-color:#CBEBDB}
+.iva .ivdue.paid .k,.iva .ivdue.paid .v{color:#0B7A4E}
+.iva .ivdue.od{background:var(--red-bg);border-top-color:#F6CFCF}
+.iva .ivdue.od .v{color:var(--red)}
+
+/* 결제 안내 */
+.iva .pm-c{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.iva .pm-c span{font-size:12px;font-weight:700;border-radius:999px;padding:6px 11px;background:var(--soft);color:var(--ink2)}
+.iva .pm-c span.h{background:var(--n);color:#fff}
+.iva .pm-d{font-size:12.5px;line-height:1.65;color:var(--ink2);margin-bottom:12px}
+.iva .pm-l{border-radius:12px;background:var(--soft);padding:4px 14px}
+.iva .pm-r{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.iva .pm-r:first-child{border-top:none}
+.iva .pm-r .k{font-size:12px;color:var(--ink3);font-weight:600;flex:none}
+.iva .pm-r .v{font-size:13.5px;font-weight:700;text-align:right;word-break:break-word;min-width:0}
+.iva .pm-r .cp{flex:none;border:1px solid var(--line);background:#fff;color:var(--n);font-family:inherit;font-size:11.5px;font-weight:700;
+  border-radius:8px;padding:5px 9px;cursor:pointer;margin-left:8px;transition:transform .14s}
+.iva .pm-r .cp:active{transform:scale(.96)}
+.iva .pm-r .cp.on{background:var(--ok);border-color:var(--ok);color:#fff}
+.iva .pm-qr{display:block;max-width:132px;margin:12px auto 0;border-radius:10px;border:1px solid var(--line)}
+.iva .ivslip{margin-top:12px}
+.iva .ivslip .k{font-size:12px;font-weight:700;color:var(--ink2);margin-bottom:7px}
+.iva .ivslip .g{display:flex;gap:8px;flex-wrap:wrap}
+.iva .ivslip img{display:block;height:110px;max-width:140px;object-fit:contain;background:#fff;border:1px solid var(--line);border-radius:10px}
+
+/* 메모 · 첨부 · 연결 문서 */
+.iva .ivnote{font-size:13.5px;line-height:1.75;color:var(--ink2);white-space:pre-line;word-break:break-word}
+.iva .ivatt-g{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.iva .ivatt-1 .ivatt-g{grid-template-columns:1fr}
+.iva .ivat{display:block;text-decoration:none;border-radius:12px;overflow:hidden;background:var(--soft)}
+.iva .ivat img{display:block;width:100%;height:132px;object-fit:cover;background:#EDF1F7}
+.iva .ivatt-1 .ivat img{height:220px;object-fit:contain;background:#0F1729}
+.iva .ivat .c{display:block;padding:8px 10px 2px;font-size:12px;font-weight:600;color:var(--ink2);line-height:1.5;word-break:break-word}
+.iva .ivat .z{display:block;padding:0 10px 9px;font-size:11px;font-weight:700;color:var(--bl)}
+.iva .ivlk{display:flex;align-items:center;gap:11px;padding:12px 16px;border-top:1px solid var(--line);text-decoration:none;color:var(--ink)}
+.iva .ivlk:first-child{border-top:none}
+.iva .ivlk .ic{width:34px;height:34px;border-radius:10px;background:#EEF2FA;display:flex;align-items:center;justify-content:center;font-size:15px;flex:none}
+.iva .ivlk .tx{flex:1;min-width:0;font-size:14px;font-weight:700}
+.iva .ivlk .tx small{display:block;font-size:12px;color:var(--ink3);font-weight:500;margin-top:1px}
+.iva .ivlk .ar{color:var(--ink3);font-size:16px}
+
+/* 발행처 · 서명 */
+.iva .ivft{padding:16px;display:flex;gap:14px;align-items:flex-end;justify-content:space-between}
+.iva .ivft .co b{display:block;font-size:13.5px;font-weight:800}
+.iva .ivft .co span{display:block;font-size:12px;color:var(--ink2);margin-top:3px;line-height:1.6}
+.iva .ivft .co a{color:var(--n2);text-decoration:none;font-weight:700}
+.iva .ivft .sg{flex:none;text-align:center}
+.iva .ivft .sg img{display:block;max-height:54px;max-width:120px;margin:0 auto}
+.iva .ivft .sg span{display:block;font-size:10.5px;color:var(--ink3);font-weight:600;border-top:1px solid var(--line);padding-top:4px;margin-top:4px}
+.iva .ivhelp{padding:16px 16px 14px;border-bottom:1px solid var(--line)}
+.iva .ivhelp b{display:block;font-size:15px;font-weight:800;letter-spacing:-.02em}
+.iva .ivhelp span{display:block;font-size:12.5px;color:var(--ink2);margin-top:3px}
+.iva .ivhelp .hb{display:flex;gap:8px;margin-top:12px}
+.iva .ivhelp .hb a{flex:1;display:flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;font-size:14px;font-weight:700;
+  border-radius:12px;padding:11px 8px;background:var(--soft);color:var(--n);transition:transform .14s}
+.iva .ivhelp .hb a.wa{background:#E7F6EF;color:#0B7A4E}
+.iva .ivhelp .hb a:active{transform:scale(.98)}
+.iva .ivty{text-align:center;font-size:12px;color:var(--ink3);font-weight:500;padding:6px 0 2px;letter-spacing:.02em}
+
+/* 컴퓨터 화면 전용 버튼 묶음 */
+.iva .ivact{display:none}
+
+/* ── 상·하단 바 ─────────────────────────────── */
+#iva-top{position:sticky;top:0;z-index:60;background:rgba(11,29,68,.96);color:#fff;
+  -webkit-backdrop-filter:saturate(160%) blur(12px);backdrop-filter:saturate(160%) blur(12px);
+  padding:calc(10px + env(safe-area-inset-top)) 12px 10px;box-shadow:0 1px 0 rgba(255,255,255,.06),0 6px 18px -10px rgba(6,18,45,.8);
+  font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif}
+#iva-top .in{max-width:1120px;margin:0 auto;display:flex;align-items:center;gap:10px}
+#iva-top .bk{border:none;background:rgba(255,255,255,.08);color:#fff;width:34px;height:34px;border-radius:10px;font-size:17px;cursor:pointer;line-height:1;flex:none}
+#iva-top .ti{flex:1;min-width:0;font-size:15.5px;font-weight:800;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#iva-top .ti span{font-weight:500;color:#9FB2DA;font-size:13px;margin-left:6px}
+#iva-top .tb{display:none}
+#iva-top .lgb{display:flex;gap:2px;background:rgba(255,255,255,.10);border-radius:999px;padding:3px;flex:none}
+#iva-top .lgb button{border:none;background:none;color:#C6D5F5;font-family:inherit;font-size:12px;font-weight:800;border-radius:999px;padding:6px 12px;cursor:pointer}
+#iva-top .lgb button.on{background:#fff;color:#0E2350}
+#iva-bar{position:fixed;left:0;right:0;bottom:0;z-index:70;max-width:560px;margin:0 auto;display:flex;gap:10px;
+  padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:rgba(255,255,255,.92);
+  -webkit-backdrop-filter:saturate(160%) blur(14px);backdrop-filter:saturate(160%) blur(14px);
+  border-top:1px solid #E6EAF2;font-family:'Pretendard Variable',Pretendard,'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif}
+#iva-bar button,.iva .ivact button{flex:1;display:flex;align-items:center;justify-content:center;gap:7px;font-family:inherit;
+  font-size:15px;font-weight:700;border-radius:13px;padding:14px 10px;cursor:pointer;border:1px solid #D5DCEA;
+  background:#fff;color:#0E2350;transition:transform .14s,box-shadow .14s}
+#iva-bar button.prim,.iva .ivact button.prim{background:linear-gradient(150deg,#16346E,#0E2350);color:#fff;border-color:transparent;
+  box-shadow:0 8px 18px -8px rgba(14,35,80,.8)}
+#iva-bar button:active,.iva .ivact button:active{transform:translateY(1px) scale(.99)}
+
+@media (max-width:379px){
+  .iva{padding-left:10px;padding-right:10px}
+  .iva .hr-v{font-size:32px}
+  .iva .hr-eq{padding:10px 9px;gap:4px}.iva .hr-eq b{font-size:12px}
+  .iva .hr-seal{width:70px;height:70px}.iva .hr-seal b{font-size:14px}
+  .iva .ivp{grid-template-columns:1fr}
+  .iva .ivp .sep{display:block;height:1px;background:var(--line)}
+}
+
+/* ── 컴퓨터: 두 칸 ─────────────────────────────── */
+@media (min-width:900px){
+  .iva{max-width:1120px;padding:28px 28px 56px}
+  .iva .ivhero{margin-bottom:20px;border-radius:24px}
+  .iva .hr-in{padding:26px 30px 24px;display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:4px 40px}
+  .iva .hr-top{grid-column:1/-1}
+  .iva .hr-mid{margin-top:26px}
+  .iva .hr-v{font-size:48px}
+  .iva .hr-co span{display:block}
+  .iva .ivhelp{padding:18px 22px 16px}
+  .iva .hr-k{font-size:13.5px}
+  .iva .hr-sub{font-size:13.5px}
+  .iva .hr-right{align-self:end}
+  .iva .hr-trk{margin-top:0;padding-top:0;border-top:none}
+  .iva .hr-flow{margin-top:18px}
+  .iva .hr-eq{margin-top:18px;padding:13px 16px;gap:10px}
+  .iva .hr-eq b{font-size:15px}
+  .iva .hr-eq span{font-size:11.5px}
+  .iva .ivver{margin:0 22px}
+  .iva .ivg{display:grid;grid-template-columns:minmax(0,1fr) 370px;gap:20px;align-items:start}
+  .iva .ivmain,.iva .ivside{display:flex;flex-direction:column;gap:16px;min-width:0}
+  .iva .ivside{position:sticky;top:76px}
+  .iva .ivc{border-radius:18px}
+  .iva .ivc-h{padding:20px 22px 0}
+  .iva .ivc-b{padding:14px 22px 20px}
+  .iva .ivp{padding:14px 22px 22px;gap:24px}
+  .iva .ivp>div+div{border-left:1px solid var(--line);padding-left:24px}
+  .iva .ivt{padding:10px 0 8px}
+  .iva .ivr{grid-template-columns:minmax(0,1fr) 90px 120px 120px;align-items:center;padding:14px 22px}
+  .iva .ivt.hd .ivr{grid-template-columns:minmax(0,1fr) 80px 110px 90px 120px}
+  .iva .ivr.th{display:grid;padding-top:6px;padding-bottom:10px}
+  .iva .ivr.th>div{font-size:11.5px;font-weight:700;color:var(--ink3);letter-spacing:.02em;text-align:right}
+  .iva .ivr.th>div:first-child{text-align:left}
+  .iva .ivr.th+.ivr{border-top:1px solid var(--line)}
+  .iva .ivr .c{display:block}
+  .iva .ivr .c.a{align-self:center;padding-top:0}
+  .iva .ivr .nm .mm{display:none}
+  .iva .ivs{padding:12px 22px 0}
+  .iva .ivdue{margin:16px -22px 0;padding:16px 22px}
+  .iva .ivft{padding:18px 22px}
+  .iva .ivlk{padding:13px 22px}
+  .iva .ivact{display:flex;gap:10px}
+  #iva-top{padding:12px 28px}
+  #iva-top .tb{display:none}
+  #iva-top .tb button{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;font-family:inherit;
+    font-size:13px;font-weight:700;border-radius:10px;padding:8px 13px;cursor:pointer}
+  #iva-top .tb button:hover{background:rgba(255,255,255,.14)}
+  #iva-bar{display:none!important}
+}
+@media (prefers-reduced-motion:reduce){.iva *,#iva-bar button{transition:none!important}}
+@media print{#iva-top,#iva-bar{display:none!important}.iva{padding:0;max-width:none}
+  html,body{overflow:visible!important;height:auto!important}
+  .iva .ivc,.iva .ivhero{break-inside:avoid!important;page-break-inside:avoid!important;box-shadow:none}
+  .iva .ivside{position:static}}
+`;
 function ensureIvaStyle(){
   if(!document.getElementById('iva-style')){
     var st=document.createElement('style');st.id='iva-style';st.textContent=IVA_CSS;document.head.appendChild(st);
   }
+  if(!document.getElementById('iva-font')){
+    var l=document.createElement('link');l.id='iva-font';l.rel='stylesheet';l.href=IVA_FONT;document.head.appendChild(l);
+  }
 }
 // 품목의 한글명 · 영문명 — 항목설정(services)에 있으면 그 이름을, 없으면 저장된 이름을 씁니다.
-// 품목명 앞의 관리 코드(HHCPL1002 · HHCIM1001 …)는 고객 문서에서 뺍니다
-function ivStripCode(n){var v=String(n==null?'':n);var o=v.replace(/^\s*HHC[A-Z]{0,4}\d{3,5}\s*[-:|·]?\s*/,'').trim();return o||v;}
+// 품목명 앞의 관리 코드(HHCPL1002 · HHC10402.1 · HHC10501-1 …)는 고객 문서에서 뺍니다
+function ivStripCode(n){var v=String(n==null?'':n);var o=v.replace(/^\s*HHC[A-Z]{0,4}\d{2,6}(?:[.\-]\d+)*\s*[-:|·]?\s*/,'').trim();return o||v;}
 function ivaName(li,en){
   var raw=String(li.name||'—');
   var sv=null;
@@ -3329,165 +3472,292 @@ function ivaName(li,en){
   }
   if(!ko)ko=raw; if(!eng)eng=raw;
   if(en&&ivHasKo(eng))eng=ivEnTx(eng);   // 영문명이 등록되지 않은 품목은 사전으로 바꿔 줍니다
-  return ivStripCode(en?eng:ko);
+  var out=ivStripCode(en?eng:ko).replace(/\s{2,}/g,' ');
+  // 영문 화면: 영문명 앞에 [ ] 꼬리표가 없으면 한글명의 꼬리표를 영어로 바꿔 붙입니다
+  //  예) 한글 「[벽걸이형 에어컨] 기본 세척」 + 영문 「BASIC CLEANING」 → 「[Wall-Mounted AC] BASIC CLEANING」
+  if(en&&!/^\s*\[/.test(out)){
+    var km=String(ko).match(/^\s*(?:HHC\S*\s+)?\[([^\]]{1,40})\]/);
+    if(km){var tg=ivTagEn(km[1].trim());if(tg)out='['+tg+'] '+out;}
+  }
+  return out;
 }
+var IV_TAG_EN={'벽걸이형 에어컨':'Wall-Mounted AC','카세트형 에어컨':'Cassette AC','실외기 에어컨':'Outdoor Unit',
+  'FCU 덕트형 에어컨':'Ducted FCU AC','드럼 세탁기':'Front-Load Washer','통돌이 세탁기':'Top-Load Washer',
+  '의류 건조기':'Clothes Dryer','실링팬':'Ceiling Fan','공기청정기':'Air Purifier','주방 후드':'Kitchen Hood',
+  '쇼파-I형':'Sofa · I-Shape','쇼파-L형':'Sofa · L-Shape','쇼파-습식':'Sofa · Wet Steam','쇼파-건식':'Sofa · Dry Suction',
+  '매트리스':'Mattress','커튼':'Curtain','카페트':'Carpet','식탁의자':'Dining Chair',
+  '냉장고-양문형':'Side-by-Side Fridge','냉장고-단문형':'Single-Door Fridge','냉장고':'Refrigerator',
+  '전기콘센트':'Electric Outlet','전등':'Light','수리':'Repair','자재비':'Materials','추가비용':'Extra Cost'};
+function ivTagEn(k){
+  if(IV_TAG_EN[k])return IV_TAG_EN[k];
+  var t=ivEnTx(k);return ivHasKo(t)?'':t;   // 사전으로도 못 바꾸면 꼬리표 없이
+}
+// 「[벽걸이형 에어컨] 기본 세척」 → 앞의 [ ] 는 작은 꼬리표로
+function ivaNameHTML(nm){
+  var m=String(nm||'').match(/^\s*\[([^\]]{1,40})\]\s*(.+)$/);
+  return m?'<em>'+ivxEsc(m[1].trim())+'</em>'+ivxEsc(m[2].trim()):ivxEsc(nm);
+}
+// 한 칸에 「한글 / English」를 함께 적은 값 → 화면 언어에 맞는 쪽만 (결제수단 이름 등)
+function ivLangPick(s,en){
+  var v=String(s==null?'':s).trim();
+  if(!v)return v;
+  var pm=v.match(/^(.*[가-힣].*?)\s*\(([^()가-힣]*[A-Za-z][^()가-힣]*)\)\s*$/);   // 「현금 결제 (Cash)」
+  if(pm)return en?pm[2].trim():pm[1].trim();
+  var parts=v.split(/\s*(?:\/|\||\n|\s·\s)\s*/).filter(function(x){return x&&x.trim();});
+  if(parts.length<2)return v;
+  var ko=parts.filter(ivHasKo),lat=parts.filter(function(p){return !ivHasKo(p)&&/[A-Za-z]/.test(p);});
+  if(!ko.length||!lat.length)return v;
+  return (en?lat:ko).join(' ');
+}
+function ivaDays(d){
+  var m=String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})/);if(!m)return null;
+  var a=new Date(+m[1],+m[2]-1,+m[3]),n=new Date();n=new Date(n.getFullYear(),n.getMonth(),n.getDate());
+  return Math.round((a-n)/864e5);
+}
+function ivaDate(d,en,short){
+  var m=String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})/);if(!m)return d||'—';
+  var y=+m[1],mo=+m[2],da=+m[3];
+  if(en){var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mo-1];return short?(da+' '+M):(da+' '+M+' '+y);}
+  return short?(mo+'월 '+da+'일'):(y+'. '+mo+'. '+da+'.');
+}
+window.ivaCopy=function(btn,txt){
+  function ok(){var o=btn.textContent;btn.classList.add('on');btn.textContent=btn.getAttribute('data-ok')||'✓';
+    setTimeout(function(){btn.classList.remove('on');btn.textContent=o;},1500);}
+  try{if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(ok,function(){});return;}}catch(e){}
+  try{var ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();ok();}catch(e){}
+};
 function buildInvAppHTML(inv,lang){
   ensureIvaStyle();
   var en=(lang!=='ko');
   function L(ko,eng){return en?eng:ko;}
+  var E=ivxEsc;
   var t=inv._t||calcTotals(inv);
   var cur=inv.currency||'MYR';
   function fa(n){return fmtAmt(n,cur);}
+  function fan(n){return '<span class="num">'+fa(n)+'</span>';}
   var cust=inv.customer||{},iss=inv.issuer||issuer,items=inv.items||[];
   var hasDisc=items.some(function(li){return (li.discVal||li.disc||0)>0;});
   var stKey=invIsPartial(inv,t)?'partial':(inv.status||'billing');
-  var stLb={billing:L('청구 중','Billing'),paid:L('결제완료','Paid'),overdue:L('연체','Overdue'),partial:L('일부결제','Partially Paid')}[stKey]||L('청구 중','Billing');
+  var paidFull=(stKey==='paid')||(t.paidAmount>0.005&&t.balance<=0.005);
+  if(paidFull)stKey='paid';
+  var dDays=ivaDays(inv.due);
+  if(stKey==='billing'&&dDays!==null&&dDays<0)stKey='overdue';
+  var dueAmt=t.paidAmount>0.005?t.balance:t.grand;
+  var pays=(inv.payments&&inv.payments.length)?inv.payments:(t.paidAmount>0.005?[{amt:t.paidAmount,date:inv.paidDate||''}]:[]);
+  var paidDate=inv.paidDate||(pays.length?(pays[pays.length-1].date||''):'');
+  var ST={paid:['✓',L('결제 완료','Paid')],billing:['•',L('결제 대기','Awaiting Payment')],
+          overdue:['!',L('결제 기한 지남','Overdue')],partial:['◐',L('일부 결제','Partially Paid')]}[stKey];
+
+  // ─ 히어로 ─
+  var lg=(typeof imgData!=='undefined'&&imgData&&imgData.logo)?'<img src="'+imgData.logo+'" alt="">':'HHC';
+  var sub='';
+  if(stKey==='paid'){
+    var _byCr=t.credit>0.005&&t.grand<=0.005;
+    sub=_byCr?L('<b>패키지 회원 적립금</b>으로 결제되었습니다','Paid with your <b>package member credit</b>')
+       :(paidDate?(en?'Paid on <b>'+ivaDate(paidDate,1)+'</b>':'<b>'+ivaDate(paidDate,0)+'</b> 결제 완료'):L('결제가 완료되었습니다. 감사합니다.','Thank you — this invoice is fully paid.'));
+  }else if(dDays!==null){
+    var dd=ivaDate(inv.due,en,1);
+    if(dDays>0)sub=en?'Due <b>'+dd+'</b> · '+dDays+' day'+(dDays>1?'s':'')+' left':'<b>'+dd+'</b>까지 · '+dDays+'일 남음';
+    else if(dDays===0)sub=en?'Due <b>today</b>':'오늘(<b>'+dd+'</b>)까지 결제해 주세요';
+    else sub=en?'<b>'+(-dDays)+' day'+(-dDays>1?'s':'')+' overdue</b> · due '+dd:'결제 기한 <b>'+(-dDays)+'일 지남</b> · '+dd+' 마감';
+  }
+  var seal=stKey==='paid'?'<div class="hr-seal"><b>PAID</b><span>'+E(ivaDate(paidDate||inv.date,1,1))+'</span></div>':'';
+  // 금액 흐름: 서비스 금액 → 차감 → 결제 금액 (차감이 있을 때만)
+  var deduct=[];
+  var _dOver=(t.discTotal||0)-(t.itemDisc||0);   // 품목 할인은 서비스 금액에 이미 반영돼 있어 계산식에서는 빼고 셉니다
+  if(_dOver>0.005)deduct.push(['m',L('할인','Discount'),_dOver]);
+  if(t.credit>0)deduct.push(['m',L('회원 적립금','Member credit'),t.credit]);
+  if(t.voucher>0)deduct.push(['m',L('상품권','Voucher'),t.voucher]);
+  if(t.pts>0)deduct.push(['m',L('해피포인트','Happy Points'),t.pts]);
+  if(t.paidAmount>0.005&&stKey!=='paid')deduct.push(['m',L('기결제','Paid'),t.paidAmount]);
+  // 한눈에 보는 계산식: 서비스 금액 − 차감 = 결제 금액 (차감이 있을 때만)
+  var _net=(stKey==='paid'?t.grand:dueAmt);
+  var _dedSum=deduct.reduce(function(a,d){return a+(+d[2]||0);},0);
+  var _gross=_net+_dedSum;
+  var _dedLb=deduct.map(function(d){return d[1];}).join(' · ');
+  var flow=(deduct.length&&_dedSum>0.005)?'<div class="hr-eq">'+
+      '<div><span>'+L('서비스 금액','Services')+'</span><b class="num">'+fa(_gross)+'</b></div><i>−</i>'+
+      '<div class="m"><span>'+_dedLb+'</span><b class="num">'+fa(_dedSum)+'</b></div><i>=</i>'+
+      '<div class="r"><span>'+(stKey==='paid'?L('결제 금액','Paid'):L('결제하실 금액','To Pay'))+'</span><b class="num">'+fa(_net)+'</b></div>'+
+    '</div>':'';
+  // 진행 단계: 발행 → 결제 기한 → 결제 완료
+  var tk2=stKey==='paid'?'done':(stKey==='overdue'?'cur bad':'cur');
+  var trk='<div class="hr-trk">'+
+    '<div class="tk done"><div class="d"></div><div class="k">'+L('발행','Issued')+'</div><div class="v num">'+E(ivaDate(inv.date,en,1))+'</div></div>'+
+    '<div class="tk '+tk2+'"><div class="d"></div><div class="k">'+L('결제 기한','Due')+'</div><div class="v num">'+E(ivaDate(inv.due,en,1))+'</div></div>'+
+    '<div class="tk '+(stKey==='paid'?'done':'todo')+'"><div class="d"></div><div class="k">'+L('결제','Payment')+'</div><div class="v num">'+
+      (stKey==='paid'?(paidDate?E(ivaDate(paidDate,en,1)):L('완료','Done')):(stKey==='partial'?L('일부 결제','Partial'):L('대기 중','Pending')))+'</div></div>'+
+    '</div>';
   var h='<div class="iva">';
-
-  // 브랜드 줄
-  var lg=(typeof imgData!=='undefined'&&imgData&&imgData.logo)?'<img src="'+imgData.logo+'">':'HHC';
-  h+='<div class="ivbrand"><div class="lg">'+lg+'</div><div class="bnm">Happy Home Care</div>'+
-     '<div class="ino">'+ivxEsc(inv.id||'')+'</div></div>';
-
-  // 히어로
-  h+='<div class="ivhero"><div class="ivh-t"><div class="ivh-l">'+
-     '<div class="ivh-k">INVOICE · RECEIPT</div><div class="ivh-n">Happy Home Care</div>'+
-     '<span class="ivpill '+stKey+'">'+stLb+'</span></div>'+
-     '<div class="ivh-r"><div class="ivh-rk">'+L('최종 결제금액','Amount Due')+'</div>'+
-     '<div class="ivh-rv">'+fa(t.paidAmount>0?t.balance:t.grand)+'</div></div></div>'+
-     '<div class="ivh-m">'+
-       '<div><div class="k">\u{1F551} '+L('인보이스 번호','Invoice No.')+'</div><div class="v">'+ivxEsc(inv.id||'—')+'</div></div>'+
-       '<div><div class="k">\u{1F4C5} '+L('발행일','Issued')+'</div><div class="v">'+ivxEsc(inv.date||'—')+'</div></div>'+
-       '<div><div class="k">\u{1F4C5} '+L('만기일','Due')+'</div><div class="v">'+ivxEsc(inv.due||'—')+'</div></div>'+
+  h+='<div class="ivhero"><div class="hr-in">'+
+     '<div class="hr-top"><div class="hr-lg">'+lg+'</div><div class="hr-co"><b>Happy Home Care</b><span>'+E(iss.name||'Happy Works Services Sdn. Bhd.')+'</span></div>'+
+     '<div class="hr-no"><i>INVOICE</i><b class="num">'+E(inv.id||'—')+'</b></div></div>'+
+     '<div class="hr-left"><div class="hr-mid"><div class="hr-amt">'+
+       '<span class="hr-st '+stKey+'"><span class="dot">'+ST[0]+'</span>'+ST[1]+'</span>'+
+       '<div class="hr-k">'+(stKey==='paid'?L('결제 금액','Amount Paid'):L('결제하실 금액','Amount Due'))+'</div>'+
+       '<div class="hr-v num">'+fa(stKey==='paid'?t.grand:dueAmt).replace(/^(RM|\$|₩)\s?/,function(s){return '<small>'+s.trim()+'</small>';})+'</div>'+
+       (sub?'<div class="hr-sub'+(stKey==='overdue'?' od':'')+'">'+sub+'</div>':'')+
+     '</div>'+seal+'</div>'+flow+'</div>'+
+     '<div class="hr-right">'+trk+'</div>'+
      '</div></div>';
 
-  // 청구 정보
-  h+='<div class="ivcard"><div class="ivh">\u{1F4C7} '+L('청구 정보','Billing Details')+'</div><div class="ivp">'+
-     '<div><div class="k">BILL TO · '+L('고객','Customer')+'</div><div class="n">'+ivxEsc(cust.name||'—')+'</div>'+
-     '<div class="d">'+([ivxEsc(cust.phone?'****':''),ivxEsc(cust.addr||'')].filter(Boolean).join('<br>')||'—')+'</div>'+
-     (cust.member?'<span class="mc">\u{1F451} '+ivxEsc(en?ivMemberEn(cust.member):cust.member)+'</span>':'')+'</div>'+
-     '<div><div class="k">FROM · '+L('발행처','Issuer')+'</div><div class="n">'+ivxEsc(iss.name||'')+'</div>'+
-     '<div class="d">'+[ivxEsc(iss.phone||''),ivxEsc(iss.addr||''),(iss.biz?'Reg. No. '+ivxEsc(iss.biz):'')].filter(Boolean).join('<br>')+'</div></div>'+
+  h+='<div class="ivg"><div class="ivmain">';
+
+  // ─ 청구 정보 ─
+  var cAddr=E(cust.addr||'');
+  h+='<div class="ivc o2"><div class="ivc-h"><b>'+L('청구 정보','Billing Details')+'</b></div><div class="ivp">'+
+     '<div><div class="k">'+L('받는 분','Bill To')+'</div><div class="n">'+E(cust.name||'—')+'</div>'+
+       (cAddr?'<div class="d">'+cAddr+'</div>':'')+
+       (cust.member?'<span class="mc">\u{1F451} '+E(en?ivMemberEn(cust.member):cust.member)+'</span>':'')+'</div>'+
+     '<div class="sep"></div>'+
+     '<div><div class="k">'+L('발행처','From')+'</div><div class="n">'+E(iss.name||'')+'</div>'+
+       '<div class="d">'+[E(iss.addr||''),(iss.biz?'Reg. No. '+E(iss.biz):'')].filter(Boolean).join('<br>')+'</div></div>'+
      '</div></div>';
 
-  // 서비스 내역
-  h+='<div class="ivsec">\u{1F9FE} '+L('서비스 내역','Service Details')+'</div>';
-  if(!items.length){
-    h+='<div class="ivcard"><div style="padding:26px;text-align:center;color:#98A1B4;font-size:12.5px">'+L('항목이 없습니다','No items')+'</div></div>';
-  }
-  items.forEach(function(li){
-    var la=(li.price||0)*(li.qty||1);
-    var da=li.discType==='pct'?la*((li.discVal||0)/100):(li.discVal||li.disc||0);
-    var amt=la-da;
-    var dTxt=li.discType==='pct'?('-'+(li.discVal||0)+'%'):('- '+fa(da));
-    var sub=liCatPath(li,!en);
-    // 결제 상태 도장 — 결제완료·청구중·연체·일부결제 모두 표시합니다
-    var wmMap={paid:['','PAID'],billing:['bl','UNPAID'],overdue:['od','OVERDUE'],partial:['pt','PARTIAL']};
-    var wmE=wmMap[stKey]||wmMap.billing;
-    var wm='<div class="iwm '+wmE[0]+'">'+wmE[1]+'</div>';
-    // 항목 코드(s178…)는 관리용이라 고객 화면에는 품목명만 보여 줍니다
-    h+='<div class="ivcard ivit">'+wm+'<div class="ihd"><div class="icode">'+ivxEsc(ivaName(li,en))+'</div>'+
-       (sub?'<div class="isub">'+ivxEsc(sub)+'</div>':'')+'</div>'+
-       '<div class="igrid'+(hasDisc?'':' n3')+'">'+
-         '<div class="igc"><div class="igk">'+L('수량','Qty')+'</div><div class="igv">'+(function(){var _q=li.qty||1,_t=ivQtyTx(li,en),_u=_t.slice(String(_q).length).trim();return _q+(_u?' <span class="un">'+ivxEsc(_u)+'</span>':'');}())+'</div></div>'+
-         '<div class="igc"><div class="igk">'+L('단가','Unit Price')+'</div><div class="igv">'+fa(li.price)+'</div></div>'+
-         (hasDisc?'<div class="igc"><div class="igk">'+L('할인','Discount')+'</div><div class="igv dc">'+(da>0?dTxt:'—')+'</div></div>':'')+
-         '<div class="igc"><div class="igk">'+L('금액','Amount')+'</div><div class="igv amt">'+fa(amt)+'</div></div>'+
-       '</div></div>';
-  });
-
-  // 결제 요약
-  var sr='';
-  function row(k,v,mi){sr+='<div class="ivsr'+(mi?' mi':'')+'"><span>'+k+'</span><b>'+v+'</b></div>';}
-  row(L('소계','Subtotal'),fa(t.sub));
-  if(t.taxRate>0)row(L('세금','Tax')+' '+t.taxRate+'%',fa(t.tax));
-  if(t.discVal>0)row(L('할인','Discount')+(t.discType==='pct'?' '+t.discVal+'%':''),'- '+fa(t.disc),1);
-  if(t.park>0)row(L('주차','Parking'),'+ '+fa(t.park));
-  if(t.extra>0)row(L('추가','Extra'),'+ '+fa(t.extra));
-  (t.adjusts||[]).forEach(function(a){
-    var ko=a.name||L('조정','Adjustment');
-    var lbl=(en?('<span data-ivtr="'+ivxEsc(ko).replace(/"/g,'&quot;')+'">'+ivxEsc(ivFreeEn(ko,''))+'</span>'):ivxEsc(ko))+_adjPctTx(a);
-    row(lbl,(a.val<0?'- ':'+ ')+fa(Math.abs(a.val)),a.val<0?1:0);
-  });
-  if(t.credit>0)row(L('회원 적립금','Member Credit'),'- '+fa(t.credit),1);
-  if(t.voucher>0)row(L('상품·할인권','Voucher')+(t.voucherCode?' ('+ivxEsc(t.voucherCode)+')':''),'- '+fa(t.voucher),1);
-  if(t.pts>0)row('\u{1F48E} '+L('해피포인트','Happy Points'),'- '+fa(t.pts),1);
-  if(t.minC>0)row(L('최소 청구','Min. Charge'),'+ '+fa(t.minC));
-  var paidRows='';
-  if(t.paidAmount>0){
-    (inv.payments&&inv.payments.length?inv.payments:[{amt:t.paidAmount,date:inv.paidDate||''}]).forEach(function(pm){
-      paidRows+='<div class="ivsr mi"><span>'+L('기결제','Paid')+(pm.date?' ('+ivxEsc(pm.date)+')':'')+'</span><b>- '+fa(pm.amt)+'</b></div>';
+  // ─ 서비스 내역 ─
+  var cnt=items.length;
+  h+='<div class="ivc o3"><div class="ivc-h"><b>'+L('서비스 내역','Services')+'</b><span>'+(en?cnt+' item'+(cnt===1?'':'s'):cnt+'건')+'</span></div>';
+  if(!cnt){
+    h+='<div class="ivempty">'+L('등록된 서비스 항목이 없습니다.','No service items on this invoice.')+'</div>';
+  }else{
+    h+='<div class="ivt'+(hasDisc?' hd':'')+'"><div class="ivr th"><div>'+L('항목','Description')+'</div><div>'+L('수량','Qty')+'</div><div>'+L('단가','Unit Price')+'</div>'+
+       (hasDisc?'<div>'+L('할인','Discount')+'</div>':'')+'<div>'+L('금액','Amount')+'</div></div>';
+    items.forEach(function(li){
+      var la=(li.price||0)*(li.qty||1);
+      var da=li.discType==='pct'?la*((li.discVal||0)/100):(li.discVal||li.disc||0);
+      var amt=la-da;
+      var dTxt=li.discType==='pct'?('-'+(li.discVal||0)+'%'):('- '+fa(da));
+      var sp=liCatPath(li,!en);
+      if(en&&sp)sp=sp.split(' · ').map(function(x){return ivHasKo(x)?ivEnTx(x):x;}).filter(function(x){return x&&!ivHasKo(x);}).join(' · ');   // 영문 화면에 한글 분류가 남지 않게
+      var q=ivQtyTx(li,en);
+      // 분류 줄(청소 · 쇼파 · 일자형)은 품목명 앞 꼬리표([쇼파-I형])가 있으면 생략 — 꼬리표가 없을 때만 보여 줍니다
+      var _nm=ivaName(li,en),_tg=/^\s*\[[^\]]{1,40}\]/.test(_nm);
+      h+='<div class="ivr"><div class="nm"><div class="t">'+ivaNameHTML(_nm)+'</div>'+
+           (sp&&!_tg?'<div class="s">'+E(sp)+'</div>':'')+
+           '<div class="mm num">'+E(q)+' × '+fa(li.price)+(da>0?'<span class="dc">'+L('할인 ','Disc. ')+E(dTxt)+'</span>':'')+'</div></div>'+
+         '<div class="c num">'+E(q)+'</div><div class="c num">'+fa(li.price)+'</div>'+
+         (hasDisc?'<div class="c num dcv">'+(da>0?E(dTxt):'—')+'</div>':'')+
+         '<div class="c a num">'+fa(amt)+'</div></div>';
     });
-    paidRows+='<div class="ivbal"><span>'+L('잔여 결제금액','Balance Due')+'</span><span>'+fa(t.balance)+'</span></div>';
+    h+='</div>';
   }
-  var _dp=(t.discTotal>0.005)?ivDiscParts(t,!en,fa):'';
-  var dtotHtml=(t.discTotal>0.005)?'<div class="ivdtot"><div class="r1"><span>\u{1F3F7}\uFE0F '+L('총 할인금액','Total Savings')+'</span><b>- '+fa(t.discTotal)+'</b></div>'+(_dp?'<div class="r2">'+_dp+'</div>':'')+'</div>':'';
-  h+='<div class="ivcard"><div class="ivh">\u{1F4B3} '+L('결제 요약','Payment Summary')+'</div><div class="ivsum">'+sr+
-     '<div class="ivtot"><span class="k">'+L('최종 합계','TOTAL')+' ('+cur+')</span><span class="v">'+fa(t.grand)+'</span></div>'+dtotHtml+
-     (paidRows?'<div style="margin-top:14px">'+paidRows+'</div>':'')+
-     '</div></div>';
+  h+='</div>';
 
-  // 결제 안내
-  var payTxt=inv.bankInfo
-    ?[(en?'<span data-ivtr="'+ivxEsc(inv.bankInfo.bankName||'')+'">'+ivxEsc(ivFreeEn(inv.bankInfo.bankName||'',''))+'</span>':ivxEsc(inv.bankInfo.bankName||'')),ivxEsc(inv.bankInfo.accNum||''),ivxEsc(inv.bankInfo.accName||'')].filter(Boolean).join('\n')
-    :(L('문의: ','Enquiry: ')+ivxEsc(iss.phone||''));
-  var _pmPaid=(inv.status==='paid')||(t.paidAmount>0&&t.balance<=0);
-  var _pmHtml=_pmPaid?'':'<div class="pmx"><div class="pmx-t"><i>NEW</i>'+L('카드 결제도 가능합니다','Card payment now accepted')+'</div>'+
-     '<div class="pmx-c"><span class="h">\u{1F4B3} '+L('카드','Card')+'</span><span class="h">\u{1F4F1} QR</span><span>\u{1F3E6} '+L('계좌이체','Bank transfer')+'</span><span>\u{1F4B5} '+L('현금','Cash')+'</span></div>'+
-     '<div class="pmx-d">'+L('카드 · QR(DuitNow · Touch \'n Go · GrabPay)은 작업이 끝난 뒤 방문한 기사님께 바로 결제하실 수 있습니다.','Pay by card or QR (DuitNow · Touch \'n Go · GrabPay) with our technician on site once the job is done.')+'</div></div>';
-  h+='<div class="ivcard gold">'+_pmHtml+'<div class="ivbox"><div class="bi">\u{1F4DE}</div><div>'+
-     '<div class="bt">'+L('결제 정보','Payment Information')+'</div><div class="bb">'+payTxt+'</div>'+
-     (inv.bankInfo&&inv.bankInfo.qr?'<img src="'+inv.bankInfo.qr+'" style="max-width:120px;margin-top:8px;border-radius:8px">':'')+
-     (function(){var cs=cslipList(inv);if(!cs.length)return '';
-       return '<div class="ivslip"><div class="k">\u{1F4B3} '+L('카드 전표','Card Payment Slip')+'</div><div class="g">'+
-         cs.map(function(a){return '<a href="'+ivxEsc(a.url||a.thumb)+'" target="_blank" rel="noopener"><img src="'+ivxEsc(a.thumb||a.url)+'" alt=""></a>';}).join('')+
-         '</div><div class="z">'+L('눌러서 크게 보기 \u2197','Tap to enlarge \u2197')+'</div></div>';})()+
-     '</div></div></div>';
-
-  // 메모
-  var noteKo=(inv.notes?inv.notes+'\n':'')+(inv.terms||'');
+  // ─ 메모 ─
+  var noteKo=[inv.notes||'',inv.terms||''].filter(Boolean).join('\n');
   var noteEn=[ivFreeEn(inv.notes||'',inv.notes_en),ivFreeEn(inv.terms||'','')].filter(Boolean).join('\n');
   var noteTxt=(inv.notes||inv.terms)
-    ?(en?'<span data-ivtr-notes="'+ivxEsc(inv.notes||'')+'" data-ivtr-en="'+ivxEsc(inv.notes_en||'')+'" data-ivtr-terms="'+ivxEsc(inv.terms||'')+'">'+ivxEsc(noteEn)+'</span>':ivxEsc(noteKo))
-    :L('30일 이내 무상 점검 · 회원은 계약 기간 내 무제한 점검이 가능합니다.','Free inspection within 30 days · Members are eligible for unlimited inspections during the membership period.');
+    ?(en?'<span data-ivtr-notes="'+E(inv.notes||'')+'" data-ivtr-en="'+E(inv.notes_en||'')+'" data-ivtr-terms="'+E(inv.terms||'')+'">'+E(noteEn)+'</span>':E(noteKo))
+    :L('작업 후 30일 이내 무상 점검을 받으실 수 있습니다. 회원은 계약 기간 동안 무제한 점검이 가능합니다.','Free inspection within 30 days of service. Members are eligible for unlimited inspections during the membership period.');
   if(en)ivTrAfterPaint();
-  h+='<div class="ivcard blue"><div class="ivbox"><div class="bi">\u{1F4C4}</div><div>'+
-     '<div class="bt">'+(en?'Notes':'메모 · Notes')+'</div><div class="bb">'+noteTxt+'</div></div></div></div>';
+  h+='<div class="ivc o7"><div class="ivc-h"><b>'+L('안내 사항','Notes')+'</b></div><div class="ivc-b"><div class="ivnote">'+noteTxt+'</div></div></div>';
 
-  // 📎 첨부 자료 — 세탁 무게 측정 사진 등 증빙자료
+  // ─ 첨부 자료 ─
   var _atA=(inv.files||[]).filter(function(a){return a&&(a.thumb||a.url);});
   if(_atA.length){
-    h+='<div class="ivsec">\u{1F4CE} '+L('첨부 자료','Attachments')+'</div>'+
-       '<div class="ivcard'+(_atA.length===1?' ivatt-1':'')+'"><div class="ivatt"><div class="ivatt-g">'+
+    h+='<div class="ivc o8'+(_atA.length===1?' ivatt-1':'')+'"><div class="ivc-h"><b>'+L('첨부 자료','Attachments')+'</b><span>'+_atA.length+'</span></div><div class="ivc-b"><div class="ivatt-g">'+
        _atA.map(function(a,i){
          var big=a.url||a.thumb||'';
          var cap=(a.cap||'').trim()||(L('첨부 ','Attachment ')+(i+1));
-         return '<a class="ivat" href="'+ivxEsc(big)+'" target="_blank" rel="noopener">'+
-           '<img src="'+ivxEsc(a.thumb||a.url||'')+'" alt="">'+
-           '<span class="c">'+ivxEsc(cap)+'</span>'+
-           '<span class="z">'+L('눌러서 크게 보기 \u2197','Tap to enlarge \u2197')+'</span></a>';
+         return '<a class="ivat" href="'+E(big)+'" target="_blank" rel="noopener"><img src="'+E(a.thumb||a.url||'')+'" alt="">'+
+           '<span class="c">'+E(cap)+'</span><span class="z">'+L('눌러서 크게 보기 ↗','Tap to enlarge ↗')+'</span></a>';
        }).join('')+'</div></div></div>';
   }
-  // 연결 문서
+  // ─ 연결 문서 ─
   var lk='';
   (inv._insp||[]).forEach(function(r){
-    lk+='<a href="'+ivxEsc(r.url||'#')+'" target="_blank" rel="noopener">\u{1F50D} '+
-        ivxEsc((r.typeLabel||'')+' '+L('보고서','Report')+(r.date?' · '+r.date:''))+' ↗</a><br>';
+    lk+='<a class="ivlk" href="'+E(r.url||'#')+'" target="_blank" rel="noopener"><span class="ic">\u{1F50D}</span>'+
+        '<span class="tx">'+E((r.typeLabel||'')+' '+L('보고서','Report'))+(r.date?'<small class="num">'+E(ivaDate(r.date,en))+'</small>':'')+'</span><span class="ar">›</span></a>';
   });
-  if(inv.contract_id)lk+='<a href="'+ivxEsc(inv._ctUrl||'#')+'" target="_blank" rel="noopener">\u{1F4D1} '+L('계약서 보기','View Contract')+' ↗</a>';
-  if(lk)h+='<div class="ivcard blue"><div class="ivbox"><div class="bi">\u{1F517}</div><div>'+
-     '<div class="bt">'+L('연결 문서','Related Documents')+'</div><div class="bb">'+lk+'</div></div></div></div>';
+  if(inv.contract_id)lk+='<a class="ivlk" href="'+E(inv._ctUrl||'#')+'" target="_blank" rel="noopener"><span class="ic">\u{1F4D1}</span>'+
+        '<span class="tx">'+L('멤버십 계약서','Membership Contract')+(inv.contract_cdate?'<small class="num">'+E(ivaDate(inv.contract_cdate,en))+'</small>':'')+'</span><span class="ar">›</span></a>';
+  if(lk)h+='<div class="ivc o9"><div class="ivc-h"><b>'+L('연결 문서','Related Documents')+'</b></div><div style="padding:6px 0 4px">'+lk+'</div></div>';
 
-  // 서명
-  if(typeof imgData!=='undefined'&&imgData&&imgData.sign){
-    h+='<div class="ivcard"><div class="ivsign"><div class="k">'+(en?'Authorized Signature':'담당자 서명 · Authorized Signature')+'</div>'+
-       '<img src="'+imgData.sign+'"></div></div>';
+  h+='</div><div class="ivside">';
+
+  // ─ 결제 요약 ─
+  var sr='';
+  function row(k,v,mi){sr+='<div class="ivsr'+(mi?' mi':'')+'"><span>'+k+'</span><b class="num">'+v+'</b></div>';}
+  row(L('서비스 금액','Subtotal'),fa(t.sub));
+  if(t.taxRate>0)row(L('세금','Tax')+' '+t.taxRate+'%',fa(t.tax));
+  if(t.discVal>0)row(L('할인','Discount')+(t.discType==='pct'?' '+t.discVal+'%':''),'- '+fa(t.disc),1);
+  if(t.park>0)row(L('주차비','Parking'),'+ '+fa(t.park));
+  if(t.extra>0)row(L('추가 비용','Extra'),'+ '+fa(t.extra));
+  (t.adjusts||[]).forEach(function(a){
+    var ko=a.name||L('조정','Adjustment');
+    var lbl=(en?('<span data-ivtr="'+E(ko).replace(/"/g,'&quot;')+'">'+E(ivFreeEn(ko,''))+'</span>'):E(ko))+_adjPctTx(a);
+    row(lbl,(a.val<0?'- ':'+ ')+fa(Math.abs(a.val)),a.val<0?1:0);
+  });
+  if(t.credit>0)row(L('회원 적립금 사용','Member Credit'),'- '+fa(t.credit),1);
+  if(t.voucher>0)row(L('상품·할인권','Voucher')+(t.voucherCode?' ('+E(t.voucherCode)+')':''),'- '+fa(t.voucher),1);
+  if(t.pts>0)row(L('해피포인트','Happy Points'),'- '+fa(t.pts),1);
+  if(t.minC>0)row(L('최소 청구','Min. Charge'),'+ '+fa(t.minC));
+  var _dp=(t.discTotal>0.005)?ivDiscParts(t,!en,fa):'';
+  var save=(t.discTotal>0.005)?'<div class="ivsave"><div>\u{1F3F7}️ '+L('이번에 아끼신 금액','You saved')+(_dp?'<small class="num">'+_dp+'</small>':'')+'</div><b class="num">'+fa(t.discTotal)+'</b></div>':'';
+  var paidRows='';
+  if(t.paidAmount>0.005){
+    pays.forEach(function(pm){
+      paidRows+='<div class="ivsr mi"><span>'+L('결제됨','Paid')+(pm.date?' · <span class="num">'+E(ivaDate(pm.date,en,1))+'</span>':'')+'</span><b class="num">- '+fa(pm.amt)+'</b></div>';
+    });
   }
-  // 푸터
-  h+='<div class="ivcard"><div class="ivft"><div class="fi">\u{1F3E2}</div><div>'+
-     '<div class="ft1">'+ivxEsc(iss.name||'')+(iss.biz?' <span style="color:#98A1B4;font-weight:700">('+ivxEsc(iss.biz)+')</span>':'')+'</div>'+
-     '<div class="ft2">\u{1F4DE} '+ivxEsc(iss.phone||'')+'</div>'+
-     '<div class="ft3">Thank You for Your Business</div></div></div></div>';
+  var hasPays=t.paidAmount>0.005;
+  // 결제 기록이 없으면 「최종 합계」와 「결제하실 금액」이 같은 값이라 아래 상자 하나로 합칩니다
+  var dueBox=stKey==='paid'
+    ?'<div class="ivdue paid"><div class="k">'+(hasPays?L('남은 결제금액','Balance Due'):L('최종 결제금액','Total Paid'))+'<small class="num">✓ '+L('결제 완료','Paid in full')+(paidDate?' · '+E(ivaDate(paidDate,en)):'')+'</small></div><div class="v num">'+fa(hasPays?0:t.grand)+'</div></div>'
+    :'<div class="ivdue'+(stKey==='overdue'?' od':'')+'"><div class="k">'+(t.paidAmount>0.005?L('남은 결제금액','Balance Due'):L('결제하실 금액','Amount Due'))+
+       '<small class="num">'+L('결제 기한 ','Due ')+E(ivaDate(inv.due,en))+'</small></div><div class="v num">'+fa(dueAmt)+'</div></div>';
+  h+='<div class="ivc o4"><div class="ivc-h"><b>'+L('결제 요약','Payment Summary')+'</b><span>'+cur+'</span></div><div class="ivs">'+sr+
+     (hasPays?'<div class="ivtot"><span class="k">'+L('최종 합계','Total')+'</span><span class="v num">'+fa(t.grand)+'</span></div>':'')+save+
+     (paidRows?'<div class="ivpaid">'+paidRows+'</div>':'')+dueBox+
+     '</div></div>';
+
+  // ─ 결제 안내 ─
+  var bk=inv.bankInfo||null,pmBody='';
+  if(stKey!=='paid'){
+    pmBody+='<div class="pm-c"><span class="h">\u{1F4B3} '+L('카드','Card')+'</span><span class="h">\u{1F4F1} QR</span><span>\u{1F3E6} '+L('계좌이체','Bank transfer')+'</span><span>\u{1F4B5} '+L('현금','Cash')+'</span></div>'+
+      '<div class="pm-d">'+L('카드 · QR(DuitNow · Touch \'n Go · GrabPay)은 작업이 끝난 뒤 방문한 기사님께 바로 결제하실 수 있습니다.','Pay by card or QR (DuitNow · Touch \'n Go · GrabPay) with our technician on site once the job is done.')+'</div>';
+  }
+  var pr=[];
+  if(bk){
+    var bnKo=ivLangPick(bk.bankName||'',false),bnEn=ivLangPick(bk.bankName||'',true);
+    var bn=en?(ivHasKo(bnEn)?'<span data-ivtr="'+E(bnEn)+'">'+E(ivFreeEn(bnEn,''))+'</span>':E(bnEn)):E(bnKo);
+    var isBank=!!bk.accNum;
+    if(bn)pr.push('<div class="pm-r"><span class="k">'+(isBank?L('은행','Bank'):L('결제 방법','Method'))+'</span><span class="v">'+bn+'</span></div>');
+    if(bk.accNum)pr.push('<div class="pm-r"><span class="k">'+L('계좌번호','Account No.')+'</span><span class="v num">'+E(bk.accNum)+
+      '<button class="cp" data-ok="'+L('복사됨','Copied')+'" onclick="ivaCopy(this,\''+E(String(bk.accNum).replace(/[^0-9A-Za-z\-]/g,''))+'\')">'+L('복사','Copy')+'</button></span></div>');
+    if(bk.accName&&isBank)pr.push('<div class="pm-r"><span class="k">'+L('예금주','Account Name')+'</span><span class="v">'+E(bk.accName)+'</span></div>');
+    if(isBank&&stKey!=='paid')pr.push('<div class="pm-r"><span class="k">'+L('입금 메모','Reference')+'</span><span class="v num">'+E(inv.id||'')+'</span></div>');
+  }else{
+    pr.push('<div class="pm-r"><span class="k">'+L('문의','Enquiry')+'</span><span class="v num">'+E(iss.phone||'')+'</span></div>');
+  }
+  pmBody+='<div class="pm-l">'+pr.join('')+'</div>';
+  if(bk&&bk.qr)pmBody+='<img class="pm-qr" src="'+bk.qr+'" alt="QR">';
+  var cs=cslipList(inv);
+  if(cs.length)pmBody+='<div class="ivslip"><div class="k">\u{1F4B3} '+L('카드 전표','Card Payment Slip')+'</div><div class="g">'+
+    cs.map(function(a){return '<a href="'+E(a.url||a.thumb)+'" target="_blank" rel="noopener"><img src="'+E(a.thumb||a.url)+'" alt=""></a>';}).join('')+'</div></div>';
+  h+='<div class="ivc o5"><div class="ivc-h"><b>'+L('결제 안내','Payment Information')+'</b></div><div class="ivc-b">'+pmBody+'</div></div>';
+
+  // ─ 컴퓨터 화면 버튼 ─
+  h+='<div class="ivact o6"><button onclick="window.print()">\u{1F5A8}️ '+L('인쇄','Print')+'</button>'+
+     '<button class="prim" onclick="window.print()">\u{1F4C4} '+L('PDF 저장','Save PDF')+'</button></div>';
+
+  // ─ 발행처 · 서명 ─
+  var sg=(typeof imgData!=='undefined'&&imgData&&imgData.sign)?'<div class="sg"><img src="'+imgData.sign+'" alt=""><span>'+L('담당자 서명','Authorized Signature')+'</span></div>':'';
+  var tel=String(iss.phone||'').replace(/[^0-9+]/g,'');
+  var wa=tel.replace(/^\+/,'');
+  var waTx=encodeURIComponent(en?('Hello, I have a question about invoice '+(inv.id||'')+'.'):('안녕하세요, 인보이스 '+(inv.id||'')+' 관련 문의드립니다.'));
+  h+='<div class="ivc o10"><div class="ivhelp"><b>'+L('궁금한 점이 있으신가요?','Questions about this invoice?')+'</b>'+
+     '<span>'+L('인보이스 번호와 함께 편하게 문의해 주세요.','Message us anytime — we\'ll include your invoice number.')+'</span>'+
+     (wa?'<div class="hb"><a class="wa" href="https://wa.me/'+E(wa)+'?text='+waTx+'" target="_blank" rel="noopener">\u{1F4AC} '+L('왓츠앱 문의','WhatsApp')+'</a>'+
+       '<a href="tel:'+E(tel)+'">\u{1F4DE} '+L('전화하기','Call')+'</a></div>':'')+'</div>'+
+     '<div class="ivver"><div class="ic">\u2713</div><div><b>'+L('공식 발행 인보이스','Official Invoice')+'</b><span>'+
+       (en?'Issued by '+E(iss.name||'')+(iss.biz?' (Reg. No. '+E(iss.biz)+')':'')+' on '+E(ivaDate(inv.date,1))+'.'
+          :E(iss.name||'')+(iss.biz?' (등록번호 '+E(iss.biz)+')':'')+'에서 '+E(ivaDate(inv.date,0))+' 발행했습니다.')+'</span></div></div>'+
+     '<div class="ivft"><div class="co"><b>'+E(iss.name||'')+'</b><span>'+
+     (iss.biz?'Reg. No. '+E(iss.biz)+'<br>':'')+(iss.phone?E(iss.phone):'')+'</span></div>'+sg+'</div></div>';
+
+  h+='</div></div>';
+  h+='<div class="ivty">'+L('해피홈케어를 이용해 주셔서 감사합니다','Thank you for choosing Happy Home Care')+'</div>';
   h+='</div>';
   return h;
 }
@@ -3662,7 +3932,7 @@ function buildInvDocHX(inv,lang){
       return '<figure><img src="'+E(a.thumb||a.url||'')+'" alt=""><figcaption>'+E((a.cap||'').trim()||(L('첨부 ','Attachment ')+(i+1)))+'</figcaption></figure>';}).join('')+'</div>'):'';
   // 결제 안내 · 메모 · 연결 문서
   var paid=(inv.status==='paid')||(t.paidAmount>0&&t.balance<=0);
-  var bank=inv.bankInfo?[E(en?ivFreeEn(inv.bankInfo.bankName||'',''):(inv.bankInfo.bankName||'')),E(inv.bankInfo.accNum||''),E(inv.bankInfo.accName||'')].filter(Boolean).join('<br>'):'';
+  var bank=inv.bankInfo?[E(en?ivFreeEn(ivLangPick(inv.bankInfo.bankName||'',true),''):ivLangPick(inv.bankInfo.bankName||'',false)),E(inv.bankInfo.accNum||''),E(inv.bankInfo.accName||'')].filter(Boolean).join('<br>'):'';
   var payX=(inv.bankInfo&&inv.bankInfo.qr?'<img class="hx-qr" src="'+E(inv.bankInfo.qr)+'" alt="">':'')+
     (paid?'':'<b style="color:#0E2350">'+L('결제 방법','Accepted')+'</b> : '+L('카드 · QR (DuitNow · Touch \'n Go · GrabPay) · 계좌이체 · 현금','Card · QR (DuitNow · Touch \'n Go · GrabPay) · Bank transfer · Cash')+'<br>')+
     (bank?bank:(L('문의 ','Enquiry ')+E(iss.phone||'')));
@@ -6822,22 +7092,24 @@ async function init(){
 // ═══════════════════════════════════════════════════════════
 async function runInvoiceView(vid,lang){
   document.title='Invoice '+vid+' · Happy Home Care';
-  document.body.style.cssText='display:block;overflow:auto;height:auto;min-height:100vh;background:#EEF0F6';
+  document.body.style.cssText='display:block;overflow:auto;height:auto;min-height:100vh;background:#F1F3F8';
   // 기본 표기는 영어 — 주소에 lang=ko 가 있을 때만 한국어로 시작합니다.
   var ivaLang=(lang==='ko')?'ko':'en';
   function ivaShell(){
     var en=(ivaLang==='en');
     document.body.innerHTML=
-      '<div id="iva-top"><button class="bk" onclick="ivaClose()">\u2190</button>'+
-        '<div class="ti">'+(en?'Invoice':'인보이스')+'</div>'+
+      '<div id="iva-top"><div class="in"><button class="bk" onclick="ivaClose()" aria-label="Back">\u2190</button>'+
+        '<div class="ti">'+(en?'Invoice':'인보이스')+'<span>'+String(vid).replace(/[<>&"]/g,'')+'</span></div>'+
+        '<div class="tb"><button onclick="window.print()">\u{1F5A8}\uFE0F '+(en?'Print':'인쇄')+'</button>'+
+        '<button onclick="window.print()">\u{1F4C4} '+(en?'Save PDF':'PDF 저장')+'</button></div>'+
         '<div class="lgb"><button id="iva-en" class="'+(en?'on':'')+'">EN</button>'+
-        '<button id="iva-ko" class="'+(en?'':'on')+'">한</button></div></div>'+
+        '<button id="iva-ko" class="'+(en?'':'on')+'">한</button></div></div></div>'+
       '<div id="ivx-host">'+
-        '<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:70px 0;color:#0E2350;font-size:15px">'+
-        '<div style="width:22px;height:22px;border:2px solid #2563EB;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></div>'+
+        '<div style="display:flex;align-items:center;justify-content:center;gap:10px;padding:90px 0;color:#0E2350;font-size:15px;font-family:inherit">'+
+        '<div style="width:22px;height:22px;border:2px solid #0E2350;border-top-color:transparent;border-radius:50%;animation:spin .8s linear infinite"></div>'+
         (en?'Loading invoice...':'인보이스 불러오는 중...')+'</div></div>'+
       '<div id="iva-bar">'+
-        '<button onclick="window.print()">\u{1F5A8}\uFE0F '+(en?'Print':'인쇄 · Print')+'</button>'+
+        '<button onclick="window.print()">\u{1F5A8}\uFE0F '+(en?'Print':'인쇄')+'</button>'+
         '<button class="prim" onclick="window.print()">\u{1F4C4} '+(en?'Save PDF':'PDF 저장')+'</button></div>';
     document.getElementById('iva-en').onclick=function(){if(ivaLang!=='en'){ivaLang='en';ivaPaint();}};
     document.getElementById('iva-ko').onclick=function(){if(ivaLang!=='ko'){ivaLang='ko';ivaPaint();}};
