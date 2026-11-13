@@ -2,7 +2,11 @@
 // GET /api/work?k={직원 링크 열쇠}            → 직원용 작업일정 (work.html)  (2026-11-13)
 // GET /api/work?manifest=1&k={열쇠}           → 홈 화면 설치용 manifest (열쇠가 붙은 주소로 열리게)
 //
-//  · 열쇠는 settings/work_link.key 와 같아야 한다 (관리자 앱 「직원 일정표」 탭에서 만들고 바꿈).
+//  · 열쇠: settings/work_link.staff[] 의 직원별 key 중 하나 (관리자 앱 「직원 일정표」 탭에서 직원마다 만들고 바꿈)
+//          settings/work_link.admin_key = 관리자 탭 전용 열쇠 → &d=YYYY-MM-DD(날짜 지정) · &raw=1(원본+편집 따로) 허용
+//  · 관리자 편집(직원 화면 전용 덧씌우기): work_edits/{YYYY-MM-DD}
+//      { edits:{작업ID:{hidden:true} | {time_s,time_e,place,unit,addr,items,lines}}, added:[{id,...}] }
+//      → 원래 예약·스케줄·구글 캘린더는 건드리지 않음. 캘린더 동기화가 덮어써도 편집이 유지됨.
 //  · 보여 주는 날짜 (말레이시아 시간):
 //      19:00 ~ 다음 날 17:59  → 다음 날 일정  (자정 이후에는 「오늘」이 그날이 됨)
 //      18:00 ~ 18:59          → 준비 중 (mode:'soon', 일정 없음)
@@ -104,6 +108,15 @@ function fromSchedule(id, s){
     addr, items: [], lines, done: /^✅/.test(String(s.title || '')) };
 }
 
+// 관리자가 고친 값 → 직원 화면에 보낼 모양만 남김
+function clean(j){
+  const items = Array.isArray(j.items) ? j.items.map(it => ({ catId: String(it.catId || 'etc'), grpKo: it.grpKo || null, svcKo: it.svcKo || null,
+    free: !!it.free, text: it.free ? String(it.text || '') : '', qty: Math.max(1, parseInt(it.qty, 10) || 1) })) : [];
+  const lines = cleanLines(Array.isArray(j.lines) ? j.lines.map(String).join('\n') : (j.lines || ''));   // 관리자가 적은 메모도 전화번호·금액 줄은 빼기
+  return { id: String(j.id), time_s: String(j.time_s || ''), time_e: String(j.time_e || ''), place: String(j.place || '—'),
+    unit: String(j.unit || ''), addr: String(j.addr || ''), items, lines, done: !!j.done };
+}
+
 // 설치용 manifest
 function manifest(k){
   const q = k ? '?k=' + encodeURIComponent(k) : '';
@@ -123,25 +136,44 @@ export async function onRequestGet(context){
   if (!k) return fail('no-key', 403);
   try{
     const st = await getDoc(env, 'settings', 'work_link');
-    if (!st || !st.key || st.key !== k || st.off === true) return fail('bad-key', 403);
+    if (!st) return fail('bad-key', 403);
+    const isAdmin = !!(st.admin_key && st.admin_key === k);
+    const staff = isAdmin ? null : (Array.isArray(st.staff) ? st.staff : []).find(x => x && x.key === k && x.off !== true);
+    if (!isAdmin && !staff) return fail('bad-key', 403);
+    const who = staff ? String(staff.name || '') : '';
 
-    const day = pickDay();
-    if (day.mode === 'soon') return json({ ok: true, date: day.date, mode: 'soon', at: Date.now(), jobs: [] });
+    let day = pickDay();
+    const dq = String(q.get('d') || '');
+    if (isAdmin && /^\d{4}-\d{2}-\d{2}$/.test(dq)) day = { date: dq, mode: 'pick' };
+    if (day.mode === 'soon') return json({ ok: true, date: day.date, mode: 'soon', at: Date.now(), staff: who, jobs: [] });
 
-    const [sRows, bRows] = await Promise.all([
+    const [sRows, bRows, ed] = await Promise.all([
       queryEq(env, 'schedules', 'date', day.date, 200),
-      queryEq(env, 'bookings', 'booking_date', day.date, 200)
+      queryEq(env, 'bookings', 'booking_date', day.date, 200),
+      getDoc(env, 'work_edits', day.date)
     ]);
-    const jobs = [];
-    for (const b of bRows){ if (b && b.status === 'confirmed') jobs.push(fromBooking('bk_' + b.__id, b)); }
+    const base = [];
+    for (const b of bRows){ if (b && b.status === 'confirmed') base.push(fromBooking('bk_' + b.__id, b)); }
     for (const s of sRows){
       if (!s || s.booking_id) continue;                 // 예약 미러 일정은 예약 쪽으로 이미 들어감
       if (s.type === 'holiday') continue;               // 휴일 표시는 작업이 아님
       if (/^✅/.test(String(s.title || ''))) continue;   // 완료 표시한 할 일(개인 할 일 포함)은 빼기
-      jobs.push(s.type === 'reserve' ? fromBooking(s.__id, s) : fromSchedule(s.__id, s));
+      base.push(s.type === 'reserve' ? fromBooking(s.__id, s) : fromSchedule(s.__id, s));
     }
-    jobs.sort((a, b) => (a.time_s || '99').localeCompare(b.time_s || '99'));
-    return json({ ok: true, date: day.date, mode: day.mode, at: Date.now(), jobs });
+    const edits = (ed && ed.edits && typeof ed.edits === 'object') ? ed.edits : {};
+    const added = (ed && Array.isArray(ed.added)) ? ed.added.filter(x => x && x.id) : [];
+    const bySort = (x, y) => (x.time_s || '99').localeCompare(y.time_s || '99');
+    base.sort(bySort);
+    if (isAdmin && q.get('raw')) return json({ ok: true, date: day.date, mode: day.mode, at: Date.now(), base, edits, added });
+    const jobs = [];
+    for (const j of base){
+      const e = edits[j.id];
+      if (e && e.hidden) continue;
+      jobs.push(e ? clean(Object.assign({}, j, e, { id: j.id })) : j);
+    }
+    for (const x of added) jobs.push(clean(x));
+    jobs.sort(bySort);
+    return json({ ok: true, date: day.date, mode: day.mode, at: Date.now(), staff: who, jobs });
   }catch(e){
     return fail(e.message === 'env-missing' ? 'server-not-configured' : 'server-error', 500);
   }

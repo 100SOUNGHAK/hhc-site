@@ -9,142 +9,254 @@
 <script type="module" src="/hhc-auth.js"></script>
 <style>
 /* ─────────────────────────────────────────────────────────────
-   work-admin.html — 직원 일정표 링크 관리 (관리자 앱 「일정 → 직원 일정표」 탭, 2026-11-13)
-   · 직원용 화면 /work?k=열쇠 의 링크를 복사 · WhatsApp 으로 보내기 · 열쇠 바꾸기
-   · 열쇠는 Firestore settings/work_link {key, updated_at, by}
-     → /api/work 가 이 값과 비교해 맞을 때만 일정을 내려 줌
-   · 열쇠를 바꾸면 예전 링크(이미 설치한 홈 화면 아이콘 포함)는 더 이상 열리지 않음
+   work-admin.html — 직원 일정표 관리 (관리자 앱 「일정 → 직원 일정표」 탭)
+   2026-11-13 v1 링크 1개 → v2 직원별 링크 + 일정 편집
+   · 직원 링크: settings/work_link { staff:[{id,name,key,created_at,updated_at}], admin_key, updated_at }
+       직원마다 /work?k=열쇠. 열쇠를 바꾸거나 삭제하면 그 직원 링크·설치 아이콘만 막힘. 일정 내용은 모두 같음.
+       admin_key 는 이 화면 전용(날짜 지정·원본 조회) — 직원에게 보내지 않음.
+   · 일정 편집: work_edits/{YYYY-MM-DD} { edits:{작업ID:{…}|{hidden:true}}, added:[…], updated_at, by }
+       직원 화면에만 덧씌움. 예약관리·스케줄·구글 캘린더 원본은 바뀌지 않음.
    ───────────────────────────────────────────────────────────── */
-:root{--n:#0E2350;--n2:#16346E;--ink:#14192A;--ink2:#5A6478;--ink3:#98A1B4;--line:#E4E9F2;--soft:#F6F8FC;
---ok:#0E9B63;--red:#DC2626;--gold:#C9A44C;--wa:#1FA855;
+:root{--n:#0E2350;--n2:#16346E;--bl:#2563EB;--ink:#14192A;--ink2:#5A6478;--ink3:#98A1B4;--line:#E4E9F2;--soft:#F6F8FC;
+--ok:#0E9B63;--red:#DC2626;--gold:#C9A44C;--gold7:#8F6F28;--wa:#1FA855;
 --e1:0 1px 2px rgba(11,24,51,.09),0 5px 12px -3px rgba(11,24,51,.14);
 --e2:0 1px 2px rgba(11,24,51,.10),0 8px 16px -4px rgba(11,24,51,.16),0 26px 44px -14px rgba(11,24,51,.34)}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;background:#F1F4F9;color:var(--ink);
   padding:calc(14px + env(safe-area-inset-top)) 14px calc(40px + env(safe-area-inset-bottom));-webkit-text-size-adjust:100%}
-.wa-wrap{max-width:980px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
-@media (min-width:820px){.wa-wrap{grid-template-columns:minmax(0,1fr) 380px;align-items:start}}
-.wa-hdr{display:flex;align-items:center;gap:10px;grid-column:1/-1}
-.wa-hdr h1{font-size:18px;font-weight:900;letter-spacing:-.02em}
+button{font-family:inherit}
+.wa-wrap{max-width:1000px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+@media (min-width:860px){.wa-wrap{grid-template-columns:minmax(0,1fr) 370px;align-items:start}}
+.wa-hdr{display:flex;align-items:center;gap:10px;grid-column:1/-1;flex-wrap:wrap}
+.wa-hdr h1{font-size:18px;font-weight:900;letter-spacing:-.02em;flex:1}
+.wa-seg{display:flex;background:#fff;border-radius:12px;padding:4px;box-shadow:var(--e1)}
+.wa-seg button{border:0;background:none;font-size:13.5px;font-weight:800;color:var(--ink2);padding:9px 14px;border-radius:9px;cursor:pointer}
+.wa-seg button.on{background:var(--n);color:#fff}
+.wa-col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.wa-col[hidden]{display:none}
 
-/* 링크 카드 (남색) */
-.wa-hero{position:relative;overflow:hidden;background:linear-gradient(150deg,var(--n),var(--n2));color:#fff;border-radius:16px;padding:18px 16px 16px;box-shadow:var(--e2)}
+/* 남색 판 */
+.wa-hero{position:relative;overflow:hidden;background:linear-gradient(150deg,var(--n),var(--n2));color:#fff;border-radius:16px;padding:16px;box-shadow:var(--e2)}
 .wa-hero:after{content:'';position:absolute;right:-70px;top:-70px;width:190px;height:190px;border-radius:50%;background:radial-gradient(circle,rgba(201,164,76,.22),transparent 70%);pointer-events:none}
-.wa-lb{position:relative;z-index:1;font-size:11.5px;font-weight:800;color:rgba(255,255,255,.62)}
-.wa-url{position:relative;z-index:1;margin-top:6px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:12px 13px;
-  font-size:14px;font-weight:700;line-height:1.45;word-break:break-all;font-variant-numeric:tabular-nums;color:#F3DDA6}
-.wa-url.none{color:rgba(255,255,255,.6);font-weight:600}
-.wa-btns{position:relative;z-index:1;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
-.wa-btn{display:flex;align-items:center;justify-content:center;gap:7px;border:none;cursor:pointer;font-family:inherit;font-size:15px;font-weight:900;
-  border-radius:13px;padding:14px 10px;transition:transform .14s;color:var(--n);background:#fff}
-.wa-btn:active{transform:scale(.97)}
-.wa-btn.wa{color:#fff;background:linear-gradient(180deg,#25C063,var(--wa));box-shadow:inset 0 1px 0 rgba(255,255,255,.3)}
-.wa-btn.full{grid-column:1/-1;color:#1B1405;background:linear-gradient(180deg,#E3C98A,var(--gold))}
-.wa-btn:disabled{opacity:.45;cursor:default}
-.wa-btn[hidden]{display:none}
-.wa-meta{position:relative;z-index:1;font-size:11.5px;color:rgba(255,255,255,.55);margin-top:10px;text-align:center}
+.wa-hero>*{position:relative;z-index:1}
+.wa-dn{display:flex;align-items:center;gap:8px}
+.wa-dn>button{flex:none;width:38px;height:38px;border-radius:10px;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.06);color:#fff;font-size:17px;cursor:pointer}
+.wa-dn>button:active{transform:scale(.95)}
+.wa-dmid{flex:1;text-align:center;min-width:0}
+.wa-lb{font-size:11.5px;font-weight:800;color:rgba(255,255,255,.62);min-height:14px}
+.wa-date{font-size:22px;font-weight:900;letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.wa-note{font-size:12px;color:rgba(255,255,255,.66);margin-top:12px;line-height:1.55;text-align:center}
+.wa-add{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:12px;border:none;cursor:pointer;
+  font-size:15px;font-weight:900;color:#1B1405;background:linear-gradient(180deg,#E3C98A,var(--gold));border-radius:13px;padding:13px;transition:transform .14s}
+.wa-add:active{transform:scale(.98)}
 
-/* 흰 카드 */
+/* 일정 목록 */
 .wa-card{background:#fff;border-radius:14px;box-shadow:var(--e1);overflow:hidden}
-.wa-ch{display:flex;align-items:center;gap:8px;padding:14px 15px 4px}
-.wa-ch h2{font-size:14.5px;font-weight:900}
-.wa-body{padding:6px 15px 15px;font-size:13.5px;line-height:1.65;color:var(--ink2)}
+.wa-ch{display:flex;align-items:center;gap:8px;padding:14px 15px 6px}
+.wa-ch h2{font-size:14.5px;font-weight:900;flex:1}
+.wa-ch span{font-size:12px;color:var(--ink3);font-weight:700}
+.wa-row{display:flex;gap:12px;align-items:flex-start;width:100%;border:0;background:none;text-align:left;padding:13px 15px;border-top:1px solid #F0F3F8;cursor:pointer;color:inherit}
+.wa-row:active{background:var(--soft)}
+.wa-tm{flex:none;width:52px;font-size:15px;font-weight:900;font-variant-numeric:tabular-nums;color:var(--n)}
+.wa-tm small{display:block;font-size:11px;font-weight:700;color:var(--ink3)}
+.wa-bd{flex:1;min-width:0}
+.wa-pl{font-size:15px;font-weight:800;line-height:1.35;word-break:break-word}
+.wa-un{display:inline-block;font-size:12px;font-weight:800;color:var(--n);background:#FBF5E6;border:1px solid rgba(201,164,76,.45);border-radius:6px;padding:1px 7px;margin-left:6px;vertical-align:1px}
+.wa-sm{font-size:12.5px;color:var(--ink2);margin-top:3px;line-height:1.45;word-break:break-word}
+.wa-bdg{display:inline-block;font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 7px;margin-left:6px;vertical-align:2px}
+.wa-bdg.ed{background:#EAF0FB;color:#1E4FA8}
+.wa-bdg.ad{background:#E6F6EF;color:#0B7A4E}
+.wa-bdg.hd{background:#F1F3F7;color:var(--ink2)}
+.wa-row.hid .wa-tm,.wa-row.hid .wa-sm{opacity:.4;text-decoration:line-through}
+.wa-row.hid .wa-pl{opacity:.5}
+.wa-chev{flex:none;color:var(--ink3);padding-top:2px}
+.wa-empty{padding:28px 16px;text-align:center;font-size:13px;color:var(--ink3);line-height:1.6}
+.wa-empty b{display:block;font-size:15px;color:var(--ink);margin-bottom:2px}
+
+/* 직원 링크 */
+.wa-staff{padding:14px 15px;border-top:1px solid #F0F3F8}
+.wa-staff:first-child{border-top:0}
+.wa-sh{display:flex;align-items:center;gap:8px}
+.wa-sh b{font-size:16px;font-weight:900;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wa-sh small{font-size:11.5px;color:var(--ink3);font-weight:600;white-space:nowrap}
+.wa-url{margin-top:7px;background:var(--soft);border-radius:9px;padding:8px 10px;font-size:12px;font-weight:700;color:var(--ink2);word-break:break-all;font-variant-numeric:tabular-nums}
+.wa-acts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:9px}
+.wa-acts button{border:0;border-radius:10px;padding:10px 4px;font-size:12.5px;font-weight:800;cursor:pointer;background:var(--soft);color:var(--n2);white-space:nowrap}
+.wa-acts button:active{transform:scale(.96)}
+.wa-acts .wa{background:var(--wa);color:#fff}
+.wa-acts .rot{color:#9A6A00;background:#FFF7E6}
+.wa-acts .del{color:var(--red);background:#FFF2F2}
+.wa-newst{display:flex;gap:8px;padding:12px 15px 15px;border-top:1px solid var(--line)}
+.wa-newst input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:11px;padding:11px 12px;font-size:15px;font-family:inherit}
+.wa-newst input:focus{outline:none;border-color:#9DB3DA}
+.wa-newst button{flex:none;border:0;border-radius:11px;padding:0 16px;font-size:14px;font-weight:900;background:var(--n);color:#fff;cursor:pointer}
+.wa-body{padding:4px 15px 15px;font-size:13.5px;line-height:1.65;color:var(--ink2)}
 .wa-body b{color:var(--ink)}
-.wa-steps{list-style:none;display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.wa-steps{list-style:none;display:flex;flex-direction:column;gap:8px}
 .wa-steps li{display:flex;gap:10px;align-items:flex-start}
 .wa-steps i{flex:none;font-style:normal;width:22px;height:22px;border-radius:50%;background:var(--soft);color:var(--n);font-size:11.5px;font-weight:900;display:grid;place-items:center;margin-top:1px}
-.wa-rule{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin-top:4px;font-size:13px}
-@media (max-width:480px){.wa-rule{grid-template-columns:1fr;gap:2px}.wa-rule span:nth-child(even){margin-bottom:8px}}
-.wa-rule span:nth-child(odd){font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
-.wa-danger{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 15px;border-top:1px solid var(--line)}
-.wa-danger p{font-size:12.5px;color:var(--ink2);line-height:1.5}
-.wa-danger p b{display:block;font-size:13.5px;color:var(--ink)}
-.wa-rot{flex:none;border:1.5px solid #F2C9C9;background:#FFF6F6;color:var(--red);font-family:inherit;font-size:13px;font-weight:900;border-radius:11px;padding:10px 12px;cursor:pointer}
-.wa-rot:active{transform:scale(.96)}
 
-/* 직원 화면 미리보기 */
+/* 미리보기 */
 .wa-pv{position:sticky;top:14px}
-.wa-phone{width:100%;max-width:380px;margin:0 auto;height:720px;border-radius:30px;background:#0B1730;padding:10px;box-shadow:var(--e2)}
-.wa-phone iframe{width:100%;height:100%;border:0;border-radius:22px;background:#F6F8FC;display:block}
-.wa-pvh{display:flex;align-items:center;justify-content:space-between;margin:0 4px 8px}
+.wa-pvh{display:flex;align-items:center;justify-content:space-between;margin:0 4px 8px;gap:8px}
 .wa-pvh b{font-size:14px;font-weight:900}
-.wa-pvh button{font-size:12px;font-weight:800;color:var(--n2);background:#fff;border:none;border-radius:8px;padding:6px 10px;box-shadow:var(--e1);cursor:pointer;font-family:inherit}
-.wa-pvnone{height:100%;display:grid;place-items:center;text-align:center;color:#aebadb;font-size:13px;line-height:1.6;padding:20px}
-@media (max-width:819px){.wa-pv{position:static}.wa-phone{height:640px}}
+.wa-pvh button{flex:none;font-size:12px;font-weight:800;color:var(--n2);background:#fff;border:none;border-radius:8px;padding:6px 10px;box-shadow:var(--e1);cursor:pointer}
+.wa-phone{width:100%;max-width:370px;margin:0 auto;height:720px;border-radius:30px;background:#0B1730;padding:10px;box-shadow:var(--e2)}
+.wa-phone iframe{width:100%;height:100%;border:0;border-radius:22px;background:#F6F8FC;display:block}
+@media (max-width:859px){.wa-pv{position:static}.wa-phone{height:640px}}
 
-/* 확인 창 */
-.wa-ov{position:fixed;inset:0;background:rgba(8,23,43,.5);display:none;align-items:center;justify-content:center;padding:20px;z-index:60}
+/* 편집 창 (전체 화면) */
+.wa-ed{position:fixed;inset:0;z-index:60;background:#F1F4F9;display:none;flex-direction:column}
+.wa-ed.on{display:flex}
+.wa-edbar{flex:none;background:linear-gradient(180deg,var(--n),var(--n2));color:#fff;display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top)) 12px 10px}
+.wa-edbar b{flex:1;font-size:16px;font-weight:900;text-align:center}
+.wa-edbar button{border:0;border-radius:999px;padding:9px 14px;font-size:14px;font-weight:900;cursor:pointer}
+.wa-edbar .x{background:rgba(255,255,255,.12);color:#fff}
+.wa-edbar .sv{background:#fff;color:var(--n)}
+.wa-edbd{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px calc(30px + env(safe-area-inset-bottom))}
+.wa-edin{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.wa-src{font-size:12.5px;color:var(--ink2);background:#fff;border-radius:11px;padding:10px 12px;box-shadow:var(--e1);line-height:1.55}
+.wa-src b{color:var(--ink)}
+.wa-f{background:#fff;border-radius:14px;box-shadow:var(--e1);padding:14px}
+.wa-f h3{font-size:13.5px;font-weight:900;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.wa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.wa-grid .full{grid-column:1/-1}
+.wa-l{display:block;font-size:11.5px;font-weight:800;color:var(--ink3);margin-bottom:5px}
+.wa-in{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:11px 12px;font-size:16px;font-family:inherit;color:var(--ink);background:#FBFCFE}
+.wa-in:focus{outline:none;border-color:#9DB3DA;background:#fff}
+textarea.wa-in{min-height:84px;resize:vertical;line-height:1.5}
+.wa-it{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #F0F3F8}
+.wa-it:first-child{border-top:0}
+.wa-it .t{flex:1;min-width:0;font-size:14.5px;font-weight:700;line-height:1.45;word-break:break-word}
+.wa-it .t em{font-style:normal;display:inline-block;font-size:11px;font-weight:700;color:var(--n2);background:#EEF2FA;border-radius:6px;padding:2px 6px;margin-right:6px;vertical-align:1px}
+.wa-qty{flex:none;display:flex;align-items:center;border:1.5px solid var(--line);border-radius:10px;overflow:hidden}
+.wa-qty button{width:34px;height:34px;border:0;background:var(--soft);font-size:17px;font-weight:800;color:var(--n);cursor:pointer}
+.wa-qty b{min-width:30px;text-align:center;font-size:15px;font-weight:900;font-variant-numeric:tabular-nums}
+.wa-itx{flex:none;width:32px;height:32px;border-radius:50%;border:0;background:#FFF2F2;color:var(--red);font-size:16px;font-weight:900;cursor:pointer}
+.wa-pick{margin-top:10px;padding-top:12px;border-top:1px dashed var(--line);display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wa-pick[hidden]{display:none}
+.wa-pick>div[hidden]{display:none}
+.wa-pick select,.wa-pick input{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px;font-size:16px;font-family:inherit;background:#fff;color:var(--ink)}
+.wa-pick .full{grid-column:1/-1}
+.wa-pick button{grid-column:1/-1;border:0;border-radius:11px;padding:12px;font-size:14.5px;font-weight:900;background:var(--n);color:#fff;cursor:pointer}
+.wa-mini{border:0;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:800;background:var(--soft);color:var(--n2);cursor:pointer}
+.wa-danger{display:flex;flex-direction:column;gap:8px}
+.wa-danger button{border:0;border-radius:12px;padding:13px;font-size:14.5px;font-weight:900;cursor:pointer}
+.wa-danger .rv{background:#fff;color:var(--n2);box-shadow:var(--e1)}
+.wa-danger .hd{background:#FFF7E6;color:#9A6A00}
+.wa-danger .dl{background:#FFF2F2;color:var(--red)}
+.wa-danger p{font-size:12px;color:var(--ink3);text-align:center;line-height:1.5}
+
+/* 확인 창 · 알림 */
+.wa-ov{position:fixed;inset:0;background:rgba(8,23,43,.5);display:none;align-items:center;justify-content:center;padding:20px;z-index:80}
 .wa-ov.on{display:flex}
 .wa-dlg{width:100%;max-width:360px;background:#fff;border-radius:16px;padding:20px 18px 16px;box-shadow:var(--e2)}
 .wa-dlg b{display:block;font-size:16.5px;font-weight:900;margin-bottom:8px}
-.wa-dlg p{font-size:13.5px;color:var(--ink2);line-height:1.6}
+.wa-dlg p{font-size:13.5px;color:var(--ink2);line-height:1.6;white-space:pre-line}
 .wa-dlg div{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
-.wa-dlg button{border:none;border-radius:11px;padding:12px;font-family:inherit;font-size:14px;font-weight:900;cursor:pointer}
+.wa-dlg button{border:none;border-radius:11px;padding:12px;font-size:14px;font-weight:900;cursor:pointer}
 .wa-dlg .no{background:var(--soft);color:var(--ink2)}
 .wa-dlg .yes{background:var(--red);color:#fff}
-
 .wa-toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);opacity:0;
-  background:#14192A;color:#fff;font-size:13px;font-weight:700;padding:10px 16px;border-radius:999px;transition:all .22s;pointer-events:none;z-index:70}
+  background:#14192A;color:#fff;font-size:13px;font-weight:700;padding:10px 16px;border-radius:999px;transition:all .22s;pointer-events:none;z-index:90;max-width:92vw;text-align:center}
 .wa-toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
 <div class="wa-wrap">
-  <div class="wa-hdr"><h1>👷 직원 일정표</h1></div>
+  <div class="wa-hdr"><h1>👷 직원 일정표</h1>
+    <div class="wa-seg" role="tablist"><button type="button" data-v="edit" class="on">📋 일정 편집</button><button type="button" data-v="links">🔗 직원 링크</button></div>
+  </div>
 
-  <div style="display:flex;flex-direction:column;gap:14px;min-width:0">
+  <!-- 일정 편집 -->
+  <div class="wa-col" id="v-edit">
     <div class="wa-hero">
-      <div class="wa-lb">직원에게 보낼 링크</div>
-      <div class="wa-url none" id="wa-url">불러오는 중…</div>
-      <div class="wa-btns">
-        <button type="button" class="wa-btn" id="wa-copy" disabled>🔗 링크 복사</button>
-        <button type="button" class="wa-btn wa" id="wa-send" disabled>💬 WhatsApp</button>
-        <button type="button" class="wa-btn full" id="wa-make" hidden>＋ 직원 링크 만들기</button>
+      <div class="wa-dn">
+        <button type="button" id="d-prev" aria-label="전날">‹</button>
+        <div class="wa-dmid"><div class="wa-lb" id="d-rel"></div><div class="wa-date" id="d-date">—</div></div>
+        <button type="button" id="d-next" aria-label="다음날">›</button>
       </div>
-      <div class="wa-meta" id="wa-meta"></div>
+      <button type="button" class="wa-add" id="j-add">＋ 일정 추가</button>
+      <div class="wa-note">여기서 고친 내용은 <b style="color:#F3DDA6">직원 화면에만</b> 반영됩니다.<br>예약관리 · 스케줄 · 구글 캘린더 원본은 바뀌지 않습니다.</div>
     </div>
+    <div class="wa-card">
+      <div class="wa-ch"><h2>직원에게 보이는 일정</h2><span id="j-cnt"></span></div>
+      <div id="j-list"><div class="wa-empty">불러오는 중…</div></div>
+    </div>
+  </div>
 
+  <!-- 직원 링크 -->
+  <div class="wa-col" id="v-links" hidden>
+    <div class="wa-card">
+      <div class="wa-ch"><h2>직원별 링크</h2><span id="s-cnt"></span></div>
+      <div id="s-list"><div class="wa-empty">불러오는 중…</div></div>
+      <form class="wa-newst" id="s-new"><input id="s-name" maxlength="30" placeholder="직원 이름 (예: Ali)" autocomplete="off"><button type="submit">＋ 추가</button></form>
+    </div>
     <div class="wa-card">
       <div class="wa-ch"><h2>직원 휴대폰에 설치하는 방법</h2></div>
-      <div class="wa-body">
-        <ol class="wa-steps">
-          <li><i>1</i><span>위 링크를 직원에게 WhatsApp으로 보냅니다.</span></li>
-          <li><i>2</i><span><b>안드로이드(Chrome)</b> — 링크를 열고 오른쪽 위 ⋮ → <b>홈 화면에 추가</b> (또는 「앱 설치」)</span></li>
-          <li><i>3</i><span><b>아이폰(Safari)</b> — 링크를 Safari에서 열고 아래 공유 버튼 → <b>홈 화면에 추가</b></span></li>
-          <li><i>4</i><span>홈 화면의 <b>HHC Jobs</b> 아이콘을 누르면 일정표가 바로 열립니다.</span></li>
-        </ol>
-      </div>
+      <div class="wa-body"><ol class="wa-steps">
+        <li><i>1</i><span>직원 이름 아래 <b>WhatsApp</b>으로 그 직원에게 링크를 보냅니다.</span></li>
+        <li><i>2</i><span><b>안드로이드(Chrome)</b> — 링크를 열고 ⋮ → <b>홈 화면에 추가</b> (또는 「앱 설치」)</span></li>
+        <li><i>3</i><span><b>아이폰(Safari)</b> — Safari에서 열고 공유 버튼 → <b>홈 화면에 추가</b></span></li>
+        <li><i>4</i><span>모든 직원이 <b>같은 일정</b>을 봅니다. 링크만 사람마다 달라서 한 사람의 링크만 막을 수 있습니다.</span></li>
+      </ol></div>
     </div>
-
     <div class="wa-card">
-      <div class="wa-ch"><h2>직원 화면에 보이는 일정</h2></div>
+      <div class="wa-ch"><h2>직원 화면에 보이는 시간</h2></div>
       <div class="wa-body">
-        <div class="wa-rule">
-          <span>오후 7시 ~ 다음 날 오후 6시</span><span>다음 날 일정 (자정이 지나면 「오늘」 일정)</span>
-          <span>오후 6시 ~ 7시</span><span>「준비 중입니다 (7시부터 확인 가능합니다)」</span>
-        </div>
-        <p style="margin-top:10px">확정된 예약과 스케줄 일정이 함께 나옵니다. 휴일 표시는 빠집니다. <b>고객 전화번호와 금액은 직원 화면에 보내지 않습니다.</b> 캘린더 메모에 전화번호나 RM 금액이 적힌 줄도 자동으로 뺍니다.</p>
-      </div>
-      <div class="wa-danger">
-        <p><b>링크 열쇠 바꾸기</b>직원이 그만두었거나 링크가 밖으로 퍼졌을 때 누릅니다. 예전 링크와 설치된 아이콘은 더 이상 열리지 않습니다.</p>
-        <button type="button" class="wa-rot" id="wa-rot" disabled>열쇠 바꾸기</button>
+        <b>오후 7시 ~ 다음 날 오후 6시</b> — 다음 날 일정 (자정이 지나면 「오늘」 일정)<br>
+        <b>오후 6시 ~ 7시</b> — 「준비 중입니다 (7시부터 확인 가능합니다)」<br>
+        고객 전화번호와 금액은 직원 화면에 보내지 않습니다.
       </div>
     </div>
   </div>
 
   <div class="wa-pv">
-    <div class="wa-pvh"><b>직원 화면 미리보기</b><button type="button" id="wa-re">↻ 새로고침</button></div>
-    <div class="wa-phone" id="wa-phone"><div class="wa-pvnone">링크를 만들면<br>직원이 보는 화면이 여기에 나옵니다.</div></div>
+    <div class="wa-pvh"><b id="pv-t">직원 화면 미리보기</b><button type="button" id="pv-re">↻ 새로고침</button></div>
+    <div class="wa-phone" id="pv"></div>
   </div>
 </div>
 
-<div class="wa-ov" id="wa-ov"><div class="wa-dlg" role="dialog" aria-modal="true">
-  <b>링크 열쇠를 바꿀까요?</b>
-  <p>지금 직원들이 쓰는 링크와 홈 화면 아이콘이 <b style="display:inline;font-size:inherit;color:var(--red)">모두 열리지 않게</b> 됩니다. 바꾼 뒤 새 링크를 직원들에게 다시 보내 주세요.</p>
-  <div><button type="button" class="no" id="wa-no">그대로 두기</button><button type="button" class="yes" id="wa-yes">바꾸기</button></div>
-</div></div>
-<div class="wa-toast" id="wa-toast"></div>
+<!-- 편집 창 -->
+<div class="wa-ed" id="ed" role="dialog" aria-modal="true">
+  <div class="wa-edbar"><button type="button" class="x" id="ed-x">취소</button><b id="ed-t">일정 수정</b><button type="button" class="sv" id="ed-sv">저장</button></div>
+  <div class="wa-edbd"><div class="wa-edin">
+    <div class="wa-src" id="ed-src"></div>
+    <div class="wa-f">
+      <h3>시간 · 장소</h3>
+      <div class="wa-grid">
+        <div><label class="wa-l" for="f-ts">시작</label><input class="wa-in" type="time" id="f-ts"></div>
+        <div><label class="wa-l" for="f-te">끝 (선택)</label><input class="wa-in" type="time" id="f-te"></div>
+        <div class="full"><label class="wa-l" for="f-pl">콘도명</label><input class="wa-in" id="f-pl" maxlength="80" placeholder="예: Arcoris Mont Kiara"></div>
+        <div><label class="wa-l" for="f-un">동호수</label><input class="wa-in" id="f-un" maxlength="20" placeholder="예: A-23-05"></div>
+        <div><label class="wa-l" for="f-ad">주소 (지도용)</label><input class="wa-in" id="f-ad" maxlength="200" placeholder="선택"></div>
+      </div>
+    </div>
+    <div class="wa-f">
+      <h3>서비스 내역 <button type="button" class="wa-mini" id="it-open">＋ 품목 추가</button></h3>
+      <div id="it-list"></div>
+      <div class="wa-pick" id="it-pick" hidden>
+        <div class="full"><label class="wa-l" for="p-cat">품목</label><select id="p-cat"></select></div>
+        <div id="p-grp-w"><label class="wa-l" for="p-grp">형태</label><select id="p-grp"></select></div>
+        <div id="p-svc-w"><label class="wa-l" for="p-svc">서비스</label><select id="p-svc"></select></div>
+        <div class="full" id="p-txt-w" hidden><label class="wa-l" for="p-txt">내용 직접 입력</label><input id="p-txt" maxlength="80" placeholder="예: 방충망 보수"></div>
+        <div><label class="wa-l" for="p-qty">수량</label><input id="p-qty" type="number" min="1" max="99" value="1" inputmode="numeric"></div>
+        <button type="button" id="p-ok">담기</button>
+      </div>
+    </div>
+    <div class="wa-f">
+      <h3>작업 내용 (메모)</h3>
+      <textarea class="wa-in" id="f-ln" placeholder="직원에게 보일 메모 — 한 줄에 하나씩"></textarea>
+      <div style="font-size:11.5px;color:var(--ink3);margin-top:6px">전화번호·RM 금액이 든 줄은 직원 화면에 보내지 않습니다.</div>
+    </div>
+    <div class="wa-danger" id="ed-danger"></div>
+  </div></div>
+</div>
+
+<div class="wa-ov" id="cf"><div class="wa-dlg"><b id="cf-t"></b><p id="cf-p"></p>
+  <div><button type="button" class="no" id="cf-no">취소</button><button type="button" class="yes" id="cf-yes">확인</button></div></div></div>
+<div class="wa-toast" id="toast"></div>
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
@@ -152,81 +264,268 @@ import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/fireb
 
 const $=s=>document.querySelector(s);
 const SITE='https://happyhomecare.com.my';
-let db=null, KEY='', META=null;
+const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>e.classList.remove('on'),2400);}
+function ask(title,text,yes){return new Promise(res=>{$('#cf-t').textContent=title;$('#cf-p').textContent=text;$('#cf-yes').textContent=yes||'확인';
+  $('#cf').classList.add('on');const done=v=>{$('#cf').classList.remove('on');res(v);};$('#cf-no').onclick=()=>done(false);$('#cf-yes').onclick=()=>done(true);});}
+function newKey(){const a=new Uint8Array(18);crypto.getRandomValues(a);let s='';a.forEach(b=>s+=String.fromCharCode(b));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+function uid(p){return p+Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
+const who=()=>String((window.HHCAuth&&window.HHCAuth.email)||'');
 
-function toast(t){const e=$('#wa-toast');e.textContent=t;e.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>e.classList.remove('on'),2200);}
-function newKey(){const a=new Uint8Array(18);crypto.getRandomValues(a);let s='';a.forEach(b=>s+=String.fromCharCode(b));
-  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
-function link(){return KEY?SITE+'/work?k='+KEY:'';}
-function fmt(iso){if(!iso)return '';const d=new Date(iso);if(isNaN(d))return '';
-  return d.getFullYear()+'. '+(d.getMonth()+1)+'. '+d.getDate()+'. '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+// ── 날짜 (말레이시아) ──
+function myNow(){const n=new Date();return new Date(n.getTime()+(n.getTimezoneOffset()+480)*60000);}
+function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function addDays(ds,n){const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return ymd(d);}
+const DOW=['일','월','화','수','목','금','토'];
+function koDate(ds){const d=new Date(ds+'T00:00:00');return (d.getMonth()+1)+'월 '+d.getDate()+'일 ('+DOW[d.getDay()]+')';}
+function staffDay(){const n=myNow(),h=n.getHours(),t=ymd(n);return h>=18?addDays(t,1):t;}   // 직원 화면이 보여 주는 날 (6~7시는 다음 날 준비)
 
-function render(){
-  const has=!!KEY;
-  $('#wa-url').textContent=has?link():'아직 직원 링크가 없습니다.';
-  $('#wa-url').classList.toggle('none',!has);
-  $('#wa-copy').disabled=!has;$('#wa-send').disabled=!has;$('#wa-rot').disabled=!has;
-  $('#wa-copy').hidden=!has;$('#wa-send').hidden=!has;
-  $('#wa-make').hidden=has;
-  $('#wa-meta').textContent=has&&META&&META.updated_at?'링크 만든 날 '+fmt(META.updated_at):'';
-  const ph=$('#wa-phone');
-  if(has){
-    const src='/work?k='+encodeURIComponent(KEY)+'&_='+Date.now();
-    const f=ph.querySelector('iframe');
-    if(f)f.src=src;else ph.innerHTML='<iframe title="직원 화면 미리보기" src="'+src+'"></iframe>';
-  }else ph.innerHTML='<div class="wa-pvnone">링크를 만들면<br>직원이 보는 화면이 여기에 나옵니다.</div>';
+// ── 품목 (예약관리 PK_CATS 와 같은 분류) ──
+const PK_CATS=[
+  {id:'ac_home',ko:'에어컨(가정용)',groups:[{ko:'벽걸이형',svcs:['기본세척','약품세척','스팀살균세척','전체분해세척']},{ko:'매립형 (덕트)',svcs:['기본세척','스팀그릴세척','전체분해세척']},{ko:'천정형 (카세트)',svcs:['기본세척','약품세척','스팀살균세척','전체분해세척']},{ko:'실외기',svcs:['기본세척','약품세척','분해세척']}]},
+  {id:'ac_shop',ko:'에어컨(매장용)',groups:[{ko:'벽걸이형',svcs:['기본세척','약품세척','스팀살균세척','전체분해세척']},{ko:'매립형 (덕트)',svcs:['기본세척','스팀그릴세척','전체분해세척']},{ko:'천정형 (카세트)',svcs:['기본세척','약품세척','스팀살균세척','전체분해세척']},{ko:'실외기',svcs:['기본세척','약품세척','분해세척']}]},
+  {id:'washer',ko:'세탁기',groups:[{svcs:['드럼세탁기','통돌이세탁기']}]},
+  {id:'mattress',ko:'매트리스',groups:[{svcs:['건식방식','습식살균방식']}]},
+  {id:'sofa',ko:'쇼파',groups:[{ko:'건식방식',svcs:['I 형','L 형']},{ko:'습식살균방식',svcs:['I 형','L 형']}]},
+  {id:'curtain',ko:'커튼',groups:[{svcs:['현장세탁','수거세탁','약식 스팀 살균']}]},
+  {id:'dryer',ko:'건조기',groups:[{svcs:['완전분해세척']}]},
+  {id:'hood',ko:'주방후드',groups:[{svcs:['완전분해세척']}]},
+  {id:'fridge',ko:'냉장고',groups:[{svcs:['단문형','양문형']}]},
+  {id:'purifier',ko:'공기청정기',groups:[{svcs:['공기청정기 청소']}]},
+  {id:'fan',ko:'실링팬',groups:[{svcs:['간이청소','분해청소']}]},
+  {id:'chair',ko:'식탁의자',groups:[{svcs:['스팀세탁']}]},
+  {id:'carpet',ko:'카페트',groups:[{svcs:['카페트 세탁']}]},
+  {id:'free',ko:'기타 (직접 입력)',groups:[]}
+];
+// 직원 화면(work.html)과 같은 표시 이름 — 한국어
+const AC_TAG={'벽걸이형':'벽걸이형 에어컨','천정형 (카세트)':'카세트형 에어컨','매립형 (덕트)':'FCU 덕트형 에어컨','실외기':'실외기 에어컨'};
+const SVC={'기본세척':'기본 세척','약품세척':'약품 세척','스팀살균세척':'스팀살균 세척','전체분해세척':'전체 분해 세척','스팀그릴세척':'스팀 그릴 세척','분해세척':'분해 세척',
+  '완전분해세척':'완전 분해 세척','건식방식':'건식 청소','습식살균방식':'습식 살균 청소','현장세탁':'현장 세탁','수거세탁':'수거 세탁','약식 스팀 살균':'약식 스팀 살균',
+  '간이청소':'간이 청소','분해청소':'분해 청소','스팀세탁':'스팀 세탁','카페트 세탁':'카페트 세탁','공기청정기 청소':'청소','전등교체':'전등 교체','콘센트 교체':'콘센트 교체'};
+const CAT_TAG={washer:'세탁기',mattress:'매트리스',curtain:'커튼',dryer:'의류 건조기',hood:'주방 후드',fridge:'냉장고',purifier:'공기청정기',fan:'실링팬',chair:'식탁의자',carpet:'카페트',etc:'기타'};
+function itemName(it){
+  if(it.free)return {tag:'',name:(it.text||'').trim()||'기타'};
+  const c=it.catId,g=it.grpKo,v=it.svcKo;
+  if(c==='ac_home'||c==='ac_shop')return {tag:AC_TAG[g]||g||'',name:SVC[v]||v||''};
+  if(c==='washer')return {tag:v==='드럼세탁기'?'드럼 세탁기':'통돌이 세탁기',name:'분해 세척'};
+  if(c==='sofa')return {tag:v==='L 형'?'쇼파-L형':'쇼파-I형',name:SVC[g]||g||''};
+  if(c==='fridge')return {tag:v==='양문형'?'냉장고-양문형':'냉장고-단문형',name:'청소'};
+  return {tag:CAT_TAG[c]||'',name:SVC[v]||v||''};
 }
+function itemsSummary(items){return (items||[]).map(it=>{const n=itemName(it);return (n.tag?n.tag+' ':'')+n.name+' ×'+(+it.qty||1);}).join(' · ');}
 
-async function load(){
+// ── 상태 ──
+let db=null, LINK=null;            // settings/work_link
+let DAY=staffDay(), RAW=null;      // RAW = {base,edits,added}
+
+// ── 직원 링크 문서 ──
+async function loadLink(){
   const s=await getDoc(doc(db,'settings','work_link'));
-  META=s.exists()?s.data():null;
-  KEY=META&&META.key&&META.off!==true?String(META.key):'';
-  render();
+  const d=s.exists()?s.data():{};
+  let changed=false;
+  if(!Array.isArray(d.staff)){ d.staff=[]; changed=true;
+    // 첫 버전(링크 1개)에서 만든 열쇠는 「공용 링크」로 옮겨 그대로 쓸 수 있게 함
+    if(d.key&&d.off!==true){ d.staff.push({id:uid('s'),name:'공용 링크 (처음 만든 것)',key:d.key,created_at:d.updated_at||new Date().toISOString(),updated_at:d.updated_at||new Date().toISOString()}); } }
+  if(!d.admin_key){ d.admin_key=newKey(); changed=true; }
+  if('key' in d){ delete d.key; delete d.off; delete d.by; changed=true; }
+  LINK=d;
+  if(changed) await saveLink();
 }
-async function save(){
-  const k=newKey();
-  const by=String((window.HHCAuth&&window.HHCAuth.email)||'');
-  const data={key:k,updated_at:new Date().toISOString(),by};
-  await setDoc(doc(db,'settings','work_link'),data);
-  META=data;KEY=k;render();
-}
+async function saveLink(){ LINK.updated_at=new Date().toISOString(); LINK.updated_by=who(); await setDoc(doc(db,'settings','work_link'),LINK); }
+const staffUrl=s=>SITE+'/work?k='+s.key;
+function fmt(iso){const d=new Date(iso);if(isNaN(d))return '';return (d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
 
+function renderStaff(){
+  const L=LINK.staff||[];
+  $('#s-cnt').textContent=L.length+'명';
+  $('#s-list').innerHTML=L.length?L.map(s=>`<div class="wa-staff" data-id="${esc(s.id)}">
+      <div class="wa-sh"><b>${esc(s.name||'(이름 없음)')}</b><small>${s.updated_at?'열쇠 '+fmt(s.updated_at):''}</small></div>
+      <div class="wa-url">${esc(staffUrl(s))}</div>
+      <div class="wa-acts"><button type="button" data-a="copy">링크 복사</button><button type="button" class="wa" data-a="wa">WhatsApp</button>
+        <button type="button" class="rot" data-a="rot">열쇠 바꾸기</button><button type="button" class="del" data-a="del">삭제</button></div></div>`).join('')
+    :'<div class="wa-empty"><b>아직 직원 링크가 없습니다</b>아래에 직원 이름을 넣고 「추가」를 누르세요.</div>';
+}
 // 직원에게 보내는 글 (직원용 앱은 영어가 기본)
-function waText(){
-  return ['*Happy Home Care – Work Schedule*','',
-    'Open this link to see your daily job schedule:',link(),'',
-    'Tip: tap ⋮ (Chrome) or Share (iPhone Safari) → "Add to Home Screen" so you can open it like an app.',
-    'Tomorrow\'s jobs are shown from 7:00 PM.','',
-    '— Happy Home Care'].join('\n');
-}
+function waText(s){return ['*Happy Home Care – Work Schedule*','','Hi '+(s.name||'')+', this is your personal link to the daily job schedule:',staffUrl(s),'',
+  'Tip: tap ⋮ (Chrome) or Share (iPhone Safari) → "Add to Home Screen" to open it like an app.','Tomorrow\'s jobs are shown from 7:00 PM.','Please do not share this link.','','— Happy Home Care'].join('\n');}
 
-$('#wa-copy').onclick=()=>{const t=link();
-  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('✓ 링크를 복사했습니다')).catch(()=>{
-    const r=document.createRange();r.selectNodeContents($('#wa-url'));const sel=getSelection();sel.removeAllRanges();sel.addRange(r);toast('링크를 길게 눌러 복사하세요');});};
-$('#wa-send').onclick=()=>{window.open('https://wa.me/?text='+encodeURIComponent(waText()),'_blank');};
-$('#wa-make').onclick=async()=>{try{$('#wa-make').disabled=true;await save();toast('✓ 직원 링크를 만들었습니다');}catch(e){toast('저장하지 못했습니다: '+(e.message||''));}finally{$('#wa-make').disabled=false;}};
-$('#wa-rot').onclick=()=>$('#wa-ov').classList.add('on');
-$('#wa-no').onclick=()=>$('#wa-ov').classList.remove('on');
-$('#wa-ov').onclick=e=>{if(e.target.id==='wa-ov')$('#wa-ov').classList.remove('on');};
-$('#wa-yes').onclick=async()=>{$('#wa-ov').classList.remove('on');
-  try{await save();toast('✓ 열쇠를 바꿨습니다 — 새 링크를 직원들에게 보내 주세요');}catch(e){toast('바꾸지 못했습니다: '+(e.message||''));}};
-$('#wa-re').onclick=()=>render();
+$('#s-list').addEventListener('click',async e=>{
+  const b=e.target.closest('button[data-a]');if(!b)return;
+  const id=b.closest('.wa-staff').dataset.id, s=LINK.staff.find(x=>x.id===id);if(!s)return;
+  const a=b.dataset.a;
+  if(a==='copy'){const t=staffUrl(s);(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast('✓ '+s.name+' 링크를 복사했습니다')).catch(()=>toast('링크를 길게 눌러 복사하세요'));}
+  if(a==='wa')window.open('https://wa.me/?text='+encodeURIComponent(waText(s)),'_blank');
+  if(a==='rot'){ if(!await ask(s.name+' 열쇠를 바꿀까요?','지금 '+s.name+' 님이 쓰는 링크와 홈 화면 아이콘이 열리지 않게 됩니다.\n바꾼 뒤 새 링크를 다시 보내 주세요.','바꾸기'))return;
+    const old=s.key;s.key=newKey();s.updated_at=new Date().toISOString();
+    try{await saveLink();renderStaff();toast('✓ 열쇠를 바꿨습니다 — 새 링크를 보내 주세요');}catch(err){s.key=old;toast('저장하지 못했습니다: '+err.message);} }
+  if(a==='del'){ if(!await ask(s.name+' 링크를 삭제할까요?','이 직원의 링크와 홈 화면 아이콘이 더 이상 열리지 않습니다.','삭제'))return;
+    const keep=LINK.staff;LINK.staff=LINK.staff.filter(x=>x.id!==id);
+    try{await saveLink();renderStaff();toast('✓ 삭제했습니다');}catch(err){LINK.staff=keep;toast('저장하지 못했습니다: '+err.message);} }
+});
+$('#s-new').addEventListener('submit',async e=>{e.preventDefault();
+  const name=$('#s-name').value.trim();if(!name){$('#s-name').focus();return;}
+  const now=new Date().toISOString();
+  LINK.staff.push({id:uid('s'),name,key:newKey(),created_at:now,updated_at:now});
+  try{await saveLink();$('#s-name').value='';renderStaff();toast('✓ '+name+' 링크를 만들었습니다 — WhatsApp으로 보내세요');}catch(err){LINK.staff.pop();toast('저장하지 못했습니다: '+err.message);}
+});
 
-if(window.__WA_DEMO){KEY=window.__WA_DEMO.key||'';META=window.__WA_DEMO.meta||null;render();}
-else{
+// ── 일정 불러오기 (관리자 열쇠로 원본 + 편집을 따로 받음) ──
+async function loadDay(){
+  $('#d-date').textContent=koDate(DAY);
+  const t=ymd(myNow());
+  $('#d-rel').textContent=DAY===staffDay()?'지금 직원 화면에 보이는 날':DAY===t?'오늘':DAY===addDays(t,1)?'내일':DAY<t?'지난 날':'';
+  $('#j-list').innerHTML='<div class="wa-empty">불러오는 중…</div>';$('#j-cnt').textContent='';
   try{
-    const app=initializeApp({
-      apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
-      authDomain:"happywork-packageplan.firebaseapp.com",
-      projectId:"happywork-packageplan",
-      storageBucket:"happywork-packageplan.firebasestorage.app",
-      messagingSenderId:"101289103022",
-      appId:"1:101289103022:web:d81aca7f3747dd26df673f"
-    });
-    db=getFirestore(app);
-    load().catch(e=>{$('#wa-url').textContent='불러오지 못했습니다 — 새로고침 해 주세요 ('+(e.message||'')+')';});
-  }catch(e){$('#wa-url').textContent='연결 오류: '+(e.message||'');}
+    const r=await fetch('/api/work?k='+encodeURIComponent(LINK.admin_key)+'&d='+DAY+'&raw=1',{cache:'no-store'});
+    const j=await r.json(); if(!j.ok)throw new Error(j.error||r.status);
+    RAW={base:j.base||[],edits:j.edits||{},added:j.added||[]};
+  }catch(e){RAW=null;$('#j-list').innerHTML='<div class="wa-empty"><b>불러오지 못했습니다</b>'+esc(e.message||'')+' — 새로고침 해 주세요.</div>';return;}
+  renderJobs();renderPreview();
 }
+function merged(){
+  const out=[];
+  RAW.base.forEach(b=>{const e=RAW.edits[b.id];
+    if(e&&e.hidden)out.push({...b,_st:'hd',_src:b});
+    else if(e)out.push({...b,...e,id:b.id,_st:'ed',_src:b});
+    else out.push({...b,_st:'',_src:b});});
+  RAW.added.forEach(a=>out.push({...a,_st:'ad'}));
+  return out.sort((x,y)=>(x.time_s||'99').localeCompare(y.time_s||'99'));
+}
+function renderJobs(){
+  const L=merged(),vis=L.filter(x=>x._st!=='hd').length;
+  $('#j-cnt').textContent='직원 화면 '+vis+'건';
+  if(!L.length){$('#j-list').innerHTML='<div class="wa-empty"><b>이 날은 일정이 없습니다</b>위 「＋ 일정 추가」로 직원 화면에만 보이는 일정을 넣을 수 있습니다.</div>';return;}
+  $('#j-list').innerHTML=L.map(j=>{
+    const bd=j._st==='ed'?'<span class="wa-bdg ed">수정됨</span>':j._st==='ad'?'<span class="wa-bdg ad">추가</span>':j._st==='hd'?'<span class="wa-bdg hd">숨김</span>':'';
+    const sm=(j.items&&j.items.length)?itemsSummary(j.items):(Array.isArray(j.lines)?j.lines.join(' / '):'');
+    return `<button type="button" class="wa-row${j._st==='hd'?' hid':''}" data-id="${esc(j.id)}"><div class="wa-tm">${esc(j.time_s||'—')}${j.time_e?'<small>~'+esc(j.time_e)+'</small>':''}</div>
+      <div class="wa-bd"><div class="wa-pl">${esc(j.place||'—')}${j.unit?'<span class="wa-un">'+esc(j.unit)+'</span>':''}${bd}</div>${sm?'<div class="wa-sm">'+esc(sm)+'</div>':''}</div><span class="wa-chev">›</span></button>`;
+  }).join('');
+}
+$('#j-list').addEventListener('click',e=>{const r=e.target.closest('.wa-row');if(r)openEd(r.dataset.id);});
+$('#d-prev').onclick=()=>{DAY=addDays(DAY,-1);loadDay();};
+$('#d-next').onclick=()=>{DAY=addDays(DAY,1);loadDay();};
+
+// ── 편집 창 ──
+let ED=null;   // {id, kind:'base'|'added'|'new', src, st, items:[]}
+function srcText(b){
+  if(!b)return '<b>새 일정</b> — 직원 화면에만 보이는 일정입니다. 예약·스케줄에는 생기지 않습니다.';
+  const id=String(b.id);
+  const k=id.indexOf('bk_')===0?'예약관리 확정 예약':id.indexOf('gcal_')===0?'구글 캘린더':id.indexOf('gtask_')===0?'구글 할 일':'스케줄';
+  return '<b>원본: '+k+'</b> — '+esc((b.time_s||'')+' '+(b.place||'')+(b.unit?' '+b.unit:''))+(b.items&&b.items.length?'<br>'+esc(itemsSummary(b.items)):'')+'<br>여기서 고쳐도 원본은 바뀌지 않습니다.';
+}
+function openEd(id){
+  if(!RAW)return;
+  const L=merged();const j=id?L.find(x=>x.id===id):null;
+  if(id&&!j)return;
+  const kind=!j?'new':j._st==='ad'?'added':'base';
+  ED={id:j?j.id:uid('add_'),kind,src:(j&&j._src)||null,st:j?j._st:'',items:JSON.parse(JSON.stringify((j&&j.items)||[]))};
+  $('#ed-t').textContent=kind==='new'?'일정 추가':'일정 수정';
+  $('#ed-src').innerHTML=srcText(ED.src);
+  $('#f-ts').value=(j&&j.time_s)||'';$('#f-te').value=(j&&j.time_e)||'';
+  $('#f-pl').value=(j&&j.place&&j.place!=='—')?j.place:'';$('#f-un').value=(j&&j.unit)||'';$('#f-ad').value=(j&&j.addr)||'';
+  $('#f-ln').value=(j&&Array.isArray(j.lines))?j.lines.join('\n'):'';
+  $('#it-pick').hidden=true;renderItems();
+  let dz='';
+  if(kind==='base'&&ED.st==='ed')dz+='<button type="button" class="rv" data-z="revert">↺ 원래대로 되돌리기</button>';
+  if(kind==='base')dz+=ED.st==='hd'?'<button type="button" class="rv" data-z="show">직원 화면에 다시 보이기</button>':'<button type="button" class="hd" data-z="hide">직원 화면에서 숨기기</button>';
+  if(kind==='added')dz+='<button type="button" class="dl" data-z="del">이 일정 삭제</button>';
+  if(kind==='base')dz+='<p>숨겨도 예약·스케줄·구글 캘린더 원본은 그대로 남습니다.</p>';
+  $('#ed-danger').innerHTML=dz;
+  $('#ed').classList.add('on');document.body.style.overflow='hidden';
+  $('#ed .wa-edbd').scrollTop=0;
+}
+function closeEd(){$('#ed').classList.remove('on');document.body.style.overflow='';ED=null;}
+function renderItems(){
+  $('#it-list').innerHTML=ED.items.length?ED.items.map((it,i)=>{const n=itemName(it);
+    return `<div class="wa-it" data-i="${i}"><div class="t">${n.tag?'<em>'+esc(n.tag)+'</em>':''}${esc(n.name)}</div>
+      <div class="wa-qty"><button type="button" data-q="-1" aria-label="하나 빼기">−</button><b>${+it.qty||1}</b><button type="button" data-q="1" aria-label="하나 더">＋</button></div><button type="button" class="wa-itx" data-x aria-label="품목 빼기">×</button></div>`;}).join('')
+    :'<div style="font-size:13px;color:var(--ink3);padding:4px 0">담은 품목이 없습니다. 「＋ 품목 추가」를 누르세요.</div>';
+}
+$('#it-list').addEventListener('click',e=>{const r=e.target.closest('.wa-it');if(!r)return;const i=+r.dataset.i;
+  const q=e.target.closest('[data-q]');if(q){ED.items[i].qty=Math.min(99,Math.max(1,(+ED.items[i].qty||1)+(+q.dataset.q)));renderItems();return;}
+  if(e.target.closest('[data-x]')){ED.items.splice(i,1);renderItems();}});
+// 품목 고르기
+$('#p-cat').innerHTML=PK_CATS.map(c=>`<option value="${c.id}">${esc(c.ko)}</option>`).join('');
+function fillPick(){
+  const c=PK_CATS.find(x=>x.id===$('#p-cat').value);const free=c.id==='free';
+  $('#p-txt-w').hidden=!free;$('#p-svc-w').hidden=free;
+  const grps=c.groups.filter(g=>g.ko);$('#p-grp-w').hidden=free||!grps.length;
+  if(grps.length)$('#p-grp').innerHTML=grps.map(g=>`<option>${esc(g.ko)}</option>`).join('');
+  fillSvc();
+}
+function fillSvc(){const c=PK_CATS.find(x=>x.id===$('#p-cat').value);if(c.id==='free')return;
+  const gk=$('#p-grp-w').hidden?'':$('#p-grp').value;
+  const g=c.groups.find(x=>(x.ko||'')===gk)||c.groups[0];
+  $('#p-svc').innerHTML=g.svcs.map(s=>`<option>${esc(s)}</option>`).join('');}
+$('#p-cat').onchange=fillPick;$('#p-grp').onchange=fillSvc;
+$('#it-open').onclick=()=>{const p=$('#it-pick');p.hidden=!p.hidden;if(!p.hidden){$('#p-qty').value=1;fillPick();}};
+$('#p-ok').onclick=()=>{const c=$('#p-cat').value,qty=Math.min(99,Math.max(1,parseInt($('#p-qty').value,10)||1));
+  if(c==='free'){const t=$('#p-txt').value.trim();if(!t){$('#p-txt').focus();return;}ED.items.push({catId:'etc',free:true,text:t,qty});$('#p-txt').value='';}
+  else ED.items.push({catId:c,grpKo:$('#p-grp-w').hidden?null:$('#p-grp').value,svcKo:$('#p-svc').value,free:false,text:'',qty});
+  $('#p-qty').value=1;renderItems();toast('✓ 담았습니다');};
+
+function formVal(){
+  return {time_s:$('#f-ts').value||'',time_e:$('#f-te').value||'',place:$('#f-pl').value.trim(),unit:$('#f-un').value.trim().toUpperCase(),
+    addr:$('#f-ad').value.trim(),items:ED.items.map(it=>({catId:it.catId,grpKo:it.grpKo||null,svcKo:it.svcKo||null,free:!!it.free,text:it.free?String(it.text||''):'',qty:+it.qty||1})),
+    lines:$('#f-ln').value.split('\n').map(s=>s.trim()).filter(Boolean)};
+}
+async function saveEdits(msg){
+  await setDoc(doc(db,'work_edits',DAY),{edits:RAW.edits,added:RAW.added,date:DAY,updated_at:new Date().toISOString(),by:who()});
+  closeEd();renderJobs();renderPreview();toast(msg);
+}
+$('#ed-sv').onclick=async()=>{
+  if(!ED)return;
+  const v=formVal();
+  if(!v.place){$('#f-pl').focus();toast('콘도명을 입력해 주세요');return;}
+  const snap=JSON.stringify([RAW.edits,RAW.added]),isNew=ED.kind==='new';
+  if(ED.kind==='base')RAW.edits[ED.id]=v;
+  else if(ED.kind==='added'){const i=RAW.added.findIndex(x=>x.id===ED.id);RAW.added[i]={id:ED.id,...v};}
+  else RAW.added.push({id:ED.id,...v});
+  try{await saveEdits(isNew?'✓ 일정을 추가했습니다':'✓ 저장했습니다 — 직원 화면에 바로 반영됩니다');}
+  catch(e){[RAW.edits,RAW.added]=JSON.parse(snap);toast('저장하지 못했습니다: '+(e.message||''));}
+};
+$('#ed-x').onclick=closeEd;
+$('#ed-danger').addEventListener('click',async e=>{const b=e.target.closest('[data-z]');if(!b||!ED)return;const z=b.dataset.z;
+  const snap=JSON.stringify([RAW.edits,RAW.added]);
+  if(z==='revert'){if(!await ask('원래대로 되돌릴까요?','이 일정에서 고친 내용을 지우고 원본(예약·캘린더) 내용으로 보여 줍니다.','되돌리기'))return;delete RAW.edits[ED.id];}
+  if(z==='hide'){if(!await ask('직원 화면에서 숨길까요?','직원 일정표에서만 빠집니다. 원본은 그대로 남습니다.','숨기기'))return;RAW.edits[ED.id]={hidden:true};}
+  if(z==='show'){delete RAW.edits[ED.id];}
+  if(z==='del'){if(!await ask('이 일정을 삭제할까요?','직접 추가한 일정이 직원 화면에서 사라집니다.','삭제'))return;RAW.added=RAW.added.filter(x=>x.id!==ED.id);}
+  try{await saveEdits(z==='revert'?'✓ 원래대로 되돌렸습니다':z==='hide'?'✓ 직원 화면에서 숨겼습니다':z==='show'?'✓ 다시 보이게 했습니다':'✓ 삭제했습니다');}
+  catch(err){[RAW.edits,RAW.added]=JSON.parse(snap);toast('저장하지 못했습니다: '+(err.message||''));}
+});
+$('#j-add').onclick=()=>openEd(null);
+
+// ── 미리보기 ──
+function renderPreview(){
+  if(!LINK)return;
+  $('#pv-t').textContent='직원 화면 미리보기 · '+koDate(DAY);
+  const src='/work?k='+encodeURIComponent(LINK.admin_key)+'&d='+DAY+'&_='+Date.now();
+  const f=$('#pv').querySelector('iframe');
+  if(f)f.src=src;else $('#pv').innerHTML='<iframe title="직원 화면 미리보기" src="'+src+'"></iframe>';
+}
+$('#pv-re').onclick=()=>{loadDay();};
+
+// ── 보기 전환 ──
+document.querySelector('.wa-seg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const v=b.dataset.v;
+  document.querySelectorAll('.wa-seg button').forEach(x=>x.classList.toggle('on',x===b));
+  $('#v-edit').hidden=v!=='edit';$('#v-links').hidden=v!=='links';});
+
+// ── 시작 ──
+async function start(){ await loadLink(); renderStaff(); await loadDay(); }
+try{
+  const app=initializeApp({
+    apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
+    authDomain:"happywork-packageplan.firebaseapp.com",
+    projectId:"happywork-packageplan",
+    storageBucket:"happywork-packageplan.firebasestorage.app",
+    messagingSenderId:"101289103022",
+    appId:"1:101289103022:web:d81aca7f3747dd26df673f"
+  });
+  db=getFirestore(app);
+  start().catch(e=>{$('#s-list').innerHTML=$('#j-list').innerHTML='<div class="wa-empty"><b>불러오지 못했습니다</b>'+esc(e.message||'')+' — 새로고침 해 주세요.</div>';});
+}catch(e){toast('연결 오류: '+(e.message||''));}
 </script>
 </body>
 </html>

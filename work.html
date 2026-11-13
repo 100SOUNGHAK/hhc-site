@@ -147,7 +147,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
 <div class="wk">
   <header id="wk-top">
     <div class="wk-logo" aria-hidden="true"><svg viewBox="0 0 100 100"><g fill="currentColor"><rect x="15" y="14" width="19" height="74" rx="3.5"/><rect x="66" y="14" width="19" height="74" rx="3.5"/><path d="M50 28 85 51v16L50 43 15 67V51Z"/></g></svg></div>
-    <div class="wk-ttl"><b id="wk-title">Work Schedule</b><small>HAPPY HOME CARE</small></div>
+    <div class="wk-ttl"><b id="wk-title">Work Schedule</b><small id="wk-who">HAPPY HOME CARE</small></div>
     <div class="wk-lang"><button data-l="en" class="on">EN</button><button data-l="ko">한국어</button></div>
   </header>
 
@@ -173,7 +173,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
 <script>
 // ── 문구 ──
 const T={
-  ko:{title:'해피홈케어 작업일정',loading:'불러오는 중…',today:'오늘 작업',tomorrow:'내일 작업',
+  ko:{title:'해피홈케어 작업일정',loading:'불러오는 중…',today:'오늘 작업',preview:'미리보기',tomorrow:'내일 작업',
       jobs:'건',units:'대',sub:'콘도명을 누르면 품목·서비스·수량이 보입니다.',
       svcs:'서비스 내역',total:'합계',work:'작업 내용',close:'목록으로',addr:'주소',map:'지도',
       done:'완료',tbc:'시간 미정',refresh:'새로고침',upd:'업데이트',
@@ -181,7 +181,7 @@ const T={
       keyT:'링크가 맞지 않습니다',keyS:'관리자에게 새 작업일정 링크를 받아 다시 열어 주세요.',
       errT:'일정을 불러오지 못했습니다',errS:'인터넷 연결을 확인한 뒤 새로고침을 눌러 주세요.',
       dow:['일요일','월요일','화요일','수요일','목요일','금요일','토요일']},
-  en:{title:'Work Schedule',loading:'Loading…',today:"Today's jobs",tomorrow:"Tomorrow's jobs",
+  en:{title:'Work Schedule',loading:'Loading…',today:"Today's jobs",preview:'Preview',tomorrow:"Tomorrow's jobs",
       jobs:'jobs',job:'job',units:'units',sub:'Tap a condo to see items, service and quantity.',
       svcs:'Services',total:'Total',work:'Job details',close:'Back',addr:'Address',map:'Map',
       done:'Done',tbc:'TBC',refresh:'Refresh',upd:'Updated',
@@ -242,8 +242,9 @@ function render(){
   if(STATE==='key'||STATE==='err'){
     $('#wk-cnt').hidden=true;$('#wk-sub').textContent='';
     $('#wk-main').innerHTML=`<div class="wk-empty err"><b>${STATE==='key'?t.keyT:t.errT}</b><span>${STATE==='key'?t.keyS:t.errS}</span></div>`;return;}
+  $('#wk-who').textContent='HAPPY HOME CARE'+(DATA.staff?' · '+DATA.staff:'');
   const d=new Date(DATA.date+'T00:00:00');
-  $('#wk-when span').textContent=DATA.mode==='today'?t.today:t.tomorrow;
+  $('#wk-when span').textContent=DATA.mode==='today'?t.today:DATA.mode==='pick'?t.preview:t.tomorrow;
   $('#wk-date').textContent=L==='en'?d.getDate()+' '+t.mon[d.getMonth()]:(d.getMonth()+1)+'월 '+d.getDate()+'일';
   $('#wk-dow').textContent=t.dow[d.getDay()];
   if(DATA.mode==='soon'){
@@ -304,7 +305,8 @@ async function load(){
   if(!window.__WK){STATE='key';render();return;}
   for(let i=0;i<3;i++){
     try{
-      const r=await fetch('/api/work?k='+encodeURIComponent(window.__WK),{cache:'no-store'});
+      const dq=new URLSearchParams(location.search).get('d');   // 관리자 미리보기용 (직원 열쇠에는 무시됨)
+      const r=await fetch('/api/work?k='+encodeURIComponent(window.__WK)+(dq?'&d='+encodeURIComponent(dq):''),{cache:'no-store'});
       if(r.status===403||r.status===401){STATE='key';render();return;}
       if(!r.ok)throw new Error(r.status);
       const d=await r.json();
