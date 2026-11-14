@@ -570,6 +570,8 @@ html.pdfdoc #rp-nav,html.pdfdoc #rp-top{position:static}
 @page{size:A4;margin:10mm}
 @media print{#rp-top,#rp-nav,#rp-bar,.sh-ov,.sheet,.toast,#zoom{display:none!important}body{background:#fff}}
 
+.tg.rec{background:#FFF1E0;color:#B45309}.tg.watch{background:#EEF2F7;color:#475569}
+
 </style>
 </head>
 <body>
@@ -653,7 +655,7 @@ ko:{bPdf:'PDF 저장',bShare:'공유',bAsk:'문의하기',loading:'보고서 불
  lkT:'냉매 누설 검사',lkOk:'누설 없음',lkBad:'누설 의심',lkPh:'누설 검사',
  pT:'현장 사진',pS:'발견된 문제 · 작업 전·후 · 작업 과정',pProb:'발견된 문제',pClean:'세척 전·후',before:'작업 전',after:'작업 후',cBefore:'세척 전',cAfter:'세척 후',work:'작업 과정',etc:'기타 사진',
  seeAll:'사진 {n}장 모두 보기',seeLess:'접기',vid:'작업 영상',vidOpen:'영상 열기',vidQr:'휴대폰으로 QR을 찍으면 영상이 열립니다',sec:'초',
- sIn:'흡입',sOut:'토출',sDt:'온도차',sIss:'발견 사항',sDone:'현장 조치',sChk:'관련 점검 항목',sMsr:'연결된 실외기',sPh:'사진',done:'조치 완료',plan:'조치 예정',
+ sIn:'흡입',sOut:'토출',sDt:'온도차',sIss:'발견 사항',sDone:'현장 조치',sChk:'관련 점검 항목',sMsr:'연결된 실외기',sPh:'사진',done:'조치 완료',plan:'조치 예정',srec:'조치 권고',swatch:'관찰 요망',
  uDet:'에어컨별 상세',
  reason:'접수 증상',diag:'진단',cause:'원인',act:'조치',res:'결과',doneW:'완료',revisit:'재방문 필요',
  risk:{h:'위험도 높음',m:'위험도 보통',l:'위험도 낮음',vh:'위험도 매우 높음'},
@@ -696,7 +698,7 @@ en:{bPdf:'PDF',bShare:'Share',bAsk:'Contact us',loading:'Loading report…',notF
  lkT:'Refrigerant leak test',lkOk:'No leak',lkBad:'Suspected leak',lkPh:'Leak test',
  pT:'Site photos',pS:'Problems found · before & after · work in progress',pProb:'Problems found',pClean:'Before & after cleaning',before:'Before',after:'After',cBefore:'Before',cAfter:'After',work:'Work in progress',etc:'Other photos',
  seeAll:'Show all {n} photos',seeLess:'Show less',vid:'Work videos',vidOpen:'Open video',vidQr:'Scan the QR code with your phone to open the video',sec:'s',
- sIn:'Air in',sOut:'Air out',sDt:'Drop',sIss:'Findings',sDone:'Done on site',sChk:'Related checks',sMsr:'Outdoor unit',sPh:'Photos',done:'Done',plan:'Scheduled',
+ sIn:'Air in',sOut:'Air out',sDt:'Drop',sIss:'Findings',sDone:'Done on site',sChk:'Related checks',sMsr:'Outdoor unit',sPh:'Photos',done:'Done',plan:'Scheduled',srec:'Recommended',swatch:'Monitor',
  uDet:'Unit details',
  reason:'Reported issue',diag:'Diagnosis',cause:'Cause',act:'Action',res:'Result',doneW:'Done',revisit:'Revisit needed',
  risk:{h:'High risk',m:'Medium risk',l:'Low risk',vh:'Very high risk'},
@@ -944,7 +946,7 @@ function buildUnits(d,ac){
     if(c.result==='bad'&&!fx)u.lv=Math.max(u.lv,2);
     function has_(x){return arr(x.units).indexOf(c.label)>=0;}
     arr(d.results).forEach(function(r){if(has_(r)){u.chk.push(r);u.lv=Math.max(u.lv,LVR[stOf(r.status)]);}});
-    arr(d.defects).forEach(function(f){if(has_(f)){(f.status==='done'?u.done:u.iss).push(f);u.lv=Math.max(u.lv,f.status==='done'?1:((f.risk==='h'||f.risk==='vh')?2:1));}});
+    arr(d.defects).forEach(function(f){if(has_(f)){(f.status==='done'?u.done:u.iss).push(f);u.lv=Math.max(u.lv,(f.status==='done'||f.status==='watch')?1:((f.risk==='h'||f.risk==='vh')?2:1));}});
     ac.lk.forEach(function(l){if(l.label===c.label&&l.status==='bad')u.lv=2;});
     ac.ms.forEach(function(m){if(has_(m))u.msr.push(m);});
     arr(d.problemPhotos).forEach(function(p){if(has_(p))u.ph.push(p);});
@@ -1039,9 +1041,9 @@ function photoSection(d,extraFirst){
   var h=extraFirst||'',lvT=t('lv');
   var pp=arr(d.problemPhotos).filter(function(p){return (p.memo&&String(p.memo).trim())||arr(p.photos).length;});
   if(pp.length&&!ST.skipProb){h+='<div class="psub"'+(h?'':' style="margin-top:0"')+'>'+t('pProb')+' <small>'+pp.length+'</small></div>'+pp.map(function(p,i){return '<div class="rp-card prob"><div class="prob-h"><span class="prob-n">'+(i+1)+'</span><div>'+(p.memo?'<p>'+esc(v(p,'memo'))+'</p>':'')+unitChips(p.units)+'</div></div>'+(arr(p.photos).length?'<div class="pg" style="margin-top:0">'+arr(p.photos).map(function(x){return ph(x);}).join('')+'</div>':'')+'</div>';}).join('');}
+  if(arr(d.workPhotos).length)h+='<div class="psub"'+(h?'':' style="margin-top:0"')+'>'+t('work')+' <small>'+arr(d.workPhotos).length+'</small></div>'+grid('wk',d.workPhotos,6,'pg3');
   var cb=arr(d.cleanBefore).length?d.cleanBefore:d.cleanPhotos,pb=pairs('cl',cb,d.cleanAfter,t('cBefore'),t('cAfter'),3);
   if(pb)h+='<div class="psub"'+(h?'':' style="margin-top:0"')+'>'+t('pClean')+' <small>'+Math.max(arr(cb).length,arr(d.cleanAfter).length)+'</small></div>'+pb;
-  if(arr(d.workPhotos).length)h+='<div class="psub"'+(h?'':' style="margin-top:0"')+'>'+t('work')+' <small>'+arr(d.workPhotos).length+'</small></div>'+grid('wk',d.workPhotos,6,'pg3');
   h+=videos(d.workVideos);
   return h?sec('s-photo',t('nav').photo,t('pT'),'',h):'';
 }
@@ -1053,7 +1055,7 @@ function unitDetail(u){
   var tph=u.c.photos.map(function(p){return ph(p,(u.fx?t('befT')+' · ':'')+(u.dt0!=null?t('sDt')+' '+u.dt0.toFixed(1)+'°':''));}).concat(arr(u.fx&&u.fx.aPhotos).map(function(p){return ph(p,t('aftT')+' · '+t('sDt')+' '+u.dt.toFixed(1)+'°');}));
   if(tph.length)h+='<div class="pg sh-tph">'+tph.join('')+'</div>';
   if(u.fx&&u.fx.note)h+='<div class="ms-memo" style="margin-top:8px">'+esc(v(u.fx,'note'))+'</div>';
-  if(u.iss.length)h+='<div class="sh-sec"><h4>'+t('sIss')+'</h4><div class="rp-card sh-li">'+u.iss.map(function(f){var l=(f.risk==='h'||f.risk==='vh')?'bad':'wn';return '<div class="row"><span class="ic '+l+'">'+icon(l)+'</span><div><b>'+esc(v(f,'defect'))+'</b>'+(f.action?'<p>'+esc(v(f,'action'))+'</p>':'')+'<span class="tg plan">'+t('plan')+'</span></div></div>';}).join('')+'</div></div>';
+  if(u.iss.length)h+='<div class="sh-sec"><h4>'+t('sIss')+'</h4><div class="rp-card sh-li">'+u.iss.map(function(f){var l=(f.risk==='h'||f.risk==='vh')?'bad':'wn';return '<div class="row"><span class="ic '+l+'">'+icon(l)+'</span><div><b>'+esc(v(f,'defect'))+'</b>'+(f.action?'<p>'+esc(v(f,'action'))+'</p>':'')+''+stTag(f)+'</div></div>';}).join('')+'</div></div>';
   if(u.done.length)h+='<div class="sh-sec"><h4>'+t('sDone')+'</h4><div class="rp-card sh-li">'+u.done.map(function(f){return '<div class="row"><span class="ic ok">✓</span><div><b>'+esc(v(f,'defect'))+'</b>'+(f.action?'<p>'+esc(v(f,'action'))+'</p>':'')+'<span class="tg done">'+t('done')+'</span></div></div>';}).join('')+'</div></div>';
   if(u.leak.length)h+='<div class="sh-sec"><h4>'+t('lkT')+'</h4><div class="rp-card sh-li">'+u.leak.map(function(l){var ok=l.status!=='bad';return '<div class="row"><span class="ic '+(ok?'ok':'bad')+'">'+(ok?'✓':'✕')+'</span><div style="flex:1;min-width:0"><b>'+(ok?t('lkOk'):t('lkBad'))+'</b>'+(arr(l.photos).length?'<div class="pg" style="margin-top:8px">'+arr(l.photos).map(function(p){return ph(p,t('lkPh'));}).join('')+'</div>':'')+'</div></div>';}).join('')+'</div></div>';
   if(!u.iss.length&&!u.done.length&&!u.leak.length&&!u.chk.length)h+='<div class="sh-sec"><div class="rp-card sh-li"><div class="row"><span class="ic ok">✓</span><div><b>'+t('noIss')+'</b></div></div></div></div>';
@@ -1078,6 +1080,7 @@ function rInspect(d){
   h+=invoiceCard(d);
   h+=opCard(d,'s-op');
   h+=unitsSection();
+  h+=sharedFixSection(d);
   var recs=arr(d.recommendations).length?arr(d.recommendations):recFromOpinion(d);
   h+=todoSection(recs);
   h+=coolSection();
@@ -1086,6 +1089,14 @@ function rInspect(d){
   h+=unitPdfSection();
   h+=photoSection(d);
   return h;
+}
+function stTag(f){var k=f.status==='rec'?'rec':f.status==='watch'?'watch':'plan';return '<span class="tg '+k+'">'+t(k==='rec'?'srec':k==='watch'?'swatch':'plan')+'</span>';}
+function sharedFixSection(d){
+  var L=arr(d.defects).filter(function(f){return !arr(f.units).length&&(f.defect||f.defect_en);});if(!L.length)return '';
+  var ko=LANG==='ko';
+  var body='<div class="todo-list" style="margin-top:0">'+L.map(function(f,i){var done=f.status==='done',st=f.status?(done?t('done'):f.status==='rec'?t('srec'):f.status==='watch'?t('swatch'):t('plan')):'';var where=f.loc?locName(f.loc,f.loc_en):'';
+    return '<div class="rp-card todo"><span class="todo-n '+(done?'review':(f.risk==='h'?'urgent':'regular'))+'">'+(i+1)+'</span><div class="todo-b"><div class="todo-when '+(done?'review':'regular')+'">'+esc([where,st].filter(Boolean).join(' · ')||(ko?'발견 결함':'Issue'))+'</div><h4>'+esc(v(f,'defect'))+'</h4>'+(f.action||f.action_en?'<p>→ '+esc(v(f,'action'))+'</p>':'')+'</div></div>';}).join('')+'</div>';
+  return sec('s-fix',ko?'결함·조치':'Issues',ko?'발견 결함 · 조치 내역':'Issues found & actions',ko?'실외기·배관·전기 등 공용 설비와 기타 발견 내용':'Outdoor units, piping, wiring and other findings',body,L.length);
 }
 /* ══════════════ 출장 점검 · 출장 수리 ══════════════ */
 function rDispatch(d){
