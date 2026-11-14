@@ -1227,6 +1227,13 @@ window.__presetLoaded=function(items){
 };
 
 function gid(id){return document.getElementById(id);}
+// m30 — 에어컨 카드 안으로 옮겨 둔 누설검사(leak) · 결함(defect) 줄까지 함께 모읍니다 (카드 안 줄 먼저, 그다음 공용 칸)
+function m30Rows(kind){
+  if(window.__m30sync){try{window.__m30sync();}catch(e){}}
+  var home=document.getElementById(kind+'-rows');
+  var moved=[].slice.call(document.querySelectorAll('#cool-units .m30-slot-'+kind+' > .unit-item'));
+  return moved.concat(home?[].slice.call(home.querySelectorAll('.unit-item')):[]);
+}
 function gv(id){var el=gid(id);return el?el.value:'';}
 function updateInspProgress(){
   var pv=gid('insp-progress-val'),pf=gid('insp-progress-fill');
@@ -4174,7 +4181,7 @@ function resetWasherForm(){
 // ═══════════════════════════════════════════
 window.newReport=function(){
   var hasContent=!!(currentEditId||gv('f-client')||gv('if-client')||gv('w-client')||gv('f-opinion')||
-    (gid('equip-rows')&&gid('equip-rows').children.length)||(gid('defect-rows')&&gid('defect-rows').children.length)||
+    (gid('equip-rows')&&gid('equip-rows').children.length)||m30Rows('defect').length||
     Object.keys(photoData).length);
   if(hasContent&&!confirm('새 보고서를 작성하시겠습니까?\n저장하지 않은 입력 내용은 모두 사라집니다.'))return;
   if(window.__clearDraft)window.__clearDraft();
@@ -4268,7 +4275,7 @@ window.bulkSetCoolOk=function(){
   toast('✓ 전체 냉방검사 유닛에 "양호" 적용됨');
 };
 window.bulkSetLeakOk=function(){
-  document.querySelectorAll('#leak-rows [data-role="ok"]').forEach(function(b){b.click();});
+  m30Rows('leak').forEach(function(w){var b=w.querySelector('[data-role="ok"]');if(b)b.click();});
   toast('✓ 전체 누설검사 유닛에 "이상없음" 적용됨');
 };
 
@@ -5778,12 +5785,12 @@ function collectData(){
   });
   // 누설검사
   var leakUnits=[];
-  document.getElementById('leak-rows').querySelectorAll('.unit-item').forEach(function(w){
+  m30Rows('leak').forEach(function(w){
     if(w._getLeakData){var d=w._getLeakData();if(d.label||d.loc||(d.photoKeys||[]).some(function(k){return photoData[k];}))leakUnits.push(d);}
   });
   // 발견 결함
   var defects=[];
-  document.getElementById('defect-rows').querySelectorAll('.unit-item').forEach(function(w){
+  m30Rows('defect').forEach(function(w){
     if(w._getDefectData){var d=w._getDefectData();if(d.defect)defects.push(d);}
   });
   // 권장 정비
@@ -6531,11 +6538,11 @@ window.loadIntoForm=function(data){
   },100);
   // 누설검사
   leakCount=0;document.getElementById('leak-rows').innerHTML='';
-  (data.leakUnits||[]).forEach(function(u){addLeakRow(u.label,u.loc,u.status);});
+  (data.leakUnits||[]).forEach(function(u){addLeakRow(u.label,u.loc,u.status);var _lw=document.getElementById('leak-rows').lastElementChild;if(_lw)_lw._m30src=u;});
   // 누설검사 유닛별 사진 복원
   setTimeout(function(){
-    document.getElementById('leak-rows').querySelectorAll('.unit-item').forEach(function(wrap,wi){
-      var u=(data.leakUnits||[])[wi];
+    m30Rows('leak').forEach(function(wrap,wi){
+      var u=wrap._m30src;
       if(!u)return;
       var photos=u.photos||[];
       if(!photos.length)return;
@@ -6546,6 +6553,7 @@ window.loadIntoForm=function(data){
   // 발견결함
   defectCount=0;document.getElementById('defect-rows').innerHTML='';
   (data.defects||[]).forEach(function(d){addDefectRow(d.defect,d.loc,d.risk,d.action,d.status,d.units);});
+  if(window.__m30relocate){setTimeout(window.__m30relocate,300);}   // m30 — 에어컨별 줄을 그 에어컨 카드 안으로
   // 권장정비
   recCount=0;document.getElementById('rec-rows').innerHTML='';
   (data.recommendations||[]).forEach(function(r){addRecRow(r.type,r.title,r.desc,r.units);});
@@ -7961,12 +7969,12 @@ setTimeout(function(){
 .section-nav-pill .m27-pi.done{background:#0E9B63;color:#fff}.section-nav-pill .m27-pi.need{background:#F0B429;color:#fff}.section-nav-pill .m27-pi.err{background:#DC2626;color:#fff}
 #inspect-form-body>div:first-child[style*="f8f9fc"]{display:none}
 /* 결함 카드 — 상태별 색 · 요약 */
-#defect-rows .unit-item.m27-d{border-left:4px solid #CBD3E1;transition:background .2s,border-color .2s}
-#defect-rows .unit-item.m27-d-plan{border-left-color:#F0B429;background:linear-gradient(180deg,#FFF9EA,#fff 45%)}
-#defect-rows .unit-item.m27-d-recommend{border-left-color:#3B82F6;background:linear-gradient(180deg,#F0F5FF,#fff 45%)}
-#defect-rows .unit-item.m27-d-advise{border-left-color:#DB2777;background:linear-gradient(180deg,#FDF2F8,#fff 45%)}
-#defect-rows .unit-item.m27-d-watch{border-left-color:#64748B;background:linear-gradient(180deg,#F1F5F9,#fff 45%)}
-#defect-rows .unit-item.m27-d-done{border-left-color:#0E9B63;background:linear-gradient(180deg,#EEFAF4,#fff 45%)}
+#view-form .unit-item.m27-d{border-left:4px solid #CBD3E1;transition:background .2s,border-color .2s}
+#view-form .unit-item.m27-d-plan{border-left-color:#F0B429;background:linear-gradient(180deg,#FFF9EA,#fff 45%)}
+#view-form .unit-item.m27-d-recommend{border-left-color:#3B82F6;background:linear-gradient(180deg,#F0F5FF,#fff 45%)}
+#view-form .unit-item.m27-d-advise{border-left-color:#DB2777;background:linear-gradient(180deg,#FDF2F8,#fff 45%)}
+#view-form .unit-item.m27-d-watch{border-left-color:#64748B;background:linear-gradient(180deg,#F1F5F9,#fff 45%)}
+#view-form .unit-item.m27-d-done{border-left-color:#0E9B63;background:linear-gradient(180deg,#EEFAF4,#fff 45%)}
 #m27-dsum{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
 #m27-dsum span{flex:1 1 auto;min-width:72px;background:#F6F8FC;border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;color:#5A6478;white-space:nowrap}
 #m27-dsum b{font-size:17px;font-weight:800;margin-right:3px;color:#14192A;font-variant-numeric:tabular-nums}
@@ -8016,7 +8024,7 @@ setTimeout(function(){
         var nt=c._getNoteInp?String(c._getNoteInp().value||'').trim():'';
         if((st==='warn'||st==='bad')&&!nt)add('y','「'+nm+'」 '+(st==='bad'?'정비 필요':'주의')+' — 내용(비고)이 비어 있습니다',c,'고객 보고서에 이유가 함께 나옵니다');
       });
-      [].forEach.call(document.querySelectorAll('#defect-rows .unit-item'),function(w,i){
+      [].forEach.call(m30Rows('defect'),function(w,i){
         if(!w._getDefectData)return;var d=w._getDefectData();
         if(!String(d.defect||'').trim()){add('y','결함 '+(i+1)+' — 결함 내용이 비어 있습니다 (비어 있으면 저장되지 않습니다)',w);return;}
         if(d.status==='done'&&!String(d.action||'').trim())add('y','결함 「'+d.defect+'」 — 「조치완료」인데 조치 내역이 비어 있습니다',w);
@@ -8099,7 +8107,7 @@ setTimeout(function(){
     if(t==='inspect'||t==='dispatch'){
       var nac=document.querySelectorAll('#cool-units .cu-item').length||document.querySelectorAll('#equip-rows .unit-item').length,nw=0;
       [].forEach.call(document.querySelectorAll('#result-rows .rcard'),function(c){if(c._statusSel&&(c._statusSel.value==='warn'||c._statusSel.value==='bad'))nw++;});
-      var ndf=0;[].forEach.call(document.querySelectorAll('#defect-rows .unit-item'),function(w){if(w._getDefectData&&String(w._getDefectData().defect||'').trim())ndf++;});
+      var ndf=0;[].forEach.call(m30Rows('defect'),function(w){if(w._getDefectData&&String(w._getDefectData().defect||'').trim())ndf++;});
       S=[['에어컨',nac,'대',''],[t==='inspect'?'주의·정비':'발견 결함',t==='inspect'?nw:ndf,'개',(t==='inspect'?nw:ndf)?'wn':''],['사진',nPhotos(),'장','']];
     }else if(t==='install'){
       S=[['설치 제품',document.querySelectorAll('#install-product-rows .unit-item').length,'대',''],['자재',document.querySelectorAll('#material-rows .unit-item').length,'개',''],['사진',nPhotos(),'장','']];
@@ -8136,7 +8144,7 @@ setTimeout(function(){
   var DST=[['plan','조치예정'],['recommend','조치권유'],['advise','조치권고'],['watch','관찰요망'],['done','조치완료']];
   function drawDef(){
     var rows=$('defect-rows');if(!rows)return;var cnt={},n=0;
-    [].forEach.call(rows.querySelectorAll('.unit-item'),function(w){if(!w._getDefectData)return;var d=w._getDefectData(),st=d.status||'plan';
+    [].forEach.call(m30Rows('defect'),function(w){if(!w._getDefectData)return;var d=w._getDefectData(),st=d.status||'plan';
       var cls='m27-d m27-d-'+st;DST.forEach(function(x){if(x[0]!==st)w.classList.remove('m27-d-'+x[0]);});w.classList.add('m27-d','m27-d-'+st);
       if(String(d.defect||'').trim()){cnt[st]=(cnt[st]||0)+1;n++;}});
     var box=$('m27-dsum');
@@ -8151,7 +8159,8 @@ setTimeout(function(){
       var cls='m27-pi '+st,tx=st==='done'?'✓':st==='err'?'!':st==='need'?'·':'';if(i.className!==cls)i.className=cls;if(i.textContent!==tx)i.textContent=tx;});
   }
   ov.addEventListener('click',function(e){var b=e.target.closest('[data-go]');if(b){go($(b.getAttribute('data-go')));return;}if(e.target.closest('[data-ck]'))openCheck();});
-  function go(el){if(!el)return;var hh=(document.querySelector('.hdr')||{}).offsetHeight||0,nh=($('section-nav')||{}).offsetHeight||0;
+  function go(el){if(!el)return;var _cb=el.closest&&el.closest('.cu-body');if(_cb&&_cb.style.display==='none'&&_cb.previousElementSibling)_cb.previousElementSibling.click();   /* 접힌 에어컨 카드 펼치기 */
+    var hh=(document.querySelector('.hdr')||{}).offsetHeight||0,nh=($('section-nav')||{}).offsetHeight||0;
     window.scrollTo({top:el.getBoundingClientRect().top+window.pageYOffset-(hh+nh+16),behavior:'smooth'});
     el.classList.remove('m27-flash');void el.offsetWidth;el.classList.add('m27-flash');
     var f=(el.matches&&el.matches('input,textarea'))?el:null;if(f)setTimeout(function(){try{f.focus({preventScroll:true});}catch(_){}},450);}
@@ -8190,7 +8199,7 @@ setTimeout(function(){
   var TYN={urgent:'🔴 우선',regular:'🟢 정기',review:'🔵 검토'};
   function hay(){var t=[];
     [].forEach.call(document.querySelectorAll('#result-rows .rcard'),function(c){if(!c._nameInp)return;var st=c._statusSel?c._statusSel.value:'';if(st==='warn'||st==='bad')t.push(c._nameInp.value);if(c._getNoteInp)t.push(c._getNoteInp().value);});
-    [].forEach.call(document.querySelectorAll('#defect-rows .unit-item'),function(w){if(w._getDefectData){var d=w._getDefectData();t.push(d.defect,d.action);}});
+    [].forEach.call(m30Rows('defect'),function(w){if(w._getDefectData){var d=w._getDefectData();t.push(d.defect,d.action);}});
     [].forEach.call(document.querySelectorAll('#problem-rows textarea'),function(m){t.push(m.value);});
     t.push(val('f-opmemo'));return t.join(' | ');}
   function hit(r,h){var ks=String(r.kw||'').split(',').map(function(x){return x.trim();}).filter(Boolean);return !ks.length||ks.some(function(k){return h.indexOf(k)>=0;});}
@@ -8199,7 +8208,7 @@ setTimeout(function(){
     if(on('fix')){var fx=[];[].forEach.call(document.querySelectorAll('#cool-units .cu-item'),function(w){if(!w._getCuData)return;var d=w._getCuData();if(d.fix&&d.fix.on)fx.push(d.loc||d.label||'');});fx=fx.filter(Boolean);
       if(fx.length)out.push({type:'review',title:fx.join('·')+' 에어컨 냉매 부족 재발 여부 관찰 — 재발 시 누설 정밀점검',units:[]});}
     if(on('out'))[].forEach.call(document.querySelectorAll('#msr-rows .unit-item'),function(w){if(!w._getMsrData)return;var d=w._getMsrData();if(d.spec_lp==='under'&&!(d.fix&&d.fix.on))out.push({type:'urgent',title:'냉매 누설 점검 및 냉매 보충'+(d.label?' ('+d.label+')':''),units:d.units||[]});});
-    if(on('def'))[].forEach.call(document.querySelectorAll('#defect-rows .unit-item'),function(w){if(!w._getDefectData)return;var d=w._getDefectData();if(!String(d.defect||'').trim()||d.status==='done')return;
+    if(on('def'))[].forEach.call(m30Rows('defect'),function(w){if(!w._getDefectData)return;var d=w._getDefectData();if(!String(d.defect||'').trim()||d.status==='done')return;
       var wt=d.status==='watch';out.push({type:wt?'review':(d.risk==='vh'||d.risk==='h')?'urgent':'regular',title:d.defect+(wt?' — 경과 관찰':d.action?' — '+d.action:''),units:d.units||[]});});
     var h=hay();RULES.list.forEach(function(r){if(hit(r,h))out.push({type:r.ty,title:r.t,units:[]});});
     var have=[];[].forEach.call(document.querySelectorAll('#rec-rows .unit-item'),function(w){if(w._getRecData)have.push(String(w._getRecData().title||'').trim());});
@@ -8323,7 +8332,7 @@ setTimeout(function(){
       g.cu.push(o);if(o.label)names[o.label]=o.loc||o.label;});
     [].forEach.call(document.querySelectorAll('#result-rows .rcard'),function(c){if(!c._nameInp||!c._statusSel)return;var nm=c._nameInp.value.trim();if(!nm)return;
       g.res.push({name:nm,st:c._statusSel.value,note:c._getNoteInp?String(c._getNoteInp().value||'').trim():''});});
-    [].forEach.call(document.querySelectorAll('#defect-rows .unit-item'),function(w){if(!w._getDefectData)return;var d=w._getDefectData();if(String(d.defect||'').trim())g.def.push(d);});
+    [].forEach.call(m30Rows('defect'),function(w){if(!w._getDefectData)return;var d=w._getDefectData();if(String(d.defect||'').trim())g.def.push(d);});
     [].forEach.call(document.querySelectorAll('#msr-rows .unit-item'),function(w){if(w._getMsrData){var d=w._getMsrData();if(d.label||d.lp||d.current)g.msr.push(d);}});
     [].forEach.call(document.querySelectorAll('#rec-rows .unit-item'),function(w){if(w._getRecData){var d=w._getRecData();if(String(d.title||'').trim())g.rec.push(d);}});
     g.where=function(f){var u=(f.units||[]).map(function(x){return names[x]||x;});if(f.loc&&u.indexOf(f.loc)<0)u.unshift(f.loc);return u.join('·');};
@@ -8581,6 +8590,175 @@ setTimeout(function(){
     new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var t=ms[i].target;t=t.nodeType===1?t:t.parentElement;if(t&&t.closest&&t.closest('#m28-evs,#m28-gen,#m27-ov,#m27-rec,#m27-dsum,.m27-tw,.m29-auto'))continue;try{wireAll();}catch(_){}schedule();return;}}).observe(vf,{childList:true,subtree:true});}
   ['switchReportType','newReport','editReport'].forEach(function(f){var o=window[f];if(typeof o!=='function')return;window[f]=function(){var r=o.apply(this,arguments);schedule();setTimeout(schedule,900);return r;};});
   schedule();setTimeout(wireAll,1500);
+})();
+</script>
+
+<!-- ════ m30 · 작성 화면 3단계 (2026-11-15) — 에어컨 한 대 = 카드 하나
+   냉방능력 점검의 각 에어컨 카드 안에서 그 에어컨의 「누설검사」와 「결함 · 조치」까지 함께 입력합니다.
+   · 저장되는 자료 모양(coolUnits · leakUnits · defects)은 그대로이고, 입력 줄이 놓이는 자리만 에어컨 카드 안으로 옮깁니다.
+   · 여러 대에 걸친 결함 · 실외기 · 배관 등 공용 결함은 아래 「발견 결함 및 조치 내역」에 그대로 둡니다.
+   ※ 이 블록(m30-css · m30-js)만 지우면 줄이 옮겨지지 않아 바로 이전 화면으로 돌아갑니다. -->
+<style id="m30-css">
+.m30-box{margin-top:12px;display:flex;flex-direction:column;gap:10px}
+.m30-blk{border:1px solid #E4E9F2;border-radius:14px;background:#F9FAFD;padding:11px 11px 12px}
+.m30-h{display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:800;color:#0E2350;margin-bottom:8px}
+.m30-h small{margin-left:auto;font-size:12px;font-weight:700;color:#98A1B4}
+.m30-add{display:flex;align-items:center;justify-content:center;width:100%;min-height:42px;border-radius:11px;border:1.5px dashed #B9C6DD;background:#fff;color:#0E2350;font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
+.m30-add:active{transform:scale(.98)}
+.m30-in{margin-bottom:8px!important;background:#fff}
+.m30-in .m30-hide{display:none!important}
+.m30-slot-leak>.unit-item{padding-top:12px}
+.m30-slot-leak>.unit-item>.unit-item-hdr{justify-content:flex-end;margin-bottom:0;min-height:0;height:0;position:relative}
+.m30-slot-leak>.unit-item>.unit-item-hdr .unit-num{display:none}
+.m30-slot-leak>.unit-item>.unit-item-hdr .btn-del{position:absolute;right:-2px;top:-8px;z-index:1;width:28px;height:28px;font-size:14px}
+.m30-slot-leak>.unit-item>.fl:first-of-type{margin-top:2px}
+.m30-slot-defect .fgrid.f2:has(> .m30-hide){grid-template-columns:1fr}
+.m30-out{display:inline-flex;align-items:center;margin-top:10px;height:30px;padding:0 11px;border-radius:999px;border:1px solid #E4E9F2;background:#fff;color:#5A6478;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
+#cool-units .cu-hdr{flex-wrap:wrap}
+.m30-tags{display:flex;gap:4px;order:9;flex:0 0 100%;padding-left:32px}
+.m30-tags:empty{display:none}
+.m30-tags i{font-style:normal;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.m30-tags .ok{background:#E7F6EF;color:#0E7A4E}.m30-tags .bad{background:#FDECEC;color:#B42318}.m30-tags .df{background:#FFF6DD;color:#8A5A00}
+.m30-note{margin:0 0 10px;padding:9px 11px;border-radius:10px;background:#F0F4FF;color:#33457A;font-size:12.5px;line-height:1.5}
+.m30-note b{color:#0E2350}
+@media (max-width:767px){.m30-slot-defect .fgrid.f2{grid-template-columns:1fr}}
+</style>
+<script id="m30-js">
+(function(){
+  function $(id){return document.getElementById(id);}
+  function cus(){return [].slice.call(document.querySelectorAll('#cool-units .cu-item'));}
+  function slot(w,k){return w.querySelector('.m30-slot-'+k);}
+  function ddsOf(row){var g=row.querySelector('.fgrid.f2');if(!g)return [];return [].map.call(g.children,function(c){return c.lastElementChild;});}
+  function setDd(dd,v){if(dd&&dd.setDdVal&&dd.getDdVal&&v&&dd.getDdVal()!==v)dd.setDdVal(v);}
+
+  /* ── 에어컨 카드 안에 「누설검사」「결함 · 조치」 칸 만들기 ── */
+  function ensure(w){
+    if(w._m30)return;var body=w.querySelector('.cu-body');if(!body||!w._cuLbl)return;w._m30=1;
+    var box=document.createElement('div');box.className='m30-box';
+    box.innerHTML='<div class="m30-blk"><div class="m30-h">🔍 냉매 누설검사</div><div class="m30-slot-leak"></div><button type="button" class="m30-add" data-m30="leak">＋ 누설검사 기록</button></div>'+
+      '<div class="m30-blk"><div class="m30-h">⚠️ 이 에어컨의 결함 · 조치 <small></small></div><div class="m30-slot-defect"></div><button type="button" class="m30-add" data-m30="defect">＋ 이 에어컨 결함 추가</button></div>';
+    body.appendChild(box);
+    box.addEventListener('click',function(e){
+      var b=e.target.closest('[data-m30]');if(!b)return;
+      var k=b.getAttribute('data-m30'),lbl=w._cuLbl(),loc=w._cuLoc?w._cuLoc():'';
+      if(k==='leak'){
+        if(typeof addLeakRow!=='function')return;
+        addLeakRow(lbl,loc,'ok');var r=$('leak-rows').lastElementChild;if(r)moveLeak(r,w);
+      }else{
+        if(typeof addDefectRow!=='function')return;
+        addDefectRow('',loc,'h','','plan',[lbl]);var d=$('defect-rows').lastElementChild;
+        if(d){moveDefect(d,w);var inp=d.querySelector('input[type=text]');if(inp)setTimeout(function(){try{inp.focus({preventScroll:true});}catch(_){}} ,50);}
+      }
+      if(window.__scheduleDraft)window.__scheduleDraft();
+      refresh();
+    });
+    var hdr=w.querySelector('.cu-hdr'),badge=hdr&&hdr.querySelector('[id^="cu-badge-"]');
+    if(hdr){var tg=document.createElement('span');tg.className='m30-tags';hdr.insertBefore(tg,badge||null);}
+  }
+  function moveLeak(r,w){
+    ensure(w);var s=slot(w,'leak');if(!s)return;
+    s.appendChild(r);r._m30cu=w;r.classList.add('m30-in');
+    var g=r.querySelector('.fgrid.f2');if(g)g.classList.add('m30-hide');   // 호기 · 위치는 이 카드의 것을 그대로 씁니다
+  }
+  function moveDefect(r,w){
+    ensure(w);var s=slot(w,'defect');if(!s)return;
+    s.appendChild(r);r._m30cu=w;r.classList.add('m30-in');
+    if(!r._m30get&&r._getDefectData){   // 카드 안에 있는 동안에는 「해당 에어컨」이 항상 이 카드의 번호 (번호가 다시 매겨져도 따라감)
+      r._m30get=r._getDefectData;
+      r._getDefectData=function(){var d=r._m30get();var c=r._m30cu;if(c&&c.isConnected&&c._cuLbl)d.units=[c._cuLbl()];return d;};
+    }
+    var g=r.querySelector('.fgrid.f2');if(g&&g.children[1])g.children[1].classList.add('m30-hide');   // 위치
+    var acp=r.querySelector('.acp');if(acp)acp.classList.add('m30-hide');                               // 해당 에어컨 고르기
+    if(!r.querySelector('.m30-out')){
+      var ob=document.createElement('button');ob.type='button';ob.className='m30-out';ob.textContent='↗ 여러 대 · 공용 결함으로 옮기기';
+      ob.addEventListener('click',function(){
+        r._m30cu=null;r.classList.remove('m30-in');[].forEach.call(r.querySelectorAll('.m30-hide'),function(x){x.classList.remove('m30-hide');});ob.remove();
+        $('defect-rows').appendChild(r);refresh();
+        r.scrollIntoView({behavior:'smooth',block:'center'});
+        if(typeof toast==='function')toast('공용 결함으로 옮겼습니다 — 해당 에어컨을 여러 대 고를 수 있습니다');
+      });
+      r.appendChild(ob);
+    }
+  }
+
+  /* ── 카드 안 줄의 호기 · 위치를 카드에 맞춤 (번호가 바뀌어도 따라가도록) — 저장 직전에도 불립니다 ── */
+  window.__m30sync=function(){
+    cus().forEach(function(w){
+      if(!w._m30||!w._cuLbl)return;var lbl=w._cuLbl(),loc=w._cuLoc?w._cuLoc():'';
+      [].forEach.call(w.querySelectorAll('.m30-slot-leak > .unit-item'),function(r){var d=ddsOf(r);setDd(d[0],lbl);setDd(d[1],loc);});
+      [].forEach.call(w.querySelectorAll('.m30-slot-defect > .unit-item'),function(r){var d=ddsOf(r);setDd(d[1],loc);});
+    });
+  };
+
+  /* ── 불러온 보고서: 에어컨 한 대에 딱 맞는 줄만 그 카드 안으로 ── */
+  window.__m30relocate=function(){
+    var list=cus();if(!list.length)return;
+    var by={};list.forEach(function(w){ensure(w);if(w._cuLbl)by[w._cuLbl()]=w;});
+    var lr=$('leak-rows'),dr=$('defect-rows');
+    if(lr)[].slice.call(lr.querySelectorAll('.unit-item')).forEach(function(r){
+      if(!r._getLeakData)return;var d=r._getLeakData(),lb=String(d.label||'').trim(),w=by[lb];
+      if(!w){var m=lb.match(/^AC\s*(\d+)$/i);if(m){var c=by['A'+m[1]];if(c&&(!d.loc||!c._cuLoc||!c._cuLoc()||c._cuLoc()===d.loc))w=c;}}
+      if(!w&&!lb&&d.loc){var cs=list.filter(function(x){return x._cuLoc&&x._cuLoc()===d.loc;});if(cs.length===1)w=cs[0];}
+      if(!w||!slot(w,'leak')||slot(w,'leak').children.length)return;
+      var wl=w._cuLoc?w._cuLoc():'';if(d.loc&&wl&&d.loc!==wl)return;   // 위치가 서로 다르면 옮기지 않음
+      moveLeak(r,w);
+    });
+    if(dr)[].slice.call(dr.querySelectorAll('.unit-item')).forEach(function(r){
+      if(!r._getDefectData)return;var u=r._getDefectData().units||[];
+      if(u.length!==1||!by[u[0]])return;
+      var dl=r._getDefectData().loc||'',cl=by[u[0]]._cuLoc?by[u[0]]._cuLoc():'';if(dl&&dl!==cl)return;   // 「실외기」처럼 위치를 따로 적은 결함은 공용 칸에 그대로
+      moveDefect(r,by[u[0]]);
+    });
+    refresh();
+  };
+
+  /* ── 표시 갱신: 추가 버튼 · 건수 · 머리 꼬리표 · 공용 칸 안내 ── */
+  function refresh(){
+    var list=cus();
+    list.forEach(function(w){
+      ensure(w);if(!w._m30)return;
+      var sl=slot(w,'leak'),sd=slot(w,'defect');if(!sl||!sd)return;
+      var lb=sl.parentNode.querySelector('.m30-add');if(lb){var dsp=sl.children.length?'none':'';if(lb.style.display!==dsp)lb.style.display=dsp;}
+      var n=sd.children.length,sm=sd.parentNode.querySelector('.m30-h small'),tx=n?n+'건':'';if(sm&&sm.textContent!==tx)sm.textContent=tx;
+      var tg=w.querySelector('.cu-hdr .m30-tags');
+      if(tg){var h='';var lr=sl.querySelector('.unit-item');
+        if(lr&&lr._getLeakData){var bad=lr._getLeakData().status==='bad';h+='<i class="'+(bad?'bad':'ok')+'">누설 '+(bad?'✕':'✓')+'</i>';}
+        if(n)h+='<i class="df">결함 '+n+'</i>';
+        if(tg.innerHTML!==h)tg.innerHTML=h;}
+      /* 머리의 꼬리표를 온도차로 — 수리 후 값이 있으면 그 값 */
+      var bd=w.querySelector('[id^="cu-badge-"]'),ta=w.querySelector('.cu-ta'),tb=w.querySelector('.cu-tb');
+      if(bd&&ta&&tb){var fd=null;try{var gd=w._getCuData?w._getCuData():null;if(gd&&gd.fix&&gd.fix.on){var fa=parseFloat(gd.fix.a),fb=parseFloat(gd.fix.b);if(!isNaN(fa)&&!isNaN(fb))fd=fa-fb;}}catch(_){}
+        var a0=parseFloat(ta.value),b0=parseFloat(tb.value),dv=fd!=null?fd:((!isNaN(a0)&&!isNaN(b0))?a0-b0:null);
+        if(dv!=null){var tx2='ΔT '+dv.toFixed(1)+'°'+(fd!=null?' · 수리 후':''),good=dv>=12;
+          if(bd.textContent!==tx2)bd.textContent=tx2;
+          var cs='font-size:11px;font-weight:800;padding:3px 9px;border-radius:10px;white-space:nowrap;background:'+(good?'#E7F6EF':'#FFF1D6')+';color:'+(good?'#0E7A4E':'#8A5A00');
+          if(bd.getAttribute('style')!==cs)bd.setAttribute('style',cs);}}
+    });
+    note('leak-rows','m30-nl','에어컨별 누설검사는 위 「냉방능력 점검상태」의 <b>각 에어컨 카드 안</b>에서 기록합니다. 여기에는 에어컨 카드에 넣지 않은 기록만 둡니다.',list.length>0);
+    note('defect-rows','m30-nd','한 에어컨의 결함은 <b>그 에어컨 카드 안</b>에서, <b>여러 대 · 실외기 · 배관</b> 등 공용 결함은 여기서 추가합니다.',list.length>0);
+  }
+  function note(rowsId,id,html,show){
+    var rows=$(rowsId);if(!rows)return;var n=$(id);
+    if(!show){if(n)n.remove();return;}
+    if(!n){n=document.createElement('div');n.id=id;n.className='m30-note';n.innerHTML='💡 '+html;var body=rows.closest('.card-body')||rows.parentNode;body.insertBefore(n,body.firstChild);}
+  }
+
+  /* ── 에어컨 카드를 지울 때: 안에 든 누설검사 · 결함도 함께 지워지므로 먼저 확인 ── */
+  var cu=$('cool-units');
+  if(cu)cu.addEventListener('click',function(e){
+    var b=e.target.closest&&e.target.closest('.cu-hdr > .btn-del');if(!b||b._m30ok)return;
+    var w=b.closest('.cu-item');if(!w)return;
+    var n=w.querySelectorAll('.m30-slot-leak > .unit-item, .m30-slot-defect > .unit-item').length;if(!n)return;
+    e.stopPropagation();e.preventDefault();
+    var ask=window.inspAsk?window.inspAsk('에어컨 '+(w._cuLbl?w._cuLbl():'')+' 삭제',['이 에어컨 카드 안의 누설검사 · 결함 '+n+'건도 함께 지워집니다.'],'삭제','취소'):Promise.resolve(confirm('이 에어컨의 누설검사 · 결함 '+n+'건도 함께 지워집니다. 삭제할까요?'));
+    ask.then(function(ok){if(ok){b._m30ok=1;b.click();}});
+  },true);
+
+  var tm=null;function schedule(){clearTimeout(tm);tm=setTimeout(function(){try{window.__m30sync();refresh();}catch(e){console.warn('m30',e);}},200);}
+  var vf=$('view-form');
+  if(vf){['input','change','click'].forEach(function(ev){vf.addEventListener(ev,schedule);});
+    new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var t=ms[i].target;t=t.nodeType===1?t:t.parentElement;if(t&&t.closest&&t.closest('.m30-tags,.m30-h,[id^="cu-badge-"],#m27-ov,#m27-rec,#m27-dsum,#m28-evs'))continue;schedule();return;}}).observe(vf,{childList:true,subtree:true});}
+  schedule();
 })();
 </script>
 
