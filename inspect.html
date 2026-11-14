@@ -996,7 +996,7 @@ function buildUnits(d,ac){
     ac.ms.forEach(function(m){if(has_(m))u.msr.push(m);});
     arr(d.problemPhotos).forEach(function(p){if(has_(p))u.ph.push(p);});
     u.leak=ac.lk.filter(function(l){return l.label===c.label;});
-    u.pc=u.c.photos.length+((fx&&arr(fx.aPhotos).length)||0)+u.leak.reduce(function(n,l){return n+arr(l.photos).length;},0)+u.msr.reduce(function(n,m){return n+m.photos.length+arr(m.fix&&m.fix.aPhotos).length;},0)+u.ph.reduce(function(n,p){return n+arr(p.photos).length;},0);
+    u.pc=u.c.photos.length+((fx&&arr(fx.aPhotos).length)||0)+u.leak.reduce(function(n,l){return n+arr(l.photos).length;},0)+u.msr.reduce(function(n,m){return n+m.photos.length+arr(m.fix&&m.fix.aPhotos).length;},0)+u.ph.reduce(function(n,p){return n+arr(p.photos).length;},0)+u.iss.concat(u.done).reduce(function(n,f){return n+arr(f.photos).length;},0);
     u.l=LVN[u.lv];return u;
   });
 }
@@ -1100,8 +1100,8 @@ function unitDetail(u){
   var tph=u.c.photos.map(function(p){return ph(p,(u.fx?t('befT')+' · ':'')+(u.dt0!=null?t('sDt')+' '+u.dt0.toFixed(1)+'°':''));}).concat(arr(u.fx&&u.fx.aPhotos).map(function(p){return ph(p,t('aftT')+' · '+t('sDt')+' '+u.dt.toFixed(1)+'°');}));
   if(tph.length)h+='<div class="pg sh-tph">'+tph.join('')+'</div>';
   if(u.fx&&u.fx.note)h+='<div class="ms-memo" style="margin-top:8px">'+esc(v(u.fx,'note'))+'</div>';
-  if(u.iss.length)h+='<div class="sh-sec"><h4>'+t('sIss')+'</h4><div class="rp-card sh-li">'+u.iss.map(function(f){var l=(f.risk==='h'||f.risk==='vh')?'bad':'wn';return '<div class="row"><span class="ic '+l+'">'+icon(l)+'</span><div><b>'+esc(v(f,'defect'))+'</b>'+(f.action?'<p>'+esc(v(f,'action'))+'</p>':'')+''+stTag(f)+'</div></div>';}).join('')+'</div></div>';
-  if(u.done.length)h+='<div class="sh-sec"><h4>'+t('sDone')+'</h4><div class="rp-card sh-li">'+u.done.map(function(f){return '<div class="row"><span class="ic ok">✓</span><div><b>'+esc(v(f,'defect'))+'</b>'+(f.action?'<p>'+esc(v(f,'action'))+'</p>':'')+'<span class="tg done">'+t('done')+'</span></div></div>';}).join('')+'</div></div>';
+  if(u.iss.length)h+='<div class="sh-sec"><h4>'+t('sIss')+'</h4><div class="rp-card sh-li">'+u.iss.map(function(f){var l=(f.risk==='h'||f.risk==='vh')?'bad':'wn';return '<div class="row"><span class="ic '+l+'">'+icon(l)+'</span><div><b>'+esc(v(f,'defect'))+'</b>'+(f.action?'<p>'+esc(v(f,'action'))+'</p>':'')+''+stTag(f)+defPh(f)+'</div></div>';}).join('')+'</div></div>';
+  if(u.done.length)h+='<div class="sh-sec"><h4>'+t('sDone')+'</h4><div class="rp-card sh-li">'+u.done.map(function(f){return '<div class="row"><span class="ic ok">✓</span><div><b>'+esc(v(f,'defect'))+'</b>'+(f.action?'<p>'+esc(v(f,'action'))+'</p>':'')+'<span class="tg done">'+t('done')+'</span>'+defPh(f)+'</div></div>';}).join('')+'</div></div>';
   if(u.leak.length)h+='<div class="sh-sec"><h4>'+t('lkT')+'</h4><div class="rp-card sh-li">'+u.leak.map(function(l){var ok=l.status!=='bad';return '<div class="row"><span class="ic '+(ok?'ok':'bad')+'">'+(ok?'✓':'✕')+'</span><div style="flex:1;min-width:0"><b>'+(ok?t('lkOk'):t('lkBad'))+'</b>'+(arr(l.photos).length?'<div class="pg" style="margin-top:8px">'+arr(l.photos).map(function(p){return ph(p,t('lkPh'));}).join('')+'</div>':'')+'</div></div>';}).join('')+'</div></div>';
   if(!u.iss.length&&!u.done.length&&!u.leak.length&&!u.chk.length)h+='<div class="sh-sec"><div class="rp-card sh-li"><div class="row"><span class="ic ok">✓</span><div><b>'+t('noIss')+'</b></div></div></div></div>';
   if(u.chk.length)h+='<div class="sh-sec"><h4>'+t('sChk')+'</h4><div class="rp-card sh-li">'+u.chk.map(function(r){var l=stOf(r.status);return '<div class="row"><span class="ic '+l+'">'+icon(l)+'</span><div><b>'+esc(v(r,'name'))+'</b>'+(r.note?'<p>'+esc(v(r,'note'))+'</p>':'')+'</div></div>';}).join('')+'</div></div>';
@@ -1137,11 +1137,13 @@ function rInspect(d){
 }
 function stKey(s){return (s==='advise'||s==='rec')?'srec':s==='recommend'?'srec2':s==='watch'?'swatch':s==='done'?'done':'plan';}
 function stTag(f){var k=stKey(f.status);return '<span class="tg '+(k==='srec'||k==='srec2'?'rec':k==='swatch'?'watch':'plan')+'">'+t(k)+'</span>';}
+/* 결함 사진 — 결함 · 조치 줄 아래 작은 사진 (누르면 크게) */
+function defPh(f){var p=arr(f&&f.photos).filter(Boolean);return p.length?'<div class="pg" style="margin-top:8px">'+p.map(function(x){return ph(x);}).join('')+'</div>':'';}
 function sharedFixSection(d){
   var L=arr(d.defects).filter(function(f){return !arr(f.units).length&&(f.defect||f.defect_en);});if(!L.length)return '';
   var ko=LANG==='ko';
   var body='<div class="todo-list" style="margin-top:0">'+L.map(function(f,i){var done=f.status==='done',st=f.status?t(stKey(f.status)):'';var where=f.loc?locName(f.loc,f.loc_en):'';
-    return '<div class="rp-card todo"><span class="todo-n '+(done?'review':(f.risk==='h'?'urgent':'regular'))+'">'+(i+1)+'</span><div class="todo-b"><div class="todo-when '+(done?'review':'regular')+'">'+esc([where,st].filter(Boolean).join(' · ')||(ko?'발견 결함':'Issue'))+'</div><h4>'+esc(v(f,'defect'))+'</h4>'+(f.action||f.action_en?'<p>→ '+esc(v(f,'action'))+'</p>':'')+'</div></div>';}).join('')+'</div>';
+    return '<div class="rp-card todo"><span class="todo-n '+(done?'review':(f.risk==='h'?'urgent':'regular'))+'">'+(i+1)+'</span><div class="todo-b"><div class="todo-when '+(done?'review':'regular')+'">'+esc([where,st].filter(Boolean).join(' · ')||(ko?'발견 결함':'Issue'))+'</div><h4>'+esc(v(f,'defect'))+'</h4>'+(f.action||f.action_en?'<p>→ '+esc(v(f,'action'))+'</p>':'')+defPh(f)+'</div></div>';}).join('')+'</div>';
   return sec('s-fix',ko?'결함·조치':'Issues',ko?'발견 결함 · 조치 내역':'Issues found & actions',ko?'실외기·배관·전기 등 공용 설비와 기타 발견 내용':'Outdoor units, piping, wiring and other findings',body,L.length);
 }
 /* ══════════════ 출장 점검 · 출장 수리 ══════════════ */

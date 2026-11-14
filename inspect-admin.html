@@ -673,10 +673,10 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 
 <!-- 문제 사진 -->
 <div class="card">
-  <div class="card-hdr"><div class="card-icon">📸</div><div class="card-title">문제 사진</div></div>
+  <div class="card-hdr"><div class="card-icon">📸</div><div class="card-title">기타/문제 사진</div></div>
   <div class="card-body">
     <div id="problem-rows"></div>
-    <button class="btn-add" onclick="addProblemRow()">+ 문제 사진 추가</button>
+    <button class="btn-add" onclick="addProblemRow()">+ 기타/문제 사진 추가</button>
   </div>
 </div>
 
@@ -2182,7 +2182,7 @@ function renumberUnits(){
     if(pr){
       pr.querySelectorAll('.unit-item').forEach(function(w,i){
         var n=w.querySelector('.unit-num');if(n)n.textContent=i+1;
-        var t=w.querySelector('.prob-ttl');if(t)t.textContent='문제 사진 '+(i+1);
+        var t=w.querySelector('.prob-ttl');if(t)t.textContent=(rid==='problem-rows'?'기타/문제 사진 ':'문제 사진 ')+(i+1);
       });
     }
   });
@@ -4334,13 +4334,13 @@ function addLeakRow(label,loc,status){
 // ═══════════════════════════════════════════
 // 발견 결함
 // ═══════════════════════════════════════════
-function addDefectRow(defect,loc,risk,action,status,units){
+function addDefectRow(defect,loc,risk,action,status,units,photos){
   defectCount++;
   var wrap=document.createElement('div');wrap.className='unit-item';wrap.style.paddingTop='40px';
 
   var del=document.createElement('button');del.className='btn-del';
   del.style='position:absolute;top:10px;right:10px;width:32px;height:32px;font-size:16px';
-  del.textContent='×';del.onclick=function(){wrap.remove();};
+  del.textContent='×';del.onclick=function(){Object.keys(photoData).forEach(function(k){if(k.indexOf(dfPhId+'-')===0)delete photoData[k];});wrap.remove();if(window.updatePhotoBadges)updatePhotoBadges();};
   wrap.appendChild(del);
 
   // 결함 + 위치
@@ -4400,6 +4400,14 @@ function addDefectRow(defect,loc,risk,action,status,units){
   });
   wrap.appendChild(stRow);
 
+  // 결함 사진 (여러 장 · 순서 바꾸기 가능)
+  var dfPhLbl=document.createElement('div');dfPhLbl.className='fl';dfPhLbl.style='margin:10px 0 6px';dfPhLbl.textContent='📷 결함 사진';
+  var dfPhId='defect-photos-df'+defectCount;
+  var dfPhRow=document.createElement('div');dfPhRow.className='photo-row';dfPhRow.id=dfPhId;
+  dfPhRow.appendChild(buildPhotoAddGroup(dfPhId));
+  wrap.appendChild(dfPhLbl);wrap.appendChild(dfPhRow);
+  (photos||[]).forEach(function(u,pi){if(!u)return;var k=dfPhId+'-r'+pi;photoData[k]=u;addPhotoThumb(dfPhRow,k,u);});
+
   wrap._getDefectData=function(){
     var ab=stRow.querySelector('[class*="dst-"]:not(.dst-btn)');
     if(!ab){ab=stRow.querySelectorAll('button')[0];}
@@ -4409,7 +4417,7 @@ function addDefectRow(defect,loc,risk,action,status,units){
     return {
       defect:defInp.value,loc:ddLoc.getDdVal(),risk:rkSel.value,
       action:actInp.value,status:activeBtn?activeBtn.dataset.stval:'plan',
-      units:defAc.get()
+      units:defAc.get(),photoKey:dfPhId
     };
   };
 
@@ -4463,7 +4471,7 @@ function addRecRow(type,title,desc,units){
 // ═══════════════════════════════════════════
 // 문제 사진
 // ═══════════════════════════════════════════
-function addProblemRow(memo, photoUrl, kind){
+function addProblemRow(memo, photoUrl, kind, units){
   // kind==='w' : 세탁기/건조기 보고서 (사진 키 접두사 · 담길 곳만 다르고 모양은 같습니다)
   var isW=(kind==='w');
   var _rowsId=isW?'w-problem-rows':'problem-rows', _pfx=isW?'wproblem-photos-':'problem-photos-';
@@ -4482,7 +4490,7 @@ function addProblemRow(memo, photoUrl, kind){
   hdr.style='display:flex;align-items:center;gap:8px;margin-bottom:10px';
   var num=document.createElement('div');num.className='unit-num';num.textContent=problemCount;
   var ttl=document.createElement('div');ttl.className='prob-ttl';ttl.style='font-size:12px;font-weight:500;color:#0F1C3F';
-  ttl.textContent='문제 사진 '+problemCount;
+  ttl.textContent=(isW?'문제 사진 ':'기타/문제 사진 ')+problemCount;
   if(isW){var _n=document.getElementById(_rowsId).querySelectorAll('.unit-item').length+1;num.textContent=_n;ttl.textContent='문제 사진 '+_n;}
   hdr.appendChild(num);hdr.appendChild(ttl);
   wrap.appendChild(hdr);
@@ -4499,6 +4507,13 @@ function addProblemRow(memo, photoUrl, kind){
     var _pmDiv=document.createElement('div');_pmDiv.style='margin:-4px 0 10px';
     wrap.appendChild(_pmDiv);
     attachPhraseChips(isW?'wpmemo':'pmemo',memoInp,{mode:'replace',compact:true,parent:_pmDiv});
+  }
+
+  // 해당 에어컨 (점검보고서 · 출장 — 세탁기/건조기는 해당 없음)
+  var probAc=null;
+  if(!isW&&typeof makeAcPicker==='function'){
+    probAc=makeAcPicker(units,{hint:'이 문제가 있는 에어컨 · 여러 대 선택 가능'});
+    probAc.el.style.marginBottom='10px';wrap.appendChild(probAc.el);
   }
 
   // 사진
@@ -4520,7 +4535,7 @@ function addProblemRow(memo, photoUrl, kind){
   }
 
   wrap._getProblemData=function(){
-    return {memo:memoInp.value,photoKey:_pfx+id};
+    var o={memo:memoInp.value,photoKey:_pfx+id};if(probAc)o.units=probAc.get();return o;
   };
 
   document.getElementById(_rowsId).appendChild(wrap);
@@ -5757,6 +5772,16 @@ window.__saveRecRules=async function(obj){
   }catch(e){console.error('recrules load:',e);}
 })();
 
+// ── 현장 메모 저장/로딩 (insp_fieldmemos/보고서번호 — 관리자 전용 · 고객 화면 API는 이 컬렉션을 읽지 않음 · m31)
+window.__fmSave=async function(id,obj){
+  if(!DB||!id)return false;
+  try{await setDoc(doc(DB,'insp_fieldmemos',id),obj);return true;}catch(e){console.error('fieldmemo save:',e);return false;}
+};
+window.__fmLoad=async function(id){
+  if(!DB||!id)return null;
+  try{var s=await getDoc(doc(DB,'insp_fieldmemos',id));return (s.exists()&&s.data())||null;}catch(e){console.error('fieldmemo load:',e);return null;}
+};
+
 // ── 데이터 수집
 function collectData(){
   // 설비
@@ -5995,6 +6020,13 @@ window.saveReport=async function(){
             m.photos=(m.photos||[]).concat(url2);
           }
           return m;
+        });
+      }
+      else if(key.startsWith('defect-photos-')){
+        // 결함 사진: defects 배열에서 photoKey로 매핑 (df1 ↔ df10 이 겹치지 않도록 'photoKey-' 경계까지 확인)
+        data.defects=(data.defects||[]).map(function(f){
+          if(f.photoKey&&(key===f.photoKey||key.indexOf(f.photoKey+'-')===0)){f.photos=(f.photos||[]).concat(url2);}
+          return f;
         });
       }
       else if(key.startsWith('problem-photos-')){
@@ -6489,6 +6521,8 @@ window.delReport=async function(id){
 
 // ── 수정 모드 로딩
 window.loadIntoForm=function(data){
+  // 다른 보고서를 불러올 때 앞 보고서의 사진이 남아 함께 저장되지 않도록 비우고 시작합니다 (아래에서 이 보고서의 사진을 다시 채움)
+  photoData={};
   // 종합평가 선택 초기화 — data.eval이 없으면(신규 작성 등) 이전 값이 남지 않도록
   document.querySelectorAll('.ev-btn').forEach(function(b){b.classList.remove('sel');});
   evalVal='';
@@ -6552,7 +6586,7 @@ window.loadIntoForm=function(data){
   },100);
   // 발견결함
   defectCount=0;document.getElementById('defect-rows').innerHTML='';
-  (data.defects||[]).forEach(function(d){addDefectRow(d.defect,d.loc,d.risk,d.action,d.status,d.units);});
+  (data.defects||[]).forEach(function(d){addDefectRow(d.defect,d.loc,d.risk,d.action,d.status,d.units,d.photos||[]);});
   if(window.__m30relocate){setTimeout(window.__m30relocate,300);}   // m30 — 에어컨별 줄을 그 에어컨 카드 안으로
   // 권장정비
   recCount=0;document.getElementById('rec-rows').innerHTML='';
@@ -6646,7 +6680,7 @@ window.loadIntoForm=function(data){
   problemCount=0;document.getElementById('problem-rows').innerHTML='';
   (data.problemPhotos||[]).forEach(function(p){
     // 사진 전체를 복원한다 (기존에는 첫 장만 복원돼 재저장 시 나머지가 유실됨)
-    addProblemRow(p.memo,(p.photos&&p.photos.length)?p.photos:null);
+    addProblemRow(p.memo,(p.photos&&p.photos.length)?p.photos:null,'',p.units||[]);
   });
 
   // 수정 모드
@@ -8562,6 +8596,7 @@ setTimeout(function(){
       else if(key.startsWith('leak-unit-'))d.leakUnits=(d.leakUnits||[]).map(function(l){if((l.photoKeys||[]).includes(key))l.photos=add(l.photos,u);return l;});
       else if(key.startsWith('fix-')){var fx=function(arr){return (arr||[]).map(function(x){var f=x&&x.fix;if(!f)return x;if((f.bKeys||[]).indexOf(key)>=0)f.bPhotos=add(f.bPhotos,u);if((f.aKeys||[]).indexOf(key)>=0)f.aPhotos=add(f.aPhotos,u);return x;});};d.coolUnits=fx(d.coolUnits);d.measurements=fx(d.measurements);}
       else if(key.startsWith('msr-unit-'))d.measurements=(d.measurements||[]).map(function(m){if((m.photoKeys||[]).includes(key))m.photos=add(m.photos,u);return m;});
+      else if(key.startsWith('defect-photos-'))d.defects=(d.defects||[]).map(function(f){if(f.photoKey&&(key===f.photoKey||key.indexOf(f.photoKey+'-')===0))f.photos=add(f.photos,u);return f;});
       else if(key.startsWith('problem-photos-'))d.problemPhotos=(d.problemPhotos||[]).map(function(p){if(key===p.photoKey||key.indexOf(p.photoKey+'-')===0)p.photos=add(p.photos,u);return p;});
     });
     d.workVideos=[];
@@ -8768,6 +8803,133 @@ setTimeout(function(){
   if(vf){['input','change','click'].forEach(function(ev){vf.addEventListener(ev,schedule);});
     new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var t=ms[i].target;t=t.nodeType===1?t:t.parentElement;if(t&&t.closest&&t.closest('.m30-tags,.m30-h,[id^="cu-badge-"],#m27-ov,#m27-rec,#m27-dsum,#m28-evs'))continue;schedule();return;}}).observe(vf,{childList:true,subtree:true});}
   schedule();
+})();
+</script>
+
+<!-- ════ m31 · 현장 메모 (2026-11-15)
+   현장에서 문제점 등을 수시로 짧게 적어 두고, 보고서 작성 때 참고하는 관리자 전용 메모입니다.
+   · 이 기기에 바로 임시저장 + 저장된 보고서와 연결되면 Firestore 「insp_fieldmemos/보고서번호」에도 저장 (다른 기기에서도 보임)
+   · 보고서 자료(inspections)와 따로 보관하므로 고객 보고서 · 마이페이지에는 절대 나오지 않습니다.
+   ※ 이 블록(m31-css · m31-js)만 지우면 메모 칸이 사라집니다(적어 둔 메모 자료는 그대로 남음). -->
+<style id="m31-css">
+#m31{background:#FFFDF5;border:1.5px solid #F1E2B4;border-radius:16px;margin:0 0 12px;box-shadow:0 1px 2px rgba(11,24,51,.06)}
+#m31 .hd{display:flex;align-items:center;gap:8px;padding:12px 14px;cursor:pointer;user-select:none}
+#m31 .hd b{font-size:15px;font-weight:800;color:#5B4300}
+#m31 .hd small{flex:1;min-width:0;font-size:11.5px;font-weight:600;color:#A38A4A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#m31 .hd .lk{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:#F3E7C2;color:#7A5E12;white-space:nowrap}
+#m31 .hd .cv{color:#A38A4A;font-size:12px}
+#m31 .bd{padding:0 14px 14px}
+#m31.closed .bd{display:none}
+#m31 textarea{width:100%;box-sizing:border-box;min-height:110px;padding:11px 12px;border:1.5px solid #EFE2BC;border-radius:12px;background:#fff;font-family:inherit;font-size:15px;line-height:1.6;color:#14192A;resize:vertical;outline:none}
+#m31 textarea:focus{border-color:#C9A44C;box-shadow:0 0 0 4px rgba(201,164,76,.15)}
+#m31 .tl{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;align-items:center}
+#m31 .tl button{height:34px;padding:0 12px;border-radius:999px;border:1px solid #EADBB0;background:#fff;color:#5B4300;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+#m31 .tl button.dl{color:#B42318;border-color:#F3C7C7}
+#m31 .st{margin-left:auto;font-size:11.5px;color:#A38A4A;font-weight:600}
+#m31 .pv{margin-top:2px;font-size:12.5px;color:#7A6630;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#m31:not(.closed) .pv{display:none}
+</style>
+<script id="m31-js">
+(function(){
+  function $(id){return document.getElementById(id);}
+  var LS='hhc_fieldmemo_v1';
+  function all(){try{return JSON.parse(localStorage.getItem(LS)||'{}')||{};}catch(e){return {};}}
+  function put(k,v){try{var o=all();if(v&&String(v.memo||'').trim())o[k]=v;else delete o[k];localStorage.setItem(LS,JSON.stringify(o));}catch(e){}}
+  function eid(){try{return currentEditId||null;}catch(e){return null;}}
+  function keyNow(){var i=eid();return i?'r:'+i:'new';}
+  function hm(d){return (d.getHours()<10?'0':'')+d.getHours()+':'+(d.getMinutes()<10?'0':'')+d.getMinutes();}
+
+  var box=document.createElement('div');box.id='m31';
+  box.innerHTML='<div class="hd" role="button" tabindex="0"><b>📝 현장 메모</b><small>고객 보고서에는 보이지 않습니다 · 자동 임시저장</small><span class="lk" id="m31-lk">새 보고서용</span><span class="cv" id="m31-cv">▼</span></div>'+
+    '<div class="pv" id="m31-pv" style="padding:0 14px 12px"></div>'+
+    '<div class="bd"><textarea id="m31-memo" placeholder="현장에서 본 문제점 · 고객 요청 · 측정 메모를 수시로 짧게 적어 두세요.&#10;예) 거실2 토출 16도 — 냉매 부족 의심 / 안방 드레인 물 고임 / 고객: 리모컨 배터리 교체 요청"></textarea>'+
+    '<div class="tl"><button type="button" data-a="time">🕘 시각 넣기</button><button type="button" data-a="send">📋 의견 메모칸으로 보내기</button><button type="button" class="dl" data-a="clear">지우기</button><span class="st" id="m31-st"></span></div></div>';
+  var rt=$('rtype-inspect'),anchor=rt&&rt.parentNode;
+  var host=$('view-form');if(!host)return;
+  var dk=$('dispatch-kind-row');
+  host.insertBefore(box,(dk&&dk.nextSibling)||(anchor&&anchor.nextSibling)||host.firstChild);
+  var ta=$('m31-memo');
+  if(window.attachMic)try{window.attachMic(ta);}catch(e){}
+
+  var cur='new',saveT=null,fsT=null,loading=false;
+  function status(t){$('m31-st').textContent=t;}
+  function paintHead(){
+    $('m31-lk').textContent=eid()?'이 보고서에 연결됨':'새 보고서용';
+    var v=ta.value.trim().split('\n').filter(Boolean);$('m31-pv').textContent=v.length?'💬 '+v[v.length-1]+(v.length>1?'  (외 '+(v.length-1)+'줄)':''):'';
+  }
+  function setOpen(o){box.classList.toggle('closed',!o);$('m31-cv').textContent=o?'▼':'▶';try{localStorage.setItem('hhc_fieldmemo_open',o?'1':'0');}catch(e){}}
+  setOpen((function(){try{return localStorage.getItem('hhc_fieldmemo_open')!=='0';}catch(e){return true;}})());
+  box.querySelector('.hd').addEventListener('click',function(){setOpen(box.classList.contains('closed'));});
+
+  function show(k){
+    loading=true;cur=k;var v=all()[k];ta.value=v?v.memo:'';loading=false;
+    status(v&&v.t?'임시저장 '+hm(new Date(v.t)):'');paintHead();
+    if(ta.value.trim()&&box.classList.contains('closed')){$('m31-pv').style.display='';}
+  }
+  function saveLocal(){var v={memo:ta.value,t:Date.now()};put(cur,v);status('임시저장 '+hm(new Date()));paintHead();}
+  function saveRemote(){
+    var id=eid();if(!id||cur!=='r:'+id||!window.__fmSave)return;
+    var c='';try{c=(document.getElementById('f-client')||{}).value||(document.getElementById('if-client')||{}).value||(document.getElementById('w-client')||{}).value||'';}catch(e){}
+    window.__fmSave(id,{memo:ta.value,updatedAt:new Date().toISOString(),client:c}).then(function(ok){if(ok)status('저장됨 '+hm(new Date())+' · 다른 기기에서도 보임');});
+  }
+  ta.addEventListener('input',function(e){
+    e.stopPropagation();   // 보고서 임시저장 · 진행 표시를 건드리지 않음
+    if(loading)return;clearTimeout(saveT);saveT=setTimeout(saveLocal,350);clearTimeout(fsT);fsT=setTimeout(saveRemote,1500);status('작성 중…');
+  });
+  box.addEventListener('click',function(e){
+    var b=e.target.closest('[data-a]');if(!b)return;var a=b.dataset.a;
+    if(a==='time'){var s=ta.selectionStart==null?ta.value.length:ta.selectionStart,pre=ta.value.slice(0,s),ins=(pre&&!/\n$/.test(pre)?'\n':'')+'['+hm(new Date())+'] ';
+      ta.value=pre+ins+ta.value.slice(s);ta.focus();ta.selectionStart=ta.selectionEnd=s+ins.length;ta.dispatchEvent(new Event('input'));}
+    else if(a==='send'){
+      var t=ta.value.trim();if(!t){if(typeof toast==='function')toast('보낼 메모가 없습니다');return;}
+      var rtp='inspect';try{rtp=reportType;}catch(_){}
+      var target=rtp==='washer'?$('w-opinion'):(rtp==='install'?$('if-test-note'):$('f-opmemo'));
+      if(!target){if(typeof toast==='function')toast('이 보고서 종류에는 보낼 칸이 없습니다');return;}
+      var clean=t.replace(/^\[\d{1,2}:\d{2}\]\s*/gm,'');
+      target.value=(target.value.trim()?target.value.replace(/\s+$/,'')+'\n':'')+clean;target.dispatchEvent(new Event('input',{bubbles:true}));
+      var tab=$('opm-t-memo');if(tab&&rtp!=='washer'&&rtp!=='install')try{tab.click();}catch(_){}
+      target.scrollIntoView({behavior:'smooth',block:'center'});
+      if(typeof toast==='function')toast(rtp==='washer'?'✓ 최종 의견 칸에 넣었습니다':rtp==='install'?'✓ 테스트 메모 칸에 넣었습니다':'✓ 「메모로 자동 작성」 칸에 넣었습니다 — 「바로 작성」을 누르면 의견이 만들어집니다');}
+    else if(a==='clear'){
+      if(!ta.value.trim())return;
+      var go=function(){ta.value='';put(cur,null);saveRemote();status('지움');paintHead();};
+      if(window.inspAsk)window.inspAsk('현장 메모 지우기',['적어 둔 현장 메모를 모두 지웁니다.'],'지우기','취소').then(function(ok){if(ok)go();});else if(confirm('현장 메모를 지울까요?'))go();
+    }
+  });
+
+  /* ── 보고서 전환에 맞춰 메모 바꾸기 ── */
+  function follow(){var k=keyNow();if(k!==cur)show(k);}
+  /* 보고서 모듈(type=module)은 이 스크립트보다 늦게 실행되므로 함수가 생길 때까지 기다렸다가 감쌉니다 */
+  (function wrapWhenReady(){
+    if(typeof window.saveReport!=='function'||typeof window.editReport!=='function'){setTimeout(wrapWhenReady,200);return;}
+  var _ed=window.editReport;
+  if(typeof _ed==='function')window.editReport=async function(id){
+    var r=await _ed.apply(this,arguments);
+    setTimeout(async function(){
+      follow();
+      if(eid()===id&&window.__fmLoad){
+        try{var d=await window.__fmLoad(id);var loc=all()['r:'+id];
+          if(d&&typeof d.memo==='string'&&(!loc||new Date(d.updatedAt||0).getTime()>=(loc.t||0))){put('r:'+id,{memo:d.memo,t:new Date(d.updatedAt||Date.now()).getTime()});if(cur==='r:'+id)show(cur);}
+        }catch(e){}
+      }
+    },400);
+    return r;
+  };
+  var _nr=window.newReport;
+  if(typeof _nr==='function')window.newReport=function(){var r=_nr.apply(this,arguments);setTimeout(follow,200);return r;};
+  var _sv=window.saveReport;
+  if(typeof _sv==='function')window.saveReport=async function(){
+    var before=eid(),k0=cur,txt=ta.value;
+    var r=await _sv.apply(this,arguments);
+    var after=eid();
+    if(after&&!before&&k0==='new'&&txt.trim()){   // 새 보고서를 처음 저장 → 메모를 이 보고서로 옮김
+      put('r:'+after,{memo:txt,t:Date.now()});put('new',null);show('r:'+after);saveRemote();
+    }else follow();
+    return r;
+  };
+  })();
+  setInterval(follow,1500);   // 그 밖의 경로(임시저장 복구 · 복제 등)로 보고서가 바뀐 경우
+  show(keyNow());
 })();
 </script>
 
