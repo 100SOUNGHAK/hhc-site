@@ -8256,5 +8256,176 @@ setTimeout(function(){
 </script>
 
 
+<!-- ════ m28 · 작성 화면 1단계 (2026-11-15) — 판정 추천 · 입력한 내용으로 의견 자동 작성 · 화면 모양 정리
+   ※ 이 블록(m28-css · m28-js)만 지우면 바로 이전 화면으로 돌아갑니다. -->
+<style id="m28-css">
+/* ── 화면 모양: 흰 카드 · 둥근 모서리 · 부드러운 그림자 (PC도 휴대폰과 같은 모양) ── */
+@media (min-width:768px){#view-form input[type=tel]{width:100%;padding:8px 10px;font-size:13px;border:0.5px solid #dde1ee;border-radius:6px;background:#f8f9fc;color:#1a1a2e;outline:none;font-family:inherit}}
+#view-form .card{border:0;border-radius:16px;box-shadow:0 1px 2px rgba(11,24,51,.07),0 6px 14px -6px rgba(11,24,51,.16);overflow:visible}
+#view-form .card-hdr{background:#fff;padding:15px 16px 4px;border-radius:16px 16px 0 0}
+#view-form .card-title{color:#14192A;font-size:15.5px;font-weight:800;letter-spacing:-.02em}
+#view-form .card-icon{background:#EEF2FA;color:#0E2350;width:28px;height:28px;border-radius:9px;font-size:14px;display:grid;place-items:center}
+#view-form .card-body{padding:12px 16px 16px}
+#view-form .unit-item{border:1px solid #E4E9F2;border-radius:14px;background:#fff;box-shadow:0 1px 2px rgba(14,35,80,.05)}
+#view-form .rcard{border:1px solid #E4E9F2;border-radius:12px}
+#view-form .btn-add{border:1.5px dashed #B9C6DD;background:#F7F9FD;color:#0E2350;font-weight:700;border-radius:12px;min-height:46px}
+#view-form .btn-add:hover{background:#EEF2FA}
+#view-form .ph-chip{padding:6px 12px;border-radius:999px;border:1px solid #CFE7E3;background:#F2FAF8;color:#0B7A70;font-size:12.5px;font-weight:600}
+#view-form .ph-chip:active{background:#0B7A70;color:#fff}
+#view-form .ph-chip-save{border-color:#C7D4F7;background:#F0F4FF;color:#1D3FD6}
+#view-form .ph-chip-mng{border-color:#E4E9F2;background:#fff;color:#5A6478}
+#view-form .ph-chip-com{border-color:#E4E9F2;background:#F6F8FC;color:#5A6478;font-weight:500}
+#view-form .dst-btn{min-height:40px;border-radius:10px;font-size:13px;font-weight:700;border:1.5px solid #E4E9F2;background:#fff;color:#5A6478}
+#view-form .rt-btn{min-height:40px;border-radius:10px;font-size:13px;font-weight:700}
+#view-form .ev-btn{border-radius:12px;font-size:12.5px;font-weight:700;padding:12px 4px;transition:transform .12s}
+#view-form .ev-btn:active{transform:scale(.97)}
+@media (max-width:767px){
+  /* 결함 · 권장 정비 · 문제 사진 줄은 한 칸씩 — 문구 버튼이 옆으로 나란히 */
+  #defect-rows .fgrid.f2,#rec-rows .fgrid.f2{grid-template-columns:1fr}
+  #view-form .defect-status-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+}
+/* ── 판정 추천 ── */
+#m28-evs{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 2px;padding:10px 12px;border-radius:12px;background:linear-gradient(135deg,#FFFBEF,#F5F8FF);border:1px solid #F1E2B4;font-size:13px;color:#5A6478;line-height:1.45}
+#m28-evs b{color:#14192A}
+#m28-evs .why{flex:1 1 180px;min-width:0}
+#m28-evs button{height:34px;padding:0 14px;border-radius:999px;border:0;background:#0E2350;color:#fff;font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer;white-space:nowrap}
+#m28-evs .same{font-weight:800;color:#0E7A4E;white-space:nowrap}
+#view-form .ev-btn.m28-sug{box-shadow:0 0 0 3px #E2B43C;position:relative}
+#view-form .ev-btn.m28-sug::after{content:"추천";position:absolute;top:-9px;left:50%;transform:translateX(-50%);padding:1px 7px;border-radius:999px;background:#C9A44C;color:#fff;font-size:10px;font-weight:800;white-space:nowrap}
+/* ── 입력한 내용으로 자동 작성 ── */
+#m28-gen{display:flex;flex-direction:column;gap:5px;margin:4px 0 10px}
+#m28-gen button{flex:1;height:46px;border-radius:12px;border:0;background:linear-gradient(135deg,#16346E,#0E2350);color:#fff;font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 6px 14px -8px rgba(14,35,80,.6)}
+#m28-gen button{flex:none;width:100%}
+#m28-gen small{font-size:11.5px;color:#98A1B4;line-height:1.4;padding:0 2px}
+@media (prefers-reduced-motion:reduce){#view-form .ev-btn{transition:none}}
+</style>
+<script id="m28-js">
+(function(){
+  function $(id){return document.getElementById(id);}
+  function RT(){try{return reportType;}catch(e){return 'inspect';}}
+  function num(x){var n=parseFloat(String(x==null?'':x).replace(/[^\d.\-]/g,''));return isNaN(n)?null:n;}
+  function val(id){var e=$(id);return e?String(e.value||'').trim():'';}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  var EVN={normal:'정상 · 양호',preventive:'예방정비 권장',repair:'수리 권장',urgent:'즉시수리 필요',repaired:'수리 완료'};
+
+  /* ── 지금 입력된 내용 모으기 ── */
+  function gather(){
+    var g={cu:[],res:[],def:[],msr:[],rec:[]},names={};
+    [].forEach.call(document.querySelectorAll('#cool-units .cu-item'),function(w){if(!w._getCuData)return;var d=w._getCuData();
+      var a=num(d.a),b=num(d.b),fx=d.fix&&d.fix.on?d.fix:null,fa=fx?num(fx.a):null,fb=fx?num(fx.b):null;
+      var o={label:d.label||'',loc:d.loc||'',d0:(a!=null&&b!=null)?a-b:null,d1:(fa!=null&&fb!=null)?fa-fb:null};o.v=o.d1!=null?o.d1:o.d0;
+      g.cu.push(o);if(o.label)names[o.label]=o.loc||o.label;});
+    [].forEach.call(document.querySelectorAll('#result-rows .rcard'),function(c){if(!c._nameInp||!c._statusSel)return;var nm=c._nameInp.value.trim();if(!nm)return;
+      g.res.push({name:nm,st:c._statusSel.value,note:c._getNoteInp?String(c._getNoteInp().value||'').trim():''});});
+    [].forEach.call(document.querySelectorAll('#defect-rows .unit-item'),function(w){if(!w._getDefectData)return;var d=w._getDefectData();if(String(d.defect||'').trim())g.def.push(d);});
+    [].forEach.call(document.querySelectorAll('#msr-rows .unit-item'),function(w){if(w._getMsrData){var d=w._getMsrData();if(d.label||d.lp||d.current)g.msr.push(d);}});
+    [].forEach.call(document.querySelectorAll('#rec-rows .unit-item'),function(w){if(w._getRecData){var d=w._getRecData();if(String(d.title||'').trim())g.rec.push(d);}});
+    g.where=function(f){var u=(f.units||[]).map(function(x){return names[x]||x;});if(f.loc&&u.indexOf(f.loc)<0)u.unshift(f.loc);return u.join('·');};
+    return g;
+  }
+
+  /* ── 판정 추천 ── */
+  function suggestEval(){
+    var g=gather(),bad=0,warn=0;g.res.forEach(function(r){if(r.st==='bad')bad++;else if(r.st==='warn')warn++;});
+    var low=g.cu.filter(function(c){return c.v!=null&&c.v<12;}).length;
+    var msrLow=g.msr.filter(function(m){return m.spec_lp==='under'&&!(m.fix&&m.fix.on);}).length;
+    var open=g.def.filter(function(f){return f.status!=='done'&&f.status!=='watch';});
+    var vh=open.filter(function(f){return f.risk==='vh';}).length,hi=open.filter(function(f){return f.risk==='h';}).length;
+    var watch=g.def.filter(function(f){return f.status==='watch';}).length,done=g.def.filter(function(f){return f.status==='done';}).length;
+    var why=[];
+    if(vh){return {k:'urgent',why:'위험도 「상」 결함 '+vh+'건이 아직 조치 전입니다'};}
+    if(hi||bad>=2||msrLow){if(hi)why.push('위험도 「중」 이상 결함 '+hi+'건 조치 전');if(bad)why.push('정비 필요 '+bad+'개');if(msrLow)why.push('실외기 저압 기준 미달 '+msrLow+'대');return {k:'repair',why:why.join(' · ')};}
+    if(bad)why.push('정비 필요 '+bad+'개');if(warn)why.push('주의 '+warn+'개');if(low)why.push('냉방 저하 '+low+'대');if(open.length)why.push('조치 전 결함 '+open.length+'건');if(watch)why.push('관찰요망 '+watch+'건');if(done)why.push('현장 조치한 결함 '+done+'건');
+    if(why.length)return {k:'preventive',why:why.join(' · ')};
+    return {k:'normal',why:g.res.length||g.cu.length?'입력한 항목이 모두 양호합니다':'아직 입력된 점검 내용이 없습니다'};
+  }
+  var evBox=null;
+  function drawEval(){
+    var row=$('ev-row');if(!row)return;
+    if(RT()!=='inspect'){if(evBox)evBox.style.display='none';[].forEach.call(row.querySelectorAll('.m28-sug'),function(b){b.classList.remove('m28-sug');});return;}
+    if(!evBox){evBox=document.createElement('div');evBox.id='m28-evs';row.parentNode.insertBefore(evBox,row.nextSibling);
+      evBox.addEventListener('click',function(e){var b=e.target.closest('[data-ev]');if(!b)return;var t=row.querySelector('.ev-btn[data-val="'+b.getAttribute('data-ev')+'"]');if(t&&typeof setEval==='function'){setEval(t);if(typeof toast==='function')toast('✓ 추천 판정으로 정했습니다');}});}
+    evBox.style.display='';
+    var s=suggestEval(),cur='';try{cur=evalVal;}catch(e){}
+    [].forEach.call(row.querySelectorAll('.ev-btn'),function(b){b.classList.toggle('m28-sug',b.dataset.val===s.k);});
+    var h='<span class="why">💡 추천: <b>'+EVN[s.k]+'</b> — '+esc(s.why)+'</span>'+(cur===s.k?'<span class="same">✓ 추천과 같음</span>':'<button type="button" data-ev="'+s.k+'">추천대로</button>');
+    if(evBox.innerHTML!==h)evBox.innerHTML=h;
+  }
+
+  /* ── 입력한 내용으로 최종 의견 자동 작성 (①②③④) ── */
+  function f1(x){return x.toFixed(1);}
+  function genInspect(){
+    var g=gather(),L=[];
+    var ok=[],fixed=[],low=[];
+    g.cu.forEach(function(c){var nm=c.loc||c.label;if(c.d1!=null)fixed.push(nm+'(조치 전 '+(c.d0!=null?f1(c.d0)+'°C':'—')+' → 조치 후 '+f1(c.d1)+'°C)');else if(c.v!=null&&c.v<12)low.push(nm+'('+f1(c.v)+'°C)');else if(c.v!=null)ok.push(nm);});
+    var bad=g.res.filter(function(r){return r.st==='bad';}),wr=g.res.filter(function(r){return r.st==='warn';});
+    L.push('① 종합 점검 결과');
+    var n=g.cu.length;
+    L.push('- '+(n?'에어컨 '+n+'대 점검 결과 ':'점검 결과 ')+((bad.length||low.length)?'일부 에어컨에서 확인이 필요한 상태가 발견됨.':'전반적인 작동 상태 및 냉방 성능은 양호한 것으로 확인됨.'));
+    if(ok.length)L.push('- '+ok.join('·')+' 에어컨은 토출 온도차 정상 범위로 냉방 성능 양호.');
+    if(fixed.length)L.push('- '+fixed.join(', ')+' — 조치 후 정상 냉방 성능 회복 확인.');
+    if(low.length)L.push('- '+low.join(', ')+' — 온도차가 기준(12°C)보다 낮게 측정됨.');
+    L.push('','② 세부 점검 및 진단 내용');var n2=L.length;
+    g.def.forEach(function(f){var w=g.where(f);L.push('- '+(w?w+': ':'')+f.defect+'.');});
+    g.msr.forEach(function(m,i){var nm=m.label||('실외기 '+(i+1));var p=[];
+      if(m.lp)p.push('저압 '+m.lp+' PSI'+(m.spec_lp==='under'?'(기준 미달)':m.spec_lp==='over'?'(기준 초과)':'')+(m.fix&&m.fix.on&&m.fix.lp?' → 조치 후 '+m.fix.lp+' PSI':''));
+      if(m.hp)p.push('고압 '+m.hp+' PSI');if(m.current)p.push('전류 '+m.current+'A'+(m.fix&&m.fix.on&&m.fix.current?' → 조치 후 '+m.fix.current+'A':''));
+      if(p.length)L.push('- '+nm+' 실외기 '+p.join(', ')+'.');});
+    bad.concat(wr).forEach(function(r){L.push('- '+r.name+': '+(r.note||'확인 필요')+'.');});
+    if(L.length===n2)L.push('- 항목별 점검 결과 특이사항 없음.');
+    L.push('','③ 조치사항');var n3=L.length;
+    g.def.filter(function(f){return f.status==='done';}).forEach(function(f){L.push('- '+f.defect+' → '+(String(f.action||'').trim()||'조치 완료')+'.');});
+    g.res.filter(function(r){return /완료/.test(r.note);}).forEach(function(r){L.push('- '+r.name+': '+r.note+'.');});
+    if(L.length===n3)L.push('- 점검 및 기본 정비 완료.');
+    var fut=[];
+    g.def.filter(function(f){return f.status!=='done';}).forEach(function(f){var w=g.where(f);fut.push('- '+(w?w+': ':'')+f.defect+(f.status==='watch'?' — 경과 관찰 요망.':(String(f.action||'').trim()?' — '+f.action+'.':' — 조치 권고.')));});
+    g.rec.forEach(function(r){fut.push('- '+r.title+(r.desc?' ('+r.desc+')':'')+' 권고.');});
+    if(fut.length){L.push('','④ 향후 권고사항');L=L.concat(fut);}
+    return L.join('\n');
+  }
+  function genDispatch(){
+    var g=gather(),L=[],reason=val('d-reason'),work=val('d-work').split('\n').map(function(x){return x.trim();}).filter(Boolean),done=true;try{done=dispatchDone;}catch(e){}
+    L.push('① 출동 사유 및 점검 결과');
+    if(reason)L.push('- 출동 사유: '+reason+'.');
+    L.push('- '+(done?'현장 점검 및 조치를 완료함.':'현장 점검 결과 추가 조치가 필요하여 재방문 예정.'));
+    L.push('','② 진단 내용');var n2=L.length;
+    g.def.forEach(function(f){var w=g.where(f);L.push('- '+(w?w+': ':'')+f.defect+'.');});
+    g.res.filter(function(r){return r.st!=='ok';}).forEach(function(r){L.push('- '+r.name+': '+(r.note||'확인 필요')+'.');});
+    if(L.length===n2)L.push('- 특이사항 없음.');
+    L.push('','③ 조치사항');var n3=L.length;
+    work.forEach(function(x){L.push('- '+x.replace(/[.。]$/,'')+'.');});
+    g.def.filter(function(f){return f.status==='done';}).forEach(function(f){L.push('- '+f.defect+' → '+(String(f.action||'').trim()||'조치 완료')+'.');});
+    if(L.length===n3)L.push('- 점검 완료.');
+    var fut=[];var rv=val('d-revisit-date');if(!done&&rv)fut.push('- 재방문 예정: '+rv+'.');
+    g.def.filter(function(f){return f.status!=='done';}).forEach(function(f){fut.push('- '+f.defect+(f.status==='watch'?' — 경과 관찰 요망.':(String(f.action||'').trim()?' — '+f.action+'.':' — 조치 권고.')));});
+    g.rec.forEach(function(r){fut.push('- '+r.title+' 권고.');});
+    if(fut.length){L.push('','④ 향후 권고사항');L=L.concat(fut);}
+    return L.join('\n');
+  }
+  function addGen(){
+    var op=$('f-opinion');if(!op||$('m28-gen'))return;
+    var box=document.createElement('div');box.id='m28-gen';
+    box.innerHTML='<button type="button">✨ 입력한 내용으로 자동 작성</button><small>측정값·결함·조치·권장 정비를 모아 ①②③④ 형식으로 만듭니다</small>';
+    var anchor=op;var prev=op.previousElementSibling;if(prev&&/음성/.test(prev.textContent||''))anchor=prev;
+    anchor.parentNode.insertBefore(box,anchor);
+    box.querySelector('button').addEventListener('click',async function(){
+      var t=RT()==='dispatch'?genDispatch():genInspect();
+      if(op.value.trim()){var ok=window.inspAsk?await window.inspAsk('최종 의견 바꾸기',['지금 적혀 있는 최종 의견을 입력한 내용으로 새로 만든 문장으로 바꿉니다.','바꾼 뒤에도 직접 고칠 수 있습니다.'],'바꾸기','취소'):confirm('최종 의견을 바꿀까요?');if(!ok)return;}
+      op.value=t;op.dispatchEvent(new Event('input',{bubbles:true}));
+      op.scrollIntoView({behavior:'smooth',block:'center'});op.classList.remove('m27-flash');void op.offsetWidth;op.classList.add('m27-flash');
+      if(typeof toast==='function')toast('✓ 최종 의견을 만들었습니다 — 고쳐 쓰셔도 됩니다');
+    });
+  }
+
+  /* ── 다시 그리기 ── */
+  var tm=null;function schedule(){clearTimeout(tm);tm=setTimeout(function(){try{drawEval();addGen();}catch(e){console.warn('m28',e);}},300);}
+  var vf=$('view-form');
+  if(vf){['input','change','click'].forEach(function(ev){vf.addEventListener(ev,function(e){if(e.target.closest&&e.target.closest('#m28-evs'))return;schedule();});});
+    new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var t=ms[i].target;t=t.nodeType===1?t:t.parentElement;if(t&&t.closest&&t.closest('#m28-evs,#m28-gen,#m27-ov,#m27-rec,#m27-dsum,.m27-tw'))continue;schedule();return;}}).observe(vf,{childList:true,subtree:true});}
+  ['switchReportType','newReport','editReport','setEval','setDispatchKind'].forEach(function(f){var o=window[f];if(typeof o!=='function')return;window[f]=function(){var r=o.apply(this,arguments);schedule();setTimeout(schedule,800);return r;};});
+  schedule();setTimeout(schedule,1500);
+})();
+</script>
+
 </body>
 </html>
