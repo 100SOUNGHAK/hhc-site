@@ -7978,6 +7978,8 @@ setTimeout(function(){
 #m27-dsum{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
 #m27-dsum span{flex:1 1 auto;min-width:72px;background:#F6F8FC;border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;color:#5A6478;white-space:nowrap}
 #m27-dsum b{font-size:17px;font-weight:800;margin-right:3px;color:#14192A;font-variant-numeric:tabular-nums}
+#m27-dsum .m27-dwhere{flex:1 0 100%;font-size:12px;color:#5A6478;padding:2px 2px 0}
+#m27-dsum .m27-dwhere button{border:0;background:none;padding:0;font-family:inherit;font-size:12px;font-weight:800;color:#2563EB;cursor:pointer}
 #m27-dsum .plan b{color:#B36000}#m27-dsum .recommend b{color:#1E40AF}#m27-dsum .advise b{color:#9D174D}#m27-dsum .watch b{color:#334155}#m27-dsum .done b{color:#0A7A4A}
 /* 결함 상태 「관찰요망」 */
 .dst-watch{border-color:#94A3B8!important;background:#F1F5F9!important;color:#334155!important;font-weight:600}
@@ -8143,15 +8145,22 @@ setTimeout(function(){
   }
   var DST=[['plan','조치예정'],['recommend','조치권유'],['advise','조치권고'],['watch','관찰요망'],['done','조치완료']];
   function drawDef(){
-    var rows=$('defect-rows');if(!rows)return;var cnt={},n=0;
+    var rows=$('defect-rows');if(!rows)return;var cnt={},n=0,inCard=[];
     [].forEach.call(m30Rows('defect'),function(w){if(!w._getDefectData)return;var d=w._getDefectData(),st=d.status||'plan';
+      if(w._m30cu&&String(d.defect||'').trim())inCard.push(w);
       var cls='m27-d m27-d-'+st;DST.forEach(function(x){if(x[0]!==st)w.classList.remove('m27-d-'+x[0]);});w.classList.add('m27-d','m27-d-'+st);
       if(String(d.defect||'').trim()){cnt[st]=(cnt[st]||0)+1;n++;}});
     var box=$('m27-dsum');
     if(!n){if(box)box.remove();return;}
     if(!box){box=document.createElement('div');box.id='m27-dsum';rows.parentNode.insertBefore(box,rows);}
-    var h='<span><b>'+n+'</b>건 발견</span>'+DST.map(function(x){return cnt[x[0]]?'<span class="'+x[0]+'"><b>'+cnt[x[0]]+'</b>'+x[1]+'</span>':'';}).join('');
+    /* 전체 건수에는 에어컨 카드 안의 결함도 들어갑니다 — 어디 있는지 함께 보여 주고 누르면 그 결함으로 이동 */
+    var lbls=[];inCard.forEach(function(w){var l=w._m30cu&&w._m30cu._cuLbl?w._m30cu._cuLbl():'';if(l&&lbls.indexOf(l)<0)lbls.push(l);});
+    var pub=n-inCard.length;
+    var h='<span><b>'+n+'</b>건 발견</span>'+DST.map(function(x){return cnt[x[0]]?'<span class="'+x[0]+'"><b>'+cnt[x[0]]+'</b>'+x[1]+'</span>':'';}).join('')+
+      (inCard.length?'<div class="m27-dwhere">전체 건수입니다 — <button type="button" data-dgo="1">에어컨 카드 안 '+inCard.length+'건 ('+lbls.join('·')+') ›</button>'+(pub?' · 이 칸 '+pub+'건':' · 이 칸에는 없음')+'</div>':'');
     if(box.innerHTML!==h)box.innerHTML=h;
+    box._go=inCard[0]||null;
+    if(!box._wired){box._wired=1;box.addEventListener('click',function(e){if(e.target.closest('[data-dgo]')&&box._go)go(box._go);});}
   }
   function decoratePills(stMap){
     [].forEach.call(document.querySelectorAll('#section-nav .section-nav-pill'),function(p){var st=stMap[p.dataset.target]||'';
