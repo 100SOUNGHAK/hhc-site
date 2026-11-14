@@ -929,6 +929,7 @@ body{background:var(--page)}
 .glu-r li.bad{color:var(--bad);font-weight:700}
 .glu-r li.warn{color:#8A5A0C}
 .glu-r li.rp{color:#1D4ED8;font-weight:700}
+.glu-r li small.glu-s{display:block;font-size:11px;font-weight:600;color:var(--ink-mute);margin-top:1px}
 .glu-r li.rp::before{content:"🔧";background:#E8F0FF;font-size:8px}
 .glu-r li.tip{color:var(--ink-soft)}
 .glu-r li.tip::before{content:"i";background:#EEF1F6;color:var(--ink-soft);font-style:italic;font-family:Georgia,serif}
@@ -1077,6 +1078,7 @@ html,body{background:#fff!important}
 .glu-r li.bad{color:var(--bad);font-weight:700}
 .glu-r li.warn{color:#8A5A0C}
 .glu-r li.rp{color:#1D4ED8;font-weight:700}
+.glu-r li small.glu-s{display:block;font-size:11px;font-weight:600;color:var(--ink-mute);margin-top:1px}
 .glu-r li.rp::before{content:"🔧";background:#E8F0FF;font-size:8px}
 .glu-r li.tip{color:var(--ink-soft)}
 .glu-r li.tip::before{content:"i";background:#EEF1F6;color:var(--ink-soft);font-style:italic;font-family:Georgia,serif}
@@ -2571,7 +2573,7 @@ window.getSampleData=function getSampleData(){
       if(!u&&make&&!base&&locs.length){u=mk('',tx(locs.join(' · '),''),num);keys(u,locs);}
       return u?[u]:[];
     }
-    function add(u,lv,txt){if(!u)return;u.lv=Math.max(u.lv,lv);if(txt&&!u.rs.some(function(r){return r.t===txt;}))u.rs.push({lv:lv,t:txt});}
+    function add(u,lv,txt,sub){if(!u)return;u.lv=Math.max(u.lv,lv);if(txt&&!u.rs.some(function(r){return r.t===txt;}))u.rs.push({lv:lv,t:txt,s:sub||''});}
     function tip(u,txt){if(u&&txt&&u.tips.indexOf(txt)<0)u.tips.push(txt);}
     /* 1) 냉방능력 점검상태 — 카드의 기준 (A1 · 설치 위치 · 온도차) */
     cu.forEach(function(c,i){
@@ -2614,7 +2616,10 @@ window.getSampleData=function getSampleData(){
     (d.defects||[]).forEach(function(f){
       var t=tx(f.defect,f.defect_en);
       tgt(f,f.loc,numOf(f.loc),false).forEach(function(u){
-        if(f.status==='done')u.done.push(t+(f.action?' · '+tx(f.action,f.action_en):''));else add(u,(f.risk==='vh'||f.risk==='h')?2:1,t);
+        var ac=f.action?tx(f.action,f.action_en):'';
+        var SL={plan:L('조치 예정','Planned'),recommend:L('조치 권유','Recommended'),advise:L('조치 권고','Advised')};
+        if(f.status==='done')u.done.push(L('조치 완료 · ','Fixed · ')+t+(ac?' — '+ac:''));
+        else add(u,(f.risk==='vh'||f.risk==='h')?2:1,t,(SL[f.status]||SL.plan)+(ac?' · '+ac:''));
       });
     });
     /* 6) 권장 정비 · 교체 제안 — 우선은 정비 필요, 정기 · 검토는 상태를 바꾸지 않고 「권장」으로 표시 */
@@ -2645,14 +2650,13 @@ window.getSampleData=function getSampleData(){
       '<span>'+L('에어컨 '+us.length+'대 · 대수별 점검 결과','Results for each of your '+us.length+' unit'+(us.length>1?'s':''))+'</span></div>'+
       '<div class="cnt">'+[2,1,0].filter(function(k){return cnt[k];}).map(function(k){return '<i class="'+ST[k][1]+'">'+ST[k][0]+' '+cnt[k]+'</i>';}).join('')+'</div></div>'+
       '<div class="gl-grid">'+us.map(function(u){
-        var c=ST[u.lv][1],rs=u.rs.slice().sort(function(a,b){return b.lv-a.lv;}).slice(0,3);
-        var li=rs.map(function(r){return '<li class="'+(r.lv===2?'bad':'warn')+'">'+esc(r.t)+'</li>';}).join('');
-        var dn=(u.done||[]).filter(function(x){return /수리 완료|Repaired|repaired/.test(x);});
-        if(!rs.length){
-          li='<li>'+esc(L('점검 항목 모두 양호','All checks passed'))+'</li>';
-          if(dn.length)li+=dn.slice(0,2).map(function(x){return '<li class="rp">'+esc(x)+'</li>';}).join('');
-          else if(u.done&&u.done.length)li+='<li>'+esc(L('조치 완료 · ','Fixed · ')+u.done[0])+'</li>';
-        }else if(dn.length)li+='<li class="rp">'+esc(dn[0])+'</li>';
+        /* 확인 필요 사항 → 조치 완료 내역 → 권장 순서. 발견 결함은 조치 상태 · 내용까지 함께 보여 줍니다 */
+        var c=ST[u.lv][1],allRs=u.rs.slice().sort(function(a,b){return b.lv-a.lv;}),rs=allRs.slice(0,4);
+        var li=rs.map(function(r){return '<li class="'+(r.lv===2?'bad':'warn')+'"><span>'+esc(r.t)+(r.s?'<small class="glu-s">'+esc(r.s)+'</small>':'')+'</span></li>';}).join('');
+        if(allRs.length>rs.length)li+='<li class="tip">'+esc(L('외 '+(allRs.length-rs.length)+'건 — 아래 점검 결과 참고','+'+(allRs.length-rs.length)+' more — see details below'))+'</li>';
+        var dn=u.done||[];
+        if(!rs.length)li='<li>'+esc(L('점검 항목 모두 양호','All checks passed'))+'</li>';
+        li+=dn.slice(0,3).map(function(x){return '<li class="rp">'+esc(x)+'</li>';}).join('');
         li+=(u.tips||[]).slice(0,2).map(function(t){return '<li class="tip">'+esc(L('권장 · ','Suggested · ')+t)+'</li>';}).join('');
         var dt='';
         if(u.dt!=null){
