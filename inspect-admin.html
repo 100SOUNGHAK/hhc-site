@@ -206,6 +206,12 @@ textarea{resize:vertical;line-height:1.6}
 .rsel-btn{flex:1;padding:8px;border-radius:6px;border:0.5px solid #dde1ee;background:#f8f9fc;font-size:12px;font-weight:500;cursor:pointer;text-align:center;color:#6b7280}
 .rsel-btn.ok{border-color:#2ecc71;background:#e8f8f0;color:#0a7a4a}
 .rsel-btn.warn{border-color:#e67e22;background:#fff4e0;color:#b36000}
+.rsel-btn.na{border-color:#64748b;background:#eef1f6;color:#334155}
+.mv-grid.cu-na-dim{opacity:.38;pointer-events:none}
+.cu-na-note{display:none;margin:-2px 0 9px;padding:8px 10px;border-radius:8px;background:#FFF8EB;border:1px solid #F3DDAE;font-size:11.5px;line-height:1.5;color:#7A5200}
+.cu-na-note.on{display:block}
+.ph-item.ph-auto{outline:2px dashed #94a3b8;outline-offset:-2px}
+.ph-item.ph-auto .ph-auto-t{position:absolute;left:0;right:0;bottom:0;background:rgba(15,28,63,.78);color:#fff;font-size:9px;font-weight:700;text-align:center;padding:2px 0}
 /* 발견결함 상태 버튼 */
 .defect-status-row{display:flex;gap:5px;flex-wrap:wrap}
 .dst-btn{flex:1;min-width:70px;padding:7px 4px;border-radius:5px;border:0.5px solid #dde1ee;background:#f8f9fc;font-size:11px;cursor:pointer;text-align:center;color:#8a8a9a}
@@ -2260,10 +2266,22 @@ function addCoolUnit(label,a,b,loc,result,fix){
   var rselRow=document.createElement('div');rselRow.className='rsel-row';
   var okBtn=document.createElement('div');okBtn.className='rsel-btn rsel-ok-btn'+(result==='ok'?' ok':'');okBtn.textContent='✅ 양호';
   var warnBtn=document.createElement('div');warnBtn.className='rsel-btn rsel-warn-btn'+(result==='warn'?' warn':'');warnBtn.textContent='⚠️ 저하';
-  okBtn.onclick=function(){okBtn.className='rsel-btn rsel-ok-btn ok';warnBtn.className='rsel-btn rsel-warn-btn';badge.style.cssText='font-size:10px;padding:2px 8px;border-radius:10px;background:#e8f8f0;color:#0a7a4a';badge.textContent='양호';num.className='cu-num';};
-  warnBtn.onclick=function(){warnBtn.className='rsel-btn rsel-warn-btn warn';okBtn.className='rsel-btn rsel-ok-btn';badge.style.cssText='font-size:10px;padding:2px 8px;border-radius:10px;background:#fff4e0;color:#b36000';badge.textContent='저하';num.className='cu-num warn';};
-  rselRow.appendChild(okBtn);rselRow.appendChild(warnBtn);
+  var naBtn=document.createElement('div');naBtn.className='rsel-btn rsel-na-btn'+(result==='na'?' na':'');naBtn.textContent='🚫 측정불가';
+  naBtn.title='고장 등으로 운전이 안 되어 온도를 잴 수 없을 때';
+  var naNote=document.createElement('div');naNote.className='cu-na-note';
+  naNote.innerHTML='🚫 <b>측정불가</b> — 고장 등으로 온도를 잴 수 없는 상태로 기록합니다. 고객 보고서에는 「측정 불가」로 표시되고, 측정 사진을 넣지 않으면 <b>측정불가 안내 사진이 자동으로</b> 들어갑니다.';
+  function naSet(on){
+    naBtn.className='rsel-btn rsel-na-btn'+(on?' na':'');
+    mvg.classList.toggle('cu-na-dim',on);naNote.classList.toggle('on',on);
+    if(on){badge.style.cssText='font-size:10px;padding:2px 8px;border-radius:10px;background:#eef1f6;color:#334155';badge.textContent='측정불가';num.className='cu-num warn';}
+    naPh();
+  }
+  okBtn.onclick=function(){naSet(false);okBtn.className='rsel-btn rsel-ok-btn ok';warnBtn.className='rsel-btn rsel-warn-btn';badge.style.cssText='font-size:10px;padding:2px 8px;border-radius:10px;background:#e8f8f0;color:#0a7a4a';badge.textContent='양호';num.className='cu-num';if(window.__scheduleDraft)window.__scheduleDraft();};
+  warnBtn.onclick=function(){naSet(false);warnBtn.className='rsel-btn rsel-warn-btn warn';okBtn.className='rsel-btn rsel-ok-btn';badge.style.cssText='font-size:10px;padding:2px 8px;border-radius:10px;background:#fff4e0;color:#b36000';badge.textContent='저하';num.className='cu-num warn';if(window.__scheduleDraft)window.__scheduleDraft();};
+  naBtn.onclick=function(){okBtn.className='rsel-btn rsel-ok-btn';warnBtn.className='rsel-btn rsel-warn-btn';naSet(true);if(window.__scheduleDraft)window.__scheduleDraft();};
+  rselRow.appendChild(okBtn);rselRow.appendChild(warnBtn);rselRow.appendChild(naBtn);
   body.appendChild(rselRow);
+  body.appendChild(naNote);
 
 
   // 사진
@@ -2277,6 +2295,15 @@ function addCoolUnit(label,a,b,loc,result,fix){
   phRow.appendChild(phAdd);
   phDiv.appendChild(phLbl);phDiv.appendChild(phRow);
   body.appendChild(phDiv);
+  // 측정불가 + 측정 사진 없음 → 고객 보고서에 들어갈 안내 사진을 미리 보여줍니다 (저장되는 사진은 아님)
+  function naPh(){
+    var on=naBtn.classList.contains('na'),own=phRow.querySelector('.ph-item:not(.ph-auto)'),au=phRow.querySelector('.ph-auto');
+    var want=on&&!own;
+    if(want&&!au){au=document.createElement('div');au.className='ph-item ph-auto';au.style.position='relative';au.title='측정 사진이 없어서 고객 보고서에 자동으로 들어가는 사진입니다';
+      au.innerHTML='<img class="ph-img" src="/measure-na.jpg" alt=""><span class="ph-auto-t">자동 첨부</span>';phRow.insertBefore(au,phAdd);}
+    else if(!want&&au)au.remove();
+  }
+  new MutationObserver(function(){naPh();}).observe(phRow,{childList:true});
   var cuFix=makeFixBlock('cool',id,fix);
   body.appendChild(cuFix.el);
 
@@ -2308,6 +2335,8 @@ function addCoolUnit(label,a,b,loc,result,fix){
 
   div._syncCuTitle=syncCuTitle;
   syncCuTitle();
+  div._cuNa=function(){return naBtn.classList.contains('na');};
+  if(result==='na')naSet(true);
   div._cuLbl=function(){return lbl;};div._cuLoc=function(){return ddCuLoc.getDdVal();};
   div._setCuLoc=function(v){if(v){ddCuLoc.setDdVal(v);}else{var s0=ddCuLoc.querySelector('select');if(s0)s0.value='';var i0=ddCuLoc.querySelector('.dd-custom');if(i0){i0.value='';i0.classList.remove('show');}}syncCuTitle();};
   refreshAcPickers();coolFillSync();
@@ -2319,7 +2348,7 @@ function addCoolUnit(label,a,b,loc,result,fix){
       label:lbl,
       a:ta?ta.value:'',
       b:tb?tb.value:'',
-      result:warnBtn.classList.contains('warn')?'warn':'ok',
+      result:naBtn.classList.contains('na')?'na':warnBtn.classList.contains('warn')?'warn':'ok',
       loc:ddCuLoc.getDdVal(),
       photoKey:'cool-'+id,
       fix:cuFix.get()
@@ -8048,7 +8077,7 @@ setTimeout(function(){
         if(!val('d-work'))add('y','처리 내용이 비어 있습니다',$('d-work'),'현장에서 한 일을 적으면 고객 보고서의 「진행 과정」에 나옵니다');
       }
       [].forEach.call(document.querySelectorAll('#cool-units .cu-item'),function(w){
-        if(!visible(w))return;
+        if(!visible(w))return;if(w._cuNa&&w._cuNa())return;
         var nm=(w._cuLbl&&w._cuLbl())||'냉방 유닛';var ta=w.querySelector('.cu-ta'),tb=w.querySelector('.cu-tb');if(!ta||!tb)return;
         var a=num(ta.value),b=num(tb.value);
         if(a==null&&b==null)add('y',nm+' — 흡입·토출 온도가 비어 있습니다',w,'측정하지 않은 유닛이면 지워 주세요');
@@ -8168,7 +8197,7 @@ setTimeout(function(){
     /* 냉방 유닛 온도 경고 */
     [].forEach.call(document.querySelectorAll('#cool-units .cu-item'),function(w){
       var ta=w.querySelector('.cu-ta'),tb=w.querySelector('.cu-tb');if(!ta||!tb)return;
-      var ws=tempWarn(num(ta.value),num(tb.value)),box=w.querySelector(':scope > .m27-tw');
+      var ws=(w._cuNa&&w._cuNa())?[]:tempWarn(num(ta.value),num(tb.value)),box=w.querySelector(':scope > .m27-tw');
       if(!ws.length){if(box)box.remove();return;}
       if(!box){box=document.createElement('div');w.appendChild(box);}
       var cn='m27-tw '+(ws.some(function(x){return x[0]==='r';})?'r':'y'),hh=ws.map(function(x){return (x[0]==='r'?'⛔ ':'💡 ')+esc(x[1]);}).join('<br>');
@@ -8371,7 +8400,7 @@ setTimeout(function(){
     var g={cu:[],res:[],def:[],msr:[],rec:[]},names={};
     [].forEach.call(document.querySelectorAll('#cool-units .cu-item'),function(w){if(!w._getCuData)return;var d=w._getCuData();
       var a=num(d.a),b=num(d.b),fx=d.fix&&d.fix.on?d.fix:null,fa=fx?num(fx.a):null,fb=fx?num(fx.b):null;
-      var o={label:d.label||'',loc:d.loc||'',d0:(a!=null&&b!=null)?a-b:null,d1:(fa!=null&&fb!=null)?fa-fb:null};o.v=o.d1!=null?o.d1:o.d0;
+      if(d.result==='na'){a=null;b=null;}var o={label:d.label||'',loc:d.loc||'',na:d.result==='na'&&!fx,d0:(a!=null&&b!=null)?a-b:null,d1:(fa!=null&&fb!=null)?fa-fb:null};o.v=o.d1!=null?o.d1:o.d0;
       g.cu.push(o);if(o.label)names[o.label]=o.loc||o.label;});
     [].forEach.call(document.querySelectorAll('#result-rows .rcard'),function(c){if(!c._nameInp||!c._statusSel)return;var nm=c._nameInp.value.trim();if(!nm)return;
       g.res.push({name:nm,st:c._statusSel.value,note:c._getNoteInp?String(c._getNoteInp().value||'').trim():''});});
@@ -8393,7 +8422,7 @@ setTimeout(function(){
     var why=[];
     if(vh){return {k:'urgent',why:'위험도 「상」 결함 '+vh+'건이 아직 조치 전입니다'};}
     if(hi||bad>=2||msrLow){if(hi)why.push('위험도 「중」 이상 결함 '+hi+'건 조치 전');if(bad)why.push('정비 필요 '+bad+'개');if(msrLow)why.push('실외기 저압 기준 미달 '+msrLow+'대');return {k:'repair',why:why.join(' · ')};}
-    if(bad)why.push('정비 필요 '+bad+'개');if(warn)why.push('주의 '+warn+'개');if(low)why.push('냉방 저하 '+low+'대');if(open.length)why.push('조치 전 결함 '+open.length+'건');if(watch)why.push('관찰요망 '+watch+'건');if(done)why.push('현장 조치한 결함 '+done+'건');
+    if(bad)why.push('정비 필요 '+bad+'개');if(warn)why.push('주의 '+warn+'개');if(low)why.push('냉방 저하 '+low+'대');var nNa=g.cu.filter(function(c){return c.na;}).length;if(nNa)why.push('온도 측정불가 '+nNa+'대');if(open.length)why.push('조치 전 결함 '+open.length+'건');if(watch)why.push('관찰요망 '+watch+'건');if(done)why.push('현장 조치한 결함 '+done+'건');
     if(why.length)return {k:'preventive',why:why.join(' · ')};
     return {k:'normal',why:g.res.length||g.cu.length?'입력한 항목이 모두 양호합니다':'아직 입력된 점검 내용이 없습니다'};
   }
@@ -8414,15 +8443,16 @@ setTimeout(function(){
   function f1(x){return x.toFixed(1);}
   function genInspect(){
     var g=gather(),L=[];
-    var ok=[],fixed=[],low=[];
-    g.cu.forEach(function(c){var nm=c.loc||c.label;if(c.d1!=null)fixed.push(nm+'(조치 전 '+(c.d0!=null?f1(c.d0)+'°C':'—')+' → 조치 후 '+f1(c.d1)+'°C)');else if(c.v!=null&&c.v<12)low.push(nm+'('+f1(c.v)+'°C)');else if(c.v!=null)ok.push(nm);});
+    var ok=[],fixed=[],low=[],na=[];
+    g.cu.forEach(function(c){var nm=c.loc||c.label;if(c.na){na.push(nm);return;}if(c.d1!=null)fixed.push(nm+'(조치 전 '+(c.d0!=null?f1(c.d0)+'°C':'—')+' → 조치 후 '+f1(c.d1)+'°C)');else if(c.v!=null&&c.v<12)low.push(nm+'('+f1(c.v)+'°C)');else if(c.v!=null)ok.push(nm);});
     var bad=g.res.filter(function(r){return r.st==='bad';}),wr=g.res.filter(function(r){return r.st==='warn';});
     L.push('① 종합 점검 결과');
     var n=g.cu.length;
-    L.push('- '+(n?'에어컨 '+n+'대 점검 결과 ':'점검 결과 ')+((bad.length||low.length)?'일부 에어컨에서 확인이 필요한 상태가 발견됨.':'전반적인 작동 상태 및 냉방 성능은 양호한 것으로 확인됨.'));
+    L.push('- '+(n?'에어컨 '+n+'대 점검 결과 ':'점검 결과 ')+((bad.length||low.length||na.length)?'일부 에어컨에서 확인이 필요한 상태가 발견됨.':'전반적인 작동 상태 및 냉방 성능은 양호한 것으로 확인됨.'));
     if(ok.length)L.push('- '+ok.join('·')+' 에어컨은 토출 온도차 정상 범위로 냉방 성능 양호.');
     if(fixed.length)L.push('- '+fixed.join(', ')+' — 조치 후 정상 냉방 성능 회복 확인.');
     if(low.length)L.push('- '+low.join(', ')+' — 온도차가 기준(12°C)보다 낮게 측정됨.');
+    if(na.length)L.push('- '+na.join('·')+' 에어컨은 고장 등으로 정상 운전이 되지 않아 냉방 온도 측정 불가.');
     L.push('','② 세부 점검 및 진단 내용');var n2=L.length;
     g.def.forEach(function(f){var w=g.where(f);L.push('- '+(w?w+': ':'')+f.defect+'.');});
     g.msr.forEach(function(m,i){var nm=m.label||('실외기 '+(i+1));var p=[];
@@ -8773,7 +8803,8 @@ setTimeout(function(){
       var bd=w.querySelector('[id^="cu-badge-"]'),ta=w.querySelector('.cu-ta'),tb=w.querySelector('.cu-tb');
       if(bd&&ta&&tb){var fd=null;try{var gd=w._getCuData?w._getCuData():null;if(gd&&gd.fix&&gd.fix.on){var fa=parseFloat(gd.fix.a),fb=parseFloat(gd.fix.b);if(!isNaN(fa)&&!isNaN(fb))fd=fa-fb;}}catch(_){}
         var a0=parseFloat(ta.value),b0=parseFloat(tb.value),dv=fd!=null?fd:((!isNaN(a0)&&!isNaN(b0))?a0-b0:null);
-        if(dv!=null){var tx2='ΔT '+dv.toFixed(1)+'°'+(fd!=null?' · 수리 후':''),good=dv>=12;
+        if(fd==null&&w._cuNa&&w._cuNa()){var cn='font-size:11px;font-weight:800;padding:3px 9px;border-radius:10px;white-space:nowrap;background:#EEF1F6;color:#334155';if(bd.textContent!=='🚫 측정불가')bd.textContent='🚫 측정불가';if(bd.getAttribute('style')!==cn)bd.setAttribute('style',cn);}
+        else if(dv!=null){var tx2='ΔT '+dv.toFixed(1)+'°'+(fd!=null?' · 수리 후':''),good=dv>=12;
           if(bd.textContent!==tx2)bd.textContent=tx2;
           var cs='font-size:11px;font-weight:800;padding:3px 9px;border-radius:10px;white-space:nowrap;background:'+(good?'#E7F6EF':'#FFF1D6')+';color:'+(good?'#0E7A4E':'#8A5A00');
           if(bd.getAttribute('style')!==cs)bd.setAttribute('style',cs);}}

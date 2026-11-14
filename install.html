@@ -571,6 +571,14 @@ html.pdfdoc #rp-nav,html.pdfdoc #rp-top{position:static}
 @media print{#rp-top,#rp-nav,#rp-bar,.sh-ov,.sheet,.toast,#zoom{display:none!important}body{background:#fff}}
 
 .tg.rec{background:#FFF1E0;color:#B45309}.tg.watch{background:#EEF2F7;color:#475569}
+/* 측정 불가 (고장 등으로 온도 측정을 못 한 에어컨) */
+.ctrack.na{background:repeating-linear-gradient(135deg,#F1F3F8 0 6px,#E7EBF3 6px 12px);height:auto;min-height:22px;display:flex;align-items:center;padding:3px 10px;box-shadow:inset 0 0 0 1px var(--line)}
+.ctrack.na span{font-size:11px;font-weight:700;color:var(--ink2);line-height:1.3}
+.crow .v.na{color:var(--ink3)}
+.na-card{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;margin-top:14px;background:#FFF8EB;box-shadow:inset 0 0 0 1px #F3DDAE}
+.na-card .na-i{font-size:20px;line-height:1.1}
+.na-card b{display:block;font-size:15px;color:#8A5A00}
+.na-card p{margin:3px 0 0;font-size:13px;line-height:1.5;color:var(--ink2)}
 
 </style>
 </head>
@@ -639,7 +647,7 @@ ko:{bPdf:'PDF 저장',bShare:'공유',bAsk:'문의하기',loading:'보고서 불
  evS:{repaired:'요청하신 수리를 마쳤으며, 정상 작동을 확인했습니다.',normal:'점검 결과 모든 항목이 정상입니다. 안심하고 사용하셔도 됩니다.',preventive:'현재 사용에는 문제가 없으나, 효율 저하를 막기 위한 예방 정비를 권장합니다.',repair:'일부 항목에서 수리가 필요한 상태가 확인되었습니다. 빠른 정비를 권장합니다.',urgent:'즉시 조치가 필요한 항목이 확인되었습니다. 가능한 한 빨리 정비를 받으시길 권장합니다.'},
  mDate:'점검일',mEng:'담당 기사',mNo:'보고서 번호',mUnits:'점검 대수',visit:'방문 일시',tech:'담당 기사',loc:'위치',units:'대수',instDate:'설치일',inst:'설치 내용',prodT:'제품',items:'점검 항목',
  opT:'담당 기사 의견',team:'해피홈케어 기술팀',more:'전체 보기',less:'접기',
- uT:'에어컨별 상태',uS:'카드를 넘겨 보고, 누르면 자세히 볼 수 있어요',dtL:'온도차',detail:'자세히 보기',noIss:'특이사항 없이 잘 작동합니다',noDt:'온도 측정값 없음',
+ uT:'에어컨별 상태',uS:'카드를 넘겨 보고, 누르면 자세히 볼 수 있어요',dtL:'온도차',detail:'자세히 보기',noIss:'특이사항 없이 잘 작동합니다',noDt:'온도 측정값 없음',naT:'측정 불가',naS:'고장 등으로 온도 측정 불가',naC:'정상 운전이 되지 않아 확인이 필요합니다',naP:'고장 등으로 정상 운전이 되지 않아 냉방 온도를 측정할 수 없었습니다',
  tT:'해야 할 일',tS:'중요한 순서대로 정리했습니다',tabs:{urgent:'지금 필요',regular:'정기 관리',review:'참고'},
  none:{urgent:'지금 바로 하실 일은 없습니다',regular:'정기 관리 항목이 없습니다',review:'참고 사항이 없습니다'},noneAny:'해당 항목이 없습니다',
  when:{urgent:'조속히',regular:'권장',review:'참고'},
@@ -682,7 +690,7 @@ en:{bPdf:'PDF',bShare:'Share',bAsk:'Contact us',loading:'Loading report…',notF
  evS:{repaired:'The requested repair has been completed and normal operation has been confirmed.',normal:'All items passed inspection. Your units are in good condition.',preventive:'No current issues, but preventive maintenance is recommended to keep efficiency up.',repair:'Some items need repair. We recommend servicing them soon.',urgent:'Urgent items were found. Please arrange service as soon as possible.'},
  mDate:'Date',mEng:'Technician',mNo:'Report no.',mUnits:'Units inspected',visit:'Visit',tech:'Technician',loc:'Location',units:'Units',instDate:'Installed',inst:'Work',prodT:'Product',items:'Checks',
  opT:'Technician’s notes',team:'Happy Home Care technical team',more:'Read all',less:'Show less',
- uT:'Unit by unit',uS:'Swipe through, tap a card for details',dtL:'drop',detail:'View details',noIss:'Working well, nothing to note',noDt:'No temperature reading',
+ uT:'Unit by unit',uS:'Swipe through, tap a card for details',dtL:'drop',detail:'View details',noIss:'Working well, nothing to note',noDt:'No temperature reading',naT:'Not measurable',naS:'Not measurable (e.g. unit fault)',naC:'Unit could not run normally — needs a check',naP:'The unit could not run normally (e.g. due to a fault), so cooling temperatures could not be measured',
  tT:'What to do next',tS:'Sorted by priority',tabs:{urgent:'Now',regular:'Routine',review:'Note'},
  none:{urgent:'Nothing urgent right now',regular:'No routine items',review:'Nothing to note'},noneAny:'Nothing here',
  when:{urgent:'As soon as possible',regular:'Recommended',review:'Note'},
@@ -926,9 +934,10 @@ function recFromOpinion(d){
 }
 
 /* ══════════════ 에어컨 점검 (점검·출장 공통 자료) ══════════════ */
+var NA_IMG='/measure-na.jpg';
 function buildAC(r){
   var eq=arr(r.equipments),eqType=(eq.filter(function(e){return e.type&&!/실외기/.test(e.type);})[0]||{});
-  var cu=arr(r.coolUnits).map(function(c){var o=Object.assign({},c);o.photos=arr(c.photos).length?arr(c.photos):(c.photo?[c.photo]:[]);o.model=c.model||'';o._type=eqType.type||'';o._type_en=eqType.type_en||'';return o;});
+  var cu=arr(r.coolUnits).map(function(c){var o=Object.assign({},c);o.photos=arr(c.photos).length?arr(c.photos):(c.photo?[c.photo]:[]);o.na=c.result==='na';if(o.na&&!o.photos.length){o.photos=[NA_IMG];o._naAuto=1;}o.model=c.model||'';o._type=eqType.type||'';o._type_en=eqType.type_en||'';return o;});
   if(!cu.length){eq.forEach(function(e){arr(e.acs).forEach(function(a){if(a&&a.label)cu.push({label:a.label,loc:a.loc,loc_en:a.loc_en,a:'',b:'',photos:[],_type:e.type,_type_en:e.type_en});});});}
   var lk=arr(r.leakUnits).map(function(l,i){var o=Object.assign({},l);if(!o.label&&cu[i])o.label=cu[i].label;return o;});
   if(arr(r.leakPhotos).length&&lk.length&&!arr(lk[0].photos).length)lk[0]=Object.assign({},lk[0],{photos:arr(r.leakPhotos)});
@@ -938,10 +947,10 @@ function buildAC(r){
 function buildUnits(d,ac){
   return ac.cu.map(function(c){
     var fx=(c.fix&&c.fix.on&&num(c.fix.a)!=null&&num(c.fix.b)!=null)?c.fix:null;
-    var a=num(c.a),b=num(c.b),has=a!=null&&b!=null;
+    var a=c.na?null:num(c.a),b=c.na?null:num(c.b),has=a!=null&&b!=null;
     var u={label:c.label||'',c:c,fx:fx,has:has||!!fx,dt0:has?a-b:null,iss:[],done:[],chk:[],msr:[],ph:[],lv:0};
     u.dt=fx?(num(fx.a)-num(fx.b)):u.dt0;
-    u.dtLv=u.dt==null?0:(u.dt>=12?0:u.dt>=9?1:2);u.lv=u.dtLv;
+    u.dtLv=u.dt==null?0:(u.dt>=12?0:u.dt>=9?1:2);u.lv=u.dtLv;u.na=!!c.na&&!fx;if(u.na)u.lv=Math.max(u.lv,1);
     if(c.result==='bad'&&!fx)u.lv=Math.max(u.lv,2);
     function has_(x){return arr(x.units).indexOf(c.label)>=0;}
     arr(d.results).forEach(function(r){if(has_(r)){u.chk.push(r);u.lv=Math.max(u.lv,LVR[stOf(r.status)]);}});
@@ -969,20 +978,20 @@ function unitsSection(){
   var lvT=t('lv');
   return sec('s-units',t('nav').units,t('uT'),ST.pdf?'':t('uS'),'<div class="uc-track" id="uct">'+U.map(function(u,i){
      var top=u.iss[0]||u.chk.filter(function(r){return stOf(r.status)!=='ok';})[0]||u.done[0];
-     var txt=top?(top.defect?v(top,'defect')+(top.status==='done'&&top.action?' — '+v(top,'action'):''):v(top,'name')+(top.note?' — '+v(top,'note'):'')):t('noIss');
-     var il=top?(top.defect?(top.status==='done'?'wn':(top.risk==='h'||top.risk==='vh'?'bad':'wn')):stOf(top.status)):'ok';
+     var txt=top?(top.defect?v(top,'defect')+(top.status==='done'&&top.action?' — '+v(top,'action'):''):v(top,'name')+(top.note?' — '+v(top,'note'):'')):(u.na?t('naC'):t('noIss'));
+     var il=top?(top.defect?(top.status==='done'?'wn':(top.risk==='h'||top.risk==='vh'?'bad':'wn')):stOf(top.status)):(u.na?'wn':'ok');
      return '<button class="uc" data-u="'+i+'"><div class="uc-stage '+u.l+'"><span class="pill '+u.l+'">'+lvT[u.l]+'</span>'+(unitTag(u)?'<span class="uc-tag">'+esc(u.label)+'</span>':'')+acHTML(u.l)+(u.pc&&!ST.pdf?'<span class="uc-cam">📷 '+u.pc+'</span>':'')+'</div>'+
      '<div class="uc-b"><h3>'+esc(unitName(u))+'</h3><div class="md">'+esc(unitModel(u))+'&nbsp;</div>'+
-     (u.dt!=null?'<div class="uc-dt"><b class="num" style="color:'+dtColor(u.dtLv)+'">'+u.dt.toFixed(1)+'°C</b><span>'+t('dtL')+'</span>'+(u.fx&&u.dt0!=null?'<i class="num">'+u.dt0.toFixed(1)+'°</i><em>'+t('fixT')+'</em>':'')+'</div>':'<div class="uc-dt"><span>'+t('noDt')+'</span></div>')+
+     (u.dt!=null?'<div class="uc-dt"><b class="num" style="color:'+dtColor(u.dtLv)+'">'+u.dt.toFixed(1)+'°C</b><span>'+t('dtL')+'</span>'+(u.fx&&u.dt0!=null?'<i class="num">'+u.dt0.toFixed(1)+'°</i><em>'+t('fixT')+'</em>':'')+'</div>':(u.na?'<div class="uc-dt"><b class="num" style="color:#C98B0A;font-size:17px">🚫 '+t('naT')+'</b></div>':'<div class="uc-dt"><span>'+t('noDt')+'</span></div>'))+
      '<div class="uc-iss"><span class="ic '+il+'">'+icon(il)+'</span><span>'+esc(txt)+'</span></div>'+
      '<div class="uc-go"><span>'+t('detail')+'</span><i>→</i></div></div></button>';
    }).join('')+'</div>'+(ST.pdf?'':'<div class="uc-dots" id="ucd">'+U.map(function(_,i){return '<i'+(i?'':' class="on"')+'></i>';}).join('')+'</div>'),U.length+(LANG==='ko'?'대':' units'));
 }
 function coolSection(title){
-  var L=U.filter(function(u){return u.dt!=null;});if(!L.length)return '';
+  var L=U.filter(function(u){return u.dt!=null||u.na;});if(!L.length)return '';
   var anyFix=L.some(function(u){return u.fx&&u.dt0!=null;});
   return sec('s-cool',t('nav').cool,title||t('cT'),t('cS'),'<div class="rp-card cool"><div class="cool-lg">'+t('cLg').map(function(x,i){return '<span style="--c:'+['#F5D98F','#BFE6CF','#86D3AB'][i]+'">'+x+'</span>';}).join('')+'</div><div style="margin-top:6px">'+
-   L.map(function(u){var i=U.indexOf(u),p=Math.min(100,Math.max(4,u.dt/20*100));return '<button class="crow" data-u="'+i+'"><div class="nm">'+esc(unitName(u))+'<small>'+esc([unitTag(u),u.fx?t('fixT'):''].filter(Boolean).join(' · '))+'</small></div><div class="ctrack">'+(u.fx&&u.dt0!=null?'<i class="ghost" style="left:'+Math.min(100,Math.max(0,u.dt0/20*100))+'%"></i>':'')+'<i class="cfill '+['','wn','bad'][u.dtLv]+'" data-w="'+p+'"'+(ST.pdf?' style="width:'+p+'%"':'')+'></i></div><div class="v num">'+u.dt.toFixed(1)+'<small>°C</small></div></button>';}).join('')+
+   L.map(function(u){var i=U.indexOf(u);if(u.na)return '<button class="crow na" data-u="'+i+'"><div class="nm">'+esc(unitName(u))+'<small>'+esc(unitTag(u))+'</small></div><div class="ctrack na"><span>'+t('naS')+'</span></div><div class="v na">—</div></button>';var p=Math.min(100,Math.max(4,u.dt/20*100));return '<button class="crow" data-u="'+i+'"><div class="nm">'+esc(unitName(u))+'<small>'+esc([unitTag(u),u.fx?t('fixT'):''].filter(Boolean).join(' · '))+'</small></div><div class="ctrack">'+(u.fx&&u.dt0!=null?'<i class="ghost" style="left:'+Math.min(100,Math.max(0,u.dt0/20*100))+'%"></i>':'')+'<i class="cfill '+['','wn','bad'][u.dtLv]+'" data-w="'+p+'"'+(ST.pdf?' style="width:'+p+'%"':'')+'></i></div><div class="v num">'+u.dt.toFixed(1)+'<small>°C</small></div></button>';}).join('')+
    '</div><div class="cscale"><i></i><div><span style="left:0">0</span><span style="left:60%">12</span><span style="left:75%">15</span><span style="left:100%">20°C</span></div></div>'+
    '<div class="cool-note"><span>💡</span><span>'+t('cNote')+(anyFix?t('cNoteFix'):'')+'</span></div></div>');
 }
@@ -1050,14 +1059,15 @@ function photoSection(d,extraFirst){
 function unitDetail(u){
   var h='';
   if(u.fx){h+='<div class="rp-card tmp2">'+[[t('befT'),u.c.a,u.c.b,u.dt0,''],[t('aftT')+' ✓',u.fx.a,u.fx.b,u.dt,' af']].filter(function(r){return r[3]!=null;}).map(function(r){return '<div class="tr'+r[4]+'"><span>'+r[0]+'</span><div><small>'+t('sIn')+'</small><b class="num">'+esc(r[1])+'°</b></div><span class="ar">→</span><div><small>'+t('sOut')+'</small><b class="num" style="color:var(--cool)">'+esc(r[2])+'°</b></div><div class="dt"><small>'+t('sDt')+'</small><b class="num">'+r[3].toFixed(1)+'°</b></div></div>';}).join('')+'</div>';}
+  else if(u.na){h+='<div class="rp-card na-card"><span class="na-i">🚫</span><div><b>'+t('naT')+'</b><p>'+t('naP')+'</p></div></div>';}
   else if(u.dt!=null){h+='<div class="rp-card tmp"><div><span>'+t('sIn')+'</span><b class="num">'+esc(u.c.a)+'°</b></div><span class="ar">→</span><div><span>'+t('sOut')+'</span><b class="num" style="color:var(--cool)">'+esc(u.c.b)+'°</b></div><div class="dt"><span>'+t('sDt')+'</span><b class="num" style="color:'+dtColor(u.dtLv)+'">'+u.dt.toFixed(1)+'°</b></div></div>';}
-  var tph=u.c.photos.map(function(p){return ph(p,(u.fx?t('befT')+' · ':'')+(u.dt0!=null?t('sDt')+' '+u.dt0.toFixed(1)+'°':''));}).concat(arr(u.fx&&u.fx.aPhotos).map(function(p){return ph(p,t('aftT')+' · '+t('sDt')+' '+u.dt.toFixed(1)+'°');}));
+  var tph=u.c.photos.map(function(p){return ph(p,u.c.na?t('naT'):(u.fx?t('befT')+' · ':'')+(u.dt0!=null?t('sDt')+' '+u.dt0.toFixed(1)+'°':''));}).concat(arr(u.fx&&u.fx.aPhotos).map(function(p){return ph(p,t('aftT')+' · '+t('sDt')+' '+u.dt.toFixed(1)+'°');}));
   if(tph.length)h+='<div class="pg sh-tph">'+tph.join('')+'</div>';
   if(u.fx&&u.fx.note)h+='<div class="ms-memo" style="margin-top:8px">'+esc(v(u.fx,'note'))+'</div>';
   if(u.iss.length)h+='<div class="sh-sec"><h4>'+t('sIss')+'</h4><div class="rp-card sh-li">'+u.iss.map(function(f){var l=(f.risk==='h'||f.risk==='vh')?'bad':'wn';return '<div class="row"><span class="ic '+l+'">'+icon(l)+'</span><div><b>'+esc(v(f,'defect'))+'</b>'+(f.action?'<p>'+esc(v(f,'action'))+'</p>':'')+''+stTag(f)+defPh(f)+'</div></div>';}).join('')+'</div></div>';
   if(u.done.length)h+='<div class="sh-sec"><h4>'+t('sDone')+'</h4><div class="rp-card sh-li">'+u.done.map(function(f){return '<div class="row"><span class="ic ok">✓</span><div><b>'+esc(v(f,'defect'))+'</b>'+(f.action?'<p>'+esc(v(f,'action'))+'</p>':'')+'<span class="tg done">'+t('done')+'</span>'+defPh(f)+'</div></div>';}).join('')+'</div></div>';
   if(u.leak.length)h+='<div class="sh-sec"><h4>'+t('lkT')+'</h4><div class="rp-card sh-li">'+u.leak.map(function(l){var ok=l.status!=='bad';return '<div class="row"><span class="ic '+(ok?'ok':'bad')+'">'+(ok?'✓':'✕')+'</span><div style="flex:1;min-width:0"><b>'+(ok?t('lkOk'):t('lkBad'))+'</b>'+(arr(l.photos).length?'<div class="pg" style="margin-top:8px">'+arr(l.photos).map(function(p){return ph(p,t('lkPh'));}).join('')+'</div>':'')+'</div></div>';}).join('')+'</div></div>';
-  if(!u.iss.length&&!u.done.length&&!u.leak.length&&!u.chk.length)h+='<div class="sh-sec"><div class="rp-card sh-li"><div class="row"><span class="ic ok">✓</span><div><b>'+t('noIss')+'</b></div></div></div></div>';
+  if(!u.na&&!u.iss.length&&!u.done.length&&!u.leak.length&&!u.chk.length)h+='<div class="sh-sec"><div class="rp-card sh-li"><div class="row"><span class="ic ok">✓</span><div><b>'+t('noIss')+'</b></div></div></div></div>';
   if(u.chk.length)h+='<div class="sh-sec"><h4>'+t('sChk')+'</h4><div class="rp-card sh-li">'+u.chk.map(function(r){var l=stOf(r.status);return '<div class="row"><span class="ic '+l+'">'+icon(l)+'</span><div><b>'+esc(v(r,'name'))+'</b>'+(r.note?'<p>'+esc(v(r,'note'))+'</p>':'')+'</div></div>';}).join('')+'</div></div>';
   if(u.msr.length)h+='<div class="sh-sec"><h4>'+t('sMsr')+'</h4><div class="rp-card ms" style="padding-top:0">'+u.msr.map(function(m){return msrHTML(m);}).join('').replace('class="ms-u"','class="ms-u" style="border-top:0"')+'</div></div>';
   if(u.ph.length)h+='<div class="sh-sec"><h4>'+t('sPh')+'</h4><div class="pg" style="margin-top:0">'+u.ph.map(function(p){return arr(p.photos).map(function(x){return ph(x,v(p,'memo'));}).join('');}).join('')+'</div></div>';
