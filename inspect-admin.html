@@ -1291,7 +1291,7 @@ var PHRASE_DEFAULTS={
   wpmemo:['배수펌프 필터 이물질 막힘','도어 고무패킹 곰팡이 · 오염','세탁조 뒷면 물때 · 찌꺼기 누적','댐퍼 · 베어링 노후 (소음 · 진동)','급수 호스 연결부 누수 흔적','건조 필터 · 배기 덕트 먼지 막힘'],
   note:['이상 없음','현장 세척 완료','재조임 완료','정상 동작','청소 필요','교체 권장','관찰 요망'],
   defect:['냉매 저압 저하 (누설 의심)','응축기 핀 오염','필터 막힘 · 풍량 저하','드레인 슬라임 누적','배관 단열 손상','소음·진동 발생','절연저항 저하'],
-  action:['누설점검 후 냉매 보충 예정','고압세척 권장 (분기 1회)','현장 세척 완료','배관 세정 완료','부품 교체 예정','경과 관찰 예정'],
+  action:['누설점검 후 냉매 보충 예정','고압세척 권장 (분기 1회)','현장 세척 완료','배관 세정 완료','부품 교체 예정','경과 관찰 예정','배관 재시공 권고','부품 교체 권고','다음 방문 시 재확인'],
   rectitle:['냉매 누설 정밀점검 및 보충','응축기 고압세척','전 세대 필터 월 1회 청소','드레인 배관 반기 세정','노후 설비 교체 검토'],
   pmemo:['냉매 누설 흔적 확인','필터 오염 심각 — 세척 필요','드레인 배관 막힘 확인','열교환기 핀 손상','절연 피복 벗겨짐','실외기 팬 이물 유입','배관 단열재 파손']
 };
@@ -7957,6 +7957,17 @@ setTimeout(function(){
 .section-nav-pill .m27-pi:empty{width:8px;height:8px;margin-right:6px;margin-left:-1px;vertical-align:1px}
 .section-nav-pill .m27-pi.done{background:#0E9B63;color:#fff}.section-nav-pill .m27-pi.need{background:#F0B429;color:#fff}.section-nav-pill .m27-pi.err{background:#DC2626;color:#fff}
 #inspect-form-body>div:first-child[style*="f8f9fc"]{display:none}
+/* 결함 카드 — 상태별 색 · 요약 */
+#defect-rows .unit-item.m27-d{border-left:4px solid #CBD3E1;transition:background .2s,border-color .2s}
+#defect-rows .unit-item.m27-d-plan{border-left-color:#F0B429;background:linear-gradient(180deg,#FFF9EA,#fff 45%)}
+#defect-rows .unit-item.m27-d-recommend{border-left-color:#3B82F6;background:linear-gradient(180deg,#F0F5FF,#fff 45%)}
+#defect-rows .unit-item.m27-d-advise{border-left-color:#DB2777;background:linear-gradient(180deg,#FDF2F8,#fff 45%)}
+#defect-rows .unit-item.m27-d-watch{border-left-color:#64748B;background:linear-gradient(180deg,#F1F5F9,#fff 45%)}
+#defect-rows .unit-item.m27-d-done{border-left-color:#0E9B63;background:linear-gradient(180deg,#EEFAF4,#fff 45%)}
+#m27-dsum{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+#m27-dsum span{flex:1 1 auto;min-width:72px;background:#F6F8FC;border-radius:10px;padding:7px 10px;font-size:12px;font-weight:700;color:#5A6478;white-space:nowrap}
+#m27-dsum b{font-size:17px;font-weight:800;margin-right:3px;color:#14192A;font-variant-numeric:tabular-nums}
+#m27-dsum .plan b{color:#B36000}#m27-dsum .recommend b{color:#1E40AF}#m27-dsum .advise b{color:#9D174D}#m27-dsum .watch b{color:#334155}#m27-dsum .done b{color:#0A7A4A}
 /* 결함 상태 「관찰요망」 */
 .dst-watch{border-color:#94A3B8!important;background:#F1F5F9!important;color:#334155!important;font-weight:600}
 @media (prefers-reduced-motion:reduce){.m27-flash{animation:none}.m27-sh{transition:none}}
@@ -8113,7 +8124,20 @@ setTimeout(function(){
       var cn='m27-tw '+(ws.some(function(x){return x[0]==='r';})?'r':'y'),hh=ws.map(function(x){return (x[0]==='r'?'⛔ ':'💡 ')+esc(x[1]);}).join('<br>');
       if(box.className!==cn)box.className=cn;if(box.innerHTML!==hh)box.innerHTML=hh;
     });
+    drawDef();
     drawRec();
+  }
+  var DST=[['plan','조치예정'],['recommend','조치권유'],['advise','조치권고'],['watch','관찰요망'],['done','조치완료']];
+  function drawDef(){
+    var rows=$('defect-rows');if(!rows)return;var cnt={},n=0;
+    [].forEach.call(rows.querySelectorAll('.unit-item'),function(w){if(!w._getDefectData)return;var d=w._getDefectData(),st=d.status||'plan';
+      var cls='m27-d m27-d-'+st;DST.forEach(function(x){if(x[0]!==st)w.classList.remove('m27-d-'+x[0]);});w.classList.add('m27-d','m27-d-'+st);
+      if(String(d.defect||'').trim()){cnt[st]=(cnt[st]||0)+1;n++;}});
+    var box=$('m27-dsum');
+    if(!n){if(box)box.remove();return;}
+    if(!box){box=document.createElement('div');box.id='m27-dsum';rows.parentNode.insertBefore(box,rows);}
+    var h='<span><b>'+n+'</b>건 발견</span>'+DST.map(function(x){return cnt[x[0]]?'<span class="'+x[0]+'"><b>'+cnt[x[0]]+'</b>'+x[1]+'</span>':'';}).join('');
+    if(box.innerHTML!==h)box.innerHTML=h;
   }
   function decoratePills(stMap){
     [].forEach.call(document.querySelectorAll('#section-nav .section-nav-pill'),function(p){var st=stMap[p.dataset.target]||'';
@@ -8223,7 +8247,7 @@ setTimeout(function(){
   var tm=null;function schedule(){clearTimeout(tm);tm=setTimeout(function(){try{draw();}catch(e){console.warn('m27',e);}},250);}
   var vf=$('view-form');
   if(vf){['input','change','click'].forEach(function(ev){vf.addEventListener(ev,function(e){if(e.target.closest&&e.target.closest('#m27-ov'))return;schedule();});});
-    var mine=function(n){return n&&n.nodeType===1&&(n.classList.contains('m27-tw')||(n.closest&&n.closest('#m27-ov,#m27-rec,#m27-ckbtn,.m27-tw')));};
+    var mine=function(n){return n&&n.nodeType===1&&(n.classList.contains('m27-tw')||n.id==='m27-dsum'||(n.closest&&n.closest('#m27-ov,#m27-rec,#m27-ckbtn,.m27-tw,#m27-dsum')));};
     new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var m=ms[i],t=m.target.nodeType===1?m.target:m.target.parentElement;if(mine(t))continue;
       var ns=[].slice.call(m.addedNodes).concat([].slice.call(m.removedNodes));if(ns.length&&ns.every(mine))continue;schedule();return;}}).observe(vf,{childList:true,subtree:true,characterData:true});}
   ['switchReportType','setDispatchKind','newReport','editReport','setEval'].forEach(function(f){var o=window[f];if(typeof o!=='function')return;window[f]=function(){var r=o.apply(this,arguments);if(f==='newReport'||f==='editReport')HID=[];schedule();setTimeout(schedule,800);return r;};});
