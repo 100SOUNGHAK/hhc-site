@@ -4344,7 +4344,7 @@ function addDefectRow(defect,loc,risk,action,status,units){
   defDiv.appendChild(defLbl);defDiv.appendChild(defInp);
   if(typeof attachPhraseChips==='function')attachPhraseChips('defect',defInp,{mode:'replace',compact:true,parent:defDiv});
 
-  var ddLoc=makeDd(LOC_OPTS,loc||'','위치 선택');
+  var ddLoc=makeDd(LOC_OPTS.concat(['실외기','배관','전기','전체 에어컨'].filter(function(x){return LOC_OPTS.indexOf(x)<0;})),loc||'','위치 선택');
   var locDiv=document.createElement('div');
   var locLbl=document.createElement('div');locLbl.className='fl';locLbl.textContent='위치';
   locDiv.appendChild(locLbl);locDiv.appendChild(ddLoc);
@@ -4378,7 +4378,7 @@ function addDefectRow(defect,loc,risk,action,status,units){
   var stLbl=document.createElement('div');stLbl.className='fl';stLbl.style='margin-bottom:6px';stLbl.textContent='상태';
   wrap.appendChild(stLbl);
   var stRow=document.createElement('div');stRow.className='defect-status-row';
-  var stCfg=[{v:'plan',l:'조치예정',c:'dst-plan'},{v:'recommend',l:'조치권유',c:'dst-rec'},{v:'advise',l:'조치권고',c:'dst-adv'},{v:'done',l:'조치완료',c:'dst-done'}];
+  var stCfg=[{v:'plan',l:'조치예정',c:'dst-plan'},{v:'recommend',l:'조치권유',c:'dst-rec'},{v:'advise',l:'조치권고',c:'dst-adv'},{v:'watch',l:'관찰요망',c:'dst-watch'},{v:'done',l:'조치완료',c:'dst-done'}];
   var stBtns=[];
   var curStatus=status||'plan';
   stCfg.forEach(function(s){
@@ -5734,6 +5734,20 @@ window.__savePhrases=async function(obj){
   }catch(e){console.error('phrases load:',e);}
 })();
 
+// ── 권장 정비 자동 추천 목록 저장/로딩 (settings/insp_recrules — 모든 기기 공유 · m27)
+window.__saveRecRules=async function(obj){
+  if(!DB)return;
+  try{await setDoc(doc(DB,'settings','insp_recrules'),{rules:obj,updatedAt:new Date().toISOString()});}
+  catch(e){console.error('recrules save:',e);}
+};
+(async function(){
+  if(!DB)return;
+  try{
+    var s=await getDoc(doc(DB,'settings','insp_recrules'));
+    if(s.exists()&&s.data()&&s.data().rules){var r=s.data().rules;var t=setInterval(function(){if(window.__recRulesLoaded){clearInterval(t);window.__recRulesLoaded(r);}},200);setTimeout(function(){clearInterval(t);},10000);}
+  }catch(e){console.error('recrules load:',e);}
+})();
+
 // ── 데이터 수집
 function collectData(){
   // 설비
@@ -6752,6 +6766,7 @@ function validateBeforeSave(data,isInstall,isWasher){
     (data.measurements||[]).forEach(function(m){if(m.fix&&m.fix.on&&m.fix.lp)return;var lp=parseFloat(m.lp);if(lp>0&&lp<80&&m.spec_lp!=='under')soft.push((m.label||'실외기')+' 저압('+m.lp+' PSI)이 80 미만인데 판정이 「'+(m.spec_lp==='over'?'기준 초과':'정상 범위')+'」로 선택되어 있습니다');});
     (data.coolUnits||[]).forEach(function(u){var a=parseFloat(u.a),b=parseFloat(u.b);var fx=u.fix&&u.fix.on&&u.fix.a&&u.fix.b;if(fx){a=parseFloat(u.fix.a);b=parseFloat(u.fix.b);}if(a&&b&&(a-b)<12)soft.push((u.label||'냉방')+' 온도차('+(a-b).toFixed(1)+'°C)가 12°C 미만');});
   }
+  if(window.__m27soft){try{window.__m27soft().forEach(function(x){if(soft.indexOf(x)<0&&!/온도차|종합판정|항목별 점검 결과가 비어/.test(x))soft.push(x);});}catch(e){}}
   return {hard:hard,soft:soft};
 }
 // 화면 안 확인창 — 앱(웹뷰)·탭 화면 안에서도 확실히 보이도록 브라우저 기본 확인창 대신 사용합니다
@@ -7850,5 +7865,372 @@ setTimeout(function(){
   sync();upBar();setTimeout(upBar,1500);
 })();
 </script>
+<!-- ════ m27 · 작성 화면 개선 (2026-11-14) ════
+   · 4종 보고서 공통: 맨 위 「한눈에」 카드(완성도 · 판정 · 숫자 · 섹션별 상태) · 「저장 전 점검」 창(누르면 그 칸으로 이동)
+     · 저장할 때 확인창에 같은 내용이 함께 나옵니다(그래도 저장 가능)
+   · 점검·출장: 흡입·토출 온도 실수 경고 · 권장 정비 「자동 추천」(설정 settings/insp_recrules 에 저장 · 모든 기기 공유)
+   ※ 이 블록(m27-css · m27-js)만 지우면 이전 화면으로 돌아갑니다. -->
+<style id="m27-css">
+#m27-ov{background:#fff;border-radius:14px;box-shadow:0 1px 2px rgba(11,24,51,.07),0 6px 14px -6px rgba(11,24,51,.16);padding:14px 14px 12px;margin:0 0 12px}
+#m27-ov .h{display:flex;gap:12px;align-items:center}
+#m27-ov .rg{position:relative;width:62px;height:62px;flex:0 0 62px}
+#m27-ov .rg svg{width:62px;height:62px;transform:rotate(-90deg)}
+#m27-ov .rg b{position:absolute;inset:0;display:grid;place-items:center;font-size:17px;font-weight:800;color:#14192A;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+#m27-ov .rg b small{font-size:10px;font-weight:700;color:#98A1B4;margin-left:1px}
+#m27-ov .t{flex:1;min-width:0}
+#m27-ov .t h3{margin:0;font-size:16.5px;font-weight:800;color:#14192A;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#m27-ov .t h3.e{color:#98A1B4}
+#m27-ov .t p{margin:2px 0 0;font-size:12.5px;color:#5A6478}
+#m27-ov .pl{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800;background:#F6F8FC;color:#5A6478}
+#m27-ov .pl.ok{background:#E7F6EF;color:#0E7A4E}#m27-ov .pl.wn{background:#FFF6DD;color:#8A5A00}#m27-ov .pl.bad{background:#FDECEC;color:#B42318}
+#m27-ov .st{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:12px}
+#m27-ov .st div{background:#F6F8FC;border-radius:10px;padding:7px 9px;min-width:0}
+#m27-ov .st span{display:block;font-size:11px;font-weight:700;color:#98A1B4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#m27-ov .st b{display:block;font-size:17px;font-weight:800;color:#14192A;font-variant-numeric:tabular-nums}
+#m27-ov .st b small{font-size:11px;color:#98A1B4;margin-left:1px}
+#m27-ov .st .wn{background:#FFF8E6}#m27-ov .st .wn b{color:#8A5A00}
+#m27-ov .st .bad{background:#FDF0F0;cursor:pointer}#m27-ov .st .bad b{color:#B42318}
+#m27-ov .mp{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+#m27-ov .mp button{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 10px 0 6px;border-radius:999px;border:1px solid #E4E9F2;background:#fff;font-family:inherit;font-size:12px;font-weight:700;color:#5A6478;cursor:pointer}
+#m27-ov .mp i{font-style:normal;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:800;background:#EEF1F6;color:#98A1B4}
+#m27-ov .mp .done{border-color:#BFE6D2;color:#0E7A4E}#m27-ov .mp .done i{background:#0E9B63;color:#fff}
+#m27-ov .mp .need{border-color:#F5DC9A;color:#8A5A00;background:#FFFBF0}#m27-ov .mp .need i{background:#F0B429;color:#fff}
+#m27-ov .mp .err{border-color:#F5B5B5;color:#B42318;background:#FFF5F5}#m27-ov .mp .err i{background:#DC2626;color:#fff}
+.m27-ckbtn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin:0 0 8px;padding:12px;border-radius:12px;border:1.5px solid #D8DFEC;background:#fff;font-family:inherit;font-size:14px;font-weight:800;color:#0E2350;cursor:pointer}
+.m27-bdg{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:#DC2626;color:#fff;font-size:11.5px;font-weight:800;display:inline-grid;place-items:center}
+.m27-bdg.y{background:#F0B429}.m27-bdg.z{display:none}
+.m27-s{flex:1;min-width:0;display:flex;align-items:center;gap:8px;border:0;background:none;padding:0;font-family:inherit;text-align:left;cursor:pointer}
+.m27-s .r{position:relative;width:40px;height:40px;flex:0 0 40px}.m27-s .r svg{width:40px;height:40px;transform:rotate(-90deg)}
+.m27-s .r b{position:absolute;inset:0;display:grid;place-items:center;font-size:11.5px;font-weight:800;color:#14192A}
+.m27-s small{display:block;font-size:11px;font-weight:700;color:#98A1B4;white-space:nowrap}
+.m27-s strong{display:flex;align-items:center;gap:5px;font-size:13.5px;font-weight:800;color:#14192A;white-space:nowrap}
+@media (max-width:767px){.m26-bar .s{display:none!important}.m27-ckbtn{display:none}}
+.m27-tw{margin:8px 10px 10px;padding:8px 10px;border-radius:9px;font-size:12px;line-height:1.45;font-weight:600}
+.m27-tw.r{background:#FDECEC;color:#B42318}.m27-tw.y{background:#FFF6DD;color:#7A5200}
+.m27-flash{animation:m27f 1.6s ease}
+@keyframes m27f{0%,100%{box-shadow:none}20%,60%{box-shadow:0 0 0 4px rgba(37,99,235,.45)}}
+.m27-dim{position:fixed;inset:0;z-index:9990;background:rgba(10,20,45,.45);opacity:0;visibility:hidden;transition:opacity .2s}
+.m27-dim.on{opacity:1;visibility:visible}
+.m27-sh{position:fixed;left:0;right:0;bottom:0;z-index:9991;max-width:600px;margin:0 auto;max-height:86vh;display:flex;flex-direction:column;background:#F4F6FA;border-radius:20px 20px 0 0;transform:translateY(105%);visibility:hidden;transition:transform .32s cubic-bezier(.2,.9,.3,1.1),visibility .32s;font-family:inherit}
+.m27-sh.on{transform:none;visibility:visible}
+.m27-sh .hd{display:flex;align-items:center;gap:8px;padding:16px 16px 8px}.m27-sh .hd b{flex:1;font-size:17px;font-weight:800;color:#14192A}
+.m27-sh .hd button{width:34px;height:34px;border-radius:50%;border:0;background:#E9EDF4;font-size:15px;color:#5A6478;cursor:pointer}
+.m27-sh .bd{overflow:auto;padding:4px 16px calc(18px + env(safe-area-inset-bottom,0))}
+.m27-sh .vh{font-size:12.5px;font-weight:800;color:#5A6478;margin:12px 2px 6px}
+.m27-vi{display:flex;align-items:flex-start;gap:10px;width:100%;margin-bottom:6px;padding:11px 12px;border:0;border-radius:12px;background:#fff;text-align:left;font-family:inherit;cursor:pointer;box-shadow:0 1px 2px rgba(14,35,80,.06)}
+.m27-vi i{flex:0 0 22px;height:22px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:800;color:#fff;background:#F0B429}
+.m27-vi.r i{background:#DC2626}
+.m27-vi div{flex:1;min-width:0}.m27-vi b{display:block;font-size:13.5px;font-weight:700;color:#14192A;line-height:1.4}.m27-vi small{display:block;font-size:11.5px;color:#98A1B4;margin-top:2px}
+.m27-vi span{flex:0 0 auto;font-size:12px;font-weight:800;color:#2563EB;align-self:center}
+.m27-ok{text-align:center;padding:22px 10px}.m27-ok div{width:56px;height:56px;margin:0 auto 10px;border-radius:50%;background:#E7F6EF;color:#0E9B63;display:grid;place-items:center;font-size:26px;font-weight:800}
+.m27-ok b{font-size:15px;color:#14192A}.m27-ok p{margin:4px 0 0;font-size:12.5px;color:#5A6478}
+.m27-pbtn{width:100%;height:48px;border:0;border-radius:12px;background:#0E2350;color:#fff;font-family:inherit;font-size:15px;font-weight:800;cursor:pointer;margin-top:8px}
+.m27-sbtn{height:44px;padding:0 14px;border:1.5px solid #D8DFEC;border-radius:12px;background:#fff;color:#0E2350;font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer}
+/* 권장 정비 자동 추천 */
+#m27-rec{margin:0 0 12px}
+#m27-rec .tp{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+#m27-rec .tp b{font-size:13.5px;font-weight:800;color:#0E2350}#m27-rec .tp b small{color:#98A1B4;font-weight:700;margin-left:3px}
+#m27-rec .ed{height:30px;padding:0 11px;border-radius:999px;border:1.5px dashed #B9C3D6;background:transparent;font-family:inherit;font-size:12px;font-weight:700;color:#5A6478;cursor:pointer}
+#m27-rec .ai{display:flex;align-items:center;gap:8px;padding:10px 10px 10px 12px;margin-bottom:6px;border-radius:12px;border:1px dashed #C9D3E6;background:linear-gradient(135deg,#F5F8FF,#FFFCF2)}
+#m27-rec .ai p{flex:1;min-width:0;margin:0;font-size:13.5px;font-weight:600;color:#14192A;line-height:1.4}
+#m27-rec .ai p small{display:block;font-size:11px;font-weight:700;color:#98A1B4}
+#m27-rec .ai .ad{height:32px;padding:0 12px;border-radius:999px;border:1px solid #BFD0F5;background:#fff;color:#2563EB;font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer;white-space:nowrap}
+#m27-rec .ai .x{width:28px;height:28px;border-radius:50%;border:0;background:rgba(255,255,255,.8);color:#98A1B4;cursor:pointer}
+#m27-rec .em{font-size:12px;color:#98A1B4;padding:4px 2px 2px}
+#m27-rec .uh{border:0;background:none;padding:2px 0 6px;font-family:inherit;font-size:12px;font-weight:700;color:#2563EB;cursor:pointer}
+.m27-rf{background:#fff;border-radius:14px;padding:12px;box-shadow:0 1px 2px rgba(14,35,80,.06)}
+.m27-rf input{width:100%;box-sizing:border-box;height:44px;padding:0 12px;border:1.5px solid #E4E9F2;border-radius:10px;background:#F6F8FC;font-family:inherit;font-size:15px}
+.m27-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.m27-seg button{height:38px;border-radius:10px;border:1.5px solid #E4E9F2;background:#fff;font-family:inherit;font-size:13px;font-weight:700;color:#5A6478;cursor:pointer}
+.m27-seg button.on{background:#0E2350;border-color:#0E2350;color:#fff}
+.m27-kw{display:flex;align-items:center;gap:8px;margin-top:8px}.m27-kw span{flex:0 0 auto;font-size:12.5px;font-weight:700;color:#5A6478}
+.m27-hint{font-size:11.5px;color:#98A1B4;margin-top:6px;line-height:1.45}
+.m27-ri{display:flex;align-items:center;gap:8px;background:#fff;border-radius:12px;padding:10px;margin-top:6px;box-shadow:0 1px 2px rgba(14,35,80,.06)}
+.m27-ri.off{opacity:.55}.m27-ri .b{flex:1;min-width:0}.m27-ri .b b{display:block;font-size:13.5px;font-weight:700;color:#14192A}.m27-ri .b small{display:block;font-size:11.5px;color:#98A1B4;margin-top:2px}.m27-ri .b em{font-style:normal;color:#0E9B63;font-weight:700}
+.m27-ri .n{flex:0 0 24px;height:24px;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:800;color:#fff;background:#2F9E6E}
+.m27-ri .n.urgent{background:#DC2626}.m27-ri .n.review{background:#3B6FD8}
+.m27-ri>button{flex:0 0 32px;height:32px;border-radius:10px;border:0;background:#F1F4F9;color:#0E2350;cursor:pointer}.m27-ri>button:disabled{opacity:.3}.m27-ri>button.x{color:#DC2626;background:#FEF2F2}
+.m27-sw{flex:0 0 46px;height:28px;border-radius:14px;border:0;background:#CBD3E1;position:relative;cursor:pointer}
+.m27-sw::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:left .2s}
+.m27-sw.on{background:#0E9B63}.m27-sw.on::after{left:21px}
+.section-nav-pill .m27-pi{font-style:normal;display:inline-grid;place-items:center;width:16px;height:16px;margin:0 5px 0 -3px;border-radius:50%;font-size:10px;font-weight:800;vertical-align:-2px;background:#E9EDF4;color:#98A1B4}
+.section-nav-pill .m27-pi:empty{width:8px;height:8px;margin-right:6px;margin-left:-1px;vertical-align:1px}
+.section-nav-pill .m27-pi.done{background:#0E9B63;color:#fff}.section-nav-pill .m27-pi.need{background:#F0B429;color:#fff}.section-nav-pill .m27-pi.err{background:#DC2626;color:#fff}
+#inspect-form-body>div:first-child[style*="f8f9fc"]{display:none}
+/* 결함 상태 「관찰요망」 */
+.dst-watch{border-color:#94A3B8!important;background:#F1F5F9!important;color:#334155!important;font-weight:600}
+@media (prefers-reduced-motion:reduce){.m27-flash{animation:none}.m27-sh{transition:none}}
+</style>
+<script id="m27-js">
+(function(){
+  function $(id){return document.getElementById(id);}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function RT(){try{return reportType;}catch(e){return 'inspect';}}
+  function val(id){var e=$(id);return e?String(e.value||'').trim():'';}
+  function num(x){var n=parseFloat(String(x==null?'':x).replace(/[^\d.\-]/g,''));return isNaN(n)?null:n;}
+  function bodyId(){var t=RT();return t==='install'?'install-form-body':(t==='washer'?'washer-form-body':'inspect-form-body');}
+  function visible(el){return !!(el&&el.offsetParent!==null);}
+  function cards(){var b=$(bodyId());if(!b)return [];return [].slice.call(b.querySelectorAll(':scope > .card')).filter(function(c){return c.style.display!=='none';});}
+  function phCount(id){var e=$(id);return e?e.querySelectorAll('.ph-item').length:0;}
+  function nPhotos(){try{return Object.keys(photoData).length;}catch(e){return 0;}}
+  var EVN={normal:['정상 · 양호','ok'],preventive:['예방정비 권장','wn'],repair:['수리 권장','bad'],urgent:['즉시수리 필요','bad'],repaired:['수리 완료','ok']};
+
+  /* ── 저장 전 점검 항목 ── */
+  function issues(){
+    var t=RT(),L=[];function add(l,msg,el,sub,soft){L.push({l:l,msg:msg,el:el,sub:sub||'',soft:soft!==false});}
+    var cid=t==='install'?'if-client':(t==='washer'?'w-client':'f-client'),did=t==='install'?'if-date':(t==='washer'?'w-date':'f-date');
+    if(!val(cid))add('r','고객명이 비어 있습니다',$(cid),'',false);
+    if(!val(did))add('r',(t==='install'?'설치일':'점검일')+'이 비어 있습니다',$(did),'',false);
+    if(t==='inspect'||t==='dispatch'){
+      if(t==='dispatch'){
+        if(!val('d-reason'))add('y','출동 사유가 비어 있습니다',$('d-reason'));
+        if(!val('d-work'))add('y','처리 내용이 비어 있습니다',$('d-work'),'현장에서 한 일을 적으면 고객 보고서의 「진행 과정」에 나옵니다');
+      }
+      [].forEach.call(document.querySelectorAll('#cool-units .cu-item'),function(w){
+        if(!visible(w))return;
+        var nm=(w._cuLbl&&w._cuLbl())||'냉방 유닛';var ta=w.querySelector('.cu-ta'),tb=w.querySelector('.cu-tb');if(!ta||!tb)return;
+        var a=num(ta.value),b=num(tb.value);
+        if(a==null&&b==null)add('y',nm+' — 흡입·토출 온도가 비어 있습니다',w,'측정하지 않은 유닛이면 지워 주세요');
+        else if(a==null||b==null)add('y',nm+' — '+(a==null?'흡입':'토출')+' 온도가 비어 있습니다',w);
+        tempWarn(a,b).forEach(function(x){add(x[0],nm+' — '+x[1],w);});
+      });
+      [].forEach.call(document.querySelectorAll('#result-rows .rcard'),function(c){
+        if(!c._nameInp||!c._statusSel)return;var st=c._statusSel.value,nm=c._nameInp.value.trim();if(!nm)return;
+        var nt=c._getNoteInp?String(c._getNoteInp().value||'').trim():'';
+        if((st==='warn'||st==='bad')&&!nt)add('y','「'+nm+'」 '+(st==='bad'?'정비 필요':'주의')+' — 내용(비고)이 비어 있습니다',c,'고객 보고서에 이유가 함께 나옵니다');
+      });
+      [].forEach.call(document.querySelectorAll('#defect-rows .unit-item'),function(w,i){
+        if(!w._getDefectData)return;var d=w._getDefectData();
+        if(!String(d.defect||'').trim()){add('y','결함 '+(i+1)+' — 결함 내용이 비어 있습니다 (비어 있으면 저장되지 않습니다)',w);return;}
+        if(d.status==='done'&&!String(d.action||'').trim())add('y','결함 「'+d.defect+'」 — 「조치완료」인데 조치 내역이 비어 있습니다',w);
+      });
+      [].forEach.call(document.querySelectorAll('#problem-rows .unit-item'),function(w,i){
+        var m=w.querySelector('textarea');if(w.querySelectorAll('.ph-item').length&&m&&!m.value.trim())add('y','문제 사진 '+(i+1)+' — 메모가 없습니다',w,'고객은 사진만 보고는 무엇이 문제인지 모릅니다');
+      });
+      if(t==='inspect'){
+        var cb=phCount('clean-before-photos'),ca=phCount('clean-after-photos');
+        if((cb||ca)&&cb!==ca)add('y','청소 전 '+cb+'장 · 청소 후 '+ca+'장 — 장수가 달라 짝이 어긋나 보일 수 있습니다',$('clean-before-photos'),'◀ ▶ 로 순서를 맞출 수 있습니다');
+      }
+      if(!val('f-opinion'))add('y','최종 의견이 비어 있습니다',$('f-opinion'),'「메모로 자동 작성」으로 초안을 만들 수 있습니다');
+    }else if(t==='install'){
+      var np=0;[].forEach.call(document.querySelectorAll('#install-product-rows .unit-item'),function(w){if(w._getInstallProductData){var d=w._getInstallProductData();if(d.loc||d.model)np++;}});
+      if(!np)add('y','설치 제품 정보가 없습니다',$('install-product-rows'));
+      if(!phCount('install-before-photos'))add('y','설치 전 사진이 없습니다',$('install-before-photos'));
+      if(!phCount('install-after-photos'))add('y','설치 후 사진이 없습니다',$('install-after-photos'));
+    }else if(t==='washer'){
+      if(!phCount('w-before-photos')&&!phCount('w-after-photos'))add('y','세척 사진이 없습니다',$('w-before-photos'));
+      else if(phCount('w-before-photos')!==phCount('w-after-photos'))add('y','세척 전 '+phCount('w-before-photos')+'장 · 세척 후 '+phCount('w-after-photos')+'장 — 장수가 다릅니다',$('w-before-photos'));
+      [].forEach.call(document.querySelectorAll('#w-problem-rows .unit-item'),function(w,i){var m=w.querySelector('textarea');if(w.querySelectorAll('.ph-item').length&&m&&!m.value.trim())add('y','문제 사진 '+(i+1)+' — 메모가 없습니다',w);});
+      if(!val('w-opinion'))add('y','최종 의견이 비어 있습니다',$('w-opinion'));
+    }
+    return L;
+  }
+  function tempWarn(a,b){var w=[];
+    if(a!=null&&b!=null&&b>=a)w.push(['r','토출 온도('+b+'°)가 흡입('+a+'°)보다 높거나 같습니다 — 두 값이 바뀌지 않았는지 확인해 주세요']);
+    if(a!=null&&(a<15||a>40))w.push(['y','흡입 온도 '+a+'°는 보통 범위(20~35°)를 벗어났습니다 — 입력값을 확인해 주세요']);
+    if(b!=null&&(b<0||b>30))w.push(['y','토출 온도 '+b+'°는 보통 범위(5~20°)를 벗어났습니다 — 입력값을 확인해 주세요']);
+    return w;}
+  /* 저장 확인창에 함께 (그래도 저장 가능) */
+  window.__m27soft=function(){return issues().filter(function(x){return x.soft;}).map(function(x){return x.msg;});};
+
+  /* ── 완성도 ── */
+  function progress(){
+    var t=RT(),k=[];
+    var cl=t==='install'?'if-client':(t==='washer'?'w-client':'f-client'),dt=t==='install'?'if-date':(t==='washer'?'w-date':'f-date');
+    k.push(!!(val(cl)&&val(dt)));
+    if(t==='inspect'){
+      k.push(!!document.querySelector('#equip-rows .unit-item'));
+      k.push(!!document.querySelector('#result-rows .rcard'));
+      k.push(!!document.querySelector('#cool-units .cu-item')||!!document.querySelector('#msr-rows .unit-item'));
+      k.push((function(){try{return !!evalVal;}catch(e){return false;}})());
+      k.push(phCount('work-photos')+phCount('clean-before-photos')+phCount('clean-after-photos')>0);
+      k.push(!!val('f-opinion'));
+    }else if(t==='dispatch'){
+      k.push(!!val('d-reason'));k.push(!!val('d-work'));k.push(nPhotos()>0);k.push(!!val('f-opinion'));
+    }else if(t==='install'){
+      k.push(!!document.querySelector('#install-product-rows .unit-item'));k.push(phCount('install-before-photos')>0);k.push(phCount('install-after-photos')>0);
+      k.push(!!document.querySelector('#cooltest-rows .unit-item')||!!val('if-test-note'));
+    }else{
+      k.push(!!val('w-model')||!!document.querySelector('#w-type-row .on'));k.push(phCount('w-before-photos')+phCount('w-after-photos')>0);k.push(!!val('w-opinion'));
+    }
+    var n=k.filter(Boolean).length,L=issues(),err=L.filter(function(x){return x.l==='r';}).length;
+    var p=Math.round(n/k.length*100);if(err&&p>0)p=Math.max(0,p-5*err);
+    return {p:p,L:L};
+  }
+  function ring(p,size,stroke){var r=(size-stroke)/2,C=2*Math.PI*r,col=p>=90?'#0E9B63':p>=60?'#2563EB':'#F0B429';
+    return '<svg viewBox="0 0 '+size+' '+size+'"><circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="#E4E9F2" stroke-width="'+stroke+'"/><circle cx="'+size/2+'" cy="'+size/2+'" r="'+r+'" fill="none" stroke="'+col+'" stroke-width="'+stroke+'" stroke-linecap="round" stroke-dasharray="'+C.toFixed(1)+'" stroke-dashoffset="'+(C*(1-p/100)).toFixed(1)+'" style="transition:stroke-dashoffset .5s"/></svg>';}
+  function hasContent(c){
+    if(c.querySelector('.ph-item,.rcard,.cu-item,#equip-rows .unit-item,.unit-item,.np-set'))return true;
+    var ins=c.querySelectorAll('input[type=text],input[type=tel],input[type=date],input:not([type]),textarea');
+    for(var i=0;i<ins.length;i++){if(String(ins[i].value||'').trim())return true;}
+    return !!c.querySelector('.ev-btn.on,.ev-btn.sel,.on');
+  }
+
+  /* ── 한눈에 카드 ── */
+  var ov=document.createElement('div');ov.id='m27-ov';
+  var nav=$('section-nav');if(nav&&nav.parentNode)nav.parentNode.insertBefore(ov,nav);
+  var TYL={inspect:'점검보고서',dispatch:'출장점검',install:'설치보고서',washer:'세탁기 · 건조기'};
+  function draw(){
+    if(!ov.isConnected)return;
+    var t=RT(),pr=progress(),L=pr.L,err=L.filter(function(x){return x.l==='r';}).length,warn=L.length-err;
+    var cl=val(t==='install'?'if-client':(t==='washer'?'w-client':'f-client')),dt=val(t==='install'?'if-date':(t==='washer'?'w-date':'f-date'));
+    var ty=TYL[t];try{if(t==='dispatch'&&dispatchKind==='repair')ty='출장수리';}catch(e){}
+    var pill='';
+    if(t==='inspect'){var ev='';try{ev=evalVal;}catch(e){}pill=ev&&EVN[ev]?'<span class="pl '+EVN[ev][1]+'">'+EVN[ev][0]+'</span>':'<span class="pl">종합 판정 선택 전</span>';}
+    else if(t==='dispatch'){var dd=true;try{dd=dispatchDone;}catch(e){}pill='<span class="pl '+(dd?'ok':'wn')+'">'+(dd?'✅ 처리 완료':'⏳ 재방문 필요')+'</span>';}
+    var S;
+    if(t==='inspect'||t==='dispatch'){
+      var nac=document.querySelectorAll('#cool-units .cu-item').length||document.querySelectorAll('#equip-rows .unit-item').length,nw=0;
+      [].forEach.call(document.querySelectorAll('#result-rows .rcard'),function(c){if(c._statusSel&&(c._statusSel.value==='warn'||c._statusSel.value==='bad'))nw++;});
+      var ndf=0;[].forEach.call(document.querySelectorAll('#defect-rows .unit-item'),function(w){if(w._getDefectData&&String(w._getDefectData().defect||'').trim())ndf++;});
+      S=[['에어컨',nac,'대',''],[t==='inspect'?'주의·정비':'발견 결함',t==='inspect'?nw:ndf,'개',(t==='inspect'?nw:ndf)?'wn':''],['사진',nPhotos(),'장','']];
+    }else if(t==='install'){
+      S=[['설치 제품',document.querySelectorAll('#install-product-rows .unit-item').length,'대',''],['자재',document.querySelectorAll('#material-rows .unit-item').length,'개',''],['사진',nPhotos(),'장','']];
+    }else{
+      var bad=0;try{WASHER_CHECKLIST.forEach(function(i){if(!washerChecklistResult[i.key])bad++;});}catch(e){}
+      S=[['체크 이상',bad,'개',bad?'wn':''],['문제 사진',document.querySelectorAll('#w-problem-rows .unit-item').length,'건',''],['사진',nPhotos(),'장','']];
+    }
+    S.push(['확인 필요',L.length,'개',err?'bad':warn?'wn':'']);
+    var stMap={};cards().forEach(function(c){
+      var tt=c.querySelector('.card-title');if(!tt)return;
+      var mine=L.filter(function(x){return x.el&&(x.el===c||c.contains(x.el));});
+      var st=mine.some(function(x){return x.l==='r';})?'err':mine.length?'need':hasContent(c)?'done':'';
+      if(!c.id)c.id='m27c-'+Math.random().toString(36).slice(2,8);
+      stMap[c.id]=st;});
+    ov.innerHTML='<div class="h"><div class="rg">'+ring(pr.p,62,7)+'<b><span>'+pr.p+'<small>%</small></span></b></div><div class="t"><h3 class="'+(cl?'':'e')+'">'+esc(cl||'고객명 입력 전')+'</h3><p>'+esc(ty)+(dt?' · '+esc(dt.replace(/-/g,'.')):'')+'</p>'+pill+'</div></div>'+
+      '<div class="st">'+S.map(function(s,i){return '<div class="'+s[3]+'"'+(i===3?' data-ck="1"':'')+'><span>'+s[0]+'</span><b>'+s[1]+'<small>'+s[2]+'</small></b></div>';}).join('')+'</div>'+
+      '';
+    decoratePills(stMap);
+    /* 아래 바 · PC 버튼 */
+    var bs=$('m27-s');if(bs)bs.innerHTML='<span class="r">'+ring(pr.p,40,5)+'<b>'+pr.p+'%</b></span><span><small>완성도 · 사진 '+nPhotos()+'장</small><strong>저장 전 점검'+(L.length?' <em class="m27-bdg'+(err?'':' y')+'">'+L.length+'</em>':' ✓')+'</strong></span>';
+    var pb=$('m27-ckbtn');if(pb)pb.innerHTML='✔ 저장 전 점검 '+(L.length?'<span class="m27-bdg'+(err?'':' y')+'">'+L.length+'</span>':'<span style="color:#0E9B63">— 빠진 곳 없음</span>');
+    /* 냉방 유닛 온도 경고 */
+    [].forEach.call(document.querySelectorAll('#cool-units .cu-item'),function(w){
+      var ta=w.querySelector('.cu-ta'),tb=w.querySelector('.cu-tb');if(!ta||!tb)return;
+      var ws=tempWarn(num(ta.value),num(tb.value)),box=w.querySelector(':scope > .m27-tw');
+      if(!ws.length){if(box)box.remove();return;}
+      if(!box){box=document.createElement('div');w.appendChild(box);}
+      var cn='m27-tw '+(ws.some(function(x){return x[0]==='r';})?'r':'y'),hh=ws.map(function(x){return (x[0]==='r'?'⛔ ':'💡 ')+esc(x[1]);}).join('<br>');
+      if(box.className!==cn)box.className=cn;if(box.innerHTML!==hh)box.innerHTML=hh;
+    });
+    drawRec();
+  }
+  function decoratePills(stMap){
+    [].forEach.call(document.querySelectorAll('#section-nav .section-nav-pill'),function(p){var st=stMap[p.dataset.target]||'';
+      var i=p.querySelector('.m27-pi');if(!i){i=document.createElement('i');i.className='m27-pi';p.insertBefore(i,p.firstChild);}
+      var cls='m27-pi '+st,tx=st==='done'?'✓':st==='err'?'!':st==='need'?'·':'';if(i.className!==cls)i.className=cls;if(i.textContent!==tx)i.textContent=tx;});
+  }
+  ov.addEventListener('click',function(e){var b=e.target.closest('[data-go]');if(b){go($(b.getAttribute('data-go')));return;}if(e.target.closest('[data-ck]'))openCheck();});
+  function go(el){if(!el)return;var hh=(document.querySelector('.hdr')||{}).offsetHeight||0,nh=($('section-nav')||{}).offsetHeight||0;
+    window.scrollTo({top:el.getBoundingClientRect().top+window.pageYOffset-(hh+nh+16),behavior:'smooth'});
+    el.classList.remove('m27-flash');void el.offsetWidth;el.classList.add('m27-flash');
+    var f=(el.matches&&el.matches('input,textarea'))?el:null;if(f)setTimeout(function(){try{f.focus({preventScroll:true});}catch(_){}},450);}
+
+  /* ── 시트 ── */
+  var dim=document.createElement('div');dim.className='m27-dim';var sh=document.createElement('div');sh.className='m27-sh';sh.setAttribute('role','dialog');
+  sh.innerHTML='<div class="hd"><b id="m27-sht"></b><button type="button" aria-label="닫기">✕</button></div><div class="bd" id="m27-shb"></div>';
+  document.body.appendChild(dim);document.body.appendChild(sh);
+  function openSheet(t,h){$('m27-sht').textContent=t;$('m27-shb').innerHTML=h;dim.classList.add('on');sh.classList.add('on');}
+  function closeSheet(){dim.classList.remove('on');sh.classList.remove('on');}
+  dim.addEventListener('click',closeSheet);sh.querySelector('.hd button').addEventListener('click',closeSheet);
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&sh.classList.contains('on'))closeSheet();});
+  var CK=[];
+  function openCheck(){
+    CK=issues();var E=CK.filter(function(x){return x.l==='r';}),W=CK.filter(function(x){return x.l!=='r';});
+    if(!CK.length){openSheet('저장 전 점검','<div class="m27-ok"><div>✓</div><b>빠진 곳이 없습니다</b><p>바로 저장하고 고객 링크를 만들 수 있어요.</p></div><button type="button" class="m27-pbtn" data-sv="1">💾 저장하고 고객 링크 생성</button>');return;}
+    var it=function(x){return '<button type="button" class="m27-vi '+x.l+'" data-i="'+CK.indexOf(x)+'"><i>'+(x.l==='r'?'!':'·')+'</i><div><b>'+esc(x.msg)+'</b>'+(x.sub?'<small>'+esc(x.sub)+'</small>':'')+'</div><span>이동 ›</span></button>';};
+    openSheet('저장 전 점검',(E.length?'<div class="vh">먼저 바로잡아 주세요 ('+E.length+')</div>'+E.map(it).join(''):'')+(W.length?'<div class="vh">확인하면 좋아요 ('+W.length+')</div>'+W.map(it).join(''):'')+
+      '<button type="button" class="m27-pbtn" data-sv="1">'+(E.length?'그래도 저장하기':'이대로 저장하기')+'</button>');
+  }
+  $('m27-shb').addEventListener('click',function(e){
+    var b=e.target.closest('[data-i]');if(b){var x=CK[+b.getAttribute('data-i')];closeSheet();if(x)setTimeout(function(){go(x.el);},260);return;}
+    if(e.target.closest('[data-sv]')){closeSheet();var s=$('btn-save');if(s)s.click();}
+  });
+  /* 아래 바(휴대폰) · 저장 버튼 위(PC) */
+  var bar=document.querySelector('.m26-bar');
+  if(bar){var s=document.createElement('button');s.type='button';s.className='m27-s';s.id='m27-s';bar.insertBefore(s,bar.firstChild);s.addEventListener('click',openCheck);}
+  var sv=$('btn-save');if(sv&&sv.parentNode){var pb=document.createElement('button');pb.type='button';pb.className='m27-ckbtn';pb.id='m27-ckbtn';sv.parentNode.insertBefore(pb,sv);pb.addEventListener('click',openCheck);}
+
+  /* ── 권장 정비 자동 추천 ── */
+  var SYS=[{id:'fix',n:'조치 후 다시 측정한 에어컨 → 재발 관찰',ex:'안방 에어컨 냉매 부족 재발 여부 관찰 — 재발 시 누설 정밀점검'},{id:'out',n:'실외기 저압 「기준 미달」(조치 전) → 누설 점검·보충',ex:'냉매 누설 점검 및 냉매 보충 (실외기 1)'},{id:'def',n:'조치완료가 아닌 결함 → 권장 정비로',ex:'배수 배관 기울기 불량 — 배관 재시공 권고'}];
+  var DEF={off:[],list:[{t:'배수배관 기울기 및 단열 처리 개선',ty:'regular',kw:'기울기'},{t:'3개월 주기 정기 세척 관리',ty:'regular',kw:'찌든, 심각한 오염, 고도'},{t:'냉매 누설 정밀점검 및 보충',ty:'urgent',kw:'누설'},{t:'응축기 고압세척',ty:'regular',kw:'응축기 핀, 응축기 오염'},{t:'필터 2주 1회 세척',ty:'regular',kw:'필터 막힘'},{t:'드레인 배관 반기 세정',ty:'regular',kw:'드레인 배관 막힘, 슬라임'}]};
+  var RULES=JSON.parse(JSON.stringify(DEF)),HID=[];
+  window.__recRulesLoaded=function(o){if(o&&Array.isArray(o.list)){RULES={off:Array.isArray(o.off)?o.off:[],list:o.list};schedule();}};
+  function saveRules(){if(window.__saveRecRules)window.__saveRecRules(RULES);}
+  var TYN={urgent:'🔴 우선',regular:'🟢 정기',review:'🔵 검토'};
+  function hay(){var t=[];
+    [].forEach.call(document.querySelectorAll('#result-rows .rcard'),function(c){if(!c._nameInp)return;var st=c._statusSel?c._statusSel.value:'';if(st==='warn'||st==='bad')t.push(c._nameInp.value);if(c._getNoteInp)t.push(c._getNoteInp().value);});
+    [].forEach.call(document.querySelectorAll('#defect-rows .unit-item'),function(w){if(w._getDefectData){var d=w._getDefectData();t.push(d.defect,d.action);}});
+    [].forEach.call(document.querySelectorAll('#problem-rows textarea'),function(m){t.push(m.value);});
+    t.push(val('f-opmemo'));return t.join(' | ');}
+  function hit(r,h){var ks=String(r.kw||'').split(',').map(function(x){return x.trim();}).filter(Boolean);return !ks.length||ks.some(function(k){return h.indexOf(k)>=0;});}
+  function suggest(){
+    var out=[],on=function(id){return RULES.off.indexOf(id)<0;};
+    if(on('fix')){var fx=[];[].forEach.call(document.querySelectorAll('#cool-units .cu-item'),function(w){if(!w._getCuData)return;var d=w._getCuData();if(d.fix&&d.fix.on)fx.push(d.loc||d.label||'');});fx=fx.filter(Boolean);
+      if(fx.length)out.push({type:'review',title:fx.join('·')+' 에어컨 냉매 부족 재발 여부 관찰 — 재발 시 누설 정밀점검',units:[]});}
+    if(on('out'))[].forEach.call(document.querySelectorAll('#msr-rows .unit-item'),function(w){if(!w._getMsrData)return;var d=w._getMsrData();if(d.spec_lp==='under'&&!(d.fix&&d.fix.on))out.push({type:'urgent',title:'냉매 누설 점검 및 냉매 보충'+(d.label?' ('+d.label+')':''),units:d.units||[]});});
+    if(on('def'))[].forEach.call(document.querySelectorAll('#defect-rows .unit-item'),function(w){if(!w._getDefectData)return;var d=w._getDefectData();if(!String(d.defect||'').trim()||d.status==='done')return;
+      var wt=d.status==='watch';out.push({type:wt?'review':(d.risk==='vh'||d.risk==='h')?'urgent':'regular',title:d.defect+(wt?' — 경과 관찰':d.action?' — '+d.action:''),units:d.units||[]});});
+    var h=hay();RULES.list.forEach(function(r){if(hit(r,h))out.push({type:r.ty,title:r.t,units:[]});});
+    var have=[];[].forEach.call(document.querySelectorAll('#rec-rows .unit-item'),function(w){if(w._getRecData)have.push(String(w._getRecData().title||'').trim());});
+    var seen={};return out.filter(function(r){if(seen[r.title]||have.indexOf(r.title)>=0||HID.indexOf(r.title)>=0)return false;seen[r.title]=1;return true;});
+  }
+  var recBox=null,SG=[];
+  function drawRec(){
+    var rr=$('rec-rows');if(!rr)return;
+    if(!recBox){recBox=document.createElement('div');recBox.id='m27-rec';rr.parentNode.insertBefore(recBox,rr);
+      recBox.addEventListener('click',function(e){
+        var a=e.target.closest('[data-ra]');if(!a)return;var k=a.getAttribute('data-ra'),i=+a.getAttribute('data-i');
+        if(k==='add'){var r=SG[i];if(r&&typeof addRecRow==='function'){addRecRow(r.type,r.title,'',r.units);if(window.__scheduleDraft)window.__scheduleDraft();if(typeof toast==='function')toast('✓ 권장 정비에 담았습니다');schedule();}}
+        else if(k==='hide'){if(SG[i]){HID.push(SG[i].title);schedule();}}
+        else if(k==='unhide'){HID=[];schedule();}
+        else if(k==='edit'){NR={t:'',ty:'regular',kw:''};openRules();}
+      });}
+    if(!visible(rr.parentNode)&&RT()!=='inspect'&&RT()!=='dispatch')return;
+    SG=suggest();
+    recBox.innerHTML='<div class="tp"><b>✨ 자동 추천<small>'+SG.length+'개</small></b><button type="button" class="ed" data-ra="edit">✎ 자동 추천 편집</button></div>'+
+      (SG.length?SG.map(function(r,i){return '<div class="ai"><p><small>'+TYN[r.type]+'</small>'+esc(r.title)+'</p><button type="button" class="ad" data-ra="add" data-i="'+i+'">＋ 담기</button><button type="button" class="x" data-ra="hide" data-i="'+i+'" aria-label="이 보고서에서 숨기기">✕</button></div>';}).join(''):'<div class="em">입력한 내용으로는 추천할 것이 없습니다. 아래에서 직접 추가할 수 있어요.</div>')+
+      (HID.length?'<button type="button" class="uh" data-ra="unhide">숨긴 추천 '+HID.length+'개 다시 보기</button>':'');
+  }
+  var NR={t:'',ty:'regular',kw:''};
+  function openRules(){var h=hay();
+    openSheet('자동 추천 편집',
+      '<div class="vh" style="margin-top:0">새 추천 추가</div><div class="m27-rf"><input id="m27-nt" placeholder="권장 정비 (예: 실외기 차양막 설치)" value="'+esc(NR.t)+'">'+
+      '<div class="m27-seg">'+['urgent','regular','review'].map(function(k){return '<button type="button" class="'+(NR.ty===k?'on':'')+'" data-rr="ty" data-v="'+k+'">'+TYN[k]+'</button>';}).join('')+'</div>'+
+      '<div class="m27-kw"><span>이런 말이 있을 때</span><input id="m27-nk" placeholder="예: 직사광선, 차양 — 비우면 항상" value="'+esc(NR.kw)+'"></div>'+
+      '<div class="m27-hint">점검 항목(주의·정비)과 비고 · 결함 · 조치 · 문제 사진 메모에 이 말이 들어 있으면 추천합니다. 여러 개는 쉼표로 나눕니다.</div>'+
+      '<button type="button" class="m27-pbtn" data-rr="add">＋ 자동 추천에 추가</button></div>'+
+      '<div class="vh">내가 만든 추천 ('+RULES.list.length+')</div>'+
+      (RULES.list.length?RULES.list.map(function(r,i){return '<div class="m27-ri"><span class="n '+r.ty+'">'+(i+1)+'</span><div class="b"><b>'+esc(r.t)+'</b><small>'+TYN[r.ty]+' · '+(r.kw?'「'+esc(r.kw)+'」 있을 때':'항상')+(hit(r,h)?' · <em>지금 추천됨</em>':'')+'</small></div><button type="button" data-rr="up" data-i="'+i+'"'+(i?'':' disabled')+' aria-label="위로">▲</button><button type="button" class="x" data-rr="del" data-i="'+i+'" aria-label="삭제">✕</button></div>';}).join(''):'<div class="m27-hint">없습니다</div>')+
+      '<div class="vh">입력값으로 문장을 만드는 기본 추천</div>'+
+      SYS.map(function(r){var on=RULES.off.indexOf(r.id)<0;return '<div class="m27-ri'+(on?'':' off')+'"><div class="b"><b>'+esc(r.n)+'</b><small>예: '+esc(r.ex)+'</small></div><button type="button" class="m27-sw'+(on?' on':'')+'" data-rr="sys" data-v="'+r.id+'" aria-label="켜기/끄기"></button></div>';}).join('')+
+      '<div style="display:flex;gap:8px;margin-top:14px"><button type="button" class="m27-sbtn" style="flex:1" data-rr="reset">처음 상태로</button><button type="button" class="m27-pbtn" style="flex:1;margin:0" data-rr="done">완료</button></div>');
+  }
+  $('m27-shb').addEventListener('click',function(e){
+    var b=e.target.closest('[data-rr]');if(!b)return;var k=b.getAttribute('data-rr'),i=+b.getAttribute('data-i');
+    var nt=$('m27-nt'),nk=$('m27-nk');if(nt)NR.t=nt.value;if(nk)NR.kw=nk.value;
+    if(k==='ty')NR.ty=b.getAttribute('data-v');
+    if(k==='add'){if(!NR.t.trim()){if(typeof toast==='function')toast('권장 정비 문장을 입력해 주세요');return;}RULES.list.unshift({t:NR.t.trim(),ty:NR.ty,kw:NR.kw.trim()});NR={t:'',ty:'regular',kw:''};if(typeof toast==='function')toast('✓ 자동 추천에 추가했습니다');}
+    if(k==='up'&&i>0){var x=RULES.list[i];RULES.list[i]=RULES.list[i-1];RULES.list[i-1]=x;}
+    if(k==='del'){var g=RULES.list[i];if(g&&window.inspAsk){window.inspAsk('자동 추천 삭제',['「'+g.t+'」를 자동 추천 목록에서 지웁니다.'],'삭제','취소').then(function(ok){if(!ok)return;RULES.list.splice(RULES.list.indexOf(g),1);saveRules();openRules();schedule();});return;}RULES.list.splice(i,1);}
+    if(k==='sys'){var id=b.getAttribute('data-v'),p=RULES.off.indexOf(id);if(p>=0)RULES.off.splice(p,1);else RULES.off.push(id);}
+    if(k==='reset')RULES=JSON.parse(JSON.stringify(DEF));
+    if(k==='done'){closeSheet();schedule();return;}
+    saveRules();openRules();schedule();
+  });
+
+  /* ── 다시 그리기 ── */
+  var tm=null;function schedule(){clearTimeout(tm);tm=setTimeout(function(){try{draw();}catch(e){console.warn('m27',e);}},250);}
+  var vf=$('view-form');
+  if(vf){['input','change','click'].forEach(function(ev){vf.addEventListener(ev,function(e){if(e.target.closest&&e.target.closest('#m27-ov'))return;schedule();});});
+    var mine=function(n){return n&&n.nodeType===1&&(n.classList.contains('m27-tw')||(n.closest&&n.closest('#m27-ov,#m27-rec,#m27-ckbtn,.m27-tw')));};
+    new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var m=ms[i],t=m.target.nodeType===1?m.target:m.target.parentElement;if(mine(t))continue;
+      var ns=[].slice.call(m.addedNodes).concat([].slice.call(m.removedNodes));if(ns.length&&ns.every(mine))continue;schedule();return;}}).observe(vf,{childList:true,subtree:true,characterData:true});}
+  ['switchReportType','setDispatchKind','newReport','editReport','setEval'].forEach(function(f){var o=window[f];if(typeof o!=='function')return;window[f]=function(){var r=o.apply(this,arguments);if(f==='newReport'||f==='editReport')HID=[];schedule();setTimeout(schedule,800);return r;};});
+  schedule();setTimeout(schedule,1500);
+})();
+</script>
+
+
 </body>
 </html>
