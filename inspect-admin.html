@@ -431,6 +431,22 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 .acp-none{font-size:11px;color:#8a94a6;line-height:1.5}
 .rcard .acp{margin-bottom:8px}
 .rc-ac{font-size:10.5px;font-weight:700;color:#1d3fd6;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 🏭 점검 대상 설비 — 에어컨별 설치 위치 (A1 · A2 …) */
+.eqa{margin-top:2px;border-radius:10px;background:#F7F9FE;border:1px solid #DFE5F2;padding:9px 10px 3px}
+.eqa-k{font-size:12px;font-weight:800;color:#0E2350;margin-bottom:8px}
+.eqa-k em{font-style:normal;font-size:11px;font-weight:600;color:#8a94a6;margin-left:5px}
+.eqa-row{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px}
+.eqa-no{flex:0 0 40px;height:38px;border-radius:10px;background:#0E2350;color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.eqa-f{flex:1;min-width:0}
+.eqa-f .dd-sel{margin-bottom:0;background:#fff}
+#view-form .eqa-f select,#view-form .eqa-f input{background:#fff}
+.eqa-f .dd-custom.show{margin-top:6px}
+.eqa-dup{display:none;font-size:11px;font-weight:700;color:#B86E00;margin:-2px 0 6px 48px}
+.eqa-dup.on{display:block}
+.cu-fill{display:flex;align-items:center;justify-content:center;width:100%;min-height:42px;border:0;border-radius:10px;background:#0E2350;color:#fff;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer;margin-bottom:10px}
+.cu-fill[disabled]{background:#EEF2FA;color:#8a94a6;cursor:default}
+.cu-link{font-size:10px;font-weight:800;color:#0D9488;background:#E6F6F3;border-radius:999px;padding:2px 7px;margin-left:5px;white-space:nowrap;vertical-align:1px}
+@media (max-width:767px){.eqa-no{height:46px;border-radius:12px;font-size:14px}.eqa-dup{margin-left:48px}.cu-fill{min-height:46px;border-radius:12px;font-size:14px}}
 </style>
 <style id="fixb-css">
 /* 🔧 수리 전 · 후 기록 */
@@ -606,6 +622,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
     <div style="background:#f0f7ff;border:0.5px solid #bdd7f5;border-radius:6px;padding:8px 10px;font-size:11px;color:#1e40af;margin-bottom:10px">
       기준: 흡입(A) − 토출(B) ≥15°C 양호 · 12~15°C 정상범위 · &lt;12°C 저하
     </div>
+    <button type="button" class="cu-fill" id="cu-fill" style="display:none" onclick="coolFillFromEquip()"></button>
     <div id="cool-units"></div>
     <div class="row-fg" style="display:flex;gap:8px;margin-top:2px">
       <button class="btn-add" onclick="addCoolUnit()" style="flex:1">+ 유닛 추가</button>
@@ -1471,13 +1488,13 @@ function makeDd(opts,val,placeholder){
 // ═══════════════════════════════════════════
 // 점검 대상 설비
 // ═══════════════════════════════════════════
-function addEquip(unit,type,loc,model,cap){
+function addEquip(unit,type,loc,model,cap,acs){
   var wrap=document.createElement('div');
   wrap.className='unit-item';
   var hdr=document.createElement('div');hdr.className='unit-item-hdr';
   var num=document.createElement('div');num.className='unit-num';num.textContent='🏭';
   var title=document.createElement('div');title.style='flex:1;font-size:12px;font-weight:500;color:#0F1C3F';title.textContent='설비';
-  var del=document.createElement('button');del.className='btn-del';del.textContent='×';del.onclick=function(){wrap.remove();};
+  var del=document.createElement('button');del.className='btn-del';del.textContent='×';del.onclick=function(){wrap.remove();eqAcSync();};
   hdr.appendChild(num);hdr.appendChild(title);hdr.appendChild(del);
 
   var grid=document.createElement('div');grid.className='fgrid f2';
@@ -1514,16 +1531,110 @@ function addEquip(unit,type,loc,model,cap){
   }
   grid.appendChild(wrapLabel('대수/호기',ddUnit));
   grid.appendChild(wrapLabel('형식',ddType));
-  grid.appendChild(wrapLabel('설치 위치',ddLoc));
+  var locWrap=wrapLabel('설치 위치',ddLoc);
+  grid.appendChild(locWrap);
   grid.appendChild(mdiv);
   grid.appendChild(capWrap);
 
-  wrap._getEquipData=function(){
-    return {unit:ddUnit.getDdVal(),type:ddType.getDdVal(),loc:ddLoc.getDdVal(),model:minp.value,capacity:ddCap.getDdVal()};
+  // ── 에어컨별 설치 위치 (대수만큼 A1 · A2 …) ──
+  //   번호는 설비 카드 순서대로 이어서 매깁니다 (벽걸이 3대 + 카세트 2대 → A1~A3, A4~A5).
+  //   실외기 형식은 번호 없이 기존 「설치 위치」 한 칸만 씁니다.
+  var eqa=document.createElement('div');eqa.className='eqa';eqa.style.display='none';
+  eqa.innerHTML='<div class="eqa-k">에어컨별 설치 위치<em>번호마다 위치를 골라 주세요</em></div>';
+  var eqRows=[];
+  var initLocs=(acs&&acs.length)?acs.map(function(a){return (a&&a.loc)||'';}):(loc?[loc]:[]);   // 예전 자료: 위치 한 칸 → A1
+  function mkEqRow(i){
+    var row=document.createElement('div');row.className='eqa-row';
+    var no=document.createElement('div');no.className='eqa-no';
+    var f=document.createElement('div');f.className='eqa-f';
+    var dd=makeDd(LOC_OPTS,initLocs[i]||'','위치 선택');f.appendChild(dd);
+    var dup=document.createElement('div');dup.className='eqa-dup';
+    row.appendChild(no);row.appendChild(f);
+    var r={el:row,no:no,dd:dd,dup:dup,_lbl:''};
+    function ch(){eqAcToCool(r._lbl,dd.getDdVal());eqAcDup();refreshAcPickers();if(window.__scheduleDraft)window.__scheduleDraft();}
+    dd.addEventListener('change',ch);dd.addEventListener('input',ch);
+    return r;
+  }
+  wrap._eqIsAc=function(){return ddType.getDdVal()!=='실외기';};
+  wrap._eqCount=function(){
+    if(!wrap._eqIsAc())return 0;
+    var m=String(ddUnit.getDdVal()||'').match(/\d+/);
+    return m?Math.min(parseInt(m[0],10)||0,30):0;
   };
-  wrap.appendChild(hdr);wrap.appendChild(grid);
+  wrap._eqRows=function(){return eqRows.slice(0,wrap._eqCount());};
+  wrap._eqRender=function(start){
+    var n=wrap._eqCount();
+    while(eqRows.length<n)eqRows.push(mkEqRow(eqRows.length));          // 줄여도 고른 위치는 기억 (다시 늘리면 복원)
+    eqRows.forEach(function(r,i){
+      if(i<n){r._lbl='A'+(start+i);r.no.textContent=r._lbl;if(!r.el.isConnected){eqa.appendChild(r.el);eqa.appendChild(r.dup);}}
+      else if(r.el.isConnected){r.el.remove();r.dup.remove();}
+    });
+    eqRows.slice(0,n).forEach(function(r){eqa.appendChild(r.el);eqa.appendChild(r.dup);});   // 순서 유지
+    eqa.style.display=n?'':'none';
+    locWrap.style.display=(wrap._eqIsAc()&&n)?'none':'';
+    title.textContent='설비'+(n?' · A'+start+(n>1?' ~ A'+(start+n-1):''):'');
+  };
+  [ddUnit,ddType].forEach(function(d){d.addEventListener('change',eqAcSync);d.addEventListener('input',eqAcSync);});
+  var _ui=ddUnit.querySelector('.dd-custom');if(_ui)_ui.addEventListener('blur',eqAcSync);
+
+  wrap._getEquipData=function(){
+    var n=wrap._eqCount(),acsOut=eqRows.slice(0,n).map(function(r){return {label:r._lbl,loc:r.dd.getDdVal()};});
+    var lv=n?acsOut.map(function(a){return a.loc;}).filter(Boolean).join(' · '):ddLoc.getDdVal();
+    var d={unit:ddUnit.getDdVal(),type:ddType.getDdVal(),loc:lv,model:minp.value,capacity:ddCap.getDdVal()};
+    if(n)d.acs=acsOut;
+    return d;
+  };
+  wrap.appendChild(hdr);wrap.appendChild(grid);wrap.appendChild(eqa);
   gid('equip-rows').appendChild(wrap);
+  eqAcSync();
   updateInspProgress();
+}
+
+// ── 점검 대상 설비의 A1 · A2 … ↔ 냉방능력 점검상태 · 해당 에어컨 선택 연결 ──
+function eqAcUnits(){
+  var out=[];
+  document.querySelectorAll('#equip-rows .unit-item').forEach(function(w){
+    if(!w._eqRows)return;
+    w._eqRows().forEach(function(r){out.push({el:r.el,label:r._lbl,loc:r.dd.getDdVal(),row:r});});
+  });
+  return out;
+}
+function eqAcFind(lbl){return eqAcUnits().find(function(u){return u.label===lbl;})||null;}
+function coolByLbl(lbl){return [].slice.call(document.querySelectorAll('#cool-units .cu-item')).find(function(w){return w._cuLbl&&w._cuLbl()===lbl;})||null;}
+function eqAcToCool(lbl,v){var c=coolByLbl(lbl);if(c&&c._setCuLoc&&c._cuLoc()!==v)c._setCuLoc(v);}
+function eqAcDup(){
+  var seen={};
+  eqAcUnits().forEach(function(u){
+    var d=u.row.dup;
+    if(u.loc&&seen[u.loc]){d.textContent='⚠ '+seen[u.loc]+'와 같은 위치예요 (거실1 · 거실2처럼 나눠 주세요)';d.classList.add('on');}
+    else d.classList.remove('on');
+    if(u.loc&&!seen[u.loc])seen[u.loc]=u.label;
+  });
+}
+function eqAcSync(){
+  var start=1;
+  document.querySelectorAll('#equip-rows .unit-item').forEach(function(w){if(w._eqRender){w._eqRender(start);start+=w._eqCount();}});
+  eqAcUnits().forEach(function(u){if(u.loc)eqAcToCool(u.label,u.loc);});
+  document.querySelectorAll('#cool-units .cu-item').forEach(function(w){if(w._syncCuTitle)w._syncCuTitle();});
+  eqAcDup();coolFillSync();refreshAcPickers();
+}
+window.eqAcSync=eqAcSync;
+function coolMissing(){
+  var have=[].slice.call(document.querySelectorAll('#cool-units .cu-item')).map(function(w){return w._cuLbl?w._cuLbl():'';});
+  return eqAcUnits().filter(function(u){return have.indexOf(u.label)<0;});
+}
+function coolFillSync(){
+  var b=gid('cu-fill');if(!b)return;
+  var eu=eqAcUnits(),m=coolMissing();
+  if(!eu.length){b.style.display='none';return;}
+  b.style.display='';
+  if(!m.length){b.disabled=true;b.textContent='✓ 점검 대상 설비 '+eu.length+'대 모두 채워짐';return;}
+  b.disabled=false;
+  b.textContent='🔗 설비대로 채우기 · '+m[0].label+(m.length>1?' ~ '+m[m.length-1].label:'')+' ('+m.length+'대)';
+}
+function coolFillFromEquip(){
+  coolMissing().forEach(function(u){addCoolUnit(u.label,'','',u.loc);});
+  coolFillSync();if(window.__scheduleDraft)window.__scheduleDraft();
 }
 
 // ═══════════════════════════════════════════
@@ -1862,10 +1973,19 @@ window.ipAddSet=ipAddSet;window.ipAllOk=ipAllOk;window.ipCustomAdd=ipCustomAdd;
 // ═══════════════════════════════════════════
 var __acPickers=[];
 function acUnitList(){
-  return [].slice.call(document.querySelectorAll('#cool-units .cu-item')).map(function(w){
-    return {el:w,label:w._cuLbl?w._cuLbl():'',loc:w._cuLoc?w._cuLoc():''};
+  var cool=[].slice.call(document.querySelectorAll('#cool-units .cu-item')).map(function(w){
+    return {el:w,els:[w],label:w._cuLbl?w._cuLbl():'',loc:w._cuLoc?w._cuLoc():''};
   });
+  var eq=(typeof eqAcUnits==='function')?eqAcUnits():[];
+  if(!eq.length)return cool;
+  // 점검 대상 설비에서 정한 A1 · A2 …를 기준으로, 냉방능력 쪽 같은 번호는 하나로 합칩니다
+  var map={},out=[];
+  eq.forEach(function(e){var o={el:e.el,els:[e.el],label:e.label,loc:e.loc};map[e.label]=o;out.push(o);});
+  cool.forEach(function(c){var o=map[c.label];if(o){o.els.push(c.el);if(!o.loc)o.loc=c.loc;}else out.push(c);});
+  function n(l){var m=String(l).match(/\d+/);return m?parseInt(m[0],10):999;}
+  return out.sort(function(a,b){return n(a.label)-n(b.label);});
 }
+function acSame(u,el){return !!el&&(u.el===el||(u.els&&u.els.indexOf(el)>-1));}
 function refreshAcPickers(){
   __acPickers=__acPickers.filter(function(p){return p.alive();});
   __acPickers.forEach(function(p){p.render();});
@@ -1880,6 +2000,7 @@ function makeAcPicker(init,opt){
   box.appendChild(hd);box.appendChild(row);
   var onCh=opt.onChange||function(){};
   function resolve(list){
+    sel.forEach(function(s){if(s.el){var f=list.find(function(u){return acSame(u,s.el);});if(f)s.el=f.el;}});   // 설비 ↔ 냉방능력 같은 번호로 옮겨 붙기
     sel=sel.filter(function(s){return !s.el||document.body.contains(s.el);});
     sel.forEach(function(s){if(!s.el){var f=list.find(function(u){return u.label===s.label;});if(f)s.el=f.el;}});
   }
@@ -2066,6 +2187,7 @@ function addCoolUnit(label,a,b,loc,result,fix){
   coolCount++;
   var lbl=label||'A'+coolCount;
   var id='cu'+coolCount;
+  if(!loc){var _eq=eqAcFind(lbl);if(_eq&&_eq.loc)loc=_eq.loc;}   // 점검 대상 설비에서 정한 위치
 
   var div=document.createElement('div');div.className='cu-item';div.id='cu-wrap-'+id;
 
@@ -2075,7 +2197,7 @@ function addCoolUnit(label,a,b,loc,result,fix){
   var tit=document.createElement('div');tit.style='flex:1;font-size:13px;font-weight:500';tit.textContent='에어컨 '+lbl+' 유닛';
   var badge=document.createElement('span');badge.style='font-size:10px;padding:2px 8px;border-radius:10px;background:#f0f0f0;color:#8a8a9a';badge.textContent='미측정';badge.id='cu-badge-'+id;
   var chev=document.createElement('span');chev.style='font-size:12px;color:#8a8a9a;margin-left:4px';chev.textContent='▼';
-  var del=document.createElement('button');del.className='btn-del';del.style='margin-left:6px';del.textContent='×';del.onclick=function(e){e.stopPropagation();div.remove();if(window.renumberUnits)renumberUnits();if(window.updateInspProgress)updateInspProgress();refreshAcPickers();};
+  var del=document.createElement('button');del.className='btn-del';del.style='margin-left:6px';del.textContent='×';del.onclick=function(e){e.stopPropagation();div.remove();if(window.renumberUnits)renumberUnits();if(window.updateInspProgress)updateInspProgress();refreshAcPickers();coolFillSync();};
   // 번호 재정렬용 — 자동 라벨(A1,A2...)일 때만 다시 매긴다
   div._renumCu=function(n){
     if(!/^A\d+$/.test(lbl))return;
@@ -2097,9 +2219,14 @@ function addCoolUnit(label,a,b,loc,result,fix){
   function syncCuTitle(){
     var lv=ddCuLoc.getDdVal();
     tit.textContent='에어컨 '+lbl+' 유닛'+(lv?' · '+lv:'');
+    if(eqAcFind(lbl)){var lk=document.createElement('span');lk.className='cu-link';lk.textContent='설비 연결';tit.appendChild(lk);}
   }
-  ddCuLoc.addEventListener('change',function(){syncCuTitle();refreshAcPickers();if(window.__scheduleDraft)window.__scheduleDraft();});
-  ddCuLoc.addEventListener('input',syncCuTitle);
+  function cuLocToEq(){   // 여기서 위치를 바꾸면 점검 대상 설비의 같은 번호도 함께 바뀝니다
+    var e=eqAcFind(lbl),v=ddCuLoc.getDdVal();
+    if(e&&e.loc!==v){e.row.dd.setDdVal(v);if(!v){var s0=e.row.dd.querySelector('select');if(s0)s0.value='';}eqAcDup();}
+  }
+  ddCuLoc.addEventListener('change',function(){syncCuTitle();cuLocToEq();refreshAcPickers();if(window.__scheduleDraft)window.__scheduleDraft();});
+  ddCuLoc.addEventListener('input',function(){syncCuTitle();cuLocToEq();});
 
   // 온도 입력
   var mvg=document.createElement('div');mvg.className='mv-grid mv3';
@@ -2174,7 +2301,8 @@ function addCoolUnit(label,a,b,loc,result,fix){
   div._syncCuTitle=syncCuTitle;
   syncCuTitle();
   div._cuLbl=function(){return lbl;};div._cuLoc=function(){return ddCuLoc.getDdVal();};
-  refreshAcPickers();
+  div._setCuLoc=function(v){if(v){ddCuLoc.setDdVal(v);}else{var s0=ddCuLoc.querySelector('select');if(s0)s0.value='';var i0=ddCuLoc.querySelector('.dd-custom');if(i0){i0.value='';i0.classList.remove('show');}}syncCuTitle();};
+  refreshAcPickers();coolFillSync();
 
   // 저장용 getter
   div._getCuData=function(){
@@ -5687,7 +5815,7 @@ async function translateData(data){
   pt('opinion_en',data.opinion);
   pt('dispatchReason_en',data.dispatchReason);pt('dispatchWork_en',data.dispatchWork);
   (data.results||[]).forEach(function(r,i){pt('r_'+i+'_cat',r.cat);pt('r_'+i+'_name',r.name);pt('r_'+i+'_note',r.note);});
-  (data.equipments||[]).forEach(function(e,i){pt('e_'+i+'_type',e.type);pt('e_'+i+'_loc',e.loc);});
+  (data.equipments||[]).forEach(function(e,i){pt('e_'+i+'_type',e.type);pt('e_'+i+'_loc',e.loc);(e.acs||[]).forEach(function(a,j){pt('e_'+i+'_a'+j,a.loc);});});
   (data.coolUnits||[]).forEach(function(u,i){pt('c_'+i+'_loc',u.loc);if(u.fix&&u.fix.note)pt('c_'+i+'_fix',u.fix.note);});
   (data.measurements||[]).forEach(function(m,i){pt('m_'+i+'_label',m.label);if(m.fix&&m.fix.note)pt('m_'+i+'_fix',m.fix.note);});
   (data.defects||[]).forEach(function(d,i){pt('d_'+i+'_defect',d.defect);pt('d_'+i+'_loc',d.loc);pt('d_'+i+'_action',d.action);});
@@ -5697,7 +5825,7 @@ async function translateData(data){
   data.opinion_en=map.opinion_en||'';
   data.dispatchReason_en=map.dispatchReason_en||'';data.dispatchWork_en=map.dispatchWork_en||'';
   (data.results||[]).forEach(function(r,i){r.cat_en=map['r_'+i+'_cat']||'';r.name_en=map['r_'+i+'_name']||'';r.note_en=map['r_'+i+'_note']||'';});
-  (data.equipments||[]).forEach(function(e,i){e.type_en=map['e_'+i+'_type']||'';e.loc_en=map['e_'+i+'_loc']||'';});
+  (data.equipments||[]).forEach(function(e,i){e.type_en=map['e_'+i+'_type']||'';e.loc_en=map['e_'+i+'_loc']||'';(e.acs||[]).forEach(function(a,j){a.loc_en=map['e_'+i+'_a'+j]||'';});});
   (data.coolUnits||[]).forEach(function(u,i){u.loc_en=map['c_'+i+'_loc']||'';if(u.fix)u.fix.note_en=map['c_'+i+'_fix']||'';});
   (data.measurements||[]).forEach(function(m,i){m.label_en=map['m_'+i+'_label']||'';if(m.fix)m.fix.note_en=map['m_'+i+'_fix']||'';});
   (data.defects||[]).forEach(function(d,i){d.defect_en=map['d_'+i+'_defect']||'';d.loc_en=map['d_'+i+'_loc']||'';d.action_en=map['d_'+i+'_action']||'';});
@@ -6354,7 +6482,7 @@ window.loadIntoForm=function(data){
   if(data.eval){var eb=document.querySelector('.ev-btn[data-val="'+data.eval+'"]');if(eb)setEval(eb);}
   // 설비
   document.getElementById('equip-rows').innerHTML='';
-  (data.equipments||[]).forEach(function(e){addEquip(e.unit,e.type,e.loc,e.model,e.capacity);});
+  (data.equipments||[]).forEach(function(e){addEquip(e.unit,e.type,e.loc,e.model,e.capacity,e.acs);});
   // 결과
   document.getElementById('result-rows').innerHTML='';
   if((data.results||[]).length){data.results.forEach(function(r){addResultRow(r.cat,r.name,r.status,r.risk,r.note,r.units);});}
