@@ -2126,6 +2126,7 @@ a.gvb:active{transform:translateY(2px) scale(.995)}
 .rfc-r .pl.no{background:#F1F4F9;color:#8a94a6}
 @media (prefers-reduced-motion:reduce){.rfc-act a,.rfc-act button{transition:none}}
 #sh-bx .lsg.rf{margin-top:10px}
+#sh-bx .lmsg.ms{max-height:min(38vh,300px);overflow-y:auto;overscroll-behavior:contain}
 /* ✨ 마이페이지 정돈 (2026-11-14) — 섹션 제목 통일 · 간격 통일 · 숫자 같은 폭 · 앱 설치 카드 간단히 */
 /* 섹션 제목: 같은 크기·굵기 + 왼쪽 짧은 금색 막대 / 오른쪽 안내는 회색 알약 */
 .sxh,.brf-h,.hcs .sxh.hcs-h,.rcx-s .sxh,.docx .sxh.doc{margin:24px 2px 10px!important;align-items:center}
@@ -3319,7 +3320,7 @@ function render(){
   //    지금 보고 있는 언어(LANG)를 그대로 문서에 넘겨 그 언어로 PDF를 만듭니다.
   const shLb=LANG==='en'?'Share PDF':'PDF 공유';
   const shBtn=(kind,id,title,url,ex)=>'<button type="button" class="shb" data-shk="'+kind+'" data-shi="'+esc(id)+
-    '" data-sht="'+esc(title)+'" data-shu="'+esc(url)+'"'+(ex||'')+'><span class="si">📤</span>'+(kind==='ip'?(LANG==='en'?'Share report':'보고서 공유'):(kind==='qt'?(LANG==='en'?'Share quote':'견적서 공유'):shLb))+'</button>';
+    '" data-sht="'+esc(title)+'" data-shu="'+esc(url)+'"'+(ex||'')+'><span class="si">📤</span>'+(kind==='ip'?(LANG==='en'?'Share report':'보고서 공유'):kind==='iv'?(LANG==='en'?'Share invoice':'인보이스 공유'):(kind==='qt'?(LANG==='en'?'Share quote':'견적서 공유'):shLb))+'</button>';
   const bkList=(DATA.bookings||[]).filter(x=>{
     if(x.status==='confirmed'){const at=bkHideAt(x);return at!=null&&Date.now()<at;}
     return true;
@@ -3593,7 +3594,7 @@ function render(){
          '<span>'+(LANG==='en'?'All ':'전체 ')+DATA.invoices.length+L.caseU+'</span>'+
          (_ivUnp.length?'<span class="bad">'+(LANG==='en'?'Unpaid ':'미납 ')+_ivUnp.length+L.caseU+' · RM '+fmt(_ivUnpAmt)+'</span>':'')+
          (_ivPaidN?'<span class="ok">'+(LANG==='en'?'Paid ':'결제완료 ')+_ivPaidN+L.caseU+'</span>':'')+
-         (DATA.invoices.length>1?'<button type="button" class="msb" data-ms="iv">'+(LANG==='en'?'Select & share PDFs':'여러 개 선택해서 공유')+'</button>':'')+
+         (DATA.invoices.length>1?'<button type="button" class="msb" data-ms="iv">'+(LANG==='en'?'Select & share':'여러 개 선택해서 공유')+'</button>':'')+
        '</div>';
     let _ivMon='';
     DATA.invoices.slice(0,20).forEach(x=>{
@@ -3635,7 +3636,12 @@ function render(){
          '</div>'+
          '<div class="dl-r"><span class="dl-lb">'+amLb+'</span><div class="dl-am'+(x.status==='overdue'?' bad':'')+'"><span class="cu">RM</span>'+rs[0]+'<small>.'+(rs[1]||'00')+'</small></div></div>'+
          '</a>'+
-         '<div class="sft dl-f"><span class="dl-no">'+esc(x.id||x.__id||'')+'</span>'+shBtn('iv',(x.id||x.__id),'Invoice '+(x.id||x.__id),_ivU)+
+         '<div class="sft dl-f"><span class="dl-no">'+esc(x.id||x.__id||'')+'</span>'+shBtn('iv',(x.id||x.__id),'Invoice '+(x.id||x.__id),_ivU,
+           // 🔗 인보이스 링크 공유 메시지용 (2026-11-14) — 고객명·발행일·품목(한/영)·금액·상태·결제기한·잔액
+           ' data-shn="'+esc(m.name||'')+'" data-shd="'+esc(x.date||'')+'" data-sam="'+esc(fmt(invTotal(x)))+'"'+
+           ' data-sst="'+esc(x.status==='paid'?'paid':(x.status==='overdue'?'overdue':(part?'part':'billing')))+'" data-sdu="'+esc(x.due||'')+'" data-sbl="'+esc(fmt(xDue))+'"'+
+           ' data-sjk="'+esc((()=>{const l0=LANG;LANG='ko';try{return invCatLine(x.items)||(_li0?rcItemName(_li0):'');}finally{LANG=l0;}})())+'"'+
+           ' data-sje="'+esc((()=>{const l0=LANG;LANG='en';try{return invCatLine(x.items)||(_li0?rcItemName(_li0):'');}finally{LANG=l0;}})())+'"')+
          '<a class="sfv" target="_blank" rel="noopener" href="'+_ivU+'">'+(LANG==='en'?'View invoice':'인보이스 보기')+' <b>›</b></a></div></div>';
     });
     h+='<button type="button" class="hubcls" id="hub-cls-iv"><span class="up">\u25B2</span>'+esc(L.ivClose)+'</button>';
@@ -5113,7 +5119,10 @@ boot();
     ev.preventDefault();ev.stopPropagation();
     var kind=b.getAttribute('data-shk'),id=b.getAttribute('data-shi'),
         title=b.getAttribute('data-sht'),url=b.getAttribute('data-shu');
-    if(kind==='ip'||kind==='qt'){linkSheet(b,isEN()?'en':'ko');return;}   // 점검보고서 · 견적서 = 반응형 화면 링크로 공유
+    // 🔗 인보이스 · 점검보고서 · 견적서 = 반응형 화면 링크로 공유 (2026-11-14 인보이스 추가)
+    //    처음 열릴 언어 : 인보이스·점검보고서 = 영어(받는 분이 업체·보험사일 수 있음), 견적서 = 화면 언어
+    if(kind==='iv'||kind==='ip'){linkSheet(b,'en');return;}
+    if(kind==='qt'){linkSheet(b,isEN()?'en':'ko');return;}
     shareDoc(kind,id,title,url);
   },true);
 
@@ -5133,13 +5142,13 @@ boot();
     bar.innerHTML='<div class="in"><div class="c"><b>'+n+'</b>'+T('개 선택',' selected')+
       '<button type="button" data-msa="1">'+(n&&n>=Math.min(all,MS_MAX)?T('선택 해제','Clear all'):T('전체 선택','Select all')+(all>MS_MAX?T(' (최근 '+MS_MAX+'개)',' (latest '+MS_MAX+')'):''))+'</button></div>'+
       '<button type="button" class="x" data-msx="1">'+T('취소','Cancel')+'</button>'+
-      '<button type="button" class="go" data-msg="1"'+(n?'':' disabled')+'>📤 '+T('PDF 공유','Share PDFs')+(n?' '+n:'')+'</button></div>';
+      '<button type="button" class="go" data-msg="1"'+(n?'':' disabled')+'>📤 '+T('공유','Share')+(n?' '+n:'')+'</button></div>';
     bar.classList.add('on');
   }
   function msOff(ls){
     ls=ls||document.querySelector('.hubls.msel');
     if(ls){ls.classList.remove('msel');Array.prototype.forEach.call(ls.querySelectorAll('.dcw.on'),function(d){d.classList.remove('on');});
-      var b=ls.querySelector('.msb');if(b)b.textContent=T('여러 개 선택해서 공유','Select & share PDFs');}
+      var b=ls.querySelector('.msb');if(b)b.textContent=T('여러 개 선택해서 공유','Select & share');}
     msBar();
   }
   window.__mselOff=msOff;
@@ -5171,9 +5180,9 @@ boot();
         msBar();return;
       }
       if(t.closest('[data-msg]')){
-        var items=msSel(ls2).map(function(d){var b=d.querySelector('.shb');return b?{kind:b.getAttribute('data-shk'),id:b.getAttribute('data-shi'),
-          title:b.getAttribute('data-sht'),url:b.getAttribute('data-shu')}:null;}).filter(Boolean);
-        if(items.length)shareMany(items);
+        // 🔗 여러 개도 하나씩 공유할 때처럼 「링크 메시지」 창으로 (2026-11-14) — 처음 언어 = 영어, PDF 는 창 안의 버튼으로
+        var bs=msSel(ls2).map(function(d){return d.querySelector('.shb');}).filter(Boolean);
+        if(bs.length)msSheet(bs,(bs[0].getAttribute('data-shk')==='qt'&&!isEN())?'ko':'en');
         return;
       }
       return;
@@ -5203,10 +5212,10 @@ boot();
   }
   function canFiles(fs){try{return !!(navigator.canShare&&navigator.canShare({files:fs}));}catch(e){return false;}}
 
-  async function shareMany(items){
+  async function shareMany(items,lgPick){
     var n=items.length,ok=[],bad=[];
     for(var i=0;i<n;i++){
-      var it=items[i],lg=shLang(it.kind),u=withLang(it.url,lg);
+      var it=items[i],lg=lgPick||shLang(it.kind),u=withLang(it.url,lg);
       busy(T('PDF 만드는 중 ('+(i+1)+' / '+n+')','Creating PDF ('+(i+1)+' / '+n+')'),
         esc2(it.title)+'<br>'+T('문서마다 몇 초씩 걸립니다. 화면을 닫지 말고 기다려 주세요.','Each document takes a few seconds. Please keep this screen open.'));
       var blob=null;
@@ -5222,7 +5231,7 @@ boot();
       box().querySelector('[data-c]').onclick=shHide;return;
     }
     busy(T('PDF 준비 중…','Preparing PDFs…'),'');
-    var kind=ok[0].it.kind,lg0=shLang(kind);
+    var kind=ok[0].it.kind,lg0=lgPick||shLang(kind);
     var files=ok.map(function(o){try{return new File([o.blob],o.nm,{type:'application/pdf'});}catch(e){return null;}}).filter(Boolean);
     var merged=null,mFile=null,mName='HHC_'+({iv:'Invoices',ip:'Reports',qt:'Quotations'}[kind]||'Documents')+'_'+ok.length+'_'+(lg0==='ko'?'KO':'EN')+'.pdf';
     if(ok.length>1){try{merged=await mergePdfs(ok.map(function(o){return o.blob;}));mFile=new File([merged],mName,{type:'application/pdf'});}catch(e){merged=null;mFile=null;}}
@@ -5280,6 +5289,7 @@ boot();
   }
   function rptMsg(b,lg){
     if(b.getAttribute('data-shk')==='qt')return qtMsg(b,lg);
+    if(b.getAttribute('data-shk')==='iv')return ivMsg(b,lg);
     var ty=b.getAttribute('data-sty')||'inspect',nm=(b.getAttribute('data-shn')||'').trim(),
         dt=rptDate(b.getAttribute('data-shd'),lg),url=withLang(b.getAttribute('data-shu'),lg).replace(/\.html\?/,'?');   // /inspect?id=… (짧은 주소)
     var hd=(lg==='en'?(RPT_EN[ty]||RPT_EN.inspect):(RPT_KO[ty]||RPT_KO.inspect));
@@ -5300,6 +5310,95 @@ boot();
       (ln?ln+'\n':'')+(vu?(lg==='en'?'Valid until '+vu:'유효기한 '+vu)+'\n':'')+'\n'+
       (lg==='en'?'Tap the link below to view the quotation.':'아래 링크를 누르시면 견적서 확인 가능.')+'\n👉 '+url};
   }
+  /* 🧾 인보이스 링크 메시지 (2026-11-14)
+     「Happy Home Care Invoice [ 고객명 / 날짜 ]」 → 품목 · 금액 → 결제 상태(완료/기한/잔액/기한 지남) → 안내 한 줄 → 👉 링크 */
+  function ivMsg(b,lg){
+    var en=lg==='en',nm=(b.getAttribute('data-shn')||'').trim(),dt=rptDate(b.getAttribute('data-shd'),lg),
+        am=b.getAttribute('data-sam')||'',st=b.getAttribute('data-sst')||'',bl=b.getAttribute('data-sbl')||'',
+        du=b.getAttribute('data-sdu')?rptDate(b.getAttribute('data-sdu'),lg):'',
+        sj=(en?(b.getAttribute('data-sje')||''):(b.getAttribute('data-sjk')||'')).trim(),
+        url=withLang(b.getAttribute('data-shu'),lg).replace(/\.html\?/,'?');   // /hhc-invoice?view=… (짧은 주소)
+    var br=[nm,dt].filter(Boolean).join(' / ');
+    var ln=[sj,am?('RM '+am):''].filter(Boolean).join(' · ');
+    void br;void ln;
+    // 2026-11-14 대표님 지정 형식 : 「2026.11.12 인보이스 [ 고객명 ]」 → 「(에어컨 · 세탁기)」 → 빈 줄 → 안내 → 👉 링크 (금액·결제상태 없음)
+    return {url:url,text:(dt?dt+' ':'')+(en?'Invoice':'인보이스')+(nm?' [ '+nm+' ]':'')+'\n'+
+      (sj?'('+sj+')\n':'')+'\n'+
+      (en?'Tap the link below to view the invoice.':'아래 링크를 누르시면 인보이스 확인 가능.')+'\n👉 '+url};
+  }
+  // 결제 상태 한 줄 — 결제 완료 / 결제 기한 / 잔액 / 기한 지남
+  function ivStat(b,lg){
+    var en=lg==='en',st=b.getAttribute('data-sst')||'',bl=b.getAttribute('data-sbl')||'',
+        du=b.getAttribute('data-sdu')?rptDate(b.getAttribute('data-sdu'),lg):'',sl='';
+    if(st==='paid')sl=en?'Paid in full':'결제 완료';
+    else if(st==='overdue')sl=en?('Overdue'+(du?' · due '+du:'')+(bl?' · balance RM '+bl:'')):('결제 기한 지남'+(du?' · '+du:'')+(bl?' · 잔액 RM '+bl:''));
+    else if(st==='part')sl=en?('Balance RM '+bl+(du?' · due '+du:'')):('잔액 RM '+bl+(du?' · 결제 기한 '+du:''));
+    else if(du)sl=en?('Payment due '+du):('결제 기한 '+du);
+    return sl;
+  }
+  /* ☑ 여러 개 한 번에 — 링크 묶음 메시지 (2026-11-14)
+     「Happy Home Care Invoices [ 고객명 · 3건 ]」 → 미결제 합계 → 안내 한 줄 → 문서마다 (번호) 날짜 · 품목 · 금액 / 상태 / 👉 링크 */
+  function msMsg(bs,lg){
+    var en=lg==='en',k=bs[0].getAttribute('data-shk'),n=bs.length,
+        nm=(bs[0].getAttribute('data-shn')||'').trim(),out=0,lines=[];
+    bs.forEach(function(b,i){
+      var u=withLang(b.getAttribute('data-shu'),lg).replace(/\.html\?/,'?'),hd,sl='';
+      if(k==='iv'){
+        var sj=(en?(b.getAttribute('data-sje')||''):(b.getAttribute('data-sjk')||'')).trim();
+        hd=[rptDate(b.getAttribute('data-shd'),lg),sj].filter(Boolean).join(' · ');   // 날짜 · 품목 (금액·결제상태 없음 — 2026-11-14)
+      }else{
+        var ty=b.getAttribute('data-sty')||'inspect';
+        hd=(en?(RPT_EN[ty]||RPT_EN.inspect):(RPT_KO[ty]||RPT_KO.inspect))+' · '+rptDate(b.getAttribute('data-shd'),lg);
+      }
+      lines.push((i+1)+') '+hd+(sl?'\n'+sl:'')+'\n👉 '+u);
+    });
+    // 「총 2건 인보이스 [ 고객명 ]」 → 빈 줄 → 안내 → 빈 줄 → 문서별 (2026-11-14 대표님 지정 형식)
+    var ttl=k==='iv'?(en?'Total '+n+' invoice'+(n>1?'s':''):'총 '+n+'건 인보이스'):(en?'Total '+n+' report'+(n>1?'s':''):'총 '+n+'건 보고서');
+    var br=nm,sum='\n';void out;
+    var gd=k==='iv'?(en?'Tap each link below to view the invoice.':'아래 링크를 누르시면 인보이스 확인 가능.')
+                   :(en?'Tap each link below to view the report.':'아래 링크를 누르시면 보고서 확인 가능.');
+    return ttl+(br?' [ '+br+' ]':'')+'\n'+sum+gd+'\n\n'+lines.join('\n\n');
+  }
+  function msSheet(bs,lg){
+    function T(ko,en){return lg==='en'?en:ko;}
+    var k=bs[0].getAttribute('data-shk'),n=bs.length,tx=msMsg(bs,lg),iv=k==='iv';
+    shShow('<div class="t1">'+(iv?T('인보이스 '+n+'건 보내기','Send '+n+' invoices'):T('보고서 '+n+'건 보내기','Send '+n+' reports'))+'</div>'+
+      '<div class="t2">'+T('받는 분이 각 링크를 누르면 지금 보시는 화면이 그대로 열립니다.','The recipient can open each link to see the same page you see.')+'</div>'+
+      '<div class="lsg"><span>'+(iv?T('처음 열릴 언어','Invoice language'):T('처음 열릴 언어','Report language'))+'</span>'+
+        '<button type="button" data-lg="ko"'+(lg==='ko'?' class="on"':'')+'>한국어</button>'+
+        '<button type="button" data-lg="en"'+(lg==='en'?' class="on"':'')+'>English</button></div>'+
+      '<div class="lmsg ms">'+esc2(tx).replace(/\n/g,'<br>')+'</div>'+
+      '<div class="acts">'+
+        '<a class="wa" href="https://wa.me/?text='+encodeURIComponent(tx)+'" target="_blank" rel="noopener">💬 '+T('왓츠앱으로 보내기','Send on WhatsApp')+'</a>'+
+        '<button type="button" class="kk" data-a="sys">💛 '+T('카카오톡 · 다른 앱으로 보내기','KakaoTalk · other apps')+'</button>'+
+        '<button type="button" data-a="cp">🔗 '+T('메시지 복사','Copy message')+'</button>'+
+        '<button type="button" class="pdf" data-a="pdf">📄 '+T('PDF 파일로 보내기 ('+n+'개)','Send as PDF files ('+n+')')+'</button>'+
+        '<button type="button" class="cl" data-a="x">'+T('닫기','Close')+'</button>'+
+      '</div><div class="lnote" id="lnote"></div>');
+    var bx=box();
+    Array.prototype.forEach.call(bx.querySelectorAll('[data-lg]'),function(x){
+      x.onclick=function(){msSheet(bs,x.getAttribute('data-lg'));};
+    });
+    function done(){shHide();if(window.__mselOff)window.__mselOff();}
+    bx.querySelector('.wa').addEventListener('click',function(){setTimeout(done,300);});
+    function note(t){var e=document.getElementById('lnote');if(e)e.textContent=t;}
+    bx.querySelector('[data-a="sys"]').onclick=async function(){
+      if(navigator.share){
+        try{await navigator.share({text:tx});done();return;}
+        catch(e){if(e&&e.name==='AbortError')return;}
+      }
+      try{await copyTx(tx);note(T('✅ 메시지가 복사되었습니다. 카카오톡 대화방에 붙여 넣어 보내 주세요.','✅ Message copied. Paste it into KakaoTalk or any app.'));}
+      catch(e){note(T('복사하지 못했습니다.','Could not copy.'));}
+    };
+    bx.querySelector('[data-a="cp"]').onclick=async function(){
+      try{await copyTx(tx);note(T('✅ 메시지가 복사되었습니다.','✅ Message copied.'));}catch(e){note(T('복사하지 못했습니다.','Could not copy.'));}
+    };
+    bx.querySelector('[data-a="pdf"]').onclick=function(){
+      shareMany(bs.map(function(b){return {kind:b.getAttribute('data-shk'),id:b.getAttribute('data-shi'),
+        title:b.getAttribute('data-sht'),url:b.getAttribute('data-shu')};}),lg);   // 고른 언어로 PDF
+    };
+    bx.querySelector('[data-a="x"]').onclick=shHide;
+  }
   function copyTx(t){
     if(navigator.clipboard&&navigator.clipboard.writeText)return navigator.clipboard.writeText(t);
     return new Promise(function(ok,no){try{var x=document.createElement('textarea');x.value=t;x.style.cssText='position:fixed;opacity:0';
@@ -5308,11 +5407,12 @@ boot();
   function linkSheet(b,lg){
     function T(ko,en){return lg==='en'?en:ko;}   // 창 글자도 고른 메시지 언어를 따름 — 한/영 섞이지 않게 (2026-11-13)
     var m=rptMsg(b,lg);
-    var _q=b.getAttribute('data-shk')==='qt';
-    shShow('<div class="t1">'+(_q?T('견적서 보내기','Send quotation'):T('점검보고서 보내기','Send report'))+'</div>'+
+    var _k=b.getAttribute('data-shk'),_q=_k==='qt',_v=_k==='iv';
+    shShow('<div class="t1">'+(_q?T('견적서 보내기','Send quotation'):_v?T('인보이스 보내기','Send invoice'):T('점검보고서 보내기','Send report'))+'</div>'+
       '<div class="t2">'+(_q?T('받는 분이 링크를 누르면 지금 보시는 견적서 화면이 그대로 열립니다.','The recipient will see the same quotation page you see.')
+                         :_v?T('받는 분이 링크를 누르면 지금 보시는 인보이스 화면이 그대로 열립니다.','The recipient will see the same invoice page you see.')
                             :T('받는 분이 링크를 누르면 지금 보시는 보고서 화면이 그대로 열립니다.','The recipient will see the same report page you see.'))+'</div>'+
-      '<div class="lsg"><span>'+(_q?T('처음 열릴 언어','Quotation language'):T('처음 열릴 언어','Report language'))+'</span>'+
+      '<div class="lsg"><span>'+(_q?T('처음 열릴 언어','Quotation language'):_v?T('처음 열릴 언어','Invoice language'):T('처음 열릴 언어','Report language'))+'</span>'+
         '<button type="button" data-lg="ko"'+(lg==='ko'?' class="on"':'')+'>한국어</button>'+
         '<button type="button" data-lg="en"'+(lg==='en'?' class="on"':'')+'>English</button></div>'+
       '<div class="lmsg">'+esc2(m.text).replace(/\n/g,'<br>')+'</div>'+
@@ -5341,13 +5441,13 @@ boot();
       try{await copyTx(m.url);note(T('✅ 링크가 복사되었습니다.','✅ Link copied.'));}catch(e){note(m.url);}
     };
     bx.querySelector('[data-a="pdf"]').onclick=function(){
-      shareDoc(b.getAttribute('data-shk')||'ip',b.getAttribute('data-shi'),b.getAttribute('data-sht'),b.getAttribute('data-shu'));
+      shareDoc(b.getAttribute('data-shk')||'ip',b.getAttribute('data-shi'),b.getAttribute('data-sht'),b.getAttribute('data-shu'),lg);   // 고른 언어로 PDF
     };
     bx.querySelector('[data-a="x"]').onclick=shHide;
   }
 
-  async function shareDoc(kind,id,title,url){
-    var lg=shLang(kind);          // iv·ip = 항상 en
+  async function shareDoc(kind,id,title,url,lgPick){
+    var lg=lgPick||shLang(kind);  // 공유 창에서 고른 언어 · 없으면(여러 개 선택 등) iv·ip = en
     url=withLang(url,lg);         // PDF 원본·대체 링크 모두 이 언어로
     var nm=fname(kind,id,lg);
     var txt='Happy Home Care · '+title;
