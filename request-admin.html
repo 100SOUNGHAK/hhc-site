@@ -512,6 +512,21 @@ html.sa body:has(.app-body.active){padding-left:200px}
 .nx-sm{flex:1;min-width:0;font-size:13px;color:var(--text2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nx-sm b{color:var(--text);font-weight:800}
 .nx-sm .rmk{color:var(--text3)}
+/* (2026-11-14) 의뢰 품목 — 접힌 카드는 예전처럼 한 줄 요약(…), 누르면 펼쳐지며 품목마다 한 줄로 전부 보임 (PC는 늘 펼친 모습) */
+.nx-l2f .nx-li{display:inline}
+.nx-l2f .nx-li+.nx-li::before{content:" · "}
+.nx-row.open .nx-l2f{align-items:flex-start}
+.nx-row.open .nx-l2f .nx-sm{white-space:normal;overflow:visible;text-overflow:clip;display:flex;flex-direction:column;gap:3px;line-height:1.45;word-break:keep-all;overflow-wrap:anywhere}
+.nx-row.open .nx-l2f .nx-li{display:block;position:relative;padding-left:11px}
+.nx-row.open .nx-l2f .nx-li+.nx-li::before{content:none}
+.nx-row.open .nx-l2f .nx-li::after{content:"";position:absolute;left:1px;top:.6em;width:4px;height:4px;border-radius:50%;background:var(--text3)}
+@media(min-width:960px){
+  .nx-l2f{align-items:flex-start}
+  .nx-l2f .nx-sm{white-space:normal;overflow:visible;text-overflow:clip;display:flex;flex-direction:column;gap:3px;line-height:1.45;word-break:keep-all;overflow-wrap:anywhere}
+  .nx-l2f .nx-li{display:block;position:relative;padding-left:11px}
+  .nx-l2f .nx-li+.nx-li::before{content:none}
+  .nx-l2f .nx-li::after{content:"";position:absolute;left:1px;top:.6em;width:4px;height:4px;border-radius:50%;background:var(--text3)}
+}
 .nx-qa{flex-shrink:0;height:32px;border:0;border-radius:9px;padding:0 11px;font-size:12.5px;font-weight:800;white-space:nowrap;cursor:pointer;font-family:inherit;transition:transform .14s}
 .nx-qa:active{transform:scale(.95)}
 .nx-qa.ok{background:var(--green-bg);color:var(--green)}
@@ -1769,7 +1784,8 @@ function renderList(){
     const icon=isUrgent?'⚠️':isPending?'🆕':conv?'✅':'📅';
     const agoTxt2=r.submitted_at?(hoursAgo<1?Math.max(1,Math.round(hoursAgo*60))+'분 전':hoursAgo<24?Math.round(hoursAgo)+'시간 전':Math.floor(hoursAgo/24)+'일 전'):'';
     const mtCls=!isPending?'':(hoursAgo>24?' r':(hoursAgo>12?' a':''));
-    const sum=items.map(it=>{const c=String(it.cat||'').replace(/\s*\(.*?\)\s*/g,' ').trim();return `${escHtml((c+' '+(it.svc||'')).trim())} <b>${escHtml(it.qty)}</b>`;}).join(' · ')||'<span class="rmk">품목 없음</span>';
+    // (2026-11-14) 품목은 「…」로 자르지 않고 한 줄에 하나씩 전부 보여 줍니다
+    const sum=items.map(it=>{const c=String(it.cat||'').replace(/\s*\(.*?\)\s*/g,' ').trim();return `<span class="nx-li">${escHtml((c+' '+(it.svc||'')).trim())} <b>× ${escHtml(it.qty)}</b></span>`;}).join('')||'<span class="rmk">품목 없음</span>';
     let qa='',ab1='';
     if(conv){ab1='';}
     else if(isPending){qa=`<button class="nx-qa ok" data-complete="${r.__id}">✓ 접수</button>`;ab1=`<div class="nx-ab"><button class="nx-b ok" data-complete="${r.__id}">✓ 접수완료</button><button class="nx-b pri" data-tobooking="${r.__id}">📅 예약전환</button></div>`;}
@@ -1778,7 +1794,7 @@ function renderList(){
       <div class="nx-ic ${tone}">${icon}</div>
       <div class="nx-bd">
         <div class="nx-r1"><span class="nx-nm"><span class="ca-open" data-caopen="${r.__id}" title="총괄 고객관리에서 이 고객 상세 열기">${escHtml(r.condo_name||r.condo||'—')}${r.condo_unit&&hhcCN(r.condo_unit)!==hhcCN(r.condo_name||r.condo)?`<small>${escHtml(r.condo_unit)}</small>`:''}</span></span>${gradeBadge(rqCustName(r),r.phone)}${r.lang==='en'?'<span class="nx-lb en">EN</span>':''}<span class="nx-mt${mtCls}">${conv?'🗓️ 전환됨':agoTxt2}</span></div>
-        <div class="nx-l2"><span class="nx-sm">${sum}</span>${qa}</div>
+        <div class="nx-l2 nx-l2f"><span class="nx-sm">${sum}</span>${qa}</div>
         ${nxRefLine(r)}
         <div class="nx-ex">
           <div class="nx-dl">${r.remarks?`<span class="k">요청</span>${escHtml(r.remarks)}<br>`:''}<span class="k">연락처</span>${r.phone?`<a href="tel:${escAttr(String(r.phone).replace(/[^\d+]/g,''))}">${escHtml(r.phone)}</a>`:'<span style="color:var(--text3)">없음</span>'}<br><span class="k">접수</span>${date}${!isPending&&!conv?' · 접수완료됨':''}</div>
