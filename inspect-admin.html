@@ -6814,6 +6814,7 @@ var draftTimer=null;
 //  — 이게 저장 후에도 "저장하지 않은 보고서" 안내가 계속 뜨던 원인)
 var _draftDirty=false;
 function collectByType(){return reportType==='install'?collectInstallData():(reportType==='washer'?collectWasherData():collectData());}
+window.__collectByType=collectByType; // m29 고객 화면 미리보기용
 function saveDraft(){
   if(currentEditId)return; // 기존 보고서 수정 중엔 미저장
   if(!_draftDirty)return; // 방금 저장/초기화되어 실제 변경이 없으면 다시 만들지 않음
@@ -8113,7 +8114,7 @@ setTimeout(function(){
       '';
     decoratePills(stMap);
     /* 아래 바 · PC 버튼 */
-    var bs=$('m27-s');if(bs)bs.innerHTML='<span class="r">'+ring(pr.p,40,5)+'<b>'+pr.p+'%</b></span><span><small>완성도 · 사진 '+nPhotos()+'장</small><strong>저장 전 점검'+(L.length?' <em class="m27-bdg'+(err?'':' y')+'">'+L.length+'</em>':' ✓')+'</strong></span>';
+    var bs=$('m27-s');if(bs)bs.innerHTML='<span class="r">'+ring(pr.p,40,5)+'<b>'+pr.p+'%</b></span><span><small>완성도 · 사진 '+nPhotos()+'장</small><strong><span class="m27-pre">저장 전 </span>점검'+(L.length?' <em class="m27-bdg'+(err?'':' y')+'">'+L.length+'</em>':' ✓')+'</strong></span>';
     var pb=$('m27-ckbtn');if(pb)pb.innerHTML='✔ 저장 전 점검 '+(L.length?'<span class="m27-bdg'+(err?'':' y')+'">'+L.length+'</span>':'<span style="color:#0E9B63">— 빠진 곳 없음</span>');
     /* 냉방 유닛 온도 경고 */
     [].forEach.call(document.querySelectorAll('#cool-units .cu-item'),function(w){
@@ -8424,6 +8425,157 @@ setTimeout(function(){
     new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var t=ms[i].target;t=t.nodeType===1?t:t.parentElement;if(t&&t.closest&&t.closest('#m28-evs,#m28-gen,#m27-ov,#m27-rec,#m27-dsum,.m27-tw'))continue;schedule();return;}}).observe(vf,{childList:true,subtree:true});}
   ['switchReportType','newReport','editReport','setEval','setDispatchKind'].forEach(function(f){var o=window[f];if(typeof o!=='function')return;window[f]=function(){var r=o.apply(this,arguments);schedule();setTimeout(schedule,800);return r;};});
   schedule();setTimeout(schedule,1500);
+})();
+</script>
+
+<!-- ════ m29 · 작성 화면 2단계 (2026-11-15) — 실외기 측정 자동 판정 · 고객 화면 미리보기(저장 전)
+   ※ 이 블록(m29-css · m29-js)만 지우면 바로 이전 화면으로 돌아갑니다. -->
+<style id="m29-css">
+/* 실외기 자동 판정 안내 */
+.m29-hint{margin:6px 0 2px;font-size:11.5px;color:#5A6478;line-height:1.5;background:#F6F8FC;border-radius:9px;padding:7px 10px}
+.m29-hint b{color:#0E2350}
+.mvb .m29-auto{display:block;margin-top:4px;font-size:10.5px;font-weight:700;line-height:1.35}
+.mvb .m29-auto.under{color:#DC2626}.mvb .m29-auto.over{color:#B45309}.mvb .m29-auto.normal{color:#059669}
+/* 고객 화면 미리보기 */
+.m29-pvbtn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin:0 0 8px;padding:12px;border-radius:12px;border:1.5px solid #D8DFEC;background:#fff;font-family:inherit;font-size:14px;font-weight:800;color:#0E2350;cursor:pointer}
+.m26-bar .nx{flex:0 0 48px;width:48px;padding:0!important;font-size:0!important}.m26-bar .nx::after{content:"↓";font-size:19px;font-weight:800}
+.m26-bar .m29-eye{flex:0 0 48px;width:48px;padding:0!important;background:#EEF2FA!important;color:#0E2350!important;font-size:19px!important}
+#m29-pv{position:fixed;inset:0;z-index:9995;display:flex;flex-direction:column;background:#0E2350;transform:translateY(100%);visibility:hidden;transition:transform .32s cubic-bezier(.2,.9,.3,1),visibility .32s}
+#m29-pv.on{transform:none;visibility:visible}
+#m29-pv .hd{display:flex;align-items:center;gap:8px;padding:calc(10px + env(safe-area-inset-top,0)) 12px 10px 16px;color:#fff}
+#m29-pv .hd b{flex:1;min-width:0;font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#m29-pv .hd b small{display:block;font-size:11px;font-weight:600;color:rgba(255,255,255,.6)}
+#m29-pv .lg{display:flex;background:rgba(255,255,255,.12);border-radius:999px;padding:3px}
+#m29-pv .lg button{height:30px;padding:0 12px;border:0;border-radius:999px;background:none;color:rgba(255,255,255,.75);font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer}
+#m29-pv .lg button.on{background:#fff;color:#0E2350}
+#m29-pv .ic{width:38px;height:38px;border-radius:50%;border:0;background:rgba(255,255,255,.14);color:#fff;font-size:15px;cursor:pointer}
+.m27-s>span:last-child{min-width:0;overflow:hidden}.m27-s strong{overflow:hidden;text-overflow:ellipsis}
+@media (max-width:420px){.m27-s .m27-pre{display:none}}
+#m29-pv iframe{flex:1;width:100%;border:0;background:#F2F5FA}
+#m29-pv .ft{padding:7px 14px calc(7px + env(safe-area-inset-bottom,0));font-size:11.5px;color:rgba(255,255,255,.65);text-align:center}
+@media (min-width:1400px){
+  #m29-pv{left:auto;width:430px;transform:translateX(100%);box-shadow:-12px 0 40px -18px rgba(11,24,51,.5)}
+  #m29-pv.on{transform:none}
+  body.m29-dock .main{margin-right:430px}
+  body.m29-dock #m29-pv .ft::after{content:" · 입력하면 바로 바뀝니다"}
+}
+@media (prefers-reduced-motion:reduce){#m29-pv{transition:none}}
+</style>
+<script id="m29-js">
+(function(){
+  function $(id){return document.getElementById(id);}
+  function RT(){try{return reportType;}catch(e){return 'inspect';}}
+  function num(x){var n=parseFloat(String(x==null?'':x).replace(/[^\d.\-]/g,''));return isNaN(n)?null:n;}
+
+  /* ═════ ① 실외기 측정 자동 판정 ═════
+     값 뒤에 「/기준」을 쓰면 정상·미달·초과를 자동으로 골라 줍니다.
+       저압 105/125~150 → 미달 · 고압 380/340~420 → 정상 · 전류 7.1/7.8(정격) → 정상 · 절연저항 1 MΩ 미만 → 미달
+     판정 버튼을 직접 누르면 그 칸은 자동 판정을 멈춥니다. */
+  function parseRef(s){
+    s=String(s||'').trim();if(!s)return null;
+    var p=s.split('/'),v=num(p[0]);if(v==null)return null;
+    var r=(p.slice(1).join('/')||'').trim(),lo=null,hi=null,one=null;
+    var m=r.match(/^\s*(\d+(?:\.\d+)?)\s*(?:~|\^|–|-|〜)\s*(\d+(?:\.\d+)?)/);
+    if(m){lo=+m[1];hi=+m[2];if(lo>hi){var t=lo;lo=hi;hi=t;}}else if(num(r)!=null)one=num(r);
+    return {v:v,lo:lo,hi:hi,one:one};
+  }
+  function judge(key,s){
+    var r=parseRef(s);if(!r)return null;
+    if(key==='in'){return r.v<1?['under','1 MΩ 미만 — 미달']:['normal','정상'];}
+    if(r.lo!=null){return r.v<r.lo?['under','기준 '+r.lo+'~'+r.hi+' 미달']:r.v>r.hi?['over','기준 '+r.lo+'~'+r.hi+' 초과']:['normal','기준 '+r.lo+'~'+r.hi+' 정상'];}
+    if(key==='cu'&&r.one!=null){return r.v>r.one*1.05?['over','정격 '+r.one+'A 초과']:['normal','정격 '+r.one+'A 이내'];}
+    return null;
+  }
+  var KEYS=['hp','lp','cu','in'];
+  function msrWire(w){
+    if(w._m29)return;w._m29=1;
+    var grid=w.querySelector('.mv-grid');if(!grid)return;
+    var hint=document.createElement('div');hint.className='m29-hint';
+    hint.innerHTML='💡 값 뒤에 <b>/기준</b>을 쓰면 판정이 자동으로 골라집니다 — 저압 <b>105/125~150</b> · 전류 <b>7.1/7.8</b>(정격) · 절연저항 1 MΩ 미만은 미달';
+    grid.parentNode.insertBefore(hint,grid.nextSibling);
+    [].forEach.call(grid.querySelectorAll('.mvb'),function(b,i){
+      var key=KEYS[i],inp=b.querySelector('input');if(!inp||!key)return;
+      var segBtns=[].slice.call(b.querySelectorAll('button[data-v]'));
+      segBtns.forEach(function(x){x.addEventListener('click',function(e){if(e.isTrusted){b.dataset.m29manual='1';var t=b.querySelector('.m29-auto');if(t)t.remove();}});});
+      function run(){
+        if(b.dataset.m29manual)return;
+        var j=judge(key,inp.value),tag=b.querySelector('.m29-auto');
+        if(!j){if(tag)tag.remove();return;}
+        var btn=segBtns.find(function(x){return x.dataset.v===j[0];});if(btn&&btn.onclick)btn.onclick();
+        if(!tag){tag=document.createElement('span');tag.className='m29-auto';b.appendChild(tag);}
+        tag.className='m29-auto '+j[0];tag.textContent='자동: '+j[1];
+      }
+      inp.addEventListener('input',run);
+    });
+  }
+  function wireAll(){[].forEach.call(document.querySelectorAll('#msr-rows .unit-item'),msrWire);}
+  document.addEventListener('focusin',function(e){var w=e.target.closest&&e.target.closest('#msr-rows .unit-item');if(w)msrWire(w);});
+
+  /* ═════ ② 고객 화면 미리보기 (저장 전) ═════ */
+  function previewDoc(){
+    if(typeof window.__collectByType!=='function')return null;
+    var d=JSON.parse(JSON.stringify(window.__collectByType()));
+    var pd={};try{pd=photoData;}catch(e){}
+    var add=function(arr,u){return (arr||[]).concat(u);};
+    Object.keys(pd).forEach(function(key){
+      var u=pd[key];if(!u)return;
+      if(key.startsWith('wproblem-photos-')){d.wProblems=(d.wProblems||[]).map(function(p){if(key===p.photoKey||key.indexOf(p.photoKey+'-')===0)p.photos=add(p.photos,u);return p;});}
+      else if(key.startsWith('w-problem-photos'))d.wProblemPhotos=add(d.wProblemPhotos,u);
+      else if(key.startsWith('w-before-photos'))d.wBeforePhotos=add(d.wBeforePhotos,u);
+      else if(key.startsWith('w-after-photos'))d.wAfterPhotos=add(d.wAfterPhotos,u);
+      else if(key.startsWith('w-etc-photos'))d.wEtcPhotos=add(d.wEtcPhotos,u);
+      else if(key.startsWith('cool-')){d.coolUnits=(d.coolUnits||[]).map(function(c){if(key===c.photoKey||key.startsWith(c.photoKey+'-x')){c.photos=add(c.photos,u);if(!c.photo)c.photo=u;}return c;});}
+      else if(key.startsWith('outdoor-')){var pts=key.split('-'),ot=pts[pts.length-1];d.outdoorSets=(d.outdoorSets||[]).map(function(s){if(s.photoKeys&&(s.photoKeys[ot]===key||key.includes(s.photoKeys[ot]||'__x__'))){var ph=s.photos||{};ph[ot]=u;s.photos=ph;}return s;});}
+      else if(key.startsWith('install-before-photos'))d.beforePhotos=add(d.beforePhotos,u);
+      else if(key.startsWith('install-after-photos'))d.afterPhotos=add(d.afterPhotos,u);
+      else if(key.startsWith('install-leak-photos'))d.installLeakPhotos=add(d.installLeakPhotos,u);
+      else if(key.startsWith('vacuum-photos'))d.vacuumPhotos=add(d.vacuumPhotos,u);
+      else if(key.startsWith('etc-photos'))d.etcPhotos=add(d.etcPhotos,u);
+      else if(key.startsWith('cooltest-photos-'))d.coolTests=(d.coolTests||[]).map(function(c){if(c.photoKeyPrefix&&key.startsWith(c.photoKeyPrefix))c.photos=add(c.photos,u);return c;});
+      else if(key.startsWith('refrigtest-photos-'))d.refrigTests=(d.refrigTests||[]).map(function(r){if(r.photoKeyPrefix&&key.startsWith(r.photoKeyPrefix))r.photos=add(r.photos,u);return r;});
+      else if(key.startsWith('work-photos'))d.workPhotos=add(d.workPhotos,u);
+      else if(key.startsWith('clean-before-photos'))d.cleanBefore=add(d.cleanBefore,u);
+      else if(key.startsWith('clean-after-photos'))d.cleanAfter=add(d.cleanAfter,u);
+      else if(key.startsWith('leak-unit-'))d.leakUnits=(d.leakUnits||[]).map(function(l){if((l.photoKeys||[]).includes(key))l.photos=add(l.photos,u);return l;});
+      else if(key.startsWith('fix-')){var fx=function(arr){return (arr||[]).map(function(x){var f=x&&x.fix;if(!f)return x;if((f.bKeys||[]).indexOf(key)>=0)f.bPhotos=add(f.bPhotos,u);if((f.aKeys||[]).indexOf(key)>=0)f.aPhotos=add(f.aPhotos,u);return x;});};d.coolUnits=fx(d.coolUnits);d.measurements=fx(d.measurements);}
+      else if(key.startsWith('msr-unit-'))d.measurements=(d.measurements||[]).map(function(m){if((m.photoKeys||[]).includes(key))m.photos=add(m.photos,u);return m;});
+      else if(key.startsWith('problem-photos-'))d.problemPhotos=(d.problemPhotos||[]).map(function(p){if(key===p.photoKey||key.indexOf(p.photoKey+'-')===0)p.photos=add(p.photos,u);return p;});
+    });
+    d.workVideos=[];
+    if(!d.client)d.client='(고객명 입력 전)';
+    return d;
+  }
+  var pv=document.createElement('div');pv.id='m29-pv';pv.setAttribute('role','dialog');pv.setAttribute('aria-label','고객 화면 미리보기');
+  pv.innerHTML='<div class="hd"><b>고객이 보는 화면<small>저장 전 미리보기 · 실제로 보내지지 않습니다</small></b><button type="button" class="ic" data-r="1" aria-label="새로 고침">↻</button><button type="button" class="ic" data-x="1" aria-label="닫기">✕</button></div>'+
+    '<iframe title="고객 화면 미리보기"></iframe><div class="ft">EN을 누르면 영문 화면 — 직접 쓴 문장의 영어 번역은 저장할 때 만들어집니다</div>';
+  document.body.appendChild(pv);
+  var fr=pv.querySelector('iframe'),lang='ko',page='',ready=false,open=false;
+  function pageOf(){var t=RT();return t==='install'?'install.html':(t==='washer'?'washer.html':'inspect.html');}
+  function load(){page=pageOf();ready=false;fr.src=page+'?preview=1&lang='+lang+'&t='+Date.now();}
+  function send(){if(!open||!ready)return;var d=previewDoc();if(!d)return;try{fr.contentWindow.postMessage({hhcPreview:d},location.origin);}catch(e){console.warn('m29 send',e);}}
+  window.addEventListener('message',function(e){if(e.origin!==location.origin||e.source!==fr.contentWindow||!e.data||!e.data.hhcPreviewReady)return;ready=true;send();});
+  function show(){open=true;if(pageOf()!==page||!fr.src)load();else send();pv.classList.add('on');if(window.matchMedia('(min-width:1400px)').matches)document.body.classList.add('m29-dock');}
+  function hide(){open=false;pv.classList.remove('on');document.body.classList.remove('m29-dock');}
+  window.__m29preview=show;
+  pv.addEventListener('click',function(e){
+    var b=e.target.closest('button');if(!b)return;
+    if(b.dataset.x)hide();
+    else if(b.dataset.r)load();
+    else if(b.dataset.l){lang=b.dataset.l;[].forEach.call(pv.querySelectorAll('.lg button'),function(x){x.classList.toggle('on',x===b);});load();}
+  });
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&open)hide();});
+  /* 버튼 — 휴대폰: 아래 바 👁 · PC: 저장 버튼 위 */
+  var bar=document.querySelector('.m26-bar');
+  if(bar){var eb=document.createElement('button');eb.type='button';eb.className='m29-eye';eb.setAttribute('aria-label','고객 화면 미리보기');eb.textContent='👁';var nx=document.getElementById('m26-next');bar.insertBefore(eb,nx||bar.lastChild);eb.addEventListener('click',show);}
+  var sv=$('btn-save');if(sv&&sv.parentNode){var pb=document.createElement('button');pb.type='button';pb.className='m29-pvbtn';pb.innerHTML='👁 고객 화면 미리보기 <span style="font-weight:600;color:#98A1B4;font-size:12px">— 저장 전에 확인</span>';var ck=$('m27-ckbtn');sv.parentNode.insertBefore(pb,ck||sv);pb.addEventListener('click',show);}
+
+  /* ── 입력이 바뀌면: 실외기 판정 연결 · (PC 옆 창이 열려 있으면) 미리보기 갱신 ── */
+  var tm=null;function schedule(){clearTimeout(tm);tm=setTimeout(function(){try{wireAll();if(open){if(pageOf()!==page)load();else send();}}catch(e){console.warn('m29',e);}},700);}
+  var vf=$('view-form');
+  if(vf){['input','change','click'].forEach(function(ev){vf.addEventListener(ev,schedule);});
+    new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var t=ms[i].target;t=t.nodeType===1?t:t.parentElement;if(t&&t.closest&&t.closest('#m28-evs,#m28-gen,#m27-ov,#m27-rec,#m27-dsum,.m27-tw,.m29-auto'))continue;try{wireAll();}catch(_){}schedule();return;}}).observe(vf,{childList:true,subtree:true});}
+  ['switchReportType','newReport','editReport'].forEach(function(f){var o=window[f];if(typeof o!=='function')return;window[f]=function(){var r=o.apply(this,arguments);schedule();setTimeout(schedule,900);return r;};});
+  schedule();setTimeout(wireAll,1500);
 })();
 </script>
 
