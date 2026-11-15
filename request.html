@@ -424,6 +424,8 @@ body{background:var(--rq-soft)}
 
 /* ══ 2026-11-14 점검방문 & 수리의뢰 요청 (rpq-) ══ */
 #card-repair .card-num{background:#C9D2E0}
+/* 출장점검/진단 요청서 모드 (?t=insp) — 의뢰 품목 칸 숨김 */
+html.rq-insp #card-items,html.rq-insp #calcBox{display:none}
 #card-repair.done .card-num{background:var(--green)}
 .rpq-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--rq-soft);border-radius:12px;margin-bottom:12px}
 .rpq-l{flex:1;min-width:0}
@@ -1174,6 +1176,25 @@ const L={
     msgFooter:'\nOur team will contact you after reviewing your request.\nHAPPY WORKS SERVICES SDN.BHD.\n📞 +60172472774',
   }
 };
+
+// ══ 2026-11-16 출장점검/진단 요청서 모드 (?t=insp) ══
+//  · 출장점검 비용 확인하기(/visit-fee)의 「출장점검/진단 신청하기」로 열 때만 적용됩니다.
+//  · 제목을 「출장점검/진단 요청서」로 바꾸고 「의뢰 품목」·「간편 견적 계산기」를 숨깁니다. 점검 대수는 최소 1대.
+//  · 자동 입력 안내는 「자동 입력되었습니다」로 표시.
+//  · 일반 의뢰 요청서(주소에 t=insp 가 없을 때)는 아무것도 바뀌지 않습니다.
+const RQ_INSP=new URLSearchParams(location.search).get('t')==='insp';
+if(RQ_INSP){
+  Object.assign(L.ko,{heroLabel:'출장점검 · 진단',heroTitle:'출장점검/진단 요청서',
+    heroSub:'방문 주소와 증상을 적어 주시면\n확인 후 방문 일정을 안내드립니다.',hs2:'점검 요청',
+    rpqTitle:'점검 대수 · 증상',rpqDesc:'점검이 필요한 대수와 증상을 알려주세요',
+    submitText:'출장점검/진단 요청서 제출',msgHeader:'[HHC 출장점검/진단 요청]\n'});
+  Object.assign(L.en,{heroLabel:'On-site Inspection',heroTitle:'Inspection / Diagnosis Request',
+    heroSub:'Tell us your address and the symptoms.\nWe will confirm a visit time with you.',hs2:'Inspection',
+    rpqTitle:'Units · symptoms',rpqDesc:'How many units need checking, and what is wrong?',
+    submitText:'Submit inspection request',msgHeader:'[HHC Inspection / Diagnosis Request]\n'});
+  document.documentElement.classList.add('rq-insp');
+  document.title='HHC 출장점검/진단 요청서';
+}
 
 let currentLang=(new URLSearchParams(window.location.search).get('lang'))||'ko';
 if(currentLang!=='en')currentLang='ko';
@@ -1933,6 +1954,19 @@ function rpqLang(){
 $('rpq-minus').addEventListener('click',()=>rpqSet(rpqQty-1));
 $('rpq-plus').addEventListener('click',()=>rpqSet(rpqQty+1));
 $('f-repair').addEventListener('input',()=>{if(rpqQty===0&&$('f-repair').value.trim())rpqSet(1);rpqChips();});
+// 출장점검/진단 요청서 모드 — 점검 대수 최소 1대, 카드 번호 2·3, 비용 확인 결과를 요청사항에 미리 적어 둠
+if(RQ_INSP){
+  const _q=new URLSearchParams(location.search);
+  const _rs=rpqSet;rpqSet=function(n){_rs(Math.max(1,n|0));$('rpq-minus').disabled=rpqQty<=1;};
+  window.__rqInspQ=parseInt(_q.get('q'),10)||1;
+  const _n=(id,v)=>{const c=document.querySelector('#'+id+' .card-num');if(c)c.textContent=v;};
+  _n('card-repair','2');_n('card-remarks','3');
+  const _fz=(_q.get('fz')||'').trim(),_ad=(_q.get('ad')||'').trim(),_r=$('f-remarks');
+  if(_r&&!_r.value.trim()&&(_fz||_ad)){
+    _r.value=[_fz,_ad?((isEn()?'Address: ':'주소: ')+_ad):''].filter(Boolean).join('\n');
+    $('card-remarks').classList.add('done');
+  }
+}
 // 증상 빠른 선택 — 누르면 증상 칸에 넣고, 다시 누르면 뺍니다. 그 외 증상은 칸에 직접 적습니다.
 const RPQ_SYM={ko:['냉방불량','작동 후 자동꺼짐','작동불능','물 떨어짐','소음발생'],
                en:['Not cooling','Turns off by itself','Not working','Water dripping','Making noise']};
@@ -2008,7 +2042,7 @@ function cgvStart(){
   window.addEventListener('popstate',function(){if(open)hide(true);});
   document.addEventListener('keydown',function(e){if(e.key==='Escape'&&open)hide(false);});
 })();
-rpqSet(0);
+rpqSet(RQ_INSP?(window.__rqInspQ||1):0);   // 출장점검/진단 요청서 모드는 넘겨받은 대수(최소 1)
 
 // ══ VALIDATION ══
 function validate(){
@@ -2155,7 +2189,7 @@ $('btn-submit').addEventListener('click',async()=>{
       customer_name:condoName,
       customer_phone:phone,
       customer_address:condoUnit,
-      booking_date:'[서비스 의뢰 요청 / Service Request]',
+      booking_date:RQ_INSP?'[출장점검/진단 요청 / Inspection Request]':'[서비스 의뢰 요청 / Service Request]',
       booking_time:'',
       booking_items:itemLines,
       booking_memo:remarks||'—',
@@ -2280,9 +2314,11 @@ function applyCondoDedupe(){
 })();
 function setPrefillNote(){
   const n=document.getElementById('prefill-note');
-  if(n)n.textContent=(currentLang==='ko')
+  if(n)n.textContent=RQ_INSP
+    ?((currentLang==='ko')?'✅ 자동 입력되었습니다. 필요하면 직접 수정하세요.':'✅ Filled in automatically. Feel free to edit.')
+    :((currentLang==='ko')
     ?'✅ 마이페이지 고객정보가 자동 입력되었습니다. 필요하면 직접 수정하세요.'
-    :'✅ Your details were filled in automatically from My Page. Feel free to edit them.';
+    :'✅ Your details were filled in automatically from My Page. Feel free to edit them.');
 }
 </script>
 
