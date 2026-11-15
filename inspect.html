@@ -155,7 +155,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 .cmp b{color:var(--ink2)}
 .gg .ghost{width:10px;height:10px;margin:-5px 0 0 -5px}
 
-.op-more{margin-top:6px;font-size:13.5px;font-weight:700;color:var(--bl);display:flex;align-items:center;gap:4px;padding:6px 0}
+.op-more{width:100%;margin-top:10px;min-height:46px;border-radius:12px;background:#F2F6FB;border:1px solid var(--line);font-size:14.5px;font-weight:800;color:var(--n);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .15s}
+.op-more:active{background:#E3EBF5}
+.op.tap{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.op.tap .op-h{position:relative;padding-right:30px}
+.op.tap .op-h::after{content:"";position:absolute;right:6px;top:50%;width:9px;height:9px;margin-top:-7px;border-right:2.5px solid var(--ink3);border-bottom:2.5px solid var(--ink3);transform:rotate(45deg);transition:transform .25s var(--ease)}
+.op.tap.open .op-h::after{transform:rotate(-135deg);margin-top:-2px}
 
 /* ━━━ 에어컨별 캐러셀 ━━━ */
 .uc-track{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:6px 16px 18px;margin:0 -16px;scrollbar-width:none;overscroll-behavior-x:contain}
@@ -1141,7 +1146,7 @@ function opBody(raw){
 function opCard(d,id){
   var raw=v(d,'opinion');if(!raw||!String(raw).trim())return '';
   var who=d.engineer?v(d,'engineer'):(d.dispatchTech||'');
-  return '<div class="rp-card op"'+(id?' id="'+id+'" data-nav="'+t('nav').op+'"':'')+'><div class="op-h"><span class="op-av">'+(who?esc(who).trim().charAt(0):'H')+'</span><div><b>'+t('opT')+'</b><span>'+(who?esc(who):t('team'))+' · '+fdate(d.date)+'</span></div></div><div class="op-body'+(ST.opOpen||ST.pdf?'':' clip')+'" id="opb">'+opBody(raw)+'</div>'+(ST.pdf?'':'<button class="op-more" id="opm">'+(ST.opOpen?t('less')+' ▴':t('more')+' ▾')+'</button>')+'</div>';
+  return '<div class="rp-card op'+(ST.pdf?'':' tap'+(ST.opOpen?' open':''))+'"'+(id?' id="'+id+'" data-nav="'+t('nav').op+'"':'')+'><div class="op-h"><span class="op-av">'+(who?esc(who).trim().charAt(0):'H')+'</span><div><b>'+t('opT')+'</b><span>'+(who?esc(who):t('team'))+' · '+fdate(d.date)+'</span></div></div><div class="op-body'+(ST.opOpen||ST.pdf?'':' clip')+'" id="opb">'+opBody(raw)+'</div>'+(ST.pdf?'':'<button class="op-more" id="opm">'+(ST.opOpen?t('less')+' ▴':t('more')+' ▾')+'</button>')+'</div>';
 }
 function checksHTML(rs){
   rs=arr(rs);if(!rs.length)return '';
@@ -1350,8 +1355,8 @@ function rInspect(d){
   h+=unitsSection();
   h+=sharedFixSection(d);
   var recs=arr(d.recommendations).length?arr(d.recommendations):recFromOpinion(d);
-  h+=todoSection(recs);
   h+=coolSection();
+  h+=todoSection(recs);
   var ck=checksHTML(d.results),acc=msrAcc(ac),lkl=leakList(ac);
   if(ck||acc||lkl)h+=sec('s-check',t('nav').check,t('kT'),arr(d.results).length?t('kS').replace('{n}',arr(d.results).length):'',ck+acc+lkl);
   h+=unitPdfSection();
@@ -1584,7 +1589,7 @@ document.getElementById('app').addEventListener('click',function(e){
   var tb=e.target.closest('[data-tab]');if(tb){ST.tab=tb.dataset.tab;render(true);return;}
   var f=e.target.closest('[data-f]');if(f){ST.issue=f.dataset.f;render(true);return;}
   var m=e.target.closest('[data-more]');if(m){var id=m.dataset.more,y0=m.getBoundingClientRect().top;ST.more[id]=!ST.more[id];render(true);if(!ST.more[id]){var n=document.querySelector('[data-more="'+id+'"]');if(n)window.scrollBy(0,n.getBoundingClientRect().top-y0);}return;}
-  if(e.target.closest('#opm')){ST.opOpen=!ST.opOpen;document.getElementById('opb').classList.toggle('clip',!ST.opOpen);e.target.closest('#opm').textContent=ST.opOpen?t('less')+' ▴':t('more')+' ▾';return;}
+  var opc=e.target.closest('.op.tap');if(opc&&!e.target.closest('a')){var sel=window.getSelection&&String(window.getSelection());if(sel&&sel.trim()&&!e.target.closest('#opm'))return;ST.opOpen=!ST.opOpen;document.getElementById('opb').classList.toggle('clip',!ST.opOpen);opc.classList.toggle('open',ST.opOpen);var ob=document.getElementById('opm');if(ob)ob.textContent=ST.opOpen?t('less')+' ▴':t('more')+' ▾';if(!ST.opOpen){var r=opc.getBoundingClientRect();if(r.top<70)window.scrollBy({top:r.top-80,behavior:'smooth'});}return;}
   if(e.target.closest('#acch')){ST.accOpen=!document.getElementById('acc').classList.contains('open');document.getElementById('acc').classList.toggle('open',ST.accOpen);return;}
 });
 function goUnit(i){var tr_=document.getElementById('uct');if(!tr_)return;var c=tr_.children[i],s=document.getElementById('s-units');window.scrollTo({top:s.getBoundingClientRect().top+scrollY-110,behavior:'smooth'});setTimeout(function(){tr_.scrollTo({left:c.offsetLeft-(tr_.clientWidth-c.offsetWidth)/2,behavior:'smooth'});c.classList.add('flash');setTimeout(function(){c.classList.remove('flash');},1500);},350);}
