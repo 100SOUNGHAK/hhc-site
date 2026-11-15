@@ -2095,6 +2095,12 @@ html[lang="en"] .ba-item.on::after{content:"Viewing"}
 
 /* HHC 로고 마크 — 자리의 글자색을 그대로 물려받는다 */
 .hhc-mark{width:1.35em;height:1.35em;max-width:82%;max-height:82%;flex:none;display:block}
+.pt-vf{display:flex;align-items:center;gap:12px;margin:2px 0 14px;padding:13px 14px;border-radius:14px;text-decoration:none;color:#0f2540;
+ background:linear-gradient(135deg,#f8e7b6,#e6c26f 55%,#c9a44c);box-shadow:0 10px 22px -12px rgba(201,164,76,.9)}
+.pt-vf i{font-style:normal;width:36px;height:36px;border-radius:50%;background:#0f2540;display:flex;align-items:center;justify-content:center;flex:none;font-size:16px}
+.pt-vf b{display:block;font-size:15px;font-weight:900;letter-spacing:-.02em}
+.pt-vf small{display:block;font-size:12px;font-weight:700;color:#5a4316;margin-top:1px}
+.pt-vf em{margin-left:auto;font-style:normal;width:28px;height:28px;border-radius:50%;background:#0f2540;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900}
 </style>
 <style id="pt-css">
 /* ═══ HHC 서비스 요금표 (pt-) — 배너 → 품목 → 서비스별 가격 ═══ */
@@ -3231,8 +3237,9 @@ body.gqp-open{overflow:hidden}
       ko:['실외기는 왜 청소할까요?','잦은 세척은 필요 없어요','실외기'],en:['Why clean the outdoor unit?','No need for frequent cleaning','Outdoor unit']},
     {k:'curPk',  img:'guide-curtain-pickup', th:'gth-curpk.jpg', hide:1,
       ko:['커튼 전문수거세탁','떼어 가서 전문 세탁 · 재설치','수거세탁'],en:['Curtain pick-up laundry','Taken away, washed and rehung','Pick-up']},
-    {k:'insp',   img:'guide-inspection', th:'gth-inspection.jpg',
-      ko:['출장점검 서비스 비용','지역별 A~D · 진행 순서','점검 비용'],en:['On-site inspection fees','Zones A–D · how it works','Fees']}
+    // 🧰 출장점검 — 그림 대신 「출장점검 비용 확인하기」 안내장(/visit-fee)을 바로 엽니다 (2026-11-16)
+    {k:'insp',   img:'guide-inspection', th:'gth-inspection.jpg', url:'/visit-fee',
+      ko:['출장점검 서비스 비용','주소로 우리 집 비용 확인','점검 비용'],en:['On-site inspection fees','Check the fee for your address','Fees']}
   ];
   function en(){var l=document.documentElement.lang;if(l==='en')return true;if(l==='ko'&&window.currentSiteLang)return false;
     return window.currentSiteLang==='en'||/[?&]lang=en(&|$)/.test(location.search);}
@@ -3243,7 +3250,7 @@ body.gqp-open{overflow:hidden}
     return G.map(function(g,i){var c=g[L];if(g.hide)return '';
       return '<button type="button" class="gq-c'+(g.wide?' wide':'')+'" data-gq="'+i+'">'+
         '<span class="ph"><img src="'+g.th+'" alt="" loading="lazy"><span class="st">'+esc(c[2])+'</span></span>'+
-        '<span class="tx"><b>'+esc(c[0])+'</b><small>'+esc(c[1])+'</small><span class="go">'+(L==='en'?'Open guide →':'안내장 보기 →')+'</span></span></button>';
+        '<span class="tx"><b>'+esc(c[0])+'</b><small>'+esc(c[1])+'</small><span class="go">'+(g.url?(L==='en'?'Check my fee →':'비용 확인하기 →'):(L==='en'?'Open guide →':'안내장 보기 →'))+'</span></span></button>';
     }).join('');
   }
   function render(){
@@ -3272,6 +3279,7 @@ body.gqp-open{overflow:hidden}
   }
   function open(i){
     var g=G[i];if(!g)return;var E=en(),c=g[E?'en':'ko'],url=g.img+(E?'-en':'')+'.png?v='+VER;
+    if(g.url){location.href=g.url+'?from=home'+(E?'&lang=en':'');return;}
     $('gqpG').hidden=true;$('gqpN').hidden=false;$('gqpB').hidden=!fromList;$('gqpB').textContent=E?'← List':'← 목록';
     $('gqpT').textContent=c[0];$('gqpN').textContent=E?'New window':'새 창으로';$('gqpN').href=url;$('gqpX').textContent=E?'✕ Close':'✕ 닫기';
     var L=$('gqpL'),I=$('gqpI');L.textContent=E?'Loading the guide…':'안내장을 불러오는 중입니다…';L.hidden=false;I.style.display='none';
@@ -7573,7 +7581,11 @@ window.PT_IMG={ban:'price-banner.jpg'};
       main+='<div class="pt-types" style="--n:'+it.types.length+'">'+it.types.map(function(t,i){return '<button type="button" data-t="'+i+'" class="'+(i===S.t?'on':'')+'">'+esc(t.sh?L(t.sh):N(t))+'</button>';}).join('')+'</div>';
     }
     main+='<div class="pt-cap"><b>'+(en?'Services & prices':'서비스별 가격')+'</b>'+(list.length>1?(en?list.length+' options':list.length+'가지'):'')+'</div>';
-    main+=list.map(function(s){return svcHTML(s,it);}).join('');
+    main+=list.map(function(s,i){
+      var h=svcHTML(s,it);
+      // 🧰 출장점검 · 수리 — 출장점검 등급 표 바로 아래 「우리 집 비용 확인하기」 (2026-11-16)
+      if(it.k==='rp'&&i===0)h+='<a class="pt-vf" href="/visit-fee?from='+(/namecard|\/nce?(\b|$)/.test(location.pathname)?'card':'home')+(en?'&lang=en':'')+'"><i>📍</i><span><b>'+(en?'Which zone is my home?':'우리 집은 몇 등급일까?')+'</b><small>'+(en?'Enter your address to see the fee':'주소만 넣으면 출장점검 비용 확인')+'</small></span><em>›</em></a>';
+      return h;}).join('');
     if(notes.length)main+='<div class="pt-nt">'+notes.map(function(n){return '<div><i>ℹ︎</i><span>'+esc(L(n))+'</span></div>';}).join('')+'</div>';
     main+=ctaHTML('m');
     var others=ITEMS.filter(function(x){return x.k!==it.k;});

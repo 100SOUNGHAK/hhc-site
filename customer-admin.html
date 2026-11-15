@@ -2115,8 +2115,9 @@ const GDS={
               dko:'냉매는 소모되지 않습니다. 충전보다 누설 점검이 먼저입니다.', den:'Refrigerant is not used up — check for leaks before topping up.'},
   gd_outdoor:{g:'outdoor',img:'guide-ac-outdoor', ko:'실외기는 왜 청소할까요?', en:'Why clean the outdoor unit?',
               dko:'실내기와 달리 잦은 세척은 필요 없습니다. 이럴 때만 청소하세요.', den:'Unlike the indoor unit, it does not need frequent cleaning — only in these cases.'},
-  gd_insp:   {g:'insp',   img:'guide-inspection', ko:'출장점검 서비스 비용', en:'On-site inspection fees',
-              dko:'지역별 출장점검비용과 진행 순서를 안내드립니다.', den:'Inspection fees by zone and how the visit works.'}
+  // 🧰 출장점검 비용 — 안내장 그림은 그대로 보내고, 링크는 출장점검 비용 확인하기(/visit-fee, 고객 주소 a=)로 (2026-11-16)
+  gd_insp:   {g:'insp',   img:'guide-inspection', ko:'출장점검 서비스 비용', en:'On-site inspection fees', fee:true,
+              dko:'링크에서 주소를 넣으시면 댁까지의 출장점검 비용을 바로 확인하실 수 있습니다.', den:'Enter your address at the link to see the visit fee for your home.'}
 };
 const CARE_MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function careLastAc(e){
@@ -4033,6 +4034,7 @@ window.caSendModal=async function(idx){
     {t:'evi',     lb:'🎁 전자상품권 안내', n:0, need:false},
     {t:'pti',     lb:'💎 적립포인트 안내', n:0, need:false},
     {t:'fee',     lb:'💡 추가비용 안내', n:0, need:false},
+    {t:'vfee',    lb:'🧰 출장점검/진단 안내', n:0, need:false},
     {t:'wp',      lb:'🪪 워크퍼밋 등록', n:0, need:false},
     {t:'nc',      lb:'💼 전자명함',      n:0, need:false},
     {t:'rev',     lb:'⭐ 리뷰 이벤트',   n:0, need:false},
@@ -4053,7 +4055,7 @@ window.caSendModal=async function(idx){
     {g:'💰 청구 · 결제',  ts:['bill','rebill','pay']},
     {g:'📅 예약 · 의뢰',  ts:['bk','bkc','rq','ipr','ipv','mmv','rqf','revisit']},
     {g:'🌿 정기관리 알림', ts:['care3','care6']},
-    {g:'📢 안내 · 소개',  ts:['nc','rev','basic','aw','mem','evi','pti','fee','wp','install']},
+    {g:'📢 안내 · 소개',  ts:['nc','rev','basic','aw','mem','evi','pti','fee','vfee','wp','install']},
     {g:'📘 에어컨 안내장', ts:['gd_all','gd_avoid','gd_leak','gd_cool','gd_odour','gd_gas','gd_outdoor','gd_insp']}
   ];
   const _cpSpan=(CPG.length&&CPD.length)?'':'grid-column:1/-1;';
@@ -4208,10 +4210,15 @@ window.caSendModal=async function(idx){
     if(state.tpl==='rev')return BASE+'/home'+(state.en?'?lang=en':'')+'#reviews';
     if(state.tpl==='evi')return BASE+'/evoucher.html'+(state.en?'?lang=en':'');
     // 📘 에어컨 안내장 — 홈페이지를 열면 그 안내장이 팝업으로 바로 뜹니다 (home.html ?g=)
+    if((GDS[state.tpl]||{}).fee){const q=new URLSearchParams();if(e.addr)q.set('a',e.addr);if(state.en)q.set('lang','en');
+      return BASE+'/visit-fee'+(q.toString()?'?'+q.toString():'');}
     if(GDS[state.tpl])return BASE+'/home?g='+GDS[state.tpl].g+(state.en?'&lang=en':'');
     if(state.tpl==='pti')return BASE+'/points.html'+(state.en?'?lang=en':'');
     // 💡 추가비용 안내 — 마이페이지 안 카드가 아니라 별도 안내장을 보냅니다 (적립포인트 안내와 같은 방식)
     if(state.tpl==='fee')return BASE+'/fees.html'+(state.en?'?lang=en':'');
+    // 🧰 출장점검/진단 안내 — 출장점검 비용 확인하기 안내장(/visit-fee). 고객 주소가 있으면 지도에서 먼저 찾아 줌(a=)
+    if(state.tpl==='vfee'){const q=new URLSearchParams();if(e.addr)q.set('a',e.addr);if(state.en)q.set('lang','en');
+      return BASE+'/visit-fee'+(q.toString()?'?'+q.toString():'');}
     const v=['iv','ip','ct','cp'].filter(k=>state[k]);
     const f=FOCUS_OF[state.tpl]||'';
     // 영문 발송은 영문 전용 미리보기 페이지(my-en.html)로 보냅니다.
@@ -4393,6 +4400,9 @@ window.caSendModal=async function(idx){
     if(state.tpl==='evi'){
       return '\n\n'+(en?'🎁 GIFT VOUCHER':'🎁 전자상품권 안내')+'\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
     }
+    if(state.tpl==='vfee'){
+      return '\n\n'+(en?'🧰 INSPECTION FEE':'🧰 출장점검/진단 안내')+'\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
+    }
     if(state.tpl==='pti'){
       return '\n\n'+(en?'💎 REWARD POINTS':'💎 적립포인트 안내')+'\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
     }
@@ -4400,7 +4410,7 @@ window.caSendModal=async function(idx){
       return '\n\n'+(en?'💼 DIGITAL NAME CARD':'💼 전자명함')+'\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
     }
     if(GDS[state.tpl]){
-      return '\n\n'+(GDS[state.tpl].all?(en?'📚 CHOOSE A GUIDE':'📚 안내장 골라 보기'):(en?'📘 VIEW THE GUIDE':'📘 안내장 크게 보기'))+'\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
+      return '\n\n'+(GDS[state.tpl].all?(en?'📚 CHOOSE A GUIDE':'📚 안내장 골라 보기'):GDS[state.tpl].fee?(en?'📍 CHECK YOUR FEE':'📍 우리 집 비용 확인하기'):(en?'📘 VIEW THE GUIDE':'📘 안내장 크게 보기'))+'\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
     }
     return '\n\n📱 MY PAGE\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
   }
@@ -4532,8 +4542,8 @@ window.caSendModal=async function(idx){
   function iprMsg(en){
     const nm=e.name||'';
     return en
-      ?(sHi(en,nm)+'\n🔍 Your inspection (repair) request has been received.\nWe\'ll confirm the visit time soon.\n\n※ Call-out fee applies (free for members / in free-inspection period).\nSee My Page › Price Info.'+sTail())
-      :(sHi(en,nm)+'\n🔍 점검(수리) 요청이 접수되었습니다.\n확인 후 방문 일정 안내드리겠습니다.\n\n※ 출장점검비가 발생합니다 (무상점검 기간·패키지 회원 제외).\n금액은 마이페이지 하단 홈페이지 › 가격정보에서 확인하실 수 있습니다.'+sTail());
+      ?(sHi(en,nm)+'\n🔍 Your inspection (repair) request has been received.\nWe\'ll confirm the visit time soon.\n\n※ Call-out fee applies (free for members / in free-inspection period).\nCheck your fee 👉 '+BASE+'/visit-fee?lang=en'+sTail())
+      :(sHi(en,nm)+'\n🔍 점검(수리) 요청이 접수되었습니다.\n확인 후 방문 일정 안내드리겠습니다.\n\n※ 출장점검비가 발생합니다 (무상점검 기간·패키지 회원 제외).\n우리 집 금액 확인 👉 '+BASE+'/visit-fee'+sTail());
   }
   // 🚗 점검방문 안내 — 「2026.08.19 수요일 오후13:00 전후」 형식
   // ✅ 예약 확정 방문일시 — 「2026년 8월 22일(토) 오전 11:30 전후」 / 「Sat, 22 Aug 2026, around 11:30 AM」
@@ -4680,7 +4690,7 @@ window.caSendModal=async function(idx){
     }
     if(f){careDownload(f);setTimeout(()=>toast('🖼 안내장 그림을 내려받았습니다 · 카카오톡 대화방에 첨부해 주세요'),2600);}
     kkShareMsg(e.name,msg(),link(),en,
-      {t:'[Happy Home Care] '+(en?G.en:G.ko),btn:G.all?(en?'Choose a guide':'안내장 고르기'):(en?'Open the guide':'안내장 보기')},null);
+      {t:'[Happy Home Care] '+(en?G.en:G.ko),btn:G.all?(en?'Choose a guide':'안내장 고르기'):G.fee?(en?'Check my fee':'우리 집 비용 확인하기'):(en?'Open the guide':'안내장 보기')},null);
   }
   // 💼 전자명함 안내 — 한국어/영문 모두 상대방에게 같은 내용으로 보입니다
   function ncMsg(en){
@@ -4752,6 +4762,12 @@ window.caSendModal=async function(idx){
       return en
         ?(sHi(en,nm)+'\n💎 Earn RM 1 for every RM 100 you spend — automatically.\nNo sign-up, no card, no expiry.\n\n(Use like cash once you reach RM 10)'+sTail())
         :(sHi(en,nm)+'\n💎 결제 RM 100마다 RM 1이 자동 적립됩니다.\n신청·카드 필요 없고 유효기간도 없습니다.\n\n(RM 10 이상 모이면 다음 결제부터 현금처럼 사용)'+sTail());
+    }
+    if(state.tpl==='vfee'){
+      // 🧰 출장점검/진단 안내 — 주소를 넣으면 댁까지의 출장점검 비용 확인 · 바로 신청
+      return en
+        ?(sHi(en,nm)+'\n🧰 On-site inspection / diagnosis\nEnter your address at the link to see your visit fee and request a visit.'+sTail())
+        :(sHi(en,nm)+'\n🧰 출장점검/진단 안내드립니다.\n링크에서 주소를 넣으시면 댁까지의 출장점검 비용을 바로 확인하고 신청하실 수 있습니다.'+sTail());
     }
     if(state.tpl==='fee'){
       // 💡 추가비용 안내 — 최소청구금액 · 주차비용 · 예약보증금
@@ -4847,7 +4863,7 @@ window.caSendModal=async function(idx){
     // 💼 전자명함도 명함 주소를 보내므로 마이페이지 노출 항목과 무관합니다.
     // ⭐ 리뷰 이벤트도 홈페이지 주소를 보내므로 마찬가지입니다.
     // 💡 추가비용 안내도 안내장 주소(/fees.html)를 보내므로 마찬가지입니다.
-    const _isMem=(state.tpl==='mem'||state.tpl==='evi'||state.tpl==='pti'||state.tpl==='fee'||state.tpl==='nc'||state.tpl==='rev'||!!GDS[state.tpl]);
+    const _isMem=(state.tpl==='mem'||state.tpl==='evi'||state.tpl==='pti'||state.tpl==='fee'||state.tpl==='vfee'||state.tpl==='nc'||state.tpl==='rev'||!!GDS[state.tpl]);
     const os=mk.querySelector('#cs-optsec');
     if(os)os.style.display=_isMem?'none':'';
     const w=mk.querySelector('#cs-warn');
@@ -5157,6 +5173,9 @@ window.caSendModal=async function(idx){
       :(state.tpl==='fee')
       ?{t:(en?'[Happy Home Care] Additional Charges':'[Happy Home Care] 추가비용 안내'),
         btn:(en?'View charges':'추가비용 안내 보기')}
+      :(state.tpl==='vfee')
+      ?{t:(en?'[Happy Home Care] On-site Inspection / Diagnosis':'[Happy Home Care] 출장점검/진단 안내'),
+        btn:(en?'Check my fee':'우리 집 비용 확인하기')}
       :(state.tpl==='rqf')
       ?{t:(en?'[Happy Home Care] Service Request Form':'[Happy Home Care] 서비스 의뢰 요청서'),
         btn:(en?'Open My Page':'마이페이지 열기')}
@@ -5189,6 +5208,7 @@ window.caSendModal=async function(idx){
       :state.tpl==='evi'?'🔗 전자상품권 안내장 주소가 복사되었습니다'
       :state.tpl==='pti'?'🔗 적립포인트 안내장 주소가 복사되었습니다'
       :state.tpl==='fee'?'🔗 추가비용 안내장 주소가 복사되었습니다'
+      :state.tpl==='vfee'?'🔗 출장점검/진단 안내 주소가 복사되었습니다'
       :state.tpl==='nc'?'🔗 전자명함 주소가 복사되었습니다'
       :GDS[state.tpl]?(GDS[state.tpl].all?'🔗 안내장 전체(고객 선택) 주소가 복사되었습니다':'🔗 안내장 주소가 복사되었습니다')
       :'🔗 마이페이지 주소가 복사되었습니다'))
