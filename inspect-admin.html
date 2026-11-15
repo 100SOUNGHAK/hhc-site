@@ -1217,7 +1217,12 @@ var shortUrls={ko:'',en:''};
 var allReports=[];
 var coolCount=0, msrCount=0, leakCount=0, defectCount=0, recCount=0, outdoorCount=0, problemCount=0;
 
-var CAT=['외관·설치','오염상태','냉매 계통','열교환·성능','배수','운전','실외기 오염상태','전기','기타'];
+var CAT=['외/내관 설치','오염상태','냉매 계통','열교환·성능','배수','운전','실외기 상태','전기','기타'];
+// 예전 이름 → 새 이름 (예전 보고서·저장된 기본 항목을 불러올 때 자동으로 바꿔 줌)
+var CAT_ALIAS={'외관·설치':'외/내관 설치','실외기 오염상태':'실외기 상태'};
+var ITEM_ALIAS={'응축기 오염상태':'응축기(실외기) 오염상태'};
+function catNorm(c){c=String(c||'');return CAT_ALIAS[c]||c;}
+function itemNorm(n){n=String(n||'');return ITEM_ALIAS[n.trim()]||n;}
 var STATUS_OPTS=['ok','warn','bad'];
 var STATUS_LBL={ok:'✅ 정상',warn:'⚠️ 주의',bad:'❌ 정비필요'};
 var RISK_OPTS=[{v:'',l:'위험도'},{v:'-',l:'없음'},{v:'vh',l:'상'},{v:'h',l:'중'},{v:'m',l:'하'},{v:'l',l:'최하'}];
@@ -1227,12 +1232,12 @@ var UNIT_OPTS=['1대','2대','3대','4대','5대','6대','7대','8대','9대','1
 var TYPE_OPTS=['벽걸이형','4WAY 카세트형','FCU형 (덕트형)','실외기'];
 var CAP_OPTS=['1.0 HP','1.5 HP','2.0 HP','2.5 HP','3.0 HP'];
 var DEFAULT_RESULTS=[
-  {cat:'외관·설치',name:'본체 고정 및 수평 상태'},
+  {cat:'외/내관 설치',name:'본체 고정 및 수평 상태'},
   {cat:'오염상태',name:'패널/에어필터 오염상태'},
   {cat:'오염상태',name:'열교환기 오염상태'},
   {cat:'오염상태',name:'송풍팬 오염상태'},
   {cat:'오염상태',name:'드레인판 오염상태'},
-  {cat:'오염상태',name:'응축기 오염상태'},
+  {cat:'오염상태',name:'응축기(실외기) 오염상태'},
   {cat:'냉매 계통',name:'배관 연결부 누설 점검'},
   {cat:'열교환·성능',name:'실내 토출 온도차 ΔT'},
   {cat:'배수',name:'드레인 배수 및 배관 상태'},
@@ -1253,7 +1258,7 @@ var INSP_PRESET_DEF=[
   {cat:'오염상태',name:'열교환기 오염상태',status:'ok',note:'고도 찌든 오염상태>현장세척 완료'},
   {cat:'오염상태',name:'송풍팬 오염상태',status:'ok',note:'고도 찌든수준 오염상태>현장세척 완료'},
   {cat:'오염상태',name:'드레인판 오염상태',status:'ok',note:'고도 찌든수준 오염상태>현장세척 완료'},
-  {cat:'오염상태',name:'응축기 오염상태',status:'ok',note:'경미한 수준 오염상태>세척 불필요'},
+  {cat:'오염상태',name:'응축기(실외기) 오염상태',status:'ok',note:'경미한 수준 오염상태>세척 불필요'},
   {cat:'열교환·성능',name:'실내 토출 온도차 ΔT',status:'ok',note:'정상 범위 측정'},
   {cat:'열교환·성능',name:'풍량 상태',status:'ok',note:'이상 없음'},
   {cat:'배수',name:'드레인 배수 및 배관 상태',status:'warn',note:'배수 배관 기울기 불량 (전체 에어컨)'},
@@ -1265,7 +1270,7 @@ var INSP_PRESET_DEF=[
 var INSP_PRESET_KEY='hhc_insp_preset_v1';
 function inspPresetNorm(a){
   return (Array.isArray(a)?a:[]).map(function(x){
-    return {cat:String((x&&x.cat)||'기타'),name:String((x&&x.name)||'').trim(),
+    return {cat:catNorm((x&&x.cat)||'기타'),name:itemNorm(String((x&&x.name)||'').trim()),
       status:(['ok','warn','bad'].indexOf(x&&x.status)>=0)?x.status:'ok',note:String((x&&x.note)||'')};
   }).filter(function(x){return x.name;});
 }
@@ -1743,14 +1748,14 @@ function coolFillFromEquip(){
 // ═══════════════════════════════════════════
 // ━━━ 구분별 정렬 ━━━
 var CAT_COLORS={
-  '외관·설치':{bar:'#166534',bg:'#f0fdf4',txt:'#166534'},
+  '외/내관 설치':{bar:'#166534',bg:'#f0fdf4',txt:'#166534'},
   '전기':{bar:'#854d0e',bg:'#fef9c3',txt:'#854d0e'},
   '냉매 계통':{bar:'#1e40af',bg:'#e8f0fe',txt:'#1e40af'},
   '열교환·성능':{bar:'#b45309',bg:'#fef3c7',txt:'#b45309'},
   '배수':{bar:'#6b21a8',bg:'#f0e7ff',txt:'#6b21a8'},
   '운전':{bar:'#0F2040',bg:'#e8e8f0',txt:'#0F2040'},
   '오염상태':{bar:'#78350F',bg:'#fdf6ec',txt:'#78350F'},
-  '실외기 오염상태':{bar:'#0D9488',bg:'#f0fdfb',txt:'#0D9488'},
+  '실외기 상태':{bar:'#0D9488',bg:'#f0fdfb',txt:'#0D9488'},
   '기타':{bar:'#6b7280',bg:'#f3f4f6',txt:'#6b7280'}
 };
 
@@ -1850,20 +1855,20 @@ window.bulkResultOk=function(){
 // 점검 항목 빠른 선택 (표준 카탈로그 픽커)
 // ═══════════════════════════════════════════
 var ITEM_CATALOG={
- '외관·설치':['본체 고정 및 수평 상태','실내기 외관 손상 여부'],
- '오염상태':['패널/에어필터 오염상태','열교환기 오염상태','송풍팬 오염상태','드레인판 오염상태','응축기 오염상태'],
+ '외/내관 설치':['본체 고정 및 수평 상태','실내기 외관 손상 여부','실내기 내부 손상 여부'],
+ '오염상태':['패널/에어필터 오염상태','열교환기 오염상태','송풍팬 오염상태','드레인판 오염상태','응축기(실외기) 오염상태'],
  '냉매 계통':['배관 연결부 누설 점검','냉매보유압력','서비스 밸브 상태(누설)'],
  '열교환·성능':['실내 토출 온도차 ΔT','열교환기 냉각편차','풍량 상태'],
  '배수':['드레인 배수 및 배관 상태','드레인 배관 막힘','배수 펌프 동작','누수 흔적'],
  '운전':['소음·진동 / 리모컨 동작','루버 작동 상태','냉방 기동 상태'],
- '실외기 오염상태':['실외기 팬 상태','실외기 주변 통풍','실외기 외함 부식'],
+ '실외기 상태':['압축기 상태','실외기 팬 상태','실외기 주변 통풍','실외기 외함 부식'],
  '전기':['전원 결선 및 단자 조임','절연저항 측정','운전 전류','전원 케이블 피복','차단기 용량 적정'],
  '기타':['사용 안내 실시','고객 요청 사항','기타 특이사항']
 };
 var IP_STD={};
 try{inspPreset().forEach(function(d){IP_STD[d.name]=1;});}catch(e){}
-var IP_ICONS={'외관·설치':'🧱','오염상태':'🧼','냉매 계통':'❄️','열교환·성능':'🌡️','배수':'💧','운전':'⚙️','실외기 오염상태':'🏭','전기':'⚡','기타':'📦'};
-var IP_RAIL_LBL={'외관·설치':'외관<br>설치','냉매 계통':'냉매<br>계통','열교환·성능':'열교환<br>성능','실외기 오염상태':'실외기<br>오염'};
+var IP_ICONS={'외/내관 설치':'🧱','오염상태':'🧼','냉매 계통':'❄️','열교환·성능':'🌡️','배수':'💧','운전':'⚙️','실외기 상태':'🏭','전기':'⚡','기타':'📦'};
+var IP_RAIL_LBL={'외/내관 설치':'외/내관<br>설치','냉매 계통':'냉매<br>계통','열교환·성능':'열교환<br>성능','실외기 상태':'실외기<br>상태'};
 var ipCat='전체',ipQ='',ipRendered=[];
 
 function ipCards(){return Array.prototype.slice.call(document.querySelectorAll('#result-rows .rcard'));}
@@ -2142,6 +2147,7 @@ function makeAcPicker(init,opt){
 }
 
 function addResultRow(cat,name,status,risk,note,units){
+  cat=catNorm(cat);name=itemNorm(name);
   var card=document.createElement('div');card.className='rcard';
 
   // 숨김 결과 select — 기존 저장/일괄적용/복제 코드와의 호환용 (_statusSel.value + change 이벤트)
@@ -8704,7 +8710,7 @@ setTimeout(function(){
     if(/에바|냉각\s*(불균형|편차)/.test(d))return '에바포레이터 냉각 편차가 확인되었습니다.';
     return jo(d,'이','가')+' 확인되었습니다.';}
   function split(note){var p=String(note||'').split('>');return {a:clean(p[0]),b:clean(p.slice(1).join('>'))};}
-  function partName(n){n=clean(n).replace(/^패널\s*\/\s*/,'').replace(/\s*오염(상태|도)?$/,'').replace(/\s*막힘$/,'');return n==='응축기'?'실외기 응축기':n;}
+  function partName(n){n=clean(n).replace(/^패널\s*\/\s*/,'').replace(/\s*오염(상태|도)?$/,'').replace(/\s*막힘$/,'');return (n==='응축기'||n==='응축기(실외기)')?'실외기 응축기':n;}
   function psi(x){x=clean(x);var m=x.match(/^([\d.]+)\s*\/\s*(.+)$/);return m?m[1]+' PSI(기준 '+m[2]+')':x+' PSI';}
   var NOTE_OK=/^(이상\s*없음|정상(\s*(동작|범위(\s*측정)?))?|양호|특이\s*(사항|발견)\s*없음)?$/;
   var CONFLICT=[[/소음|진동/,/소음|진동/],[/루버/,/루버/],[/풍량/,/풍량/],[/냉매/,/냉매/],[/캐패|캐피|전류|전기/,/전류|전기|절연/]];
