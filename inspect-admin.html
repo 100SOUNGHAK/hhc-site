@@ -428,7 +428,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 .fbx-total b{font-size:24px;font-weight:900;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
 .fbx-total small{font-size:12px;font-weight:800;color:#e3c98a}
 .fbx-r10{text-align:right;font-size:12px;font-weight:700;color:#8f6f28;margin-top:6px}.fbx-r10:empty{display:none}
-@media (max-width:767px){.m26-rt #rtype-fabric{grid-column:1/-1}}
+/* 보고서 종류 6개 — 휴대폰 2칸 × 3줄 */
 
 .ivbox-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .ivchip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;background:#eef2ff;color:#3730a3;border:1px solid #c7d2fe;border-radius:999px;padding:4px 10px}
@@ -541,6 +541,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   <button class="rtype-btn" id="rtype-install" onclick="switchReportType('install')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer">🔧 설치보고서</button>
   <button class="rtype-btn" id="rtype-washer" onclick="switchReportType('washer')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer">🌀 세탁기/건조기</button>
   <button class="rtype-btn" id="rtype-fabric" onclick="switchReportType('fabric')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer">🛋️ 커튼·쇼파·매트리스</button>
+  <button class="rtype-btn" id="rtype-hood" onclick="switchReportType('hood')" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:13px;cursor:pointer">🍳 주방후드</button>
 </div>
 
 <div class="dk-row" id="dispatch-kind-row" style="display:none">
@@ -959,6 +960,12 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
         <button type="button" class="leak-btn" id="w-type-front" onclick="setWasherType('front')">드럼</button>
         <button type="button" class="leak-btn" id="w-type-dryer" onclick="setWasherType('dryer')">건조기</button>
       </div>
+      <div class="leak-res-row" id="h-type-row" style="display:none">
+        <button type="button" class="leak-btn leak-ok" id="h-type-chimney" onclick="setHoodType('chimney')">침니형</button>
+        <button type="button" class="leak-btn" id="h-type-slim" onclick="setHoodType('slim')">슬림형</button>
+        <button type="button" class="leak-btn" id="h-type-builtin" onclick="setHoodType('builtin')">빌트인형</button>
+        <button type="button" class="leak-btn" id="h-type-island" onclick="setHoodType('island')">아일랜드형</button>
+      </div>
     </div>
     <div class="fgrid f2" style="margin-top:8px">
       <div><div class="fl">모델명</div><input id="w-model" type="text" placeholder="모델명"></div>
@@ -1231,6 +1238,21 @@ var WASHER_CHECKLIST=[
   {key:'other',label:'기타 이상 유무',en:'Other abnormal conditions'}
 ];
 var washerChecklistResult={};
+// 🍳 주방후드 점검보고서 (type:'hood') — 세탁기/건조기 작성 화면을 같이 쓰고, 제품 유형·체크리스트만 바뀝니다
+var hoodType='chimney';
+var HOOD_CHECKLIST=[
+  {key:'power',label:'전원 및 작동',en:'Power & Operation'},
+  {key:'suction',label:'흡입력',en:'Suction power'},
+  {key:'speed',label:'단계별 풍량 조절',en:'Fan speed control'},
+  {key:'light',label:'조명 작동',en:'Lighting'},
+  {key:'noise',label:'소음 · 진동',en:'Noise & vibration'},
+  {key:'filter',label:'필터 손상 · 변형',en:'Grease filter'},
+  {key:'oil',label:'오일 누유 · 기름 고임',en:'Oil leakage'},
+  {key:'duct',label:'배기 덕트 연결 상태',en:'Exhaust duct'},
+  {key:'other',label:'기타 이상 유무',en:'Other abnormal conditions'}
+];
+function isWFam(t){return t==='washer'||t==='hood';}
+function wList(){return reportType==='hood'?HOOD_CHECKLIST:WASHER_CHECKLIST;}
 var washerEval='';
 var testResults={power:true,noise:true};
 var installProductCount=0,materialCount=0,installLeakCount=0,coolTestCount=0,refrigTestCount=0;
@@ -4013,7 +4035,7 @@ window.switchReportType=function(t){
   try{
     var _BI={inspect:['f-client','f-phone','f-date','f-addr'],dispatch:['f-client','f-phone','f-date','f-addr'],
              install:['if-client','if-phone','if-date','if-addr'],washer:['w-client','w-phone','w-date','w-addr'],
-             fabric:['fb-client','fb-phone','fb-date','fb-addr']};
+             fabric:['fb-client','fb-phone','fb-date','fb-addr'],hood:['w-client','w-phone','w-date','w-addr']};
     var _from=_BI[reportType],_to=_BI[t];
     var _empty=function(el){var v=String(el.value||'').trim();return !v||v==='+60';};
     if(_from&&_to&&_from!==_to){
@@ -4028,7 +4050,7 @@ window.switchReportType=function(t){
   var showInspect=(t==='inspect'||t==='dispatch');
   document.getElementById('inspect-form-body').style.display=showInspect?'block':'none';
   document.getElementById('install-form-body').style.display=t==='install'?'block':'none';
-  document.getElementById('washer-form-body').style.display=t==='washer'?'block':'none';
+  document.getElementById('washer-form-body').style.display=isWFam(t)?'block':'none';
   document.getElementById('fabric-form-body').style.display=t==='fabric'?'block':'none';
   document.getElementById('dispatch-info-card').style.display=t==='dispatch'?'block':'none';
   var onCss='flex:1;padding:11px;border-radius:10px;border:1.5px solid #4F6EF7;background:#eef1ff;color:#1d3fd6;font-weight:700;font-size:13px;cursor:pointer';
@@ -4038,10 +4060,11 @@ window.switchReportType=function(t){
   document.getElementById('rtype-install').style.cssText=t==='install'?onCss:offCss;
   document.getElementById('rtype-washer').style.cssText=t==='washer'?onCss:offCss;
   document.getElementById('rtype-fabric').style.cssText=t==='fabric'?onCss:offCss;
-  ['inspect','dispatch','install','washer','fabric'].forEach(function(k){var b=document.getElementById('rtype-'+k);if(b)b.classList.toggle('on',k===t);});
+  document.getElementById('rtype-hood').style.cssText=t==='hood'?onCss:offCss;
+  ['inspect','dispatch','install','washer','fabric','hood'].forEach(function(k){var b=document.getElementById('rtype-'+k);if(b)b.classList.toggle('on',k===t);});
   var btn=document.getElementById('btn-save');
   if(btn)btn.textContent=saveBtnTxt(t);
-  if(t==='washer'&&!document.getElementById('w-checklist').children.length)renderWasherChecklist();
+  if(isWFam(t)){var _wtr=gid('w-type-row'),_htr=gid('h-type-row');if(_wtr)_wtr.style.display=t==='hood'?'none':'';if(_htr)_htr.style.display=t==='hood'?'':'none';renderWasherChecklist();}
   if(t==='fabric'&&window.fbRender)fbRender();
   applyDispatchUi();
   if(window.buildSectionNav)window.buildSectionNav();
@@ -4053,6 +4076,7 @@ function saveBtnTxt(t){
   if(t==='install')return '💾 설치보고서 저장하고 고객 링크 생성';
   if(t==='washer')return '💾 세탁기/건조기 점검보고서 저장하고 고객 링크 생성';
   if(t==='fabric')return '💾 커튼·쇼파·매트리스 보고서 저장하고 고객 링크 생성';
+  if(t==='hood')return '💾 주방후드 점검보고서 저장하고 고객 링크 생성';
   if(t==='dispatch')return dispatchKind==='repair'?'💾 수리보고서 저장하고 고객 링크 생성':'💾 출장점검보고서 저장하고 고객 링크 생성';
   return '💾 저장하고 고객 링크 생성';
 }
@@ -4271,7 +4295,7 @@ window.setWasherEval=function(btn){
   washerEval=(v&&washerEval!==v)?v:'';
   paintWasherEval();
 };
-function washerAutoEval(){var b=0;WASHER_CHECKLIST.forEach(function(i){if(washerChecklistResult[i.key]===false)b++;});return {k:b?'repair':'normal',bad:b};}
+function washerAutoEval(){var b=0;wList().forEach(function(i){if(washerChecklistResult[i.key]===false)b++;});return {k:b?'repair':'normal',bad:b};}
 var W_EV_LBL={normal:'정상',preventive:'예방정비 권장',repair:'수리 권장',urgent:'즉시수리 필요',repaired:'수리 완료'};
 function paintWasherEval(){
   var a=washerAutoEval();
@@ -4285,10 +4309,14 @@ function paintWasherEval(){
     :'🤖 자동: 체크리스트 기준 <b>'+W_EV_LBL[a.k]+'</b>'+(a.bad?' (이상 '+a.bad+'개)':'')+' — 버튼을 누르면 직접 정할 수 있습니다.';
 }
 
+window.setHoodType=function(type){
+  hoodType=type;
+  ['chimney','slim','builtin','island'].forEach(function(k){var b=document.getElementById('h-type-'+k);if(b)b.className='leak-btn'+(k===type?' leak-ok':'');});
+};
 function renderWasherChecklist(){
   var c=document.getElementById('w-checklist');
   c.innerHTML='';
-  WASHER_CHECKLIST.forEach(function(item){
+  wList().forEach(function(item){
     if(!(item.key in washerChecklistResult))washerChecklistResult[item.key]=true;
     var row=document.createElement('div');
     row.style='display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f0f0f0';
@@ -4312,12 +4340,12 @@ function renderWasherChecklist(){
 }
 
 function collectWasherData(){
-  var checklist=WASHER_CHECKLIST.map(function(item){
+  var checklist=wList().map(function(item){
     return {key:item.key,label:item.label,result:washerChecklistResult[item.key]?'ok':'bad'};
   });
   return Object.assign(inspInvFields(),{
-    type:'washer',
-    client:gv('w-client'),phone:gv('w-phone'),date:gv('w-date'),addr:gv('w-addr'),model:gv('w-model'),productType:washerType,
+    type:reportType==='hood'?'hood':'washer',
+    client:gv('w-client'),phone:gv('w-phone'),date:gv('w-date'),addr:gv('w-addr'),model:gv('w-model'),productType:reportType==='hood'?hoodType:washerType,
     checklist:checklist,
     eval:washerEval,
     opinion:gv('w-opinion'),
@@ -4340,7 +4368,7 @@ function resetWasherForm(){
   var _wpr=document.getElementById('w-problem-rows');if(_wpr)_wpr.innerHTML='';
   document.getElementById('w-phone').value='+60 ';
   document.getElementById('w-date').value=new Date().toISOString().split('T')[0];
-  setWasherType('top');
+  setWasherType('top');setHoodType('chimney');
   washerChecklistResult={};washerEval='';
   renderWasherChecklist();
   photoData={};videoData={};if(window.updateVideoUI)updateVideoUI();
@@ -4469,7 +4497,7 @@ window.newReport=function(){
   var rbn=document.querySelector('.restore-banner');if(rbn)rbn.remove();
   if(reportType==='install'){
     resetInstallForm();
-  }else if(reportType==='washer'){
+  }else if(isWFam(reportType)){
     resetWasherForm();
   }else if(reportType==='fabric'){
     resetFabricForm();
@@ -5249,7 +5277,7 @@ function renderList(items,targetId){
     var id=r._id;
     var isInstall=r.type==='install';
     var isDispatch=r.type==='dispatch';
-    var isWasher=r.type==='washer';
+    var isWasher=r.type==='washer'||r.type==='hood';
     var isFabric=r.type==='fabric';
     var typeBadge=isFabric
       ?'<span style="display:inline-block;margin-bottom:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#fbf5e6;color:#8f6f28">🛋️ 커튼·쇼파·매트리스</span>'
@@ -5257,6 +5285,8 @@ function renderList(items,targetId){
       ?'<span style="display:inline-block;margin-bottom:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#fef3c7;color:#b45309">🔧 설치</span>'
       :isDispatch
       ?'<span style="display:inline-block;margin-bottom:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#ede9fe;color:#6d28d9">'+(r.dispatchKind==='repair'?'🔧 수리':'🚐 출장점검')+'</span>'
+      :r.type==='hood'
+      ?'<span style="display:inline-block;margin-bottom:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#fef3e2;color:#9a5b00">🍳 주방후드</span>'
       :isWasher
       ?'<span style="display:inline-block;margin-bottom:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#e0f7fa;color:#00767b">🌀 세탁기/건조기</span>'
       :'<span style="display:inline-block;margin-bottom:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:#e0f2fe;color:#0369a1">📋 점검</span>';
@@ -5311,7 +5341,7 @@ function filterCustomers(){
   list.sort(function(a,b){return(b.lastDate||'').localeCompare(a.lastDate||'');});
   renderCustomerList(list);
 }
-var TYPE_CHIP_LBL={inspect:{cls:'tc-inspect',lbl:'📋 점검'},dispatch:{cls:'tc-dispatch',lbl:'🚐 출장'},install:{cls:'tc-install',lbl:'🔧 설치'},washer:{cls:'tc-washer',lbl:'🌀 세탁기'},fabric:{cls:'tc-washer',lbl:'🛋️ 커튼·쇼파'}};
+var TYPE_CHIP_LBL={inspect:{cls:'tc-inspect',lbl:'📋 점검'},dispatch:{cls:'tc-dispatch',lbl:'🚐 출장'},install:{cls:'tc-install',lbl:'🔧 설치'},washer:{cls:'tc-washer',lbl:'🌀 세탁기'},fabric:{cls:'tc-washer',lbl:'🛋️ 커튼·쇼파'},hood:{cls:'tc-washer',lbl:'🍳 주방후드'}};
 function renderCustomerList(list){
   var el=gid('cust-list-container');
   if(!list.length){el.innerHTML='<div style="text-align:center;padding:40px;color:#8a8a9a">고객 없음</div>';return;}
@@ -5373,6 +5403,7 @@ function refreshCustomerDetailIfOpen(){
 window.REPORT_TYPE_LABEL={
   install:{ko:'에어컨 설치보고서',en:'AC Installation Report'},
   washer:{ko:'세탁기/건조기 점검보고서',en:'Washer/Dryer Inspection Report'},
+  hood:{ko:'주방후드 점검보고서',en:'Kitchen Hood Inspection Report'},
   fabric:{ko:'커튼·쇼파·매트리스 작업 보고서',en:'Curtain/Sofa/Mattress Work Report'},
   dispatch:{ko:'에어컨 출장점검보고서',en:'AC On-site Inspection Report'},
   repair:{ko:'에어컨 수리보고서',en:'AC Repair Report'},
@@ -5399,7 +5430,7 @@ function sendWa(){window.open('https://wa.me/?text='+encodeURIComponent(gid('sm-
 function sendKakao(){navigator.clipboard.writeText(gid('sm-msg').value).then(function(){toast('✓ 카카오 메시지 복사됨');});}
 function viewReport(id){
   var r=allReports.find(function(x){return x._id===id;});
-  var pageFile=(r&&r.type==='install')?'install.html':((r&&r.type==='washer')?'washer.html':((r&&r.type==='fabric')?'fabric.html':'inspect.html'));
+  var pageFile=(r&&r.type==='install')?'install.html':((r&&r.type==='washer')?'washer.html':(r&&r.type==='hood')?'hood.html':((r&&r.type==='fabric')?'fabric.html':'inspect.html'));
   window.open('https://happyhomecare.com.my/'+pageFile+'?id='+id,'_blank');
 }
 
@@ -5524,7 +5555,7 @@ function buildSectionNav(){
   var nav=document.getElementById('section-nav');
   if(!nav)return;
   nav.innerHTML='';
-  var bodyId=reportType==='install'?'install-form-body':(reportType==='washer'?'washer-form-body':(reportType==='fabric'?'fabric-form-body':'inspect-form-body'));
+  var bodyId=reportType==='install'?'install-form-body':(isWFam(reportType)?'washer-form-body':(reportType==='fabric'?'fabric-form-body':'inspect-form-body'));
   var body=document.getElementById(bodyId);
   if(!body)return;
   var cards=Array.from(body.children).filter(function(el){return el.classList&&el.classList.contains('card')&&el.style.display!=='none';});
@@ -6180,9 +6211,9 @@ async function translateWasherData(data){
 window.saveReport=async function(){
   if(!DB){toast('Firebase 연결 안됨');return;}
   var isInstall=reportType==='install';
-  var isWasher=reportType==='washer';
+  var isWasher=isWFam(reportType);
   var isFabric=reportType==='fabric';
-  var btnLabel=isFabric?saveBtnTxt('fabric'):isInstall?'💾 설치보고서 저장하고 고객 링크 생성':(isWasher?'💾 세탁기/건조기 점검보고서 저장하고 고객 링크 생성':'💾 저장하고 고객 링크 생성');
+  var btnLabel=isFabric?saveBtnTxt('fabric'):isInstall?'💾 설치보고서 저장하고 고객 링크 생성':(isWasher?saveBtnTxt(reportType):'💾 저장하고 고객 링크 생성');
   var btn=document.getElementById('btn-save');btn.disabled=true;btn.textContent='저장 중...';
   try{
     var data=isFabric?collectFabricData():(isInstall?collectInstallData():(isWasher?collectWasherData():collectData()));
@@ -6360,7 +6391,7 @@ window.saveReport=async function(){
         '(나머지 내용과 정상 업로드된 사진은 그대로 저장되었습니다)';
       inspAsk('⚠️ 일부 사진 · 동영상이 올라가지 않았습니다',_failMsg.split('\n').filter(function(x){return x.trim();}),'확인',null);
     }
-    var pageFile=isFabric?'fabric.html':(isInstall?'install.html':(isWasher?'washer.html':'inspect.html'));
+    var pageFile=isFabric?'fabric.html':(isInstall?'install.html':(isWasher?(reportType==='hood'?'hood.html':'washer.html'):'inspect.html'));
     var koUrl='https://happyhomecare.com.my/'+pageFile+'?id='+rid+'&lang=ko';
     var enUrl='https://happyhomecare.com.my/'+pageFile+'?id='+rid+'&lang=en';
     shortUrls.ko=await shorten(koUrl);shortUrls.en=await shorten(enUrl);
@@ -6384,7 +6415,7 @@ window.saveReport=async function(){
     var sbtn=document.getElementById('btn-save');
     if(sbtn){sbtn.textContent='💾 수정 저장';sbtn.style.background='#1e40af';}
     document.getElementById('sm-link').textContent=shortUrls.ko;
-    window._sendCtx={client:data.client||'',type:isFabric?'fabric':(isInstall?'install':(isWasher?'washer':(reportType==='dispatch'?(dispatchKind==='repair'?'repair':'dispatch'):'inspect')))};
+    window._sendCtx={client:data.client||'',type:isFabric?'fabric':(isInstall?'install':(isWasher?reportType:(reportType==='dispatch'?(dispatchKind==='repair'?'repair':'dispatch'):'inspect')))};
     updateSendMsg();
     document.getElementById('send-modal').style.display='flex';
   }catch(e){console.error(e);hideSaveProg();btn.disabled=false;btn.textContent=btnLabel;
@@ -6547,7 +6578,7 @@ function inspCtxFromForm(){
   var t=(typeof reportType!=='undefined')?reportType:'inspect';
   var c;
   if(t==='install')c={client:gv('if-client'),phone:gv('if-phone'),date:gv('if-date')};
-  else if(t==='washer')c={client:gv('w-client'),phone:gv('w-phone'),date:gv('w-date')};
+  else if(isWFam(t))c={client:gv('w-client'),phone:gv('w-phone'),date:gv('w-date')};
   else if(t==='fabric')c={client:gv('fb-client'),phone:gv('fb-phone'),date:gv('fb-date')};
   else c={client:gv('f-client'),phone:gv('f-phone'),date:gv('f-date')};
   c.selfId=currentEditId||'';
@@ -6742,7 +6773,7 @@ window.openInspInvModal=async function(reportId){
 window.openSendModalFor=async function(id){
   var r=allReports.find(function(x){return x._id===id;});
   if(!r){toast('보고서를 찾을 수 없습니다.');return;}
-  var pageFile=(r.type==='install')?'install.html':((r.type==='washer')?'washer.html':((r.type==='fabric')?'fabric.html':'inspect.html'));
+  var pageFile=(r.type==='install')?'install.html':((r.type==='washer')?'washer.html':(r.type==='hood')?'hood.html':((r.type==='fabric')?'fabric.html':'inspect.html'));
   toast('링크 생성 중...');
   var koUrl='https://happyhomecare.com.my/'+pageFile+'?id='+id+'&lang=ko';
   var enUrl='https://happyhomecare.com.my/'+pageFile+'?id='+id+'&lang=en';
@@ -6752,7 +6783,7 @@ window.openSendModalFor=async function(id){
   }catch(e){shortUrls.ko=koUrl;shortUrls.en=enUrl;}
   window._sendCtx={
     client:r.client||'',
-    type:(r.type==='fabric')?'fabric':(r.type==='install')?'install':((r.type==='washer')?'washer':((r.type==='dispatch')?(r.dispatchKind==='repair'?'repair':'dispatch'):'inspect'))
+    type:(r.type==='fabric')?'fabric':(r.type==='hood')?'hood':(r.type==='install')?'install':((r.type==='washer')?'washer':((r.type==='dispatch')?(r.dispatchKind==='repair'?'repair':'dispatch'):'inspect'))
   };
   var koRadio=document.querySelector('input[name="slang"][value="ko"]');
   if(koRadio)koRadio.checked=true;
@@ -6792,8 +6823,8 @@ window.editReport=async function(id){
     if(data.type==='install'){
       switchReportType('install');
       setTimeout(function(){loadIntoInstallForm(data);},150);
-    }else if(data.type==='washer'){
-      switchReportType('washer');
+    }else if(data.type==='washer'||data.type==='hood'){
+      switchReportType(data.type);
       setTimeout(function(){loadIntoWasherForm(data);},150);
     }else if(data.type==='fabric'){
       switchReportType('fabric');
@@ -7051,7 +7082,7 @@ window.loadIntoWasherForm=function(data){
   resetWasherForm();
   gv2('w-client',data.client);gv2('w-phone',data.phone||'+60 ');gv2('w-date',data.date);gv2('w-addr',data.addr);gv2('w-model',data.model);
   if(window.inspSetLinkFromData)window.inspSetLinkFromData(data);
-  setWasherType(data.productType||'top');
+  if(data.type==='hood')setHoodType(data.productType||'chimney');else setWasherType(data.productType||'top');
   washerChecklistResult={};
   (data.checklist||[]).forEach(function(c){washerChecklistResult[c.key]=c.result!=='bad';});
   washerEval=(data.eval&&W_EV_LBL[data.eval])?data.eval:'';
@@ -7152,7 +7183,7 @@ var draftTimer=null;
 //  15초 주기 자동저장이 이미 저장된 내용을 "임시저장 초안"으로 다시 만들어버리는 문제가 있었음
 //  — 이게 저장 후에도 "저장하지 않은 보고서" 안내가 계속 뜨던 원인)
 var _draftDirty=false;
-function collectByType(){return reportType==='fabric'?collectFabricData():(reportType==='install'?collectInstallData():(reportType==='washer'?collectWasherData():collectData()));}
+function collectByType(){return reportType==='fabric'?collectFabricData():(reportType==='install'?collectInstallData():(isWFam(reportType)?collectWasherData():collectData()));}
 window.__collectByType=collectByType; // m29 고객 화면 미리보기용
 function saveDraft(){
   if(currentEditId)return; // 기존 보고서 수정 중엔 미저장
@@ -7188,7 +7219,7 @@ function restoreDraftBanner(){
     var rt=d._reportType||'inspect';
     switchReportType(rt);
     setTimeout(function(){
-      if(rt==='install')loadIntoInstallForm(d);else if(rt==='washer')loadIntoWasherForm(d);else if(rt==='fabric')loadIntoFabricForm(d);else loadIntoForm(d);
+      if(rt==='install')loadIntoInstallForm(d);else if(isWFam(rt))loadIntoWasherForm(d);else if(rt==='fabric')loadIntoFabricForm(d);else loadIntoForm(d);
       currentEditId=null; // 임시저장 복구 → 새 보고서로 저장
       updateEditTag();
       if(d._evalVal){var eb=document.querySelector('.ev-btn[data-val="'+d._evalVal+'"]');if(eb)setEval(eb);}
@@ -7205,13 +7236,13 @@ function restoreDraftBanner(){
 window.__cloneReport=function(id){
   var r=allReports.find(function(x){return x._id===id;});
   if(!r){toast('보고서를 찾을 수 없습니다');return;}
-  var rt=r.type==='install'?'install':(r.type==='washer'?'washer':(r.type==='fabric'?'fabric':(r.type==='dispatch'?'dispatch':'inspect')));
+  var rt=r.type==='install'?'install':(isWFam(r.type)?r.type:(r.type==='fabric'?'fabric':(r.type==='dispatch'?'dispatch':'inspect')));
   switchView('form');switchReportType(rt);
   setTimeout(function(){
-    if(rt==='install')loadIntoInstallForm(r);else if(rt==='washer')loadIntoWasherForm(r);else if(rt==='fabric')loadIntoFabricForm(Object.assign({},r,{_id:null,fbPhotos:[]}));else loadIntoForm(r);
+    if(rt==='install')loadIntoInstallForm(r);else if(isWFam(rt))loadIntoWasherForm(r);else if(rt==='fabric')loadIntoFabricForm(Object.assign({},r,{_id:null,fbPhotos:[]}));else loadIntoForm(r);
     currentEditId=null; // 새 보고서로 저장
     updateEditTag();
-    var dt=document.getElementById(rt==='install'?'if-date':(rt==='washer'?'w-date':(rt==='fabric'?'fb-date':'f-date')));if(dt)dt.value=new Date().toISOString().split('T')[0];
+    var dt=document.getElementById(rt==='install'?'if-date':(isWFam(rt)?'w-date':(rt==='fabric'?'fb-date':'f-date')));if(dt)dt.value=new Date().toISOString().split('T')[0];
     var sb=document.getElementById('btn-save');if(sb){sb.style.background='';sb.textContent=saveBtnTxt(rt);}
     var db=document.getElementById('dup-box');if(db)db.style.display='none';
     toast('이전 보고서를 복제했습니다 — 결과 값만 수정 후 저장하세요');
@@ -8073,7 +8104,7 @@ setTimeout(function(){
       $$('m26-bv').textContent=pv.textContent.replace('/',' / ');
       pg.style.display='';$$('m26-bp').style.width=pf?pf.style.width:'0';
     }else{
-      $$('m26-bl').textContent={dispatch:'출장점검 · 수리',install:'설치보고서',washer:'세탁기 · 건조기',fabric:'커튼 · 쇼파 · 매트리스'}[isI]||'보고서';
+      $$('m26-bl').textContent={dispatch:'출장점검 · 수리',install:'설치보고서',washer:'세탁기 · 건조기',fabric:'커튼 · 쇼파 · 매트리스',hood:'주방후드'}[isI]||'보고서';
       $$('m26-bv').textContent='사진 '+(ph?ph.textContent:'0장');
       pg.style.display='none';
     }
@@ -8103,7 +8134,7 @@ setTimeout(function(){
   }
 
   /* ⑤ 목록 — 종류별 건수 칩 + 두 줄 카드 */
-  var TY={inspect:'📋 점검',dispatch:'🚐 출장',install:'🔧 설치',washer:'🌀 세탁기',fabric:'🛋️ 커튼·쇼파'};
+  var TY={inspect:'📋 점검',dispatch:'🚐 출장',install:'🔧 설치',washer:'🌀 세탁기',fabric:'🛋️ 커튼·쇼파',hood:'🍳 주방후드'};
   var EV={repaired:['b','수리완료'],normal:['ok','정상'],preventive:['w','예방정비 권장'],repair:['o','수리 권장'],urgent:['r','즉시수리 필요']};
   var IV={paid:'결제완료',overdue:'연체',billing:'청구중'};
   var tf='all';
@@ -8126,9 +8157,9 @@ setTimeout(function(){
     var host=$$('m26-tf');
     if(!host){host=document.createElement('div');host.id='m26-tf';host.className='m26-tf';var lc=$$('list-container');lc.parentNode.insertBefore(host,lc);
       host.addEventListener('click',function(e){var b=e.target.closest('button[data-t]');if(!b)return;tf=b.dataset.t;window.filterList();});}
-    var c={all:items.length,inspect:0,dispatch:0,install:0,washer:0,fabric:0};
+    var c={all:items.length,inspect:0,dispatch:0,install:0,washer:0,fabric:0,hood:0};
     items.forEach(function(r){c[tyOf(r)]++;});
-    var L=[['all','전체'],['inspect','📋 점검'],['dispatch','🚐 출장·수리'],['install','🔧 설치'],['washer','🌀 세탁기'],['fabric','🛋️ 커튼·쇼파·매트리스']];
+    var L=[['all','전체'],['inspect','📋 점검'],['dispatch','🚐 출장·수리'],['install','🔧 설치'],['washer','🌀 세탁기'],['fabric','🛋️ 커튼·쇼파·매트리스'],['hood','🍳 주방후드']];
     host.innerHTML=L.filter(function(x){return x[0]==='all'||c[x[0]]>0||tf===x[0];}).map(function(x){
       return '<button type="button" data-t="'+x[0]+'" class="'+(tf===x[0]?'on':'')+'">'+x[1]+'<b>'+c[x[0]]+'</b></button>';}).join('');
   }
@@ -8321,9 +8352,9 @@ setTimeout(function(){
   function RT(){try{return reportType;}catch(e){return 'inspect';}}
   function val(id){var e=$(id);return e?String(e.value||'').trim():'';}
   function num(x){var n=parseFloat(String(x==null?'':x).replace(/[^\d.\-]/g,''));return isNaN(n)?null:n;}
-  function bodyId(){var t=RT();return t==='install'?'install-form-body':(t==='washer'?'washer-form-body':(t==='fabric'?'fabric-form-body':'inspect-form-body'));}
-  function CID(t){return t==='install'?'if-client':(t==='washer'?'w-client':(t==='fabric'?'fb-client':'f-client'));}
-  function DID(t){return t==='install'?'if-date':(t==='washer'?'w-date':(t==='fabric'?'fb-date':'f-date'));}
+  function bodyId(){var t=RT();return t==='install'?'install-form-body':(isWFam(t)?'washer-form-body':(t==='fabric'?'fabric-form-body':'inspect-form-body'));}
+  function CID(t){return t==='install'?'if-client':(isWFam(t)?'w-client':(t==='fabric'?'fb-client':'f-client'));}
+  function DID(t){return t==='install'?'if-date':(isWFam(t)?'w-date':(t==='fabric'?'fb-date':'f-date'));}
   function visible(el){return !!(el&&el.offsetParent!==null);}
   function cards(){var b=$(bodyId());if(!b)return [];return [].slice.call(b.querySelectorAll(':scope > .card')).filter(function(c){return c.style.display!=='none';});}
   function phCount(id){var e=$(id);return e?e.querySelectorAll('.ph-item').length:0;}
@@ -8380,7 +8411,7 @@ setTimeout(function(){
       if(fsv==='pickup'&&!(parseFloat(val('fb-weight'))>0))add('y','커튼 총중량(kg)이 비어 있습니다',$('fb-weight'),'고객 보고서에 총중량이 나옵니다');
       if(fsv==='onsite'){var tq=0;try{tq=fbCalc();}catch(e){}if(!(tq>0))add('y','커튼 사이즈(가로·세로)가 비어 있습니다',$('fb-rooms'),'고객 보고서에 총 사이즈(SQ)가 나옵니다');}
       if(!phCount('fb-photos'))add('y',(fsv==='pickup'?'커튼 중량 사진':'작업 과정 사진')+'이 없습니다',$('fb-photos'));
-    }else if(t==='washer'){
+    }else if(isWFam(t)){
       if(!phCount('w-before-photos')&&!phCount('w-after-photos'))add('y','세척 사진이 없습니다',$('w-before-photos'));
       else if(phCount('w-before-photos')!==phCount('w-after-photos'))add('y','세척 전 '+phCount('w-before-photos')+'장 · 세척 후 '+phCount('w-after-photos')+'장 — 장수가 다릅니다',$('w-before-photos'));
       [].forEach.call(document.querySelectorAll('#w-problem-rows .unit-item'),function(w,i){var m=w.querySelector('textarea');if(w.querySelectorAll('.ph-item').length&&m&&!m.value.trim())add('y','문제 사진 '+(i+1)+' — 메모가 없습니다',w);});
@@ -8419,7 +8450,7 @@ setTimeout(function(){
       if(fs2==='onsite')k.push((function(){try{return fbCalc()>0;}catch(e){return false;}})());
       k.push(phCount('fb-photos')>0);
     }else{
-      k.push(!!val('w-model')||!!document.querySelector('#w-type-row .on'));k.push(phCount('w-before-photos')+phCount('w-after-photos')>0);k.push(!!val('w-opinion'));
+      k.push(!!val('w-model')||!!document.querySelector('#w-type-row .on')||RT()==='hood');k.push(phCount('w-before-photos')+phCount('w-after-photos')>0);k.push(!!val('w-opinion'));
     }
     var n=k.filter(Boolean).length,L=issues(),err=L.filter(function(x){return x.l==='r';}).length;
     var p=Math.round(n/k.length*100);if(err&&p>0)p=Math.max(0,p-5*err);
@@ -8437,7 +8468,7 @@ setTimeout(function(){
   /* ── 한눈에 카드 ── */
   var ov=document.createElement('div');ov.id='m27-ov';
   var nav=$('section-nav');if(nav&&nav.parentNode)nav.parentNode.insertBefore(ov,nav);
-  var TYL={inspect:'점검보고서',dispatch:'출장점검',install:'설치보고서',washer:'세탁기 · 건조기',fabric:'커튼 · 쇼파 · 매트리스'};
+  var TYL={inspect:'점검보고서',dispatch:'출장점검',install:'설치보고서',washer:'세탁기 · 건조기',fabric:'커튼 · 쇼파 · 매트리스',hood:'주방후드'};
   function draw(){
     if(!ov.isConnected)return;
     var t=RT(),pr=progress(),L=pr.L,err=L.filter(function(x){return x.l==='r';}).length,warn=L.length-err;
@@ -8445,7 +8476,7 @@ setTimeout(function(){
     var ty=TYL[t];try{if(t==='dispatch'&&dispatchKind==='repair')ty='출장수리';}catch(e){}
     var pill='';
     if(t==='inspect'){var ev='';try{ev=evalVal;}catch(e){}pill=ev&&EVN[ev]?'<span class="pl '+EVN[ev][1]+'">'+EVN[ev][0]+'</span>':'<span class="pl">종합 판정 선택 전</span>';}
-    else if(t==='washer'){var we='',wa='normal';try{we=washerEval;wa=washerAutoEval().k;}catch(e){}var wk=we||wa;pill=EVN[wk]?'<span class="pl '+EVN[wk][1]+'">'+EVN[wk][0]+(we?'':' (자동)')+'</span>':'';}
+    else if(isWFam(t)){var we='',wa='normal';try{we=washerEval;wa=washerAutoEval().k;}catch(e){}var wk=we||wa;pill=EVN[wk]?'<span class="pl '+EVN[wk][1]+'">'+EVN[wk][0]+(we?'':' (자동)')+'</span>':'';}
     else if(t==='dispatch'){var dd=true;try{dd=dispatchDone;}catch(e){}pill='<span class="pl '+(dd?'ok':'wn')+'">'+(dd?'✅ 처리 완료':'⏳ 재방문 필요')+'</span>';}
     var S;
     if(t==='inspect'||t==='dispatch'){
@@ -8461,7 +8492,7 @@ setTimeout(function(){
       var m3=f3==='pickup'?['총중량',val('fb-weight')||0,'kg','']:f3==='onsite'?['총 사이즈',(function(){try{return fbCalc();}catch(e){return 0;}})(),'SQ','']:['작업',(FB_SVC[f3]||[''])[0],'',''];
       S=[['품목',IT3[it3]||'—','',''],m3,['사진',nPhotos(),'장','']];
     }else{
-      var bad=0;try{WASHER_CHECKLIST.forEach(function(i){if(!washerChecklistResult[i.key])bad++;});}catch(e){}
+      var bad=0;try{wList().forEach(function(i){if(!washerChecklistResult[i.key])bad++;});}catch(e){}
       S=[['체크 이상',bad,'개',bad?'wn':''],['문제 사진',document.querySelectorAll('#w-problem-rows .unit-item').length,'건',''],['사진',nPhotos(),'장','']];
     }
     S.push(['확인 필요',L.length,'개',err?'bad':warn?'wn':'']);
@@ -9027,7 +9058,7 @@ setTimeout(function(){
     '<iframe title="고객 화면 미리보기"></iframe><div class="ft">EN을 누르면 영문 화면 — 직접 쓴 문장의 영어 번역은 저장할 때 만들어집니다</div>';
   document.body.appendChild(pv);
   var fr=pv.querySelector('iframe'),lang='ko',page='',ready=false,open=false;
-  function pageOf(){var t=RT();return t==='install'?'install.html':(t==='washer'?'washer.html':(t==='fabric'?'fabric.html':'inspect.html'));}
+  function pageOf(){var t=RT();return t==='install'?'install.html':(t==='washer'?'washer.html':t==='hood'?'hood.html':(t==='fabric'?'fabric.html':'inspect.html'));}
   function load(){page=pageOf();ready=false;fr.src=page+'?preview=1&lang='+lang+'&t='+Date.now();}
   function send(){if(!open||!ready)return;var d=previewDoc();if(!d)return;try{fr.contentWindow.postMessage({hhcPreview:d},location.origin);}catch(e){console.warn('m29 send',e);}}
   window.addEventListener('message',function(e){if(e.origin!==location.origin||e.source!==fr.contentWindow||!e.data||!e.data.hhcPreviewReady)return;ready=true;send();});
@@ -9303,13 +9334,13 @@ setTimeout(function(){
     else if(a==='send'){
       var t=ta.value.trim();if(!t){if(typeof toast==='function')toast('보낼 메모가 없습니다');return;}
       var rtp='inspect';try{rtp=reportType;}catch(_){}
-      var target=rtp==='fabric'?null:(rtp==='washer'?$('w-opinion'):(rtp==='install'?$('if-test-note'):$('f-opmemo')));
+      var target=rtp==='fabric'?null:(isWFam(rtp)?$('w-opinion'):(rtp==='install'?$('if-test-note'):$('f-opmemo')));
       if(!target){if(typeof toast==='function')toast('이 보고서 종류에는 보낼 칸이 없습니다');return;}
       var clean=t.replace(/^\[\d{1,2}:\d{2}\]\s*/gm,'');
       target.value=(target.value.trim()?target.value.replace(/\s+$/,'')+'\n':'')+clean;target.dispatchEvent(new Event('input',{bubbles:true}));
-      var tab=$('opm-t-memo');if(tab&&rtp!=='washer'&&rtp!=='install')try{tab.click();}catch(_){}
+      var tab=$('opm-t-memo');if(tab&&!isWFam(rtp)&&rtp!=='install')try{tab.click();}catch(_){}
       target.scrollIntoView({behavior:'smooth',block:'center'});
-      if(typeof toast==='function')toast(rtp==='washer'?'✓ 최종 의견 칸에 넣었습니다':rtp==='install'?'✓ 테스트 메모 칸에 넣었습니다':'✓ 「메모로 자동 작성」 칸에 넣었습니다 — 「바로 작성」을 누르면 의견이 만들어집니다');}
+      if(typeof toast==='function')toast(isWFam(rtp)?'✓ 최종 의견 칸에 넣었습니다':rtp==='install'?'✓ 테스트 메모 칸에 넣었습니다':'✓ 「메모로 자동 작성」 칸에 넣었습니다 — 「바로 작성」을 누르면 의견이 만들어집니다');}
     else if(a==='clear'){
       if(!ta.value.trim())return;
       var go=function(){ta.value='';put(cur,null);saveRemote();status('지움');paintHead();};
