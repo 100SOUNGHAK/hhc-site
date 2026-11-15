@@ -448,6 +448,7 @@ body.tags .pg3 .ph em.ptag{font-size:10px;padding:1px 5px;right:4px;top:auto;bot
 .fs-b .pg{margin-top:10px}
 .fs-ul{margin:4px 0 2px;padding-left:18px;font-size:14px;color:var(--ink2);line-height:1.55}
 .fs-ul li{margin:3px 0}
+.fs-ul li.fs-g{list-style:none;margin:9px 0 2px -18px;font-size:13px;font-weight:700;color:var(--ink)}.fs-ul li.fs-g:first-child{margin-top:2px}
 .fs-ul li::marker{color:var(--gold-d)}
 .tag{display:inline-block;font-size:11.5px;font-weight:800;border-radius:7px;padding:1px 8px;margin-top:6px}
 .tag.ok{background:var(--ok-bg);color:var(--ok)}.tag.wn{background:var(--wn-bg);color:var(--wn-t)}.tag.bad{background:var(--red-bg);color:var(--red)}
@@ -1218,9 +1219,13 @@ function rDispatch(d){
   /* 진행 과정: 의견의 ①②③ 단락 → 없으면 출장 정보 칸으로 */
   var S=sections(v(d,'opinion')),useOp=S.length>=2,steps,next=null,C=['c1','c2','c3','c4'],I=['alert','search','wrench','check'];
   var probPh=[];arr(d.problemPhotos).forEach(function(p){arr(p.photos).forEach(function(x){probPh.push(x);});});
-  if(useOp){var nIdx=S.findIndex(function(s,i){return i>=2&&/권고|권장|향후|recommend|future/i.test(s.h);});
-    if(nIdx>0){next=S[nIdx];S=S.slice(0,nIdx);}
-    steps=S.slice(0,4).map(function(s,i){return {h:s.h,li:s.li.map(function(x){return x.t;}),p:s.p};});}
+  if(useOp){
+    /* ③ 「조치사항 및 권고사항」 한 단락 안의 「완료한 조치 / 향후 권고」는 나눠서 — 완료는 진행 단계에, 향후 권고는 「앞으로 할 일」로 */
+    var FUT=/향후|권고|권장|recommend|future/i,sIdx=S.findIndex(function(s,i){return i>=2&&s.li.some(function(x){return x.g&&FUT.test(x.g);});});
+    if(sIdx>0){var sx=S[sIdx],fl=sx.li.filter(function(x){return x.g&&FUT.test(x.g);});next={h:sx.h,li:fl};S=S.slice(0,sIdx+1);S[sIdx]=Object.assign({},sx,{li:sx.li.filter(function(x){return fl.indexOf(x)<0;})});if(!S[sIdx].li.length&&!S[sIdx].p.length)S=S.slice(0,sIdx);}
+    else{var nIdx=S.findIndex(function(s,i){return i>=2&&/권고|권장|향후|recommend|future/i.test(s.h);});
+    if(nIdx>0){next=S[nIdx];S=S.slice(0,nIdx);}}
+    steps=S.slice(0,4).map(function(s,i){return {h:s.h,li:s.li,p:s.p};});}
   else{steps=[{h:t('reason'),li:[],p:[reason||'—'].concat(arr(d.equipments).map(function(e){return [locName(e.loc,e.loc_en),locName(e.type,e.type_en)].filter(Boolean).join(' · ');}).filter(Boolean))},
       {h:t('diag'),li:[],p:[v(f,'defect')||work[0]||'—'].concat(f.defect&&work[0]?[work[0]]:[])},
       {h:t('act'),li:[],p:[v(f,'action')||work.join(' ')||'—']},
@@ -1229,7 +1234,7 @@ function rDispatch(d){
   h+=sec('s-flow',t('nav').flow,repair?t('rfT'):t('cfT'),repair?t('rfS'):t('cfS'),'<div class="rp-card flow'+(ST.pdf?' on':'')+'" id="flow">'+steps.map(function(s,i){
     var c=useOp?C[Math.min(i,3)]:C[i],ic=useOp?I[Math.min(i,3)]:I[i],isAct=useOp?(i===last||/조치|action|measure/i.test(s.h)):i>=2;
     return '<div class="fs"><span class="fs-n '+(i===last&&!useOp?'c4':c)+'">'+ICO[i===last&&!useOp?'check':ic]+'</span><div class="fs-b"><div class="fs-k">'+(useOp?'STEP '+(i+1):[t('reason'),t('diag'),t('act'),t('res')][i])+'</div><h4>'+esc(useOp?s.h:s.p[0])+'</h4>'+
-     (s.li.length?'<ul class="fs-ul">'+s.li.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>':'')+(useOp?s.p:s.p.slice(1)).map(function(x){return '<p>'+esc(x)+'</p>';}).join('')+
+     (s.li.length?'<ul class="fs-ul">'+s.li.map(function(x,j){var t=typeof x==='string'?x:x.t,gg=typeof x==='string'?'':x.g,pg=j&&typeof s.li[j-1]!=='string'?s.li[j-1].g:'';return (gg&&gg!==pg?'<li class="fs-g">'+esc(gg)+'</li>':'')+'<li>'+esc(t)+'</li>';}).join('')+'</ul>':'')+(useOp?s.p:s.p.slice(1)).map(function(x){return '<p>'+esc(x)+'</p>';}).join('')+
      ((useOp?i===1:i===1)&&f.risk&&t('risk')[f.risk]?'<span class="tag '+(f.risk==='l'?'wn':'bad')+'">'+t('risk')[f.risk]+'</span>':'')+
      (i===last&&(useOp||s.p[0]!==(done?t('doneW'):t('revisit')))?'<span class="tag '+(done?'ok':'wn')+'">'+(done?t('doneW'):t('revisit'))+'</span>':'')+
      (isAct&&i===last&&probPh.length?'<div class="pg pg3">'+probPh.slice(0,ST.pdf?99:6).map(function(x){return ph(x);}).join('')+'</div>':'')+'</div></div>';}).join('')+'</div>');

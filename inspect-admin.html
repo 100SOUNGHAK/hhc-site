@@ -8384,6 +8384,9 @@ setTimeout(function(){
 #m28-gen button{flex:1;height:46px;border-radius:12px;border:0;background:linear-gradient(135deg,#16346E,#0E2350);color:#fff;font-family:inherit;font-size:14px;font-weight:800;cursor:pointer;box-shadow:0 6px 14px -8px rgba(14,35,80,.6)}
 #m28-gen button{flex:none;width:100%}
 #m28-gen small{font-size:11.5px;color:#98A1B4;line-height:1.4;padding:0 2px}
+#m28-gen .m28-chk{margin-top:4px;padding:10px 12px;border-radius:12px;background:#FFF8E6;border:1px solid #F1D48A;font-size:12.5px;color:#7A5200;line-height:1.5}
+#m28-gen .m28-chk b{color:#7A5200}#m28-gen .m28-chk span{color:#9A7A3A;font-size:11.5px}
+#m28-gen .m28-chk ul{margin:4px 0 0;padding-left:18px}#m28-gen .m28-chk li{margin:2px 0}
 @media (prefers-reduced-motion:reduce){#view-form .ev-btn{transition:none}}
 </style>
 <script id="m28-js">
@@ -8400,7 +8403,7 @@ setTimeout(function(){
     var g={cu:[],res:[],def:[],msr:[],rec:[]},names={};
     [].forEach.call(document.querySelectorAll('#cool-units .cu-item'),function(w){if(!w._getCuData)return;var d=w._getCuData();
       var a=num(d.a),b=num(d.b),fx=d.fix&&d.fix.on?d.fix:null,fa=fx?num(fx.a):null,fb=fx?num(fx.b):null;
-      if(d.result==='na'){a=null;b=null;}var o={label:d.label||'',loc:d.loc||'',na:d.result==='na'&&!fx,d0:(a!=null&&b!=null)?a-b:null,d1:(fa!=null&&fb!=null)?fa-fb:null};o.v=o.d1!=null?o.d1:o.d0;
+      if(d.result==='na'){a=null;b=null;}var o={label:d.label||'',loc:d.loc||'',na:d.result==='na'&&!fx,a:a,b:b,fa:fa,fb:fb,d0:(a!=null&&b!=null)?a-b:null,d1:(fa!=null&&fb!=null)?fa-fb:null};o.v=o.d1!=null?o.d1:o.d0;
       g.cu.push(o);if(o.label)names[o.label]=o.loc||o.label;});
     [].forEach.call(document.querySelectorAll('#result-rows .rcard'),function(c){if(!c._nameInp||!c._statusSel)return;var nm=c._nameInp.value.trim();if(!nm)return;
       g.res.push({name:nm,st:c._statusSel.value,note:c._getNoteInp?String(c._getNoteInp().value||'').trim():''});});
@@ -8439,67 +8442,168 @@ setTimeout(function(){
     if(evBox.innerHTML!==h)evBox.innerHTML=h;
   }
 
-  /* ── 입력한 내용으로 최종 의견 자동 작성 (①②③④) ── */
-  function f1(x){return x.toFixed(1);}
-  function genInspect(){
-    var g=gather(),L=[];
-    var ok=[],fixed=[],low=[],na=[];
-    g.cu.forEach(function(c){var nm=c.loc||c.label;if(c.na){na.push(nm);return;}if(c.d1!=null)fixed.push(nm+'(조치 전 '+(c.d0!=null?f1(c.d0)+'°C':'—')+' → 조치 후 '+f1(c.d1)+'°C)');else if(c.v!=null&&c.v<12)low.push(nm+'('+f1(c.v)+'°C)');else if(c.v!=null)ok.push(nm);});
-    var bad=g.res.filter(function(r){return r.st==='bad';}),wr=g.res.filter(function(r){return r.st==='warn';});
-    L.push('① 종합 점검 결과');
-    var n=g.cu.length;
-    L.push('- '+(n?'에어컨 '+n+'대 점검 결과 ':'점검 결과 ')+((bad.length||low.length||na.length)?'일부 에어컨에서 확인이 필요한 상태가 발견됨.':'전반적인 작동 상태 및 냉방 성능은 양호한 것으로 확인됨.'));
-    if(ok.length)L.push('- '+ok.join('·')+' 에어컨은 토출 온도차 정상 범위로 냉방 성능 양호.');
-    if(fixed.length)L.push('- '+fixed.join(', ')+' — 조치 후 정상 냉방 성능 회복 확인.');
-    if(low.length)L.push('- '+low.join(', ')+' — 온도차가 기준(12°C)보다 낮게 측정됨.');
-    if(na.length)L.push('- '+na.join('·')+' 에어컨은 고장 등으로 정상 운전이 되지 않아 냉방 온도 측정 불가.');
-    L.push('','② 세부 점검 및 진단 내용');var n2=L.length;
-    g.def.forEach(function(f){var w=g.where(f);L.push('- '+(w?w+': ':'')+f.defect+'.');});
-    g.msr.forEach(function(m,i){var nm=m.label||('실외기 '+(i+1));var p=[];
-      if(m.lp)p.push('저압 '+m.lp+' PSI'+(m.spec_lp==='under'?'(기준 미달)':m.spec_lp==='over'?'(기준 초과)':'')+(m.fix&&m.fix.on&&m.fix.lp?' → 조치 후 '+m.fix.lp+' PSI':''));
-      if(m.hp)p.push('고압 '+m.hp+' PSI');if(m.current)p.push('전류 '+m.current+'A'+(m.fix&&m.fix.on&&m.fix.current?' → 조치 후 '+m.fix.current+'A':''));
-      if(p.length)L.push('- '+nm+' 실외기 '+p.join(', ')+'.');});
-    bad.concat(wr).forEach(function(r){L.push('- '+r.name+': '+(r.note||'확인 필요')+'.');});
-    if(L.length===n2)L.push('- 항목별 점검 결과 특이사항 없음.');
-    L.push('','③ 조치사항');var n3=L.length;
-    g.def.filter(function(f){return f.status==='done';}).forEach(function(f){L.push('- '+f.defect+' → '+(String(f.action||'').trim()||'조치 완료')+'.');});
-    g.res.filter(function(r){return /완료/.test(r.note);}).forEach(function(r){L.push('- '+r.name+': '+r.note+'.');});
-    if(L.length===n3)L.push('- 점검 및 기본 정비 완료.');
-    var fut=[];
-    g.def.filter(function(f){return f.status!=='done';}).forEach(function(f){var w=g.where(f);fut.push('- '+(w?w+': ':'')+f.defect+(f.status==='watch'?' — 경과 관찰 요망.':(String(f.action||'').trim()?' — '+f.action+'.':' — 조치 권고.')));});
-    g.rec.forEach(function(r){fut.push('- '+r.title+(r.desc?' ('+r.desc+')':'')+' 권고.');});
-    if(fut.length){L.push('','④ 향후 권고사항');L=L.concat(fut);}
-    return L.join('\n');
+  /* ── 입력한 내용으로 최종 의견 자동 작성 — 보고서 작성 규칙(2026-11-14 최종) 기준
+       ① 종합 점검 결과 : 작동 상태 · 이상 증상만 (조치 내용 없음)
+       ② 세부 점검 및 진단 내용 : 에어컨 위치별 확인 사실 · 측정값 · 확인/추정 원인
+       ③ 조치사항 및 권고사항 : 「완료한 조치」와 「향후 권고」를 나눠 씀
+       배수배관 구배·단열 불량은 기본 적용, 정상으로 입력한 경우만 뺌. 입력하지 않은 값은 만들지 않음. ── */
+  function f1(x){return (Math.round(x*10)/10).toFixed(1);}
+  function jo(w,a,b){var s=String(w||'').replace(/[\s)\]'"」』.]+$/,''),ch=s.charAt(s.length-1),c=s.charCodeAt(s.length-1);
+    if(c>=0xAC00&&c<=0xD7A3)return w+(((c-0xAC00)%28)?a:b);if(/[0-9]/.test(ch))return w+('013678'.indexOf(ch)>=0?a:b);return w+b;}
+  function clean(s){return String(s||'').replace(/\s*·\s*/g,'·').replace(/\s+/g,' ').trim().replace(/[.。]+$/,'');}
+  function andJoin(a){a=a.filter(Boolean);if(a.length<2)return a[0]||'';return a.slice(0,-2).concat([jo(a[a.length-2],'과','와')+' '+a[a.length-1]]).join(', ');}
+  function sent(s){s=clean(s);if(!s)return '';
+    if(/(니다|습니다)$/.test(s))return s+'.';
+    if(/(권고|권유|추천|권장)$/.test(s))return jo(s.replace(/\s*(권고|권유|추천|권장)$/,''),'을','를')+' 권장합니다.';
+    if(/예정$/.test(s))return s+'입니다.';
+    if(/필요$/.test(s))return jo(s.replace(/\s*필요$/,''),'이','가')+' 필요합니다.';
+    if(/^(경과\s*)?관찰(\s*요망)?$/.test(s))return '경과 관찰이 필요합니다.';
+    return s+'.';}
+  function isRef(f){return /냉매/.test(f.defect||'')&&/누설|저압|부족/.test(f.defect||'');}
+  function diag(f){var d=clean(f.defect);
+    if(isRef(f))return jo(d.replace(/\s*\(누설\s*의심\)/,''),'이','가')+' 확인되었습니다. 냉매는 사용하면서 줄어드는 소모품이 아니므로 배관 연결부 등에서의 냉매 누설이 의심됩니다.';
+    if(/필터/.test(d)&&/막힘/.test(d))return '에어필터가 먼지로 막혀 실내기로 들어가는 공기량이 줄어든 풍량 저하 상태가 확인되었습니다.';
+    if(/소음|진동/.test(d))return '운전 중 '+jo(d.replace(/\s*발생$/,''),'이','가')+' 확인되었으며, 이번 점검에서 원인은 특정되지 않았습니다.';
+    if(/응축기/.test(d)&&/오염/.test(d))return '실외기 응축기 핀에 오염이 쌓여 열 배출 효율이 떨어질 수 있는 상태입니다.';
+    if(/슬라임/.test(d))return '드레인판·배관에 슬라임(물때)이 쌓여 응축수 배출이 원활하지 않을 수 있는 상태입니다.';
+    if(/단열/.test(d))return jo(d,'이','가')+' 확인되어 배관 표면에 결로(물방울 맺힘)가 생길 위험이 있습니다.';
+    if(/배수|드레인/.test(d)&&/기울기|구배/.test(d))return '배수배관 구배 확보가 미흡하여 응축수 배출이 원활하지 않을 가능성이 있습니다.';
+    if(/에바|냉각\s*(불균형|편차)/.test(d))return '에바포레이터 냉각 편차가 확인되었습니다.';
+    return jo(d,'이','가')+' 확인되었습니다.';}
+  function split(note){var p=String(note||'').split('>');return {a:clean(p[0]),b:clean(p.slice(1).join('>'))};}
+  function partName(n){n=clean(n).replace(/^패널\s*\/\s*/,'').replace(/\s*오염(상태|도)?$/,'').replace(/\s*막힘$/,'');return n==='응축기'?'실외기 응축기':n;}
+  function psi(x){x=clean(x);var m=x.match(/^([\d.]+)\s*\/\s*(.+)$/);return m?m[1]+' PSI(기준 '+m[2]+')':x+' PSI';}
+  var NOTE_OK=/^(이상\s*없음|정상(\s*(동작|범위(\s*측정)?))?|양호|특이\s*(사항|발견)\s*없음)?$/;
+  var CONFLICT=[[/소음|진동/,/소음|진동/],[/루버/,/루버/],[/풍량/,/풍량/],[/냉매/,/냉매/],[/캐패|캐피|전류|전기/,/전류|전기|절연/]];
+
+  function build(kind){
+    var g=gather(),chk=[],S1=[],S2=[],S3a=[],S3b=[];
+    var nm=function(c){return c.loc||c.label||'에어컨';};
+    var single=function(f){var u=f.units||[];if(u.length===1){var c=g.cu.filter(function(x){return x.label===u[0];})[0];if(c)return c;}
+      if(!u.length&&f.loc){var c2=g.cu.filter(function(x){return x.loc===f.loc;});if(c2.length===1)return c2[0];}return null;};
+    var whereOf=function(f){var w=g.where(f);return /전체|모든|all/i.test(w)?'':w;};
+    /* 점검 항목 나누기 */
+    var dirt=[],clog=null,slopeR=null,insR=null,others=[],okItems=[];
+    g.res.forEach(function(r){var n=r.name,s=split(r.note);
+      if(/온도차|ΔT/.test(n))return;
+      if(/단열/.test(n+r.note)&&!/오염/.test(n)){insR=r;return;}
+      if(/오염/.test(n)){dirt.push(r);return;}
+      if(/막힘/.test(n)){clog=r;return;}
+      if(/배수|드레인/.test(n)&&!/펌프/.test(n)){slopeR=r;return;}
+      if(r.st==='ok'&&(NOTE_OK.test(s.a)||!s.a))okItems.push(r);else if(r.st!=='ok')others.push(r);});
+    /* 배수배관 — 기본 적용 */
+    var slopeBad=!(slopeR&&slopeR.st==='ok'&&!/기울기|구배|불량|미흡/.test(slopeR.note))||g.def.some(function(f){return /배수|드레인/.test(f.defect)&&/기울기|구배/.test(f.defect);});
+    var insBad=insR?(insR.st!=='ok'||/불량|손상|파손|미흡/.test(insR.note)):slopeBad;
+    var scope='';if(slopeR&&!/전체|모든/.test(slopeR.note)){var hit=g.cu.map(nm).filter(function(x,i,a){return x&&a.indexOf(x)===i&&slopeR.note.indexOf(x)>=0;});if(hit.length)scope=hit.join('·');}
+    if(!slopeR&&kind==='inspect')chk.push('배수배관 항목 입력 없음 — 기본 규칙(구배 불량)으로 작성했습니다.');
+    if(!insR&&insBad&&kind==='inspect')chk.push('배관 단열 입력 없음 — 기본 규칙(단열처리 불량)으로 작성했습니다.');
+    var drainOn=kind==='inspect'?(slopeBad||insBad):((slopeR&&slopeR.st!=='ok')||(insR&&insBad));
+    /* 에어컨별 정리 */
+    var units=g.cu.map(function(c){return {c:c,name:nm(c),def:[],sym:[]};}),common=[],extra={};
+    g.def.forEach(function(f){var c=single(f);if(c){units[g.cu.indexOf(c)].def.push(f);return;}var w=whereOf(f);if(w){(extra[w]=extra[w]||{c:null,name:w,def:[],sym:[]}).def.push(f);}else common.push(f);});
+    var groups=units.concat(Object.keys(extra).map(function(k){return extra[k];}));
+    var hasRef=g.def.some(isRef),hasLp=g.msr.some(function(m){return clean(m.lp);});
+    /* ① 종합 점검 결과 */
+    var n=g.cu.length,meas=g.cu.filter(function(c){return c.d0!=null;});
+    groups.forEach(function(u){var c=u.c;if(c){if(c.na)u.sym.push('정상 운전 불가');else if(c.d0!=null&&c.d0<12)u.sym.push('냉방 성능 저하');}
+      u.def.forEach(function(f){u.sym.push(clean(f.defect).replace(/\s*\(누설\s*의심\)/,'').replace(/\s*발생$/,''));});});
+    var symU=groups.filter(function(u){return u.sym.length;});
+    var badU=units.filter(function(u){return u.c.na||(u.c.d0!=null&&u.c.d0<12&&u.c.d1==null);}).length,overallBad=n>=2&&badU>n/2;
+    var okAll=meas.length===n&&n>0&&meas.every(function(c){return c.d0>=12;})&&!g.cu.some(function(c){return c.na;});
+    if(kind==='dispatch'){var rs=val('d-reason');if(rs)S1.push('출동 사유: '+clean(rs)+'.');}
+    if(overallBad)S1.push('에어컨 '+n+'대 중 '+badU+'대에서 냉방 성능 이상이 확인되었습니다.');
+    else if(kind==='inspect'||okAll)S1.push((n?'에어컨 '+n+'대의 ':'에어컨의 ')+'전반적인 작동 상태는 양호'+(okAll?'하며, '+(n>1?n+'대 모두 ':'')+'토출 온도차가 정상 범위로 냉방 성능이 유지되고 있습니다.':'합니다.'));
+    if(symU.length)S1.push((overallBad||kind==='dispatch'?'':'다만 ')+symU.map(function(u,i){return u.name+' 에어컨에서 '+jo(andJoin(u.sym),'이','가');}).join(', ')+' 확인되었습니다.');
+    var msrUnder=g.msr.filter(function(m){return m.spec_lp==='under';});
+    var csym=common.map(function(f){return clean(f.defect).replace(/\s*\(누설\s*의심\)/,'').replace(/\s*발생$/,'');}).concat(msrUnder.length?['실외기 저압 기준 미달']:[]).concat(others.map(function(r){return clean(r.name).replace(/\s*상태$/,'')+' 이상';}));
+    if(csym.length)S1.push('또한 '+jo(andJoin(csym),'이','가')+' 확인되었습니다.');
+    if(drainOn)S1.push((scope?scope+' 에어컨':'전체 에어컨')+'의 '+(slopeBad&&insBad?'배수배관 기울기(구배)와 단열처리 상태가 불량한 것으로 확인됩니다.':slopeBad?'배수배관 기울기(구배)가 불량한 것으로 확인됩니다.':'배관 단열처리 상태가 불량한 것으로 확인됩니다.'));
+    if(!S1.length)S1.push('점검 결과 특이사항은 확인되지 않았습니다.');
+    /* ② 세부 점검 및 진단 내용 */
+    var tv=function(a,b){return '흡입 '+f1(a)+'°C / 토출 '+f1(b)+'°C';};
+    groups.forEach(function(u){var c=u.c,L=[];
+      if(c){if(c.na)L.push('고장 등으로 정상 운전이 되지 않아 냉방 온도 측정이 불가하였습니다.');
+        else if(c.d0!=null&&c.d1!=null)L.push('조치 전 '+tv(c.a,c.b)+', 온도차 '+f1(c.d0)+'°C로 '+(c.d0<12?'냉방 성능 저하가 확인되었습니다.':'측정되었습니다.'));
+        else if(c.d0!=null)L.push('냉방 성능: '+tv(c.a,c.b)+', 온도차 '+f1(c.d0)+'°C로 '+(c.d0<12?'기준(12°C)보다 낮아 냉방 성능 저하가 확인됩니다.':(u.def.some(isRef)?'현재 냉방은 정상 범위입니다.':'정상 범위입니다.')));
+        else chk.push(u.name+' 냉방 온도가 입력되지 않았습니다.');}
+      u.def.forEach(function(f){L.push(diag(f));});
+      if(L.length){S2.push({h:u.name+' 에어컨',li:L});}});
+    g.msr.forEach(function(m,i){var p=[];if(clean(m.lp))p.push('저압 '+psi(m.lp)+(m.spec_lp==='under'?' — 기준 미달':m.spec_lp==='over'?' — 기준 초과':''));if(clean(m.hp))p.push('고압 '+psi(m.hp));if(clean(m.current))p.push('운전 전류 '+clean(m.current)+'A');
+      if(p.length)S2.push({h:(clean(m.label)?clean(m.label)+' ':'')+'실외기'+(g.msr.length>1&&!clean(m.label)?' '+(i+1):''),li:['측정 결과 '+p.join(', ')+'.'+(m.spec_lp==='under'&&!hasRef?' 냉매 부족 가능성이 있습니다.':'')]});});
+    var C=[];
+    common.forEach(function(f){C.push(diag(f));});
+    var heavy=[],mid=[],light=[];dirt.forEach(function(r){var s=split(r.note).a;if(!s||NOTE_OK.test(s))return;(/고도|심각|심한|찌든/.test(s)?heavy:/경미/.test(s)?light:mid).push(partName(r.name));});
+    var dl=[];if(heavy.length)dl.push(heavy.join('·')+'에 찌든 오염이 심하게 쌓여 있었습니다.');var clogS='';
+    if(clog){var ca=split(clog.note).a;if(ca&&!NOTE_OK.test(ca))clogS=/심각|심한/.test(ca)?'드레인 배관은 심한 막힘 상태였습니다.':'드레인 배관 막힘: '+ca+'.';}if(clogS)dl.push(clogS);
+    if(mid.length)dl.push(jo(mid.join('·'),'은','는')+' 일반적인 수준의 오염 상태입니다.');if(light.length)dl.push(jo(light.join('·'),'은','는')+' 경미한 오염 수준입니다.');
+    if(dl.length)C.push('오염 상태: '+dl.join(' '));
+    if(drainOn){var dd=[];if(slopeBad)dd.push('구배 확보가 미흡하여 응축수 배출이 원활하지 않을 가능성이 있으며');if(insBad)dd.push('단열처리 불량으로 배관 표면에 결로(물방울 맺힘)가 생길 위험이 있습니다');
+      C.push('배수배관'+(scope?'('+scope+')':'')+': '+(dd.length===2?dd.join(', '):dd[0].replace(/있으며$/,'있습니다'))+'.');}
+    others.forEach(function(r){C.push(clean(r.name)+(r.st==='bad'?'(정비 필요)':'(주의)')+': '+(split(r.note).a||'확인 필요')+'.');});
+    var openDef=g.def.filter(function(f){return f.status!=='done';});
+    var okShow=okItems.filter(function(r){var bad=false;CONFLICT.forEach(function(p){g.def.forEach(function(f){if(p[0].test(f.defect)&&p[1].test(r.name)){bad=true;if(f.status!=='done')chk.push('「'+clean(f.defect)+'」 결함과 항목 점검 「'+clean(r.name)+': '+(r.note||'이상 없음')+'」이 서로 맞지 않습니다.');}});});return !bad;});
+    if(okShow.length)C.push(okShow.map(function(r){return clean(r.name).replace(/\s*상태$/,'');}).join('·')+' 상태는 이상 없습니다.');
+    if(C.length)S2.push({h:'공통 · 전체 에어컨',li:C});
+    if(!S2.length)S2.push({h:'',li:['항목별 점검 결과 특이사항은 확인되지 않았습니다.']});
+    /* ③ 완료한 조치 */
+    if(kind==='dispatch')val('d-work').split('\n').map(clean).filter(Boolean).forEach(function(x){S3a.push(x);});
+    var wash=[],washX=[];g.res.forEach(function(r){var s=split(r.note);if(/세척|청소/.test(s.b)&&/완료/.test(s.b))wash.push(partName(r.name));else if(/완료/.test(s.b))S3a.push(clean(r.name)+': '+s.b);});
+    g.def.filter(function(f){return f.status==='done';}).forEach(function(f){var a=clean(f.action),w=g.where(f),d=clean(f.defect);
+      if(!a)chk.push((w?w+' ':'')+'「'+d+'」 결함이 조치 완료인데 조치 내용이 비어 있습니다.');
+      if(wash.length&&/세척|청소/.test(a)){washX.push((w?w+' ':'')+d.split('·')[0]);return;}
+      S3a.push((w?w+': ':'')+d.replace(/\s*\(누설\s*의심\)/,'')+' → '+(a?(/완료/.test(a)?a:a+' 완료'):'조치 완료'));});
+    if(wash.length)S3a.unshift(wash.join('·')+' 현장 세척 완료'+(washX.length?' ('+washX.join(', ')+' 포함)':''));
+    g.cu.forEach(function(c){if(c.d1==null)return;S3a.push(nm(c)+': 조치 후 '+tv(c.fa,c.fb)+', 온도차 '+f1(c.d1)+'°C'+(c.d1>=12?'로 정상 냉방 성능 확인':' — 기준(12°C)보다 낮음'));});
+    g.msr.forEach(function(m){if(!(m.fix&&m.fix.on))return;var p=[];if(clean(m.fix.lp))p.push('저압 '+psi(m.fix.lp));if(clean(m.fix.current))p.push('운전 전류 '+clean(m.fix.current)+'A');if(p.length)S3a.push((clean(m.label)||'')+'실외기: 조치 후 '+p.join(', '));});
+    var done=true;if(kind==='dispatch'){try{done=dispatchDone;}catch(e){}var rv=val('d-revisit-date');if(!done)S3b.push('추가 조치를 위해 재방문 예정입니다'+(rv?' ('+rv+').':'.'));}
+    /* ③ 향후 권고 */
+    var REF_PLAN='냉매 누설 점검으로 누설 부위를 확인한 뒤 냉매를 보충할 예정입니다. 누설 부위를 수리하지 않고 보충만 하면 같은 증상이 다시 나타날 수 있습니다.';
+    var REF_ADV='누설 정밀점검으로 누설 부위를 확인·수리한 뒤 냉매를 재충전할 것을 권장합니다. 냉매 보충만으로는 같은 증상이 다시 나타날 수 있습니다.';
+    openDef.forEach(function(f){var a=clean(f.action),w=g.where(f),t;
+      if(isRef(f))t=/보충|충전/.test(a)&&(f.status==='plan'||/예정/.test(a))?REF_PLAN:REF_ADV;
+      else if(/누설/.test(a)&&!/냉매|누설|배관/.test(f.defect)){t='원인 확인을 위한 정밀점검 후 조치를 권장합니다.';chk.push((w?w+' ':'')+'「'+clean(f.defect)+'」의 조치가 「'+a+'」로 되어 있어 「정밀점검 후 조치 권장」으로 바꿔 적었습니다.');}
+      else if(f.status==='watch'&&!a)t='경과를 관찰하고, 동일 증상이 다시 나타나면 정밀점검을 권장합니다.';
+      else if(a)t=sent(a);
+      else t=/부품|불량|고장|파손/.test(f.defect)?'해당 부품의 수리 또는 교체가 필요합니다.':'원인 확인을 위한 정밀점검 후 조치를 권장합니다.';
+      S3b.push((w?w+': ':'')+t);});
+    g.def.filter(function(f){return f.status==='done'&&isRef(f);}).forEach(function(f){var w=g.where(f);S3b.push((w?w+': ':'')+'냉매 부족 재발 여부를 관찰하고, 재발 시 누설 정밀점검을 권장합니다.');});
+    units.forEach(function(u){var c=u.c;if(u.def.some(function(f){return f.status!=='done';}))return;
+      if(c.na)S3b.push(u.name+': 정상 운전이 되지 않는 원인 확인을 위한 점검·수리가 필요합니다.');
+      else if(c.d0!=null&&c.d0<12&&c.d1==null&&!u.def.length)S3b.push(u.name+': 냉방 성능 저하 원인 확인을 위한 정밀점검을 권장합니다.');});
+    var recRef=g.rec.some(function(r){return /냉매|누설/.test(r.title);});
+    if(msrUnder.some(function(m){return !(m.fix&&m.fix.on);})&&!hasRef&&!recRef)S3b.push('실외기: 저압이 기준보다 낮아 냉매 누설 정밀점검을 권장합니다.');
+    var doneRef=g.def.some(function(f){return f.status==='done'&&isRef(f);});
+    g.rec.forEach(function(r){var t=clean(r.title);if(drainOn&&/배수|구배|기울기|단열/.test(t))return;
+      /* 결함·자동 문구와 겹치는 권장 정비는 빼기 */
+      if(g.def.some(function(f){var d=clean(f.defect).replace(/\s*\(누설\s*의심\)/,'');return d&&(t.indexOf(d)>=0||d.indexOf(t)>=0);}))return;
+      if((doneRef&&/재발/.test(t))||(hasRef&&/냉매|누설/.test(t)))return;
+      var x=/(니다|권고|권유|추천|권장|예정|필요)$/.test(t)?sent(t):/(청소|세척|관리|교체|수리|점검|정밀점검|개선|조정|충전|보충|설치|재시공|확인)$/.test(t)?jo(t,'을','를')+' 권장합니다.':t+' — 정밀점검 후 조치를 권장합니다.';S3b.push(x+(clean(r.desc)?' ('+clean(r.desc)+')':''));});
+    if(drainOn)S3b.push((scope?scope+': ':'')+(slopeBad&&insBad?'원활한 응축수 배출과 결로 예방을 위해 배수배관 구배 조정과 단열처리 개선을 권장합니다.':slopeBad?'원활한 응축수 배출을 위해 배수배관 구배 조정을 권장합니다.':'결로 예방을 위해 배관 단열처리 개선을 권장합니다.'));
+    if(hasRef&&!hasLp)chk.push('냉매 결함이 있지만 냉매 압력(PSI)이 입력되지 않아 수치 없이 작성했습니다.');
+    var same={};g.cu.forEach(function(c){if(c.d0==null)return;var k=f1(c.a)+' / '+f1(c.b);(same[k]=same[k]||[]).push(nm(c));});
+    Object.keys(same).forEach(function(k){if(same[k].length>1)chk.push(same[k].join('·')+' 온도가 '+k+'로 똑같습니다. 복사해서 입력한 값인지 확인해 주세요.');});
+    /* 글로 만들기 */
+    var L=['① '+(kind==='dispatch'?'출동 사유 및 점검 결과':'종합 점검 결과')];S1.forEach(function(x){L.push('- '+x);});
+    L.push('','② 세부 점검 및 진단 내용');S2.forEach(function(s){if(s.h)L.push(s.h);s.li.forEach(function(x){L.push('- '+x);});});
+    L.push('','③ 조치사항 및 권고사항');
+    if(S3a.length){L.push('완료한 조치');S3a.forEach(function(x){L.push('- '+clean(x));});}
+    if(S3b.length){L.push('향후 권고');S3b.forEach(function(x){L.push('- '+x);});}
+    if(!S3a.length&&!S3b.length)L.push('- 별도 조치 및 권고사항은 없습니다.');
+    return {text:L.join('\n'),chk:chk.filter(function(x,i,a){return a.indexOf(x)===i;})};
   }
-  function genDispatch(){
-    var g=gather(),L=[],reason=val('d-reason'),work=val('d-work').split('\n').map(function(x){return x.trim();}).filter(Boolean),done=true;try{done=dispatchDone;}catch(e){}
-    L.push('① 출동 사유 및 점검 결과');
-    if(reason)L.push('- 출동 사유: '+reason+'.');
-    L.push('- '+(done?'현장 점검 및 조치를 완료함.':'현장 점검 결과 추가 조치가 필요하여 재방문 예정.'));
-    L.push('','② 진단 내용');var n2=L.length;
-    g.def.forEach(function(f){var w=g.where(f);L.push('- '+(w?w+': ':'')+f.defect+'.');});
-    g.res.filter(function(r){return r.st!=='ok';}).forEach(function(r){L.push('- '+r.name+': '+(r.note||'확인 필요')+'.');});
-    if(L.length===n2)L.push('- 특이사항 없음.');
-    L.push('','③ 조치사항');var n3=L.length;
-    work.forEach(function(x){L.push('- '+x.replace(/[.。]$/,'')+'.');});
-    g.def.filter(function(f){return f.status==='done';}).forEach(function(f){L.push('- '+f.defect+' → '+(String(f.action||'').trim()||'조치 완료')+'.');});
-    if(L.length===n3)L.push('- 점검 완료.');
-    var fut=[];var rv=val('d-revisit-date');if(!done&&rv)fut.push('- 재방문 예정: '+rv+'.');
-    g.def.filter(function(f){return f.status!=='done';}).forEach(function(f){fut.push('- '+f.defect+(f.status==='watch'?' — 경과 관찰 요망.':(String(f.action||'').trim()?' — '+f.action+'.':' — 조치 권고.')));});
-    g.rec.forEach(function(r){fut.push('- '+r.title+' 권고.');});
-    if(fut.length){L.push('','④ 향후 권고사항');L=L.concat(fut);}
-    return L.join('\n');
-  }
+  function genInspect(){return build('inspect');}
+  function genDispatch(){return build('dispatch');}
   function addGen(){
     var op=$('f-opinion');if(!op||$('m28-gen'))return;
     var box=document.createElement('div');box.id='m28-gen';
-    box.innerHTML='<button type="button">✨ 입력한 내용으로 자동 작성</button><small>측정값·결함·조치·권장 정비를 모아 ①②③④ 형식으로 만듭니다</small>';
+    box.innerHTML='<button type="button">✨ 입력한 내용으로 자동 작성</button><small>측정값·결함·조치·권장 정비를 모아 ① 종합 점검 결과 · ② 세부 진단 · ③ 조치 및 권고 형식으로 만듭니다</small><div class="m28-chk" hidden></div>';
     var anchor=op;var prev=op.previousElementSibling;if(prev&&/음성/.test(prev.textContent||''))anchor=prev;
     anchor.parentNode.insertBefore(box,anchor);
     box.querySelector('button').addEventListener('click',async function(){
-      var t=RT()==='dispatch'?genDispatch():genInspect();
+      var R=RT()==='dispatch'?genDispatch():genInspect(),t=R.text,cb=box.querySelector('.m28-chk');
       if(op.value.trim()){var ok=window.inspAsk?await window.inspAsk('최종 의견 바꾸기',['지금 적혀 있는 최종 의견을 입력한 내용으로 새로 만든 문장으로 바꿉니다.','바꾼 뒤에도 직접 고칠 수 있습니다.'],'바꾸기','취소'):confirm('최종 의견을 바꿀까요?');if(!ok)return;}
       op.value=t;op.dispatchEvent(new Event('input',{bubbles:true}));
+      if(R.chk.length){cb.innerHTML='<b>⚠️ 작성 전 확인 '+R.chk.length+'건</b> <span>(이 상자는 고객 보고서에 나가지 않습니다)</span><ul>'+R.chk.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>';cb.hidden=false;}else{cb.innerHTML='';cb.hidden=true;}
       op.scrollIntoView({behavior:'smooth',block:'center'});op.classList.remove('m27-flash');void op.offsetWidth;op.classList.add('m27-flash');
       if(typeof toast==='function')toast('✓ 최종 의견을 만들었습니다 — 고쳐 쓰셔도 됩니다');
     });
