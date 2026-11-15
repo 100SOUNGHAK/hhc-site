@@ -285,6 +285,11 @@ input.ocr-filled{background:#fff8e0!important;border-color:#f0c040!important}
 .ev-r{background:#fde8e8;color:#c0392b;border-color:#e74c3c}
 .ev-row.ev5{grid-template-columns:repeat(5,1fr)}
 .ev-d{background:#e6f0ff;color:#1d4ed8;border-color:#3b82f6}
+.wev-btn{border-radius:12px;padding:12px 4px;text-align:center;border:1.5px solid #e8e8f0;cursor:pointer;font-size:12px;font-weight:700;line-height:1.5;opacity:.55;transition:transform .12s,opacity .12s}
+.wev-btn:active{transform:scale(.97)}
+.wev-btn.on{opacity:1;box-shadow:0 0 0 2px currentColor}
+.wev-btn.wsug{opacity:.85;outline:2px dashed #C9A44C;outline-offset:1px}
+@media (max-width:380px){.wev-btn{font-size:10.5px;padding:10px 2px}}
 /* 출장점검 / 수리 구분 */
 .dk-row{display:flex;gap:8px;margin:-6px 0 14px}
 .dk-btn{flex:1;padding:9px;border-radius:10px;border:1.5px solid #d8dce8;background:#fff;color:#6b7280;font-weight:700;font-size:12.5px;cursor:pointer}
@@ -968,6 +973,21 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   <div class="card-body" id="w-checklist"></div>
 </div>
 
+<!-- 종합 판정 (세탁기/건조기) — 직접 선택. 선택하지 않으면 체크리스트 결과로 자동(이상 있으면 수리 권장, 없으면 정상) -->
+<div class="card">
+  <div class="card-hdr"><div class="card-icon">⭐</div><div class="card-title">종합 판정</div></div>
+  <div class="card-body">
+    <div class="ev-row ev5" id="w-ev-row">
+      <div class="wev-btn ev-g" data-val="normal" onclick="setWasherEval(this)">🟢<br>정상</div>
+      <div class="wev-btn ev-y" data-val="preventive" onclick="setWasherEval(this)">🟡<br>예방정비<br>권장</div>
+      <div class="wev-btn ev-o" data-val="repair" onclick="setWasherEval(this)">🟠<br>수리 권장</div>
+      <div class="wev-btn ev-r" data-val="urgent" onclick="setWasherEval(this)">🔴<br>즉시수리<br>필요</div>
+      <div class="wev-btn ev-d" data-val="repaired" onclick="setWasherEval(this)">🛠️<br>수리<br>완료</div>
+    </div>
+    <div id="w-ev-hint" style="font-size:11.5px;color:#6b7280;line-height:1.5"></div>
+  </div>
+</div>
+
 <!-- 문제 사진 — 점검보고서 「문제 사진」과 같은 방식 (번호 · 메모 · 사진 묶음) -->
 <div class="card">
   <div class="card-hdr"><div class="card-icon">📸</div><div class="card-title">문제 사진</div></div>
@@ -1211,6 +1231,7 @@ var WASHER_CHECKLIST=[
   {key:'other',label:'기타 이상 유무',en:'Other abnormal conditions'}
 ];
 var washerChecklistResult={};
+var washerEval='';
 var testResults={power:true,noise:true};
 var installProductCount=0,materialCount=0,installLeakCount=0,coolTestCount=0,refrigTestCount=0;
 var shortUrls={ko:'',en:''};
@@ -4244,6 +4265,26 @@ window.setWasherType=function(type){
   });
 };
 
+// 종합 판정 직접 선택 — 같은 버튼을 다시 누르면 선택 해제(자동 판정으로 돌아감)
+window.setWasherEval=function(btn){
+  var v=btn&&btn.dataset?btn.dataset.val:(btn||'');
+  washerEval=(v&&washerEval!==v)?v:'';
+  paintWasherEval();
+};
+function washerAutoEval(){var b=0;WASHER_CHECKLIST.forEach(function(i){if(washerChecklistResult[i.key]===false)b++;});return {k:b?'repair':'normal',bad:b};}
+var W_EV_LBL={normal:'정상',preventive:'예방정비 권장',repair:'수리 권장',urgent:'즉시수리 필요',repaired:'수리 완료'};
+function paintWasherEval(){
+  var a=washerAutoEval();
+  document.querySelectorAll('#w-ev-row .wev-btn').forEach(function(b){
+    b.classList.toggle('on',b.dataset.val===washerEval);
+    b.classList.toggle('wsug',!washerEval&&b.dataset.val===a.k);
+  });
+  var h=document.getElementById('w-ev-hint');if(!h)return;
+  h.innerHTML=washerEval
+    ?'✋ 직접 선택: <b>'+W_EV_LBL[washerEval]+'</b> — 고객 보고서에 이 판정이 표시됩니다. (같은 버튼을 다시 누르면 자동으로 돌아갑니다)'
+    :'🤖 자동: 체크리스트 기준 <b>'+W_EV_LBL[a.k]+'</b>'+(a.bad?' (이상 '+a.bad+'개)':'')+' — 버튼을 누르면 직접 정할 수 있습니다.';
+}
+
 function renderWasherChecklist(){
   var c=document.getElementById('w-checklist');
   c.innerHTML='';
@@ -4260,13 +4301,14 @@ function renderWasherChecklist(){
       okBtn.className='leak-btn'+(ok?' leak-ok':'');okBtn.textContent='정상';
       badBtn.className='leak-btn'+(ok?'':' leak-bad');badBtn.textContent='이상';
     }
-    okBtn.onclick=function(){washerChecklistResult[item.key]=true;paint();};
-    badBtn.onclick=function(){washerChecklistResult[item.key]=false;paint();};
+    okBtn.onclick=function(){washerChecklistResult[item.key]=true;paint();paintWasherEval();};
+    badBtn.onclick=function(){washerChecklistResult[item.key]=false;paint();paintWasherEval();};
     paint();
     btnRow.appendChild(okBtn);btnRow.appendChild(badBtn);
     row.appendChild(lbl);row.appendChild(btnRow);
     c.appendChild(row);
   });
+  paintWasherEval();
 }
 
 function collectWasherData(){
@@ -4277,6 +4319,7 @@ function collectWasherData(){
     type:'washer',
     client:gv('w-client'),phone:gv('w-phone'),date:gv('w-date'),addr:gv('w-addr'),model:gv('w-model'),productType:washerType,
     checklist:checklist,
+    eval:washerEval,
     opinion:gv('w-opinion'),
     wProblems:(function(){
       var out=[];
@@ -4298,7 +4341,7 @@ function resetWasherForm(){
   document.getElementById('w-phone').value='+60 ';
   document.getElementById('w-date').value=new Date().toISOString().split('T')[0];
   setWasherType('top');
-  washerChecklistResult={};
+  washerChecklistResult={};washerEval='';
   renderWasherChecklist();
   photoData={};videoData={};if(window.updateVideoUI)updateVideoUI();
   updatePhotoBadges();
@@ -7011,6 +7054,7 @@ window.loadIntoWasherForm=function(data){
   setWasherType(data.productType||'top');
   washerChecklistResult={};
   (data.checklist||[]).forEach(function(c){washerChecklistResult[c.key]=c.result!=='bad';});
+  washerEval=(data.eval&&W_EV_LBL[data.eval])?data.eval:'';
   renderWasherChecklist();
   // 최종 의견 — 예전 보고서(고장 진단 3칸)는 내용을 한 칸으로 이어 붙여 불러옵니다
   gv2('w-opinion',(data.opinion&&String(data.opinion).trim())?data.opinion:[data.diag1,data.diag2,data.diag3].filter(function(x){return x&&String(x).trim();}).join('\n'));
@@ -8067,7 +8111,7 @@ setTimeout(function(){
   function tyLbl(r){if(r.type==='dispatch'&&r.dispatchKind==='repair')return '🔧 수리';return TY[tyOf(r)];}
   function pillsOf(r){
     var h='<span class="m26-pl ty">'+tyLbl(r)+'</span>';
-    if(r.type!=='install'&&r.type!=='washer'&&r.type!=='fabric'&&EV[r.eval])h+='<span class="m26-pl '+EV[r.eval][0]+'">'+EV[r.eval][1]+'</span>';
+    if(r.type!=='install'&&r.type!=='fabric'&&EV[r.eval])h+='<span class="m26-pl '+EV[r.eval][0]+'">'+EV[r.eval][1]+'</span>';
     if(r.invoice_id)h+='<span class="m26-pl iv">🧾 '+(IV[r.invoice_status]||'인보이스')+'</span>';
     return h;
   }
@@ -8401,6 +8445,7 @@ setTimeout(function(){
     var ty=TYL[t];try{if(t==='dispatch'&&dispatchKind==='repair')ty='출장수리';}catch(e){}
     var pill='';
     if(t==='inspect'){var ev='';try{ev=evalVal;}catch(e){}pill=ev&&EVN[ev]?'<span class="pl '+EVN[ev][1]+'">'+EVN[ev][0]+'</span>':'<span class="pl">종합 판정 선택 전</span>';}
+    else if(t==='washer'){var we='',wa='normal';try{we=washerEval;wa=washerAutoEval().k;}catch(e){}var wk=we||wa;pill=EVN[wk]?'<span class="pl '+EVN[wk][1]+'">'+EVN[wk][0]+(we?'':' (자동)')+'</span>':'';}
     else if(t==='dispatch'){var dd=true;try{dd=dispatchDone;}catch(e){}pill='<span class="pl '+(dd?'ok':'wn')+'">'+(dd?'✅ 처리 완료':'⏳ 재방문 필요')+'</span>';}
     var S;
     if(t==='inspect'||t==='dispatch'){
