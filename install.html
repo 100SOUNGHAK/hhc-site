@@ -476,7 +476,7 @@ body.tags .pg3 .ph em.ptag{font-size:10px;padding:1px 5px;right:4px;top:auto;bot
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}html{scroll-behavior:auto}.ac-air i{opacity:.5}}
 @media print{
   body{background:#fff}
-  #rp-top,#rp-nav,#rp-bar,.sh-ov,.sheet,.toast,.op-more,.uc-dots,.seg{display:none!important}
+  #rp-top,#rp-nav,#rp-bar,.sh-ov,.sheet,.toast,.op-more,.uc-dots,.uc-ar,.seg{display:none!important}
   .rp-card,.uc,.hero-card,.todo,.ck-row,.ph{break-inside:avoid;box-shadow:none!important;border:1px solid #e4e9f2}
   .uc-track{flex-wrap:wrap;overflow:visible}.uc{flex-basis:47%}
   .op-body.clip{max-height:none}.op-body.clip::after{display:none}
@@ -694,6 +694,25 @@ html:not(.pdfdoc) .uc-go{margin-top:8px;font-size:11.5px}
 html:not(.pdfdoc) .uc-go i{width:22px;height:22px;font-size:12px}
 html:not(.pdfdoc) .uc-dots{margin-top:-2px}
 @media (min-width:600px){html:not(.pdfdoc) .uc{flex-basis:200px}}
+
+/* 에어컨별 카드 — PC(마우스)에서 좌우 이동: 화살표 버튼 · 끌어서 넘기기 · 점 누르기 */
+.uc-wrap{position:relative}
+.uc-ar{display:none}
+@media (hover:hover) and (pointer:fine){
+  .uc-ar{display:flex;position:absolute;top:50%;z-index:3;width:38px;height:38px;margin-top:-27px;border-radius:50%;border:0;cursor:pointer;
+    align-items:center;justify-content:center;font-size:24px;font-weight:700;line-height:1;padding:0 0 3px;color:var(--n);
+    background:linear-gradient(180deg,#fff,#F3F6FB);box-shadow:inset 0 1px 0 #fff,0 0 0 1px rgba(14,35,80,.08),0 6px 14px -4px rgba(11,24,51,.35);
+    transition:opacity .2s,transform .15s var(--ease)}
+  .uc-ar.l{left:-8px}.uc-ar.r{right:-8px}
+  @media (min-width:600px){.uc-ar{top:62px;margin-top:0}.uc-ar.l{left:-28px}.uc-ar.r{right:-28px}}
+  .uc-ar:hover{transform:scale(1.08)}.uc-ar:active{transform:scale(.94)}
+  .uc-ar[hidden]{display:flex;opacity:0;pointer-events:none}
+  .uc-track{cursor:grab}
+  .uc-track.drag{cursor:grabbing;scroll-snap-type:none!important;scroll-behavior:auto}
+  .uc-track.drag .uc{pointer-events:none}
+  .uc-dots i{cursor:pointer;position:relative}
+  .uc-dots i::after{content:"";position:absolute;inset:-7px -3px}
+}
 
 /* 에어컨별 상세 — 전체 화면 */
 .sh-ov{display:none}
@@ -1449,13 +1468,39 @@ window.addEventListener('scroll',function(){requestAnimationFrame(spy);},{passiv
 window.addEventListener('resize',function(){spy();segPill();});
 function reduce(){return window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;}
 var animDone=false;
+/* PC(마우스)에서 에어컨별 카드 좌우 이동 — 휴대폰 손가락 넘기기는 그대로 */
+function ucPcNav(tr){
+  if(!tr||tr.dataset.pc)return;tr.dataset.pc='1';
+  var w=document.createElement('div');w.className='uc-wrap';tr.parentNode.insertBefore(w,tr);w.appendChild(tr);
+  var cards=function(){return [].slice.call(tr.querySelectorAll('.uc'));};
+  var padL=function(){return parseFloat(getComputedStyle(tr).scrollPaddingLeft)||0;};
+  var posOf=function(c){return c.getBoundingClientRect().left-tr.getBoundingClientRect().left+tr.scrollLeft-padL();};
+  var curIdx=function(){var cs=cards(),x=tr.scrollLeft,k=0;cs.forEach(function(c,i){if(posOf(c)<=x+8)k=i;});return k;};
+  var goTo=function(i){var cs=cards();if(!cs.length)return;i=Math.max(0,Math.min(cs.length-1,i));tr.scrollTo({left:Math.max(0,posOf(cs[i])),behavior:'smooth'});};
+  var mk=function(d){var b=document.createElement('button');b.type='button';b.className='uc-ar '+(d<0?'l':'r');
+    b.setAttribute('aria-label',d<0?(LANG==='ko'?'이전 에어컨':'Previous unit'):(LANG==='ko'?'다음 에어컨':'Next unit'));
+    b.innerHTML=d<0?'&#8249;':'&#8250;';b.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();goTo(curIdx()+d);});w.appendChild(b);return b;};
+  var bl=mk(-1),br=mk(1);
+  var upd=function(){var max=tr.scrollWidth-tr.clientWidth;bl.hidden=tr.scrollLeft<=4;br.hidden=tr.scrollLeft>=max-4;};
+  tr.addEventListener('scroll',function(){requestAnimationFrame(upd);},{passive:true});window.addEventListener('resize',upd);upd();
+  /* 점 누르면 그 에어컨으로 */
+  var dots=document.getElementById('ucd');
+  if(dots)[].forEach.call(dots.children,function(x,i){x.addEventListener('click',function(){var cs=cards();if(cs[i])tr.scrollTo({left:Math.max(0,posOf(cs[i])-(tr.clientWidth-cs[i].offsetWidth)/2+padL()),behavior:'smooth'});});});
+  /* 마우스로 끌어서 넘기기 (끌었을 때는 카드가 열리지 않음) */
+  var sx=0,sl=0,down=false,moved=false;
+  tr.addEventListener('mousedown',function(e){if(e.button!==0)return;down=true;moved=false;sx=e.clientX;sl=tr.scrollLeft;});
+  window.addEventListener('mousemove',function(e){if(!down)return;var dx=e.clientX-sx;if(!moved&&Math.abs(dx)>6){moved=true;tr.classList.add('drag');}if(moved){e.preventDefault();tr.scrollLeft=sl-dx;}});
+  window.addEventListener('mouseup',function(){if(!down)return;down=false;if(moved){var keep=tr.scrollLeft;tr.classList.remove('drag');tr.scrollLeft=keep;var cs=cards(),k=0,bd=1e9;cs.forEach(function(c,i){var d=Math.abs(posOf(c)-keep);if(d<bd){bd=d;k=i;}});goTo(k);}});
+  tr.addEventListener('click',function(e){if(moved){e.preventDefault();e.stopPropagation();moved=false;}},true);
+  tr.addEventListener('dragstart',function(e){e.preventDefault();});
+}
 function bindAfter(){
   /* 캐러셀 — 넘길 때 에어컨이 입체적으로 돌아갑니다 */
   var tr_=document.getElementById('uct');
   if(tr_&&!ST.pdf){var onScr=function(){var r=tr_.getBoundingClientRect(),cx=r.left+r.width/2,best=0,bd=1e9;
       [].forEach.call(tr_.querySelectorAll('.uc'),function(card,i){var cr=card.getBoundingClientRect(),off=(cr.left+cr.width/2-cx)/cr.width;var g=card.querySelector('.ac-g');if(g)g.style.setProperty('--ry',(-22+off*-34).toFixed(1)+'deg');if(Math.abs(off)<bd){bd=Math.abs(off);best=i;}});
       [].forEach.call(document.querySelectorAll('#ucd i'),function(x,i){x.classList.toggle('on',i===best);});};
-    tr_.addEventListener('scroll',function(){requestAnimationFrame(onScr);},{passive:true});onScr();}
+    tr_.addEventListener('scroll',function(){requestAnimationFrame(onScr);},{passive:true});onScr();ucPcNav(tr_);}
   /* 점수 · 막대 · 단계선 */
   var arc=document.getElementById('ringArc'),sn=document.getElementById('scoreN');
   if(arc&&!ST.pdf){if(animDone||reduce()){arc.style.transition='none';arc.style.strokeDashoffset=(351.9*(1-SCORE/100)).toFixed(1);sn.textContent=SCORE;}
