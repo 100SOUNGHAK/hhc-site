@@ -14,8 +14,13 @@
 //    GMAPS_SERVER_KEY   Routes API 전용 서버 키 (Secret)
 //    HHC_ORIGIN         출발지 — 주소 글자 또는 "위도,경도" (Secret)
 //  셋 중 하나라도 없으면 ready:false → 화면은 구역 요금표만 보여 줌
+//
+//  GET /api/travel?mem=1&c={고객문서ID}  → {ok, exempt, warranty, last}   (2026-11-16)
+//      · exempt: 패키지 회원(유효 계약 적립잔액 합계 RM500 초과) · warranty: 마지막 에어컨 서비스 30일 이내
+//      · 잔액 RM500 이하면 회원 면제 제외 (무상점검 제한 규정). 금액·계약 내용은 돌려주지 않음
+//      · 고객 문서 찾는 규칙은 /api/my 와 같음 (ca_links · ca_link · ca_off · 전화/이름)
 // ─────────────────────────────────────────────────────────────────────────────
-import { json, fail, rateLimited, originAllowed } from './_lib/fs.js';
+import { json, fail, rateLimited, originAllowed, getDoc, listAll, batchGet, nn, pn } from './_lib/fs.js';
 
 const ROUTES_URL = 'https://routes.googleapis.com/directions/v2:computeRoutes';
 const TRIM_M = 600;            // 출발지 주변 경로선 자르는 거리 (m)
@@ -24,6 +29,8 @@ export async function onRequestGet(context){
   const { request, env } = context;
   const q = new URL(request.url).searchParams;
   const ready = !!(env.GMAPS_BROWSER_KEY && env.GMAPS_SERVER_KEY && env.HHC_ORIGIN);
+
+  if (q.get('mem')) return memberExempt(request, env, (q.get('c') || '').trim());
 
   if (q.get('cfg')) {
     if (rateLimited(request, 'travel-cfg', 60)) return fail('too many requests', 429);
@@ -118,4 +125,73 @@ function trimStart(pts, m){
   const out = rest.filter((_, i) => i % step === 0);
   if (out[out.length - 1] !== rest[rest.length - 1]) out.push(rest[rest.length - 1]);
   return out.map(p => [+p[0].toFixed(5), +p[1].toFixed(5)]);
+}
+
+// 출장점검 면제 확인 (2026-11-16)
+//  · exempt  : 패키지 회원 — 유효 계약(status≠ended) 적립잔액 합계 RM500 초과 (my.html balCalc 과 같은 계산)
+//  · warranty: 마지막 에어컨 「세척」 인보이스(초안 제외) 날짜로부터 30일 이내 — 기본세척만 했으면 7일 이내
+//              출장점검·수리·냉매·설치·부품 품목은 세척이 아니므로 세지 않음. 「1회」 사용 여부는 보지 않음 (대표님 결정)
+//  · last·days: 기준 세척 날짜(YYYY-MM-DD)와 무상 기간(30 또는 7) — 안내 문구용. 금액·계약 내용은 돌려주지 않음
+const AC_RE = /에어컨|벽걸이|천정|천장|카세트|스탠드|매립|덕트|실외기|FCU|air[- ]?con|cassette|ceiling(?!\s*fan)|wall[- ]?mount|duct|outdoor/i;  // 고객관리 CARE_AC 와 같음
+const CLEAN_RE = /세척|청소|살균|스팀|약품|wash|clean|steam|overhaul|chemical|saniti/i;
+const NOT_CLEAN_RE = /출장점검|점검|수리|repair|inspect|냉매|refrigerant|가스|gas|설치|install|부품|part|진공|vacuum/i;
+const BASIC_RE = /기본\s*세척|basic/i;
+const WARRANTY_DAYS = 30, BASIC_DAYS = 7;
+async function memberExempt(request, env, CID){
+  if (!originAllowed(request)) return fail('forbidden', 403);
+  if (rateLimited(request, 'travel-mem', 20)) return fail('too many requests', 429);
+  const none = { ok: true, exempt: false, warranty: false, last: '' };
+  if (!CID || CID.length > 128) return json(none);
+  try {
+    const m = await getDoc(env, 'customers', CID);
+    if (!m) return json(none);
+    const keys = [nn(m.name)].concat((m.aliases || []).map(nn)).filter(Boolean);
+    const mp = pn(m.phone);
+    const MYK = ['m:' + CID, 'k:' + nn(m.name) + '#' + pn(m.phone)];
+    const has = (x, f) => (x && Array.isArray(x[f]) ? x[f] : []).some(v => MYK.indexOf(v) >= 0);
+    const hit = (name, phone, x) => {
+      if (has(x, 'ca_links')) return true;
+      if (x && x.ca_link) return MYK.indexOf(x.ca_link) >= 0;
+      if (has(x, 'ca_off')) return false;
+      return (mp && pn(phone) === mp) || (!!name && keys.includes(nn(name)));
+    };
+    const LNK = ['ca_link', 'ca_links', 'ca_off'];
+    const [lc, li] = await Promise.all([
+      listAll(env, 'contracts', 300, ['name', 'phone', 'status', ...LNK]),
+      listAll(env, 'invoices', 300, ['customer.name', 'customer.phone', 'status', 'date', ...LNK]),
+    ]);
+    // ① 패키지 회원
+    const cIds = lc.filter(x => x.status !== 'ended' && hit(x.name, x.phone, x)).map(x => x.__id);
+    let remain = 0;
+    if (cIds.length) (await batchGet(env, 'contracts', cIds)).forEach(c => {
+      const paid = parseFloat(c.amount_paid) || 0, bonus = (parseFloat(c.bonus_credit) || 0) + (parseFloat(c.special_bonus_credit) || 0);
+      let h = []; try { h = typeof c.usage_history === 'string' ? JSON.parse(c.usage_history || '[]') : (c.usage_history || []); } catch (e) { h = []; }
+      const used = h.reduce((a, u) => a + (parseFloat(u.amount) || 0), 0);
+      const disc = h.reduce((a, u) => a + (parseFloat(u.discount) || 0), 0);
+      const carry = h.reduce((a, u) => a + (parseFloat(u.carryover) || 0), 0);
+      remain += paid + bonus - used + disc + carry;
+    });
+    const exempt = cIds.length > 0 && remain > 500;
+    // ② 마지막 에어컨 서비스 30일 이내 (최근 인보이스부터 확인)
+    const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);   // 말레이시아 날짜
+    const from = new Date(Date.now() + 8 * 3600e3 - (WARRANTY_DAYS + 1) * 86400e3).toISOString().slice(0, 10);
+    const iIds = li.filter(x => x.status !== 'draft' && /^\d{4}-\d{2}-\d{2}/.test(String(x.date || '')) && String(x.date).slice(0, 10) >= from &&
+      hit(x.customer && x.customer.name, x.customer && x.customer.phone, x)).map(x => x.__id);
+    // 인보이스마다 무상 기간: 에어컨 세척 품목이 있으면 30일, 그 세척이 모두 「기본세척」이면 7일
+    let last = '', lim = 0;
+    if (iIds.length) (await batchGet(env, 'invoices', iIds)).forEach(x => {
+      let L = 0;
+      (x.items || []).forEach(it => {
+        const t = String((it && it.cat) || '') + ' ' + String((it && it.subcat) || '') + ' ' + String((it && it.name) || '');
+        if (!AC_RE.test(t) || !CLEAN_RE.test(t) || NOT_CLEAN_RE.test(t)) return;
+        L = Math.max(L, BASIC_RE.test(t) ? BASIC_DAYS : WARRANTY_DAYS);
+      });
+      const d = String(x.date || '').slice(0, 10);
+      const age = Math.round((Date.parse(today) - Date.parse(d)) / 86400e3);
+      if (L && age >= 0 && age <= L && d > last) { last = d; lim = L; }
+    });
+    return json({ ok: true, exempt, warranty: !!last, last, days: lim });
+  } catch (e) {
+    return json({ ok: false, exempt: false, warranty: false, last: '', days: 0 });
+  }
 }
