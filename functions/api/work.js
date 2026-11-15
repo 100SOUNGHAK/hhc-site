@@ -12,9 +12,14 @@
 //      18:00 ~ 18:59          → 준비 중 (mode:'soon', 일정 없음)
 //  · 일정 규칙은 「내일 일정 단체방 보내기」(sched-send.html)와 같다:
 //      확정 예약(bookings, status=confirmed) + 일정(schedules, 예약 미러·휴일·✅완료 제외)
-//  · 고객 전화번호 · 가격 · 내부 메모는 내려보내지 않는다. 시간 · 장소 · 동호수 · 품목 · 수량 · 주소만.
+//  · 고객 전화번호 · 가격 · 내부 메모는 내려보내지 않는다. 시간 · 장소 · 동호수 · 품목 · 수량 · 주소 · 위치만.
+//  · 📍 방문 위치 loc {lat,lng,name,addr,pid,src} (2026-11-16) — 직원 화면에서 누르면 구글맵 길 안내
+//      우선순위: ① work_edits.locs[작업ID] (관리자가 이 일정에 직접 등록 · {off:true} = 이 일정은 위치 안 씀)
+//               ② 예약에 저장된 위치 (bookings.customer_loc — 예약전환 때 고객 확정 위치가 담기거나 예약관리에서 등록)
+//                  · 예전에 전환된 예약은 requests.loc 를 converted_booking_id 로 찾아 씀
+//               ③ settings/work_places.map[콘도명 키] (관리자가 「같은 콘도명이면 다음에도」로 저장한 위치)
 // ─────────────────────────────────────────────────────────────────────────────
-import { getDoc, queryEq, json, fail, rateLimited } from './_lib/fs.js';
+import { getDoc, queryEq, queryIn, json, fail, rateLimited } from './_lib/fs.js';
 
 const MY_OFFSET = 8 * 60;   // UTC+8
 
@@ -117,6 +122,17 @@ function clean(j){
     unit: String(j.unit || ''), addr: String(j.addr || ''), items, lines, done: !!j.done };
 }
 
+// ── 📍 방문 위치 ──
+// 콘도명 → 저장 위치 키 (work-admin.html placeKey 와 같은 규칙)
+function placeKey(s){ return String(s || '').toUpperCase().replace(/[^A-Z0-9가-힣]/g, '').slice(0, 60); }
+function cleanLoc(l, src){
+  if (!l || typeof l !== 'object') return null;
+  const lat = Number(l.lat), lng = Number(l.lng);
+  if (!isFinite(lat) || !isFinite(lng) || lat < 0.8 || lat > 7.6 || lng < 99.5 || lng > 119.5) return null;
+  return { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6, name: String(l.name || '').slice(0, 120),
+    addr: String(l.addr || '').slice(0, 300), pid: String(l.pid || '').slice(0, 300), src };
+}
+
 // 설치용 manifest
 function manifest(k){
   const q = k ? '?k=' + encodeURIComponent(k) : '';
@@ -147,11 +163,23 @@ export async function onRequestGet(context){
     if (isAdmin && /^\d{4}-\d{2}-\d{2}$/.test(dq)) day = { date: dq, mode: 'pick' };
     if (day.mode === 'soon') return json({ ok: true, date: day.date, mode: 'soon', at: Date.now(), staff: who, jobs: [] });
 
-    const [sRows, bRows, ed] = await Promise.all([
+    const [sRows, bRows, ed, wp] = await Promise.all([
       queryEq(env, 'schedules', 'date', day.date, 200),
       queryEq(env, 'bookings', 'booking_date', day.date, 200),
-      getDoc(env, 'work_edits', day.date)
+      getDoc(env, 'work_edits', day.date),
+      getDoc(env, 'settings', 'work_places').catch(() => null)
     ]);
+    // 고객이 의뢰신청서에서 확정한 위치 — 이 날 확정 예약으로 전환된 의뢰만
+    const bkIds = bRows.filter(b => b && b.status === 'confirmed').map(b => b.__id);
+    const reqLoc = {};
+    for (const b of bRows){ const l = b && b.status === 'confirmed' && cleanLoc(b.customer_loc, b.customer_loc && b.customer_loc.from === 'request' ? 'req' : 'bk'); if (l) reqLoc['bk_' + b.__id] = l; }
+    for (const s of sRows){ const l = s && !s.booking_id && s.type === 'reserve' && cleanLoc(s.customer_loc, 'bk'); if (l) reqLoc[s.__id] = l; }
+    if (bkIds.some(id => !reqLoc['bk_' + id])){
+      try{
+        const rq = await queryIn(env, 'requests', 'converted_booking_id', bkIds.filter(id => !reqLoc['bk_' + id]), 50);
+        for (const r of rq){ const l = cleanLoc(r && r.loc, 'req'); if (l && !reqLoc['bk_' + r.converted_booking_id]) reqLoc['bk_' + r.converted_booking_id] = l; }
+      }catch(e){}
+    }
     const base = [];
     for (const b of bRows){ if (b && b.status === 'confirmed') base.push(fromBooking('bk_' + b.__id, b)); }
     for (const s of sRows){
@@ -162,9 +190,19 @@ export async function onRequestGet(context){
     }
     const edits = (ed && ed.edits && typeof ed.edits === 'object') ? ed.edits : {};
     const added = (ed && Array.isArray(ed.added)) ? ed.added.filter(x => x && x.id) : [];
+    const locs = (ed && ed.locs && typeof ed.locs === 'object') ? ed.locs : {};
+    const places = (wp && wp.map && typeof wp.map === 'object') ? wp.map : {};
     const bySort = (x, y) => (x.time_s || '99').localeCompare(y.time_s || '99');
     base.sort(bySort);
-    if (isAdmin && q.get('raw')) return json({ ok: true, date: day.date, mode: day.mode, at: Date.now(), base, edits, added });
+    if (isAdmin && q.get('raw')){
+      base.forEach(j => { if (reqLoc[j.id]) j.rloc = reqLoc[j.id]; });
+      return json({ ok: true, date: day.date, mode: day.mode, at: Date.now(), base, edits, added, locs, places });
+    }
+    const locOf = j => {
+      const own = locs[j.id];
+      if (own && own.off) return null;
+      return cleanLoc(own, 'job') || reqLoc[j.id] || cleanLoc(places[placeKey(j.place)], 'place') || null;
+    };
     const jobs = [];
     for (const j of base){
       const e = edits[j.id];
@@ -172,6 +210,7 @@ export async function onRequestGet(context){
       jobs.push(e ? clean(Object.assign({}, j, e, { id: j.id })) : j);
     }
     for (const x of added) jobs.push(clean(x));
+    jobs.forEach(j => { const l = locOf(j); if (l) j.loc = l; });
     jobs.sort(bySort);
     return json({ ok: true, date: day.date, mode: day.mode, at: Date.now(), staff: who, jobs });
   }catch(e){

@@ -13,6 +13,8 @@
    · 매일 밤 11시 캘린더 Worker → /api/notify(type:tomorrow) → 관리자 기기 알림 → 이 화면
    · 일정(schedules) + 확정 예약(bookings)에서 시간·장소·작업내용만 뽑아 영어로 정리
    · 고객 이름·전화번호는 넣지 않는다
+   · 🧭 길 안내 링크 (2026-11-16): 직원 일정표와 같은 위치를 일정마다 한 줄로 붙임
+       work_edits/{날짜}.locs > 예약 customer_loc > settings/work_places (같은 콘도명) — 순서는 functions/api/work.js 와 같음
    ───────────────────────────────────────────────────────────── */
 :root{--n:#0E2350;--n2:#16346E;--ink:#14192A;--ink2:#5A6478;--ink3:#98A1B4;--line:#E4E9F2;--soft:#F6F8FC;
 --ok:#0E9B63;--red:#DC2626;--gold:#C9A44C;--wa:#1FA855;
@@ -70,6 +72,7 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .ss-tag{display:inline-block;font-size:10px;font-weight:800;border-radius:6px;padding:1px 6px;margin-left:5px;vertical-align:1px;background:#E6F6F3;color:#0A6B60}
 .ss-tag.g{background:#EAF0FB;color:#1E4FA8}
 .ss-tag.h{background:#FDECEC;color:#A21C1C}
+.ss-tag.nv{background:#E8F0FE;color:#174EA6}
 .ss-row.off .ss-tm,.ss-row.off .ss-bd{opacity:.42}
 .ss-empty{padding:26px 16px 24px;text-align:center}
 .ss-empty b{display:block;font-size:15px;font-weight:800}
@@ -118,7 +121,7 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, getDocs, query, where } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, getDocs, query, where, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 const $=s=>document.querySelector(s);
 const MY_TZ_OFFSET=480;                      // 말레이시아 UTC+8
@@ -147,17 +150,21 @@ function setOff(o){try{const keep={};const lim=addDays(ymd(myNow()),-3);Object.k
 // ── 일정 불러오기 (스케줄 화면과 같은 규칙: 예약 미러 일정 제외, 확정 예약 포함) ──
 async function load(){
   $('#ss-list').innerHTML='<div class="ss-empty"><span>불러오는 중…</span></div>';
-  const [sSnap,bSnap]=await Promise.all([
+  const [sSnap,bSnap,eSnap,pSnap]=await Promise.all([
     getDocs(query(collection(db,'schedules'),where('date','==',DAY))),
-    getDocs(query(collection(db,'bookings'),where('booking_date','==',DAY)))
+    getDocs(query(collection(db,'bookings'),where('booking_date','==',DAY))),
+    getDoc(doc(db,'work_edits',DAY)).catch(()=>null),
+    getDoc(doc(db,'settings','work_places')).catch(()=>null)
   ]);
+  const LOCS=(eSnap&&eSnap.exists()&&eSnap.data().locs)||{},PLACES=(pSnap&&pSnap.exists()&&pSnap.data().map)||{};
   const arr=[];
   bSnap.forEach(d=>{const b=d.data();if(b.status!=='confirmed')return;
-    arr.push({id:'bk_'+d.id,time_s:bkTime(b.booking_time),time_e:'',title:b.booking_items||'',memo:b.booking_memo||'',addr:b.customer_address||'',kind:'booking'});});
+    arr.push({id:'bk_'+d.id,time_s:bkTime(b.booking_time),time_e:'',title:b.booking_items||'',memo:b.booking_memo||'',addr:b.customer_address||'',kind:'booking',
+      loc:ssLoc(LOCS['bk_'+d.id],b.customer_loc,PLACES[ssPlaceKey(b.customer_name)])});});
   sSnap.forEach(d=>{const s=d.data();if(s.booking_id)return;
     const title=String(s.title||'');
     arr.push({id:d.id,time_s:s.time_s||'',time_e:s.time_e||'',title,memo:s.memo||'',addr:s.address||'',kind:s.type||'',
-      done:/^✅/.test(title)});});
+      done:/^✅/.test(title),loc:ssLoc(LOCS[d.id],s.customer_loc,PLACES[ssPlaceKey(title.replace(/^✅\s*/,''))])});});
   arr.sort((a,b)=>(a.time_s||'99').localeCompare(b.time_s||'99'));
   ITEMS=arr;
   const off=getOff();
@@ -166,6 +173,17 @@ async function load(){
   await buildEnglish();
 }
 
+// ── 🧭 길 안내 위치 (직원 일정표와 같은 순서) ──
+function ssPlaceKey(s){
+  const t=String(s||'').replace(/(?:#|unit\s*|no\.?\s*)?\b([A-Z]{1,2}\d{0,2}[A-Z]?-\d{1,3}[A-Z]?(?:-\d{1,3}[A-Z]?)?|\d{1,3}[A-Z]?-\d{1,3}[A-Z]?(?:-\d{1,3}[A-Z]?)?)\b/i,' ');
+  return t.toUpperCase().replace(/[^A-Z0-9가-힣]/g,'').slice(0,60);
+}
+function ssLoc(own,bk,place){
+  if(own&&own.off)return null;
+  for(const l of [own,bk,place])if(l&&isFinite(l.lat)&&isFinite(l.lng))return {lat:+(+l.lat).toFixed(6),lng:+(+l.lng).toFixed(6)};
+  return null;
+}
+const ssNav=l=>'https://www.google.com/maps/dir/?api=1&destination='+l.lat+','+l.lng;
 function renderList(){
   const n=ITEMS.filter(i=>i.on).length;
   $('#ss-n').textContent=n;
@@ -173,7 +191,8 @@ function renderList(){
   if(!ITEMS.length){
     $('#ss-list').innerHTML='<div class="ss-empty"><b>이 날은 일정이 없습니다</b><span>보낼 내용이 없어요. 날짜를 바꾸려면 위 ‹ › 를 누르세요.</span></div>';return;}
   $('#ss-list').innerHTML=ITEMS.map(it=>{
-    const tag=it.kind==='booking'?'<span class="ss-tag">예약확정</span>':it.kind==='google'?'<span class="ss-tag g">구글</span>':it.kind==='holiday'?'<span class="ss-tag h">휴일</span>':'';
+    const nav=it.loc?'<span class="ss-tag nv">🧭 길안내</span>':'';
+    const tag=nav+(it.kind==='booking'?'<span class="ss-tag">예약확정</span>':it.kind==='google'?'<span class="ss-tag g">구글</span>':it.kind==='holiday'?'<span class="ss-tag h">휴일</span>':'');
     const sub=[it.addr?'📍 '+it.addr:'',it.memo].filter(Boolean).join('\n');
     return `<label class="ss-row${it.on?'':' off'}"><input type="checkbox" data-id="${esc(it.id)}"${it.on?' checked':''}>
       <div class="ss-tm">${esc(it.time_s||'—')}${it.time_e?'<small>~'+esc(it.time_e)+'</small>':''}</div>
@@ -234,6 +253,7 @@ function makeMsg(){
     out.push('*'+(k+1)+') '+t+'*');
     if(e.place)out.push('📍 '+e.place);
     if(e.work)out.push('🔧 '+e.work);
+    if(it.loc)out.push('🧭 '+ssNav(it.loc));
     out.push('');
   });
   out.push('Please be on time. Thank you!');

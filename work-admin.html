@@ -7,6 +7,7 @@
 <meta name="theme-color" content="#0E2350">
 <title>HHC 직원 일정표</title>
 <script type="module" src="/hhc-auth.js"></script>
+<script src="/hhc-loc.js" defer></script>
 <style>
 /* ─────────────────────────────────────────────────────────────
    work-admin.html — 직원 일정표 관리 (관리자 앱 「일정 → 직원 일정표」 탭)
@@ -16,6 +17,10 @@
        admin_key 는 이 화면 전용(날짜 지정·원본 조회) — 직원에게 보내지 않음.
    · 일정 편집: work_edits/{YYYY-MM-DD} { edits:{작업ID:{…}|{hidden:true}}, added:[…], updated_at, by }
        직원 화면에만 덧씌움. 예약관리·스케줄·구글 캘린더 원본은 바뀌지 않음.
+   · 📍 방문 위치 (2026-11-16): work_edits/{날짜}.locs{작업ID:{lat,lng,name,addr,pid}|{off:true}}
+       + settings/work_places.map{콘도명키:{…}} (「같은 콘도명이면 다음에도」) — 위치만 등록하면 「수정됨」이 되지 않음
+       고객이 의뢰신청서에서 확정한 위치(requests.loc)는 예약전환된 확정 예약에 자동으로 붙음 (functions/api/work.js)
+       검색·지도 창은 /hhc-loc.js (출장점검 비용 확인과 같은 구글 키)
    ───────────────────────────────────────────────────────────── */
 :root{--n:#0E2350;--n2:#16346E;--bl:#2563EB;--ink:#14192A;--ink2:#5A6478;--ink3:#98A1B4;--line:#E4E9F2;--soft:#F6F8FC;
 --ok:#0E9B63;--red:#DC2626;--gold:#C9A44C;--gold7:#8F6F28;--wa:#1FA855;
@@ -140,6 +145,25 @@ textarea.wa-in{min-height:84px;resize:vertical;line-height:1.5}
 .wa-pick .full{grid-column:1/-1}
 .wa-pick button{grid-column:1/-1;border:0;border-radius:11px;padding:12px;font-size:14.5px;font-weight:900;background:var(--n);color:#fff;cursor:pointer}
 .wa-mini{border:0;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:800;background:var(--soft);color:var(--n2);cursor:pointer}
+/* 📍 방문 위치 */
+.wa-lc-go{display:flex;align-items:center;gap:12px;width:100%;border:1.5px dashed #B9C6DD;background:#F8FAFE;border-radius:12px;padding:13px 14px;cursor:pointer;text-align:left;font-family:inherit;color:inherit}
+.wa-lc-go:active{transform:scale(.99)}
+.wa-lc-go i{flex:none;font-style:normal;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:20px;background:#fff;box-shadow:var(--e1)}
+.wa-lc-go b{display:block;font-size:15px;font-weight:900;color:var(--n)}
+.wa-lc-go span{display:block;font-size:12px;color:var(--ink2);line-height:1.45;margin-top:2px}
+.wa-lc{display:flex;gap:12px;align-items:flex-start}
+.wa-lc>i{flex:none;font-style:normal;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-size:19px;background:linear-gradient(160deg,#1A73E8,#174EA6);color:#fff;box-shadow:0 6px 14px -6px rgba(26,115,232,.6)}
+.wa-lc .n{font-size:15px;font-weight:900;line-height:1.35;word-break:break-word}
+.wa-lc .a{font-size:12.5px;color:var(--ink2);line-height:1.45;margin-top:2px;word-break:break-word}
+.wa-lc .s{display:inline-block;font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 7px;margin-top:6px}
+.wa-lc .s.job{background:#EAF0FB;color:#1E4FA8}.wa-lc .s.bk{background:#EAF0FB;color:#1E4FA8}.wa-lc .s.req{background:#E6F6EF;color:#0B7A4E}.wa-lc .s.place{background:#FBF5E6;color:var(--gold7)}
+.wa-lc-acts{display:flex;gap:6px;margin-top:11px;flex-wrap:wrap}
+.wa-lc-acts a,.wa-lc-acts button{flex:1 1 auto;text-align:center;text-decoration:none;border:0;border-radius:10px;padding:10px 8px;font-size:12.5px;font-weight:800;cursor:pointer;background:var(--soft);color:var(--n2);font-family:inherit;white-space:nowrap}
+.wa-lc-acts .x{color:var(--red);background:#FFF2F2}
+.wa-lc-rem{display:flex;align-items:center;gap:8px;margin-top:11px;padding-top:11px;border-top:1px solid #F0F3F8;font-size:12.5px;font-weight:700;color:var(--ink2);cursor:pointer}
+.wa-lc-rem input{width:18px;height:18px;accent-color:var(--n)}
+.wa-lc-off{font-size:12.5px;color:var(--ink3);line-height:1.5;margin-bottom:10px}
+.wa-pin{display:inline-block;font-size:11px;font-weight:800;color:#174EA6;background:#E8F0FE;border-radius:6px;padding:2px 6px;margin-left:6px;vertical-align:2px}
 .wa-danger{display:flex;flex-direction:column;gap:8px}
 .wa-danger button{border:0;border-radius:12px;padding:13px;font-size:14.5px;font-weight:900;cursor:pointer}
 .wa-danger .rv{background:#fff;color:var(--n2);box-shadow:var(--e1)}
@@ -232,6 +256,10 @@ textarea.wa-in{min-height:84px;resize:vertical;line-height:1.5}
         <div><label class="wa-l" for="f-un">동호수</label><input class="wa-in" id="f-un" maxlength="20" placeholder="예: A-23-05"></div>
         <div><label class="wa-l" for="f-ad">주소 (지도용)</label><input class="wa-in" id="f-ad" maxlength="200" placeholder="선택"></div>
       </div>
+    </div>
+    <div class="wa-f">
+      <h3>📍 방문 위치 (구글맵)</h3>
+      <div id="lc-box"></div>
     </div>
     <div class="wa-f">
       <h3>서비스 내역 <button type="button" class="wa-mini" id="it-open">＋ 품목 추가</button></h3>
@@ -378,7 +406,7 @@ async function loadDay(){
   try{
     const r=await fetch('/api/work?k='+encodeURIComponent(LINK.admin_key)+'&d='+DAY+'&raw=1',{cache:'no-store'});
     const j=await r.json(); if(!j.ok)throw new Error(j.error||r.status);
-    RAW={base:j.base||[],edits:j.edits||{},added:j.added||[]};
+    RAW={base:j.base||[],edits:j.edits||{},added:j.added||[],locs:j.locs||{},places:j.places||{}};
   }catch(e){RAW=null;$('#j-list').innerHTML='<div class="wa-empty"><b>불러오지 못했습니다</b>'+esc(e.message||'')+' — 새로고침 해 주세요.</div>';return;}
   renderJobs();renderPreview();
 }
@@ -398,8 +426,9 @@ function renderJobs(){
   $('#j-list').innerHTML=L.map(j=>{
     const bd=j._st==='ed'?'<span class="wa-bdg ed">수정됨</span>':j._st==='ad'?'<span class="wa-bdg ad">추가</span>':j._st==='hd'?'<span class="wa-bdg hd">숨김</span>':'';
     const sm=(j.items&&j.items.length)?itemsSummary(j.items):(Array.isArray(j.lines)?j.lines.join(' / '):'');
+    const pin=j._st!=='hd'&&effLoc(j)?'<span class="wa-pin">📍 길안내</span>':'';
     return `<button type="button" class="wa-row${j._st==='hd'?' hid':''}" data-id="${esc(j.id)}"><div class="wa-tm">${esc(j.time_s||'—')}${j.time_e?'<small>~'+esc(j.time_e)+'</small>':''}</div>
-      <div class="wa-bd"><div class="wa-pl">${esc(j.place||'—')}${j.unit?'<span class="wa-un">'+esc(j.unit)+'</span>':''}${bd}</div>${sm?'<div class="wa-sm">'+esc(sm)+'</div>':''}</div><span class="wa-chev">›</span></button>`;
+      <div class="wa-bd"><div class="wa-pl">${esc(j.place||'—')}${j.unit?'<span class="wa-un">'+esc(j.unit)+'</span>':''}${bd}${pin}</div>${sm?'<div class="wa-sm">'+esc(sm)+'</div>':''}</div><span class="wa-chev">›</span></button>`;
   }).join('');
 }
 $('#j-list').addEventListener('click',e=>{const r=e.target.closest('.wa-row');if(r)openEd(r.dataset.id);});
@@ -419,13 +448,14 @@ function openEd(id){
   const L=merged();const j=id?L.find(x=>x.id===id):null;
   if(id&&!j)return;
   const kind=!j?'new':j._st==='ad'?'added':'base';
-  ED={id:j?j.id:uid('add_'),kind,src:(j&&j._src)||null,st:j?j._st:'',items:JSON.parse(JSON.stringify((j&&j.items)||[]))};
+  ED={id:j?j.id:uid('add_'),kind,src:(j&&j._src)||null,st:j?j._st:'',items:JSON.parse(JSON.stringify((j&&j.items)||[])),
+    own:RAW.locs[j?j.id:'']?JSON.parse(JSON.stringify(RAW.locs[j.id])):null,rloc:(j&&j.rloc)||null,rem:false};
   $('#ed-t').textContent=kind==='new'?'일정 추가':'일정 수정';
   $('#ed-src').innerHTML=srcText(ED.src);
   $('#f-ts').value=(j&&j.time_s)||'';$('#f-te').value=(j&&j.time_e)||'';
   $('#f-pl').value=(j&&j.place&&j.place!=='—')?j.place:'';$('#f-un').value=(j&&j.unit)||'';$('#f-ad').value=(j&&j.addr)||'';
   $('#f-ln').value=(j&&Array.isArray(j.lines))?j.lines.join('\n'):'';
-  $('#it-pick').hidden=true;renderItems();
+  $('#it-pick').hidden=true;renderItems();renderLoc();
   let dz='';
   if(kind==='base'&&ED.st==='ed')dz+='<button type="button" class="rv" data-z="revert">↺ 원래대로 되돌리기</button>';
   if(kind==='base')dz+=ED.st==='hd'?'<button type="button" class="rv" data-z="show">직원 화면에 다시 보이기</button>':'<button type="button" class="hd" data-z="hide">직원 화면에서 숨기기</button>';
@@ -471,31 +501,92 @@ function formVal(){
     lines:$('#f-ln').value.split('\n').map(s=>s.trim()).filter(Boolean)};
 }
 async function saveEdits(msg){
-  await setDoc(doc(db,'work_edits',DAY),{edits:RAW.edits,added:RAW.added,date:DAY,updated_at:new Date().toISOString(),by:who()});
+  await setDoc(doc(db,'work_edits',DAY),{edits:RAW.edits,added:RAW.added,locs:RAW.locs,date:DAY,updated_at:new Date().toISOString(),by:who()});
   closeEd();renderJobs();renderPreview();toast(msg);
 }
 $('#ed-sv').onclick=async()=>{
   if(!ED)return;
   const v=formVal();
   if(!v.place){$('#f-pl').focus();toast('콘도명을 입력해 주세요');return;}
-  const snap=JSON.stringify([RAW.edits,RAW.added]),isNew=ED.kind==='new';
-  if(ED.kind==='base')RAW.edits[ED.id]=v;
+  const snap=JSON.stringify([RAW.edits,RAW.added,RAW.locs]),isNew=ED.kind==='new';
+  // 위치만 등록하고 나머지가 원본과 같으면 「수정됨」으로 고정하지 않음 (원본 예약이 바뀌면 그대로 따라감)
+  if(ED.kind==='base'){ if(sameAsSrc(v,ED.src)&&ED.st!=='hd')delete RAW.edits[ED.id]; else RAW.edits[ED.id]=v; }
   else if(ED.kind==='added'){const i=RAW.added.findIndex(x=>x.id===ED.id);RAW.added[i]={id:ED.id,...v};}
   else RAW.added.push({id:ED.id,...v});
-  try{await saveEdits(isNew?'✓ 일정을 추가했습니다':'✓ 저장했습니다 — 직원 화면에 바로 반영됩니다');}
-  catch(e){[RAW.edits,RAW.added]=JSON.parse(snap);toast('저장하지 못했습니다: '+(e.message||''));}
+  if(ED.own)RAW.locs[ED.id]=ED.own;else delete RAW.locs[ED.id];
+  const remember=ED.own&&!ED.own.off&&ED.rem&&placeKey(v.place)?{k:placeKey(v.place),l:ED.own}:null;
+  try{
+    if(remember){
+      await setDoc(doc(db,'settings','work_places'),{map:{[remember.k]:{...remember.l,place:v.place,updated_at:new Date().toISOString(),by:who()}},updated_at:new Date().toISOString()},{merge:true});
+      RAW.places[remember.k]=remember.l;
+    }
+    await saveEdits(isNew?'✓ 일정을 추가했습니다':'✓ 저장했습니다 — 직원 화면에 바로 반영됩니다');}
+  catch(e){[RAW.edits,RAW.added,RAW.locs]=JSON.parse(snap);toast('저장하지 못했습니다: '+(e.message||''));}
 };
 $('#ed-x').onclick=closeEd;
 $('#ed-danger').addEventListener('click',async e=>{const b=e.target.closest('[data-z]');if(!b||!ED)return;const z=b.dataset.z;
-  const snap=JSON.stringify([RAW.edits,RAW.added]);
+  const snap=JSON.stringify([RAW.edits,RAW.added,RAW.locs]);
   if(z==='revert'){if(!await ask('원래대로 되돌릴까요?','이 일정에서 고친 내용을 지우고 원본(예약·캘린더) 내용으로 보여 줍니다.','되돌리기'))return;delete RAW.edits[ED.id];}
   if(z==='hide'){if(!await ask('직원 화면에서 숨길까요?','직원 일정표에서만 빠집니다. 원본은 그대로 남습니다.','숨기기'))return;RAW.edits[ED.id]={hidden:true};}
   if(z==='show'){delete RAW.edits[ED.id];}
-  if(z==='del'){if(!await ask('이 일정을 삭제할까요?','직접 추가한 일정이 직원 화면에서 사라집니다.','삭제'))return;RAW.added=RAW.added.filter(x=>x.id!==ED.id);}
+  if(z==='del'){if(!await ask('이 일정을 삭제할까요?','직접 추가한 일정이 직원 화면에서 사라집니다.','삭제'))return;RAW.added=RAW.added.filter(x=>x.id!==ED.id);delete RAW.locs[ED.id];}
   try{await saveEdits(z==='revert'?'✓ 원래대로 되돌렸습니다':z==='hide'?'✓ 직원 화면에서 숨겼습니다':z==='show'?'✓ 다시 보이게 했습니다':'✓ 삭제했습니다');}
-  catch(err){[RAW.edits,RAW.added]=JSON.parse(snap);toast('저장하지 못했습니다: '+(err.message||''));}
+  catch(err){[RAW.edits,RAW.added,RAW.locs]=JSON.parse(snap);toast('저장하지 못했습니다: '+(err.message||''));}
 });
 $('#j-add').onclick=()=>openEd(null);
+
+// ── 📍 방문 위치 ──
+// 콘도명 → 저장 위치 키 (functions/api/work.js placeKey 와 같은 규칙)
+function placeKey(s){return String(s||'').toUpperCase().replace(/[^A-Z0-9가-힣]/g,'').slice(0,60);}
+// 직원 화면에 실제로 쓰일 위치: 이 일정에 등록 > 고객이 의뢰서에서 확정 > 같은 콘도명 저장 위치
+function effLoc(j,own){
+  const o=own!==undefined?own:RAW.locs[j.id];
+  if(o&&o.off)return null;
+  if(o&&isFinite(o.lat))return {...o,src:'job'};
+  if(j.rloc)return {...j.rloc,src:j.rloc.src==='bk'?'bk':'req'};
+  const p=RAW.places[placeKey(j.place)];
+  return p&&isFinite(p.lat)?{...p,src:'place'}:null;
+}
+function sameAsSrc(v,b){
+  if(!b)return false;
+  const n=o=>JSON.stringify([o.time_s||'',o.time_e||'',(o.place&&o.place!=='—')?o.place:'',String(o.unit||'').toUpperCase(),o.addr||'',
+    (o.items||[]).map(it=>[it.catId,it.grpKo||null,it.svcKo||null,!!it.free,it.free?String(it.text||''):'',+it.qty||1]),(Array.isArray(o.lines)?o.lines:[]).map(s=>String(s).trim()).filter(Boolean)]);
+  return n(v)===n(b);
+}
+const LC_SRC={job:'이 일정에 등록한 위치',req:'고객이 의뢰서에서 확정한 위치',bk:'예약관리에 등록된 위치',place:'같은 콘도명으로 저장해 둔 위치'};
+function renderLoc(){
+  if(!ED)return;
+  const place=$('#f-pl').value.trim();
+  const cur=effLoc({id:ED.id,rloc:ED.rloc,place},ED.own);
+  const k=placeKey(place),saved=RAW.places[k];
+  let h='';
+  if(cur){
+    h=`<div class="wa-lc"><i>🧭</i><div style="flex:1;min-width:0"><div class="n">${esc(cur.name||'지도에서 고른 위치')}</div>${cur.addr?'<div class="a">'+esc(cur.addr)+'</div>':''}<span class="s ${cur.src}">${LC_SRC[cur.src]}</span></div></div>
+      <div class="wa-lc-acts"><a href="${HHCLocUrl(cur)}" target="_blank" rel="noopener">지도에서 보기</a><button type="button" data-lc="pick">${cur.src==='job'?'다시 검색 · 변경':'이 일정만 다른 위치로'}</button>
+      <button type="button" class="x" data-lc="${cur.src==='job'?'clear':'off'}">${cur.src==='job'?'위치 지우기':'이 일정은 위치 안 씀'}</button></div>`;
+    if(cur.src==='job'&&k){
+      const same=saved&&Math.abs(saved.lat-cur.lat)<1e-6&&Math.abs(saved.lng-cur.lng)<1e-6;
+      h+=same?'<div class="wa-lc-rem" style="cursor:default">✓ 「'+esc(place)+'」 다음 일정에도 이 위치가 자동으로 쓰입니다</div>'
+        :`<label class="wa-lc-rem"><input type="checkbox" id="lc-rem"${ED.rem?' checked':''}> 같은 콘도명(${esc(place)})이면 다음에도 이 위치 자동 사용</label>`;
+    }
+  }else{
+    if(ED.own&&ED.own.off)h='<div class="wa-lc-off">이 일정은 위치를 쓰지 않도록 해 두었습니다. 직원 화면에는 주소 글자로만 지도가 열립니다. <button type="button" class="wa-mini" data-lc="clear">되돌리기</button></div>';
+    h+=`<button type="button" class="wa-lc-go" data-lc="pick"><i>🔍</i><div><b>구글맵에서 위치 검색 · 등록</b><span>등록하면 직원 일정표에서 누르는 즉시 구글맵 길 안내가 시작됩니다.</span></div></button>`;
+  }
+  $('#lc-box').innerHTML=h;
+  const rm=$('#lc-rem');if(rm)rm.onchange=()=>{ED.rem=rm.checked;};
+}
+function HHCLocUrl(l){return window.HHCLoc?HHCLoc.viewUrl(l):'https://www.google.com/maps/search/?api=1&query='+l.lat+','+l.lng;}
+$('#lc-box').addEventListener('click',async e=>{const b=e.target.closest('[data-lc]');if(!b||!ED)return;const a=b.dataset.lc;
+  if(a==='clear'){ED.own=null;renderLoc();return;}
+  if(a==='off'){ED.own={off:true};renderLoc();return;}
+  if(!window.HHCLoc){toast('지도를 불러오는 중입니다. 잠시 후 다시 눌러 주세요');return;}
+  const place=$('#f-pl').value.trim(),addr=$('#f-ad').value.trim();
+  const cur=effLoc({id:ED.id,rloc:ED.rloc,place},ED.own);
+  const r=await HHCLoc.pick({lang:'ko',who:'admin',query:addr&&!/^[A-Z]?\d/.test(addr)?(place?place+' ':'')+addr:place,initial:cur});
+  if(r){ED.own=r;ED.rem=true;renderLoc();toast('✓ 위치를 골랐습니다 — 「저장」을 눌러 주세요');}
+});
+$('#f-pl').addEventListener('change',()=>{if(ED)renderLoc();});
 
 // ── 미리보기 ──
 function renderPreview(){

@@ -201,13 +201,16 @@ function bkc(o){
   var en=!!o.en,nm=o.name||'';
   var wb=('wpBooking' in o)?o.wpBooking:o.booking;
   var bkcW=bkcWhen(o.booking,en);
+  // 📍 방문 위치 한 줄 (2026-11-16) — 예약에 위치(customer_loc)가 있을 때만. 고객이 잘못 찍은 위치를 방문 전에 바로잡도록
+  var lc=o.booking&&o.booking.customer_loc,lcN=lc&&isFinite(lc.lat)?String(lc.name||'').trim():'';
+  var bkcL=lcN?(en?'📍 Visit location: '+lcN+' (let us know if this is not correct)\n':'📍 방문 위치: '+lcN+' (다르면 알려 주세요)\n'):'';
   var tail='\n👉 '+o.link+'\n\n'+SIG;
   return en
-    ?(sHi(en,nm)+'\n✅ Your booking has been confirmed.\n'+(bkcW?'📅 '+bkcW+'\n':'')+
+    ?(sHi(en,nm)+'\n✅ Your booking has been confirmed.\n'+(bkcW?'📅 '+bkcW+'\n':'')+bkcL+
       '\n⚠️ Please complete the Work Permit (visit registration) before we arrive.\n'+
       '🪪 Work permit guide\n🔗 '+wpLink(wb,nm,true)+'\n'+
       '\nFull details are on your My Page.'+tail)
-    :(sHi(en,nm)+'\n✅ 예약이 확정되었습니다.\n'+(bkcW?'📅 '+bkcW+'\n':'')+
+    :(sHi(en,nm)+'\n✅ 예약이 확정되었습니다.\n'+(bkcW?'📅 '+bkcW+'\n':'')+bkcL+
       '\n⚠️ 방문 전 작업방문등록(Work Permit)을 꼭 완료해 주세요.\n'+
       '🪪 작업방문등록 안내장\n🔗 '+wpLink(wb,nm,false)+'\n'+
       '\n상세 정보는 마이페이지에서 확인하세요.'+tail);

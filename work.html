@@ -69,6 +69,25 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
 .wk-row{display:flex;align-items:center;gap:14px;width:100%;border:0;background:#fff;border-radius:14px;box-shadow:var(--card);text-align:left;
   font-family:inherit;color:inherit;padding:18px 14px 18px 16px;cursor:pointer;transition:transform .14s,background .16s}
 .wk-row:active{transform:scale(.985);background:#FBFCFE}
+/* 📍 길 안내 (2026-11-16) — 관리자가 위치를 등록했거나 고객이 의뢰서에서 확정한 일정 */
+.wk-it{position:relative}
+.wk-it.nv .wk-row{padding-right:88px}
+.wk-it.nv .wk-chev{display:none}
+.wk-go{position:absolute;right:12px;top:50%;transform:translateY(-50%);width:64px;height:64px;border-radius:16px;text-decoration:none;color:#fff;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:linear-gradient(160deg,#1A73E8,#174EA6);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 2px 4px rgba(23,78,166,.25),0 10px 18px -8px rgba(23,78,166,.6);transition:transform .14s}
+.wk-go:active{transform:translateY(-50%) scale(.94)}
+.wk-go svg{width:24px;height:24px;display:block}
+.wk-go span{font-size:11.5px;font-weight:800;letter-spacing:-.01em}
+.wk-nav{display:flex;align-items:center;gap:13px;text-decoration:none;color:#fff;border-radius:16px;padding:15px 16px;margin-bottom:16px;
+  background:linear-gradient(160deg,#1A73E8,#174EA6);box-shadow:inset 0 1px 0 rgba(255,255,255,.22),0 2px 4px rgba(23,78,166,.22),0 16px 28px -12px rgba(23,78,166,.65);transition:transform .14s}
+.wk-nav:active{transform:scale(.985)}
+.wk-nav i{flex:none;width:46px;height:46px;border-radius:13px;background:rgba(255,255,255,.16);display:grid;place-items:center}
+.wk-nav i svg{width:26px;height:26px}
+.wk-nav div{flex:1;min-width:0}
+.wk-nav b{display:block;font-size:18px;font-weight:800;letter-spacing:-.02em}
+.wk-nav small{display:block;font-size:12.5px;font-weight:600;color:rgba(255,255,255,.8);margin-top:3px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wk-nav em{flex:none;font-style:normal;font-size:13px;font-weight:800;color:#174EA6;background:#fff;border-radius:999px;padding:8px 13px}
 .wk-tm{flex:none;width:64px;font-variant-numeric:tabular-nums}
 .wk-tm b{display:block;font-size:21px;font-weight:800;letter-spacing:-.03em;color:var(--n);line-height:1.05}
 .wk-tm small{display:block;font-size:12px;font-weight:600;color:var(--ink3);margin-top:4px}
@@ -176,6 +195,7 @@ const T={
   ko:{title:'해피홈케어 작업일정',loading:'불러오는 중…',today:'오늘 작업',preview:'미리보기',tomorrow:'내일 작업',
       jobs:'건',units:'대',sub:'콘도명을 누르면 품목·서비스·수량이 보입니다.',
       svcs:'서비스 내역',total:'합계',work:'작업 내용',close:'목록으로',addr:'주소',map:'지도',
+      nav:'길 안내 시작',navS:'구글맵이 열리고 바로 안내합니다',go:'길안내',
       done:'완료',tbc:'시간 미정',refresh:'새로고침',upd:'업데이트',
       soonT:'준비 중입니다.',soonS:'(7시부터 확인 가능합니다.)',emptyT:'이 날은 잡힌 작업이 없습니다',emptyS:'일정이 추가되면 여기에 바로 나타납니다.\n저녁 7시부터는 다음 날 일정이 보입니다.',
       keyT:'링크가 맞지 않습니다',keyS:'관리자에게 새 작업일정 링크를 받아 다시 열어 주세요.',
@@ -184,6 +204,7 @@ const T={
   en:{title:'Work Schedule',loading:'Loading…',today:"Today's jobs",preview:'Preview',tomorrow:"Tomorrow's jobs",
       jobs:'jobs',job:'job',units:'units',sub:'Tap a condo to see items, service and quantity.',
       svcs:'Services',total:'Total',work:'Job details',close:'Back',addr:'Address',map:'Map',
+      nav:'Start navigation',navS:'Opens Google Maps with directions',go:'Go',
       done:'Done',tbc:'TBC',refresh:'Refresh',upd:'Updated',
       soonT:'Coming Soon',soonS:'(Available from 7:00 PM)',emptyT:'No jobs on this day',emptyS:'New jobs will appear here automatically.\nFrom 7 PM, the next day\'s schedule is shown.',
       keyT:'This link is not valid',keyS:'Please ask the office for a new schedule link.',
@@ -206,6 +227,10 @@ const EN_W={'벽걸이형':'Wall-mounted','매립형 (덕트)':'Ducted','천정�
   '전등교체':'Light replacement','콘센트 교체':'Socket replacement','기타서비스':'Other service'};
 
 const $=s=>document.querySelector(s);
+// 📍 구글맵 길 안내 — 휴대폰에서는 구글맵 앱이 열리고 바로 안내 시작 (hhc-loc.js navUrl 과 같은 주소)
+const NAV_SVG='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.2 20.5 20.6c.2.4-.3.9-.7.6L12 16.9l-7.8 4.3c-.4.3-.9-.2-.7-.6Z"/></svg>';
+function navUrl(l){return 'https://www.google.com/maps/dir/?api=1&destination='+l.lat+','+l.lng+(l.pid?'&destination_place_id='+encodeURIComponent(l.pid):'')+'&travelmode=driving&dir_action=navigate';}
+function viewUrl(l){return 'https://www.google.com/maps/search/?api=1&query='+l.lat+','+l.lng+(l.pid?'&query_place_id='+encodeURIComponent(l.pid):'');}
 const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 let L=(()=>{try{return localStorage.getItem('hhc_work_lang')||'en';}catch(e){return 'en';}})();
 let DATA=null,STATE='loading';
@@ -261,9 +286,10 @@ function render(){
   if(!jobs.length){$('#wk-main').innerHTML=`<div class="wk-empty"><b>${t.emptyT}</b><span>${esc(t.emptyS).replace(/\n/g,'<br>')}</span></div>`;return;}
   $('#wk-main').innerHTML='<div class="wk-list">'+jobs.map(j=>{
     const tm=j.time_s?`<b>${esc(j.time_s)}</b>${j.time_e?'<small>~ '+esc(j.time_e)+'</small>':''}`:`<span class="tbc">${t.tbc}</span>`;
-    return `<button class="wk-row${j.done?' done':''}" data-id="${esc(j.id)}"><div class="wk-tm">${tm}</div>
+    const nv=j.loc&&isFinite(j.loc.lat);
+    return `<div class="wk-it${nv?' nv':''}"><button class="wk-row${j.done?' done':''}" data-id="${esc(j.id)}"><div class="wk-tm">${tm}</div>
       <div class="wk-bd"><div class="wk-place">${esc(placeOf(j))}${j.done?'<span class="wk-done">'+t.done+'</span>':''}</div>${j.unit?'<span class="wk-unit">'+esc(j.unit)+'</span>':''}</div>
-      <span class="wk-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>`;
+      <span class="wk-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></span></button>${nv?`<a class="wk-go" href="${navUrl(j.loc)}" target="_blank" rel="noopener" aria-label="${t.nav}">${NAV_SVG}<span>${t.go}</span></a>`:''}</div>`;
   }).join('')+'</div>';
   if(OPENID)openSheet(OPENID);
 }
@@ -279,6 +305,8 @@ function openSheet(id){
   $('#wk-sh-un').innerHTML=j.unit?'<span class="wk-unit">'+esc(j.unit)+'</span>':'';
   $('#wk-x-t').textContent=t.close;
   let det='';
+  const lc=j.loc&&isFinite(j.loc.lat)?j.loc:null;
+  if(lc)det+=`<a class="wk-nav" href="${navUrl(lc)}" target="_blank" rel="noopener"><i>${NAV_SVG}</i><div><b>${t.nav}</b><small>${esc(lc.name||t.navS)}</small></div><em>Google Maps</em></a>`;
   if(j.items&&j.items.length){
     const tot=j.items.reduce((a,x)=>a+(+x.qty||1),0),n=j.items.length,en=L==='en';
     const u=q=>en?' unit'+(q===1?'':'s'):'대';
@@ -289,7 +317,8 @@ function openSheet(id){
   }
   const lines=j.lines;
   if(lines&&lines.length)det+=`<div class="wk-lbl">${t.work}</div><div class="wk-txt">${esc(lines.join('\n'))}</div>`;
-  if(j.addr)det+=`<div class="wk-lbl">${t.addr}</div><a class="wk-addr" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(j.addr)}" target="_blank" rel="noopener"><span>${esc(j.addr)}</span><em>${t.map}</em></a>`;
+  const ad=j.addr||(lc&&lc.addr)||'';
+  if(ad)det+=`<div class="wk-lbl">${t.addr}</div><a class="wk-addr" href="${lc?viewUrl(lc):'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(ad)}" target="_blank" rel="noopener"><span>${esc(ad)}</span><em>${t.map}</em></a>`;
   $('#wk-sh-bd').innerHTML=det||'<div class="wk-txt">—</div>';
   $('#wk-sh-bd').scrollTop=0;
   const ov=$('#wk-ov');if(!ov.classList.contains('on')){ov.classList.add('on');ov.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';

@@ -876,11 +876,30 @@ html.sa body:has(.app-body.active){padding-left:200px}
   window.addEventListener('resize',fit);document.addEventListener('DOMContentLoaded',fit);setInterval(fit,1500);fit();
 })();
 </script>
+<style>
+/* 📍 방문 위치 (bkl-) */
+.bkl-go{display:flex;align-items:center;gap:11px;width:100%;text-align:left;font-family:inherit;color:inherit;cursor:pointer;border:1.5px dashed #B9C6DD;background:#F8FAFE;border-radius:10px;padding:10px 12px}
+.bkl-go:active{transform:scale(.99)}
+.bkl-go i{flex:none;font-style:normal;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:17px;background:#fff;box-shadow:0 1px 2px rgba(11,24,51,.09),0 5px 12px -3px rgba(11,24,51,.14)}
+.bkl-go b{display:block;font-size:13.5px;font-weight:800;color:#0E2350}
+.bkl-go span{display:block;font-size:11.5px;color:#5A6478;line-height:1.45;margin-top:1px}
+.bkl-ok{display:flex;gap:10px;align-items:flex-start;border:1.5px solid #B9D3F5;background:#F3F8FF;border-radius:10px;padding:10px 12px}
+.bkl-ok>i{flex:none;font-style:normal;width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:16px;background:linear-gradient(160deg,#1A73E8,#174EA6);color:#fff}
+.bkl-ok .n{font-size:14px;font-weight:800;color:#14192A;line-height:1.35;word-break:break-word}
+.bkl-ok .a{font-size:11.5px;color:#5A6478;line-height:1.45;margin-top:1px;word-break:break-word}
+.bkl-ok .s{display:inline-block;font-size:10.5px;font-weight:800;border-radius:6px;padding:1px 7px;margin-top:5px}
+.bkl-ok .s.request{background:#E6F6EF;color:#0B7A4E}.bkl-ok .s.admin{background:#EAF0FB;color:#1E4FA8}
+.bkl-ok .k{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.bkl-ok .k a,.bkl-ok .k button{border:0;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;background:#fff;color:#16346E;text-decoration:none;box-shadow:0 1px 2px rgba(11,24,51,.08)}
+.bkl-ok .k .x{color:#B42318}
+.bkl-pin{color:#174EA6;font-weight:700;text-decoration:none}
+</style>
 <script type="module" src="/hhc-auth.js"></script>
 </head>
 <body>
 <script>if(self===top)document.documentElement.classList.add('sa');</script>
 <script src="/hhc-sendmsg.js"></script>
+<script src="/hhc-loc.js" defer></script>
 <!-- ══ 좌측 고정 메뉴 (독립 실행 + 로그인 후에만 표시 — 관리자 허브 안에서는 자동 숨김) ══ -->
 <aside id="sb">
   <div class="bd"><span class="lg"><svg class="hhc-mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g fill="currentColor"><rect x="15" y="14" width="19" height="74" rx="3.5"/><rect x="66" y="14" width="19" height="74" rx="3.5"/><path d="M50 28 85 51v16L50 43 15 67V51Z"/></g></svg></span><div><b>Happy Home Care</b><span>예약 관리 시스템</span></div></div>
@@ -987,6 +1006,12 @@ html.sa body:has(.app-body.active){padding-left:200px}
           <div class="field" style="margin-top:10px">
             <label class="field-label">주소</label>
             <input id="c-address" type="text" placeholder="주소 입력" class="field-input sm">
+          </div>
+          <!-- 📍 방문 위치 (2026-11-16) — bookings.customer_loc {lat,lng,name,addr,pid,from:'request'|'admin'}
+               의뢰서에서 고객이 확정한 위치는 「예약전환」 때 자동으로 담김 · 직원 일정표 길 안내 · 확정 메시지 한 줄에 사용 -->
+          <div class="field" style="margin-top:10px">
+            <label class="field-label">📍 방문 위치 (구글맵 · 선택)</label>
+            <div id="c-loc"></div>
           </div>
           <div class="field" style="margin-top:10px">
             <label class="field-label">메모</label>
@@ -2185,6 +2210,8 @@ function applyTransferData(){
     // 언어 설정
     if(d.lang==='en'&&langEn){langEn.checked=true;if(langKo)langKo.checked=false;}
     window._transferFromRequestId=d.fromRequest||null;
+    // 📍 고객이 의뢰서에서 확정한 방문 위치 → 이 예약에 함께 담기
+    window._bkLoc=(d.loc&&isFinite(d.loc.lat))?{...d.loc,from:'request'}:null;bkLocRender();
     // 의뢰 품목 원본 구조 보관 → 저장 시 예약 문서에 실어서 고객용 예약신청 화면의 품목 피커에 그대로 반영
     window._transferItemsStruct=d.items_struct||'';
     localStorage.removeItem('hhc_transfer_booking');
@@ -2630,6 +2657,7 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
       booking_items:bItems,
       booking_items_struct:JSON.stringify(pkItemsStructOf(_nb)),
       booking_memo:bMemo,
+      customer_loc:window._bkLoc||null,   // 📍 방문 위치 (없으면 null)
     };
     if(!existing)data.created_at=new Date().toISOString();
     // 의뢰요청서 품목을 예약신청 화면(고객용)의 피커에 그대로 반영 — 값이 있을 때만 실어서
@@ -2709,7 +2737,7 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
     if(instantConfirm){
       t.textContent='✓ 즉시 확정 등록 완료! 예약목록·캘린더에 바로 반영되었습니다';
       // 예약전환으로 들어온 경우엔 창을 닫아도 고객관리로 넘어가지 않고 예약목록에 머뭅니다
-      setTimeout(()=>showConfirmMsgModal({__id:docId,customer_name:name,customer_address:address,customer_phone:phone,customer_lang:lang,booking_date:bDate,booking_time:bTime,booking_items:bItems},_fromReq?false:undefined),600);
+      setTimeout(()=>showConfirmMsgModal({__id:docId,customer_name:name,customer_address:address,customer_phone:phone,customer_lang:lang,booking_date:bDate,booking_time:bTime,booking_items:bItems,customer_loc:data.customer_loc},_fromReq?false:undefined),600);
     }else{
       t.textContent='✓ 등록 완료! 고객 링크가 생성되었습니다';
     }
@@ -2870,7 +2898,7 @@ function renderList(){
   const edBtn=b=>`<button class="nx-ib" onclick="startEditList('${b.__id}')" title="수정">✏️</button>`;
   const detail=b=>{
     const dates=(()=>{try{return b.schedule_dates?JSON.parse(b.schedule_dates):[];}catch(e){return[];}})();
-    return `<div class="nx-det"><span class="k">연락처</span>${tel(b)}${b.customer_address?`<br><span class="k">주소</span>${escHtml(b.customer_address)}`:''}${dates.length?`<br><span class="k">후보일</span>${dates.map(mdShort).join(', ')}`:''}${b.customer_memo?`<br><span class="k">메모</span>${escHtml(b.customer_memo)}`:''}</div>`;
+    return `<div class="nx-det"><span class="k">연락처</span>${tel(b)}${b.customer_address?`<br><span class="k">주소</span>${escHtml(b.customer_address)}`:''}${bkLocLink(b)?`<br><span class="k">위치</span>${bkLocLink(b)}`:''}${dates.length?`<br><span class="k">후보일</span>${dates.map(mdShort).join(', ')}`:''}${b.customer_memo?`<br><span class="k">메모</span>${escHtml(b.customer_memo)}`:''}</div>`;
   };
   const editOf=b=>{
     {
@@ -2946,6 +2974,7 @@ function renderList(){
     if(b.booking_memo)rows.push(`<span class="k">요청</span>${escHtml(b.booking_memo)}`);
     if(b.customer_memo)rows.push(`<span class="k">메모</span>${escHtml(b.customer_memo)}`);
     if(b.customer_address)rows.push(`<span class="k">주소</span>${escHtml(b.customer_address)}`);
+    if(bkLocLink(b))rows.push(`<span class="k">위치</span>${bkLocLink(b)}`);
     rows.push(`<span class="k">연락처</span>${tel(b)}`);
     if(dates.length&&b.status!=='confirmed')rows.push(`<span class="k">후보일</span>${dates.map(mdShort).join(', ')}`);
     return `<div class="nx-dl">${rows.join('<br>')}</div>`;
@@ -3639,6 +3668,7 @@ window.editBooking=function(id){
   document.getElementById('c-name').value=b.customer_name||'';
   document.getElementById('c-phone').value=b.customer_phone||'+60 ';
   document.getElementById('c-address').value=b.customer_address||'';
+  window._bkLoc=(b.customer_loc&&isFinite(b.customer_loc.lat))?{...b.customer_loc}:null;bkLocRender();
   document.getElementById('c-memo').value=b.customer_memo||'';
   document.getElementById('b-date').value=b.booking_date||'';
   document.getElementById('b-time').value=b.booking_time||'';
@@ -4117,6 +4147,28 @@ window.sendVisitReminder=function(scheduleItemId){
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
 };
 
+// ── 📍 방문 위치 (2026-11-16) — 등록 창은 /hhc-loc.js (직원 일정표·의뢰서와 같은 구글맵 창) ──
+window._bkLoc=null;
+function bkLocUrl(l){return 'https://www.google.com/maps/search/?api=1&query='+l.lat+','+l.lng+(l.pid?'&query_place_id='+encodeURIComponent(l.pid):'');}
+function bkLocLink(b){const l=b&&b.customer_loc;if(!l||!isFinite(l.lat))return '';
+  return `<a class="bkl-pin" href="${bkLocUrl(l)}" target="_blank" rel="noopener">📍 ${escHtml(l.name||'지도 보기')}</a>${l.from==='request'?' <span style="color:var(--text3);font-size:11px">고객 확정</span>':''}`;}
+function bkLocRender(){
+  const box=document.getElementById('c-loc');if(!box)return;const l=window._bkLoc;
+  box.innerHTML=l?`<div class="bkl-ok"><i>🧭</i><div style="flex:1;min-width:0"><div class="n">${escHtml(l.name||'지도에서 고른 위치')}</div>${l.addr?'<div class="a">'+escHtml(l.addr)+'</div>':''}
+      <span class="s ${l.from==='request'?'request':'admin'}">${l.from==='request'?'고객이 의뢰서에서 확정한 위치':'예약관리에서 등록한 위치'}</span>
+      <div class="k"><a href="${bkLocUrl(l)}" target="_blank" rel="noopener">지도에서 보기</a><button type="button" data-l="pick">다시 검색 · 변경</button><button type="button" class="x" data-l="del">지우기</button></div></div></div>`
+    :`<button type="button" class="bkl-go" data-l="pick"><i>🔍</i><div><b>구글맵에서 위치 검색 · 등록</b><span>등록하면 직원 일정표 길 안내와 확정 메시지에 자동으로 쓰입니다.</span></div></button>`;
+}
+document.getElementById('c-loc').addEventListener('click',async e=>{
+  const b=e.target.closest('[data-l]');if(!b)return;
+  if(b.dataset.l==='del'){window._bkLoc=null;bkLocRender();return;}
+  if(!window.HHCLoc){showToast('지도를 불러오는 중입니다. 잠시 후 다시 눌러 주세요');return;}
+  const nm=String(document.getElementById('c-name').value||'').replace(/\s*[#(]?\s*[A-Z]{0,2}\d{0,2}[A-Z]?-\d{1,3}[A-Z]?(?:-\d{1,3}[A-Z]?)?\)?\s*$/i,'').trim();
+  const r=await HHCLoc.pick({lang:'ko',who:'admin',query:nm,initial:window._bkLoc});
+  if(r){window._bkLoc={...r,from:'admin'};bkLocRender();showToast('✓ 위치를 골랐습니다 — 저장을 눌러 주세요');}
+});
+bkLocRender();
+
 // 확정 안내 메시지 모달
 //  · 이 모달을 닫으면(닫기·배경 클릭·👤 버튼) 총괄 고객관리의 해당 고객 상세가 자동으로 열립니다.
 //  · 안내 메시지 발송 단계를 건너뛰지 않도록, 확정 직후 바로가 아니라 모달을 닫을 때 이동합니다.
@@ -4309,6 +4361,7 @@ document.getElementById('btn-save').addEventListener('click',()=>{},true);
 function resetNewForm(){
   currentBookingId=null;selectedDates=[];scheduleMap={};currentDateForTime='';
   ['c-name','c-address','c-memo','b-date','b-time','b-items','b-memo'].forEach(id=>document.getElementById(id).value='');
+  window._bkLoc=null;bkLocRender();
   document.getElementById('c-phone').value='+60 ';
   pkSetArr('new',[]);renderEditPicked();
   document.getElementById('b-instant-confirm').checked=false;

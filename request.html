@@ -385,6 +385,25 @@ body{background:var(--rq-soft)}
 .calc-box{border-radius:14px;margin-bottom:12px;box-shadow:var(--rq-e1)}
 .calc-teaser{padding:11px 13px!important;gap:10px!important}
 .calc-teaser em{display:none!important}
+/* 📍 방문 위치 확인 (선택) */
+.rql{margin-top:2px;padding-top:14px;border-top:1px dashed var(--rq-line)}
+.rql-h{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:var(--rq-ink3);letter-spacing:.04em;margin-bottom:8px}
+.rql-h em{font-style:normal;font-size:10.5px;font-weight:800;letter-spacing:0;color:var(--rq-ink2);background:var(--rq-soft);border:1px solid var(--rq-line);border-radius:6px;padding:1px 6px}
+.rql-go{display:flex;align-items:center;gap:12px;width:100%;text-align:left;font-family:inherit;color:inherit;cursor:pointer;border:1.5px solid rgba(201,164,76,.55);
+  background:linear-gradient(180deg,#FFFDF7,#FBF5E6);border-radius:14px;padding:12px 13px;box-shadow:0 1px 2px rgba(143,111,40,.08),0 8px 16px -10px rgba(143,111,40,.35);transition:transform .14s}
+.rql-go:active{transform:scale(.985)}
+.rql-go i{flex:none;font-style:normal;width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:20px;background:#fff;box-shadow:var(--rq-e1)}
+.rql-go b{display:block;font-size:15px;font-weight:800;color:var(--rq-n);letter-spacing:-.02em}
+.rql-go span{display:block;font-size:12.5px;color:#6B5420;line-height:1.45;margin-top:2px}
+.rql-go .ar{flex:none;font-size:18px;font-weight:800;color:#8F6F28}
+.rql-ok{display:flex;gap:11px;align-items:flex-start;background:#F0FAF6;border:1.5px solid #9FD8CF;border-radius:14px;padding:12px 13px}
+.rql-ok>i{flex:none;font-style:normal;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--rq-tl2);color:#fff;font-size:17px;font-weight:900}
+.rql-ok .t{font-size:12px;font-weight:800;color:var(--rq-tl)}
+.rql-ok .n{font-size:15px;font-weight:800;color:var(--rq-ink);line-height:1.35;margin-top:2px;word-break:break-word}
+.rql-ok .a{font-size:12.5px;color:var(--rq-ink2);line-height:1.45;margin-top:2px;word-break:break-word}
+.rql-ok .k{display:flex;gap:6px;margin-top:9px}
+.rql-ok .k button{border:0;border-radius:9px;padding:7px 12px;font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit;background:#fff;color:var(--rq-n2);box-shadow:var(--rq-e1)}
+.rql-ok .k .x{color:#B42318}
 /* 진행 막대 */
 .rq-stp{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:2px 2px 12px}
 .rq-stp div{font-size:12px;font-weight:700;color:var(--rq-ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -598,6 +617,8 @@ html.rq-insp #card-items,html.rq-insp #calcBox,html.rq-insp #rpq-fee-btn{display
           <div class="err-msg" id="err-phone">필수 입력 항목입니다</div>
         </div>
         </div>
+        <!-- 📍 방문 위치 확인 (선택) — 2026-11-16 · 지도 창은 /hhc-loc.js -->
+        <div class="rql" id="rq-loc"></div>
       </div>
     </div>
 
@@ -1269,6 +1290,7 @@ function applyLang(){
   setPrefillNote();   // 고객정보 자동 입력 안내 칩도 언어 전환 (선언 호이스팅으로 안전)
   try{rpqLang();}catch(_e){}
   try{rqProgress();rqChips();}catch(_e){}
+  try{rqLocRender();}catch(_e){}
 }
 
 document.querySelectorAll('.lang-btn').forEach(btn=>{
@@ -2179,6 +2201,7 @@ $('btn-submit').addEventListener('click',async()=>{
         items:JSON.stringify(itemsForSave),
         items_struct:JSON.stringify(itemsStruct),
         ref:window.HHC_REFK||'',   // 🤝 추천 코드 (서버가 추천인을 찾아 저장)
+        loc:window.__rqLoc||null,   // 📍 고객이 지도에서 확정한 방문 위치 (선택 · 없으면 null)
         status:'pending',
         submitted_at:new Date().toISOString(),
       });
@@ -2193,7 +2216,7 @@ $('btn-submit').addEventListener('click',async()=>{
       booking_date:RQ_INSP?'[출장점검/진단 요청 / Inspection Request]':'[서비스 의뢰 요청 / Service Request]',
       booking_time:'',
       booking_items:itemLines,
-      booking_memo:remarks||'—',
+      booking_memo:(remarks||'—')+(window.__rqLoc?'\n📍 '+(window.__rqLoc.name||'')+' https://www.google.com/maps/search/?api=1&query='+window.__rqLoc.lat+','+window.__rqLoc.lng:''),
       submitted_at:new Date().toLocaleString('ko-KR'),
     },'O99J6X4SGYUPMfGQy');
   }catch(e){console.warn('Email send failed:',e);}
@@ -2420,5 +2443,32 @@ function setPrefillNote(){
 .rq-ref .s{font-size:12px;font-weight:700;color:#8f6f28;margin-top:2px;word-break:keep-all}
 .rq-ref .x{font-size:11px;font-weight:700;color:#98A1B4;margin-top:3px;word-break:keep-all}
 </style>
+<!-- 📍 방문 위치 확인 (선택 항목 · 2026-11-16) — 확정하면 접수 때 requests.loc 로 저장 → 예약전환 후 직원 일정표 길 안내에 자동 사용 -->
+<script src="/hhc-loc.js"></script>
+<script>
+window.__rqLoc=null;
+const RQL_T={
+  ko:{h:'방문 위치 확인',opt:'선택',go:'위치 확인 · 등록하기',sub:'정확한 방문을 위해 지도에서 우리 집 위치를 확인해 주세요. 기사가 헤매지 않고 약속 시간에 도착합니다.',
+      ok:'방문 위치가 확정되었습니다',chg:'변경',del:'삭제'},
+  en:{h:'Visit location',opt:'Optional',go:'Confirm location on map',sub:'For an accurate visit, please confirm your home on the map so our technician arrives on time without getting lost.',
+      ok:'Visit location confirmed',chg:'Change',del:'Remove'}};
+function rqLocEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function rqLocRender(){
+  const box=document.getElementById('rq-loc');if(!box)return;
+  const t=RQL_T[currentLang==='en'?'en':'ko'],l=window.__rqLoc;
+  box.innerHTML='<div class="rql-h">📍 '+t.h+' <em>'+t.opt+'</em></div>'+(l
+    ?'<div class="rql-ok"><i>✓</i><div style="flex:1;min-width:0"><div class="t">'+t.ok+'</div><div class="n">'+rqLocEsc(l.name)+'</div>'+(l.addr?'<div class="a">'+rqLocEsc(l.addr)+'</div>':'')
+      +'<div class="k"><button type="button" data-q="pick">'+t.chg+'</button><button type="button" class="x" data-q="del">'+t.del+'</button></div></div></div>'
+    :'<button type="button" class="rql-go" data-q="pick"><i>🗺️</i><div style="flex:1;min-width:0"><b>'+t.go+'</b><span>'+t.sub+'</span></div><span class="ar">›</span></button>');
+}
+document.getElementById('rq-loc').addEventListener('click',async e=>{
+  const b=e.target.closest('[data-q]');if(!b)return;
+  if(b.dataset.q==='del'){window.__rqLoc=null;rqLocRender();return;}
+  const nm=(document.getElementById('f-condo-name').value||'').trim();
+  const r=await HHCLoc.pick({lang:currentLang==='en'?'en':'ko',who:'customer',query:nm,initial:window.__rqLoc});
+  if(r){window.__rqLoc=r;rqLocRender();}
+});
+rqLocRender();
+</script>
 </body>
 </html>

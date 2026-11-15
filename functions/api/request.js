@@ -1,6 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/request — 고객 서비스 의뢰서(request.html) 접수 (2026-11-09)
 //  본문: {condo_name, condo_unit, phone, remarks, lang, items, items_struct, ref?}
+//  loc = 📍 고객이 지도에서 확정한 방문 위치 (선택, 2026-11-16) {lat,lng,name,addr,pid} — 말레이시아 범위만 저장
+//        → 예약전환 후 직원 일정표(functions/api/work.js)가 converted_booking_id 로 찾아 길 안내에 씀
 //  ref = 추천 코드 (2026-11-12 지인 추천) — 맞는 코드면 추천인(ref_by·ref_by_name)과 1차 신규 판정(ref_new)을 함께 저장
 //  → requests 컬렉션에 새 문서 생성(status:'pending') + 관리자 기기 푸시 알림
 //  응답: {ok:true, id}
@@ -95,6 +97,16 @@ export async function onRequestPost(context){
     status: 'pending',
     submitted_at: new Date().toISOString(),
   };
+  // 📍 방문 위치 (선택) — 형식이 맞지 않으면 조용히 빼고 접수는 그대로 진행
+  const lc = b && b.loc;
+  if (lc && typeof lc === 'object') {
+    const lat = Number(lc.lat), lng = Number(lc.lng);
+    if (isFinite(lat) && isFinite(lng) && lat >= 0.8 && lat <= 7.6 && lng >= 99.5 && lng <= 119.5) {
+      data.loc = { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6,
+        name: String(lc.name || '').slice(0, 120), addr: String(lc.addr || '').slice(0, 300), pid: String(lc.pid || '').slice(0, 300),
+        at: new Date().toISOString() };
+    }
+  }
   // 🤝 추천 코드 — 추천 정보가 잘못돼도 의뢰 접수는 그대로 진행합니다
   const ref = str('ref').trim().toUpperCase();
   if (ref) {
