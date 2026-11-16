@@ -2635,9 +2635,16 @@ function mmTx(ko,en){
 
 const PKG_LB={silver:['실버 Silver','Silver'],royal:['로얄 Royal','Royal'],gold:['골드 Gold','Gold'],diamond:['다이아 Diamond','Diamond'],titanium:['티타늄 Titanium','Titanium'],special:['스페셜 Special','Special']};
 function pkgLb(pid){pid=String(pid||'');const biz=/-biz$/.test(pid);const e=PKG_LB[pid.replace(/-biz$/,'')];const b=e?(LANG==='en'?e[1]:e[0]):pid;return b+(biz?' (Biz)':'');}
-function inspPage(t){return t==='install'?'install.html':(t==='washer'?'washer.html':(t==='hood'?'hood.html':'inspect.html'));}
-function inspIco(t){return t==='install'?'🔩':(t==='washer'?'🧺':t==='hood'?'🍳':(t==='dispatch'?'🚗':'❄️'));}
-function inspTile(t){return t==='install'?'in':(t==='washer'||t==='hood'?'wa':(t==='dispatch'?'ds':'ac'));}
+function inspPage(t){return t==='install'?'install.html':(t==='washer'?'washer.html':(t==='hood'?'hood.html':(t==='fabric'?'fabric.html':'inspect.html')));}
+/* 커튼·쇼파·매트리스 작업 보고서 — 품목 이름으로 제목 (2026-11-16) · fbItems(여러 품목) 우선, 예전 자료는 fbItem */
+const FB_IT={curtain:['🪟','커튼','Curtain'],sofa:['🛋️','쇼파','Sofa'],mattress:['🛏️','매트리스','Mattress']};
+function fbIts(x){const a=((x&&x.fbItems&&x.fbItems.length)?x.fbItems:[x&&x.fbItem]).map(k=>FB_IT[k]).filter(Boolean);return a.length?a:[FB_IT.curtain];}
+function inspName(x,lg){
+  if(x&&x.type==='fabric'){const a=fbIts(x);return lg==='en'?a.map(i=>i[2]).join(' & ')+' Cleaning Report':a.map(i=>i[1]).join('·')+' 작업 보고서';}
+  const M=T[lg==='en'?'en':'ko'].insp;return M[x&&x.type]||M.inspect;
+}
+function inspIco(t,x){if(t==='fabric')return fbIts(x)[0][0];return t==='install'?'🔩':(t==='washer'?'🧺':t==='hood'?'🍳':(t==='dispatch'?'🚗':'❄️'));}
+function inspTile(t){return t==='install'?'in':(t==='washer'||t==='hood'||t==='fabric'?'wa':(t==='dispatch'?'ds':'ac'));}
 function p2(n){return String(n).length<2?'0'+n:String(n);}
 const MN_EN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function todayISO(){const d=new Date();return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());}
@@ -3525,9 +3532,9 @@ function render(){
       if(x.type==='dispatch'&&x.dispatchResult==='revisit'){pill=L.dpRevisit;pc='warn';}
       else if(bd>0){pill=L.needAct;pc='bad';}
       else if(wn>0){pill=L.caution;pc='warn';}
-      RC.push({d:d,k:LANG==='en'?'Service report':'서비스 보고서',ico:inspIco(x.type),t:(L.insp[x.type]||L.insp.inspect),
+      RC.push({d:d,k:LANG==='en'?'Service report':'서비스 보고서',ico:inspIco(x.type,x),t:inspName(x,LANG),
         u:BASE+'/'+inspPage(x.type)+'?id='+encodeURIComponent(x.__id)+'&lang='+LANG,
-        mv:(T.en.insp[x.type]||T.en.insp.inspect)+' '+(dfmt(x.date)||''),pill:pill,pc:pc});
+        mv:inspName(x,'en')+' '+(dfmt(x.date)||''),pill:pill,pc:pc});
     });
     (DATA.memos||[]).forEach(x=>{
       const d=String(x.req_date||'').slice(0,10);if(!d)return;
@@ -3707,14 +3714,14 @@ function render(){
       const _ipS=hasStat?'<div class="dl-q"><span>'+L.unitsLb+' <b>'+(tot||'—')+'</b></span><span class="g">'+L.okLb+' <b>'+ok+'</b></span><span class="'+((wn+bd)>0?'r':'z')+'">'+L.actLb+' <b>'+(wn+bd)+'</b></span></div>':'';
       h+='<div class="dcw dl"><a class="icard dl-a" target="_blank" rel="noopener" href="'+_ipU+'">'+
          _cal+
-         '<div class="dl-m"><div class="dl-t"><span class="dl-ty">'+inspIco(x.type)+'</span>'+esc(L.insp[x.type]||L.insp.inspect)+'</div>'+
+         '<div class="dl-m"><div class="dl-t"><span class="dl-ty">'+inspIco(x.type,x)+'</span>'+esc(inspName(x,LANG))+'</div>'+
          '<div class="dl-s">'+(chip?'<span class="dl-st e '+ccl+'">'+chip+'</span>':'')+
            (x.invoice_id?'<span class="dl-x blue">'+L.linked+'</span>':'')+
            (x.addr?'<span class="dl-x ad">📍 '+esc(x.addr)+'</span>':'')+'</div>'+
          _ipS+'</div>'+
          '</a>'+
-         '<div class="sft dl-f">'+shBtn('ip',x.__id,(T.en.insp[x.type]||T.en.insp.inspect)+' '+(dfmt(x.date)||''),_ipU,
-           ' data-sty="'+esc(x.type||'inspect')+'" data-shn="'+esc(x.client||m.name||'')+'" data-shd="'+esc(x.date||'')+'"')+
+         '<div class="sft dl-f">'+shBtn('ip',x.__id,inspName(x,'en')+' '+(dfmt(x.date)||''),_ipU,
+           ' data-sty="'+esc(x.type||'inspect')+'" data-stk="'+esc(inspName(x,'ko'))+'" data-ste="'+esc(inspName(x,'en'))+'" data-shn="'+esc(x.client||m.name||'')+'" data-shd="'+esc(x.date||'')+'"')+
          '<a class="sfv" target="_blank" rel="noopener" href="'+_ipU+'">'+(LANG==='en'?'Open report':'보고서 열기')+' <b>›</b></a></div></div>';
     });
     h+='<button type="button" class="hubcls" id="hub-cls-ip"><span class="up">\u25B2</span>'+esc(L.ipClose)+'</button>';
@@ -4091,6 +4098,7 @@ function render(){
         dispatch:{ko:'새 출장점검보고서',en:'New dispatch report',img:'ac-s-parts.jpg'},
         washer:{ko:'새 세탁기·건조기 보고서',en:'New washer/dryer report',img:'card-washer.jpg'},
         hood:{ko:'새 주방후드 보고서',en:'New kitchen hood report',img:'mp-bg-care.jpg'},
+        fabric:{ko:'새 작업 보고서',en:'New work report',img:'mp-bg-care.jpg'},
         install:{ko:'새 설치보고서',en:'New installation report',img:'card-ac.jpg'}};
       const in14=s=>{const dd=dayDiff(String(s||'').slice(0,10));return dd!=null&&dd<=0&&dd>=-14;};
       const seenT={};
@@ -4098,8 +4106,8 @@ function render(){
         const ty=RPT[r.type]?r.type:'inspect';
         if(seenT[ty])return;seenT[ty]=1;
         const R0=RPT[ty];
-        B.push({k:'report',tone:'teal',ic:inspIco(r.type),tag:en?R0.en:R0.ko,img:R0.img,pic:1,
-          big:esc(L.insp[r.type]||L.insp.inspect),
+        B.push({k:'report',tone:'teal',ic:inspIco(r.type,r),tag:en?R0.en:R0.ko,img:R0.img,pic:1,
+          big:esc(inspName(r,LANG)),
           sub:esc(dfmt(r.date))+' · '+(en?'Check the results and photos':'점검 결과와 사진을 확인해 보세요'),
           cta:en?'Open':'보고서 보기',act:'href="'+esc(BASE+'/'+inspPage(r.type)+'?id='+encodeURIComponent(r.__id)+'&lang='+LANG)+'"'});
       });
@@ -4712,6 +4720,7 @@ boot();
       'install.html'    :T('🔩 설치 보고서','🔩 Installation Report'),
       'washer.html'     :T('🧺 세탁기 보고서','🧺 Washer Report'),
       'hood.html'       :T('🍳 주방후드 보고서','🍳 Kitchen Hood Report'),
+      'fabric.html'     :T('🛋️ 작업 보고서','🛋️ Work Report'),
       'admin.html'      :T('📑 계약서 · 이용내역','📑 Contract · Usage'),
       'coupon.html'     :T('🎫 상품권 · 할인권','🎫 Voucher'),
       'quote.html'      :T('🧾 견적서','🧾 Quotation'),
@@ -5294,7 +5303,7 @@ boot();
     if(b.getAttribute('data-shk')==='iv')return ivMsg(b,lg);
     var ty=b.getAttribute('data-sty')||'inspect',nm=(b.getAttribute('data-shn')||'').trim(),
         dt=rptDate(b.getAttribute('data-shd'),lg),url=withLang(b.getAttribute('data-shu'),lg).replace(/\.html\?/,'?');   // /inspect?id=… (짧은 주소)
-    var hd=(lg==='en'?(RPT_EN[ty]||RPT_EN.inspect):(RPT_KO[ty]||RPT_KO.inspect));
+    var hd=b.getAttribute(lg==='en'?'data-ste':'data-stk')||(lg==='en'?(RPT_EN[ty]||RPT_EN.inspect):(RPT_KO[ty]||RPT_KO.inspect));
     var br=[nm,dt].filter(Boolean).join(' / ');
     return {url:url,text:hd+(br?' [ '+br+' ]':'')+'\n\n'+
       (lg==='en'?'Tap the link below to view the report.':'아래 링크를 누르시면 보고서 확인 가능.')+'\n👉 '+url};
@@ -5350,7 +5359,7 @@ boot();
         hd=[rptDate(b.getAttribute('data-shd'),lg),sj].filter(Boolean).join(' · ');   // 날짜 · 품목 (금액·결제상태 없음 — 2026-11-14)
       }else{
         var ty=b.getAttribute('data-sty')||'inspect';
-        hd=(en?(RPT_EN[ty]||RPT_EN.inspect):(RPT_KO[ty]||RPT_KO.inspect))+' · '+rptDate(b.getAttribute('data-shd'),lg);
+        hd=(b.getAttribute(en?'data-ste':'data-stk')||(en?(RPT_EN[ty]||RPT_EN.inspect):(RPT_KO[ty]||RPT_KO.inspect)))+' · '+rptDate(b.getAttribute('data-shd'),lg);
       }
       lines.push((i+1)+') '+hd+(sl?'\n'+sl:'')+'\n👉 '+u);
     });

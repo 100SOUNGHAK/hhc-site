@@ -400,6 +400,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 .insp-invbox{margin-top:10px}
 /* ── 커튼·쇼파·매트리스 보고서 작성 (fbx-) ── */
 .fbx-seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.fbx-multi{grid-column:1/-1;font-size:11.5px;color:#6b7280;margin-top:2px}
 .fbx-seg button,.fbx-svc button{font-family:inherit;cursor:pointer;border:1.5px solid #dde1ee;background:#fff;border-radius:10px;color:#4b5563;transition:transform .12s}
 .fbx-seg button{padding:10px 4px;font-size:13.5px;font-weight:800;display:flex;flex-direction:column;align-items:center;gap:3px}
 .fbx-seg button i{font-style:normal;font-size:20px;line-height:1}
@@ -4377,7 +4378,7 @@ function resetWasherForm(){
 
 // ═══════════════════════════════════════════
 // 커튼 · 쇼파 · 매트리스 작업 보고서 (type:'fabric')
-//  저장 항목: fbItem · fbSvc · fbWeight(kg, 전문수거) · fbRooms/fbTotalSq(SQ, 현장스팀) · fbPhotos(작업 과정 사진)
+//  저장 항목: fbItems(쇼파·매트리스는 함께 선택 가능, fbItem 은 첫 품목 — 예전 화면 호환) · fbSvc · fbWeight(kg, 전문수거) · fbRooms/fbTotalSq(SQ, 현장스팀) · fbPhotos(작업 과정 사진)
 // ═══════════════════════════════════════════
 var FB_ITEMS=[{id:'curtain',ic:'🪟',ko:'커튼',svcs:['pickup','onsite','light']},{id:'sofa',ic:'🛋️',ko:'쇼파',svcs:['dry','wet']},{id:'mattress',ic:'🛏️',ko:'매트리스',svcs:['dry','wet']}];
 var FB_SVC={pickup:['전문수거 세탁','떼어 가서 전문 세탁 · 재설치'],onsite:['현장스팀 세탁','떼지 않고 그 자리에서 3단계 세탁'],light:['약식스팀 살균','고온 · 고압 스팀으로 먼지 탈거 · 살균'],
@@ -4388,15 +4389,16 @@ var FB_DESC={pickup:'고객 보고서: 커튼을 떼어 수거한 뒤 전문 세
   dry:'고객 보고서: 진공 흡입으로 진드기·먼지 제거 설명 + 작업 과정 사진',
   wet:'고객 보고서: 진공 흡입 → 분사·흡입 습식 세탁 → 고온 스팀 살균 설명 + 작업 과정 사진'};
 var FB_ROOMS=['거실','방1','방2','방3','방4','주방','서재','기타'];
-var fbItem='curtain',fbSvc='onsite',fbRoomSeq=0;
+var fbItems=['curtain'],fbSvc='onsite',fbRoomSeq=0;
 function fbNum(v){var n=parseFloat(String(v==null?'':v).replace(/[^\d.]/g,''));return isNaN(n)?0:n;}
 function fbR1(n){return Math.round(n*10)/10;}
 function fbFmt(n){return fbR1(n).toLocaleString('en-US',{maximumFractionDigits:1});}
 window.fbRender=function(){
-  var it=FB_ITEMS.filter(function(x){return x.id===fbItem;})[0]||FB_ITEMS[0];
+  var it=FB_ITEMS.filter(function(x){return x.id===fbItems[0];})[0]||FB_ITEMS[0];
   if(it.svcs.indexOf(fbSvc)<0)fbSvc=it.svcs[0];
   var ir=gid('fb-item-row'),sr=gid('fb-svc-row');if(!ir||!sr)return;
-  ir.innerHTML=FB_ITEMS.map(function(x){return '<button type="button" data-fbi="'+x.id+'" class="'+(x.id===fbItem?'on':'')+'"><i>'+x.ic+'</i>'+x.ko+'</button>';}).join('');
+  ir.innerHTML=FB_ITEMS.map(function(x){return '<button type="button" data-fbi="'+x.id+'" class="'+(fbItems.indexOf(x.id)>=0?'on':'')+'"><i>'+x.ic+'</i>'+x.ko+'</button>';}).join('')+
+    '<div class="fbx-multi">쇼파 · 매트리스는 함께 선택할 수 있습니다 (작업 종류는 같이 적용)</div>';
   sr.innerHTML=it.svcs.map(function(k){return '<button type="button" data-fbs="'+k+'" class="'+(k===fbSvc?'on':'')+'"><span class="rd"></span><span>'+FB_SVC[k][0]+'<small>'+FB_SVC[k][1]+'</small></span></button>';}).join('');
   gid('fb-desc').textContent=FB_DESC[fbSvc]||'';
   gid('fb-weight-card').style.display=fbSvc==='pickup'?'block':'none';
@@ -4408,7 +4410,12 @@ window.fbRender=function(){
 };
 document.addEventListener('click',function(e){
   var b=e.target.closest&&e.target.closest('#fb-item-row button[data-fbi],#fb-svc-row button[data-fbs]');if(!b)return;
-  if(b.dataset.fbi)fbItem=b.dataset.fbi;else fbSvc=b.dataset.fbs;
+  if(b.dataset.fbi){
+    var id=b.dataset.fbi,i=fbItems.indexOf(id);
+    if(id==='curtain'||fbItems.indexOf('curtain')>=0)fbItems=[id];          // 커튼은 단독
+    else if(i<0)fbItems=FB_ITEMS.map(function(x){return x.id;}).filter(function(k){return k===id||fbItems.indexOf(k)>=0;});   // 쇼파·매트리스 함께
+    else if(fbItems.length>1)fbItems.splice(i,1);                         // 하나는 꼭 남김
+  }else fbSvc=b.dataset.fbs;
   fbRender();if(window.__scheduleDraft)window.__scheduleDraft();
 });
 window.fbAddRoom=function(room,w,h){
@@ -4448,7 +4455,7 @@ function collectFabricData(){
   return Object.assign(inspInvFields(),{
     type:'fabric',
     client:gv('fb-client'),phone:gv('fb-phone'),date:gv('fb-date'),addr:gv('fb-addr'),
-    fbItem:fbItem,fbSvc:fbSvc,
+    fbItem:fbItems[0],fbItems:fbItems.slice(),fbSvc:fbSvc,
     fbWeight:isP&&fbNum(gv('fb-weight'))?fbR1(fbNum(gv('fb-weight'))):'',
     fbRooms:rooms,
     fbTotalSq:isO?fbR1(rooms.reduce(function(a,r){return a+r.sq;},0)):'',
@@ -4462,7 +4469,7 @@ function resetFabricForm(){
   gid('fb-date').value=new Date().toISOString().split('T')[0];
   gid('fb-rooms').innerHTML='';
   var pr=gid('fb-photos');if(pr)pr.querySelectorAll('.ph-item').forEach(function(x){x.remove();});
-  fbItem='curtain';fbSvc='onsite';
+  fbItems=['curtain'];fbSvc='onsite';
   photoData={};videoData={};if(window.updateVideoUI)updateVideoUI();
   fbRender();fbCalc();updatePhotoBadges();
 }
@@ -4472,7 +4479,7 @@ window.loadIntoFabricForm=function(data){
   resetFabricForm();
   sv('fb-client',data.client);sv('fb-phone',data.phone||'+60 ');sv('fb-date',data.date);sv('fb-addr',data.addr);
   if(window.inspSetLinkFromData)window.inspSetLinkFromData(data);
-  fbItem=data.fbItem||'curtain';fbSvc=data.fbSvc||'onsite';
+  fbItems=(data.fbItems&&data.fbItems.length)?data.fbItems.slice():[data.fbItem||'curtain'];fbSvc=data.fbSvc||'onsite';
   sv('fb-weight',data.fbWeight);
   gid('fb-rooms').innerHTML='';
   (data.fbRooms||[]).forEach(function(r){fbAddRoom(r.room,r.w,r.h);});
@@ -8487,10 +8494,10 @@ setTimeout(function(){
     }else if(t==='install'){
       S=[['설치 제품',document.querySelectorAll('#install-product-rows .unit-item').length,'대',''],['자재',document.querySelectorAll('#material-rows .unit-item').length,'개',''],['사진',nPhotos(),'장','']];
     }else if(t==='fabric'){
-      var f3='',it3='';try{f3=fbSvc;it3=fbItem;}catch(e){}
+      var f3='',it3=[];try{f3=fbSvc;it3=fbItems;}catch(e){}
       var IT3={curtain:'커튼',sofa:'쇼파',mattress:'매트리스'};
       var m3=f3==='pickup'?['총중량',val('fb-weight')||0,'kg','']:f3==='onsite'?['총 사이즈',(function(){try{return fbCalc();}catch(e){return 0;}})(),'SQ','']:['작업',(FB_SVC[f3]||[''])[0],'',''];
-      S=[['품목',IT3[it3]||'—','',''],m3,['사진',nPhotos(),'장','']];
+      S=[['품목',it3.map(function(k){return IT3[k];}).filter(Boolean).join('·')||'—','',''],m3,['사진',nPhotos(),'장','']];
     }else{
       var bad=0;try{wList().forEach(function(i){if(!washerChecklistResult[i.key])bad++;});}catch(e){}
       S=[['체크 이상',bad,'개',bad?'wn':''],['문제 사진',document.querySelectorAll('#w-problem-rows .unit-item').length,'건',''],['사진',nPhotos(),'장','']];
