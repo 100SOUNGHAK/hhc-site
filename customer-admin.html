@@ -64,6 +64,7 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .drow:last-child{border-bottom:none}
 .drow .id{font-weight:800}
 .drow .m{color:var(--ink3);font-size:11px}
+.drow .iv-it{flex-basis:100%;font-size:12.5px;font-weight:800;color:#0F1C3F;line-height:1.4;margin:-2px 0 -1px}
 .open-btn{margin-left:auto;font-size:10.5px;font-weight:800;color:var(--pri);background:var(--pri-bg);border-radius:6px;padding:3px 9px;white-space:nowrap;text-decoration:none}
 .dnone{padding:14px;font-size:12px;color:var(--ink3);text-align:center}
 .rb{border:none;cursor:pointer;font-family:inherit;font-size:10.5px;font-weight:800;border-radius:6px;padding:3px 8px;background:var(--bg);color:var(--ink2);white-space:nowrap}
@@ -1590,6 +1591,19 @@ const INV_ST={paid:['결제완료','ok'],billing:['청구중','warn'],overdue:['
 function inspPage(t){return t==='install'?'install.html':(t==='washer'?'washer.html':(t==='hood'?'hood.html':(t==='fabric'?'fabric.html':'inspect.html')));}
 /* 보고서 종류 표시 — 주방후드·커튼·쇼파·매트리스 추가 (2026-11-16). 커튼 등은 품목 이름(fbItems, 예전 자료는 fbItem) */
 const FB_IT={curtain:['🪟','커튼'],sofa:['🛋️','쇼파'],mattress:['🛏️','매트리스']};
+/* 인보이스 품목 한 줄 (2026-11-16) — 마이페이지(my.html)와 같은 분류 · 3개 넘으면 「외 N」 · 분류가 없으면 첫 항목 이름 */
+const INV_CATS=[[/에어컨|실외기|air.?con|aircond|\bA\/?C\b/i,'에어컨'],[/세탁기|washing.?machine|washer/i,'세탁기'],[/건조기|dryer/i,'건조기'],
+  [/냉장고|refrigerator|fridge/i,'냉장고'],[/후드|hood/i,'주방후드'],[/공기청정기|air.?purifier/i,'공기청정기'],[/매트리스|mattress/i,'매트리스'],
+  [/쇼파|소파|sofa/i,'쇼파'],[/식탁의자|dining.?chair/i,'식탁의자'],[/커튼|curtain/i,'커튼'],[/카펫|카페트|carpet|rug/i,'카펫'],
+  [/실링팬|ceiling.?fan/i,'실링팬'],[/전등|콘센트|조명|light|socket/i,'전등 · 콘센트']];
+function invItemLine(x){
+  const its=(x&&x.items)||[],out=[];
+  its.forEach(li=>{const n=String((li||{}).name||'')+' '+String((li||{}).cat||'')+' '+String((li||{}).subcat||'');
+    for(const c of INV_CATS){if(c[0].test(n)){if(out.indexOf(c[1])<0)out.push(c[1]);break;}}});
+  if(out.length)return out.length>3?out.slice(0,3).join(' · ')+' 외 '+(out.length-3):out.join(' · ');
+  const f=its.map(li=>String((li||{}).name||'').replace(/^[A-Z]{2,}[-]?\d+[A-Za-z0-9-]*[\s:·-]*/,'').trim()).filter(Boolean);
+  return f.length?f[0]+(f.length>1?' 외 '+(f.length-1):''):'';
+}
 function inspLabel(t,x){
   if(t==='fabric'){const a=((x&&x.fbItems&&x.fbItems.length)?x.fbItems:[x&&x.fbItem]).map(k=>FB_IT[k]).filter(Boolean);const b=a.length?a:[FB_IT.curtain];return b[0][0]+' '+b.map(i=>i[1]).join('·');}
   return t==='install'?'🔩 설치':(t==='washer'?'🧺 세탁기':(t==='hood'?'🍳 주방후드':(t==='dispatch'?'🚗 출장':'🔍 점검')));
@@ -2862,7 +2876,7 @@ window.openDrawer=function(idx){
     // 회원적립잔액(creditUse)으로 차감된 인보이스: 차감 전 금액을 괄호로 표시 (단순 표기 — 합산에 반영 안 함)
     const _cu=parseFloat(x.creditUse)||0;
     const _cuTag=_cu>0.005?' <b style="color:#7c3aed">(차감 전 '+fmtRM(invTotal(x)+_cu)+' · 적립금 −'+fmtRM(_cu)+')</b>':'';
-    return '<div class="drow"><span class="id">'+esc(x.id||x.__id)+'</span><span class="pill '+st[1]+'">'+esc(st[0])+'</span><span class="m">'+esc(x.date||'')+' · '+fmtRM(invTotal(x))+_cuTag+(_pt?' <b style="color:var(--ok)">(기결제 −'+fmtRM(_pd)+' · 잔여 '+fmtRM(invDue(x))+')</b>':'')+'</span><a class="open-btn" target="_blank" rel="noopener" data-t="✏️ 인보이스 수정 — '+esc(x.id||x.__id)+'" href="'+window.caEditUrl('invoices',x)+'" onclick="return caView(this.href,this.dataset.t,event)">✏️ 열기·수정</a>'+rowBtns('invoices',x.__id)+'</div>';
+    return '<div class="drow"><span class="id">'+esc(x.id||x.__id)+'</span><span class="pill '+st[1]+'">'+esc(st[0])+'</span>'+(invItemLine(x)?'<span class="iv-it">🧾 '+esc(invItemLine(x))+'</span>':'')+'<span class="m">'+esc(x.date||'')+' · '+fmtRM(invTotal(x))+_cuTag+(_pt?' <b style="color:var(--ok)">(기결제 −'+fmtRM(_pd)+' · 잔여 '+fmtRM(invDue(x))+')</b>':'')+'</span><a class="open-btn" target="_blank" rel="noopener" data-t="✏️ 인보이스 수정 — '+esc(x.id||x.__id)+'" href="'+window.caEditUrl('invoices',x)+'" onclick="return caView(this.href,this.dataset.t,event)">✏️ 열기·수정</a>'+rowBtns('invoices',x.__id)+'</div>';
   }).join(''):'<div class="dnone">인보이스 없음</div>';
   h+='</div>';
   // 점검보고서
