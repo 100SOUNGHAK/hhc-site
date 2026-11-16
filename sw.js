@@ -11,6 +11,17 @@ self.addEventListener('notificationclick', function (e) {
   try { if (navigator.clearAppBadge) navigator.clearAppBadge(); } catch (err) {}
   var tab = (e.notification.data && e.notification.data.tab) || '';
   var url = (e.notification.data && e.notification.data.url) || '';
+  // 🔔 고객 앱 알림 : 열려 있는 마이페이지 창이 있으면 그 창에서 열고, 없으면 새로 엽니다
+  if (url && e.notification.data.cust) {
+    e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
+      for (var i = 0; i < list.length; i++) {
+        var c = list[i];
+        if (c.url && /^\/my(\.html)?$/.test(new URL(c.url).pathname) && c.navigate) { if (c.focus) c.focus(); return c.navigate(url); }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+    }));
+    return;
+  }
   // 주소가 정해진 알림(예: 내일 일정 보내기 → /sched-send.html)은 그 화면을 바로 엽니다
   if (url) {
     e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
@@ -39,6 +50,16 @@ self.addEventListener('notificationclick', function (e) {
 self.addEventListener('push', function (e) {
   var d = {};
   try { d = e.data ? e.data.json() : {}; } catch (err) {}
+  // 🔔 고객 앱 알림 (2026-11-16 · /api/cpush) — 관리자 알림과 따로: 고객 아이콘 · 누르면 마이페이지의 해당 안내로
+  if (d.kind === 'cust') {
+    var cu = (typeof d.url === 'string' && d.url.charAt(0) === '/' && d.url.charAt(1) !== '/') ? d.url : '/my';
+    e.waitUntil(self.registration.showNotification(d.title || 'Happy Home Care', {
+      body: d.body || '', icon: 'icon-192.png', badge: 'icon-192.png',
+      tag: d.tag || 'hhc-cust', renotify: true, timestamp: Date.now(),
+      data: { url: cu, cust: true }
+    }));
+    return;
+  }
   var url = (typeof d.url === 'string' && d.url.charAt(0) === '/') ? d.url : '';   // 우리 사이트 안 주소만
   var tab = url ? (d.tab || 'link') : (d.tab === 'booking' ? 'booking' : 'request');
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {

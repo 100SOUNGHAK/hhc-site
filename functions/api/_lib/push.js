@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { listAll, deleteDoc, patchDoc } from './fs.js';
 
-const VAPID_PUBLIC='BE5OUy5k4wwsty8t7vBJ1IH-9LMpqzKI66QAV78Z39lGhYRBImjekMHVyJMhqUDsHJvvwIIVbb-YT-gRtwL5O74';
+export const VAPID_PUBLIC='BE5OUy5k4wwsty8t7vBJ1IH-9LMpqzKI66QAV78Z39lGhYRBImjekMHVyJMhqUDsHJvvwIIVbb-YT-gRtwL5O74';
 const SUBJECT='mailto:kopeco100@gmail.com';
 
 export const MSG={
@@ -59,7 +59,7 @@ async function encryptPayload(plainText,p256dhB64u,authB64u){
 }
 
 // ---------- 푸시 1건 발송 ----------
-async function sendPush(sub,payload,privKey){
+export async function sendPush(sub,payload,privKey){
   const ep=sub.endpoint;
   const aud=new URL(ep).origin;
   const jwt=await vapidJwt(aud,privKey);

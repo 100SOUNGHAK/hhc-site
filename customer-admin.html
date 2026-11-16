@@ -4191,6 +4191,7 @@ window.caSendModal=async function(idx){
       '<div class="sm2-btns">'+
         '<button id="cs-wa" class="btn" style="background:#22c55e;border-color:#22c55e;color:#fff">💬 WhatsApp</button>'+
         '<button id="cs-kk" class="btn" style="background:#FEE500;border-color:#FEE500;color:#3C1E1E">💛 카카오톡</button>'+
+        '<button id="cs-pn" class="btn" title="고객 휴대폰 앱 알림" disabled style="background:#0E2350;border-color:#0E2350;color:#fff;opacity:.45">🔔<span class="t">앱 알림</span><small id="cs-pn-n" style="margin-left:3px;font-weight:800;opacity:.8"></small></button>'+
         '<button id="cs-cp" class="btn" title="메시지 복사">📋<span class="t">복사</span></button>'+
         '<button id="cs-pv" class="btn" title="고객화면 미리보기" style="background:var(--pri-bg);border-color:var(--pri);color:var(--pri)">👁<span class="t">고객화면</span></button>'+
       '</div>'+
@@ -5216,6 +5217,40 @@ window.caSendModal=async function(idx){
     window.open(wa+'?text='+encodeURIComponent(_t),'_blank');
     careMark('wa');
   });
+  // 🔔 앱 알림 (2026-11-16) — 고객이 마이페이지에서 「알림 켜기」를 한 휴대폰으로 지금 고른 안내를 알림으로 보냅니다
+  //  · 등록된 기기가 없으면 버튼이 흐리게 꺼져 있습니다 (마우스를 올리면 이유 표시)
+  //  · 발송 요청은 관리자만 쓸 수 있는 cust_push_out 에 기록한 뒤 /api/cpush 가 그 기록을 확인하고 보냅니다(발송 이력도 남음)
+  {
+    const pb=mk.querySelector('#cs-pn'),pc=mk.querySelector('#cs-pn-n');
+    let pnN=0;
+    getDocs(query(collection(db,'cust_push'),where('c','==',mid))).then(s=>{
+      pnN=s.size;
+      if(pnN){pb.disabled=false;pb.style.opacity='';pc.textContent=pnN>1?pnN+'대':'';pb.title='앱 알림 보내기 · 등록된 휴대폰 '+pnN+'대';}
+      else pb.title='이 고객은 아직 마이페이지에서 앱 알림을 켜지 않았습니다';
+    }).catch(()=>{pb.title='앱 알림 기기를 확인하지 못했습니다';});
+    // 문구 → 알림 내용: 인사·주소·연락처 줄을 빼고 핵심 두 줄
+    const pnBody=()=>{
+      const ls=String(waText(msg())||'').split('\n').map(s=>s.trim()).filter(Boolean)
+        .filter(s=>!/https?:\/\//.test(s)&&!/^(👉|📞|☎)/.test(s));
+      if(ls.length>1)ls.shift();   // 첫 줄 인사 제외
+      return Array.from(ls.slice(0,2).join(' ')).slice(0,170).join('');
+    };
+    const pnUrl=()=>{let u=String(link()||'');if(u.indexOf(BASE)===0)u=u.slice(BASE.length);return u.charAt(0)==='/'?u:'/my?c='+encodeURIComponent(mid);};
+    pb.addEventListener('click',async()=>{
+      if(!pnN)return;
+      const title=state.en?'Happy Home Care':'해피홈케어',body=pnBody(),url=pnUrl();
+      if(!confirm('🔔 앱 알림으로 보낼까요? (휴대폰 '+pnN+'대)\n\n'+title+'\n'+body))return;
+      pb.disabled=true;
+      try{
+        const ref=await addDoc(collection(db,'cust_push_out'),{c:mid,name:e.name||'',title,body,url,tpl:state.tpl||'',lang:state.en?'en':'ko',created_at:new Date().toISOString()});
+        const r=await fetch('/api/cpush',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'send',id:ref.id})}).then(x=>x.json());
+        if(r&&r.ok&&r.sent)toast('🔔 앱 알림을 보냈습니다 ('+r.sent+'대)'+(r.removed?' · 해제된 기기 '+r.removed+'대 정리':''));
+        else if(r&&r.ok)toast('⚠️ 보낼 수 있는 기기가 없습니다'+(r.removed?' — 고객이 알림을 꺼서 기기 '+r.removed+'대를 정리했습니다':''));
+        else toast('⚠️ 앱 알림을 보내지 못했습니다'+(r&&r.error?': '+r.error:''));
+      }catch(err){toast('⚠️ 앱 알림을 보내지 못했습니다');}
+      pb.disabled=false;
+    });
+  }
   // 💛 카카오톡 : 누르자마자 고객명을 복사 → 공유창(카카오 · 휴대폰 공유창) 검색칸에 붙여넣어 대화방을 바로 찾습니다.
   //    복사는 다른 기다림(await)보다 먼저 해야 휴대폰 브라우저가 막지 않습니다.
   //    메시지 전체가 필요하면 아래 「📋 메시지 복사」 버튼을 씁니다.
