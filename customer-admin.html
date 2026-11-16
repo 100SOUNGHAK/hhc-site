@@ -1346,8 +1346,10 @@ function kkItemsShort(t){
   for(let k=ix.length-1;k>=1;k--)Ls.splice(ix[k],1);
   return Ls.join('\n');
 }
+// 💛 카카오톡은 왓츠앱 굵은 글씨(*…*)를 지원하지 않으므로 별표를 뗍니다
+function kkPlain(t){return String(t==null?'':t).replace(/\*([^*\n]+)\*/g,'$1');}
 function kkText(m,feed){
-  let t=hhcFixLinks(msgSlim(m,true));
+  let t=kkPlain(hhcFixLinks(msgSlim(m,true)));
   if(feed){
     // 🖼 사진 카드 : 카카오는 「제목 + 설명」을 합쳐 4줄까지만 보여줍니다.
     //    카드에 사진과 버튼이 이미 있으므로 주소 안내줄·회사 서명은 빼고,
@@ -1455,7 +1457,7 @@ async function kkShareMsg(name,message,url,en,title,img){
   if(window._kkNameClip){
     toast('💛 「'+window._kkNameClip+'」 이름이 복사되었습니다 · 공유창 검색칸에 붙여넣으세요');
   }else{
-    let _cp=waText(message);
+    let _cp=kkPlain(waText(message));
     if(Array.from(msgSlim(message,true)).length>195)_cp=kkItemsShort(_cp);
     try{await navigator.clipboard.writeText(await hhcShortLinks(_cp));}catch(_){}
     toast('💛 카카오톡 공유창을 엽니다 · 전체 메시지도 복사되었습니다');
@@ -4440,65 +4442,93 @@ window.caSendModal=async function(idx){
   const SIG='📞 +60 17-247 2774 · Happy Home Care';
   function sHi(en,nm){return en?('Hello, '+nm+' 😊'):('안녕하세요, '+nm+' 고객님 😊');}
   function sTail(){return '\n👉 '+dLink()+'\n\n'+SIG;}
+  // ── 📐 발송 문구 공통 모양 (2026-11 개편) ──
+  //  인사 → (빈 줄) → 아이콘 *제목* → 핵심 정보 한 줄씩 → 👉 할 일 → 「이름 👉 주소」 → 서명
+  //  *…* 는 왓츠앱 굵은 글씨 — 카카오톡으로 보낼 때는 kkPlain() 이 별표를 뗍니다.
+  //  링크 줄은 「이름 👉 주소」 한 줄이라 카카오에서는 줄째 빠지고 카드 버튼이 대신합니다.
+  function sLk(lb){return '\n\n'+lb+' 👉 '+dLink()+'\n'+SIG;}
+  const sDay=(d,en)=>HHCMsg.whenOf(d,'',en);                 // 「11월 15일(일)」 / 「Sun, 15 Nov」
+  const sWhen=(d,t,en)=>HHCMsg.whenOf(d,t,en);               // 「11월 19일(목) 오후 2:00 전후」
+  const sRM=v=>fmtRM(v);                                      // 「RM 1,250.00」
+  // 금액 표기 맞추기 — 「RM100」·「100」 → 「RM 100」 (10% 등은 그대로)
+  function sVal(v){v=String(v||'').trim();if(/^[0-9,.]+$/.test(v))return 'RM '+v;return v.replace(/^RM\s*/i,'RM ');}
+  const PKG_EN={silver:'Silver',royal:'Royal',gold:'Gold',diamond:'Diamond',titanium:'Titanium',special:'Special Happy Home'};
+  function sPkg(pid,en){
+    if(!pid)return '';
+    const biz=/-biz$/.test(pid),k=String(pid).replace(/-biz$/,'');
+    return en?((PKG_EN[k]||k)+(biz?' (Business)':'')+' Package'):(pkgLabel(pid)+' 패키지');
+  }
+  // 계약서의 마지막 이용 금액 (작업후 안내용)
+  function ctLastUse(c){
+    let h=[];try{h=typeof c.usage_history==='string'?JSON.parse(c.usage_history||'[]'):(c.usage_history||[]);}catch(_){h=[];}
+    const a=h.filter(u=>(parseFloat(u.amount)||0)>0);
+    return a.length?(parseFloat(a[a.length-1].amount)||0):0;
+  }
   // 영문 발송 품목명 — 사전(trItemsEn)에 없는 말이 남으면 문장 사전(toEn)으로 한 번 더 바꿔
   // 영문 문구에 한글이 섞여 나가지 않게 합니다.
   function sEnIt(x){let t=trItemsEn(String(x||''));if(/[\uAC00-\uD7A3]/.test(t))t=toEn(t);return t;}
   function sDot(d){return String(d||'').replace(/^(\d{4})-(\d{2})-(\d{2})$/,'$1.$2.$3');}
-  // ── 🔧 점검보고서 발송 ──────────────────────
+  // ── 🔧 점검보고서 발송 ──
   function insMsg(en){
     const x=curCoupon();
     if(!x)return en?'No inspection report available to send.':'발송 가능한 점검보고서가 없습니다.';
-    const nm=e.name||'';
-    const dt=String(x.date||'');
-    const tl=en?({install:'Installation Report',washer:'Washing Machine Report',dispatch:'Service Visit Report'}[x.type]||'Air-Con Inspection Report')
-              :({install:'설치 기술보고서',washer:'세탁기 점검 보고서',dispatch:'출장 보고서'}[x.type]||'에어컨 점검보고서');
-    const dd=dt?('('+sDot(dt)+')'):'';
+    const nm=e.name||'',dt=String(x.date||'').slice(0,10),fab=(x.type==='fabric'),ins=(x.type==='install');
+    const tl=en?({install:'Installation Report',washer:'Washing Machine Report',dispatch:'Service Visit Report',hood:'Kitchen Hood Report',fabric:'Cleaning Work Report'}[x.type]||'Air-Con Inspection Report')
+              :({install:'설치 기술보고서',washer:'세탁기 점검 보고서',dispatch:'출장 보고서',hood:'주방후드 점검보고서',fabric:'세탁 작업 보고서'}[x.type]||'에어컨 점검보고서');
+    const dd=/^\d{4}-\d{2}-\d{2}$/.test(dt)?sDay(dt,en):'';
     return en
-      ?(sHi(en,nm)+'\n📋 Your '+tl+(dd?' '+dd:'')+' is ready.\n\nPlease check it on your My Page.'+sTail())
-      :(sHi(en,nm)+'\n📋 '+tl+dd+'가 준비되었습니다.\n\n마이페이지에서 확인해 주세요.'+sTail());
+      ?(sHi(en,nm)+'\n\n📋 *Your '+tl+' is ready*'+(dd?'\n🗓 '+dd:'')+
+        '\n\n👉 '+(fab?'Please check the work details and process photos.':ins?'Please check the installation details and photos.':'Please check the results and recommended actions, with photos.')+sLk('📄 View report'))
+      :(sHi(en,nm)+'\n\n📋 *'+tl+'가 나왔습니다*'+(dd?'\n🗓 '+(fab?'작업일 ':ins?'설치일 ':'점검일 ')+dd:'')+
+        '\n\n👉 '+(fab?'작업 내용과 작업 과정 사진을 확인해 주세요.':ins?'설치 내용과 사진을 확인해 주세요.':'점검 결과와 권장 조치를 사진과 함께 확인해 주세요.')+sLk('📄 보고서 보기'));
   }
   function qtMsg(en){
     const x=curCoupon();
     if(!x)return en?'No quotation available to send.':'발송 가능한 견적서가 없습니다.';
-    const nm=e.name||'';
+    const nm=e.name||'',t=qtTotal(x);
     return en
-      ?(sHi(en,nm)+'\n📄 The quotation you requested is ready.\n\n👉 '+dLink()+'\n\nIf it looks good, just reply and we\'ll book your visit right away!\n'+SIG)
-      :(sHi(en,nm)+'\n📄 요청하신 견적서가 준비되었습니다.\n\n👉 '+dLink()+'\n\n괜찮으시면 회신 주세요. 바로 일정 잡아 드리겠습니다!\n'+SIG);
+      ?(sHi(en,nm)+'\n\n🧾 *Your quotation is ready*'+(t>0?'\n💰 Total '+sRM(t):'')+
+        '\n\n👉 If it looks good, just reply 「OK」.\n      We\'ll book your visit right away.'+sLk('📄 View quotation'))
+      :(sHi(en,nm)+'\n\n🧾 *요청하신 견적서입니다*'+(t>0?'\n💰 합계 '+sRM(t):'')+
+        '\n\n👉 괜찮으시면 「진행」이라고 회신만 주세요.\n      바로 일정을 잡아 드립니다.'+sLk('📄 견적서 보기'));
   }
   function ctMsg(en){
     const x=curCoupon();
     if(!x)return en?'No contract available to send.':'발송 가능한 계약서가 없습니다.';
-    const nm=e.name||'';
+    const nm=e.name||'',pk=sPkg(x.package_id,en),r=ctBal(x).remain;
     return en
-      ?(sHi(en,nm)+'\n📑 Here is your membership contract. Thank you!\n\nYour contract, credit balance and usage history are on your My Page.'+sTail())
-      :(sHi(en,nm)+'\n📑 회원제 상품 계약서를 보내드립니다. 감사합니다!\n\n계약 내용, 적립금 잔액, 이용 내역은 마이페이지에서 확인하세요.'+sTail());
+      ?(sHi(en,nm)+'\n\n📑 *Here is your membership contract — thank you!*'+(pk?'\n👑 '+pk:'')+'\n💰 Available balance '+sRM(r)+
+        '\n\n👉 Please check your contract and remaining balance.'+sLk('📑 View contract'))
+      :(sHi(en,nm)+'\n\n📑 *멤버십 계약서를 보내드립니다 — 감사합니다!*'+(pk?'\n👑 '+pk:'')+'\n💰 사용 가능 금액 '+sRM(r)+
+        '\n\n👉 계약 내용과 남은 금액을 확인해 주세요.'+sLk('📑 계약서 보기'));
   }
   function awMsg(en){
     const x=curCoupon();
     if(!x)return en?'No contract available to send.':'발송 가능한 계약서가 없습니다.';
-    const nm=e.name||'';
+    const nm=e.name||'',u=ctLastUse(x),r=ctBal(x).remain;
     return en
-      ?(sHi(en,nm)+'\n🧽 Thank you for using our service today! 🙏\n\nYour membership usage history is on your My Page.'+sTail())
-      :(sHi(en,nm)+'\n🧽 오늘도 서비스를 이용해 주셔서 감사합니다! 🙏\n\n멤버십 이용 내역은 마이페이지에서 확인하세요.'+sTail());
+      ?(sHi(en,nm)+'\n\n🧽 *Today\'s service is done — thank you!*'+(u>0?'\n💳 Used this time '+sRM(u):'')+'\n💰 Remaining '+sRM(r)+
+        '\n\n👉 Nothing else needed from you.'+sLk('📑 View usage history'))
+      :(sHi(en,nm)+'\n\n🧽 *오늘 작업이 끝났습니다 — 감사합니다!*'+(u>0?'\n💳 이번 사용 '+sRM(u):'')+'\n💰 남은 금액 '+sRM(r)+
+        '\n\n👉 따로 하실 일은 없습니다.'+sLk('📑 이용 내역 보기'));
   }
   function cpExp(d,en){
     const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d||''));
     if(!m)return String(d||'');
-    return en?(CS_MN[parseInt(m[2],10)-1]+' '+m[3]+', '+m[1]):(m[1]+'년 '+m[2]+'월 '+m[3]+'일까지');
+    return en?(parseInt(m[3],10)+' '+CS_MN[parseInt(m[2],10)-1]+' '+m[1]):(m[1]+'년 '+parseInt(m[2],10)+'월 '+parseInt(m[3],10)+'일까지');
   }
   function cpMsg(en){
     const c=curCoupon();
     if(!c)return en?'No coupon available to send.':'발송 가능한 쿠폰이 없습니다.';
     const isD=(state.tpl==='cpd');
-    const tl=en?(isD?'Discount Coupon (e-coupon)':'Gift Voucher (e-voucher)'):(isD?'할인권(전자)':'상품권(전자)');
-    const dl=en?(isD?'e-Discount Coupon':'e-Gift Voucher'):(isD?'전자할인권':'전자상품권');
     const recv=c.receiver||c.name||e.name||'';
-    let val=String(c.value||'').trim();
-    if(/^[0-9,.]+$/.test(val))val='RM'+val;          // 숫자만 있으면 RM 붙임 (10% 등은 그대로)
-    const ic=isD?'🏷️':'🎁';
+    const val=sVal(c.value);
+    const ex=c.expiry?('\n⏳ '+(en?'Valid until '+cpExp(c.expiry,true):cpExp(c.expiry,false)+' 사용')):'';
     return en
-      ?(sHi(en,recv)+'\n'+ic+' As a thank-you, here is a '+val+' '+dl+' for you!\n'+(isD?'Use it on your next service.':'Use it like cash for any of our services.')+'\n\nDetails are on your My Page.'+sTail())
-      :(sHi(en,recv)+'\n'+ic+' 감사의 마음을 담아 '+val+' '+dl+'을 보내드립니다.\n'+(isD?'다음 서비스 이용 시 할인받으실 수 있습니다.':'서비스 이용 시 현금처럼 쓰실 수 있습니다.')+'\n\n상세 내용은 마이페이지에서 확인해 주세요.'+sTail());
+      ?(sHi(en,recv)+'\n\n'+(isD?'🏷️ *Here is your '+val+' discount coupon*':'🎁 *Here is your '+val+' e-Gift Voucher*')+ex+
+        '\n👉 '+(isD?'Show the coupon screen to our staff at your next service.':'Use it like cash for any of our services.')+sLk(isD?'🏷️ View coupon':'🎫 View voucher'))
+      :(sHi(en,recv)+'\n\n'+(isD?'🏷️ *'+val+' 할인권을 보내드립니다*':'🎁 *'+val+' 전자상품권을 보내드립니다*')+ex+
+        '\n👉 '+(isD?'다음 서비스 때 직원에게 할인권 화면을 보여 주세요.':'서비스 결제 때 현금처럼 쓰실 수 있습니다.')+sLk(isD?'🏷️ 할인권 보기':'🎫 상품권 보기'));
   }
   function billList(){return (D.invoices||[]).filter(x=>(x.status==='billing'||x.status==='overdue')&&invDue(x)>0.005);}
   function billAmt(){return billList().reduce((a,x)=>a+invDue(x),0);}
@@ -4546,24 +4576,23 @@ window.caSendModal=async function(idx){
     const x=curCoupon();
     if(!x)return en?'No scheduled visit to send.':'방문 예정일이 잡힌 메모가 없습니다.';
     const nm=e.name||'';
-    const when=mmvWhen(x,en);
+    const when=sWhen(x.visit_date,x.visit_time,en);
     const symKo=String(x.symptom||'').trim();
-    const sym=en?toEn(String(x.symptom_en||'').trim()||symKo):symKo;
-    const symLine=sym?('\n🔧 '+(en?'Request':'요청 내용')+' : '+sym.split('\n')[0]):'';
+    const sym=(en?toEn(String(x.symptom_en||'').trim()||symKo):symKo).split('\n')[0];
     const addr=String(x.condo||e.addr||'').trim();
-    const adLine=addr?('\n📍 '+(en?'Address':'방문 장소')+' : '+addr):'';
+    const info=(when?'\n📅 '+when:'')+(sym?'\n🔧 '+sym:'')+(addr?'\n📍 '+addr:'');
     return en
-      ?(sHi(en,nm)+'\n🚗 Here is your service visit schedule.\n\n📅 '+when+symLine+adLine+
-        '\n\n⚠️ Work Permit required before our visit.\n🪪 Work permit guide\n🔗 '+wpLinkMemo(x,true)+'\n\nResults → your My Page after the visit.'+sTail())
-      :(sHi(en,nm)+'\n🚗 점검 방문 일정 안내드립니다.\n\n📅 '+when+symLine+adLine+
-        '\n\n⚠️ 방문 전 작업방문등록(Work Permit)을 꼭 완료해 주세요.\n🪪 작업방문등록 안내장\n🔗 '+wpLinkMemo(x,false)+'\n\n진단·처리 결과는 방문 후 마이페이지에서 확인하실 수 있습니다.'+sTail());
+      ?(sHi(en,nm)+'\n\n🚗 *Inspection visit schedule*'+info+
+        '\n\n📌 *Before we arrive*\nRegister our visit (Work Permit) with management.\n🪪 Registration details 👉 '+wpLinkMemo(x,true)+sLk('📱 Results (after the visit)'))
+      :(sHi(en,nm)+'\n\n🚗 *점검 방문 일정 안내*'+info+
+        '\n\n📌 *방문 전 꼭 해 주세요*\n매니지먼트에 작업방문등록(Work Permit)\n🪪 등록에 필요한 정보 👉 '+wpLinkMemo(x,false)+sLk('📱 점검 결과 (방문 후)'));
   }
   // 🔍 점검 접수완료 안내
   function iprMsg(en){
     const nm=e.name||'';
     return en
-      ?(sHi(en,nm)+'\n🔍 Your inspection (repair) request has been received.\nWe\'ll confirm the visit time soon.\n\n※ Call-out fee applies (free for members / in free-inspection period).\nCheck your fee 👉 '+BASE+'/visit-fee?lang=en'+sTail())
-      :(sHi(en,nm)+'\n🔍 점검(수리) 요청이 접수되었습니다.\n확인 후 방문 일정 안내드리겠습니다.\n\n※ 출장점검비가 발생합니다 (무상점검 기간·패키지 회원 제외).\n우리 집 금액 확인 👉 '+BASE+'/visit-fee'+sTail());
+      ?(sHi(en,nm)+'\n\n🔍 *Your inspection (repair) request has been received*\n👉 We\'ll contact you with a visit time.\n\n💡 A call-out fee applies\n      (free for package members / in the free-inspection period)\n📍 Check my fee 👉 '+BASE+'/visit-fee?lang=en'+sLk('📱 My Page'))
+      :(sHi(en,nm)+'\n\n🔍 *점검(수리) 요청이 접수되었습니다*\n👉 확인 후 방문 일정을 연락드립니다.\n\n💡 출장점검비가 있습니다\n      (패키지 회원 · 무상점검 기간은 무료)\n📍 우리 집 비용 확인 👉 '+BASE+'/visit-fee'+sLk('📱 마이페이지'));
   }
   // 🚗 점검방문 안내 — 「2026.08.19 수요일 오후13:00 전후」 형식
   // ✅ 예약 확정 방문일시 — 「2026년 8월 22일(토) 오전 11:30 전후」 / 「Sat, 22 Aug 2026, around 11:30 AM」
@@ -4588,17 +4617,17 @@ window.caSendModal=async function(idx){
   function ipvMsg(en){
     const x=curCoupon();
     if(!x)return en?'No scheduled visit to send.':'방문 예정일이 잡힌 메모가 없습니다.';
-    const nm=e.name||'',when=ipvWhen(x,en);
+    const nm=e.name||'',when=sWhen(x.visit_date,x.visit_time,en);
     return en
-      ?(sHi(en,nm)+'\n🚗 We can visit for the inspection around '+when+'.\nDoes this time work for you? Please reply 🙏'+sTail())
-      :(sHi(en,nm)+'\n🚗 '+when+' 전후 점검 방문 가능합니다.\n일정 괜찮으신지 회신 부탁드립니다 🙏'+sTail());
+      ?(sHi(en,nm)+'\n\n🚗 *Available visit time*'+(when?'\n📅 '+when:'')+'\n\n👉 If this works, just reply 「OK」 🙏\n      If not, let us know a better time.'+sLk('📱 My Page'))
+      :(sHi(en,nm)+'\n\n🚗 *점검 방문 가능 일정*'+(when?'\n📅 '+when:'')+'\n\n👉 괜찮으시면 「OK」라고 회신 부탁드립니다 🙏\n      어려우시면 편한 시간을 알려 주세요.'+sLk('📱 마이페이지'));
   }
   // ⭐ 리뷰 이벤트 — 카드 이미지(review-event-ko/en.png) + 아래 두 줄 문구를 함께 보냅니다
   function revMsg(en){
     const nm=e.name||'';
     return en
-      ?(sHi(en,nm)+'\n🎁 Leave a review on our website and get RM10 in Happy Points!'+sTail())
-      :(sHi(en,nm)+'\n🎁 홈페이지 리뷰 남기고 Happy Point RM10 받으세요!'+sTail());
+      ?(sHi(en,nm)+'\n\n⭐ *Leave a review, get RM 10*\nWrite a review and we\'ll give you RM 10 in Happy Points.\n\n👉 Just leave a star rating and a short comment at the link.'+sLk('⭐ Write a review'))
+      :(sHi(en,nm)+'\n\n⭐ *리뷰 남기고 RM 10 받으세요*\n이용 후기를 남겨 주시면 해피포인트 RM 10을 드립니다.\n\n👉 링크에서 별점과 한 줄 후기만 남겨 주세요.'+sLk('⭐ 리뷰 쓰기'));
   }
   const revImgUrl=en=>BASE+'/review-event-'+(en?'en':'ko')+'.png';
   // 📱 휴대폰 공유창은 「누른 순간」에 바로 열어야 하므로 카드 이미지를 미리 받아 둡니다
@@ -4654,14 +4683,18 @@ window.caSendModal=async function(idx){
     if(G.all){
       // 영문은 안내장 이름이 길어 카카오 200자를 넘기므로 목록에서만 짧은 이름을 씁니다
       const SH={gd_avoid:'Companies to avoid',gd_leak:'Water dripping',gd_cool:'Not cooling',gd_odour:'Bad smell',gd_gas:'Low gas',gd_outdoor:'Outdoor unit cleaning',gd_insp:'Inspection fees'};
-      const L=Object.keys(GDS).filter(k=>!GDS[k].all).map(k=>'· '+(en?(SH[k]||GDS[k].en):GDS[k].ko)).join('\n');
+      const ks=Object.keys(GDS).filter(k=>!GDS[k].all);
+      const L=ks.map(k=>'· '+(en?(SH[k]||GDS[k].en):GDS[k].ko)).join('\n');
       return en
-        ?(sHi(en,nm)+'\n📚 Our air-con guides — pick one at the link:\n\n'+L+sTail())
-        :(sHi(en,nm)+'\n📚 에어컨 궁금증 안내장을 보내드립니다.\n링크를 열어 궁금하신 안내장을 골라 보세요.\n\n'+L+sTail());
+        ?(sHi(en,nm)+'\n\n📚 *Our '+ks.length+' air-con guides*\n'+L+'\n\n👉 Pick the one you need at the link.'+sLk('📚 Choose a guide'))
+        :(sHi(en,nm)+'\n\n📚 *에어컨 궁금증 안내장 '+ks.length+'가지*\n'+L+'\n\n👉 링크에서 궁금하신 것을 골라 보세요.'+sLk('📚 안내장 고르기'));
     }
+    if(G.fee)return en
+      ?(sHi(en,nm)+'\n\n🧰 *'+G.en+'*\n\n👉 Enter your address at the link to see the fee for your home.'+sLk('📍 Check my fee'))
+      :(sHi(en,nm)+'\n\n🧰 *'+G.ko+'*\n\n👉 링크에서 주소를 넣으면 우리 집 비용이 바로 나옵니다.'+sLk('📍 우리 집 비용 확인'));
     return en
-      ?(sHi(en,nm)+'\n📘 Guide: '+G.en+'\n'+G.den+sTail())
-      :(sHi(en,nm)+'\n📘 ['+G.ko+'] 안내장을 보내드립니다.\n'+G.dko+sTail());
+      ?(sHi(en,nm)+'\n\n📘 *'+G.en+'*\n'+G.den+'\n\n👉 If this doesn\'t solve it, just let us know here.'+sLk('📘 View the guide'))
+      :(sHi(en,nm)+'\n\n📘 *'+G.ko+'*\n'+G.dko+'\n\n👉 보시고 해결이 안 되면 이 대화방에 알려 주세요.'+sLk('📘 안내장 크게 보기'));
   }
   // 💎 적립포인트 안내도 안내장 그림(guide-points.png)을 함께 보냅니다
   const IMG_TPL={pti:'guide-points'};
@@ -4704,7 +4737,7 @@ window.caSendModal=async function(idx){
     const en=!!state.en,G=GDS[state.tpl];
     const f=await gdPrefetch(en);
     if(f&&navigator.canShare&&navigator.canShare({files:[f]})&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
-      const txt=await hhcShortLinks(waText(msg()));
+      const txt=await hhcShortLinks(kkPlain(waText(msg())));
       try{await navigator.share({files:[f],text:txt});return;}   // 공유창에서 카카오톡 선택
       catch(err){if(err&&err.name==='AbortError')return;}
     }
@@ -4715,11 +4748,11 @@ window.caSendModal=async function(idx){
   // 💼 전자명함 안내 — 한국어/영문 모두 상대방에게 같은 내용으로 보입니다
   function ncMsg(en){
     return en
-      ?('Hello 😊 This is Happy Home Care.\n💼 Here is our digital name card.\n\nBook a service or check our prices right from the card.'+sTail())
-      :('안녕하세요 😊 Happy Home Care입니다.\n💼 전자명함을 보내드립니다.\n\n명함에서 바로 서비스 예약과 가격 확인을 하실 수 있습니다.'+sTail());
+      ?('Hello 😊 This is Happy Home Care.\n\n💼 *Here is our digital name card*\n👉 Save it to book, check prices or chat with us anytime.'+sLk('💼 Open name card'))
+      :('안녕하세요 😊 Happy Home Care입니다.\n\n💼 *전자명함을 보내드립니다*\n👉 저장해 두시면 예약 · 가격 확인 · 상담을\n      한 번에 하실 수 있습니다.'+sLk('💼 명함 열기'));
   }
   function msg(){
-    const l=link(),en=!!state.en,nm=e.name||'',list=msgList();
+    const en=!!state.en,nm=e.name||'',hi=sHi(en,nm)+'\n\n';
     if(state.tpl==='nc')return ncMsg(en);
     if(state.tpl==='rev')return revMsg(en);
     if(GDS[state.tpl])return gdMsg(en);
@@ -4732,84 +4765,78 @@ window.caSendModal=async function(idx){
     if(state.tpl==='aw')return awMsg(en);
     if(state.tpl==='qt')return qtMsg(en);
     if(state.tpl==='bill'){
-      const amt=billAmt();
-      const amtEn=amt.toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
+      // 청구금액 = 청구중 + 연체 인보이스의 잔여 결제금액 합계
+      const amt=sRM(billAmt()),n=billList().length;
       return en
-        ?(sHi(en,nm)+'\n💳 Your amount due is RM '+amtEn+'.\n\nPayment account and full details are on your My Page.'+sTail())
-        :(sHi(en,nm)+'\n💳 이번 청구 금액은 RM '+amtEn+'입니다.\n\n결제 계좌와 상세 내역은 마이페이지에서 확인해 주세요.'+sTail());
+        ?(hi+'💳 *Payment due  '+amt+'*'+(n?'\n🧾 '+n+(n===1?' invoice':' invoices'):'')+'\n\n👉 Please transfer to the account at the link below,\n      then send us the receipt here.'+sLk('💳 Account & details'))
+        :(hi+'💳 *결제 요청  '+amt+'*'+(n?'\n🧾 인보이스 '+n+'건':'')+'\n\n👉 아래 링크의 계좌로 이체 후,\n      영수증을 이 대화방에 보내 주세요.'+sLk('💳 결제 계좌 · 내역'));
     }
     if(state.tpl==='rebill'){
       // 결제내역이 확인되지 않은 고객에게 이체 영수증을 다시 요청하는 안내
-      const amt=billAmt();
-      const amtEn=amt.toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
+      const amt=sRM(billAmt());
       return en
-        ?(sHi(en,nm)+'\n🔔 We haven\'t been able to confirm payment of RM '+amtEn+' yet.\n\nIf you have already paid, please send us the transfer receipt 🙏\nPayment account details are on your My Page.'+sTail())
-        :(sHi(en,nm)+'\n🔔 RM '+amtEn+' 청구 건의 입금이 아직 확인되지 않아 연락드립니다.\n\n이미 결제하셨다면 이체 영수증을 보내 주세요 🙏\n결제 계좌는 마이페이지에서 확인하실 수 있습니다.'+sTail());
+        ?(hi+'🔔 *Payment check  '+amt+'*\nWe have not received this payment yet.\n\n👉 If you have already paid, just send us the receipt 🙏\n      If not, please transfer to the account at the link below.'+sLk('💳 Account & details'))
+        :(hi+'🔔 *입금 확인 요청  '+amt+'*\n아직 입금이 확인되지 않았습니다.\n\n👉 이미 이체하셨다면 영수증 사진만 보내 주세요 🙏\n      아직이시면 아래 링크의 계좌로 이체 부탁드립니다.'+sLk('💳 결제 계좌 · 내역'));
     }
     if(state.tpl==='pay'){
+      const pd=/^\d{4}-\d{2}-\d{2}$/.test(state.payDate||'')?sDay(state.payDate,en):'';
       return en
-        ?(sHi(en,nm)+'\n✅ Your payment has been confirmed. Thank you!\n\nYour invoice is available on your My Page.'+sTail())
-        :(sHi(en,nm)+'\n✅ 결제가 확인되었습니다. 감사합니다!\n\n인보이스는 마이페이지에서 확인하실 수 있습니다.'+sTail());
+        ?(hi+'✅ *Payment confirmed — thank you!*'+(pd?'\n🧾 Confirmed on '+pd:'')+'\n\n👉 Nothing else needed from you.'+sLk('🧾 View invoice'))
+        :(hi+'✅ *결제 확인 완료 — 감사합니다!*'+(pd?'\n🧾 '+pd+' 확인':'')+'\n\n👉 따로 하실 일은 없습니다.'+sLk('🧾 인보이스 보기'));
     }
     if(state.tpl==='care3'||state.tpl==='care6'){
-      // 🌿 정기관리 알림 — 최종 인보이스(청소) 후 3·6개월이 지난 고객에게 정기 청소를 권합니다.
-      //  · 그림(마지막 관리일이 들어간 안내장)은 기존 그대로 함께 나갑니다 — 문구만 짧게.
-      const six=(state.tpl==='care6'),n=six?'6':'3',ic=six?'🔧':'🌿';
+      // 🌿 정기관리 알림 — 그림(마지막 관리일이 들어간 안내장)은 기존 그대로 함께 나갑니다.
+      const six=(state.tpl==='care6');
+      const ld=/^\d{4}-\d{2}-\d{2}$/.test(state.careDate||'')?sDay(state.careDate,en):'';
       return en
-        ?(sHi(en,nm)+'\n'+ic+' It has been '+n+' months since your last air-con cleaning.\nWe recommend cleaning every 3 months (air & health) / 6 months (cooling & care).\n\nBook your cleaning at the link below 📅'+sTail())
-        :(sHi(en,nm)+'\n'+ic+' 에어컨 청소 후 '+n+'개월이 지났습니다.\n3개월(공기·호흡기 건강) · 6개월(냉방 성능·에어컨 보호) 주기 정기 청소를 권해 드립니다.\n\n아래 링크에서 예약하실 수 있습니다 📅'+sTail());
+        ?(hi+(six?'🔧 *6-month air-con cleaning reminder*':'🌿 *3-month air-con cleaning reminder*')+(ld?'\n🗓 Last cleaning: '+ld:'')+
+          '\n\n👉 '+(six?'After 6 months, cooling gets weaker\n      and your electricity bill can go up.':'Cleaning every 3 months keeps the air fresh,\n      free of smell and mould.')+sLk('📅 Book a cleaning'))
+        :(hi+(six?'🔧 *에어컨 청소 6개월 알림*':'🌿 *에어컨 청소 3개월 알림*')+(ld?'\n🗓 마지막 청소 '+ld:'')+
+          '\n\n👉 '+(six?'6개월이 넘으면 냉방이 약해지고\n      전기요금이 늘 수 있습니다.':'3개월마다 청소하면 냄새·곰팡이 없이\n      깨끗한 공기를 유지할 수 있습니다.')+sLk('📅 청소 예약하기'));
     }
     if(state.tpl==='rqf'){
-      // 서비스 의뢰 요청서 안내 — 고객이 직접 품목을 고르고 접수하도록 안내합니다.
       return en
-        ?(sHi(en,nm)+'\n📨 Here is the Happy Home Care [Service Request Form].\n\nPick your items → see the price → done!\n(No sign-up · about 1 minute)'+sTail())
-        :(sHi(en,nm)+'\n📨 Happy Home Care [서비스 의뢰서]입니다.\n\n필요한 품목만 선택 → 견적 바로 확인 → 접수 완료!\n(회원가입 없이 1분이면 됩니다)'+sTail());
+        ?(hi+'📨 *Here is our Service Request Form*\nPick items → see the price → submit\n(No sign-up · about 1 minute)\n\n👉 Choose what you need and submit. We\'ll get back to you.'+sLk('📝 Fill in the form'))
+        :(hi+'📨 *서비스 의뢰서를 보내드립니다*\n품목 선택 → 금액 바로 확인 → 접수\n(회원가입 없이 1분)\n\n👉 필요한 품목만 골라 접수해 주세요. 확인 후 연락드립니다.'+sLk('📝 의뢰서 작성하기'));
     }
     if(state.tpl==='mem'){
-      // 패키지(멤버십) 상품 안내 — 안내장 한 장으로 등급·혜택을 모두 볼 수 있게 안내합니다.
       return en
-        ?(sHi(en,nm)+'\n👑 Introducing our Happy Membership Package.\nNo expiry · spend more than you pay · up to RM 15,000 bonus credit.\n\n🎁 New sign-ups now get double bonus (limited time)'+sTail())
-        :(sHi(en,nm)+'\n👑 해피 멤버십 패키지를 안내드립니다.\n유효기간 없이, 가입 금액보다 큰 한도로 이용 · 최대 RM 15,000 무상적립\n\n🎁 지금 신규가입 시 무상적립금 2배 (기간 한정)'+sTail());
+        ?(hi+'👑 *Happy Membership Package*\n💰 Use more than you pay (up to RM 15,000 bonus credit)\n⏳ No expiry\n🎁 Double bonus for new sign-ups (limited time)\n\n👉 Compare the benefits of each tier.'+sLk('👑 View packages'))
+        :(hi+'👑 *해피 멤버십 패키지 안내*\n💰 낸 금액보다 더 많이 사용 (최대 RM 15,000 추가 적립)\n⏳ 유효기간 없음\n🎁 지금 가입 시 추가 적립 2배 (기간 한정)\n\n👉 등급별 혜택을 비교해 보세요.'+sLk('👑 패키지 보기'));
     }
     if(state.tpl==='evi'){
-      // 🎁 전자상품권 안내 — 안내장 한 장으로 종류·혜택·이용방법을 모두 볼 수 있게 안내합니다.
       return en
-        ?(sHi(en,nm)+'\n🎁 Introducing our e-Gift Voucher.\nBuy at 10% off and use it like cash for any service.\n\nA great gift for family & friends, too!'+sTail())
-        :(sHi(en,nm)+'\n🎁 해피홈케어 전자상품권을 안내드립니다.\n액면가보다 10% 저렴하게 사서 모든 서비스에 현금처럼 쓰세요.\n\n가족·지인께 선물도 가능합니다!'+sTail());
+        ?(hi+'🎁 *e-Gift Voucher — 10% off*\n💳 Use like cash for any service\n🎀 A great gift for family & friends\n\n👉 Choose an amount and buy at the link.'+sLk('🎁 View voucher guide'))
+        :(hi+'🎁 *전자상품권 — 10% 저렴하게*\n💳 모든 서비스에 현금처럼 사용\n🎀 가족 · 지인께 선물 가능\n\n👉 원하시는 금액을 골라 구매해 주세요.'+sLk('🎁 상품권 안내 보기'));
     }
     if(state.tpl==='pti'){
       // 💎 적립포인트 안내 — 그림(guide-points)은 기존 그대로 함께 나갑니다.
       return en
-        ?(sHi(en,nm)+'\n💎 Earn RM 1 for every RM 100 you spend — automatically.\nNo sign-up, no card, no expiry.\n\n(Use like cash once you reach RM 10)'+sTail())
-        :(sHi(en,nm)+'\n💎 결제 RM 100마다 RM 1이 자동 적립됩니다.\n신청·카드 필요 없고 유효기간도 없습니다.\n\n(RM 10 이상 모이면 다음 결제부터 현금처럼 사용)'+sTail());
+        ?(hi+'💎 *Happy Points — RM 1 for every RM 100*\n✔ No sign-up or card (automatic)\n✔ No expiry\n✔ Use like cash from RM 10\n\n👉 Nothing else needed from you.'+sLk('💎 View points guide'))
+        :(hi+'💎 *해피포인트 — RM 100마다 RM 1 적립*\n✔ 신청 · 카드 필요 없음 (자동 적립)\n✔ 유효기간 없음\n✔ RM 10부터 현금처럼 사용\n\n👉 따로 하실 일은 없습니다.'+sLk('💎 포인트 안내 보기'));
     }
     if(state.tpl==='vfee'){
-      // 🧰 출장점검/진단 안내 — 주소를 넣으면 댁까지의 출장점검 비용 확인 · 바로 신청
       return en
-        ?(sHi(en,nm)+'\n🧰 On-site inspection / diagnosis\nEnter your address at the link to see your visit fee and request a visit.'+sTail())
-        :(sHi(en,nm)+'\n🧰 출장점검/진단 안내드립니다.\n링크에서 주소를 넣으시면 댁까지의 출장점검 비용을 바로 확인하고 신청하실 수 있습니다.'+sTail());
+        ?(hi+'🧰 *On-site inspection / diagnosis*\n\n👉 Enter your address at the link to see the visit fee\n      for your home — you can request a visit there too.'+sLk('📍 Check my fee'))
+        :(hi+'🧰 *출장점검 · 진단 안내*\n\n👉 링크에서 주소를 넣으면 우리 집 출장점검 비용이\n      바로 나옵니다. 그 화면에서 신청까지 됩니다.'+sLk('📍 우리 집 비용 확인'));
     }
     if(state.tpl==='fee'){
-      // 💡 추가비용 안내 — 최소청구금액 · 주차비용 · 예약보증금
-      //    자세한 내용(환급 규정 표 등)은 링크의 추가비용 안내장(/fees.html)에서 봅니다.
       return en
-        ?(sHi(en,nm)+'\n💡 Please note these charges before your service:\n\n· Minimum charge RM 320\n· Parking RM 10 (2 hrs, +RM 10/hr)\n· Deposit RM 320 (bookings 2+ weeks ahead)'+sTail())
-        :(sHi(en,nm)+'\n💡 서비스 전 추가비용을 확인해 주세요.\n\n· 최소청구금액 RM 320\n· 주차비 RM 10 (2시간 · 초과 시 시간당 RM 10)\n· 예약보증금 RM 320 (2주 이후 예약 시)'+sTail());
+        ?(hi+'💡 *Please note — additional charges*\n· Minimum charge RM 320\n· Parking RM 10 (2 hrs, then RM 10/hr)\n· Deposit RM 320 (bookings 2+ weeks ahead)\n\n👉 Any questions? Just reply in this chat.'+sLk('💡 See details'))
+        :(hi+'💡 *서비스 전 확인해 주세요 — 추가비용*\n· 최소 청구금액 RM 320\n· 주차비 RM 10 (2시간 · 이후 시간당 RM 10)\n· 예약보증금 RM 320 (2주 뒤 예약일 때)\n\n👉 궁금하신 점은 이 대화방으로 물어봐 주세요.'+sLk('💡 자세히 보기'));
     }
     if(state.tpl==='wp'){
-      // 매니지먼트 작업방문등록(워크퍼밋)에 필요한 회사·차량·직원 정보
-      //  · 직원 명단이 반드시 다 들어가야 하므로, 카카오 200자 안에 담기도록
-      //    라벨(회사명/차량/직원)은 아이콘으로 대신하고 문장을 짧게 씁니다.
+      // 매니지먼트 작업방문등록(워크퍼밋)에 필요한 회사·차량·직원 정보 — 직원 한 줄에 한 명
       const V=CS_VISIT;
-      const staff=V.staff.map(function(a){return a[0]+' '+a[1];}).join('\n');
+      const info='🏢 '+V.company+'\n🚗 '+V.cars+'\n'+V.staff.map(function(a){return '👷 '+a[0]+' '+a[1];}).join('\n');   // 카카오 200자 안에 직원 5명이 모두 들어가도록 짧게
       return en
-        ?(sHi(en,nm)+'\n🪪 Please register our visit (Work Permit) with management.\n\n🏢 '+V.company+'\n🚗 '+V.cars+'\n👷 '+staff+sTail())
-        :(sHi(en,nm)+'\n🪪 방문 전 매니지먼트에 작업방문등록 부탁드립니다.\n\n🏢 '+V.company+'\n🚗 '+V.cars+'\n👷 '+staff+sTail());
+        ?(hi+'🪪 *Work Permit*\n👉 Please pass these to management.\n\n'+info+sLk('🪪 Registration guide'))
+        :(hi+'🪪 *방문 전 작업방문등록 부탁드립니다*\n👉 아래 정보를 관리사무소에 전달해 주세요.\n\n'+info+sLk('🪪 등록 안내장'));
     }
     if(state.tpl==='install'){
       return en
-        ?(sHi(en,nm)+'\n📲 Install your My Page like an app — one tap to open!\n\n🍎 iPhone: Share (⬆️) → Add to Home Screen\n🤖 Android: 「📲 Install as App」 or menu (⋮) → Add to Home screen\n\nOpen your My Page first:'+sTail())
-        :(sHi(en,nm)+'\n📲 마이페이지를 앱처럼 설치해 보세요. 아이콘 하나로 바로 열립니다!\n\n🍎 아이폰: 공유(⬆️) → 홈 화면에 추가\n🤖 안드로이드: 「📲 앱으로 설치」 또는 메뉴(⋮) → 홈 화면에 추가\n\n먼저 마이페이지를 열어 주세요:'+sTail());
+        ?(hi+'📲 *Install your My Page like an app*\nOne tap to open.\n\n👉 Open the link, then\n🍎 iPhone: Share (⬆️) → Add to Home Screen\n🤖 Android: menu (⋮) → Add to Home screen'+sLk('📱 Open My Page'))
+        :(hi+'📲 *마이페이지를 앱처럼 설치하세요*\n아이콘 하나로 바로 열립니다.\n\n👉 링크를 연 뒤\n🍎 아이폰: 공유(⬆️) → 홈 화면에 추가\n🤖 안드로이드: 메뉴(⋮) → 홈 화면에 추가'+sLk('📱 마이페이지 열기'));
     }
     if(state.tpl==='bk'){
       let bi=BKP[0]&&BKP[0].booking_items?String(BKP[0].booking_items):'';
@@ -4817,8 +4844,8 @@ window.caSendModal=async function(idx){
       let il=bkItemLines(bi,false);
       if(en&&il)il=il.split('\n').map(sEnIt).join('\n');
       return en
-        ?(sHi(en,nm)+'\nRequest received — thank you! 🙏\n'+(il?'\n'+il+'\n':'')+'\n👇 Please choose your preferred visit date & time on your My Page below.'+sTail())
-        :(sHi(en,nm)+'\n의뢰 접수 완료! 감사합니다 🙏\n'+(il?'\n'+il+'\n':'')+'\n👇 아래 마이페이지에서 원하시는 방문 날짜·시간을 선택해 주세요.'+sTail());
+        ?(hi+'📅 *Please choose your visit date*'+(il?'\n'+il:'')+'\n\n👉 Open the link and tap a date & time — that\'s it.'+sLk('📅 Choose a date'))
+        :(hi+'📅 *방문 날짜를 골라 주세요*'+(il?'\n'+il:'')+'\n\n👉 링크를 열고 날짜·시간을 누르면 예약 신청이 끝납니다.'+sLk('📅 날짜 고르기'));
     }
     if(state.tpl==='bkc'){
       // ✅ 예약 확정 안내 — 문구 원본은 /hhc-sendmsg.js (예약관리 확정 발송과 같은 문구)
@@ -4830,29 +4857,36 @@ window.caSendModal=async function(idx){
     }
     if(state.tpl==='revisit'){
       return en
-        ?(sHi(en,nm)+'\nThank you for choosing us again!\n\nYou can book your next service at the link below 📅'+sTail())
-        :(sHi(en,nm)+'\n다시 찾아주셔서 진심으로 감사합니다!\n\n아래 링크에서 서비스 예약을 신청하실 수 있습니다 📅'+sTail());
+        ?(hi+'🙏 *Thank you for coming back*\n\n👉 Pick your items and preferred date at the link to book.'+sLk('📅 Book now'))
+        :(hi+'🙏 *다시 찾아 주셔서 감사합니다*\n\n👉 링크에서 품목과 원하시는 날짜를 골라 예약 신청해 주세요.'+sLk('📅 예약 신청하기'));
     }
     return en
-      ?(sHi(en,nm)+'\n📱 Here is your personal My Page.\nBooking · prices · invoices · reports · reward points — all in one place.'+sTail())
-      :(sHi(en,nm)+'\n📱 고객님 전용 마이페이지입니다.\n예약 신청 · 가격 정보 · 인보이스 · 점검보고서 · 적립포인트를 한곳에서 확인하세요.'+sTail());
+      ?(hi+'📱 *Your personal My Page*\nBookings · invoices · reports · reward points in one place\n\n👉 Save it to your home screen for quick access.'+sLk('📱 Open My Page'))
+      :(hi+'📱 *고객님 전용 마이페이지입니다*\n예약 · 인보이스 · 점검보고서 · 적립포인트를 한곳에서\n\n👉 홈 화면에 저장해 두시면 편합니다.'+sLk('📱 마이페이지 열기'));
   }
   // 미리보기 전용 렌더러 (실제 발송 텍스트는 msg() 원문 그대로 사용)
   function msgHtml(txt){
-    return String(txt).split('\n').map(ln=>{
+    // 들여 쓴 이어지는 줄(「      (따로 하실 일은 없습니다)」)은 윗줄과 한 덩어리로 그립니다
+    const _L=[];String(txt).split('\n').forEach(ln=>{if(/^ {4,}\S/.test(ln)&&_L.length)_L[_L.length-1]+='\n'+ln.trim();else _L.push(ln);});
+    return _L.map(ln=>{
       const t=ln.trim();
       if(!t)return '<div style="height:8px"></div>';
       if(/^[-━]{5,}$/.test(t))return '<div style="border-top:1px dashed #d3dbe8;margin:9px 0"></div>';
-      if(t.indexOf('\u{1F449}')===0)return '<div style="background:linear-gradient(135deg,#fff7e6,#ffedd5);border:1.5px solid #f4b73f;border-left:5px solid #ea8c00;border-radius:11px;padding:11px 13px;margin:8px 0;font-size:13.5px;font-weight:900;color:#9a3412;line-height:1.6;letter-spacing:-.01em;box-shadow:0 2px 8px rgba(234,140,0,.16)">'+esc(t)+'</div>';
+      if(t.indexOf('\u{1F449}')===0)return '<div style="background:#fff7e6;border:1px solid #f4cf8a;border-radius:10px;padding:8px 11px;margin:6px 0 2px;font-size:12.5px;font-weight:800;color:#9a3412;line-height:1.6">'+esc(t).replace(/\n/g,'<br>')+'</div>';
       if(t.indexOf('🔗')===0)return '<div style="background:var(--pri-bg);border:1px solid #cfe0ff;border-radius:9px;padding:8px 10px;margin:4px 0;font-size:10.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--pri);font-weight:700;word-break:break-all">'+esc(t)+'</div>';
       if(t.charAt(0)==='*'||t.charAt(0)==='•')return '<div style="display:flex;gap:7px;padding:2px 0 2px 3px"><span style="color:var(--pri);font-weight:900">●</span><span style="font-weight:800">'+esc(t.replace(/^[*•]\s*/,''))+'</span></div>';
       if(/^https?:\/\//.test(t))return '<div style="background:var(--pri-bg);border:1px solid #cfe0ff;border-radius:9px;padding:8px 10px;margin:4px 0;font-size:10.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--pri);font-weight:700;word-break:break-all">'+esc(t)+'</div>';
+      // 「이름 👉 주소」 링크 줄 — 이름은 굵게, 주소는 파란 상자
+      const _lm=/^(.*?)\s*\u{1F449}\s*(https?:\/\/\S+)\s*$/u.exec(t);
+      if(_lm)return '<div style="margin:5px 0 3px"><div style="font-weight:900;font-size:12px;color:var(--ink)">'+esc(_lm[1].replace(/\*/g,''))+'</div><div style="background:var(--pri-bg);border:1px solid #cfe0ff;border-radius:9px;padding:7px 10px;margin-top:3px;font-size:10.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--pri);font-weight:700;word-break:break-all">'+esc(_lm[2])+'</div></div>';
       let x=esc(t).replace(/(RM\s?[\d,]+(?:\.\d+)?|[\d,]+링깃)/g,'<b style="color:#c2410c;font-size:14.5px;font-weight:900;letter-spacing:-.01em">$1</b>');
+      // *제목* — 왓츠앱 굵은 글씨 (미리보기도 굵고 조금 크게)
+      x=x.replace(/\*([^*]+)\*/g,'<b style="font-size:14px;font-weight:900;color:var(--ink)">$1</b>');
       if(/^[1-9]\u{FE0F}?\u{20E3}/u.test(t))return '<div style="background:var(--pri-bg);border-left:4px solid var(--pri);border-radius:8px;padding:7px 11px;margin:7px 0 4px;font-size:13px;font-weight:900;color:var(--pri);letter-spacing:-.01em">'+esc(t)+'</div>';
       if(/^[①②③④⑤]/.test(t))return '<div style="padding:2px 0 2px 12px;font-weight:700;color:var(--ink2)">'+esc(t)+'</div>';
       if(t.indexOf('🍎')===0||t.indexOf('🤖')===0)return '<div style="font-weight:900;font-size:13px;margin-top:4px">'+esc(t)+'</div>';
       if(t.indexOf('📱')===0||t.indexOf('🏠')===0)x='<span style="font-weight:800">'+x+'</span>';
-      return '<div>'+x+'</div>';
+      return '<div>'+x.replace(/\n/g,'<br>')+'</div>';
     }).join('');
   }
   function paint(){
@@ -5110,7 +5144,7 @@ window.caSendModal=async function(idx){
       if(!/^\d{4}-\d{2}-\d{2}$/.test(state.careDate||''))toast('📅 마지막 관리일이 없어 문구만 보냅니다');
       return false;
     }
-    const txt=await hhcShortLinks(waText(msg()));
+    const txt=await hhcShortLinks(ch==='kk'?kkPlain(waText(msg())):waText(msg()));
     if(_isMob&&navigator.canShare&&navigator.canShare({files:[f]})){
       try{await navigator.share({files:[f],text:txt});careMark(ch);return true;}
       catch(err){if(err&&err.name==='AbortError')return true;}
@@ -5168,7 +5202,7 @@ window.caSendModal=async function(idx){
     if(state.tpl==='pti'){                   // 💎 적립포인트 : 휴대폰은 공유창(그림 + 문구), PC 는 그림을 내려받고 카드 발송
       const _f=await gdPrefetch(!!state.en);
       if(_f&&navigator.canShare&&navigator.canShare({files:[_f]})&&/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
-        try{await navigator.share({files:[_f],text:await hhcShortLinks(waText(msg()))});return;}
+        try{await navigator.share({files:[_f],text:await hhcShortLinks(kkPlain(waText(msg())))});return;}
         catch(err){if(err&&err.name==='AbortError')return;}
       }
       if(_f){careDownload(_f);setTimeout(()=>toast('🖼 안내장 그림을 내려받았습니다 · 카카오톡 대화방에 첨부해 주세요'),2600);}
@@ -5247,22 +5281,22 @@ window.caSendModal=async function(idx){
 
 // ═══ 홈페이지 섹션 안내 발송 ═══
 const HP_SECS=[
-  {k:'promotion', lb:'🎁 이벤트·할인',
+  {k:'promotion', tk:'🎁 *이번 달 이벤트 · 할인*',ak:'👉 진행 중인 할인을 확인하고 바로 예약하실 수 있습니다.',lk:'🎁 이벤트 보기',te:'🎁 *This month\'s events & offers*',ae:'👉 See our current offers and book right away.',le:'🎁 View offers', lb:'🎁 이벤트·할인',
    ko:'🎁 지금 진행 중인 이벤트·할인 프로모션을 안내드립니다. 아래 링크를 누르시면 바로 확인하실 수 있습니다.',
    en:'🎁 Here are our ongoing events & promotions. Tap the link below to see the details.'},
-  {k:'pricing', lb:'💰 가격정보',
+  {k:'pricing', tk:'💰 *서비스 가격표*',ak:'👉 품목별 가격을 확인해 보세요.',lk:'💰 가격표 보기',te:'💰 *Our price list*',ae:'👉 Check the price for each service.',le:'💰 View prices', lb:'💰 가격정보',
    ko:'💰 서비스 가격 안내입니다. 아래 링크에서 항목별 가격표를 확인하실 수 있습니다.',
    en:'💰 Here is our price guide. Tap the link below for the full price list.'},
-  {k:'membership', lb:'👑 멤버십',
+  {k:'membership', tk:'👑 *멤버십 혜택*',ak:'👉 적립금과 회원 혜택을 확인해 보세요.',lk:'👑 혜택 보기',te:'👑 *Membership benefits*',ae:'👉 See the bonus credit and member perks.',le:'👑 View benefits', lb:'👑 멤버십',
    ko:'👑 멤버십 혜택을 안내드립니다. 적립금과 회원 혜택을 아래 링크에서 확인해 보세요.',
    en:'👑 Here are our membership benefits. Check credits and member perks below.'},
-  {k:'voucher', lb:'🎟 할인 상품권',
+  {k:'voucher', tk:'🎟 *할인 상품권 — 10% 저렴하게*',ak:'👉 원하시는 금액을 골라 구매하실 수 있습니다.',lk:'🎟 상품권 보기',te:'🎟 *Gift vouchers — 10% off*',ae:'👉 Choose an amount and buy at the link.',le:'🎟 View vouchers', lb:'🎟 할인 상품권',
    ko:'🎟 할인 상품권을 안내드립니다. 액면가보다 10% 할인된 금액으로 구매하실 수 있습니다.',
    en:'🎟 Introducing our discount gift vouchers — buy at 10% below face value.'},
-  {k:'services', lb:'🧹 서비스 소개',
+  {k:'services', tk:'🧹 *서비스 소개*\n에어컨 · 세탁기 · 소파 · 매트리스',ak:'👉 필요한 서비스를 골라 보세요.',lk:'🧹 서비스 보기',te:'🧹 *Our services*\nAir-con · washer · sofa · mattress',ae:'👉 Find the service you need.',le:'🧹 View services', lb:'🧹 서비스 소개',
    ko:'🧹 저희 서비스 소개입니다. 에어컨·세탁기·소파·매트리스 케어 서비스를 확인해 보세요.',
    en:'🧹 Here is an overview of our services — aircon, washer, sofa & mattress care.'},
-  {k:'reviews', lb:'⭐ 고객 후기',
+  {k:'reviews', tk:'⭐ *실제 고객 후기*',ak:'👉 이용하신 분들의 후기를 확인해 보세요.',lk:'⭐ 후기 보기',te:'⭐ *Real customer reviews*',ae:'👉 See what our customers say.',le:'⭐ View reviews', lb:'⭐ 고객 후기',
    ko:'⭐ 실제 고객 후기를 안내드립니다. 아래 링크에서 확인해 보세요.',
    en:'⭐ See what our customers say — real reviews at the link below.'}
 ];
@@ -5292,9 +5326,11 @@ window.caHomeModal=function(idx){
   function link(){return BASE+'/home'+(en?'?lang=en':'')+'#'+sec;}
   function msg(){
     const o=HP_SECS.find(x=>x.k===sec);
+    // 2026-11 발송 문구 개편 — 인사 → *제목* → 👉 할 일 → 「이름 👉 주소」 → 서명
+    const SG='📞 +60 17-247 2774 · Happy Home Care';
     return en
-      ?('Hello '+e.name+' 😊\nThis is Happy Home Care.\n\n'+o.en+'\n\n🔗 '+hpLink()+'\n\nThank you 🙏\nHappy Home Care\n📞 +60 17-247 2774')
-      :('안녕하세요, '+e.name+' 고객님 😊\nHappy Home Care 입니다.\n\n'+o.ko+'\n\n🔗 '+hpLink()+'\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774');
+      ?('Hello, '+e.name+' 😊\n\n'+o.te+'\n\n'+o.ae+'\n\n'+o.le+' 👉 '+hpLink()+'\n'+SG)
+      :('안녕하세요, '+e.name+' 고객님 😊\n\n'+o.tk+'\n\n'+o.ak+'\n\n'+o.lk+' 👉 '+hpLink()+'\n'+SG);
   }
   // 문구에는 짧은 주소를 씁니다 (준비 전·실패 시엔 원 주소)
   const hpLink=()=>_hhcShortCache[link()]||link();
@@ -5315,7 +5351,7 @@ window.caHomeModal=function(idx){
       b.style.background=on?'#0B1833':'#fff';
       b.style.color=on?'#fff':'var(--ink3)';
     });
-    mk.querySelector('#hp-bub').textContent=msg();
+    mk.querySelector('#hp-bub').innerHTML=esc(msg()).replace(/\*([^*\n]+)\*/g,'<b>$1</b>');   // *제목* 은 왓츠앱에서 굵은 글씨
   }
   mk.querySelector('#hp-secs').addEventListener('click',ev=>{
     const el=ev.target.closest('[data-k]');if(!el)return;sec=el.dataset.k;paint();
@@ -5333,7 +5369,7 @@ window.caHomeModal=function(idx){
     if(ph)wa+='60'+ph;
     window.open(wa+'?text='+encodeURIComponent(await hhcShortLinks(msg())),'_blank');
   });
-  mk.querySelector('#hp-kk').addEventListener('click',()=>{kkShareMsg(e.name,msg(),link(),!!state.en);});
+  mk.querySelector('#hp-kk').addEventListener('click',()=>{kkShareMsg(e.name,msg(),link(),en);});
   mk.querySelector('#hp-cp').addEventListener('click',async()=>{
     const _t=await hhcShortLinks(msg());
     navigator.clipboard.writeText(_t).then(()=>toast('✓ 메시지가 복사되었습니다'))

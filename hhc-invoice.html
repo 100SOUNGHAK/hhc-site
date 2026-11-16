@@ -4953,73 +4953,61 @@ async function saveAndShare(){
 var msgLang='ko';
 
 // 결제계좌 블록 (구분선 + 항목별 줄) — 청구/연체 메시지 공용
+// ═══ 발송 문구 (2026-11 개편 — 고객이 한눈에 이해하도록) ═══
+//  인사 → *제목(금액)* → 기한 · 번호 한 줄씩 → 결제 계좌 → 👉 할 일 → 「이름 👉 주소」 → 서명
+//  *…* 는 왓츠앱 굵은 글씨 — 카카오 · 이메일로 보낼 때는 ivNoBold() 로 별표를 뗍니다.
+var IV_SIG='📞 +60 17-247 2774 · Happy Home Care';
+function ivNoBold(t){return String(t==null?'':t).replace(/\*([^*\n]+)\*/g,'$1');}
+// 날짜 + 요일 — 「11월 23일(월)」 · 「Mon, 23 Nov 2026」 · 「Isnin, 23 Nov 2026」
+function ivDay(d,lang){
+  var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(d||''));
+  if(!m)return String(d||'');
+  var dt=new Date(+m[1],+m[2]-1,+m[3]),w=dt.getDay(),mo=+m[2],dy=+m[3];
+  if(lang==='en')return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][w]+', '+dy+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mo-1]+' '+m[1];
+  if(lang==='ms')return ['Ahad','Isnin','Selasa','Rabu','Khamis','Jumaat','Sabtu'][w]+', '+dy+' '+['Jan','Feb','Mac','Apr','Mei','Jun','Jul','Ogo','Sep','Okt','Nov','Dis'][mo-1]+' '+m[1];
+  return m[1]+'년 '+mo+'월 '+dy+'일('+['일','월','화','수','목','금','토'][w]+')';
+}
+// 결제 계좌 — 계좌번호를 한 줄에 두어 길게 눌러 바로 복사할 수 있게 합니다
 function bankBlock(inv,lang){
-  var div='────────────────';
-  var W={ko:{t:'🏦 결제계좌',b:'은행',a:'계좌번호',n:'예금주',cash:'💵 결제방법: 현금 결제'},
-         en:{t:'🏦 Payment Account',b:'Bank',a:'Account No',n:'Account Name',cash:'💵 Payment: Cash Payment'},
-         ms:{t:'🏦 Akaun Bayaran',b:'Bank',a:'No. Akaun',n:'Nama Akaun',cash:'💵 Bayaran: Tunai'}}[lang]||{};
+  var W={ko:{t:'결제 계좌',cash:'결제 방법: 현금'},en:{t:'Payment account',cash:'Payment: cash'},ms:{t:'Akaun bayaran',cash:'Bayaran: tunai'}}[lang]||{t:'',cash:''};
   if(inv.bankInfo&&inv.bankInfo.accNum)
-    return '\n'+div+'\n'+W.t+'\n• '+W.b+': '+(inv.bankInfo.bankName||'')+'\n• '+W.a+': '+inv.bankInfo.accNum+'\n• '+W.n+': '+(inv.bankInfo.accName||'');
-  if(inv.bankInfo&&!inv.bankInfo.accNum)return '\n'+W.cash;
+    return '\n\n🏦 *'+W.t+'*\n'+(inv.bankInfo.bankName||'')+'  '+inv.bankInfo.accNum+(inv.bankInfo.accName?'\n'+inv.bankInfo.accName:'');
+  if(inv.bankInfo&&!inv.bankInfo.accNum)return '\n\n💵 *'+W.cash+'*';
   return '';
 }
+function ivIsCash(inv){return !!(inv.bankInfo&&!inv.bankInfo.accNum);}
+function ivNm(inv,lang){return (inv.customer&&inv.customer.name)||(lang==='ko'?'고객':lang==='ms'?'Pelanggan':'Customer');}
+function ivHi(inv,lang){var n=ivNm(inv,lang);return lang==='en'?('Hello, '+n+' 😊'):lang==='ms'?('Salam '+n+' 😊'):('안녕하세요, '+n+' 고객님 😊');}
+function ivPayAct(inv,lang){
+  if(ivIsCash(inv))return {ko:'👉 방문 시 직원에게 현금으로 결제해 주세요.',en:'👉 Please pay our staff in cash during the visit.',ms:'👉 Sila bayar tunai kepada kakitangan kami semasa lawatan.'}[lang];
+  return {ko:'👉 이체 후 영수증을 이 대화방에 보내 주세요.',en:'👉 Please send us the receipt here after your transfer.',ms:'👉 Sila hantar resit di sini selepas pemindahan.'}[lang];
+}
+var IV_LK={ko:'🧾 인보이스 보기',en:'🧾 View invoice',ms:'🧾 Lihat invois'};
 
 // 상태별 × 언어별 메시지 템플릿
+function ivBill(lang){return function(inv,lnk){
+  var T={ko:['인보이스','결제 기한 '],en:['Invoice','Due '],ms:['Invois','Tarikh akhir ']}[lang];
+  return ivHi(inv,lang)+'\n\n💳 *'+T[0]+' — '+fmtAmt(inv.total||0,inv.currency)+'*'+(inv.due?'\n📅 '+T[1]+ivDay(inv.due,lang):'')+'\n🧾 '+inv.id+
+    bankBlock(inv,lang)+'\n\n'+ivPayAct(inv,lang)+'\n\n'+IV_LK[lang]+' 👉 '+lnk+'\n'+IV_SIG;
+};}
+function ivPaid(lang){return function(inv,lnk){
+  var T={ko:['결제 확인 완료 — 감사합니다!',' 확인','👉 따로 하실 일은 없습니다.'],
+         en:['Payment received — thank you!','','👉 Nothing else needed from you.'],
+         ms:['Bayaran diterima — terima kasih!','','👉 Tiada apa-apa lagi yang perlu dibuat.']}[lang];
+  return ivHi(inv,lang)+'\n\n✅ *'+T[0]+'*\n🧾 '+fmtAmt(inv.total||0,inv.currency)+' · '+ivDay(today(),lang)+T[1]+'\n🧾 '+inv.id+
+    '\n\n'+T[2]+'\n\n'+IV_LK[lang]+' 👉 '+lnk+'\n'+IV_SIG;
+};}
+function ivOver(lang){return function(inv,lnk){
+  var T={ko:['결제 기한이 지났습니다','기한 ','👉 이미 이체하셨다면 영수증 사진만 보내 주세요 🙏'],
+         en:['Payment overdue','Due ','👉 If you have already paid, just send us the receipt 🙏'],
+         ms:['Bayaran tertunggak','Tarikh akhir ','👉 Jika sudah bayar, sila hantar resit sahaja 🙏']}[lang];
+  return ivHi(inv,lang)+'\n\n⚠️ *'+T[0]+' — '+fmtAmt(inv.total||0,inv.currency)+'*'+(inv.due?'\n📅 '+T[1]+ivDay(inv.due,lang):'')+'\n🧾 '+inv.id+
+    bankBlock(inv,lang)+'\n\n'+(ivIsCash(inv)?ivPayAct(inv,lang):T[2])+'\n\n'+IV_LK[lang]+' 👉 '+lnk+'\n'+IV_SIG;
+};}
 var msgTemplates={
-  // ── 청구 (billing) ──
-  billing:{
-    ko:function(inv,lnk){
-      var name=inv.customer&&inv.customer.name||'고객';
-      var div='────────────────';
-      return '안녕하세요, '+name+' 님 👋\n\nHappy Home Care 인보이스입니다.\n'+div+'\n📋 인보이스번호: '+inv.id+'\n💰 청구금액: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 만기일: '+fmtDate(inv.due)+bankBlock(inv,'ko')+'\n'+div+'\n\n🔗 인보이스 확인:\n'+lnk+'\n\n감사합니다 🙏\nHappy Home Care';
-    },
-    en:function(inv,lnk){
-      var name=inv.customer&&inv.customer.name||'Customer';
-      var div='────────────────';
-      return 'Dear '+name+' 👋\n\nPlease find your invoice from Happy Home Care.\n'+div+'\n📋 Invoice No: '+inv.id+'\n💰 Amount Due: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Due Date: '+inv.due+bankBlock(inv,'en')+'\n'+div+'\n\n🔗 View Invoice:\n'+lnk+'\n\nThank you 🙏\nHappy Home Care';
-    },
-    ms:function(inv,lnk){
-      var name=inv.customer&&inv.customer.name||'Pelanggan';
-      var div='────────────────';
-      return 'Salam '+name+' 👋\n\nSila semak invois daripada Happy Home Care.\n'+div+'\n📋 No. Invois: '+inv.id+'\n💰 Jumlah: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Tarikh Akhir: '+inv.due+bankBlock(inv,'ms')+'\n'+div+'\n\n🔗 Lihat Invois:\n'+lnk+'\n\nTerima kasih 🙏\nHappy Home Care';
-    }
-  },
-  // ── 결제완료 (paid) ──
-  paid:{
-    ko:function(inv,lnk){
-      var name=inv.customer&&inv.customer.name||'고객';
-      var div='────────────────';
-      return '안녕하세요, '+name+' 님 👋\n\n결제가 확인되었습니다. 감사합니다! ✅\n'+div+'\n📋 인보이스번호: '+inv.id+'\n💰 결제금액: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 결제일: '+fmtDate(today())+'\n'+div+'\n\n항상 이용해 주셔서 감사합니다 🙏\nHappy Home Care\n\n🔗 인보이스 확인:\n'+lnk;
-    },
-    en:function(inv,lnk){
-      var name=inv.customer&&inv.customer.name||'Customer';
-      var div='────────────────';
-      return 'Dear '+name+' 👋\n\nYour payment has been received. Thank you! ✅\n'+div+'\n📋 Invoice No: '+inv.id+'\n💰 Amount Paid: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Payment Date: '+today()+'\n'+div+'\n\nThank you for choosing Happy Home Care 🙏\n\n🔗 View Invoice:\n'+lnk;
-    },
-    ms:function(inv,lnk){
-      var name=inv.customer&&inv.customer.name||'Pelanggan';
-      var div='────────────────';
-      return 'Salam '+name+' 👋\n\nPembayaran anda telah diterima. Terima kasih! ✅\n'+div+'\n📋 No. Invois: '+inv.id+'\n💰 Jumlah Dibayar: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Tarikh Bayaran: '+today()+'\n'+div+'\n\nTerima kasih kerana memilih Happy Home Care 🙏\n\n🔗 Lihat Invois:\n'+lnk;
-    }
-  },
-  // ── 연체 (overdue) ──
-  overdue:{
-    ko:function(inv,lnk){
-      var name=inv.customer&&inv.customer.name||'고객';
-      var div='────────────────';
-      return '안녕하세요, '+name+' 님 👋\n\n인보이스 만기일이 지났습니다. 확인 부탁드립니다. ⚠️\n'+div+'\n📋 인보이스번호: '+inv.id+'\n💰 미결제금액: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 만기일: '+fmtDate(inv.due)+bankBlock(inv,'ko')+'\n'+div+'\n\n🔗 인보이스 확인:\n'+lnk+'\n\n문의사항은 언제든지 연락주세요 🙏\nHappy Home Care';
-    },
-    en:function(inv,lnk){
-      var name=inv.customer&&inv.customer.name||'Customer';
-      var div='────────────────';
-      return 'Dear '+name+' 👋\n\nYour invoice is overdue. Please arrange payment at your earliest convenience. ⚠️\n'+div+'\n📋 Invoice No: '+inv.id+'\n💰 Amount Overdue: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Due Date: '+inv.due+bankBlock(inv,'en')+'\n'+div+'\n\n🔗 View Invoice:\n'+lnk+'\n\nPlease contact us if you have any questions 🙏\nHappy Home Care';
-    },
-    ms:function(inv,lnk){
-      var name=inv.customer&&inv.customer.name||'Pelanggan';
-      var div='────────────────';
-      return 'Salam '+name+' 👋\n\nInvois anda telah tamat tempoh. Sila buat pembayaran segera. ⚠️\n'+div+'\n📋 No. Invois: '+inv.id+'\n💰 Jumlah Tertunggak: '+fmtAmt(inv.total||0,inv.currency)+'\n📅 Tarikh Akhir: '+inv.due+bankBlock(inv,'ms')+'\n'+div+'\n\n🔗 Lihat Invois:\n'+lnk+'\n\nSila hubungi kami jika ada pertanyaan 🙏\nHappy Home Care';
-    }
-  }
+  billing:{ko:ivBill('ko'),en:ivBill('en'),ms:ivBill('ms')},   // ── 청구
+  paid:{ko:ivPaid('ko'),en:ivPaid('en'),ms:ivPaid('ms')},      // ── 결제완료
+  overdue:{ko:ivOver('ko'),en:ivOver('en'),ms:ivOver('ms')}    // ── 연체
 };
 
 var emailSubjects={
@@ -5028,22 +5016,39 @@ var emailSubjects={
   overdue:{ko:'인보이스 만기 안내 — Happy Home Care',en:'Invoice Overdue — Happy Home Care',ms:'Invois Tertunggak — Happy Home Care'}
 };
 
+// 📧 이메일 본문 — 결제 계좌와 인보이스 주소를 함께 넣어 고객이 다시 묻지 않아도 되게 합니다
+function ivMailLnk(inv){var l=getLnk(inv.id);return tinyCache[l]||l;}
+function ivMailBank(inv,lang){
+  var W={ko:['결제 계좌','결제 방법: 현금 (방문 시 결제)'],en:['Payment account','Payment: cash (pay during the visit)'],ms:['Akaun bayaran','Bayaran: tunai (bayar semasa lawatan)']}[lang];
+  if(inv.bankInfo&&inv.bankInfo.accNum)return '\n\n'+W[0]+'\n'+(inv.bankInfo.bankName||'')+'  '+inv.bankInfo.accNum+(inv.bankInfo.accName?' ('+inv.bankInfo.accName+')':'');
+  if(ivIsCash(inv))return '\n\n'+W[1];
+  return '';
+}
+function ivMail(kind,lang){return function(inv){
+  var nm=ivNm(inv,lang),amt=fmtAmt(inv.total||0,inv.currency),lnk=ivMailLnk(inv);
+  var T={
+    ko:{hi:'안녕하세요, '+nm+' 고객님.',no:'인보이스 번호: ',sig:'Happy Home Care  +60 17-247 2774',vw:'인보이스 보기: ',
+        billing:['[결제 요청] ','결제 기한: ','이체 후 영수증을 이 메일에 회신해 주세요.'],
+        paid:['[결제 확인] ','결제일: ','결제가 확인되었습니다. 감사합니다!'],
+        overdue:['[결제 기한 지남] ','기한: ','이미 이체하셨다면 영수증을 이 메일에 회신해 주세요.']},
+    en:{hi:'Dear '+nm+',',no:'Invoice no: ',sig:'Happy Home Care  +60 17-247 2774',vw:'View invoice: ',
+        billing:['[Payment request] ','Due: ','Please reply to this email with the receipt after your transfer.'],
+        paid:['[Payment received] ','Paid on: ','Your payment has been received. Thank you!'],
+        overdue:['[Payment overdue] ','Due: ','If you have already paid, please reply to this email with the receipt.']},
+    ms:{hi:'Salam '+nm+',',no:'No. invois: ',sig:'Happy Home Care  +60 17-247 2774',vw:'Lihat invois: ',
+        billing:['[Permintaan bayaran] ','Tarikh akhir: ','Sila balas e-mel ini dengan resit selepas pemindahan.'],
+        paid:['[Bayaran diterima] ','Tarikh bayaran: ','Bayaran anda telah diterima. Terima kasih!'],
+        overdue:['[Bayaran tertunggak] ','Tarikh akhir: ','Jika sudah bayar, sila balas e-mel ini dengan resit.']}
+  }[lang],K=T[kind];
+  var dd=kind==='paid'?ivDay(today(),lang):(inv.due?ivDay(inv.due,lang):'');
+  var act=(kind!=='paid'&&ivIsCash(inv))?{ko:'방문 시 직원에게 현금으로 결제해 주세요.',en:'Please pay our staff in cash during the visit.',ms:'Sila bayar tunai kepada kakitangan kami semasa lawatan.'}[lang]:K[2];
+  return T.hi+'\n\n'+K[0]+amt+(dd?'\n'+K[1]+dd:'')+'\n'+T.no+inv.id+(kind==='paid'?'':ivMailBank(inv,lang))+
+    '\n\n'+act+'\n'+T.vw+lnk+'\n\n'+T.sig;
+};}
 var emailBodies={
-  billing:{
-    ko:function(inv){return '안녕하세요,\n\nHappy Home Care를 이용해 주셔서 감사합니다.\n인보이스를 확인 부탁드립니다.\n\n인보이스 번호: '+inv.id+'\n청구 금액: '+fmtAmt(inv.total||0,inv.currency)+'\n만기일: '+fmtDate(inv.due)+'\n\n감사합니다.\nHappy Home Care 팀';},
-    en:function(inv){return 'Dear '+(inv.customer&&inv.customer.name||'Customer')+',\n\nThank you for choosing Happy Home Care.\nPlease find your invoice details below.\n\nInvoice No: '+inv.id+'\nAmount Due: '+fmtAmt(inv.total||0,inv.currency)+'\nDue Date: '+inv.due+'\n\nThank you,\nHappy Home Care Team';},
-    ms:function(inv){return 'Salam '+(inv.customer&&inv.customer.name||'Pelanggan')+',\n\nTerima kasih kerana memilih Happy Home Care.\nSila semak butiran invois anda.\n\nNo. Invois: '+inv.id+'\nJumlah: '+fmtAmt(inv.total||0,inv.currency)+'\nTarikh Akhir: '+inv.due+'\n\nTerima kasih,\nPasukan Happy Home Care';}
-  },
-  paid:{
-    ko:function(inv){return '안녕하세요,\n\n결제가 확인되었습니다. 감사합니다!\n\n인보이스 번호: '+inv.id+'\n결제 금액: '+fmtAmt(inv.total||0,inv.currency)+'\n결제일: '+fmtDate(today())+'\n\n항상 이용해 주셔서 감사합니다.\nHappy Home Care 팀';},
-    en:function(inv){return 'Dear '+(inv.customer&&inv.customer.name||'Customer')+',\n\nYour payment has been received. Thank you!\n\nInvoice No: '+inv.id+'\nAmount Paid: '+fmtAmt(inv.total||0,inv.currency)+'\nPayment Date: '+today()+'\n\nThank you for choosing Happy Home Care.\nHappy Home Care Team';},
-    ms:function(inv){return 'Salam '+(inv.customer&&inv.customer.name||'Pelanggan')+',\n\nPembayaran anda telah diterima. Terima kasih!\n\nNo. Invois: '+inv.id+'\nJumlah Dibayar: '+fmtAmt(inv.total||0,inv.currency)+'\nTarikh Bayaran: '+today()+'\n\nTerima kasih kerana memilih Happy Home Care.\nPasukan Happy Home Care';}
-  },
-  overdue:{
-    ko:function(inv){return '안녕하세요,\n\n인보이스 만기일이 지났습니다. 빠른 결제 부탁드립니다.\n\n인보이스 번호: '+inv.id+'\n미결제 금액: '+fmtAmt(inv.total||0,inv.currency)+'\n만기일: '+fmtDate(inv.due)+'\n\n문의사항은 언제든지 연락주세요.\nHappy Home Care 팀';},
-    en:function(inv){return 'Dear '+(inv.customer&&inv.customer.name||'Customer')+',\n\nYour invoice is overdue. Please arrange payment at your earliest convenience.\n\nInvoice No: '+inv.id+'\nAmount Overdue: '+fmtAmt(inv.total||0,inv.currency)+'\nDue Date: '+inv.due+'\n\nPlease contact us if you have any questions.\nHappy Home Care Team';},
-    ms:function(inv){return 'Salam '+(inv.customer&&inv.customer.name||'Pelanggan')+',\n\nInvois anda telah tamat tempoh. Sila buat pembayaran segera.\n\nNo. Invois: '+inv.id+'\nJumlah Tertunggak: '+fmtAmt(inv.total||0,inv.currency)+'\nTarikh Akhir: '+inv.due+'\n\nSila hubungi kami jika ada pertanyaan.\nPasukan Happy Home Care';}
-  }
+  billing:{ko:ivMail('billing','ko'),en:ivMail('billing','en'),ms:ivMail('billing','ms')},
+  paid:{ko:ivMail('paid','ko'),en:ivMail('paid','en'),ms:ivMail('paid','ms')},
+  overdue:{ko:ivMail('overdue','ko'),en:ivMail('overdue','en'),ms:ivMail('overdue','ms')}
 };
 
 function setMsgLang(lang){
@@ -5072,7 +5077,7 @@ async function buildMsgAsync(inv){
   var msg=tpl(inv,shortLnk);
   // 결제완료 + 저장된 PDF가 있으면 다운로드 링크 자동 포함
   if(status==='paid'&&inv.pdfUrl){
-    try{var pdfShort=await shorten(inv.pdfUrl);msg+='\n\n📥 PDF 다운로드:\n'+pdfShort;}catch(e){}
+    try{var pdfShort=await shorten(inv.pdfUrl);msg=msg.replace('\n'+IV_SIG,'\n'+({ko:'📥 PDF 다운로드',en:'📥 Download PDF',ms:'📥 Muat turun PDF'}[msgLang]||'📥 PDF')+' 👉 '+pdfShort+'\n'+IV_SIG);}catch(e){}
   }
   return msg;
 }
@@ -5114,12 +5119,12 @@ async function shareKakao(id){
   showLoad('링크 단축 중...');
   var msg=await buildMsgAsync(inv);
   hideLoad();
-  cpTxt(msg);showToast('카카오톡 메시지 복사됨',3000);
+  cpTxt(ivNoBold(msg));showToast('카카오톡 메시지 복사됨',3000);   // 카카오는 굵은 글씨(*…*) 미지원
 }
 function quickEmail(id){
   var inv=invoices.find(function(i){return i.id===id;});if(!inv)return;
   var to=inv.customer&&inv.customer.email||'';if(!to){showToast('이메일 없음');return;}
-  window.location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent('인보이스 안내 — HHC ('+id+')')+'&body='+encodeURIComponent(buildMsg(inv));
+  window.location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent('인보이스 안내 — HHC ('+id+')')+'&body='+encodeURIComponent(ivNoBold(buildMsg(inv)));
 }
 window.shareWa=shareWa;window.shareKakao=shareKakao;window.quickEmail=quickEmail;
 

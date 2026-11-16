@@ -1856,24 +1856,29 @@ function trItemsEn(s){
 }
 // ── 메시지 생성 (통일 포맷: 인사 → 상태 → 구분선 → 정보블록 → 구분선 → 안내 → 감사) ──
 function buildMsg(r,isComplete){
+  // 2026-11 발송 문구 개편 — 인사 → *제목* → 핵심 정보 한 줄씩 → 👉 할 일 → 서명
   const items=r.items?JSON.parse(r.items):[];
   const lang=r.lang||'ko';
-  const name=r.condo_name||r.condo||(lang==='en'?'Customer':'고객');
-  const div='────────────────';
-  const _EN=(lang==='en');
-  const itemLines=items.map(it=>{const c=_EN?trItemsEn(it.cat):it.cat;const s2=it.svc?(_EN?trItemsEn(it.svc):it.svc):'';return `  • ${c}${s2?` - ${s2}`:''} × ${it.qty}`;}).join('\n');
-
-  if(isComplete){
-    if(lang==='en'){
-      return `Dear ${name} 😊\n\n📋 Your service request has been confirmed ✅\n${div}\n🔧 Service Items:\n${itemLines}${r.remarks?`\n📝 Remarks: ${r.remarks}`:''}\n${div}\n\nOur team will contact you shortly to schedule your service.\n\nThank you 🙏\nHappy Home Care\n📞 +60 17-247 2774`;
-    }
-    return `안녕하세요, ${name}님 😊\n\n📋 서비스 의뢰가 확인되었습니다 ✅\n${div}\n🔧 의뢰 품목:\n${itemLines}${r.remarks?`\n📝 요청사항: ${r.remarks}`:''}\n${div}\n\n담당자가 일정 확인 후 연락드립니다.\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774`;
-  }else{
-    if(lang==='en'){
-      return `Dear ${name} 😊\n\n📋 We've received your service request ⏳\n${div}\n🏢 Condo: ${r.condo_name||r.condo||'—'}\n🏠 Unit/Address: ${r.condo_unit||'—'}\n📞 Phone: ${r.phone||'—'}\n\n🔧 Service Items:\n${itemLines}${r.remarks?`\n📝 Remarks: ${r.remarks}`:''}\n${div}\n\nOur team will review and contact you shortly.\n\nThank you 🙏\nHappy Home Care\n📞 +60 17-247 2774`;
-    }
-    return `안녕하세요, ${name}님 😊\n\n📋 서비스 의뢰가 접수되었습니다 ⏳\n${div}\n🏢 콘도: ${r.condo_name||r.condo||'—'}\n🏠 동호수: ${r.condo_unit||'—'}\n📞 연락처: ${r.phone||'—'}\n\n🔧 의뢰 품목:\n${itemLines}${r.remarks?`\n📝 요청사항: ${r.remarks}`:''}\n${div}\n\n담당자가 확인 후 빠르게 연락드리겠습니다.\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774`;
+  const en=(lang==='en');
+  const name=rqCustName(r)||(en?'Customer':'고객');   // 고객명 = 콘도명 + 동호수 (고객관리와 같은 규칙)
+  const unit=String(r.condo_unit||'').trim(),condo=String(r.condo_name||r.condo||'').trim();
+  let place=[condo,unit].filter(Boolean).join(' ');
+  if(place&&String(name).replace(/\s+/g,'')===place.replace(/\s+/g,''))place='';   // 인사말 이름과 같으면 다시 쓰지 않습니다
+  const itemLines=items.map(it=>{
+    const c=en?trItemsEn(it.cat):it.cat;const s2=it.svc?(en?trItemsEn(it.svc):it.svc):'';
+    const q=String(it.qty||'').trim();
+    return HHCMsg.rqIcon((it.cat||'')+' '+(it.svc||''))+' '+c+(s2?' · '+s2:'')+(q&&q!=='0'?' × '+(/^\d+$/.test(q)?(q+(en?(q==='1'?' unit':' units'):'대')):q):'');
+  }).join('\n');
+  const rm=String(r.remarks||'').trim();
+  const SG='📞 +60 17-247 2774 · Happy Home Care';
+  if(en){
+    return 'Hello, '+name+' 😊\n\n'+(isComplete?'✅ *Your request has been confirmed*':'📥 *Your request has been received*')+
+      (place&&!isComplete?'\n🏢 '+place:'')+(itemLines?'\n'+itemLines:'')+(rm?'\n📝 '+rm:'')+
+      '\n\n👉 Our team will contact you'+(isComplete?' to schedule your visit.':' shortly.')+'\n      (Nothing else needed from you)\n\n'+SG;
   }
+  return '안녕하세요, '+name+' 고객님 😊\n\n'+(isComplete?'✅ *의뢰가 확인되었습니다*':'📥 *의뢰가 접수되었습니다*')+
+    (place&&!isComplete?'\n🏢 '+place:'')+(itemLines?'\n'+itemLines:'')+(rm?'\n📝 '+rm:'')+
+    '\n\n👉 담당자가 확인 후 '+(isComplete?'방문 일정을 연락드립니다.':'연락드립니다.')+'\n      (따로 하실 일은 없습니다)\n\n'+SG;
 }
 
 // 📥 접수완료 발송 문구 — 총괄 고객관리 「📱 마이페이지 발송 → 의뢰 접수 안내」와 같은 문구입니다.
@@ -1896,8 +1901,9 @@ async function buildDoneMsg(r){
 // ── 의뢰 링크 발송 ──
 var _sendLang='ko';
 var _sendMsgs={
-  ko:function(link){return '안녕하세요 😊\n\n[서비스 의뢰 요청서] 보내드립니다.\n필요하신 품목만 선택하시면 접수됩니다.\n\n\u2713 회원가입 없이 1분이면 작성 완료\n\u2713 견적계산기에서 가격 바로 확인됩니다\n\u2713 접수 후 방문 가능 일정 안내드립니다\n\n📝 의뢰 요청서 작성\n🔗 '+link+'\n\nHappy Home Care 📞 +60 17-247 2774';},
-  en:function(link){return 'Hello 😊\n\nOur [Service Request Form]:\n\n\u2713 1 minute, no sign-up needed\n\u2713 Instant price in the calculator\n\u2713 We will suggest visit dates\n\n📝 SERVICE REQUEST FORM\n🔗 '+link+'\n\nHappy Home Care 📞 +60 17-247 2774';}
+  // 2026-11 발송 문구 개편 — *제목* → 장점 3줄 → 「이름 👉 주소」 → 서명
+  ko:function(link){return '안녕하세요 😊 Happy Home Care입니다.\n\n📨 *서비스 의뢰서를 보내드립니다*\n✓ 회원가입 없이 1분\n✓ 품목을 고르면 금액이 바로 나옵니다\n✓ 접수 후 방문 가능 일정을 안내드립니다\n\n📝 의뢰서 작성하기 👉 '+link+'\n📞 +60 17-247 2774 · Happy Home Care';},
+  en:function(link){return 'Hello 😊 This is Happy Home Care.\n\n📨 *Here is our Service Request Form*\n✓ No sign-up · about 1 minute\n✓ See the price as soon as you pick items\n✓ We\'ll suggest visit dates after you submit\n\n📝 Fill in the form 👉 '+link+'\n📞 +60 17-247 2774 · Happy Home Care';}
 };
 // 영문 발송은 미리보기 카드(그림·제목)까지 영어로 나오도록 request-en.html 을 거칩니다.
 function _getSendLink(){return _sendLang==='en'
@@ -1937,7 +1943,7 @@ document.getElementById('slm-wa').addEventListener('click',async()=>{
   window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
 });
 document.getElementById('slm-kakao').addEventListener('click',async()=>{
-  const msg=_sendMsgs[_sendLang](await hhcShortUrl(_getSendLink()));
+  const msg=HHCMsg.noBold(_sendMsgs[_sendLang](await hhcShortUrl(_getSendLink())));   // 카카오는 굵은 글씨(*…*) 미지원
   navigator.clipboard.writeText(msg).then(()=>{
     const ok=document.getElementById('slm-copy-ok');
     if(ok){ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);}
@@ -2086,7 +2092,8 @@ document.getElementById('req-list').addEventListener('click',async e=>{
     const r=allRequests.find(x=>x.__id===kakaoBtn.dataset.kakao);
     if(!r)return;
     const msg=r.status==='completed'?await buildDoneMsg(r):buildMsg(r,false);
-    navigator.clipboard.writeText(msg).then(()=>showToast('✓ 복사됨! 카카오톡에 붙여넣기 하세요')).catch(()=>prompt('복사:',msg));
+    const kmsg=HHCMsg.noBold(msg);   // 카카오는 굵은 글씨(*…*) 미지원
+    navigator.clipboard.writeText(kmsg).then(()=>showToast('✓ 복사됨! 카카오톡에 붙여넣기 하세요')).catch(()=>prompt('복사:',kmsg));
     return;
   }
 
@@ -2197,7 +2204,7 @@ function showCompleteModal(r,msg,onComplete){
 
   document.getElementById('m-wa').onclick=async()=>window.open(`https://wa.me/?text=${encodeURIComponent(await hhcShortLinks(msg))}`,'_blank');
   document.getElementById('m-kakao').onclick=()=>{
-    navigator.clipboard.writeText(msg).then(()=>{
+    navigator.clipboard.writeText(HHCMsg.noBold(msg)).then(()=>{
       const ok=document.getElementById('modal-copy-ok');ok.style.display='block';setTimeout(()=>ok.style.display='none',2500);
     });
   };

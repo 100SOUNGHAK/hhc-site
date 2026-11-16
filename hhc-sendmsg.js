@@ -128,8 +128,9 @@ function bkcWhen(x,en){
   let out='';
   if(m){
     const w=CS_DOW[new Date(+m[1],+m[2]-1,+m[3]).getDay()];
-    out=en?(w[1]+', '+parseInt(m[3],10)+' '+CS_MN[parseInt(m[2],10)-1]+' '+m[1])
-          :(parseInt(m[1],10)+'년 '+parseInt(m[2],10)+'월 '+parseInt(m[3],10)+'일('+w[0]+')');
+    // 연도는 생략합니다 — 요일이 함께 있어 헷갈리지 않고, 한 줄이 짧아져 한눈에 읽힙니다 (2026-11 발송 문구 개편)
+    out=en?(w[1]+', '+parseInt(m[3],10)+' '+CS_MN[parseInt(m[2],10)-1])
+          :(parseInt(m[2],10)+'월 '+parseInt(m[3],10)+'일('+w[0]+')');
   }else out=d;
   if(!out)return '';
   // 방문시간 — 「11:30」·「오전 11:30」·「09:00|11:00」 모두 처리
@@ -180,18 +181,33 @@ function myLink(cid,en,f){
 }
 
 // ══════════════ 발송 문구 ══════════════
+// 📐 공통 모양 (2026-11 개편 — 고객이 한눈에 이해하도록 모든 발송 문구를 같은 순서로)
+//    인사
+//    (빈 줄)
+//    아이콘 *제목 한 줄*            ← 무슨 일인지 (왓츠앱은 *…* 가 굵은 글씨)
+//    핵심 정보 한 줄에 하나          ← 날짜 · 금액 · 품목
+//    👉 고객이 할 일 한 줄            ← 없으면 「따로 하실 일은 없습니다」
+//    「이름 👉 주소」 링크 줄         ← 무엇이 열리는지 이름을 붙임 (카카오는 이 줄이 버튼으로 바뀜)
+//    서명
+// 카카오톡은 굵은 글씨를 지원하지 않으므로 보낼 때 noBold() 로 별표를 뗍니다.
+function noBold(t){return String(t==null?'':t).replace(/\*([^*\n]+)\*/g,'$1');}
+// 방문 일시 — 「11월 20일(금) 오전 11:00 전후」 / 「Fri, 20 Nov, around 11:00 AM」
+function whenOf(d,t,en){return bkcWhen({booking_date:d,booking_time:t},en);}
+// 링크 줄 — 「📄 보고서 보기 👉 https://…」
+function lk(label,url){return label+' 👉 '+url;}
+
 // 📥 의뢰 접수 안내
 //   o.name : 고객명 · o.req : requests 문서({items,...}) · o.en : 영문 여부 · o.link : 마이페이지 주소(짧은 주소)
 function rq(o){
   var en=!!o.en,nm=o.name||'',r=o.req||{};
   var ri=rqItemLines2(r,en);                  // 품목 한 줄에 하나 (앞에 품목 아이콘)
   var items=String(ri||'').split('\n').filter(Boolean).map(function(x){return en?sEnIt(x):x;});
-  var il=items.length?('\n'+items.join('\n')):'';
+  var il=items.length?(items.join('\n')+'\n'):'';
   return en
-    ?(sHi(en,nm)+'\nYour request has been received. Thank you!\n'+il+
-      '\n📅 Our team will check and contact you with a visit time.\n\n📱 My Page 👉 '+o.link+'\n'+SIG)
-    :(sHi(en,nm)+'\n의뢰가 접수되었습니다. 감사합니다!\n'+il+
-      '\n📅 방문 일정은 담당자가 확인 후 연락드리겠습니다.\n\n📱 마이페이지 👉 '+o.link+'\n'+SIG);
+    ?(sHi(en,nm)+'\n\n📥 *Your request has been received*\n'+il+
+      '\n👉 Our team will contact you with a visit time.\n      (Nothing else needed from you)\n\n'+lk('📱 My Page',o.link)+'\n'+SIG)
+    :(sHi(en,nm)+'\n\n📥 *의뢰가 접수되었습니다*\n'+il+
+      '\n👉 담당자가 확인 후 방문 일정을 연락드립니다.\n      (따로 하실 일은 없습니다)\n\n'+lk('📱 마이페이지',o.link)+'\n'+SIG);
 }
 // ✅ 예약 확정 안내 — 방문일시를 본문에 넣고, 상세는 마이페이지에서 확인하도록 짧게 유지
 //   o.name · o.en · o.link(마이페이지 주소)
@@ -201,25 +217,23 @@ function bkc(o){
   var en=!!o.en,nm=o.name||'';
   var wb=('wpBooking' in o)?o.wpBooking:o.booking;
   var bkcW=bkcWhen(o.booking,en);
-  // 📍 방문 위치 한 줄 (2026-11-16) — 예약에 위치(customer_loc)가 있을 때만. 고객이 잘못 찍은 위치를 방문 전에 바로잡도록
+  // 📍 방문 위치 (2026-11-16) — 예약에 위치(customer_loc)가 있을 때만. 고객이 잘못 찍은 위치를 방문 전에 바로잡도록
   var lc=o.booking&&o.booking.customer_loc,lcN=lc&&isFinite(lc.lat)?String(lc.name||'').trim():'';
-  var bkcL=lcN?(en?'📍 Visit location: '+lcN+' (let us know if this is not correct)\n':'📍 방문 위치: '+lcN+' (다르면 알려 주세요)\n'):'';
-  var tail='\n👉 '+o.link+'\n\n'+SIG;
+  var bkcL=lcN?('📍 '+lcN+'\n      '+(en?'(let us know if this is not correct)':'(위치가 다르면 알려 주세요)')+'\n'):'';
   return en
-    ?(sHi(en,nm)+'\n✅ Your booking has been confirmed.\n'+(bkcW?'📅 '+bkcW+'\n':'')+bkcL+
-      '\n⚠️ Please complete the Work Permit (visit registration) before we arrive.\n'+
-      '🪪 Work permit guide\n🔗 '+wpLink(wb,nm,true)+'\n'+
-      '\nFull details are on your My Page.'+tail)
-    :(sHi(en,nm)+'\n✅ 예약이 확정되었습니다.\n'+(bkcW?'📅 '+bkcW+'\n':'')+bkcL+
-      '\n⚠️ 방문 전 작업방문등록(Work Permit)을 꼭 완료해 주세요.\n'+
-      '🪪 작업방문등록 안내장\n🔗 '+wpLink(wb,nm,false)+'\n'+
-      '\n상세 정보는 마이페이지에서 확인하세요.'+tail);
+    ?(sHi(en,nm)+'\n\n✅ *Booking confirmed*\n'+(bkcW?'📅 '+bkcW+'\n':'')+bkcL+
+      '\n📌 *Before we arrive*\nRegister our visit (Work Permit) with management.\n'+
+      lk('🪪 Registration details',wpLink(wb,nm,true))+'\n\n'+lk('📱 Booking details',o.link)+'\n'+SIG)
+    :(sHi(en,nm)+'\n\n✅ *예약이 확정되었습니다*\n'+(bkcW?'📅 '+bkcW+'\n':'')+bkcL+
+      '\n📌 *방문 전 꼭 해 주세요*\n매니지먼트에 작업방문등록(Work Permit)\n'+
+      lk('🪪 등록에 필요한 정보',wpLink(wb,nm,false))+'\n\n'+lk('📱 예약 상세',o.link)+'\n'+SIG);
 }
 
 window.HHCMsg={
   BASE:BASE,SIG:SIG,ITEM_EN:ITEM_EN,
   toEn:toEn,trItemsEn:trItemsEn,sEnIt:sEnIt,rqIcon:rqIcon,rqItemLines2:rqItemLines2,
   bkcWhen:bkcWhen,sHi:sHi,wpLink:wpLink,myLink:myLink,
+  noBold:noBold,whenOf:whenOf,lk:lk,
   rq:rq,bkc:bkc
 };
 })();

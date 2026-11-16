@@ -2767,23 +2767,27 @@ document.getElementById('btn-copy-link').addEventListener('click',()=>{
 });
 
 function getMsg(name,phone,url,dates,times,lang){
+  // 2026-11 발송 문구 개편 — 인사 → *제목* → 가능한 날짜 → 👉 할 일 → 「이름 👉 주소」 → 서명
   lang=lang||'ko';
-  const div='────────────────';
+  const en=(lang==='en');
   const dateLines=dates.map(d=>{
     const rawTimes=times[d]||[];
     const localTimes=rawTimes.map(t=>{
       // 'ko텍스트|en텍스트' 형태로 저장된 경우 분리
       const parts=t.split('|');
-      if(parts.length>=2){return lang==='en'?parts[1].trim():parts[0].trim();}
+      if(parts.length>=2){return en?parts[1].trim():parts[0].trim();}
       return t;
     });
-    const tStr=localTimes.join(', ');
-    return `📅 ${d}${tStr?` (${tStr})`:''}`; }).join('\n');
-  const availBlock=dateLines?`\n${div}\n${dateLines}\n${div}\n`:'';
-  if(lang==='en'){
-    return `Hello ${name} 😊\n\n📋 Here is your Happy Home Care booking link ⏳${availBlock}\nPlease select your preferred date and time via the link below.\n\nFeel free to contact us if you have any questions.\n\nThank you 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n🔗 Booking Link:\n${url}`;
+    const tStr=localTimes.join(' · ');
+    const dd=/^\d{4}-\d{2}-\d{2}$/.test(String(d))?HHCMsg.whenOf(d,'',en):d;   // 「11월 20일(금)」
+    return '· '+dd+(tStr?' '+tStr:''); }).join('\n');
+  const SG='📞 +60 17-247 2774 · Happy Home Care';
+  if(en){
+    return 'Hello, '+name+' 😊\n\n📅 *Please choose your visit date*'+(dateLines?'\nAvailable dates\n'+dateLines:'')+
+      '\n\n👉 Tap a time at the link — that\'s all it takes to request your booking.\n\n📅 Choose a date 👉 '+url+'\n'+SG;
   }
-  return `안녕하세요, ${name}님 😊\n\n📋 Happy Home Care 세척서비스 예약 링크입니다 ⏳${availBlock}\n아래 링크에서 편하신 날짜와 시간을 선택해 주세요.\n\n궁금한 사항은 언제든지 연락해 주세요.\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n🔗 예약 링크:\n${url}`;
+  return '안녕하세요, '+name+' 고객님 😊\n\n📅 *방문 날짜를 골라 주세요*'+(dateLines?'\n가능한 날짜\n'+dateLines:'')+
+    '\n\n👉 링크에서 편하신 시간을 누르면 예약 신청이 끝납니다.\n\n📅 날짜 고르기 👉 '+url+'\n'+SG;
 }
 
 // ══ 품목명 KO→EN 사전 — 고객용 영문 메시지 전용 (관리화면 표시는 한글 그대로 유지) ══
@@ -2825,7 +2829,7 @@ document.getElementById('btn-kakao-link').addEventListener('click',async()=>{
   const phone=document.getElementById('c-phone').value||'';
   const lang=document.querySelector('input[name="c-lang"]:checked')?.value||'ko';
   url=await hhcShortUrl(_linkWithLang(url,lang));   // 🔗 짧은 주소로
-  const msg=getMsg(name,phone,url,selectedDates,scheduleMap,lang);
+  const msg=HHCMsg.noBold(getMsg(name,phone,url,selectedDates,scheduleMap,lang));   // 카카오는 굵은 글씨(*…*) 미지원
   navigator.clipboard.writeText(msg).then(()=>{
     const ok=document.getElementById('kakao-ok');ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
   }).catch(()=>prompt('복사 후 카카오톡에 붙여넣기 하세요:',msg));
@@ -3398,37 +3402,25 @@ window.toInvoice=function(id){
 
 // ── 인보이스 링크 발송 메시지 빌드
 function buildInvMsg(b, lang){
+  // 2026-11 발송 문구 개편 — 날짜·상태를 고객 말로, 할 일 한 줄, 「이름 👉 주소」
+  const en=(lang==='en');
   const invUrl=`${BASE_URL}inv.html?id=${b.__id}`;
-  const name=b.customer_name||'고객';
-  const date=b.booking_date||'—';
-  const items=(lang==='en')?(b.booking_items?trItemsEn(b.booking_items):'Service'):(b.booking_items||'서비스');
-  const statusLabel={billing:'청구',paid:'결제완료',overdue:'연체'}[b.invoice_status||'billing'];
-  if(lang==='en'){
-    return `Hello ${name} 😊
-
-Your Happy Home Care invoice is ready.
-
-📋 Invoice: ${invUrl}
-📅 Service Date: ${date}
-🔧 Service: ${items}
-💰 Status: ${statusLabel}
-
-Thank you for choosing us!
-HAPPY WORKS SERVICES SDN.BHD.
-📞 +60172472774`;
-  }
-  return `안녕하세요 ${name}님 😊
-
-Happy Home Care 인보이스를 확인해 주세요.
-
-📋 인보이스: ${invUrl}
-📅 서비스일: ${date}
-🔧 서비스: ${items}
-💰 상태: ${statusLabel}
-
-감사합니다!
-HAPPY WORKS SERVICES SDN.BHD.
-📞 +60172472774`;
+  const name=b.customer_name||(en?'Customer':'고객');
+  const dd=/^\d{4}-\d{2}-\d{2}$/.test(String(b.booking_date||''))?HHCMsg.whenOf(b.booking_date,'',en):(b.booking_date||'');
+  const items=en?(b.booking_items?trItemsEn(b.booking_items):'Service'):(b.booking_items||'서비스');
+  const st=b.invoice_status||'billing';
+  const stTx=en?({billing:'Awaiting payment',paid:'Paid — thank you!',overdue:'Payment overdue'}[st]||'')
+               :({billing:'결제 대기',paid:'결제 완료 — 감사합니다!',overdue:'결제 기한 지남'}[st]||'');
+  const act=st==='paid'
+    ?(en?'👉 Nothing else needed from you.':'👉 따로 하실 일은 없습니다.')
+    :(en?'👉 Please check the amount and account, then transfer.\n      Send us the receipt here after your transfer.'
+        :'👉 금액과 결제 계좌를 확인 후 이체해 주세요.\n      이체 후 영수증을 이 대화방에 보내 주세요.');
+  const SG='📞 +60 17-247 2774 · Happy Home Care';
+  return (en?'Hello, '+name+' 😊\n\n🧾 *Your invoice is ready*':'안녕하세요, '+name+' 고객님 😊\n\n🧾 *인보이스를 보내드립니다*')+
+    (dd?'\n📅 '+(en?'Service date ':'서비스일 ')+dd:'')+
+    '\n🔧 '+String(items).split('\n').join(', ')+
+    (stTx?'\n💳 '+stTx:'')+
+    '\n\n'+act+'\n\n'+(en?'🧾 View invoice':'🧾 인보이스 보기')+' 👉 '+invUrl+'\n'+SG;
 }
 
 // ── 인보이스 WA 발송
@@ -3446,7 +3438,7 @@ async function sendInvWA(id){
 function sendInvKakao(id){
   const b=allBookings.find(x=>x.__id===id);
   if(!b)return;
-  const msg=buildInvMsg(b,b.customer_lang||'ko');
+  const msg=HHCMsg.noBold(buildInvMsg(b,b.customer_lang||'ko'));   // 카카오는 굵은 글씨(*…*) 미지원
   navigator.clipboard.writeText(msg).then(()=>showToast('✓ 카카오 메시지 복사됨'));
 }
 
@@ -3914,41 +3906,20 @@ function getVisitReminderMsg(name,dateStr,lang,tpl,timeS){
       tEn='around '+h12+(mi?':'+String(mi).padStart(2,'0'):'')+(h<12?' AM':' PM');
     }
   }
-  var L=[];
+  // 2026-11 발송 문구 개편 — 인사 → *제목* → 일시 → 👉 할 일 (마이페이지 주소 · 서명은 vrTail 이 붙입니다)
+  var when=(tpl==='today')?(lang==='en'?tEn:tKo):[lang==='en'?dEn:dKo,lang==='en'?tEn:tKo].filter(Boolean).join(' ');
   if(lang==='en'){
-    if(tpl==='tomorrow'){
-      L.push('Hello, '+name+'.','','🔔 Visit Tomorrow');
-      if(dEn)L.push('• Date: '+dEn);
-      if(tEn)L.push('• Time: '+tEn);
-      L.push('','If you have not registered our visit yet, please make sure to complete the Work Permit registration before our visit tomorrow for smooth entry.','Thank you.');
-    }else if(tpl==='today'){
-      L.push('Hello, '+name+'.','','🔔 Visit Today');
-      if(tEn)L.push('• Time: '+tEn);
-      L.push('','If you have not registered our visit yet, please complete the Work Permit registration right away, before our visit, for smooth entry.','See you shortly. Thank you.');
-    }else{
-      L.push('Hello, '+name+'.','','📅 Scheduled Visit');
-      if(dEn)L.push('• Date: '+dEn);
-      if(tEn)L.push('• Time: '+tEn);
-      L.push('','If you have not registered our visit yet, please make sure to complete the Work Permit registration before our visit for smooth entry.','We look forward to seeing you. Thank you.');
-    }
-    return L.join('\n');
+    var tEN={tomorrow:'🔔 *We\'re visiting tomorrow*',today:'🔔 *We\'re visiting today*'}[tpl]||'📅 *Your scheduled visit*';
+    var aEN={tomorrow:'👉 If you haven\'t registered our visit (Work Permit) yet,\n      please do it with your management office today.',
+             today:'👉 If you haven\'t registered our visit (Work Permit) yet,\n      please do it right away. See you shortly!'}[tpl]
+             ||'👉 If you haven\'t registered our visit (Work Permit) yet,\n      please do it with your management office before we arrive.';
+    return 'Hello, '+name+' 😊\n\n'+tEN+(when?'\n'+(tpl==='today'?'⏰ ':'📅 ')+when:'')+'\n\n'+aEN;
   }
-  if(tpl==='tomorrow'){
-    L.push('안녕하세요, '+name+' 고객님.','','🔔 내일 방문 안내');
-    if(dKo)L.push('• 일자: '+dKo);
-    if(tKo)L.push('• 방문시간: '+tKo);
-    L.push('','아직 작업방문등록을 하지 않으셨다면, 원활한 출입을 위해 내일 방문 전까지 반드시 Work Permit 등록 부탁드립니다.','감사합니다.');
-  }else if(tpl==='today'){
-    L.push('안녕하세요, '+name+' 고객님.','','🔔 금일 방문 안내');
-    if(tKo)L.push('• 방문시간: '+tKo);
-    L.push('','아직 작업방문등록을 하지 않으셨다면, 원활한 출입을 위해 방문 전까지 지금 바로 Work Permit 등록 부탁드립니다.','잠시 후 뵙겠습니다. 감사합니다.');
-  }else{
-    L.push('안녕하세요, '+name+' 고객님.','','📅 예약 방문 안내');
-    if(dKo)L.push('• 일자: '+dKo);
-    if(tKo)L.push('• 방문시간: '+tKo);
-    L.push('','아직 작업방문등록을 하지 않으셨다면, 원활한 출입을 위해 방문 전까지 반드시 Work Permit 등록 부탁드립니다.','예약일에 뵙겠습니다. 감사합니다.');
-  }
-  return L.join('\n');
+  var tKO={tomorrow:'🔔 *내일 방문합니다*',today:'🔔 *오늘 방문합니다*'}[tpl]||'📅 *예약 방문 안내*';
+  var aKO={tomorrow:'👉 작업방문등록(Work Permit)을 아직 안 하셨다면\n      오늘 중으로 매니지먼트에 등록 부탁드립니다.',
+           today:'👉 작업방문등록(Work Permit)을 아직 안 하셨다면\n      지금 바로 부탁드립니다. 잠시 후 뵙겠습니다.'}[tpl]
+           ||'👉 작업방문등록(Work Permit)을 아직 안 하셨다면\n      방문 전까지 매니지먼트에 등록 부탁드립니다.';
+  return '안녕하세요, '+name+' 고객님 😊\n\n'+tKO+(when?'\n'+(tpl==='today'?'⏰ ':'📅 ')+when:'')+'\n\n'+aKO;
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -3998,7 +3969,7 @@ async function vrKkKey(force){
 //  · 주소 줄과 그 짝인 「📱 MY PAGE」 제목 줄은 카드의 「마이페이지 열기」 버튼이 대신하므로 걷어냅니다.
 //  · 그래도 넘치면 회사명·연락처 서명부터 덜어냅니다 (카드 하단에 이미 표시됩니다).
 function vrKkText(m){
-  var t=String(m||'')
+  var t=String(m||'').replace(/\*([^*\n]+)\*/g,'$1')   // 카카오는 굵은 글씨(*…*)를 지원하지 않습니다
     .replace(/^.*https?:\/\/\S+.*$/gm,'')
     .replace(/^\s*📱\s*(MY ?PAGE|My Page|마이페이지)\s*$/gim,'')
     .replace(/[ \t]+$/gm,'').replace(/\n{3,}/g,'\n\n').trim();
@@ -4026,7 +3997,7 @@ function vrWaText(m){
 }
 // 📱 마이페이지 안내 꼬리말 — 총괄 고객관리「마이페이지 발송」과 같은 형식
 function vrTail(url,en){
-  return '\n\n📱 MY PAGE\n🔗 '+hhcFixLinks(url)+'\n\nHappy Home Care 📞 +60 17-247 2774';
+  return '\n\n'+(en?'📱 My Page':'📱 마이페이지')+' 👉 '+hhcFixLinks(url)+'\n📞 +60 17-247 2774 · Happy Home Care';
 }
 // 💬 왓츠앱 주소 — 고객 번호가 있으면 바로 그 대화방이 열립니다
 function vrWaUrl(phone,text){
@@ -4194,7 +4165,7 @@ window.sendVisitReminder=function(scheduleItemId){
   // 💛 카카오톡 카드 발송 — 「마이페이지 열기」 버튼이 붙은 카드로 나갑니다
   document.getElementById('confirm-kakao-btn').addEventListener('click',async()=>{
     const m=getMsg();
-    try{await navigator.clipboard.writeText(vrWaText(m));}catch(_){}
+    try{await navigator.clipboard.writeText(HHCMsg.noBold(vrWaText(m)));}catch(_){}
     await vrKkSend(m,VR_URL,lang==='en');
   });
   document.getElementById('visit-copy-btn').addEventListener('click',()=>{
@@ -4384,9 +4355,10 @@ async function bkResendMsg(b){
   const url=await hhcShortUrl(await bkMyPageUrl(b));
   const il=bkItemLinesMsg(b.booking_items,en);
   const SIG='📞 +60 17-247 2774 · Happy Home Care';
+  // 2026-11 발송 문구 개편 — 마이페이지 발송 「예약 신청」과 같은 모양
   return en
-    ?('Hello, '+nm+' 😊\nHere is your booking request form again 🙏\n'+(il?'\n'+il+'\n':'')+'\n👇 Please choose your preferred visit date & time on your My Page below.\n👉 '+url+'\n\n'+SIG)
-    :('안녕하세요, '+nm+' 고객님 😊\n예약 완료 신청서 다시 보내드립니다 🙏\n'+(il?'\n'+il+'\n':'')+'\n👇 아래 마이페이지에서 원하시는 방문 날짜·시간을 선택해 주세요.\n👉 '+url+'\n\n'+SIG);
+    ?('Hello, '+nm+' 😊\n\n📅 *Please choose your visit date*'+(il?'\n'+il:'')+'\n\n👉 Open the link and tap a date & time — that\'s it.\n\n📅 Choose a date 👉 '+url+'\n'+SIG)
+    :('안녕하세요, '+nm+' 고객님 😊\n\n📅 *방문 날짜를 골라 주세요*'+(il?'\n'+il:'')+'\n\n👉 링크를 열고 날짜·시간을 누르면 예약 신청이 끝납니다.\n\n📅 날짜 고르기 👉 '+url+'\n'+SIG);
 }
 window.sendWA=async function(id){
   const b=allBookings.find(x=>x.__id===id);
@@ -4413,7 +4385,8 @@ window.sendKakao=async function(id){
   const msg=b.status==='confirmed'
     ?await bkConfirmMsg(b)
     :await bkResendMsg(b);
-  navigator.clipboard.writeText(msg).then(()=>showToast('✓ 복사됨! 붙여넣기 하세요')).catch(()=>prompt('복사 후 붙여넣기:',msg));
+  const kmsg=HHCMsg.noBold(msg);   // 카카오는 굵은 글씨(*…*) 미지원
+  navigator.clipboard.writeText(kmsg).then(()=>showToast('✓ 복사됨! 붙여넣기 하세요')).catch(()=>prompt('복사 후 붙여넣기:',kmsg));
 };
 // ── NEW BOOKING RESET ──
 document.getElementById('btn-save').addEventListener('click',()=>{},true);

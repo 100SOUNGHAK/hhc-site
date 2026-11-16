@@ -1584,17 +1584,23 @@ function updateQuoteMsg(){
   gid('sm-link').textContent=link;
   var ctx=window._quoteCtx||{};
   var name=ctx.client||(lang==='en'?'Customer':'고객');
-  var div='────────────────';
-  var acLineKo=ctx.hasAc?'\n견적서에서 원하시는 에어컨 모델을 직접 선택하실 수 있습니다. 모델 선택 시 최종 금액이 자동 계산됩니다.\n':'\n';
-  var acLineEn=ctx.hasAc?'\nYou can select your preferred AC model directly in the quotation — the final amount is calculated automatically.\n':'\n';
-  var ko='안녕하세요, '+name+'님 😊\n\n📋 요청하신 견적서가 준비되었습니다 ✅\n'+div+'\n아래 링크에서 견적 내용을 확인해 주세요.'+acLineKo+div+'\n\n감사합니다 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n🔗 견적서 확인:\n'+link;
-  var en='Dear '+name+' 😊\n\n📋 Your quotation is ready ✅\n'+div+'\nPlease review the details via the link below.'+acLineEn+div+'\n\nThank you 🙏\nHappy Home Care\n📞 +60 17-247 2774\n\n🔗 View Quotation:\n'+link;
+  // 2026-11 발송 문구 개편 — 인사 → *제목* → 합계 → 👉 할 일 → 「이름 👉 주소」 → 서명
+  var tot=(!ctx.hasAc&&ctx.total>0)?ctx.total.toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
+  var SG='📞 +60 17-247 2774 · Happy Home Care';
+  var ko='안녕하세요, '+name+' 고객님 😊\n\n🧾 *요청하신 견적서입니다*'+(tot?'\n💰 합계 RM '+tot:'')+'\n\n'+
+    (ctx.hasAc?'👉 견적서에서 에어컨 모델을 고르시면\n      최종 금액이 자동으로 계산됩니다.\n      괜찮으시면 「진행」이라고 회신만 주세요.'
+              :'👉 괜찮으시면 「진행」이라고 회신만 주세요.\n      바로 일정을 잡아 드립니다.')+
+    '\n\n📄 견적서 보기 👉 '+link+'\n'+SG;
+  var en='Hello, '+name+' 😊\n\n🧾 *Your quotation is ready*'+(tot?'\n💰 Total RM '+tot:'')+'\n\n'+
+    (ctx.hasAc?'👉 Choose your air-con model in the quotation —\n      the final amount is calculated automatically.\n      If it looks good, just reply 「OK」.'
+              :'👉 If it looks good, just reply 「OK」.\n      We\'ll book your visit right away.')+
+    '\n\n📄 View quotation 👉 '+link+'\n'+SG;
   gid('sm-msg').value=lang==='en'?en:ko;
 }
 function openQuotePreview(){var l=gid('sm-link').textContent;if(l)window.open(l,'_blank');}
 function copyQuoteLink(){var l=gid('sm-link').textContent;if(l)navigator.clipboard.writeText(l).then(function(){toast('✓ 링크 복사됨');});}
 function sendQuoteWa(){window.open('https://wa.me/?text='+encodeURIComponent(gid('sm-msg').value),'_blank');}
-function sendQuoteKakao(){navigator.clipboard.writeText(gid('sm-msg').value).then(function(){toast('✓ 카카오 메시지 복사됨');});}
+function sendQuoteKakao(){navigator.clipboard.writeText(gid('sm-msg').value.replace(/\*([^*\n]+)\*/g,'$1')).then(function(){toast('✓ 카카오 메시지 복사됨');});}
 /* 📧 이메일 발송 — 휴대폰 · PC의 메일 앱이 받는 사람 · 제목 · 본문이 채워진 채로 열립니다 (보내기만 누르면 됩니다)
    · 보낸 이메일 주소는 견적서와 고객 마스터(비어 있을 때만)에 저장해 다음 발송 때 자동으로 채웁니다 */
 function sendQuoteEmail(){
@@ -1603,7 +1609,7 @@ function sendQuoteEmail(){
   var l=document.querySelector('input[name="qlang"]:checked'),en=l&&l.value==='en';
   var ctx=window._quoteCtx||{},nm=ctx.client||'';
   var sub=en?('[Happy Home Care] Your Quotation'+(nm?' — '+nm:'')):('[Happy Home Care] 견적서 안내'+(nm?' — '+nm+'님':''));
-  window.location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(gid('sm-msg').value);
+  window.location.href='mailto:'+encodeURIComponent(to)+'?subject='+encodeURIComponent(sub)+'&body='+encodeURIComponent(gid('sm-msg').value.replace(/\*([^*\n]+)\*/g,'$1'));   // 이메일은 굵은 글씨(*…*) 표시 안 됨
   try{if(window.__qSaveEmail)window.__qSaveEmail(ctx.id,to,ctx.client,ctx.phone);}catch(e){}
   var nt=gid('sm-email-note');
   if(nt){nt.style.display='block';nt.textContent='메일 앱이 열렸습니다 — 받는 사람 · 제목 · 내용을 확인하고 「보내기」를 눌러 주세요. 메일 앱이 열리지 않으면 「링크 복사」로 보내 주세요.';}
@@ -2165,7 +2171,7 @@ window.__saveQuote=async function(){
     const enUrl='https://happyhomecare.com.my/quote.html?id='+id+'&lang=en';
     shortUrls.ko=await shorten(koUrl);
     shortUrls.en=await shorten(enUrl);
-    window._quoteCtx={id:id,client:data.client,phone:data.phone||'',email:data.email||'',hasAc:!!data.acSelect};
+    window._quoteCtx={id:id,client:data.client,phone:data.phone||'',email:data.email||'',hasAc:!!data.acSelect,total:parseFloat(data.baseTotal)||0};
     const koR=document.querySelector('input[name="qlang"][value="ko"]');if(koR)koR.checked=true;
     updateQuoteMsg();fillQuoteEmail();
     document.getElementById('send-modal').classList.add('open');
@@ -2269,7 +2275,7 @@ window.__sendQuoteFor=async function(id){
     shortUrls.ko=await shorten(koUrl);
     shortUrls.en=await shorten(enUrl);
   }catch(e){shortUrls.ko=koUrl;shortUrls.en=enUrl;}
-  window._quoteCtx={id:id,client:q.client,phone:q.phone||'',email:q.email||'',hasAc:!!q.acSelect};
+  window._quoteCtx={id:id,client:q.client,phone:q.phone||'',email:q.email||'',hasAc:!!q.acSelect,total:parseFloat(q.baseTotal)||0};
   const koR=document.querySelector('input[name="qlang"][value="ko"]');if(koR)koR.checked=true;
   updateQuoteMsg();fillQuoteEmail();
   document.getElementById('send-modal').classList.add('open');
