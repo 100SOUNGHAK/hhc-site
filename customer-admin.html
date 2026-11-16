@@ -862,6 +862,16 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
 .dcall a{display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 12px;border-radius:999px;font-size:12px;font-weight:800;
   color:#fff;text-decoration:none;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.2)}
 .dcall a:active{transform:scale(.96)}
+/* 📍 고객 방문 위치 (2026-11-16) */
+.dloc{display:flex;flex-wrap:nowrap;min-width:0;align-items:center;gap:6px;margin-top:8px}
+.dloc a,.dloc button{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 11px;border-radius:999px;font-family:inherit;font-size:12px;font-weight:800;
+  color:#fff;text-decoration:none;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.2);cursor:pointer;max-width:100%}
+.dloc a{background:rgba(20,149,138,.28);border-color:rgba(94,214,199,.55);color:#DDF7F3}
+.dloc a span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.dloc a{flex:0 1 auto;min-width:0}.dloc button{flex:none;padding:0 10px}
+.dloc button.add{border-style:dashed;color:#E3C98A;border-color:rgba(227,201,138,.6);background:rgba(227,201,138,.08)}
+.dloc a:active,.dloc button:active{transform:scale(.96)}
+.hl-ov{z-index:2100!important}   /* 지도 창이 고객 상세(드로어) 위에 뜨도록 */
 .dact{margin-top:14px}
 .dab{min-height:46px;border-radius:13px}
 .dmk{margin-top:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:10px 10px 8px}
@@ -962,6 +972,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
 <body>
 <script>if(self===top)document.documentElement.classList.add('sa');</script>
 <script src="/hhc-sendmsg.js?v=20261116a"></script><!-- hhc-sendmsg.js 를 고치면 v= 숫자도 바꿉니다 (예전 파일이 남아 있지 않게) -->
+<script src="/hhc-loc.js" defer></script><!-- 📍 고객 방문 위치 등록 창 (의뢰서·예약관리·직원 일정표와 같은 구글맵 창) -->
 <!-- ══ 좌측 고정 메뉴 (독립 실행 시에만 표시 — 관리자 허브 안에서는 자동 숨김) ══ -->
 <aside id="sb">
   <div class="bd">HAPPY HOMECARE</div>
@@ -1723,6 +1734,7 @@ function buildEntries(){
   RAW.customers.forEach(m=>{
     const e=newEntry(m.name,m.phone);
     e.master=m;e.aliases=m.aliases||[];e.member=m.member||'';e.email=m.email||'';e.addr=m.addr||'';e.memo=m.memo||'';
+    e.loc=(m.loc&&isFinite(m.loc.lat)&&isFinite(m.loc.lng))?m.loc:null;   // 📍 방문 위치 (customers.loc)
     e.inactive=!!m.ca_inactive;   // ⏸ 비활성 고객 (기본 목록에서 숨김)
     e.ch=CH_OK(m.ca_ch);          // 📞 연락 경로 표시 (W · K · O · 없음)
     e.careLog=Array.isArray(m.care_log)?m.care_log.slice():[];   // 🌿 정기관리 안내 발송 이력
@@ -2728,6 +2740,7 @@ window.openDrawer=function(idx){
     '<div class="avatar">'+esc(init)+'</div><div class="dinfo"><b>'+esc(e.name)+chBadge(e,idx)+'</b>'+
     '<div class="cph">'+(pn(e.phone)?esc(e.phone):'연락처 없음')+(e.addr?' · '+esc(e.addr):'')+'</div>'+
     (_wa?'<div class="dcall"><a href="tel:'+esc(_raw)+'">📞 전화</a><a href="https://wa.me/'+_wa+'" target="_blank" rel="noopener">💬 WhatsApp</a></div>':'')+
+    caLocRow(e,idx)+
     '<div class="tagrow">'+memberBadge(e)+
     (e.detached?'<span class="pill det">🔓 연결 해제된 문서 — ⋮ 메뉴에서 복구하거나 다른 고객에게 연결하세요</span>':'')+
     (e.inactive?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏸ 비활성 고객</span>':'')+(e.aliases.length?'<span class="pill vio">별칭 '+esc(e.aliases.join(', '))+'</span>':'')+((e.linkNames||[]).length?'<span class="pill vio" title="수동 연결된 문서에 적힌 이름입니다. 원본 그대로 유지됩니다.">🔗 연결문서 '+esc(e.linkNames.join(', '))+'</span>':'')+'</div></div>'+
@@ -3516,6 +3529,49 @@ window.caDelCustomer=async function(idx){
     await deleteDoc(doc(db,'customers',e.master.__id));
     toast('✓ 고객 정보가 삭제되었습니다');
     closeDrawer();loadAll(true);   // 고객 자체가 삭제되었으므로 상세보기를 닫습니다
+  }catch(err){toast('삭제 실패: '+err.message);}
+};
+
+// ── 📍 고객 방문 위치 (2026-11-16) ──
+//  · 고객 마스터(customers 문서)의 loc 칸에 저장 {lat,lng,name,addr,pid,at}
+//  · 등록 창은 /hhc-loc.js (의뢰서·예약관리·직원 일정표와 같은 구글맵 창, 기본 위성지도)
+//  · 문서에서 자동 집계된 고객(마스터 없음)은 비활성 전환과 같은 방식으로 마스터를 먼저 만듭니다
+function caLocView(l){return 'https://www.google.com/maps/search/?api=1&query='+l.lat+','+l.lng+(l.pid?'&query_place_id='+encodeURIComponent(l.pid):'');}
+function caLocRow(e,idx){
+  const l=e.loc;
+  if(!l)return '<div class="dloc"><button type="button" class="add" onclick="caLocPick('+idx+')">📍 방문 위치 등록</button></div>';
+  return '<div class="dloc"><a href="'+caLocView(l)+'" target="_blank" rel="noopener" title="'+esc(l.addr||'')+'">📍 <span>'+esc(l.name||l.addr||'지도 보기')+'</span></a>'+
+    '<button type="button" onclick="caLocPick('+idx+')">변경</button><button type="button" onclick="caLocDel('+idx+')">삭제</button></div>';
+}
+async function caLocMaster(e){
+  if(e.master&&e.master.__id)return e.master.__id;
+  const now=new Date().toISOString();
+  const ref=await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name:e.name,phone:e.phone||'',member:e.member||'',email:'',addr:e.addr||'',memo:'',aliases:e.aliases||[],created_at:now,updated_at:now});
+  toast('👥 고객 마스터에 자동 등록되었습니다');
+  return ref.id;
+}
+window.caLocPick=async function(idx){
+  const e=entries[idx];if(!e)return;
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  if(!window.HHCLoc){toast('지도를 불러오는 중입니다. 잠시 후 다시 눌러 주세요');return;}
+  const r=await HHCLoc.pick({lang:'ko',who:'admin',query:e.loc?'':String(e.addr||'').trim(),initial:e.loc});
+  if(!r||!isFinite(r.lat)||!isFinite(r.lng))return;
+  try{
+    const mid=await caLocMaster(e);
+    const now=new Date().toISOString();
+    const loc={lat:+r.lat,lng:+r.lng,name:r.name||'',addr:r.addr||'',pid:r.pid||'',at:now};
+    await updateDoc(doc(db,'customers',mid),{loc,updated_at:now});
+    toast('📍 방문 위치가 저장되었습니다');
+    loadAll(true);
+  }catch(err){toast('저장 실패: '+err.message);}
+};
+window.caLocDel=async function(idx){
+  const e=entries[idx];if(!e||!e.loc||!(e.master&&e.master.__id))return;
+  if(!confirm('「'+e.name+'」 고객의 방문 위치를 지울까요?'))return;
+  try{
+    await updateDoc(doc(db,'customers',e.master.__id),{loc:null,updated_at:new Date().toISOString()});
+    toast('방문 위치를 지웠습니다');
+    loadAll(true);
   }catch(err){toast('삭제 실패: '+err.message);}
 };
 
