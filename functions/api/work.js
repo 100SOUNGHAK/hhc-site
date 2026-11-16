@@ -17,9 +17,10 @@
 //      우선순위: ① work_edits.locs[작업ID] (관리자가 이 일정에 직접 등록 · {off:true} = 이 일정은 위치 안 씀)
 //               ② 예약에 저장된 위치 (bookings.customer_loc — 예약전환 때 고객 확정 위치가 담기거나 예약관리에서 등록)
 //                  · 예전에 전환된 예약은 requests.loc 를 converted_booking_id 로 찾아 씀
-//               ③ settings/work_places.map[콘도명 키] (관리자가 「같은 콘도명이면 다음에도」로 저장한 위치)
+//               ③ 고객관리에 등록한 고객 위치 (customers.loc — 연락처, 없으면 이름·별칭으로 찾음) (2026-11-16)
+//               ④ settings/work_places.map[콘도명 키] (관리자가 「같은 콘도명이면 다음에도」로 저장한 위치)
 // ─────────────────────────────────────────────────────────────────────────────
-import { getDoc, queryEq, queryIn, json, fail, rateLimited } from './_lib/fs.js';
+import { getDoc, queryEq, queryIn, listAll, json, fail, rateLimited, nn, pn } from './_lib/fs.js';
 
 const MY_OFFSET = 8 * 60;   // UTC+8
 
@@ -178,6 +179,26 @@ export async function onRequestGet(context){
       try{
         const rq = await queryIn(env, 'requests', 'converted_booking_id', bkIds.filter(id => !reqLoc['bk_' + id]), 50);
         for (const r of rq){ const l = cleanLoc(r && r.loc, 'req'); if (l && !reqLoc['bk_' + r.converted_booking_id]) reqLoc['bk_' + r.converted_booking_id] = l; }
+      }catch(e){}
+    }
+    // ③ 고객관리 고객 위치 — 예약에 위치가 없는 일정만, 연락처 → 이름·별칭 순으로 찾음
+    const needC = [];
+    for (const b of bRows){ if (b && b.status === 'confirmed' && !reqLoc['bk_' + b.__id]) needC.push(['bk_' + b.__id, b]); }
+    for (const s of sRows){ if (s && !s.booking_id && s.type === 'reserve' && !reqLoc[s.__id]) needC.push([s.__id, s]); }
+    if (needC.length){
+      try{
+        const cs = await listAll(env, 'customers', 300, ['phone', 'name', 'aliases', 'loc']);
+        const byP = {}, byN = {};
+        for (const c of cs){
+          const l = cleanLoc(c && c.loc, 'cust'); if (!l) continue;
+          const p = pn(c.phone); if (p.length >= 6 && !byP[p]) byP[p] = l;
+          [c.name].concat(Array.isArray(c.aliases) ? c.aliases : []).forEach(a => { const k = nn(a); if (k && !byN[k]) byN[k] = l; });
+        }
+        for (const [id, o] of needC){
+          const p = pn(o.customer_phone);
+          const l = (p.length >= 6 && byP[p]) || byN[nn(o.customer_name)];
+          if (l) reqLoc[id] = l;
+        }
       }catch(e){}
     }
     const base = [];

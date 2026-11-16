@@ -14,7 +14,7 @@
    · 일정(schedules) + 확정 예약(bookings)에서 시간·장소·작업내용만 뽑아 영어로 정리
    · 고객 이름·전화번호는 넣지 않는다
    · 🧭 길 안내 링크 (2026-11-16): 직원 일정표와 같은 위치를 일정마다 한 줄로 붙임
-       work_edits/{날짜}.locs > 예약 customer_loc > settings/work_places (같은 콘도명) — 순서는 functions/api/work.js 와 같음
+       work_edits/{날짜}.locs > 예약 customer_loc > 고객관리 customers.loc > settings/work_places (같은 콘도명) — 순서는 functions/api/work.js 와 같음
    ───────────────────────────────────────────────────────────── */
 :root{--n:#0E2350;--n2:#16346E;--ink:#14192A;--ink2:#5A6478;--ink3:#98A1B4;--line:#E4E9F2;--soft:#F6F8FC;
 --ok:#0E9B63;--red:#DC2626;--gold:#C9A44C;--wa:#1FA855;
@@ -150,21 +150,27 @@ function setOff(o){try{const keep={};const lim=addDays(ymd(myNow()),-3);Object.k
 // ── 일정 불러오기 (스케줄 화면과 같은 규칙: 예약 미러 일정 제외, 확정 예약 포함) ──
 async function load(){
   $('#ss-list').innerHTML='<div class="ss-empty"><span>불러오는 중…</span></div>';
-  const [sSnap,bSnap,eSnap,pSnap]=await Promise.all([
+  const [sSnap,bSnap,eSnap,pSnap,cSnap]=await Promise.all([
     getDocs(query(collection(db,'schedules'),where('date','==',DAY))),
     getDocs(query(collection(db,'bookings'),where('booking_date','==',DAY))),
     getDoc(doc(db,'work_edits',DAY)).catch(()=>null),
-    getDoc(doc(db,'settings','work_places')).catch(()=>null)
+    getDoc(doc(db,'settings','work_places')).catch(()=>null),
+    getDocs(collection(db,'customers')).catch(()=>null)   // 📍 고객관리 고객 위치 (2026-11-16)
   ]);
   const LOCS=(eSnap&&eSnap.exists()&&eSnap.data().locs)||{},PLACES=(pSnap&&pSnap.exists()&&pSnap.data().map)||{};
+  // 고객관리에 등록한 고객 위치 — 예약에 위치가 없을 때 연락처 → 이름·별칭 순으로 (functions/api/work.js 와 같은 순서)
+  const CP={},CN={},_pn=p=>{p=String(p||'').replace(/[^0-9]/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');},_nn=n=>String(n||'').toLowerCase().replace(/\s+/g,'');
+  if(cSnap)cSnap.forEach(d=>{const c=d.data()||{},l=c.loc;if(!l||!isFinite(l.lat)||!isFinite(l.lng))return;
+    const p=_pn(c.phone);if(p.length>=6&&!CP[p])CP[p]=l;[c.name].concat(c.aliases||[]).forEach(a=>{const k=_nn(a);if(k&&!CN[k])CN[k]=l;});});
+  const custLoc=o=>{const p=_pn(o.customer_phone);return (p.length>=6&&CP[p])||CN[_nn(o.customer_name)]||null;};
   const arr=[];
   bSnap.forEach(d=>{const b=d.data();if(b.status!=='confirmed')return;
     arr.push({id:'bk_'+d.id,time_s:bkTime(b.booking_time),time_e:'',title:b.booking_items||'',memo:b.booking_memo||'',addr:b.customer_address||'',kind:'booking',
-      loc:ssLoc(LOCS['bk_'+d.id],b.customer_loc,PLACES[ssPlaceKey(b.customer_name)])});});
+      loc:ssLoc(LOCS['bk_'+d.id],b.customer_loc,custLoc(b),PLACES[ssPlaceKey(b.customer_name)])});});
   sSnap.forEach(d=>{const s=d.data();if(s.booking_id)return;
     const title=String(s.title||'');
     arr.push({id:d.id,time_s:s.time_s||'',time_e:s.time_e||'',title,memo:s.memo||'',addr:s.address||'',kind:s.type||'',
-      done:/^✅/.test(title),loc:ssLoc(LOCS[d.id],s.customer_loc,PLACES[ssPlaceKey(title.replace(/^✅\s*/,''))])});});
+      done:/^✅/.test(title),loc:ssLoc(LOCS[d.id],s.customer_loc,s.type==='reserve'?custLoc(s):null,PLACES[ssPlaceKey(title.replace(/^✅\s*/,''))])});});
   arr.sort((a,b)=>(a.time_s||'99').localeCompare(b.time_s||'99'));
   ITEMS=arr;
   const off=getOff();
@@ -178,9 +184,9 @@ function ssPlaceKey(s){
   const t=String(s||'').replace(/(?:#|unit\s*|no\.?\s*)?\b([A-Z]{1,2}\d{0,2}[A-Z]?-\d{1,3}[A-Z]?(?:-\d{1,3}[A-Z]?)?|\d{1,3}[A-Z]?-\d{1,3}[A-Z]?(?:-\d{1,3}[A-Z]?)?)\b/i,' ');
   return t.toUpperCase().replace(/[^A-Z0-9가-힣]/g,'').slice(0,60);
 }
-function ssLoc(own,bk,place){
+function ssLoc(own,bk,cust,place){
   if(own&&own.off)return null;
-  for(const l of [own,bk,place])if(l&&isFinite(l.lat)&&isFinite(l.lng))return {lat:+(+l.lat).toFixed(6),lng:+(+l.lng).toFixed(6)};
+  for(const l of [own,bk,cust,place])if(l&&isFinite(l.lat)&&isFinite(l.lng))return {lat:+(+l.lat).toFixed(6),lng:+(+l.lng).toFixed(6)};
   return null;
 }
 const ssNav=l=>'https://www.google.com/maps/dir/?api=1&destination='+l.lat+','+l.lng;

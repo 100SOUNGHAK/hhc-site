@@ -892,7 +892,7 @@ html.sa body:has(.app-body.active){padding-left:200px}
 .bkl-ok .n{font-size:14px;font-weight:800;color:#14192A;line-height:1.35;word-break:break-word}
 .bkl-ok .a{font-size:11.5px;color:#5A6478;line-height:1.45;margin-top:1px;word-break:break-word}
 .bkl-ok .s{display:inline-block;font-size:10.5px;font-weight:800;border-radius:6px;padding:1px 7px;margin-top:5px}
-.bkl-ok .s.request{background:#E6F6EF;color:#0B7A4E}.bkl-ok .s.admin{background:#EAF0FB;color:#1E4FA8}
+.bkl-ok .s.request{background:#E6F6EF;color:#0B7A4E}.bkl-ok .s.customer{background:#E6F6EF;color:#0B7A4E}.bkl-ok .s.admin{background:#EAF0FB;color:#1E4FA8}
 .bkl-ok .k{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
 .bkl-ok .k a,.bkl-ok .k button{border:0;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;background:#fff;color:#16346E;text-decoration:none;box-shadow:0 1px 2px rgba(11,24,51,.08)}
 .bkl-ok .k .x{color:#B42318}
@@ -1449,6 +1449,7 @@ try{window.hhcShortUrl=hhcShortUrl;window.hhcShortLinks=hhcShortLinks;}catch(_e)
 // ═══════════════════════════════════════════════════════════
 var HHCG_PH={},HHCG_NM={},HHCG_CPH={},HHCG_CNM={},HHCG_ON=false;
 var HHCH_IDPH={},HHCH_IDNM={};   // 📱 마이페이지 링크용 고객 문서 ID (전화번호 · 이름)
+var HHCH_LOCPH={},HHCH_LOCNM={}; // 📍 고객관리에 등록한 고객 방문 위치 (customers.loc · 전화번호 · 이름/별칭) (2026-11-16)
 var HHCG_PKG={silver:'실버',royal:'로얄',gold:'골드',diamond:'다이아',titanium:'티타늄',special:'스페셜해피홈'};
 function hhcgPN(p){p=String(p||'').replace(/[^0-9]/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');}
 function hhcgNN(n){return String(n||'').toLowerCase().replace(/\s+/g,'');}
@@ -1463,17 +1464,19 @@ function hhcgWatch(onChange){
   if(HHCG_ON||!db)return;HHCG_ON=true;
   try{
     onSnapshot(collection(db,'customers'),function(snap){
-      var ph={},nm={},idp={},idn={};
+      var ph={},nm={},idp={},idn={},lp={},ln={};
       snap.docs.forEach(function(d){
         var c=d.data()||{},g=String(c.member||'').trim();
         var p0=hhcgPN(c.phone),ns=[c.name].concat(c.aliases||[]);
+        var lc=c.loc;if(lc&&isFinite(lc.lat)&&isFinite(lc.lng)){if(p0&&p0.length>=6&&!lp[p0])lp[p0]=lc;ns.forEach(function(a){var k=hhcgNN(a);if(k&&!ln[k])ln[k]=lc;});}
         if(p0&&!idp[p0])idp[p0]=d.id;
         ns.forEach(function(a){var k=hhcgNN(a);if(k&&!idn[k])idn[k]=d.id;});
         if(!g)return;
         if(p0&&!ph[p0])ph[p0]=g;
         ns.forEach(function(a){var k=hhcgNN(a);if(k&&!nm[k])nm[k]=g;});
       });
-      HHCG_PH=ph;HHCG_NM=nm;HHCH_IDPH=idp;HHCH_IDNM=idn;
+      HHCG_PH=ph;HHCG_NM=nm;HHCH_IDPH=idp;HHCH_IDNM=idn;HHCH_LOCPH=lp;HHCH_LOCNM=ln;
+      try{if(window.bkLocRender)window.bkLocRender();}catch(e){}
       if(onChange)try{onChange();}catch(e){}
     },function(){});
     onSnapshot(collection(db,'contracts'),function(snap){
@@ -2667,7 +2670,7 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
       booking_items:bItems,
       booking_items_struct:JSON.stringify(pkItemsStructOf(_nb)),
       booking_memo:bMemo,
-      customer_loc:window._bkLoc||null,   // 📍 방문 위치 (없으면 null)
+      customer_loc:window._bkLoc||bkCustLocFor(phone,name)||null,   // 📍 방문 위치 (없으면 고객관리 고객 위치, 그것도 없으면 null)
     };
     if(!existing)data.created_at=new Date().toISOString();
     // 의뢰요청서 품목을 예약신청 화면(고객용)의 피커에 그대로 반영 — 값이 있을 때만 실어서
@@ -3809,6 +3812,8 @@ window.confirmBooking=async function(id,force){
   }
   showLoading(true);
   try{
+    // 📍 예약에 위치가 없으면 고객관리에 등록한 고객 위치를 함께 저장 (직원 길 안내 · 확정 메시지에 쓰임)
+    if(!(b.customer_loc&&isFinite(b.customer_loc.lat))){const _cu=bkCustLocFor(b.customer_phone,b.customer_name);if(_cu)b.customer_loc=_cu;}
     await updateDoc(doc(db,'bookings',id),{...b,status:'confirmed'});
     // schedules 컬렉션에 자동 등록 (기존 미러 제거 후 1건만 유지)
     await syncBookingMirror(id,b);
@@ -4182,10 +4187,26 @@ window._bkLoc=null;
 function bkLocUrl(l){return 'https://www.google.com/maps/search/?api=1&query='+l.lat+','+l.lng+(l.pid?'&query_place_id='+encodeURIComponent(l.pid):'');}
 function bkLocLink(b){const l=b&&b.customer_loc;if(!l||!isFinite(l.lat))return '';
   return `<a class="bkl-pin" href="${bkLocUrl(l)}" target="_blank" rel="noopener">📍 ${escHtml(l.name||'지도 보기')}</a>${l.from==='request'?' <span style="color:var(--text3);font-size:11px">고객 확정</span>':''}`;}
+// 📍 고객관리에 등록한 고객 위치 (2026-11-16) — 이 예약에 위치가 없으면 이 위치를 보여 주고, 저장할 때 함께 저장합니다
+function bkCustLocFor(phone,name){
+  const p=hhcgPN(phone),lp=HHCH_LOCPH||{},ln=HHCH_LOCNM||{};
+  const l=(p.length>=6&&lp[p])||ln[hhcgNN(name)];
+  return l&&isFinite(l.lat)?{lat:+l.lat,lng:+l.lng,name:l.name||'',addr:l.addr||'',pid:l.pid||'',from:'customer'}:null;
+}
+function bkCustLoc(){return bkCustLocFor((document.getElementById('c-phone')||{}).value,(document.getElementById('c-name')||{}).value);}
+const BKL_SRC={request:'고객이 의뢰서에서 확정한 위치',customer:'고객관리에 등록된 고객 위치',admin:'예약관리에서 등록한 위치'};
 function bkLocRender(){
-  const box=document.getElementById('c-loc');if(!box)return;const l=window._bkLoc;
+  const box=document.getElementById('c-loc');if(!box)return;
+  const cl=window._bkLoc?null:bkCustLoc();
+  if(cl){
+    box.innerHTML=`<div class="bkl-ok"><i>🧭</i><div style="flex:1;min-width:0"><div class="n">${escHtml(cl.name||'지도에서 고른 위치')}</div>${cl.addr?'<div class="a">'+escHtml(cl.addr)+'</div>':''}
+      <span class="s customer">${BKL_SRC.customer} · 저장하면 이 예약에도 저장됩니다</span>
+      <div class="k"><a href="${bkLocUrl(cl)}" target="_blank" rel="noopener">지도에서 보기</a><button type="button" data-l="pick">이 예약만 다른 위치로</button></div></div></div>`;
+    return;
+  }
+  const l=window._bkLoc;
   box.innerHTML=l?`<div class="bkl-ok"><i>🧭</i><div style="flex:1;min-width:0"><div class="n">${escHtml(l.name||'지도에서 고른 위치')}</div>${l.addr?'<div class="a">'+escHtml(l.addr)+'</div>':''}
-      <span class="s ${l.from==='request'?'request':'admin'}">${l.from==='request'?'고객이 의뢰서에서 확정한 위치':'예약관리에서 등록한 위치'}</span>
+      <span class="s ${BKL_SRC[l.from]?l.from:'admin'}">${BKL_SRC[l.from]||BKL_SRC.admin}</span>
       <div class="k"><a href="${bkLocUrl(l)}" target="_blank" rel="noopener">지도에서 보기</a><button type="button" data-l="pick">다시 검색 · 변경</button><button type="button" class="x" data-l="del">지우기</button></div></div></div>`
     :`<button type="button" class="bkl-go" data-l="pick"><i>🔍</i><div><b>구글맵에서 위치 검색 · 등록</b><span>등록하면 직원 일정표 길 안내와 확정 메시지에 자동으로 쓰입니다.</span></div></button>`;
 }
@@ -4194,10 +4215,13 @@ document.getElementById('c-loc').addEventListener('click',async e=>{
   if(b.dataset.l==='del'){window._bkLoc=null;bkLocRender();return;}
   if(!window.HHCLoc){showToast('지도를 불러오는 중입니다. 잠시 후 다시 눌러 주세요');return;}
   const nm=String(document.getElementById('c-name').value||'').replace(/\s*[#(]?\s*[A-Z]{0,2}\d{0,2}[A-Z]?-\d{1,3}[A-Z]?(?:-\d{1,3}[A-Z]?)?\)?\s*$/i,'').trim();
-  const r=await HHCLoc.pick({lang:'ko',who:'admin',query:nm,initial:window._bkLoc});
+  const r=await HHCLoc.pick({lang:'ko',who:'admin',query:nm,initial:window._bkLoc||bkCustLoc()});
   if(r){window._bkLoc={...r,from:'admin'};bkLocRender();showToast('✓ 위치를 골랐습니다 — 저장을 눌러 주세요');}
 });
 bkLocRender();
+window.bkLocRender=bkLocRender;
+// 연락처·이름을 바꾸면 고객관리 위치도 다시 찾아 보여 줍니다
+['c-phone','c-name'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',()=>{if(!window._bkLoc)bkLocRender();});});
 
 // 확정 안내 메시지 모달
 //  · 이 모달을 닫으면(닫기·배경 클릭·👤 버튼) 총괄 고객관리의 해당 고객 상세가 자동으로 열립니다.
