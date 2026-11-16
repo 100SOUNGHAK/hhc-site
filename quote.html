@@ -573,6 +573,9 @@ const NOTICE_EN={
   '이전 설치 시 냉매 상태에 따라 냉매 보충 비용이 추가될 수 있습니다.':'For relocation, a refrigerant top-up charge may apply depending on the refrigerant condition.',
   '기존 위치의 타공 구멍 마감은 별도 작업입니다.':'Patching the old wall hole at the previous location is a separate job.',
   '작업 일정은 견적 확정 후 협의하여 정합니다.':'The work schedule will be arranged after the quotation is confirmed.',
+  // 2026-11-16 직접 적은 문구 영문
+  '자재/부품 가격 변동에 따라 최종 단가는 실제 구매 시점 기준으로 적용됩니다.':'The final price of materials and parts will be based on the actual purchase price at the time of procurement, as prices may fluctuate.',
+  '팬모터 경우 별도의 보증기간이 없습니다.':'Please note that the fan motor does not come with a separate warranty period.',
   '콘도 관리사무소의 작업 허가가 필요한 경우 고객님께서 미리 신청해 주셔야 합니다.':'If your condo management requires a work permit, please apply for it in advance.'
 };
 // ══ 대상 작업(자유 문장) 영문 표시 ══════════════════════════════
@@ -658,7 +661,26 @@ function subjOf(Q,isEn){
 }
 function noticesOf(Q,isEn){
   var ns=Q.notices||[],en=Q.noticesEn||[];
-  return ns.map(function(n,i){return isEn?enOf(n,'',en[i]):n;}).filter(Boolean);
+  if(!isEn)return ns.filter(Boolean);
+  // 안내사항에 영문 문장을 따로 적어 둔 견적서는 그 영문 문장만 보여 줍니다(번역과 겹치지 않게)
+  var own=ns.filter(function(n){return n&&!KO_RE.test(n);});
+  if(own.length&&own.length<ns.filter(Boolean).length)return own;
+  // 번역이 아직 없는 문장은 영문 화면에서 빼 둡니다(번역이 도착하면 다시 그림)
+  return ns.map(function(n,i){return enOf(n,'',en[i]);}).filter(function(t){return t&&!KO_RE.test(t);});
+}
+// 품목 비고 영문 — 「분류 · 대당」 같은 자동 비고는 단위만 영어로, 번역 못 한 한글 조각은 뺍니다
+function noteOf(it,isEn){
+  var ko=String(it.note||'').trim();
+  if(!isEn)return ko;
+  if(!ko)return '';
+  var man=(it.noteEn&&!KO_RE.test(it.noteEn))?it.noteEn:'';
+  var t=enOf(ko,man,it.noteEnAuto);
+  if(!KO_RE.test(t))return t;
+  return ko.split(/\s*·\s*/).map(function(part){
+    var m=part.match(/^(.+?)\s*당$/);
+    if(m&&UNIT_EN[m[1].trim()])return 'per '+UNIT_EN[m[1].trim()][0];
+    var e=subjEn(part);return KO_RE.test(e)?'':e;
+  }).filter(Boolean).join(' · ').replace(/^per/,'Per');
 }
 const fmtN=n=>Number(n||0).toLocaleString('en-US');
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -772,7 +794,7 @@ function render(){
     groups[g].forEach(it=>{
       // 영문 화면: 영문명이 없으면 용어 사전(subjEn)으로 바꿉니다 — 한글이 그대로 남지 않게
       const nm=isEn?enOf(it.name,(it.nameEn&&!KO_RE.test(it.nameEn))?it.nameEn:'',it.nameEnAuto):it.name;
-      const nt=isEn?enOf(it.note||'',(it.noteEn&&!KO_RE.test(it.noteEn))?it.noteEn:'',it.noteEnAuto):(it.note||'');
+      const nt=noteOf(it,isEn);
       const unitTx=it.unit?(isEn?unitEn(it.unit,it.qty):it.unit):'';
       const qtyTxt=((it.qty&&it.qty!==1)||it.unit)?(fmtN(it.qty)+(unitTx?' '+unitTx:'')+' × RM '+fmtN(it.price)):'';
       const dv=parseFloat(it.discVal)||0;
@@ -1032,7 +1054,7 @@ function buildQuoteDoc(){
     rows.push({g:L(SM[k][0],SM[k][1]),r:RM(s)});
     list.forEach(it=>{
       const nm=isEn?enOf(it.name,(it.nameEn&&!KO_RE.test(it.nameEn))?it.nameEn:'',it.nameEnAuto):it.name;
-      const nt=isEn?enOf(it.note||'',(it.noteEn&&!KO_RE.test(it.noteEn))?it.noteEn:'',it.noteEnAuto):(it.note||'');
+      const nt=noteOf(it,isEn);
       const un=it.unit?(isEn?unitEn(it.unit,it.qty):it.unit):'';
       const da=dAmt(it);
       const r=['<span class="nm">'+e(nm||'—')+'</span>'+(nt?'<span class="sb">'+e(nt)+'</span>':''),
