@@ -104,7 +104,11 @@ function fromBooking(id, b){
 }
 // 구글 캘린더에서 넘어온 일정 · 직접 적은 일정 → 제목이 장소, 메모는 그대로(전화·금액 줄 제외)
 function fromSchedule(id, s){
-  const title = String(s.title || '').replace(/^✅\s*/, '').trim();
+  let title = String(s.title || '').replace(/^✅\s*/, '').trim();
+  { // 「콘도명 (콘도명)」 중복 제목은 한 번만
+    const m = title.match(/^(.*?)\s*\(([^()]+)\)\s*$/), n = x => x.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (m && n(m[1]).endsWith(n(m[2]))) title = m[1].trim();
+  }
   const raw = String(s.memo || '').split('\n').map(x => x.trim());
   const pin = raw.find(l => l.indexOf('📍') === 0);
   const addr = String(s.address || (pin ? pin.replace('📍', '').trim() : '')).trim();
