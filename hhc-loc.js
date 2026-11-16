@@ -134,6 +134,8 @@
       return { url: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="-12 -34 24 35"><path d="M0 0C-2-7-11-12-11-21A11 11 0 1 1 11-21C11-12 2-7 0 0Z" fill="' + c + '" stroke="#fff" stroke-width="1.6"/><circle cy="-21" r="4.2" fill="#fff"/></svg>'),
         scaledSize: new google.maps.Size(w, h), anchor: new google.maps.Point(w / 2, h), labelOrigin: new google.maps.Point(w / 2, h + 11) };
     }
+    // 지도 종류: 기본 위성(hybrid · 도로·이름 함께), 마지막 고른 것 기억 (2026-11-16)
+    function mtGet(){ try { var v = localStorage.getItem('hhc_map_type'); if (v === 'roadmap' || v === 'hybrid') return v; } catch(_){} return 'hybrid'; }
     function LBL(s, c){ s = String(s || ''); return { text: s.length > 24 ? s.slice(0, 23) + '…' : s, color: c, fontWeight: '800', fontSize: '12px', className: 'hl-ml' }; }
 
     function setTip(h){ tip.innerHTML = h; tip.style.display = h ? 'block' : 'none'; }
@@ -209,9 +211,10 @@
       if (done) return;
       var init = opt.initial && isFinite(opt.initial.lat) && isFinite(opt.initial.lng) ? opt.initial : null;
       map = new google.maps.Map(q('.hl-map'), { center: init ? { lat: +init.lat, lng: +init.lng } : KL, zoom: init ? 18 : 11,
-        disableDefaultUI: true, zoomControl: true, mapTypeControl: true,
+        disableDefaultUI: true, zoomControl: true, mapTypeControl: true, mapTypeId: mtGet(),
         mapTypeControlOptions: { position: google.maps.ControlPosition.LEFT_BOTTOM, style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR, mapTypeIds: ['roadmap', 'hybrid'] },
         zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM }, gestureHandling: 'greedy', clickableIcons: true });
+      map.addListener('maptypeid_changed', function(){ try { localStorage.setItem('hhc_map_type', map.getMapTypeId()); } catch(_){} });
       geocoder = new google.maps.Geocoder();
       map.addListener('click', function(e){
         if (!e.latLng) return;
