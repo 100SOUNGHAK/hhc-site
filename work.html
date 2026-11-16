@@ -324,7 +324,7 @@ const CAT_TAG={washer:['세탁기','Washer'],mattress:['매트리스','Mattress'
   chair:['식탁의자','Dining Chair'],carpet:['카페트','Carpet'],etc:['기타','Other']};
 function itemName(it){
   const en=L==='en',p=v=>v?(en?v[1]:v[0]):'';
-  if(it.free)return {tag:'',name:(it.text||'').trim()||(en?'Other':'기타')};
+  if(it.free)return {tag:'',name:tx((it.text||'').trim())||(en?'Other':'기타')};
   const c=it.catId,g=it.grpKo,v=it.svcKo;
   if(c==='ac_home'||c==='ac_shop')return {tag:p(AC_TAG[g])||g||'',name:p(SVC[v])||v||''};
   if(c==='washer')return {tag:p(v==='드럼세탁기'?['드럼 세탁기','Front-Load Washer']:['통돌이 세탁기','Top-Load Washer']),name:p(['분해 세척','OVERHAUL CLEANING'])};
@@ -372,7 +372,43 @@ function render(){
   }).join('')+'</div>';
   if(OPENID)openSheet(OPENID);
 }
-function placeOf(j){return j.place||'—';}
+function placeOf(j){return tx(j.place||'—');}
+// ══ 영어 화면: 일정 제목·메모의 한글을 영어로 (2026-11-16) ══
+//  ① 자주 나오는 문구는 정해 둔 영어로 바로 바꾸고 ② 남은 한글은 구글 번역으로 받아 이 휴대폰에 기억해 둡니다.
+//  번역이 도착하기 전·실패 시에는 원문 그대로 보입니다. (한국어 화면은 원문 그대로)
+const KO_RX=/[\uAC00-\uD7A3]/;
+const PHR=[['※ 메모장(커튼세탁)에서 자동 등록된 일정입니다.','※ Auto-added from the memo (curtain laundry).'],
+  ['※ 메모장(수리요청)에서 자동 등록된 일정입니다.','※ Auto-added from the memo (repair request).'],
+  ['커튼 세탁 · 재설치 방문','Curtain laundry · reinstallation visit'],['커튼 재설치','Curtain reinstallation'],['커튼 세탁','Curtain laundry'],
+  ['세탁 완료 예정','Laundry ready'],['수거일','Pickup date'],['수리 방문','Repair visit'],['수리요청','Repair request'],['재설치','Reinstallation']];
+let TRC=(()=>{try{return JSON.parse(localStorage.getItem('hhc_work_tr')||'{}')||{};}catch(e){return {};}})();
+const TRQ=new Set();let _trT=null,_trBusy=false;
+function tx(s){
+  s=String(s==null?'':s);
+  if(L!=='en'||!KO_RX.test(s))return s;
+  let o=s;PHR.forEach(p=>{o=o.split(p[0]).join(p[1]);});
+  if(!KO_RX.test(o))return o;
+  if(TRC[o])return TRC[o];
+  TRQ.add(o);clearTimeout(_trT);_trT=setTimeout(trRun,60);
+  return o;
+}
+async function trRun(){
+  if(_trBusy||!TRQ.size)return;_trBusy=true;
+  const list=Array.from(TRQ).slice(0,30);list.forEach(x=>TRQ.delete(x));
+  let got=0;
+  await Promise.all(list.map(async src=>{
+    try{const r=await fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q='+encodeURIComponent(src));
+      const d=await r.json();const en=(d&&d[0]||[]).map(x=>x&&x[0]||'').join('').trim();
+      if(en){TRC[src]=en;got++;}}catch(e){}
+  }));
+  _trBusy=false;
+  if(got){
+    const ks=Object.keys(TRC);if(ks.length>400)ks.slice(0,ks.length-400).forEach(k=>delete TRC[k]);
+    try{localStorage.setItem('hhc_work_tr',JSON.stringify(TRC));}catch(e){}
+    if(L==='en'&&DATA&&STATE==='ok'){const keep=OPENID;render();if(keep)openSheet(keep);}
+  }
+  if(TRQ.size)setTimeout(trRun,60);
+}
 // 품목 요약 칩 — 종류별 아이콘 + 수량 (목록에서 바로 보이게)
 function chipsOf(j){
   const g={},ord=[];
@@ -395,7 +431,7 @@ function openSheet(id){
   // 등록 위치가 없으면 주소 → 콘도명 글자 검색으로 길 안내 (정확도는 등록 위치보다 낮음)
   const qtxt=!lc?String(j.addr||(j.place&&j.place!=='—'?j.place:'')).trim():'';
   const nl=lc||(qtxt?{q:qtxt,name:(L==='en'?'Search: ':'검색: ')+qtxt}:null);
-  if(nl)det+=`<div class="wk-nv"><div class="wk-nv-h"><i>${NAV_SVG}</i><div><b>${t.nav}</b><small>${esc(nl.name||t.navS)}</small></div></div>
+  if(nl)det+=`<div class="wk-nv"><div class="wk-nv-h"><i>${NAV_SVG}</i><div><b>${t.nav}</b><small>${esc(tx(nl.name||t.navS))}</small></div></div>
     <div class="wk-nv-b"><a class="g${NAVSET&&NAVAPP==='google'?' on':''}" data-app="google" data-last="${t.last}" href="${navUrl(nl)}" target="_blank" rel="noopener">${NAV_SVG}Google Maps</a>
     <a class="w${NAVSET&&NAVAPP==='waze'?' on':''}" data-app="waze" data-last="${t.last}" href="${wazeUrl(nl)}" target="_blank" rel="noopener">${WAZE_SVG}Waze</a></div></div>`;
   if(j.items&&j.items.length){
@@ -407,9 +443,9 @@ function openSheet(id){
       (n>1?`<div class="wk-ivtot"><span>${t.total}</span><b>${tot}<small>${u(tot)}</small></b></div>`:'')+`</div>`;
   }
   const lines=j.lines;
-  if(lines&&lines.length)det+=`<div class="wk-lbl">${t.work}</div><div class="wk-txt">${esc(lines.join('\n'))}</div>`;
+  if(lines&&lines.length)det+=`<div class="wk-lbl">${t.work}</div><div class="wk-txt">${esc(lines.map(tx).join('\n'))}</div>`;
   const ad=j.addr||(lc&&lc.addr)||'';
-  if(ad)det+=`<div class="wk-lbl">${t.addr}</div><a class="wk-addr" href="${lc?viewUrl(lc):'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(ad)}" target="_blank" rel="noopener"><span>${esc(ad)}</span><em>${t.map}</em></a>`;
+  if(ad)det+=`<div class="wk-lbl">${t.addr}</div><a class="wk-addr" href="${lc?viewUrl(lc):'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(ad)}" target="_blank" rel="noopener"><span>${esc(tx(ad))}</span><em>${t.map}</em></a>`;
   $('#wk-sh-bd').innerHTML=det||'<div class="wk-txt">—</div>';
   $('#wk-sh-bd').scrollTop=0;
   const ov=$('#wk-ov');if(!ov.classList.contains('on')){ov.classList.add('on');ov.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';
