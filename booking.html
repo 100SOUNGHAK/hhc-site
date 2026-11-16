@@ -312,6 +312,27 @@ body{background:var(--bk-soft)}
 .bk-t small{font-size:11px;font-weight:600;color:var(--bk-ink3);margin:0 2px}
 .bk-t.on{background:var(--bk-tl2);border-color:var(--bk-tl2);color:#fff}.bk-t.on small{color:rgba(255,255,255,.82)}
 .bk-t:active{transform:scale(.97)}
+/* 2026-11-16 마감 시간 — 다른 고객이 먼저 신청·확정한 시간(전후 1시간) */
+.bk-t.full{background:#F1F3F5;border-color:#E3E7EB;color:#A7B0BA;cursor:not-allowed;text-decoration:line-through;text-decoration-color:rgba(167,176,186,.7);position:relative}
+.bk-t.full small{color:#B7BFC8}
+.bk-t.full .fl{display:block;font-size:9.5px;font-weight:800;letter-spacing:.02em;color:#C0392B;text-decoration:none;line-height:1;margin-top:2px}
+.bk-t.full:active{transform:none}
+.bk-dc.allfull{opacity:.62}
+.bk-dc.past{opacity:.5;background:#F7F8FA}
+.bk-dc.past .bk-rel{color:#8A94A0}
+.bk-t.past{background:#F1F3F5;border-color:#E3E7EB;color:#A7B0BA;cursor:not-allowed}
+.bk-t.past small{color:#B7BFC8}
+.bk-t.past .fl{display:block;font-size:9.5px;font-weight:800;color:#8A94A0;line-height:1;margin-top:2px}
+.bk-t.past:active{transform:none}
+.bk-expired{text-align:center;padding:22px 16px 20px;margin-top:10px;border-radius:14px;background:linear-gradient(180deg,#FFF8EC,#FFF3E0);border:1px solid #F1D9A8;color:#6B4A12}
+.bk-expired .ic{font-size:30px;line-height:1;margin-bottom:8px}
+.bk-expired b{display:block;font-size:15.5px;line-height:1.5;color:#14264B;margin-bottom:6px;word-break:keep-all}
+.bk-expired span{display:block;font-size:13.5px;line-height:1.55;word-break:keep-all}
+.bk-dc.allfull .bk-rel{color:#C0392B}
+.time-slot.full{background:#F1F3F5;border-color:#E3E7EB;color:#A7B0BA;cursor:not-allowed;text-decoration:line-through}
+#step1-panel .cal-day.full{background:#F4F5F7;color:#B7BFC8;text-decoration:line-through;cursor:default}
+.bk-gone{display:none;margin:10px 0 0;padding:11px 13px;border-radius:12px;background:#FDF2F0;border:1px solid #F3C9C2;color:#9B2C1F;font-size:13px;font-weight:700;line-height:1.5}
+.bk-gone.on{display:block}
 .bk-none{font-size:13px;color:var(--bk-ink3);padding:4px 0}
 .bk-alt{display:flex;align-items:center;gap:10px;margin-top:12px;padding:11px 12px;border-radius:12px;background:var(--bk-soft);font-size:13px;color:var(--bk-ink2);text-decoration:none;line-height:1.5}
 .bk-alt b{color:var(--bk-ink)}.bk-alt .go{margin-left:auto;font-weight:800;color:#128C4B;white-space:nowrap;flex-shrink:0}
@@ -352,6 +373,7 @@ body{background:var(--bk-soft)}
 .bk-ts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
 .bk-t{min-width:0;height:40px;padding:0 4px;font-size:14px;border-radius:10px;white-space:nowrap}
 .bk-t small{font-size:10px;margin:0 1px}
+.bk-t.full{height:44px}
 </style>
 </head>
 <body>
@@ -595,6 +617,7 @@ async function apiBookingGet(id){
   try{j=await r.json();}catch(e){}
   if(r.status===404||(j&&j.error==='not-found'))return null;
   if(!r.ok||!j||!j.ok)throw new Error((j&&j.error)||('http '+r.status));
+  window._bkTakenIn=(j.taken&&typeof j.taken==='object')?j.taken:{};
   return j.doc;
 }
 async function apiBookingSave(id,payload){
@@ -658,13 +681,32 @@ let pkCat='ac_home';
 
 let db=null, bookingData=null, bookingId=null;
 let _lastRaw='';   // 서버에서 마지막으로 받은 예약 내용(JSON) — 30초 폴링 비교용 · 저장 직후에도 갱신
+let bkTaken={}, _lastTaken='{}';   // (2026-11-16) 마감된 후보 시간 {날짜:[시간…]} — 다른 고객이 먼저 신청·확정
+function bkIsFull(d,t){return !!(bkTaken[d]&&bkTaken[d].indexOf(t)>=0);}
+function bkDayFull(d){const ts=scheduleMap[d]||[];return ts.length>0&&ts.every(t=>bkIsFull(d,t)||bkPast(d,t));}
+// (2026-11-16) 지난 일정 — 날짜가 지났거나, 오늘인데 그 시간이 이미 지난 후보 시간
+function bkMin(v){
+  const s=String(v==null?'':v).split('|')[0].trim();if(!s)return null;
+  const pm=/오후|저녁|p\.?m\.?/i.test(s),am=/오전|아침|a\.?m\.?/i.test(s);
+  let m=s.match(/(\d{1,2})\s*[:시]\s*(\d{1,2})?/);
+  if(!m){const d=s.match(/(\d{1,2})/);if(!d)return null;m=[null,d[1],null];}
+  let h=parseInt(m[1],10)||0;const mi=parseInt(m[2]||'0',10)||0;
+  if(pm&&h<12)h+=12;if(am&&h===12)h=0;return h*60+mi;
+}
+function bkPast(d,t){
+  const T0=today();if(d<T0)return true;if(d>T0)return false;
+  const m=bkMin(t);if(m==null)return false;const n=new Date();return m<=n.getHours()*60+n.getMinutes();
+}
+function bkDayPast(d){const ts=scheduleMap[d]||[];return d<today()||(ts.length>0&&ts.every(t=>bkPast(d,t)));}
+// 후보 일정이 있었는데 모두 지나갔는지 (확정 신청 지연)
+function bkAllPast(){const ds=availableDates||[];return ds.length>0&&ds.every(bkDayPast);}
 let calYear=new Date().getFullYear(), calMonth=new Date().getMonth();
 let selectedDate='', selectedTime='';
 let availableDates=[], scheduleMap={};
 let currentStep=1;
 let editMode=false;   // 예약 완료 후 고객이 직접 수정 중인지
 
-const today=()=>new Date().toISOString().slice(0,10);
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};   // 기기 현지 날짜
 const params=new URLSearchParams(window.location.search);
 bookingId=params.get('id');
 
@@ -682,6 +724,7 @@ if(!bookingId){
   const applyBooking=(d)=>{
       if(!d){showError('예약 정보를 찾을 수 없습니다','링크가 만료되었거나 잘못되었습니다. 관리자에게 문의해주세요.');return;}
       _lastRaw=JSON.stringify(d);
+      bkTaken=window._bkTakenIn||{};_lastTaken=JSON.stringify(bkTaken);
       bookingData={...d,__id:bookingId};
       // URL의 ?lang= 파라미터가 있으면 우선 적용(발송 시 선택한 언어로 열림),
       // 이후 고객이 직접 전환한 언어(_userLang)가 있으면 그것을 최우선
@@ -699,7 +742,10 @@ if(!bookingId){
     apiBookingGet(bookingId).then(applyBooking,(err)=>showError('데이터 로드 실패',err.message));
     setInterval(()=>{
       if(document.visibilityState!=='visible'||editMode||window._justSubmitted)return;
-      apiBookingGet(bookingId).then(d=>{ if(d&&JSON.stringify(d)!==_lastRaw)applyBooking(d); }).catch(()=>{});
+      apiBookingGet(bookingId).then(d=>{
+        if(d&&JSON.stringify(d)!==_lastRaw){applyBooking(d);bkCheckGone();}
+        else if(JSON.stringify(window._bkTakenIn||{})!==_lastTaken)bkApplyTaken(window._bkTakenIn||{});
+      }).catch(()=>{});
     },30000);
   }catch(e){showError('연결 실패',e.message);}
 }
@@ -1129,11 +1175,13 @@ function renderCalendar(){
     const isSel=dateStr===selectedDate;
     const isToday=dateStr===todayStr;
     let cls='cal-day';
-    if(isAvail)cls+=' available';
+    const isFull=isAvail&&!isSel&&(bkDayFull(dateStr)||bkDayPast(dateStr));
+    if(isAvail&&!isFull)cls+=' available';
+    if(isFull)cls+=' full';
     if(isSel)cls+=' selected';
     if(isToday)cls+=' today';
     btn.className=cls;
-    if(isAvail){
+    if(isAvail&&!isFull){
       btn.addEventListener('click',()=>{
         selectedDate=dateStr;selectedTime='';
         document.getElementById('btn-step1-next').disabled=true;
@@ -1166,9 +1214,11 @@ function renderTimeSlots(){
   }
   el.innerHTML=times.map(t=>{
     const display=getDisplayTime(t,isEn);
+    if(bkPast(selectedDate,t))return `<button type="button" class="time-slot full" disabled>${display} · ${isEn?'Passed':'지남'}</button>`;
+    if(bkIsFull(selectedDate,t))return `<button type="button" class="time-slot full" disabled>${display} · ${isEn?'Booked':'마감'}</button>`;
     return `<button type="button" class="time-slot${t===selectedTime?' selected':''}" data-time="${t}">${display}</button>`;
   }).join('');
-  el.querySelectorAll('.time-slot').forEach(btn=>{
+  el.querySelectorAll('.time-slot:not(.full)').forEach(btn=>{
     btn.addEventListener('click',()=>{
       selectedTime=btn.dataset.time;
       renderTimeSlots();
@@ -1218,18 +1268,30 @@ function bkTimeHtml(t,isEn){
 function bkRenderCards(){
   const el=document.getElementById('bk-cards');if(!el)return;
   const isEn=bkEn(),T0=today();
-  const ds=(availableDates||[]).slice().sort().filter(d=>d>=T0||d===selectedDate);
-  if(!ds.length){
+  const ds=(availableDates||[]).slice().sort();
+  if(bkAllPast()&&!(editMode&&selectedDate)){
+    // 고를 수 있던 일정이 모두 지남 → 확정 신청 지연 안내 (지난 카드는 보여 주지 않음)
+    el.innerHTML='<div class="bk-expired"><div class="ic">⏰</div>'+
+      (isEn?'<b>All available booking dates have closed because the booking was not confirmed in time.</b><span>Please contact us again to request a new booking.</span>'
+           :'<b>확정 신청 지연으로 인해 예약 가능 일정이 모두 마감되었습니다.</b><span>다시 의뢰 문의 부탁드립니다.</span>')+'</div>';
+  }else if(!ds.length){
     el.innerHTML='<div class="bk-empty">'+(isEn?'There are no available dates right now.<br>Please message us and we will send new dates.':'지금 고르실 수 있는 날짜가 없습니다.<br>아래로 문의 주시면 새 일정을 보내드리겠습니다.')+'</div>';
   }else{
-    el.innerHTML='<div class="bk-lbl">🗓️ '+(isEn?ds.length+' available '+(ds.length>1?'dates':'date'):'가능한 일정 '+ds.length+'일')+'<span>· '+(isEn?'tap a time to choose':'시간을 누르면 바로 선택됩니다')+'</span></div>'+
+    el.innerHTML='<div class="bk-lbl">🗓️ '+(function(){const n=ds.filter(d=>!bkDayPast(d)).length;return isEn?n+' available '+(n===1?'date':'dates'):'가능한 일정 '+n+'일';})()+'<span>· '+(isEn?'tap a time to choose':'시간을 누르면 바로 선택됩니다')+'</span></div>'+
       ds.map(d=>{
         const dt=new Date(d+'T00:00:00'),w=dt.getDay(),times=scheduleMap[d]||[];
         const sel=d===selectedDate;
-        return '<div class="bk-dc'+(sel?' sel':'')+'" id="bkd-'+d+'"><div class="bk-db'+(w===0?' sun':w===6?' sat':'')+'">'+
+        const dPast=bkDayPast(d);
+        const nOpen=times.filter(t=>!bkIsFull(d,t)&&!bkPast(d,t)).length,allFull=!dPast&&times.length>0&&nOpen===0;
+        const cnt=dPast?(isEn?'Date passed':'지난 일정'):allFull?(isEn?'Fully booked':'모두 마감'):(nOpen<times.length?(isEn?nOpen+' of '+times.length+' times left':times.length+'개 중 '+nOpen+'개 남음'):(isEn?times.length+' time'+(times.length===1?'':'s'):times.length+'개 시간'));
+        return '<div class="bk-dc'+(sel&&!dPast?' sel':'')+(allFull?' allfull':'')+(dPast?' past':'')+'" id="bkd-'+d+'"><div class="bk-db'+(w===0?' sun':w===6?' sat':'')+'">'+
           '<div class="m">'+(isEn?BK_M[dt.getMonth()]:(dt.getMonth()+1)+'월')+'</div><div class="d">'+dt.getDate()+'</div><div class="w">'+(isEn?BK_WS.en[w]:BK_W.ko[w])+'</div></div>'+
-          '<div class="bk-dr"><div class="bk-rel">'+bkRel(d,isEn)+' · '+(isEn?times.length+' time'+(times.length===1?'':'s'):times.length+'개 시간')+'</div>'+
-          (times.length?'<div class="bk-ts">'+times.map(t=>'<button type="button" class="bk-t'+(sel&&t===selectedTime?' on':'')+'" data-bkd="'+bkEsc(d)+'" data-bkt="'+bkEsc(t)+'">'+bkTimeHtml(t,isEn)+'</button>').join('')+'</div>'
+          '<div class="bk-dr"><div class="bk-rel">'+(dPast?'':bkRel(d,isEn)+' · ')+cnt+'</div>'+
+          (times.length?'<div class="bk-ts">'+times.map(t=>bkPast(d,t)
+              ?'<button type="button" class="bk-t past" disabled>'+bkTimeHtml(t,isEn)+'<span class="fl">'+(isEn?'PASSED':'지남')+'</span></button>'
+              :bkIsFull(d,t)
+              ?'<button type="button" class="bk-t full" disabled aria-label="'+bkEsc(getDisplayTime(t,isEn))+' '+(isEn?'booked':'마감')+'">'+bkTimeHtml(t,isEn)+'<span class="fl">'+(isEn?'BOOKED':'마감')+'</span></button>'
+              :'<button type="button" class="bk-t'+(sel&&t===selectedTime?' on':'')+'" data-bkd="'+bkEsc(d)+'" data-bkt="'+bkEsc(t)+'">'+bkTimeHtml(t,isEn)+'</button>').join('')+'</div>'
             :'<div class="bk-none">'+(isEn?'No times set for this date':'이 날짜는 시간이 정해지지 않았습니다')+'</div>')+
           '</div></div>';
       }).join('');
@@ -1240,6 +1302,12 @@ function bkRenderCards(){
     const txt=isEn?('Hello, this is '+nm+'. None of the suggested booking dates work for me — could you send other dates?')
                   :('안녕하세요, '+nm+'입니다. 보내주신 예약 일정 중 가능한 날짜가 없어 다른 일정을 요청드립니다.');
     alt.href='https://wa.me/60172472774?text='+encodeURIComponent(txt);
+    const _ex=bkAllPast()&&!(editMode&&selectedDate);
+    if(_ex){
+      const t2=isEn?('Hello, this is '+nm+'. The booking dates have all closed — I would like to request a new booking.'):('안녕하세요, '+nm+'입니다. 예약 가능 일정이 모두 마감되어 다시 의뢰 문의드립니다.');
+      alt.href='https://wa.me/60172472774?text='+encodeURIComponent(t2);
+      alt.innerHTML='<span style="font-size:18px">💬</span><span><b>'+(isEn?'Request a new booking':'다시 의뢰 문의하기')+'</b><br>'+(isEn?'Message us on WhatsApp and we will send new dates':'왓츠앱으로 알려 주시면 새 일정을 보내드려요')+'</span><span class="go">'+(isEn?'Ask ›':'문의 ›')+'</span>';
+    }else
     alt.innerHTML='<span style="font-size:18px">💬</span><span><b>'+(isEn?'None of these dates work?':'맞는 날짜가 없으신가요?')+'</b><br>'+(isEn?'Message us on WhatsApp and we will send other dates':'왓츠앱으로 알려 주시면 다른 일정을 보내드려요')+'</span><span class="go">'+(isEn?'Ask ›':'문의 ›')+'</span>';
   }
 }
@@ -1252,6 +1320,40 @@ function bkBar(){
   b.disabled=!ok;
   v.classList.toggle('wait',!ok);
   v.textContent=ok?(bkFmtDate(selectedDate,isEn)+' '+getDisplayTime(selectedTime,isEn)):(selectedDate?(bkFmtDate(selectedDate,isEn)+(isEn?' · pick a time':' · 시간을 골라 주세요')):(isEn?'Please pick a time':'시간을 골라 주세요'));
+}
+// ── (2026-11-16) 마감 시간 반영 — 30초마다 받은 마감 목록이 바뀌면 일정 화면만 다시 그림 ──
+function bkApplyTaken(tk){
+  bkTaken=tk||{};_lastTaken=JSON.stringify(bkTaken);
+  if(!bookingData)return;
+  bkCheckGone();
+  try{renderCalendar();if(selectedDate)renderTimeSlots();}catch(e){}
+}
+// 고른 시간이 방금 마감됐으면 선택을 풀고 안내 (1단계에서만 — 2단계 이후는 제출 때 서버가 막음)
+function bkCheckGone(){
+  if(!selectedDate||!selectedTime||!bkIsFull(selectedDate,selectedTime))return;
+  if(currentStep!==1){bkGoneMsg(selectedDate,selectedTime);return;}
+  const d=selectedDate,t=selectedTime;
+  selectedTime='';
+  const b=document.getElementById('btn-step1-next');if(b)b.disabled=true;
+  const s=document.getElementById('sel-time-summary');if(s)s.style.display='none';
+  bkGoneMsg(d,t);
+}
+// (2026-11-16) 화면을 열어 둔 채 시간이 지나면 1분마다 지난 시간을 막고, 고른 시간이 지났으면 선택을 풂
+setInterval(function(){
+  if(!bookingData||currentStep!==1||document.visibilityState!=='visible')return;
+  if(selectedDate&&selectedTime&&bkPast(selectedDate,selectedTime)&&!editMode){
+    selectedTime='';const b=document.getElementById('btn-step1-next');if(b)b.disabled=true;
+    const s=document.getElementById('sel-time-summary');if(s)s.style.display='none';
+  }
+  try{renderCalendar();if(selectedDate)renderTimeSlots();}catch(e){}
+},60000);
+function bkGoneMsg(d,t){
+  const isEn=bkEn();
+  let el=document.getElementById('bk-gone');
+  if(!el){el=document.createElement('div');el.id='bk-gone';el.className='bk-gone';const c=document.getElementById('bk-cards');if(c)c.parentNode.insertBefore(el,c);else return;}
+  el.textContent=isEn?('⚠️ '+bkFmtDate(d,true)+' '+getDisplayTime(t,true)+' has just been booked by another customer. Please choose another time.')
+                     :('⚠️ '+bkFmtDate(d,false)+' '+getDisplayTime(t,false)+'은(는) 방금 다른 고객님 예약으로 마감되었습니다. 다른 시간을 골라 주세요.');
+  el.classList.add('on');
 }
 function bkScrollTo(ds){
   const c=document.getElementById('bkd-'+ds);if(!c)return;
@@ -1272,8 +1374,10 @@ function bkHeroFill(lang){
 }
 document.addEventListener('click',function(e){
   const t=e.target.closest('.bk-t');
+  if(t&&t.classList.contains('full'))return;
   if(t){
     selectedDate=t.dataset.bkd;selectedTime=t.dataset.bkt;
+    const _g=document.getElementById('bk-gone');if(_g)_g.classList.remove('on');
     const p=selectedDate.split('-');calYear=parseInt(p[0],10);calMonth=parseInt(p[1],10)-1;
     renderCalendar();renderTimeSlots();applySelectionSummaries();bkBar();
     return;
@@ -1583,7 +1687,23 @@ async function submitBooking(){
     }
 
     showStep3(items.join(', '),memo,isEdit);
-  }catch(e){editMode=isEdit;alert('예약 저장 실패: '+e.message);}
+  }catch(e){
+    editMode=isEdit;window._justSubmitted=false;
+    if(e.message==='slot-past'){
+      alert(isEn?'This time has already passed.\nPlease choose another time.':'이미 지난 시간입니다.\n다른 시간을 골라 주세요.');
+      selectedTime='';goToStep(1);try{renderCalendar();if(selectedDate)renderTimeSlots();}catch(_){}
+      return;
+    }
+    if(e.message==='slot-taken'){
+      // 그사이 다른 고객이 같은 시간(전후 1시간)을 신청·확정 → 저장 안 됨. 마감 표시 후 1단계로
+      (bkTaken[selectedDate]=bkTaken[selectedDate]||[]).push(selectedTime);
+      alert(isEn?'Sorry — this time was just booked by another customer.\nPlease choose another time.':'죄송합니다. 방금 다른 고객님 예약으로 마감된 시간입니다.\n다른 시간을 골라 주세요.');
+      goToStep(1);bkApplyTaken(bkTaken);
+      apiBookingGet(bookingId).then(()=>bkApplyTaken(window._bkTakenIn||bkTaken)).catch(()=>{});
+      return;
+    }
+    alert('예약 저장 실패: '+e.message);
+  }
 }
 
 function getDisplayTime(t,isEn){
