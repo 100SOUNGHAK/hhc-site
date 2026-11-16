@@ -751,6 +751,10 @@ html.sa body:has(.app-body.active){padding-left:200px}
 .nx-row.open .nx-ex{display:block}
 .nx-dl{font-size:13px;color:var(--text2);line-height:1.75;background:var(--surface);border-radius:10px;padding:8px 10px;word-break:break-word}
 .nx-dl .k{display:inline-block;min-width:46px;color:var(--text3);font-weight:700}
+.nx-cds{display:inline-block;vertical-align:top}
+.nx-cd{display:block}
+.nx-cd b{font-weight:700;color:var(--text)}
+.nx-cdn{color:var(--text3)}
 .nx-dl a{color:#2563EB;font-weight:700;text-decoration:none}
 .nx-ab{display:flex;gap:6px;margin-top:8px;align-items:center}
 .nx-ab .nx-b{height:42px;border-radius:11px}
@@ -2885,6 +2889,18 @@ function renderList(){
   const DOW='일월화수목금토';
   const mdTxt=d=>{const x=new Date(d+'T00:00:00');return isNaN(x)?d:(x.getMonth()+1)+'월 '+x.getDate()+'일 ('+DOW[x.getDay()]+')';};
   const mdShort=d=>{const x=new Date(d+'T00:00:00');return isNaN(x)?d:(x.getMonth()+1)+'/'+x.getDate()+' '+DOW[x.getDay()];};
+  // 후보일 + 그 날짜의 후보 시간 (schedule_times: {날짜:[시간…]}) — 날짜마다 한 줄
+  const candOf=b=>{
+    let ds=[],tm={};
+    try{ds=b.schedule_dates?JSON.parse(b.schedule_dates):[];}catch(e){}
+    try{tm=b.schedule_times?JSON.parse(b.schedule_times):{};}catch(e){}
+    if(!Array.isArray(ds)||!ds.length)return '';
+    if(!tm||typeof tm!=='object')tm={};
+    return '<span class="nx-cds">'+ds.map(d=>{
+      const ts=(Array.isArray(tm[d])?tm[d]:[]).map(v=>String(v||'').split('|')[0].trim()).filter(Boolean);
+      return `<span class="nx-cd"><b>${escHtml(mdShort(d))}</b>${ts.length?' · '+ts.map(escHtml).join(', '):' · <span class="nx-cdn">시간 미정</span>'}</span>`;
+    }).join('')+'</span>';
+  };
   const addDay=n=>{const x=new Date(T0+'T00:00:00');x.setDate(x.getDate()+n);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');};
   const tm=v=>{const disp=v?(String(v).indexOf('|')>=0?String(v).split('|')[0]:String(v)):'';const m=bkTimeMin(disp);if(m===99999)return{big:disp?escHtml(disp):'미정',sm:'',na:!disp};const h=Math.floor(m/60),mi=m%60;return{big:String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0'),sm:(h<12?'오전':'오후')+(/전후|around/i.test(disp)?' 전후':''),na:false};};
   const chipsOf=t=>{const a=String(t||'').split(/\s*[,\n]\s*/).filter(Boolean);return a.length?'<div class="nx-its">'+a.map(x=>`<span class="nx-it">${escHtml(x)}</span>`).join('')+'</div>':'';};
@@ -2904,7 +2920,7 @@ function renderList(){
   const edBtn=b=>`<button class="nx-ib" onclick="startEditList('${b.__id}')" title="수정">✏️</button>`;
   const detail=b=>{
     const dates=(()=>{try{return b.schedule_dates?JSON.parse(b.schedule_dates):[];}catch(e){return[];}})();
-    return `<div class="nx-det"><span class="k">연락처</span>${tel(b)}${b.customer_address?`<br><span class="k">주소</span>${escHtml(b.customer_address)}`:''}${bkLocLink(b)?`<br><span class="k">위치</span>${bkLocLink(b)}`:''}${dates.length?`<br><span class="k">후보일</span>${dates.map(mdShort).join(', ')}`:''}${b.customer_memo?`<br><span class="k">메모</span>${escHtml(b.customer_memo)}`:''}</div>`;
+    return `<div class="nx-det"><span class="k">연락처</span>${tel(b)}${b.customer_address?`<br><span class="k">주소</span>${escHtml(b.customer_address)}`:''}${bkLocLink(b)?`<br><span class="k">위치</span>${bkLocLink(b)}`:''}${dates.length?`<br><span class="k">후보일</span>${candOf(b)}`:''}${b.customer_memo?`<br><span class="k">메모</span>${escHtml(b.customer_memo)}`:''}</div>`;
   };
   const editOf=b=>{
     {
@@ -2982,7 +2998,7 @@ function renderList(){
     if(b.customer_address)rows.push(`<span class="k">주소</span>${escHtml(b.customer_address)}`);
     if(bkLocLink(b))rows.push(`<span class="k">위치</span>${bkLocLink(b)}`);
     rows.push(`<span class="k">연락처</span>${tel(b)}`);
-    if(dates.length&&b.status!=='confirmed')rows.push(`<span class="k">후보일</span>${dates.map(mdShort).join(', ')}`);
+    if(dates.length&&b.status!=='confirmed')rows.push(`<span class="k">후보일</span>${candOf(b)}`);
     return `<div class="nx-dl">${rows.join('<br>')}</div>`;
   };
   const tools=(b,menuExtra,first)=>`<div class="nx-ab">${first||`<button class="nx-b wa2" onclick="sendWA('${b.__id}')">${NX_WA} WhatsApp</button>`}${edBtn(b)}<button class="nx-ib" onclick="openCustomerAdminById('${b.__id}')" title="고객정보 보기">👤</button>${menu(b,menuExtra)}</div>`;
