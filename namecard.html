@@ -1343,7 +1343,9 @@ a.nc-v{color:var(--navy-800)}
    명함의 「예약 신청하기」(request.html)가 같은 보관값을 읽어 의뢰서와 함께 보냅니다. */
 (function(){
   try{
-    var k=(new URLSearchParams(location.search).get('ref')||'').trim().toUpperCase();
+    var q0=new URLSearchParams(location.search),k=(q0.get('ref')||'').trim().toUpperCase();
+    /* 관리자 명함에서 보낸 링크(?r=0) — 회사가 직접 보낸 것이라 추천인 없음: 이 휴대폰에 보관된 추천 코드도 지움 (2026-11-16) */
+    if(q0.get('r')==='0'){try{localStorage.removeItem('hhc_ref');}catch(e){}return;}
     if(/^[A-Z2-9]{6}$/.test(k)){window.HHC_REFK=k;try{localStorage.setItem('hhc_ref',JSON.stringify({k:k,t:Date.now()}));}catch(e){}}
     else{var o=JSON.parse(localStorage.getItem('hhc_ref')||'null');if(o&&o.k&&Date.now()-o.t<30*864e5)window.HHC_REFK=o.k;}
   }catch(e){}
@@ -2688,8 +2690,11 @@ function selfUrl(){
    두 파일 모두 명함과 같은 미리보기 사진·문구를 갖고 있고,
    눌리면 곧바로 전자명함(고객 화면)으로 넘어간다. */
 function sendUrl(){
-  var q = (mode === 'company') ? '?card=company' : '';
-  return SITE + (lang === 'en' ? '/nce' : '/nc') + q;
+  /* 관리자 명함에서 보낼 때는 r=0 — 받는 폰에 남아 있던 추천인(지인 소개 띠·의뢰서 추천 코드)을 지운다 (2026-11-16) */
+  var p = [];
+  if(mode === 'company') p.push('card=company');
+  if(owner) p.push('r=0');
+  return SITE + (lang === 'en' ? '/nce' : '/nc') + (p.length ? '?' + p.join('&') : '');
 }
 function shareText(){ return T[lang].msg + sendUrl(); }
 
