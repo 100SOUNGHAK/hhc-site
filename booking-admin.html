@@ -2621,6 +2621,12 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
     if(!hasTime){bkErr(EN?'No Time':'시간 없음',EN?'Please set at least one available time.':'최소 1개 날짜에 방문 가능 시간을 설정해주세요.');return;}
   }
 
+  // ⚠️ 즉시 확정 등록 — 같은 시간대(전후 1시간)에 확정된 예약이 있으면 먼저 알려 준다
+  if(instantConfirm){
+    const _cl=bkFindClash(bDate,bTime,currentBookingId);
+    if(_cl.length&&!(await bkAsk('⚠️ 같은 시간대 예약 있음',bkClashText(bDate,bTime,_cl))))return;
+  }
+
   if(window.HHCC_fill){
     try{const _fl=await HHCC_fill({name:name,phone:phone});
       if(_fl.phone&&_fl.phone!==phone){phone=_fl.phone;document.getElementById('c-phone').value=phone;}
@@ -3753,9 +3759,46 @@ async function syncBookingMirror(id,b){
   await addDoc(collection(db,'schedules'),schData);
 }
 
-window.confirmBooking=async function(id){
+// ── ⚠️ 같은 시간대 확정 예약 안내 ──
+//    확정하려는 날짜에 이미 확정된 예약이 있고, 시간이 같거나 앞뒤 1시간 이내면 알려 준다.
+//    (막지는 않음 — 안내를 보고 「그래도 확정」을 고를 수 있다. 시간이 비어 있는 예약은 비교하지 않음)
+function bkFindClash(date,time,excludeId){
+  if(!date)return [];
+  const t0=bkTimeMin(time);
+  if(t0===99999)return [];
+  return allBookings.filter(function(x){
+    if(x.__id===excludeId||x.status!=='confirmed'||x.booking_date!==date)return false;
+    const t=bkTimeMin(x.booking_time);
+    return t!==99999&&Math.abs(t-t0)<=60;
+  }).sort(function(a,b){return bkTimeMin(a.booking_time)-bkTimeMin(b.booking_time);});
+}
+function bkClashText(date,time,list){
+  const d=new Date(date+'T00:00:00');
+  const w=(d.getMonth()+1)+'월 '+d.getDate()+'일 ('+'일월화수목금토'[d.getDay()]+') '+String(time||'').split('|')[0];
+  const rows=list.map(function(x){
+    return '· '+String(x.booking_time||'').split('|')[0]+'  '+(x.customer_name||'고객')+(x.booking_items?' ('+x.booking_items+')':'');
+  }).join('\n');
+  return w+' 전후 1시간 안에 이미 확정된 예약이 '+list.length+'건 있습니다.\n\n'+rows+'\n\n직원·차량 배정을 확인해 주세요.\n그래도 확정하시겠습니까?';
+}
+// 확인 → true, 취소·바깥 누르기 → false
+function bkAsk(title,msg){
+  return new Promise(function(res){
+    let done=false;const fin=function(v){if(!done){done=true;res(v);}};
+    showModal(title,msg,true,function(){fin(true);});
+    document.getElementById('modal-cancel').addEventListener('click',function(){fin(false);});
+    const ov=document.getElementById('modal-ov');
+    const h=function(e){if(e.target===ov){ov.removeEventListener('click',h);fin(false);}};
+    ov.addEventListener('click',h);
+  });
+}
+
+window.confirmBooking=async function(id,force){
   const b=allBookings.find(x=>x.__id===id);
   if(!b)return;
+  if(!force){
+    const _cl=bkFindClash(b.booking_date,b.booking_time,id);
+    if(_cl.length&&!(await bkAsk('⚠️ 같은 시간대 예약 있음',bkClashText(b.booking_date,b.booking_time,_cl))))return;
+  }
   showLoading(true);
   try{
     await updateDoc(doc(db,'bookings',id),{...b,status:'confirmed'});
