@@ -184,6 +184,14 @@ body{background:#EEF1F7;font-size:15px}
 .notice p:before{content:'';position:absolute;left:4px;top:16px;width:7px;height:7px;border-radius:50%;background:var(--c3)}
 
 /* ── 연락처 ── */
+.bank{padding:6px 16px 14px}
+.bank .bk{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-top:1px solid #EEF1F6;font-size:13.5px}
+.bank .bk:first-child{border-top:0}
+.bank .bk span{color:var(--ink2);font-weight:600;flex:none}
+.bank .bk b{color:var(--ink);font-weight:800;text-align:right;word-break:break-word}
+.bank .bk b.num{font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.bank .cp{flex:none;margin-left:8px;border:1px solid var(--line);background:var(--soft);color:var(--n);border-radius:8px;padding:5px 9px;font:inherit;font-size:11.5px;font-weight:800;cursor:pointer}
+@media print{.bank .cp{display:none}}
 .ft{display:flex;gap:12px;align-items:center;padding:15px 16px}
 .ft .fi{width:42px;height:42px;border-radius:12px;background:var(--n);color:#E3C98A;flex:none;display:flex;align-items:center;justify-content:center}
 .ft .ft0{flex:1;min-width:0}
@@ -668,6 +676,21 @@ function noticesOf(Q,isEn){
   // 번역이 아직 없는 문장은 영문 화면에서 빼 둡니다(번역이 도착하면 다시 그림)
   return ns.map(function(n,i){return enOf(n,'',en[i]);}).filter(function(t){return t&&!KO_RE.test(t);});
 }
+// 결제 계좌 (관리자에서 「견적서에 결제 계좌 표시」를 켜고 저장한 견적서만)
+function bankHtml(b,isEn){
+  if(!b||!b.no)return '';
+  return '<div class="card"><div class="chd">'+(isEn?'Payment Account':'결제 계좌')+'</div><div class="bank">'+
+    '<div class="bk"><span>'+(isEn?'Bank':'은행')+'</span><b>'+esc(b.bank||'')+'</b></div>'+
+    '<div class="bk"><span>'+(isEn?'Account No.':'계좌번호')+'</span><div style="display:flex;align-items:center"><b class="num">'+esc(b.no)+'</b>'+
+      '<button type="button" class="cp" onclick="copyBankNo(this,\''+esc(b.no)+'\')">'+(isEn?'Copy':'복사')+'</button></div></div>'+
+    '<div class="bk"><span>'+(isEn?'Account Name':'예금주')+'</span><b>'+esc(b.name||'')+'</b></div>'+
+  '</div></div>';
+}
+function copyBankNo(btn,no){
+  var done=function(){var t=btn.textContent;btn.textContent='✓';setTimeout(function(){btn.textContent=t;},1500);};
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(no).then(done,function(){prompt('',no);});
+  else prompt('',no);
+}
 // 품목 비고 영문 — 「분류 · 대당」 같은 자동 비고는 단위만 영어로, 번역 못 한 한글 조각은 뺍니다
 function noteOf(it,isEn){
   var ko=String(it.note||'').trim();
@@ -995,6 +1018,7 @@ function render(){
       acHtml+
       (secHtml?'<div class="card"><div class="chd">'+(isEn?'Details':'상세 내역')+'<small>'+itemN+(isEn?(itemN===1?' item':' items'):'개 항목')+'</small></div>'+secHtml+'</div>':'')+
       (nts.length?'<div class="card"><div class="chd">'+(isEn?'Terms & Notes':'안내사항')+'</div><div class="notice">'+nts.map(n=>'<p>'+esc(n)+'</p>').join('')+'</div></div>':'')+
+      bankHtml(Q.bank,isEn)+
       '<div class="card"><div class="ft"><div class="fi"><svg class="hhc-mark" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g fill="currentColor"><rect x="15" y="14" width="19" height="74" rx="3.5"/><rect x="66" y="14" width="19" height="74" rx="3.5"/><path d="M50 28 85 51v16L50 43 15 67V51Z"/></g></svg></div><div class="ft0">'+
         '<div class="ft1">'+(isEn?'Questions about this quote?':'견적 내용이 궁금하신가요?')+'</div>'+
         '<div class="ft2">+60 17-247 2774</div></div></div>'+
@@ -1106,6 +1130,7 @@ function buildQuoteDoc(){
     :L('발행일로부터 '+(Q.validDays||7)+'일간 유효합니다 ('+(Q.validUntil||'')+' 까지).','Valid for '+(Q.validDays||7)+' days from the issue date (until '+(Q.validUntil||'')+').');
   const noteBlock=H.notes([
     nts.length?{t:L('안내사항','Terms & Notes'),x:H.list(nts.map(n=>e(n))),cls:'w'}:null,
+    (Q.bank&&Q.bank.no)?{t:L('결제 계좌','Payment Account'),x:e(Q.bank.bank||'')+' '+e(Q.bank.no)+'<br>'+e(Q.bank.name||'')}:null,
     {t:L('유효기한','Validity'),x:e(validTx)},
     {t:L('문의 · 예약','Enquiry & Booking'),x:'WhatsApp / Tel +60 17-247 2774<br>happyhomecare.com.my',cls:'g'}
   ]);

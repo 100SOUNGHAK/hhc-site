@@ -366,6 +366,12 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
     </div>
   </div>
 
+  <!-- 2026-11-16 결제 계좌 표시 (켜면 고객 견적서·PDF에 계좌 정보가 보입니다) -->
+  <div class="card" id="bank-card">
+    <h4>💳 결제 계좌</h4>
+    <button type="button" class="nt-auto on" id="f-bank" aria-pressed="true" onclick="toggleBankShow()"><span class="sw"></span><span><b>견적서에 결제 계좌 표시</b><small id="f-bank-tx"></small></span></button>
+  </div>
+
   <div class="total" id="tot-box"></div>
 
   <div class="btnrow">
@@ -1518,6 +1524,15 @@ async function addQuoteEnglish(data){
   return fail;
 }
 
+// ── 결제 계좌 (견적서 표시 켜기/끄기) — 저장 시 견적서 문서에 계좌 정보가 함께 들어갑니다
+var QUOTE_BANK={bank:'MAYBANK',no:'562179535697',name:'Happy Works Services Sdn Bhd'};
+function setBankShow(on){
+  var b=gid('f-bank');if(!b)return;
+  b.classList.toggle('on',!!on);b.setAttribute('aria-pressed',on?'true':'false');
+  gid('f-bank-tx').textContent=on?(QUOTE_BANK.bank+' '+QUOTE_BANK.no+' · '+QUOTE_BANK.name):'끔 — 고객 견적서에 계좌가 보이지 않습니다';
+}
+window.toggleBankShow=function(){setBankShow(!gid('f-bank').classList.contains('on'));};
+setBankShow(true);
 // ── 폼 수집/리셋
 function collectQuote(){
   var client=gid('f-client').value.trim();
@@ -1538,7 +1553,8 @@ function collectQuote(){
     discount:parseFloat(gid('f-discount').value)||0,
     baseTotal:baseTotal(),
     acSelect:collectAcSelect(),
-    notices:ntSel.slice()
+    notices:ntSel.slice(),
+    bank:gid('f-bank').classList.contains('on')?Object.assign({},QUOTE_BANK):null
   };
 }
 function resetForm(confirmAsk){
@@ -1547,7 +1563,7 @@ function resetForm(confirmAsk){
   gid('f-client').value='';gid('f-phone').value='+60 ';gid('f-subject').value='';gid('f-subject-en').value='';
   gid('f-date').value=todayStr();gid('f-valid').value='7';gid('f-discount').value='0';
   if(acEnabled)toggleAcSelect();
-  ntResetState();refreshNotices();renderSelList();
+  ntResetState();refreshNotices();renderSelList();setBankShow(true);
   gid('save-btn').textContent='저장 & 링크 발송';
 }
 window.loadQuoteToForm=function(q,id){
@@ -1563,6 +1579,7 @@ window.loadQuoteToForm=function(q,id){
   gid('f-discount').value=q.discount||0;
   selItems=(q.items||[]).map(function(it){return {name:it.name,nameEn:it.nameEn||it.name,qty:it.qty,unit:it.unit||'',price:it.price,discType:it.discType||'pct',discVal:parseFloat(it.discVal)||0,group:it.group||'custom',sect:it.sect||defaultSect(it.group||'custom'),note:it.note||'',noteEn:it.noteEn||'',svcId:it.svcId||'',cat:it.cat||'',subcat:it.subcat||''};});
   // 저장된 견적의 안내사항을 그대로 체크 (유형 자동 추천은 다시 덮어쓰지 않음)
+  setBankShow(!!q.bank);
   ntResetState();ntSel=(q.notices||[]).slice();
   // 그 견적의 유형에서 일부러 뺀 추천 문구만 「뺀 것」으로 기억 → 나중에 다른 유형을 더하면 그 유형 추천은 체크됩니다
   ntAll().forEach(function(n){if(ntSel.indexOf(n.ko)<0&&(n.t==='common'||(q.types||[]).indexOf(n.t)>=0))ntOff[n.ko]=1;});
