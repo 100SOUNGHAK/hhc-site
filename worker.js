@@ -7,6 +7,7 @@ const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.go
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SITE = 'https://happyhomecare.com.my';
 const TOMORROW_CRON = '0 15 * * *';   // UTC 15:00 = 말레이시아 23:00 (wrangler.toml crons 와 같은 글자여야 함)
+const CUST_CRON = '0 1 * * *';        // UTC 01:00 = 말레이시아 09:00 — 고객 자동 앱 알림 (wrangler.toml crons 와 같은 글자여야 함)
 
 function b64url(bytes) {
   let bin = '';
@@ -307,6 +308,19 @@ export default {
           body: JSON.stringify({ type: 'tomorrow' })
         });
         console.log('내일 일정 알림: ' + r.status + ' ' + (await r.text()));
+      })());
+      return;
+    }
+    // 매일 오전 9시(말레이시아) = UTC 01:00 → 알림을 켠 고객에게 자동 앱 알림 (2026-11-16)
+    //   방문 전날(확정 예약) · 결제 기한 하루 전 · 기한 지남 — 대상 고르기·발송·중복 방지는 홈페이지 서버(/api/cpush, op:auto)가 한다.
+    if (event.cron === CUST_CRON) {
+      ctx.waitUntil((async () => {
+        const r = await fetch(SITE + '/api/cpush', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Origin': SITE },
+          body: JSON.stringify({ op: 'auto' })
+        });
+        console.log('고객 자동 알림: ' + r.status + ' ' + (await r.text()));
       })());
       return;
     }
