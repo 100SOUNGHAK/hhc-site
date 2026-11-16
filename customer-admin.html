@@ -1403,7 +1403,7 @@ function kkText(m,feed){
   if(len(t)>MAX)t=Array.from(t).slice(0,MAX-1).join('').replace(/\s+\S*$/,'')+'…';
   return t;
 }
-async function kkSend(title,desc,url,en,btn,img){
+async function kkSend(title,desc,url,en,btn,img,btn2){
   const key=await kkKey(false);
   if(!key){toast('카카오 JavaScript 키가 등록되지 않았습니다');return false;}
   let K;
@@ -1416,6 +1416,9 @@ async function kkSend(title,desc,url,en,btn,img){
   try{
     const _lk={mobileWebUrl:url,webUrl:url};
     const _btn=[{title:(btn||(en?'Open MY PAGE':'마이페이지 열기')),link:_lk}];
+    // 🔗 링크가 두 개인 안내(예약 확정 · 점검 출장방문의 작업방문등록, 점검 접수의 출장비 확인)는
+    //    카카오 카드에 버튼을 하나 더 붙입니다 — 카카오는 버튼 2개까지 지원합니다. 할 일 버튼을 앞에 둡니다.
+    if(btn2&&btn2.u)_btn.unshift({title:btn2.t,link:{mobileWebUrl:btn2.u,webUrl:btn2.u}});
     if(img){
       // 🖼 사진이 있는 안내 — 위에 사진, 아래 문구, 맨 아래 버튼 순서로 보입니다.
       //    제목을 따로 지정하지 않으면 안내 문구의 첫 줄이 제목(굵은 글씨)이 되고
@@ -1449,6 +1452,23 @@ async function kkSend(title,desc,url,en,btn,img){
 // 발송 버튼 공통 처리 (전체 메시지를 먼저 클립보드에 복사 + 안내 표시 → 그 다음 카카오톡 공유창 열기)
 // 순서가 중요합니다: 공유창을 먼저 열면 화면이 곧바로 카카오톡 앱으로 전환되어
 // 안내 문구가 뜰 틈도 없이 화면이 넘어가 버립니다. 그래서 안내부터 띄운 뒤 공유를 시작합니다.
+// 💛 카카오 카드 두 번째 버튼 — 본문의 「이름 👉 주소」 줄 가운데 마이페이지(카드 기본 버튼)가 아닌 주소를 찾습니다.
+//    카카오 본문에서는 주소 줄이 빠지므로, 이 주소가 버튼이 되어야 고객이 열 수 있습니다.
+function kkExtraBtn(message,url,en){
+  const main=[url,_hhcShortCache[url]].filter(Boolean);
+  const L=String(message||'').split('\n');
+  for(const ln of L){
+    const m=/^(.*?)\s*\u{1F449}\s*(https?:\/\/\S+)\s*$/u.exec(ln.trim());
+    if(!m||main.indexOf(m[2])>=0)continue;
+    const lb=m[1];
+    // 카카오 버튼 이름은 짧아야 잘리지 않습니다 (14자 이내)
+    const t=/등록|Registration|Work ?permit/i.test(lb)?(en?'Work permit info':'작업방문등록 정보')
+          :/비용|fee/i.test(lb)?(en?'Check my fee':'우리 집 비용 확인')
+          :Array.from(lb.replace(/[^\p{L}\p{N}\s·()]/gu,'').trim()).slice(0,14).join('');
+    return {t:t,u:_hhcShortCache[m[2]]||m[2]};
+  }
+  return null;
+}
 async function kkShareMsg(name,message,url,en,title,img){
   // 클립보드에는 왓츠앱과 같은 간략한 내용(주소 포함)을 넣어, 손으로 붙여 보낼 때도 동일하게 나갑니다
   //  · 카카오 200자를 넘는 경우엔 품목 목록을 「첫 품목 외 N건」으로 줄인 문구를 복사합니다
@@ -1464,7 +1484,7 @@ async function kkShareMsg(name,message,url,en,title,img){
   }
   const ok=await kkSend((title&&title.t)||(en?('[Happy Home Care] Notice for '+(name||'Customer'))
                           :('[Happy Home Care] '+(name||'고객')+'님 안내')),
-                        kkText(message,!!img),url,en,(title&&title.btn)||'',img);
+                        kkText(message,!!img),url,en,(title&&title.btn)||'',img,kkExtraBtn(message,url,en));
   return ok;
 }
 async function kkResetKey(){
