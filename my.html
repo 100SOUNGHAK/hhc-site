@@ -2385,7 +2385,11 @@ const VIS=(P.get('v')||'iv,ip,ct,cp').split(',');
 // 📌 발송 메시지에 맞춰 「지금 봐 주셔야 할 곳」을 지정합니다 (f=iv · ip · ct · cp · qt · bk · mm · pt)
 const FOCUS=(P.get('f')||'').trim();
 // 안내한 섹션이 꺼져 있으면 그 섹션만 자동으로 켭니다 (안내와 화면이 어긋나지 않도록)
-if(FOCUS&&['iv','ip','ct','cp'].indexOf(FOCUS)>=0&&VIS.indexOf(FOCUS)<0)VIS.push(FOCUS);
+//  · py(결제 요청) · ivl(결제 확인 → 인보이스 내역)도 인보이스 섹션을 켭니다 (2026-11-16)
+const FOCUS_VIS=(FOCUS==='py'||FOCUS==='ivl')?'iv':FOCUS;
+if(FOCUS_VIS&&['iv','ip','ct','cp'].indexOf(FOCUS_VIS)>=0&&VIS.indexOf(FOCUS_VIS)<0)VIS.push(FOCUS_VIS);
+// 📌 fi= 가리키는 문서 번호(점검보고서 등) — 「지금 확인하실 일」에 그 문서 카드가 있으면 그 카드를 강조합니다
+const FOCUS_ID=(P.get('fi')||'').trim();
 let LANG=(P.get('lang')==='en')?'en':'ko';
 
 // ── PWA : 홈 화면 설치 ──
@@ -4315,7 +4319,7 @@ function render(){
           big:esc(dLong(v.d))+' <small class="brf-nw">'+(v.t?esc(v.t)+' ':'')+(bk?(en?'· Confirmed':'예약확정'):(en?'· Visit confirmed':'방문확정'))+'</small>',
           sub:'<b class="brf-wp">'+(en?'Pre-register your WORK PERMIT':'WORK PERMIT 사전등록 필수')+'</b>',
           // 🪪 누르면 작업방문등록 안내장 — 맨 위에 예약 확정 카드(이름 · 예약일 · 품목 · 상태)가 함께 나옵니다
-          cta:en?'Booking & work permit':'예약 · 작업방문등록',act:'href="'+esc(wpUrl(v))+'" data-mvt="'+(en?'🪪 Work permit':'🪪 작업방문등록 안내')+'"'});
+          cta:en?'Booking & work permit':'예약 · 작업방문등록',act:'href="'+esc(wpUrl(v))+'" data-mvt="'+(en?'🪪 Work permit':'🪪 작업방문등록 안내')+'" data-src="'+(bk?'bk':'mm')+'"'});
       }
     }
     // ②-0 서비스 의뢰 접수 완료 — 의뢰서를 낸 뒤, 그 의뢰로 예약 신청서가 만들어지기 전까지 보입니다
@@ -4382,7 +4386,8 @@ function render(){
         hood:{ko:'새 주방후드 보고서',en:'New kitchen hood report',img:'mp-bg-care.jpg'},
         fabric:{ko:'새 작업 보고서',en:'New work report',img:'mp-bg-care.jpg'},
         install:{ko:'새 설치보고서',en:'New installation report',img:'card-ac.jpg'}};
-      const in14=s=>{const dd=dayDiff(String(s||'').slice(0,10));return dd!=null&&dd<=0&&dd>=-14;};
+      // (2026-11-16) 「새 보고서」 카드는 보고서 날짜부터 5일 동안만 보입니다 (예전 14일)
+      const in14=s=>{const dd=dayDiff(String(s||'').slice(0,10));return dd!=null&&dd<=0&&dd>=-5;};
       const seenT={};
       (DATA.inspections||[]).filter(x=>in14(x.date)).forEach(r=>{
         const ty=RPT[r.type]?r.type:'inspect';
@@ -4452,7 +4457,7 @@ function render(){
     }
     // ⑥-0 서비스 의뢰하기 (2026-11-10) — 「의뢰 요청서」·정기관리 안내(f=sv)로 열었을 때만, 배너 맨 앞에.
     //   간편 견적 계산기가 있는 의뢰서로 연결. 열면 focusSection 이 이 카드를 화면 가운데로 옮겨 강조합니다.
-    if(FOCUS==='sv')B.unshift({k:'svreq',tone:'gold',ic:'📋',tag:en?'Request form':'의뢰 요청서',
+    if(FOCUS==='sv'||FOCUS==='cr')B.unshift({k:'svreq',tone:'gold',ic:'📋',tag:en?'Request form':'의뢰 요청서',
       big:en?'Submit a service request':'서비스 의뢰 신청 접수하기',
       sub:'',cta:'',act:'href="'+esc(BASE+'/request.html?lang='+LANG+'&nm='+encodeURIComponent(m.name||'')+'&ph='+encodeURIComponent(m.phone||'')+'&ad='+encodeURIComponent(m.addr||''))+'"'});
     // ⑥-1 이달의 이벤트 (이벤트관리에 「공개」로 등록한 것이 자동으로 나옵니다)
@@ -4526,7 +4531,7 @@ function render(){
       const cyc2=c=>en?(c.mo%12?c.mo+' months':(c.mo===12?'1 year':(c.mo/12)+' years')):(c.mo%12?c.mo+'개월':(c.mo/12)+'년');
       const ST2={bad:en?'Care needed':'관리 필요',warn:en?'Due soon':'곧 관리',ok:en?'Good':'양호'};
       // (2026-11-13) 제목을 「내 문서」처럼 카드 위로 꺼냄 · 카드 안 첫 줄은 상태 요약 + 안내
-      H_CARE+='<div class="sec hcs">'+
+      H_CARE+='<div class="sec hcs" id="sec-care">'+
         '<div class="sxh hcs-h"><b>'+(en?'Home care status':'우리집 케어 현황')+'</b>'+
           '<span class="hcg-sum">'+['bad','warn','ok'].filter(k=>cnt[k]).map(k=>'<i class="'+k+'">'+SUM[k]+' '+cnt[k]+'</i>').join('')+'</span></div>'+
         '<div class="hcg v3 v4" id="hcg">'+
@@ -4955,7 +4960,9 @@ function pnInit(){if(!CID||IS_INAPP)return;pnPaint();}
 //    테두리를 깜빡여 눈에 띄게 합니다. 화면을 한 번 누르면 표시가 사라집니다.
 var FOCUS_SEC={iv:'sec-iv',ip:'sec-ip',ct:'sec-ct',cp:'sec-cp',qt:'sec-qt',
                bk:'brief',mm:'sec-mm',pt:'pyx-sec',ap:'a2hs-card',sv:'sec-sv',fee:'sec-fee',
-               td:'brief',rq:'brief'};   // rq = 의뢰 접수 완료 카드 (없으면 「지금 확인하실 일」 전체)   // td = 「지금 확인하실 일」 전체 (의뢰 접수 안내) · bk 는 예약 카드가 없으면 여기로
+               td:'brief',rq:'brief',
+               py:'sec-iv',ivl:'sec-iv',
+               cr:'hcg'};   // cr = 정기관리 3·6개월 알림 → 「우리집 케어 현황」 (없으면 의뢰 요청서 카드)   // py = 결제 요청 → 「결제 예정」 카드(없으면 인보이스 내역) · ivl = 결제 확인 → 인보이스 내역   // rq = 의뢰 접수 완료 카드 (없으면 「지금 확인하실 일」 전체)   // td = 「지금 확인하실 일」 전체 (의뢰 접수 안내) · bk 는 예약 카드가 없으면 여기로
 var _hiDone=false,_hiActive=false;
 function hiClear(){
   document.querySelectorAll('.hi-focus').forEach(function(el){el.classList.remove('hi-focus','done','hi-inset');});
@@ -4972,10 +4979,23 @@ function _hiOff(){
 // 예약 안내(f=bk)는 「지금 확인하실 일」 배너 안의 예약 카드로 데려갑니다.
 //  작성 대기(bkw) → 확인 중(bkp) → 방문 예정(visit) 순으로 있는 카드를 고릅니다.
 //  의뢰 접수 안내(f=rq)는 「의뢰 접수 완료」 카드로 데려갑니다.
-var BRIEF_KEYS={bk:['bkw','bkp','visit'],rq:['rq','bkw','bkp','visit'],sv:['svreq']};
+// (2026-11-16) 결제 요청 · 견적서 · 상품권 · 점검보고서 · 점검 출장방문 안내도 이 배너의 해당 카드로 먼저 데려갑니다.
+//  카드가 없으면(이미 결제함 · 2주 지난 보고서 등) 예전처럼 아래 내역 섹션으로 갑니다.
+//  'visit@mm' = 방문 카드 중 수리요청(점검 출장방문)에서 온 것만
+var BRIEF_KEYS={bk:['bkw','bkp','visit'],rq:['rq','bkw','bkp','visit'],sv:['svreq'],
+                iv:['pay'],py:['pay'],qt:['quote'],cp:['coupon'],ip:['report'],mm:['visit@mm']};
 function bkBrief(){
   var ks=BRIEF_KEYS[FOCUS];if(!ks)return null;
-  for(var i=0;i<ks.length;i++){var c=document.querySelector('#brf-rail .brf[data-k="'+ks[i]+'"]');if(c)return c;}
+  for(var i=0;i<ks.length;i++){
+    var kk=ks[i].split('@'),sel='#brf-rail .brf[data-k="'+kk[0]+'"]'+(kk[1]?'[data-src="'+kk[1]+'"]':'');
+    // 보고서 안내에 문서 번호(fi=)가 있으면 그 보고서 카드만 — 다른 보고서를 잘못 가리키지 않게 합니다
+    if(FOCUS==='ip'&&FOCUS_ID){
+      var cs=document.querySelectorAll(sel);
+      for(var j=0;j<cs.length;j++){if((cs[j].getAttribute('href')||'').indexOf('id='+encodeURIComponent(FOCUS_ID))>=0)return cs[j];}
+      continue;
+    }
+    var c=document.querySelector(sel);if(c)return c;
+  }
   return null;
 }
 function focusSection(){
@@ -4985,15 +5005,18 @@ function focusSection(){
   if(!el){                       // ① 계약서 요약 카드만 있는 경우 등 대체 위치
     if(FOCUS==='ct')el=document.getElementById('duo')||document.querySelector('.mbx');
     if(FOCUS==='pt')el=document.querySelector('.ptc');
+    if(FOCUS==='cr')el=document.querySelector('#brf-rail .brf[data-k="svreq"]');
     if(!el)return;               // 설치 안내(ap)는 이미 설치한 고객에게 카드가 없어 그냥 지나갑니다
   }
   // 예약·상품권·청구 안내 팝업이 떠 있으면 그것을 먼저 보시게 하고, 닫은 뒤에 강조합니다.
   if(document.querySelector('.pmx-ov.on')){setTimeout(focusSection,600);return;}
   _hiDone=true;_hiActive=true;
   // 인보이스·점검보고서·수리요청은 내역까지 펼쳐 바로 보이게 합니다.
-  if(FOCUS==='iv'||FOCUS==='ip'||FOCUS==='mm'){
-    var b=document.getElementById('hub-btn-'+FOCUS);
-    if(b&&!OPEN[FOCUS]){OPEN[FOCUS]=true;b.click();OPEN[FOCUS]=true;}
+  //  · 「지금 확인하실 일」 카드로 데려갈 때는 내역을 펼치지 않습니다 (카드만 또렷하게)
+  var _hk=(FOCUS==='py'||FOCUS==='ivl')?'iv':FOCUS;
+  if(!bkBrief()&&(_hk==='iv'||_hk==='ip'||_hk==='mm')){
+    var b=document.getElementById('hub-btn-'+_hk);
+    if(b&&!OPEN[_hk]){OPEN[_hk]=true;b.click();OPEN[_hk]=true;}
   }
   var _pick=function(){return bkBrief()||document.getElementById(id)||el;};
   var _center=function(){

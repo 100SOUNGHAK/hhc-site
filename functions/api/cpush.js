@@ -156,9 +156,9 @@ async function autoPush(env,dry){
   bks.filter(x=>x.status==='confirmed').forEach(x=>owners(x.customer_name,x.customer_phone,x).forEach(c=>
     jobs.push({key:'auto-bk-'+x.__id+'-'+tmr+'-'+c,c,kind:'visit',f:'bk',d:{date:tmr,timeRaw:x.booking_time}})));
   ivT.filter(unpaid).forEach(x=>owners(x.customer&&x.customer.name,x.customer&&x.customer.phone,x).forEach(c=>
-    jobs.push({key:'auto-due-'+x.__id+'-'+c,c,kind:'due',f:'iv',d:{date:tmr,id:x.id||x.__id}})));
+    jobs.push({key:'auto-due-'+x.__id+'-'+c,c,kind:'due',f:'py',d:{date:tmr,id:x.id||x.__id}})));
   ivY.filter(unpaid).forEach(x=>owners(x.customer&&x.customer.name,x.customer&&x.customer.phone,x).forEach(c=>
-    jobs.push({key:'auto-over-'+x.__id+'-'+c,c,kind:'over',f:'iv',d:{date:yst,id:x.id||x.__id}})));
+    jobs.push({key:'auto-over-'+x.__id+'-'+c,c,kind:'over',f:'py',d:{date:yst,id:x.id||x.__id}})));
 
   const out=[];
   for(const j of jobs){
