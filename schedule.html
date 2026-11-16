@@ -1619,43 +1619,23 @@ function vrDT(dateStr,timeS){
 }
 
 function getVisitReminderMsg(name,dateStr,lang,tpl,timeS){
+  // 2026-11 발송 문구 개편 — 인사 → *제목* → 일시 → 👉 할 일 (마이페이지 주소 · 서명은 vrTail 이 붙입니다)
+  //  예약관리(booking-admin) 「방문 알림」과 같은 문구입니다.
   lang=lang||'ko';tpl=tpl||'pre';
-  var D=vrDT(dateStr,timeS),dKo=D.dKo,dEn=D.dEn,tKo=D.tKo,tEn=D.tEn;
-  var L=[];
-  if(lang==='en'){
-    if(tpl==='tomorrow'){
-      L.push('Hello, '+name+'.','','🔔 Visit Tomorrow');
-      if(dEn)L.push('• Date: '+dEn);
-      if(tEn)L.push('• Time: '+tEn);
-      L.push('','If you have not registered our visit yet, please make sure to complete the Work Permit registration before our visit tomorrow for smooth entry.','Thank you.');
-    }else if(tpl==='today'){
-      L.push('Hello, '+name+'.','','🔔 Visit Today');
-      if(tEn)L.push('• Time: '+tEn);
-      L.push('','If you have not registered our visit yet, please complete the Work Permit registration right away, before our visit, for smooth entry.','See you shortly. Thank you.');
-    }else{
-      L.push('Hello, '+name+'.','','📅 Scheduled Visit');
-      if(dEn)L.push('• Date: '+dEn);
-      if(tEn)L.push('• Time: '+tEn);
-      L.push('','If you have not registered our visit yet, please make sure to complete the Work Permit registration before our visit for smooth entry.','We look forward to seeing you. Thank you.');
-    }
-    return L.join('\n');
+  var D=vrDT(dateStr,timeS),en=(lang==='en');
+  var when=(tpl==='today')?(en?D.tEn:D.tKo):[en?D.dEn:D.dKo,en?D.tEn:D.tKo].filter(Boolean).join(' ');
+  if(en){
+    var tEN={tomorrow:'🔔 *We\'re visiting tomorrow*',today:'🔔 *We\'re visiting today*'}[tpl]||'📅 *Your scheduled visit*';
+    var aEN={tomorrow:'👉 If you haven\'t registered our visit (Work Permit) yet,\n      please do it with your management office today.',
+             today:'👉 If you haven\'t registered our visit (Work Permit) yet,\n      please do it right away. See you shortly!'}[tpl]
+             ||'👉 If you haven\'t registered our visit (Work Permit) yet,\n      please do it with your management office before we arrive.';
+    return 'Hello, '+name+' 😊\n\n'+tEN+(when?'\n'+(tpl==='today'?'⏰ ':'📅 ')+when:'')+'\n\n'+aEN;
   }
-  if(tpl==='tomorrow'){
-    L.push('안녕하세요, '+name+' 고객님.','','🔔 내일 방문 안내');
-    if(dKo)L.push('• 일자: '+dKo);
-    if(tKo)L.push('• 방문시간: '+tKo);
-    L.push('','아직 작업방문등록을 하지 않으셨다면, 원활한 출입을 위해 내일 방문 전까지 반드시 Work Permit 등록 부탁드립니다.','감사합니다.');
-  }else if(tpl==='today'){
-    L.push('안녕하세요, '+name+' 고객님.','','🔔 금일 방문 안내');
-    if(tKo)L.push('• 방문시간: '+tKo);
-    L.push('','아직 작업방문등록을 하지 않으셨다면, 원활한 출입을 위해 방문 전까지 지금 바로 Work Permit 등록 부탁드립니다.','잠시 후 뵙겠습니다. 감사합니다.');
-  }else{
-    L.push('안녕하세요, '+name+' 고객님.','','📅 예약 방문 안내');
-    if(dKo)L.push('• 일자: '+dKo);
-    if(tKo)L.push('• 방문시간: '+tKo);
-    L.push('','아직 작업방문등록을 하지 않으셨다면, 원활한 출입을 위해 방문 전까지 반드시 Work Permit 등록 부탁드립니다.','예약일에 뵙겠습니다. 감사합니다.');
-  }
-  return L.join('\n');
+  var tKO={tomorrow:'🔔 *내일 방문합니다*',today:'🔔 *오늘 방문합니다*'}[tpl]||'📅 *예약 방문 안내*';
+  var aKO={tomorrow:'👉 작업방문등록(Work Permit)을 아직 안 하셨다면\n      오늘 중으로 매니지먼트에 등록 부탁드립니다.',
+           today:'👉 작업방문등록(Work Permit)을 아직 안 하셨다면\n      지금 바로 부탁드립니다. 잠시 후 뵙겠습니다.'}[tpl]
+           ||'👉 작업방문등록(Work Permit)을 아직 안 하셨다면\n      방문 전까지 매니지먼트에 등록 부탁드립니다.';
+  return '안녕하세요, '+name+' 고객님 😊\n\n'+tKO+(when?'\n'+(tpl==='today'?'⏰ ':'📅 ')+when:'')+'\n\n'+aKO;
 }
 
 // ── 🛠 수리 방문 안내 메시지 4종 템플릿 (메모장에서 등록된 수리 일정용) ──
@@ -1663,55 +1643,25 @@ function getVisitReminderMsg(name,dateStr,lang,tpl,timeS){
 function getRepairReminderMsg(name,dateStr,lang,tpl,timeS,symptom){
   lang=lang||'ko';tpl=tpl||'pre';
   var D=vrDT(dateStr,timeS);
-  var L=[];
-  if(lang==='en'){
-    if(tpl==='now'){
-      L.push('Hello, '+name+'.','','🛠 Repair Visit');
-      if(symptom)L.push('• Request: '+symptom);
-      L.push('','Our technician can come over now — would that be convenient for you?','Please let us know. Thank you.');
-    }else if(tpl==='tomorrow'){
-      L.push('Hello, '+name+'.','','🔔 Repair Visit Tomorrow');
-      if(symptom)L.push('• Request: '+symptom);
-      if(D.dEn)L.push('• Date: '+D.dEn);
-      if(D.tEn)L.push('• Time: '+D.tEn);
-      L.push('','If you have not registered our visit yet, please make sure to complete the Work Permit registration before our visit tomorrow for smooth entry.','Thank you.');
-    }else if(tpl==='today'){
-      L.push('Hello, '+name+'.','','🔔 Repair Visit Today');
-      if(symptom)L.push('• Request: '+symptom);
-      if(D.tEn)L.push('• Time: '+D.tEn);
-      L.push('','If you have not registered our visit yet, please complete the Work Permit registration right away, before our visit, for smooth entry.','See you shortly. Thank you.');
-    }else{
-      L.push('Hello, '+name+'.','','🛠 Repair Visit Scheduled');
-      if(symptom)L.push('• Request: '+symptom);
-      if(D.dEn)L.push('• Date: '+D.dEn);
-      if(D.tEn)L.push('• Time: '+D.tEn);
-      L.push('','If you have not registered our visit yet, please make sure to complete the Work Permit registration before our visit for smooth entry.','We look forward to seeing you. Thank you.');
-    }
-    return L.join('\n');
+  // 2026-11 발송 문구 개편 — 인사 → *제목* → 요청 내용 · 일시 → 👉 할 일
+  var en=(lang==='en');
+  var when=(tpl==='today')?(en?D.tEn:D.tKo):[en?D.dEn:D.dKo,en?D.tEn:D.tKo].filter(Boolean).join(' ');
+  var sym=symptom?('\n🔧 '+symptom):'';
+  var wl=(when&&tpl!=='now')?('\n'+(tpl==='today'?'⏰ ':'📅 ')+when):'';
+  if(en){
+    var T={now:'🚗 *We can visit now*',tomorrow:'🔔 *Repair visit tomorrow*',today:'🔔 *Repair visit today*'}[tpl]||'🛠 *Repair visit scheduled*';
+    var A={now:'👉 If this works for you, just reply 「OK」 🙏',
+           tomorrow:'👉 If you haven\'t registered our visit (Work Permit) yet,\n      please do it with your management office today.',
+           today:'👉 If you haven\'t registered our visit (Work Permit) yet,\n      please do it right away. See you shortly!'}[tpl]
+           ||'👉 If you haven\'t registered our visit (Work Permit) yet,\n      please do it with your management office before we arrive.';
+    return 'Hello, '+name+' 😊\n\n'+T+sym+wl+'\n\n'+A;
   }
-  if(tpl==='now'){
-    L.push('안녕하세요, '+name+' 고객님.','','🛠 수리 방문 안내');
-    if(symptom)L.push('• 접수내용: '+symptom);
-    L.push('','지금 방문드릴 수 있을 것 같아 가능하신지 확인 연락드립니다.','회신 주시면 감사하겠습니다.');
-  }else if(tpl==='tomorrow'){
-    L.push('안녕하세요, '+name+' 고객님.','','🔔 내일 수리 방문 안내');
-    if(symptom)L.push('• 접수내용: '+symptom);
-    if(D.dKo)L.push('• 일자: '+D.dKo);
-    if(D.tKo)L.push('• 방문시간: '+D.tKo);
-    L.push('','아직 작업방문등록을 하지 않으셨다면, 원활한 출입을 위해 내일 방문 전까지 반드시 Work Permit 등록 부탁드립니다.','감사합니다.');
-  }else if(tpl==='today'){
-    L.push('안녕하세요, '+name+' 고객님.','','🔔 금일 수리 방문 안내');
-    if(symptom)L.push('• 접수내용: '+symptom);
-    if(D.tKo)L.push('• 방문시간: '+D.tKo);
-    L.push('','아직 작업방문등록을 하지 않으셨다면, 원활한 출입을 위해 방문 전까지 지금 바로 Work Permit 등록 부탁드립니다.','잠시 후 뵙겠습니다. 감사합니다.');
-  }else{
-    L.push('안녕하세요, '+name+' 고객님.','','🛠 수리 방문 예정 안내');
-    if(symptom)L.push('• 접수내용: '+symptom);
-    if(D.dKo)L.push('• 일자: '+D.dKo);
-    if(D.tKo)L.push('• 방문시간: '+D.tKo);
-    L.push('','아직 작업방문등록을 하지 않으셨다면, 원활한 출입을 위해 방문 전까지 반드시 Work Permit 등록 부탁드립니다.','예정일에 뵙겠습니다. 감사합니다.');
-  }
-  return L.join('\n');
+  var TK={now:'🚗 *지금 바로 방문 가능합니다*',tomorrow:'🔔 *내일 수리 방문합니다*',today:'🔔 *오늘 수리 방문합니다*'}[tpl]||'🛠 *수리 방문 예정 안내*';
+  var AK={now:'👉 괜찮으시면 「OK」라고 회신 부탁드립니다 🙏',
+          tomorrow:'👉 작업방문등록(Work Permit)을 아직 안 하셨다면\n      오늘 중으로 매니지먼트에 등록 부탁드립니다.',
+          today:'👉 작업방문등록(Work Permit)을 아직 안 하셨다면\n      지금 바로 부탁드립니다. 잠시 후 뵙겠습니다.'}[tpl]
+          ||'👉 작업방문등록(Work Permit)을 아직 안 하셨다면\n      방문 전까지 매니지먼트에 등록 부탁드립니다.';
+  return '안녕하세요, '+name+' 고객님 😊\n\n'+TK+sym+wl+'\n\n'+AK;
 }
 // 수리 일정의 메모에서 접수내용(🔧 줄)만 뽑아 옵니다
 function vrSymptom(item){
@@ -1786,7 +1736,7 @@ async function vrKkKey(force){
 //  · 주소 줄과 그 짝인 「📱 MY PAGE」 제목 줄은 카드의 「마이페이지 열기」 버튼이 대신하므로 걷어냅니다.
 //  · 그래도 넘치면 회사명·연락처 서명부터 덜어냅니다 (카드 하단에 이미 표시됩니다).
 function vrKkText(m){
-  var t=String(m||'')
+  var t=String(m||'').replace(/\*([^*\n]+)\*/g,'$1')   // 카카오는 굵은 글씨(*…*)를 지원하지 않습니다
     .replace(/^.*https?:\/\/\S+.*$/gm,'')
     .replace(/^\s*📱\s*(MY ?PAGE|My Page|마이페이지)\s*$/gim,'')
     .replace(/[ \t]+$/gm,'').replace(/\n{3,}/g,'\n\n').trim();
@@ -1814,7 +1764,7 @@ function vrWaText(m){
 }
 // 📱 마이페이지 안내 꼬리말 — 총괄 고객관리「마이페이지 발송」과 같은 형식
 function vrTail(url,en){
-  return '\n\n📱 MY PAGE\n🔗 '+hhcFixLinks(url)+'\n\nHappy Home Care 📞 +60 17-247 2774';
+  return '\n\n'+(en?'📱 My Page':'📱 마이페이지')+' 👉 '+hhcFixLinks(url)+'\n📞 +60 17-247 2774 · Happy Home Care';
 }
 // 💬 왓츠앱 주소 — 고객 번호가 있으면 바로 그 대화방이 열립니다
 function vrWaUrl(phone,text){
@@ -2010,7 +1960,7 @@ window.sendVisitReminder=function(itemId){
     if(ok!==false)logSend(vrWaText(m),'kakao');
   });
   document.getElementById('visit-copy-btn').addEventListener('click',()=>{
-    const t=vrWaText(getMsg());
+    const t=vrWaText(getMsg()).replace(/\*([^*\n]+)\*/g,'$1');   // 복사(카카오 등)는 굵은 글씨 별표를 뗍니다
     navigator.clipboard.writeText(t).then(()=>{
       const ok=document.getElementById('visit-kakao-ok');
       ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
