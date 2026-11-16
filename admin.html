@@ -3983,7 +3983,9 @@ function renderUsage(){
     : {empty:'이용내역이 없습니다',use:'이용',carry:'이월',disc:'할인',edit:'✏️ 수정',del:'✕ 삭제',noen:''};
   if(!currentUsageHistory.length){tb.innerHTML=`<div class="usage-empty">${UL.empty}</div>`;updateBalance();return;}
   tb.innerHTML=currentUsageHistory.map((u,i)=>({u:u,i:i}))
-    .sort((a,b)=>(isMemberEntry(a.u)?1:0)-(isMemberEntry(b.u)?1:0))   // 회원제상품 항목은 일자와 무관하게 항상 최하단
+    .sort((a,b)=>((isMemberEntry(a.u)?1:0)-(isMemberEntry(b.u)?1:0))   // 회원제상품 항목은 일자와 무관하게 항상 최하단
+      ||String(b.u.date||'').localeCompare(String(a.u.date||''))   // (2026-11-16) 그 외는 최근 날짜순, 같은 날은 나중에 넣은 것이 위
+      ||(b.i-a.i))
     .map(({u,i})=>{
     const net=(parseFloat(u.amount)||0)-(parseFloat(u.discount)||0);
     // 기본값(한국어)은 desc, English 전환 시 desc_en — 둘을 동시에 보여주지 않는다
@@ -4880,9 +4882,12 @@ function buildContractDocHX(c,L,mode,id){
         if(freeAnyQty(u)){var _fs2=freeSnap(b.history,u,_fL2);Object.keys(_fs2).forEach(function(k){sub.push(freeSnapTxt(k,_fs2[k],isEn).replace(/<[^>]+>/g,''));});}
         if(dsc>0)sub.push(X('할인 ','Discount ')+'RM '+fmt(dsc));
         var net=amt-dsc;
-        rows.push([E(u.date||''),'<span class="nm">'+nm+'</span>'+(sub.length?'<span class="sb">'+sub.join(' · ')+'</span>':''),
-          (cry>0&&net===0)?'<span class="dc">+ '+fmt(cry)+'</span>':(net?'− '+fmt(net):'<span class="mu">—</span>'),'<b>'+fmt(run)+'</b>']);
+        var _row=[E(u.date||''),'<span class="nm">'+nm+'</span>'+(sub.length?'<span class="sb">'+sub.join(' · ')+'</span>':''),
+          (cry>0&&net===0)?'<span class="dc">+ '+fmt(cry)+'</span>':(net?'− '+fmt(net):'<span class="mu">—</span>'),'<b>'+fmt(run)+'</b>'];
+        _row._m=isMemberEntry(u);rows.push(_row);
       });
+      rows.reverse();   // (2026-11-16) 최근 날짜순 표시 (잔액은 날짜순으로 계산한 값 그대로)
+      rows.sort(function(x,y){return (x._m?1:0)-(y._m?1:0);});
     }else rows.push(['','<span class="mu">'+E(T.usage_empty)+'</span>','','']);
     blocks.push(H.sec(T.usage_title,b.history.length?(b.history.length+X('건',' entries')):'',H.table(
       [{h:T.th_date,w:'78px'},{h:T.th_desc},{h:T.th_amt+' (RM)',c:'r',w:'92px'},{h:T.th_bal+' (RM)',c:'r',w:'96px'}],rows)));
@@ -6055,7 +6060,9 @@ function tryHhcGoto(){
       if(typeof hubSyncSelects==='function')try{hubSyncSelects(ec.__id);}catch(e){}
       loadFormData(ec);
       switchTab('admin');
-      showToastLike('📑 '+(ec.name||'계약')+' 계약서를 불러왔습니다 — 수정 후 저장하세요');
+      // (2026-11-16) 고객관리 「열기·수정」은 서비스 이용내역 화면부터 보여 줌 (계약서 작성 탭은 위 전환 버튼으로)
+      setAdminView('usage');
+      showToastLike('📊 '+(ec.name||'계약')+' 서비스 이용내역을 불러왔습니다 — 계약 내용 수정은 「계약서 작성」 탭에서');
     }else showToastLike('해당 계약서를 찾을 수 없습니다');
   }
   const g=window._hhcGoto;
