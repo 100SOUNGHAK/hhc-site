@@ -1587,8 +1587,13 @@ function invPaid(inv){
 // 실제 청구(잔여) 금액 = 총액 - 기결제
 function invDue(inv){return Math.max(0,invTotal(inv)-invPaid(inv));}
 const INV_ST={paid:['결제완료','ok'],billing:['청구중','warn'],overdue:['연체','bad'],draft:['작성중','blue']};
-function inspPage(t){return t==='install'?'install.html':(t==='washer'?'washer.html':(t==='hood'?'hood.html':'inspect.html'));}
-function inspLabel(t){return t==='install'?'🔩 설치':(t==='washer'?'🧺 세탁기':(t==='dispatch'?'🚗 출장':'🔍 점검'));}
+function inspPage(t){return t==='install'?'install.html':(t==='washer'?'washer.html':(t==='hood'?'hood.html':(t==='fabric'?'fabric.html':'inspect.html')));}
+/* 보고서 종류 표시 — 주방후드·커튼·쇼파·매트리스 추가 (2026-11-16). 커튼 등은 품목 이름(fbItems, 예전 자료는 fbItem) */
+const FB_IT={curtain:['🪟','커튼'],sofa:['🛋️','쇼파'],mattress:['🛏️','매트리스']};
+function inspLabel(t,x){
+  if(t==='fabric'){const a=((x&&x.fbItems&&x.fbItems.length)?x.fbItems:[x&&x.fbItem]).map(k=>FB_IT[k]).filter(Boolean);const b=a.length?a:[FB_IT.curtain];return b[0][0]+' '+b.map(i=>i[1]).join('·');}
+  return t==='install'?'🔩 설치':(t==='washer'?'🧺 세탁기':(t==='hood'?'🍳 주방후드':(t==='dispatch'?'🚗 출장':'🔍 점검')));
+}
 function pkgLabel(pid){
   if(!pid)return '';
   const biz=/-biz$/.test(pid);
@@ -2863,7 +2868,7 @@ window.openDrawer=function(idx){
   // 점검보고서
   h+='<div class="dcard'+(caFold('inspections')?' fold':'')+'" data-fold="inspections"><div class="dcard-h dch"><span class="chv">▾</span>🔧 점검보고서<span class="cnt">'+e.docs.inspections.length+'건</span>'+hdrLink('inspections')+'</div>';
   h+=e.docs.inspections.length?e.docs.inspections.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>
-    '<div class="drow"><span class="id">'+inspLabel(x.type)+'</span><span class="m">'+esc(x.date||'')+(x.addr?' · '+esc(x.addr):'')+'</span>'+(x.invoice_id?'<span class="pill blue">🧾 '+esc(x.invoice_id)+'</span>':'')+'<a class="open-btn" target="_blank" rel="noopener" data-t="✏️ '+esc(inspLabel(x.type))+' 수정 — '+esc(x.date||'')+'" href="'+window.caEditUrl('inspections',x)+'" onclick="return caView(this.href,this.dataset.t,event)">✏️ 열기·수정</a>'+rowBtns('inspections',x.__id)+'</div>').join('')
+    '<div class="drow"><span class="id">'+inspLabel(x.type,x)+'</span><span class="m">'+esc(x.date||'')+(x.addr?' · '+esc(x.addr):'')+'</span>'+(x.invoice_id?'<span class="pill blue">🧾 '+esc(x.invoice_id)+'</span>':'')+'<a class="open-btn" target="_blank" rel="noopener" data-t="✏️ '+esc(inspLabel(x.type,x))+' 수정 — '+esc(x.date||'')+'" href="'+window.caEditUrl('inspections',x)+'" onclick="return caView(this.href,this.dataset.t,event)">✏️ 열기·수정</a>'+rowBtns('inspections',x.__id)+'</div>').join('')
     :'<div class="dnone">점검보고서 없음</div>';
   h+='</div>';
   // 📝 메모장 (수리요청 처리내역) — 등록·수정·삭제 가능
@@ -2993,7 +2998,7 @@ function dvTitleOf(url){
   const f=String(url).split('?')[0].split('#')[0].split('/').pop().toLowerCase();
   const M={'hhc-invoice.html':'🧾 인보이스','hhcinvoice.html':'🧾 인보이스',
     'inspect.html':'🔧 점검 보고서','inspect-admin.html':'🔧 점검 보고서','inspectadmin.html':'🔧 점검 보고서',
-    'install.html':'🔩 설치 보고서','washer.html':'🧺 세탁기 보고서','hood.html':'🍳 주방후드 보고서',
+    'install.html':'🔩 설치 보고서','washer.html':'🧺 세탁기 보고서','hood.html':'🍳 주방후드 보고서','fabric.html':'🛋️ 작업 보고서',
     'admin.html':'📑 계약서 · 이용내역','coupon.html':'🎫 상품권','coupon-admin.html':'🎫 상품권','couponadmin.html':'🎫 상품권',
     'quote.html':'🧾 견적서','quote-admin.html':'🧾 견적서','quoteadmin.html':'🧾 견적서',
     'booking.html':'📅 예약 확인','request.html':'📝 서비스 의뢰','my.html':'📱 고객 마이페이지',
@@ -4360,7 +4365,7 @@ window.caSendModal=async function(idx){
   // 드롭다운 옵션 문구
   function pickLb(x){
     if(state.tpl==='mmv'||state.tpl==='ipv')return (x.visit_date||'')+(x.visit_time?' '+x.visit_time:'')+' · '+(String(x.symptom||'').split('\n')[0]||'점검 방문').slice(0,28);
-    if(state.tpl==='ins')return inspLabel(x.type)+' · '+(x.date||'')+(x.addr?' · '+x.addr:'');
+    if(state.tpl==='ins')return inspLabel(x.type,x)+' · '+(x.date||'')+(x.addr?' · '+x.addr:'');
     if(state.tpl==='ct'||state.tpl==='aw')return (pkgLabel(x.package_id)||'패키지')+' · '+(x.contract_date||'')+' · 납입 '+fmtRM(x.amount_paid);
     if(state.tpl==='qt')return (x.qno||'견적')+' · '+(x.issueDate||'')+' · '+fmtRM(qtTotal(x))+(x.subject?' · '+x.subject:'');
     return (x.code||'')+' · '+(x.value||'')+(x.expiry?' · ~'+x.expiry:'');
@@ -5338,7 +5343,7 @@ function docOwnerPhone(coll,x){
 }
 function docSummary(coll,x){
   if(coll==='invoices')return (x.id||x.__id)+' · '+(x.date||'')+' · '+fmtRM(invTotal(x));
-  if(coll==='inspections')return inspLabel(x.type)+' · '+(x.date||'')+(x.addr?' · '+x.addr:'');
+  if(coll==='inspections')return inspLabel(x.type,x)+' · '+(x.date||'')+(x.addr?' · '+x.addr:'');
   if(coll==='contracts')return (pkgLabel(x.package_id)||'패키지')+' · '+(x.contract_date||'')+' · 납입 '+fmtRM(x.amount_paid);
   if(coll==='coupons')return (x.code||'')+' · '+(x.value||'')+(x.expiry?' · ~'+x.expiry:'');
   if(coll==='requests')return (reqName(x)||'의뢰')+' · '+String(x.created_at||'').slice(0,10);
@@ -5866,7 +5871,7 @@ window.caDocEdit=function(coll,id){
       fi('date','날짜',x.date||'','YYYY-MM-DD')+sel('status','상태',x.status||'billing',[['draft','작성중'],['billing','청구중'],['paid','결제완료'],['overdue','연체']]);
   }else if(coll==='inspections'){
     body=fi('client','고객명',x.client||'')+fi('phone','연락처',x.phone||'')+fi('date','날짜',x.date||'','YYYY-MM-DD')+
-      sel('type','종류',x.type||'inspect',[['inspect','점검'],['dispatch','출장'],['install','설치'],['washer','세탁기']])+fi('addr','주소',x.addr||'');
+      sel('type','종류',x.type||'inspect',[['inspect','점검'],['dispatch','출장'],['install','설치'],['washer','세탁기'],['hood','주방후드'],['fabric','커튼·쇼파·매트리스']])+fi('addr','주소',x.addr||'');
   }else if(coll==='contracts'){
     body=fi('name','계약자명',x.name||'')+fi('phone','연락처',x.phone||'')+fi('contract_date','계약일',x.contract_date||'','YYYY-MM-DD')+
       sel('status','계약 상태',(x.status==='ended')?'ended':'active',[['active','✅ 유효'],['ended','⏹ 종료']]);
