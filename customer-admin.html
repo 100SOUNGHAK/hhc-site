@@ -1175,6 +1175,17 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
 #drawer .open-btn{display:inline-flex;align-items:center;height:34px;padding:0 13px;border-radius:10px;font-size:12.5px;font-weight:800;background:#EEF3FF;color:#1D4ED8}
 #drawer .rb.mor{width:34px;height:34px;padding:0;border-radius:10px;font-size:17px;background:var(--dz-soft);color:var(--dz-ink2)}
 #drawer .dnone{font-size:13px;color:var(--dz-ink3)}
+.cs-chb{display:inline-flex;align-items:center;vertical-align:middle}
+.cs-chb .chb{width:22px;height:22px;font-size:11.5px;margin-left:8px;cursor:pointer}
+#drawer .mr-log{margin:8px 0 0;font-size:12px;font-weight:700;color:#0E9B63;background:#ECFDF5;border-radius:9px;padding:6px 10px}
+#drawer .mr-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;padding-top:10px;border-top:1px dashed #E4E9F2}
+#drawer .mr-acts .ma{flex:1 1 auto;min-height:38px;padding:0 12px;border-radius:10px;border:1px solid #E4E9F2;background:#fff;color:#14192A;
+  font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer;white-space:nowrap;transition:transform .14s}
+#drawer .mr-acts .ma:active{transform:scale(.96)}
+#drawer .mr-acts .ma.s{background:#0E2350;border-color:#0E2350;color:#fff}
+#drawer .mr-acts .ma.rp{background:#EEF3FF;border-color:#C7D6FB;color:#1D4ED8}
+#drawer .mr-acts .ma.ok{background:#ECFDF5;border-color:#B7EBD3;color:#0E9B63}
+#drawer .mr-acts .ma.del{flex:0 0 44px;padding:0;background:#FEF2F2;border-color:#FECACA;color:#DC2626}
 #drawer .dcard.hit,#drawer .balc.hit,#drawer .ptcard.hit{box-shadow:0 0 0 3px rgba(201,164,76,.55),var(--dz-card)}
 /* ── 📦 패키지 잔액: 흰 카드 ── */
 #drawer .balc{background:#fff!important;color:var(--dz-ink)!important;border:none!important;border-radius:16px;box-shadow:var(--dz-card)!important;margin-bottom:10px;scroll-margin-top:110px}
@@ -2367,6 +2378,8 @@ window.caChMenu=function(ev,btn,idx){
   if(y+hh>window.innerHeight-8)y=Math.max(8,r.top-hh-6);
   m.style.left=x+'px';m.style.top=y+'px';
 };
+// 📤 마이페이지 발송 창 제목 옆 연락 경로 표시(W·K·O) — 눌러서 바로 바꿀 수 있음
+function caChModal(e,idx){const el=document.getElementById('cs-chb');if(el)el.innerHTML=chBadge(e,idx);}
 window.caChSet=async function(idx,v){
   caMenuClose();
   const e=entries[idx];if(!e)return;
@@ -2374,6 +2387,7 @@ window.caChSet=async function(idx,v){
   if(!db){toast('Firebase 연결 중입니다');return;}
   const prev=e.ch;
   e.ch=v;renderAll();if(drawerKey!=null)try{openDrawer(drawerKey);}catch(_){}   // 먼저 화면에 반영
+  caChModal(e,idx);   // 📤 마이페이지 발송 창이 열려 있으면 그 표시도 함께 바꿈
   try{
     let mid=e.master&&e.master.__id;
     if(!mid){
@@ -2384,7 +2398,7 @@ window.caChSet=async function(idx,v){
     await updateDoc(doc(db,'customers',mid),{ca_ch:v,updated_at:new Date().toISOString()});
     toast(v?('📞 연락 경로 '+CH_LB[v][1]+' 로 표시됩니다'):'📞 연락 경로 표시를 지웠습니다');
   }catch(err){
-    e.ch=prev;renderAll();
+    e.ch=prev;renderAll();caChModal(e,idx);
     toast('저장 실패: '+err.message);
   }
 };
@@ -3259,17 +3273,15 @@ window.openDrawer=function(idx){
               :(x.channel==='whatsapp'?'<span class="pill">💚 왓챕</span>':'');
       return '<div class="mrow">'+
         '<div class="mr1"><span class="mrdt">'+esc(x.req_date||'')+'</span>'+kd+st+ch+
-          '<span class="mrbt">'+
-            '<button class="rb ed" onclick="caMemoEdit('+idx+',\''+esc(x.__id)+'\')">✏️ 수정</button>'+
-            '<button class="rb del" onclick="caMemoDel('+idx+',\''+esc(x.__id)+'\')">🗑</button>'+
-          '</span></div>'+
+          (x.visit_date&&x.schedule_id?'<span class="pill" style="background:#EDE9FE;color:#5B21B6">📅 캘린더</span>':'')+
+          '</div>'+
         (ct?('<div class="mr2">'+
           '<div class="k">고객명</div><div class="v">'+esc(x.name||'—')+(x.phone?' · '+esc(x.phone):'')+'</div>'+
           '<div class="k">🧺 수거</div><div class="v">'+esc(x.req_date||'—')+'</div>'+
           '<div class="k">🧼 세탁완료</div><div class="v">'+(x.wash_date?esc(x.wash_date):'<span style="color:#8a94a6">미정</span>')+'</div>'+
           '<div class="k">🚗 재설치</div><div class="v">'+(x.visit_date?esc(x.visit_date)+(x.visit_time?' '+esc(x.visit_time):''):'<span style="color:#8a94a6">미정</span>')+'</div>'+
           (x.memo?'<div class="k">내부메모</div><div class="v int">🔒 '+esc(x.memo)+'</div>':'')+
-        '</div></div>'):'')+
+        '</div>'):'')+
         (ct?'':('<div class="mr2">'+
           '<div class="k">고객명</div><div class="v">'+esc(x.name||'—')+(x.phone?' · '+esc(x.phone):'')+'</div>'+
           '<div class="k">증상</div><div class="v sym">'+esc(x.symptom||'—')+'</div>'+
@@ -3280,7 +3292,7 @@ window.openDrawer=function(idx){
           (rph.length?'<div class="k">결과 사진</div><div class="v"><div style="display:flex;gap:5px;flex-wrap:wrap">'+rph.slice(0,6).map(p=>'<a href="'+esc(p.url||p.thumb)+'" target="_blank" rel="noopener"><img src="'+esc(p.thumb||p.url)+'" alt="" loading="lazy" style="width:44px;height:44px;object-fit:cover;border-radius:7px;border:1px solid #E5E7EB"></a>').join('')+'</div></div>':'')+
           ((x.result||rph.length)?'<div class="k">보고서</div><div class="v"><a href="https://happyhomecare.com.my/repair?id='+encodeURIComponent(x.__id)+'" target="_blank" rel="noopener" style="font-weight:800;color:#1D4ED8;text-decoration:none">📄 방문 결과 보고서 보기 ↗</a>'+(x.report_sent_at?' <span style="font-size:10.5px;color:#0E9B63;font-weight:800">✓ 발송 '+esc(String(x.report_sent_at).slice(0,10))+'</span>':'')+'</div>':'')+
           (x.memo?'<div class="k">내부메모</div><div class="v int">🔒 '+esc(x.memo)+'</div>':'')+
-        '</div></div>'));
+        '</div>'))+caMemoActs(idx,x)+'</div>';
     }).join(''):'<div class="dnone">메모 없음</div>';
     h+='</div>';
   }
@@ -4674,7 +4686,7 @@ window.caSendModal=async function(idx){
       ((o.need||o.n>0)?'<i>'+o.n+'</i>':'')+'</span>';
   };
   const _g0=Math.max(0,TGRP.findIndex(function(G){return G.ts.indexOf(state.tpl)>=0;}));
-  const mk=genericModal('📤 마이페이지 발송 — '+esc(e.name),
+  const mk=genericModal('📤 마이페이지 발송 — '+esc(e.name)+'<span id="cs-chb" class="cs-chb">'+chBadge(e,idx)+'</span>',
     '<div class="sendm"><div class="sm2-body">'+
     // ── 상황 알림 ──
     ((BKP.length||BKCU.length)?'<div class="sm2-notes">'+
@@ -6150,7 +6162,60 @@ async function caSyncSchedule(memoId,d,prevSchedId){
     return sid;
   }
 }
+// ══ 📝 메모장 — 일정(직원앱) 메모장 화면의 기능을 그대로 씁니다 (2026-11-16) ══
+//  등록·수정·발송은 memo-admin.html 을 이 화면 안(문서 보기 창)에 열어 처리합니다.
+//  → 자주 쓰는 문구 · 결과 사진 · 영문 자동 변환 · 연락 경로 · 「저장 후 발송」 · 방문확인/결과 보고서 발송이
+//    메모장 화면과 100% 같게 동작하고, 메모장 화면이 바뀌면 여기도 함께 바뀝니다.
+//  창을 닫으면 고객 상세로 돌아오고, 저장된 내용은 실시간으로 다시 그려집니다.
+function caMemoUrl(q){
+  const u=new URLSearchParams(Object.assign({embed:'1'},q));
+  return BASE+'/memo-admin.html?'+u.toString();
+}
+function caMemoRpReady(x){return !!(x&&x.kind!=='curtain'&&(String(x.result||'').trim()||(x.result_photos||[]).length));}
+function caMemoActs(idx,x){
+  const id=esc(x.__id),ct=x.kind==='curtain';
+  const last=(x.sent_log||[]).slice(-1)[0];
+  const lastTx=last?('📤 '+esc(String(last.at||'').slice(0,16).replace('T',' '))+' · '+
+    (ct?('①②③④'.charAt(Math.max(0,Math.min(3,(last.tpl||1)-1)))+' 안내')
+       :((last.tpl===5||last.tpl===6)?'📄 결과 보고서':(last.tpl===2?'②예정시각':(last.tpl===3?'③작업방문등록':'①즉시'))))+' 발송'):'';
+  return (lastTx?'<div class="mr-log">'+lastTx+'</div>':'')+
+    '<div class="mr-acts">'+
+      (x.status==='done'?'':'<button type="button" class="ma s" onclick="caMemoSend(\''+id+'\')">💬 '+(ct?'안내 발송':'방문확인 발송')+'</button>')+
+      (caMemoRpReady(x)?'<button type="button" class="ma rp" onclick="caMemoSend(\''+id+'\',5)">📄 '+(x.report_sent_at?'보고서 재발송':'결과 보고서 발송')+'</button>':'')+
+      '<button type="button" class="ma" onclick="caMemoEdit('+idx+',\''+id+'\')">✏️ 수정</button>'+
+      (x.status==='done'
+        ?'<button type="button" class="ma" onclick="caMemoStatus('+idx+',\''+id+'\',\'pending\')">↩ 되돌리기</button>'
+        :'<button type="button" class="ma ok" onclick="caMemoStatus('+idx+',\''+id+'\',\'done\')">✅ 완료</button>')+
+      '<button type="button" class="ma del" onclick="caMemoDel('+idx+',\''+id+'\')">🗑</button>'+
+    '</div>';
+}
+window.caMemoSend=function(mid,tpl){
+  const q={send:mid};if(tpl)q.tpl=String(tpl);
+  return window.caView(caMemoUrl(q),tpl===5?'📄 결과 보고서 발송':'💬 메모장 발송');
+};
+window.caMemoStatus=async function(idx,mid,st){
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  try{
+    await updateDoc(doc(db,'memos',mid),{status:st,updated_at:new Date().toISOString()});
+    toast(st==='done'?'✓ 완료 처리했습니다':'✓ 대기로 되돌렸습니다');
+    await loadAll(true);
+    if(typeof openDrawer==='function')openDrawer(idx);
+  }catch(err){toast('저장 실패: '+err.message);}
+};
+// 메모장 화면(문서 보기 창 안)에서 창을 닫으면 → 보기 창을 닫고 고객 상세로 복귀
+window.addEventListener('message',function(ev){
+  const d=ev&&ev.data;if(!d||!d.hhcMemoClose)return;
+  try{window.caViewClose();}catch(_){}
+});
 window.caMemoEdit=function(idx,mid,kind){
+  const e=entries[idx];if(!e)return;
+  if(mid)return window.caView(caMemoUrl({edit:mid}),'✏️ 메모장 수정');
+  const _c=CH_OK(e.ch);
+  return window.caView(caMemoUrl({new:kind==='curtain'?'curtain':'repair',name:e.name||'',phone:e.phone||'',condo:e.addr||'',
+    ch:_c==='K'?'kakao':(_c==='W'?'whatsapp':'')}),kind==='curtain'?'🧺 커튼세탁 등록':'🛠 수리요청 등록');
+};
+// ↓ 예전 고객관리 전용 입력창 (지금은 쓰지 않음 · 메모장 화면을 열 수 없을 때를 대비해 남겨 둠)
+window.caMemoEditLocal=function(idx,mid,kind){
   const e=entries[idx];if(!e)return;
   const m=mid?(e.docs.memos||[]).filter(x=>x.__id===mid)[0]:null;
   // 🧺 커튼세탁 — 메모장(memo-admin)의 커튼세탁 등록과 같은 칸 · 같은 저장 형식

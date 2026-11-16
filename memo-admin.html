@@ -152,6 +152,15 @@ textarea.fi{resize:vertical;line-height:1.6}
 @media(max-width:600px){input:not([type=checkbox]),select,textarea{font-size:16px!important}.fi{font-size:16px!important}}
 </style>
 <script type="module" src="/hhc-auth.js"></script>
+<style>
+/* 🔗 고객관리 상세보기 안에서 열 때(?embed=1) — 목록은 숨기고 등록·수정·발송 창만 보여 줍니다 */
+html.emb .wrap{display:none}
+html.emb body{min-height:100vh;background:#F2F4F8}
+html.emb body::before{content:'불러오는 중...';display:block;text-align:center;padding:40vh 0 0;font-size:13px;font-weight:700;color:#98A1B4}
+html.emb #mm-cust{display:none!important}
+html.emb #sd-who{pointer-events:none}
+</style>
+<script>try{if(new URLSearchParams(location.search).get('embed')==='1')document.documentElement.classList.add('emb');}catch(e){}</script>
 </head>
 <body>
 <div class="wrap">
@@ -1013,6 +1022,7 @@ async function loadAll(force){
       rs.docs.map(d=>Object.assign({__id:d.id},d.data()))
     );
     renderList();
+    if(!window._hhcDeepDone){window._hhcDeepDone=1;try{hhcDeep();}catch(_e){console.warn(_e);}}
     if(force)toast('✓ 새로고침 완료');
   }catch(e){console.warn(e);toast('불러오기 실패: '+e.message);}
 }
@@ -1657,6 +1667,48 @@ try{
 }catch(e){
   console.warn(e);
   document.getElementById('list').innerHTML='<div class="none">연결 실패: '+esc(e.message)+'</div>';
+}
+
+// ══ 🔗 바로 열기 주소 (2026-11-16) — 고객관리 상세보기의 메모장에서 이 화면의 기능을 그대로 씁니다 ══
+//  ?edit=<id>          그 요청의 수정 창
+//  ?send=<id>&tpl=5    그 요청의 발송 창 (tpl 생략 시 이 화면과 같은 기본 선택)
+//  ?new=repair|curtain&name=&phone=&condo=&ch=   새 등록 창 (고객 정보 미리 채움)
+//  &embed=1            고객관리 안에서 열림 → 창을 닫으면 고객관리로 돌아갑니다
+const HHC_QP=(function(){try{return new URLSearchParams(location.search);}catch(e){return new URLSearchParams('');}})();
+const HHC_EMB=HHC_QP.get('embed')==='1';
+let _embHold=false;
+function hhcEmbDone(){
+  if(!HHC_EMB)return;
+  let n=0;
+  (function chk(){
+    const open=document.querySelector('#mm-mask.open,#sd-mask.open');
+    if(open&&_embHold&&document.getElementById('mm-mask').classList.contains('open'))_embHold=false;   // 저장 실패 → 창이 그대로 남음
+    if(open)return;                                   // 다른 창(발송)이 열렸으면 기다리지 않고 끝
+    if(_embHold&&n++<30){setTimeout(chk,200);return;} // 「저장 후 발송」 → 발송 창이 열릴 때까지 최대 6초 대기
+    try{window.parent.postMessage({hhcMemoClose:1},'*');}catch(e){}
+  })();
+}
+if(HHC_EMB){
+  const _cm=window.closeMemo,_cs=window.closeSend,_os=window.openSend;
+  window.closeMemo=function(){_cm.apply(this,arguments);setTimeout(hhcEmbDone,120);};
+  window.closeSend=function(){_cs.apply(this,arguments);setTimeout(hhcEmbDone,120);};
+  window.openSend=function(){_embHold=false;return _os.apply(this,arguments);};
+  const _ss=document.getElementById('mm-save-send');
+  if(_ss)_ss.addEventListener('click',function(){_embHold=true;},true);
+  // 바깥(어두운 부분)을 눌러 닫는 경우도 같은 처리
+  ['mm-mask','sd-mask'].forEach(function(k){const el=document.getElementById(k);if(el)el.addEventListener('click',function(ev){if(ev.target===el)setTimeout(hhcEmbDone,150);});});
+}
+function hhcDeep(){
+  const ed=HHC_QP.get('edit'),sd=HHC_QP.get('send'),nw=HHC_QP.get('new');
+  const has=id=>MEMOS.some(x=>x.__id===id);
+  if(ed){if(has(ed))window.openMemo(ed);else{toast('요청을 찾을 수 없습니다 (삭제되었을 수 있습니다)');setTimeout(hhcEmbDone,1500);}return;}
+  if(sd){const tp=parseInt(HHC_QP.get('tpl')||'',10);if(has(sd))window.openSend(sd,tp>0?tp:undefined);else{toast('요청을 찾을 수 없습니다');setTimeout(hhcEmbDone,1500);}return;}
+  if(nw){
+    window.openMemo('',nw==='curtain'?'curtain':'repair');
+    [['name','mm-name'],['phone','mm-phone'],['condo','mm-condo']].forEach(function(a){
+      const v=HHC_QP.get(a[0]);const el=document.getElementById(a[1]);if(v&&el)el.value=v;});
+    const ch=HHC_QP.get('ch');if(ch==='kakao'||ch==='whatsapp'||ch==='other')setCh(ch);
+  }
 }
 
 // 디버그 훅
