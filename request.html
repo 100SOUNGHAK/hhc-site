@@ -2468,6 +2468,27 @@ document.getElementById('rq-loc').addEventListener('click',async e=>{
   const r=await HHCLoc.pick({lang:currentLang==='en'?'en':'ko',who:'customer',query:nm,initial:window.__rqLoc});
   if(r){window.__rqLoc=r;rqLocRender();}
 });
+// 출장점검 비용 확인(/visit-fee)에서 고른 위치를 「방문 위치」로 미리 등록 (2026-11-16)
+//  · 목록에서 고른 곳이면 고객명도 자동 입력(nm=), 지도를 눌러 고른 곳이면 고객명은 비워 두고 직접 적도록 안내
+(function(){
+  const q=new URLSearchParams(location.search),m=(q.get('ll')||'').match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
+  if(!m)return;
+  const lat=+m[1],lng=+m[2];
+  if(!(lat>0&&lat<8&&lng>99&&lng<120))return;   // 말레이시아 범위만
+  const ad=(q.get('ad')||'').trim();
+  window.__rqLoc={lat:lat,lng:lng,name:String(q.get('ln')||ad.split(',')[0]||'').slice(0,120),addr:ad.slice(0,300),pid:String(q.get('lp')||'').slice(0,300)};
+  if(!(q.get('nm')||'').trim()){
+    const f=document.getElementById('f-condo-name');
+    if(f&&!f.value.trim()){
+      const n=document.createElement('div');n.id='rq-nm-hint';
+      n.style.cssText='background:#FBF5E6;border:1px solid rgba(201,164,76,.45);color:#5B4410;border-radius:10px;padding:8px 11px;font-size:12px;font-weight:700;line-height:1.5;margin:6px 0 2px';
+      const put=()=>{n.textContent=currentLang==='en'?'📍 You picked a spot on the map — please type your condo / business name above.':'📍 지도에서 직접 고른 위치입니다 — 위 칸에 콘도명(상호)을 직접 적어 주세요.';};
+      put();f.insertAdjacentElement('afterend',n);
+      f.addEventListener('input',()=>{n.style.display=f.value.trim()?'none':'';});
+      document.addEventListener('click',e=>{if(e.target.closest('.lang-btn,[data-lang]'))setTimeout(put,0);});
+    }
+  }
+})();
 rqLocRender();
 </script>
 </body>

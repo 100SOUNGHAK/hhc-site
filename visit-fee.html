@@ -388,7 +388,9 @@ function render(){
  $('b-wa').textContent=$('f-wa').textContent=t.wa;$('b-wa').href=$('f-wa').href=wa;
  // 신청 → 출장점검/진단 요청서 모드(t=insp). 비용을 확인했으면 콘도명·대수·확인 결과·주소를 함께 넘김
  const rq=new URLSearchParams({t:'insp'});
- if(res&&chosen){rq.set('nm',chosen.name);rq.set('q',qty);if(chosen.addr)rq.set('ad',chosen.addr);
+ if(res&&chosen){if(chosen.named)rq.set('nm',chosen.name);
+  // 고른 위치를 요청서 「방문 위치」로도 넘김 (ll=위도,경도 · lp=구글 장소 ID · ln=위치 이름)
+  rq.set('ll',chosen.lat.toFixed(6)+','+chosen.lng.toFixed(6));if(/^p:/.test(chosen.key||''))rq.set('lp',chosen.key.slice(2));rq.set('ln',chosen.named?chosen.name:((chosen.addr||'').split(',').slice(0,2).join(',').trim()||chosen.name));rq.set('q',qty);if(chosen.addr)rq.set('ad',chosen.addr);
   rq.set('fz',L==='en'?('[Fee check] Zone '+z.z+' · '+res.km.toFixed(1)+' km · '+qty+' unit(s) · '+(fr==='mem'?'package member — visit fee waived':fr==='war'?'free check ('+WARD+' days after cleaning '+dE(WAR)+')':'est. RM'+tot)):('[출장점검 비용 확인] '+z.z+'구역 · '+res.km.toFixed(1)+'km · 에어컨 '+qty+'대 · '+(fr==='mem'?'패키지 회원 출장점검비 면제':fr==='war'?WARD+'일 이내 무상점검 (에어컨 세척 '+dK(WAR)+')':'예상 RM'+tot)));}
  if(L==='en')rq.set('lang','en');
  const rqUrl='/request?'+rq.toString();
@@ -491,7 +493,7 @@ async function search(){
   if(my!==seq)return;
   clearCands();setActive(null);
   const ps=r.places||[];
-  ps.forEach((p,i)=>{const c={key:'p:'+p.id,name:(p.displayName||'').trim()||p.formattedAddress,addr:p.formattedAddress||'',lat:p.location.lat(),lng:p.location.lng()};
+  ps.forEach((p,i)=>{const c={key:'p:'+p.id,named:true,name:(p.displayName||'').trim()||p.formattedAddress,addr:p.formattedAddress||'',lat:p.location.lat(),lng:p.location.lng()};
    const m=new google.maps.Marker({map,position:{lat:c.lat,lng:c.lng},icon:PIN('#EA4335'),label:LBL((ps.length>1?(i+1)+'. ':'')+c.name,'#B3261E'),zIndex:10});
    m.__c=c;m.addListener('click',()=>setActive(c));mkC.push(m);cands.push(c)});
   if(cands.length===1){map.panTo({lat:cands[0].lat,lng:cands[0].lng});map.setZoom(16);setActive(cands[0])}
@@ -516,7 +518,9 @@ async function confirmPick(c){
   const r=await fetch('/api/travel?lat='+c.lat.toFixed(6)+'&lng='+c.lng.toFixed(6),{cache:'no-store'});
   const d=await r.json().catch(()=>({}));
   if(!d.ok){showErr(d.error==='no-route'||d.error==='bad-location'?t.errRoute:t.errNet);mapUI();return}
-  if(!c.name)c.name=(c.addr||'').split(',')[0]||t.myPin;
+  // 목록·장소(이름 있는 곳)에서 고르면 요청서 고객명에 넣고, 지도 빈 곳을 눌러 고르면 고객명은 고객이 직접 적음 (2026-11-16)
+ c.named=!!String(c.name||'').trim();
+ if(!c.name)c.name=(c.addr||'').split(',')[0]||t.myPin;
   chosen=c;res={km:d.km,minutes:d.minutes};active=null;
   if(mkActive){mkActive.setMap(null);mkActive=null}
   mkC.forEach(m=>m.setMap(null));mkC=[];cands=[];
