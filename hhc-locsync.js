@@ -20,7 +20,7 @@
           HHCLS.watchPending(hostEl)            — 승인 대기 칸 (고객관리 · 의뢰관리)
    ═══════════════════════════════════════════════════════════════════════════ */
 import { getApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, doc, getDocs, updateDoc, addDoc, setDoc, query, where, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, doc, getDocs, updateDoc, addDoc, setDoc, deleteDoc, query, where, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 let DB = null;
 function db(){ return DB || (DB = getFirestore(getApp())); }
@@ -51,7 +51,7 @@ function srcLabel(l){
 // ── 고객 찾기 (연락처 → 이름·별칭) ──
 async function loadCustomers(){
   const s = await getDocs(collection(db(), 'customers'));
-  return s.docs.map(d => ({ id: d.id, ...d.data() }));
+  return s.docs.map(d => ({ ...d.data(), __id: d.id }));   // ⚠ 고객 문서 안에 자체 id 필드('c…')가 있으므로 문서 ID 는 __id
 }
 function matchCust(list, phone, names){
   const p = pn(phone);
@@ -119,7 +119,7 @@ async function apply({ cust, phone, name, newLoc, src, via, targets, custOn }){
   const L = clean(newLoc);
   if (custOn !== false){
     const loc = { ...L, at: now, src, via };
-    if (cust) await updateDoc(doc(db(), 'customers', cust.id), { loc, updated_at: now });
+    if (cust) await updateDoc(doc(db(), 'customers', cust.__id), { loc, updated_at: now });
     else if (name || phone) await addDoc(collection(db(), 'customers'), { id: 'c' + Date.now(), name: name || '', phone: phone || '', member: '', email: '', addr: '', memo: '', aliases: [], loc, created_at: now, updated_at: now });
   }
   const from = src === 'customer' ? 'request' : 'customer';
@@ -209,7 +209,7 @@ async function proposeAdmin({ phone, name, names, loc, via, skip, custId }){
   try{
     const list = await loadCustomers();
     const ns = [name].concat(names || []).filter(Boolean);
-    const cust = custId ? list.find(c => c.id === custId) : matchCust(list, phone, ns);
+    const cust = custId ? list.find(c => c.__id === custId) : matchCust(list, phone, ns);
     if (!cust && !pn(phone) && !ns.length) return false;
     const oldLoc = cust && ok(cust.loc) ? cust.loc : null;
     const targets = await collectTargets({ phone: phone || (cust && cust.phone), names: ns, cust, oldLoc, newLoc: loc, skip });
@@ -253,7 +253,7 @@ async function renderAll(){
       const c = matchCust(cs, r.phone, reqNames(r));
       const old = c && ok(c.loc) ? c.loc : null;
       if (same(old, r.loc)){ updateDoc(doc(db(), 'requests', r.id), { loc_sync: 'same', loc_sync_at: new Date().toISOString() }).catch(() => {}); continue; }
-      list.push({ r, c, old, key: c ? 'c:' + c.id : 'p:' + (pn(r.phone) || nn(r.condo)) });
+      list.push({ r, c, old, key: c ? 'c:' + c.__id : 'p:' + (pn(r.phone) || nn(r.condo)) });
     }
   }catch(e){ console.warn('[HHCLS]', e); }
   // 같은 고객의 요청이 여러 건이면 가장 최근 것을 추천 (① 가장 마지막 등록)
@@ -313,10 +313,42 @@ function watchPending(host){
   hosts.add(host); host.addEventListener('click', onClick);
   if (unsub){ renderAll(); return; }
   unsub = onSnapshot(query(collection(db(), 'requests'), where('loc_sync', '==', 'pending')), snap => {
-    PEND = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(r => ok(r.loc));
+    PEND = snap.docs.map(d => ({ ...d.data(), id: d.id })).filter(r => ok(r.loc));
     CUSTS = null; renderAll();
   }, e => console.warn('[HHCLS] pending', e));
 }
 
-window.HHCLS = { setDb(d){ if (d) DB = d; }, proposeAdmin, watchPending, same, ok };
+// ── 🧹 (2026-11-17) 첫 배포본 오류 정리 ──
+//   95ea766 에서 고객관리 위치 등록이 기존 고객 대신 「같은 이름·연락처의 새 고객 문서」에 저장되던 문제.
+//   2026-11-17 오후 5시(말레이시아) 이후 위치 저장 때 만들어진 빈 고객 문서 중, 같은 연락처·이름의 기존 고객이 있는 것만 골라
+//   위치를 기존 고객으로 옮기고 새 문서를 지웁니다. 지우기 전에 목록을 보여 주고 확인을 받습니다. 한 번 정리하면 다시 묻지 않습니다.
+async function repairDups(){
+  try{
+    if (localStorage.getItem('hhc_ls_fix1') === 'done') return 0;
+    const list = await loadCustomers();
+    const blank = c => !c.member && !c.email && !c.addr && !c.memo && !(c.aliases || []).length && ok(c.loc) && c.loc.via &&
+      String(c.created_at || '') >= '2026-11-17T09:00' && Object.keys(c).every(k => ['id','name','phone','member','email','addr','memo','aliases','loc','created_at','updated_at','__id'].includes(k));
+    const fixes = [];
+    for (const d of list.filter(blank)){
+      const p = pn(d.phone);
+      const orig = list.filter(c => c.__id !== d.__id && String(c.created_at || '') < String(d.created_at || '') &&
+        ((p.length >= 6 && pn(c.phone) === p) || (nn(d.name) && [c.name].concat(c.aliases || []).some(a => nn(a) === nn(d.name)))))
+        .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')))[0];
+      if (orig) fixes.push({ d, orig });
+    }
+    if (!fixes.length){ localStorage.setItem('hhc_ls_fix1', 'done'); return 0; }
+    const names = fixes.map(f => '· ' + (f.orig.name || f.d.name) + ' → ' + (f.d.loc.name || '지도 위치')).join('\n');
+    if (!confirm('📍 방문 위치가 기존 고객이 아닌 「중복 고객」에 저장된 것이 ' + fixes.length + '건 있습니다.\n\n' + names + '\n\n위치를 기존 고객으로 옮기고 중복 고객을 지울까요?\n(중복 고객은 오늘 위치 저장 때 자동으로 만들어진 빈 고객 정보입니다)')) return 0;
+    for (const f of fixes){
+      const keep = ok(f.orig.loc) && String(f.orig.loc.at || '') > String(f.d.loc.at || '');
+      if (!keep) await updateDoc(doc(db(), 'customers', f.orig.__id), { loc: f.d.loc, updated_at: new Date().toISOString() });
+      await deleteDoc(doc(db(), 'customers', f.d.__id));
+    }
+    localStorage.setItem('hhc_ls_fix1', 'done');
+    toast('📍 위치 ' + fixes.length + '건을 기존 고객으로 옮기고 중복 고객을 정리했습니다');
+    return fixes.length;
+  }catch(e){ console.warn('[HHCLS] repair', e); return 0; }
+}
+
+window.HHCLS = { setDb(d){ if (d) DB = d; }, proposeAdmin, watchPending, repairDups, same, ok };
 window.dispatchEvent(new Event('hhcls-ready'));
