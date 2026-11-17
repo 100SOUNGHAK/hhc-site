@@ -166,6 +166,24 @@ textarea{resize:vertical;line-height:1.6}
 .ip-ph .ph-chips{margin-top:5px;gap:4px}
 .ip-ph .ph-chip{font-size:10.5px;padding:4px 9px;border-radius:13px}
 .ip-empty{text-align:center;padding:34px 12px;color:#9aa0b4;font-size:12.5px}
+/* 항목 편집(목록 추가·삭제) */
+.ip-t button.ip-edb{width:auto;margin-left:auto;margin-right:6px;padding:0 11px;border-radius:15px;border:1px solid #d6d3e8;background:#fff;color:#4338CA;font-size:11.5px;font-weight:800;white-space:nowrap}
+.ip-t button.ip-edb.on{border-color:#0E2350;background:#0E2350;color:#fff}
+.ip-edbar{flex-shrink:0;display:none;padding:7px 12px;background:#fff8e6;border-bottom:1px solid #f3e3b5;font-size:11px;color:#8a6410;line-height:1.45}
+.ip-sheet.ip-editing .ip-edbar{display:block}
+.ip-sheet.ip-editing .ip-quick{display:none}
+.ip-new{display:inline-block;margin-left:5px;font-size:9px;font-weight:800;padding:1.5px 5px;border-radius:4px;background:#fff4d6;color:#8a6410;vertical-align:1px}
+.ip-del{flex-shrink:0;padding:7px 10px;border-radius:8px;border:1px solid #f3c9c9;background:#fff;color:#dc2626;font-size:11.5px;font-weight:800;cursor:pointer;white-space:nowrap}
+.ip-del:active,.ip-addrow button:active,.ip-rst button:active{transform:scale(.96)}
+.ip-addrow{display:flex;gap:6px;margin:2px 0 8px}
+.ip-addrow input{flex:1;min-width:0;padding:9px 10px;border:1.5px dashed #c7c3e6;border-radius:10px;font-size:12.5px;background:#fbfbff;box-sizing:border-box}
+.ip-addrow input:focus{outline:none;border-style:solid;border-color:#4F46E5;background:#fff}
+.ip-addrow button{flex-shrink:0;padding:0 14px;border-radius:10px;border:0;background:#4F46E5;color:#fff;font-size:12px;font-weight:800;cursor:pointer}
+.ip-rst{margin-top:14px;padding:10px;border-radius:10px;background:#f6f7fb;border:1px solid #ecebf4}
+.ip-rst .h{font-size:10.5px;font-weight:800;color:#6b7280;margin-bottom:6px}
+.ip-rst .r{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12px;color:#9aa0b4;text-decoration:line-through}
+.ip-rst .r span{flex:1;min-width:0}
+.ip-rst button{flex-shrink:0;text-decoration:none;padding:5px 9px;border-radius:7px;border:1px solid #c7d2fe;background:#fff;color:#4338CA;font-size:11px;font-weight:700;cursor:pointer}
 .ip-f{flex-shrink:0;display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid #eceaf5;background:#fff;padding-bottom:calc(10px + env(safe-area-inset-bottom))}
 .ip-f .s{flex:1;min-width:0;line-height:1.35}
 .ip-f .s span{display:block;font-size:11px;color:#6b7280;font-weight:600}
@@ -1175,7 +1193,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 <div class="ip-sheet" id="ip-sheet">
   <div class="ip-h">
     <div class="ip-grab"></div>
-    <div class="ip-t"><b>🔧 점검 항목 선택</b><button type="button" onclick="closeItemPicker()">✕</button></div>
+    <div class="ip-t"><b>🔧 점검 항목 선택</b><button type="button" class="ip-edb" id="ip-edb" onclick="ipToggleEdit()">✏️ 목록 편집</button><button type="button" onclick="closeItemPicker()">✕</button></div>
     <div class="ip-sr"><input id="ip-q" placeholder="검색: 필터, 냉매, 드레인, 절연…" oninput="ipSearch(this.value)" autocomplete="off"></div>
   </div>
   <div class="ip-bd">
@@ -1186,6 +1204,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
         <button type="button" onclick="ipAllOk()">전체 양호</button>
         <button type="button" onclick="ipCustomAdd()">＋ 직접 입력</button>
       </div>
+      <div class="ip-edbar">목록 편집 중 — 항목을 <b>추가</b>하거나 <b>삭제</b>하면 모든 기기의 선택 목록에 바로 반영됩니다. 이미 작성 중인 보고서 항목은 그대로 남습니다.</div>
       <div class="ip-list" id="ip-list"></div>
     </div>
   </div>
@@ -1910,29 +1929,136 @@ function ipFind(name){
   ipCards().forEach(function(c){ if(!f&&c._nameInp&&c._nameInp.value.trim()===name)f=c; });
   return f;
 }
-function ipCustomList(){
-  try{return JSON.parse(localStorage.getItem('hhc_insp_custom_items')||'{}');}catch(e){return {};}
+// ── 선택 목록 편집값 (settings/insp_items — 모든 기기 공유)
+//   add : {구분:[추가한 항목…]}   hide : [삭제한 기본 항목 이름…]
+//   예전 기기별 저장(hhc_insp_custom_items)은 처음 한 번 옮겨 담습니다.
+var IP_CFG_KEY='hhc_insp_itemcfg_v1',IP_EDIT=false;
+var ipCfg=(function(){
+  var c=null;
+  try{c=JSON.parse(localStorage.getItem(IP_CFG_KEY)||'null');}catch(e){}
+  if(!c||typeof c!=='object'){
+    var old={};try{old=JSON.parse(localStorage.getItem('hhc_insp_custom_items')||'{}')||{};}catch(e){}
+    c={add:old,hide:[],_local:1};
+  }
+  if(!c.add||typeof c.add!=='object')c.add={};
+  if(!Array.isArray(c.hide))c.hide=[];
+  return c;
+})();
+function ipCfgSave(){
+  delete ipCfg._local;
+  try{localStorage.setItem(IP_CFG_KEY,JSON.stringify(ipCfg));}catch(e){}
+  if(window.__saveItemCfg)window.__saveItemCfg({add:ipCfg.add,hide:ipCfg.hide});
 }
+window.__itemCfgLoaded=function(r){
+  if(r&&typeof r==='object'){
+    var local=ipCfg;
+    ipCfg={add:(r.add&&typeof r.add==='object')?r.add:{},hide:Array.isArray(r.hide)?r.hide:[]};
+    if(local._local){ // 이 기기에만 있던 예전 직접 입력 항목을 합칩니다
+      var moved=0;
+      Object.keys(local.add||{}).forEach(function(c){(local.add[c]||[]).forEach(function(n){
+        if(!ipCfg.add[c])ipCfg.add[c]=[];
+        if(ipCfg.add[c].indexOf(n)<0){ipCfg.add[c].push(n);moved++;}
+      });});
+      if(moved){ipCfgSave();return;}
+    }
+    try{localStorage.setItem(IP_CFG_KEY,JSON.stringify(ipCfg));}catch(e){}
+  }else if(ipCfg._local){ ipCfgSave(); }
+  var sh=gid('ip-sheet'); if(sh&&sh.classList.contains('show'))ipRender();
+};
+function ipEsc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function ipCustomList(){return ipCfg.add||{};}
+function ipIsAdded(cat,name){return (ipCfg.add[cat]||[]).indexOf(name)>=0;}
 function ipSaveCustom(cat,name){
-  var m=ipCustomList(); if(!m[cat])m[cat]=[];
-  if(m[cat].indexOf(name)<0)m[cat].push(name);
-  try{localStorage.setItem('hhc_insp_custom_items',JSON.stringify(m));}catch(e){}
+  if(!ipCfg.add[cat])ipCfg.add[cat]=[];
+  if(ipCfg.add[cat].indexOf(name)<0)ipCfg.add[cat].push(name);
+  var h=ipCfg.hide.indexOf(name); if(h>=0)ipCfg.hide.splice(h,1);
+  ipCfgSave();
 }
 function ipList(cat){
   var base=(ITEM_CATALOG[cat]||[]).slice(),ex=ipCustomList()[cat]||[];
   ex.forEach(function(n){if(base.indexOf(n)<0)base.push(n);});
-  return base;
+  return base.filter(function(n){return ipCfg.hide.indexOf(n)<0||ipIsAdded(cat,n);});
+}
+function ipCats(){
+  var cs=Object.keys(ITEM_CATALOG);
+  Object.keys(ipCustomList()).forEach(function(c){if(cs.indexOf(c)<0&&(ipCfg.add[c]||[]).length)cs.push(c);});
+  return cs;
 }
 function ipAll(){
   var out=[];
-  Object.keys(ITEM_CATALOG).forEach(function(c){ ipList(c).forEach(function(n){out.push({cat:c,name:n});}); });
-  var cu=ipCustomList();
-  Object.keys(cu).forEach(function(c){ if(!ITEM_CATALOG[c])cu[c].forEach(function(n){out.push({cat:c,name:n});}); });
+  ipCats().forEach(function(c){ ipList(c).forEach(function(n){out.push({cat:c,name:n});}); });
   return out;
 }
 
+// ── ✏️ 목록 편집: 항목 추가 · 삭제 · 되살리기
+function ipToggleEdit(){
+  IP_EDIT=!IP_EDIT;
+  var sh=gid('ip-sheet'),b=gid('ip-edb');
+  if(sh)sh.classList.toggle('ip-editing',IP_EDIT);
+  if(b){b.classList.toggle('on',IP_EDIT);b.textContent=IP_EDIT?'✓ 편집 끝내기':'✏️ 목록 편집';}
+  ipRender();
+}
+function ipEditHtml(){
+  var cats=(ipCat==='전체'||ipQ)?ipCats():[ipCat],q=(ipQ||'').toLowerCase(),html='';
+  ipRendered=[];
+  cats.forEach(function(c,ci){
+    var items=ipList(c);
+    if(q)items=items.filter(function(n){return (n+' '+c).toLowerCase().indexOf(q)>=0;});
+    html+='<div class="ip-grp">'+(IP_ICONS[c]||'📦')+' '+ipEsc(c)+' · '+items.length+'개</div>';
+    items.forEach(function(n){
+      var i=ipRendered.length; ipRendered.push({cat:c,name:n});
+      html+='<div class="ip-it"><div class="ip-m"><div class="t">'+ipEsc(n)+
+        (IP_STD[n]?'<span class="ip-std">기본</span>':'')+(ipIsAdded(c,n)?'<span class="ip-new">추가함</span>':'')+
+        '</div></div><button type="button" class="ip-del" onclick="ipDelItem('+i+')">🗑 삭제</button></div>';
+    });
+    html+='<div class="ip-addrow"><input id="ip-new-'+ci+'" data-cat="'+ipEsc(c)+'" placeholder="＋ '+ipEsc(c)+'에 새 항목 이름" '+
+      'onkeydown="if(event.key===\'Enter\'){event.preventDefault();ipNewItem('+ci+');}" autocomplete="off">'+
+      '<button type="button" onclick="ipNewItem('+ci+')">추가</button></div>';
+  });
+  var hid=ipCfg.hide.filter(function(n){
+    return cats.some(function(c){return (ITEM_CATALOG[c]||[]).indexOf(n)>=0;});
+  });
+  if(hid.length){
+    html+='<div class="ip-rst"><div class="h">삭제한 기본 항목 '+hid.length+'개 — 필요하면 되살릴 수 있어요</div>';
+    hid.forEach(function(n){
+      html+='<div class="r"><span>'+ipEsc(n)+'</span><button type="button" onclick="ipRestore('+JSON.stringify(n).replace(/"/g,'&quot;')+')">↺ 되살리기</button></div>';
+    });
+    html+='</div>';
+  }
+  return html;
+}
+function ipNewItem(ci){
+  var inp=gid('ip-new-'+ci); if(!inp)return;
+  var c=inp.getAttribute('data-cat')||'기타',n=(inp.value||'').replace(/\s+/g,' ').trim();
+  if(!n){inp.focus();return;}
+  if(n.length>40){toast('항목 이름은 40자 이내로 입력해 주세요');return;}
+  var dup=null; ipAll().forEach(function(it){if(!dup&&it.name===n)dup=it;});
+  if(dup){toast('이미 있는 항목입니다 ('+dup.cat+')');return;}
+  ipSaveCustom(c,n);
+  ipRender();
+  var again=gid('ip-new-'+ci); if(again)again.focus();
+  toast('✓ 「'+n+'」 추가됨');
+}
+function ipDelItem(i){
+  var it=ipRendered[i]; if(!it)return;
+  if(ipIsAdded(it.cat,it.name)){
+    ipCfg.add[it.cat]=ipCfg.add[it.cat].filter(function(n){return n!==it.name;});
+    if(!ipCfg.add[it.cat].length)delete ipCfg.add[it.cat];
+  }
+  if((ITEM_CATALOG[it.cat]||[]).indexOf(it.name)>=0&&ipCfg.hide.indexOf(it.name)<0)ipCfg.hide.push(it.name);
+  ipCfgSave(); ipRender();
+  toast('🗑 「'+it.name+'」 목록에서 삭제됨');
+}
+function ipRestore(n){
+  ipCfg.hide=ipCfg.hide.filter(function(x){return x!==n;});
+  ipCfgSave(); ipRender();
+  toast('↺ 「'+n+'」 되살림');
+}
+window.ipToggleEdit=ipToggleEdit;window.ipNewItem=ipNewItem;window.ipDelItem=ipDelItem;window.ipRestore=ipRestore;
+
 function openItemPicker(){
   ipCat='전체';ipQ='';
+  if(IP_EDIT)ipToggleEdit();
   var q=gid('ip-q'); if(q)q.value='';
   gid('ip-bg').classList.add('show');
   gid('ip-sheet').classList.add('show');
@@ -1954,7 +2080,7 @@ window.ipSearch=ipSearch;window.ipSetCat=ipSetCat;
 
 function ipRail(){
   var rail=gid('ip-rail'); if(!rail)return;
-  var cats=['전체'].concat(Object.keys(ITEM_CATALOG));
+  var cats=['전체'].concat(ipCats());
   var html='';
   cats.forEach(function(c){
     var items=(c==='전체')?ipAll():ipList(c).map(function(n){return {cat:c,name:n};});
@@ -2010,6 +2136,7 @@ function ipNoteChips(){
 function ipRender(){
   ipRail();
   var box=gid('ip-list'); if(!box)return;
+  if(IP_EDIT){box.innerHTML=ipEditHtml();ipFoot();return;}
   var src;
   if(ipQ){
     var q=ipQ.toLowerCase();
@@ -6089,6 +6216,21 @@ window.__savePhrases=async function(obj){
     var s=await getDoc(doc(DB,'settings','insp_phrases'));
     if(s.exists()&&s.data()&&s.data().fields&&window.__phrasesLoaded)window.__phrasesLoaded(s.data().fields);
   }catch(e){console.error('phrases load:',e);}
+})();
+
+// ── 점검 항목 선택 목록 편집값 (settings/insp_items — 모든 기기 공유 · 항목 추가·삭제)
+window.__saveItemCfg=async function(o){
+  if(!DB)return;
+  try{await setDoc(doc(DB,'settings','insp_items'),{add:o.add,hide:o.hide,updatedAt:new Date().toISOString()});}
+  catch(e){console.error('item cfg save:',e);}
+};
+(async function(){
+  if(!DB)return;
+  try{
+    var s=await getDoc(doc(DB,'settings','insp_items'));
+    var r=(s.exists()&&s.data())?s.data():null;
+    var t=setInterval(function(){if(window.__itemCfgLoaded){clearInterval(t);window.__itemCfgLoaded(r);}},200);setTimeout(function(){clearInterval(t);},10000);
+  }catch(e){console.error('item cfg load:',e);}
 })();
 
 // ── 권장 정비 자동 추천 목록 저장/로딩 (settings/insp_recrules — 모든 기기 공유 · m27)
