@@ -2029,8 +2029,21 @@ function rebuildAndPaint(){
     if(ni>=0)openDrawer(ni);else closeDrawer();
   }
 }
+// 🏦 결제 계좌 — 인보이스 설정의 「입금 계좌」(banks) 중 계좌번호가 있는 첫 번째 (2026-11-17)
+//   발송 창 「🏦 결제 계좌 안내」 문구에 씁니다. 읽지 못하면 기본 MAYBANK 계좌.
+let PAY_BANKS=[];
+function payBank(){
+  const ok=PAY_BANKS.filter(b=>String(b.accNum||'').replace(/[^0-9A-Za-z]/g,''));
+  return ok[0]||{bankName:'MAYBANK',accName:'HAPPY WORKS SERVICES SDN.BHD.',accNum:'562179535697'};
+}
+function loadPayBanks(){
+  getDocs(collection(db,'banks')).then(snap=>{
+    PAY_BANKS=snap.docs.map(d=>d.data()||{}).sort((a,b)=>(a.order||0)-(b.order||0));
+  }).catch(err=>console.warn('banks',err.message));
+}
 let _subs=[];
 function subscribeAll(){
+  loadPayBanks();
   _subs.forEach(u=>{try{u();}catch(e){}});
   _subs=COLL_NAMES.map(n=>onSnapshot(collection(db,n),snap=>{
     window.__hhcReady&&window.__hhcReady();
@@ -4813,6 +4826,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     {t:'bill',    lb:'🧾 청구 안내',    n:0, need:false},
     {t:'rebill',  lb:'🔔 청구 재요청',  n:0, need:false},
     {t:'pay',     lb:'💳 결제 확인',    n:0, need:false},
+    {t:'pacc',    lb:'🏦 결제 계좌 안내', n:0, need:false},   // 계좌번호 + 복사 가능한 안내장(/pay) (2026-11-17)
     {t:'care3',   lb:'🌿 3개월 안내',   n:0, need:false},
     {t:'care6',   lb:'🔧 6개월 안내',   n:0, need:false},
     {t:'rqf',     lb:'📨 의뢰 요청서',  n:0, need:false},
@@ -4840,7 +4854,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   // 발송 종류를 성격별로 묶어 한눈에 찾을 수 있게 합니다.
   const TGRP=[
     {g:'📄 문서 보내기', ts:['ins','ct','qt','cpg','cpd']},
-    {g:'💰 청구 · 결제',  ts:['bill','rebill','pay']},
+    {g:'💰 청구 · 결제',  ts:['bill','rebill','pay','pacc']},
     {g:'📅 예약 · 의뢰',  ts:['bk','bkc','rq','ipr','ipv','mmv','rqf','revisit']},
     {g:'🌿 정기관리 알림', ts:['care3','care6']},
     {g:'📢 안내 · 소개',  ts:['nc','rev','basic','aw','mem','evi','pti','fee','vfee','mvo','wp','install']},
@@ -5010,6 +5024,9 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     if(state.tpl==='pti')return BASE+'/points.html'+(state.en?'?lang=en':'');
     // 💡 추가비용 안내 — 마이페이지 안 카드가 아니라 별도 안내장을 보냅니다 (적립포인트 안내와 같은 방식)
     if(state.tpl==='fee')return BASE+'/fees.html'+(state.en?'?lang=en':'');
+    // 🏦 결제 계좌 안내 — 계좌번호 복사 안내장(/pay). 미결제 잔여 금액이 있으면 amt= 로 함께 보여 줍니다 (2026-11-17)
+    if(state.tpl==='pacc'){const q=new URLSearchParams();const a=Math.round(billAmt()*100)/100;if(a>0.005)q.set('amt',String(a));if(state.en)q.set('lang','en');
+      return BASE+'/pay'+(q.toString()?'?'+q.toString():'');}
     // 🚚 이사 나갈 때 안내 — 이사전용 상품 안내장(/moveout). 그림(guide-moveout)도 함께 나갑니다 (2026-11-16)
     if(state.tpl==='mvo')return BASE+'/moveout'+(state.en?'?lang=en':'');
     // 🧰 출장점검/진단 안내 — 출장점검 비용 확인하기 안내장(/visit-fee). 고객 주소가 있으면 지도에서 먼저 찾아 줌(a=)
@@ -5621,6 +5638,14 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
         ?(hi+'🚚 *Moving out? 2 services you\'ll need*\n❄️ Basic air-con cleaning RM 80/unit\n🧺 Curtain steam sanitising RM 350\n      (condo 1,000 sq ft)\n\n👉 See the estimated cost for your home size.'+sLk('🚚 View move-out guide'))
         :(hi+'🚚 *이사 나갈 때 꼭 필요한 서비스 2가지*\n❄️ 에어컨 기본세척 RM 80/대\n🧺 커튼 약식 스팀 살균 RM 350\n      (콘도 1,000 sq ft 기준)\n\n👉 집 크기별 예상 비용을 확인해 보세요.'+sLk('🚚 이사 안내 보기'));
     }
+    if(state.tpl==='pacc'){
+      // 🏦 결제 계좌 안내 — 계좌번호를 본문에 한 줄로 넣어 왓츠앱에서 길게 눌러 복사할 수 있게 합니다
+      const B=payBank(),a=billAmt(),am=a>0.005?sRM(a):'';
+      const acc=B.bankName+'\n'+B.accName+'\n'+String(B.accNum||'').replace(/[^0-9A-Za-z]/g,'');
+      return en
+        ?(hi+'🏦 *Payment account*'+(am?'\n💳 Amount due  *'+am+'*':'')+'\n\n'+acc+'\n\n👉 After the transfer, please send the receipt in this chat.'+sLk('🏦 Copy account number'))
+        :(hi+'🏦 *결제 계좌 안내*'+(am?'\n💳 결제 금액  *'+am+'*':'')+'\n\n'+acc+'\n\n👉 이체 후 영수증 사진을 이 대화방에 보내 주세요.'+sLk('🏦 계좌번호 복사하기'));
+    }
     if(state.tpl==='fee'){
       return en
         ?(hi+'💡 *Please note — additional charges*\n· Minimum charge RM 320\n· Parking RM 10 (2 hrs, then RM 10/hr)\n· Deposit RM 320 (bookings 2+ weeks ahead)\n\n👉 Any questions? Just reply in this chat.'+sLk('💡 See details'))
@@ -5718,7 +5743,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     // 💼 전자명함도 명함 주소를 보내므로 마이페이지 노출 항목과 무관합니다.
     // ⭐ 리뷰 이벤트도 홈페이지 주소를 보내므로 마찬가지입니다.
     // 💡 추가비용 안내도 안내장 주소(/fees.html)를 보내므로 마찬가지입니다.
-    const _isMem=(state.tpl==='mem'||state.tpl==='evi'||state.tpl==='pti'||state.tpl==='fee'||state.tpl==='vfee'||state.tpl==='mvo'||state.tpl==='nc'||state.tpl==='rev'||!!GDS[state.tpl]);
+    const _isMem=(state.tpl==='mem'||state.tpl==='evi'||state.tpl==='pti'||state.tpl==='fee'||state.tpl==='pacc'||state.tpl==='vfee'||state.tpl==='mvo'||state.tpl==='nc'||state.tpl==='rev'||!!GDS[state.tpl]);
     const os=mk.querySelector('#cs-optsec');
     if(os)os.style.display=_isMem?'none':'';
     const w=mk.querySelector('#cs-warn');
@@ -6067,6 +6092,9 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
       :(state.tpl==='pti')
       ?{t:(en?'[Happy Home Care] Reward Points':'[Happy Home Care] 적립포인트 안내'),
         btn:(en?'View points guide':'적립포인트 안내 보기')}
+      :(state.tpl==='pacc')
+      ?{t:(en?'[Happy Home Care] Payment Account':'[Happy Home Care] 결제 계좌 안내'),
+        btn:(en?'Copy account number':'계좌번호 복사하기')}
       :(state.tpl==='fee')
       ?{t:(en?'[Happy Home Care] Additional Charges':'[Happy Home Care] 추가비용 안내'),
         btn:(en?'View charges':'추가비용 안내 보기')}
@@ -6111,6 +6139,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
       :state.tpl==='evi'?'🔗 전자상품권 안내장 주소가 복사되었습니다'
       :state.tpl==='pti'?'🔗 적립포인트 안내장 주소가 복사되었습니다'
       :state.tpl==='fee'?'🔗 추가비용 안내장 주소가 복사되었습니다'
+      :state.tpl==='pacc'?'🔗 결제 계좌 안내장 주소가 복사되었습니다'
       :state.tpl==='vfee'?'🔗 출장점검/진단 안내 주소가 복사되었습니다'
       :state.tpl==='mvo'?'🔗 이사 나갈 때 안내장 주소가 복사되었습니다'
       :state.tpl==='nc'?'🔗 전자명함 주소가 복사되었습니다'
