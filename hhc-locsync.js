@@ -209,7 +209,8 @@ async function proposeAdmin({ phone, name, names, loc, via, skip, custId }){
   try{
     const list = await loadCustomers();
     const ns = [name].concat(names || []).filter(Boolean);
-    const cust = custId ? list.find(c => c.__id === custId) : matchCust(list, phone, ns);
+    let cust = custId ? list.find(c => c.__id === custId) : matchCust(list, phone, ns);
+    if (custId && !cust) cust = { __id: custId, name: name || '', phone: phone || '' };   // 고객관리에서 고른 고객 → 그 문서에만 저장 (새 고객 만들지 않음)
     if (!cust && !pn(phone) && !ns.length) return false;
     const oldLoc = cust && ok(cust.loc) ? cust.loc : null;
     const targets = await collectTargets({ phone: phone || (cust && cust.phone), names: ns, cust, oldLoc, newLoc: loc, skip });
@@ -321,13 +322,12 @@ function watchPending(host){
 // ── 🧹 (2026-11-17) 첫 배포본 오류 정리 ──
 //   95ea766 에서 고객관리 위치 등록이 기존 고객 대신 「같은 이름·연락처의 새 고객 문서」에 저장되던 문제.
 //   2026-11-17 오후 5시(말레이시아) 이후 위치 저장 때 만들어진 빈 고객 문서 중, 같은 연락처·이름의 기존 고객이 있는 것만 골라
-//   위치를 기존 고객으로 옮기고 새 문서를 지웁니다. 지우기 전에 목록을 보여 주고 확인을 받습니다. 한 번 정리하면 다시 묻지 않습니다.
+//   위치를 기존 고객으로 옮기고 새 문서를 지웁니다. 지우기 전에 목록을 보여 주고 확인을 받습니다. 정리할 것이 있을 때만 묻습니다 (2026-11-18 까지 생긴 것만).
 async function repairDups(){
   try{
-    if (localStorage.getItem('hhc_ls_fix1') === 'done') return 0;
     const list = await loadCustomers();
-    const blank = c => !c.member && !c.email && !c.addr && !c.memo && !(c.aliases || []).length && ok(c.loc) && c.loc.via &&
-      String(c.created_at || '') >= '2026-11-17T09:00' && Object.keys(c).every(k => ['id','name','phone','member','email','addr','memo','aliases','loc','created_at','updated_at','__id'].includes(k));
+    const blank = c => !c.member && !c.email && !c.addr && !c.memo && !(c.aliases || []).length && !c.ca_ch && !c.ca_inactive && ok(c.loc) && c.loc.via &&
+      String(c.created_at || '') >= '2026-11-17T09:00' && String(c.created_at || '') < '2026-11-19';
     const fixes = [];
     for (const d of list.filter(blank)){
       const p = pn(d.phone);
@@ -336,15 +336,15 @@ async function repairDups(){
         .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')))[0];
       if (orig) fixes.push({ d, orig });
     }
-    if (!fixes.length){ localStorage.setItem('hhc_ls_fix1', 'done'); return 0; }
+    if (!fixes.length) return 0;
+    fixes.sort((a, b) => String(a.d.loc.at || '').localeCompare(String(b.d.loc.at || '')));   // 같은 고객이면 가장 최근 위치가 마지막에 남음
     const names = fixes.map(f => '· ' + (f.orig.name || f.d.name) + ' → ' + (f.d.loc.name || '지도 위치')).join('\n');
     if (!confirm('📍 방문 위치가 기존 고객이 아닌 「중복 고객」에 저장된 것이 ' + fixes.length + '건 있습니다.\n\n' + names + '\n\n위치를 기존 고객으로 옮기고 중복 고객을 지울까요?\n(중복 고객은 오늘 위치 저장 때 자동으로 만들어진 빈 고객 정보입니다)')) return 0;
     for (const f of fixes){
       const keep = ok(f.orig.loc) && String(f.orig.loc.at || '') > String(f.d.loc.at || '');
-      if (!keep) await updateDoc(doc(db(), 'customers', f.orig.__id), { loc: f.d.loc, updated_at: new Date().toISOString() });
+      if (!keep){ f.orig.loc = f.d.loc; await updateDoc(doc(db(), 'customers', f.orig.__id), { loc: f.d.loc, updated_at: new Date().toISOString() }); }
       await deleteDoc(doc(db(), 'customers', f.d.__id));
     }
-    localStorage.setItem('hhc_ls_fix1', 'done');
     toast('📍 위치 ' + fixes.length + '건을 기존 고객으로 옮기고 중복 고객을 정리했습니다');
     return fixes.length;
   }catch(e){ console.warn('[HHCLS] repair', e); return 0; }
