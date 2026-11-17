@@ -6063,6 +6063,19 @@ window.__savePreset=async function(items){
     if(s.exists()&&s.data()&&Array.isArray(s.data().items)&&window.__presetLoaded)window.__presetLoaded(s.data().items);
   }catch(e){console.error('preset load:',e);}
 })();
+// ── ⭐ 기본 항목 묶음 여러 개 (settings/insp_presets — 모든 기기 공유, m34 화면에서 사용)
+window.__savePresetSets=async function(o){
+  if(!DB)return;
+  try{await setDoc(doc(DB,'settings','insp_presets'),{sets:o.sets,active:o.active,updatedAt:new Date().toISOString()});}
+  catch(e){console.error('preset sets save:',e);}
+};
+(async function(){
+  if(!DB)return;
+  try{
+    var s=await getDoc(doc(DB,'settings','insp_presets'));
+    if(s.exists()&&s.data()&&Array.isArray(s.data().sets)&&window.__presetSetsLoaded)window.__presetSetsLoaded(s.data());
+  }catch(e){console.error('preset sets load:',e);}
+})();
 
 // ── 자주 쓰는 문구 저장/로딩 (settings/insp_phrases — 모든 기기 공유)
 window.__savePhrases=async function(obj){
@@ -9595,6 +9608,389 @@ setTimeout(function(){
   })();
   setInterval(follow,1500);   // 그 밖의 경로(임시저장 복구 · 복제 등)로 보고서가 바뀐 경우
   show(keyNow());
+})();
+</script>
+
+<!-- ════ m32 · 냉방능력 점검상태 구분 (2026-11-17) — 에어컨 카드마다 경계 · 색 · 끝 표시, 「에어컨 추가」 버튼을 카드와 떨어뜨려 구분
+   · 저장되는 자료와 입력 방식은 그대로이고 보이는 모양 · 버튼 문구만 바꿉니다.
+   ※ 이 블록(m32-css · m32-js)만 지우면 바로 이전 화면으로 돌아갑니다. -->
+<style id="m32-css">
+#cool-units .cu-item{--ac:#0E2350;--acs:#EEF2FA;border:1.5px solid #CBD5E6;border-left:6px solid var(--ac);border-radius:16px;margin-bottom:20px;background:#fff;box-shadow:0 8px 18px -10px rgba(14,35,80,.35);overflow:visible}
+#cool-units .cu-item:nth-child(3n+2){--ac:#0B8A7E;--acs:#E8F6F3}
+#cool-units .cu-item:nth-child(3n){--ac:#B8860B;--acs:#FBF4E2}
+#cool-units .cu-hdr{background:var(--acs);border-bottom:1.5px solid #DDE3EE;border-radius:10px 10px 0 0;padding:12px 12px}
+#cool-units .cu-hdr .cu-num{width:34px;height:34px;font-size:12.5px;font-weight:800;background:var(--ac);box-shadow:0 3px 8px -3px rgba(0,0,0,.35)}
+#cool-units .cu-hdr > div:nth-child(2){font-size:14.5px!important;font-weight:800!important;color:#14192A;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#cool-units .cu-body{position:relative}
+#cool-units .m32-end{display:flex;align-items:center;gap:8px;margin:14px -2px 0;font-size:11.5px;font-weight:800;color:var(--ac);letter-spacing:.02em}
+#cool-units .m32-end::before,#cool-units .m32-end::after{content:"";flex:1;height:0;border-top:2px solid var(--ac);opacity:.35}
+#cool-units .cu-body[style*="display: none"] + .m32-end,#cool-units .cu-body[style*="display:none"] + .m32-end{display:none}
+/* 카드 안 버튼(누설검사 · 결함)은 점선 대신 옅은 바탕 — 바깥 「에어컨 추가」와 모양을 다르게 */
+#cool-units .m30-add{border:1px solid #D5DEEC;background:#fff;color:#33457A;font-size:13px;min-height:40px}
+#cool-units .m30-blk{background:var(--acs)}
+/* 「에어컨 추가」 구역 — 카드 묶음과 떨어뜨리고 선으로 구분 */
+.m32-zone{margin-top:8px;padding-top:16px;border-top:2px dashed #CBD5E6;position:relative}
+.m32-zone::before{content:"새 에어컨 카드 만들기";position:absolute;top:-10px;left:50%;transform:translateX(-50%);padding:0 10px;background:#fff;font-size:11.5px;font-weight:800;color:#8A93A8;white-space:nowrap}
+#view-form .m32-zone .btn-add.m32-addcu{border:2px solid #0E2350;border-style:solid;background:#fff;color:#0E2350;font-weight:800;margin-top:0}
+#view-form .m32-zone .btn-add.m32-addcu:active{background:#0E2350;color:#fff}
+.m32-undo{display:flex;align-items:center;gap:10px;margin:8px 0 0;padding:10px 12px;border-radius:12px;background:#0E2350;color:#fff;font-size:13px;font-weight:600}
+.m32-undo span{flex:1}
+.m32-undo button{height:32px;padding:0 14px;border-radius:999px;border:0;background:#E2B43C;color:#0E2350;font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer}
+</style>
+<script id="m32-js">
+(function(){
+  var cu=document.getElementById('cool-units');if(!cu)return;
+  var btn=[].slice.call(document.querySelectorAll('.btn-add')).find(function(b){return /addCoolUnit\(\)/.test(b.getAttribute('onclick')||'');});
+  var zone=btn&&btn.closest('.row-fg');
+  if(zone)zone.classList.add('m32-zone');
+  if(btn)btn.classList.add('m32-addcu');
+  function cards(){return [].slice.call(cu.querySelectorAll(':scope > .cu-item'));}
+  function next(){var n=cards().length+1,used={};cards().forEach(function(w){if(w._cuLbl)used[w._cuLbl()]=1;});while(used['A'+n])n++;return 'A'+n;}
+  function paint(){
+    cards().forEach(function(w){
+      var body=w.querySelector(':scope > .cu-body');if(!body)return;
+      var e=w.querySelector(':scope > .m32-end');
+      if(!e){e=document.createElement('div');e.className='m32-end';body.parentNode.insertBefore(e,body.nextSibling);}
+      var t='▲ 에어컨 '+(w._cuLbl?w._cuLbl():'')+' 입력 끝';if(e.textContent!==t)e.textContent=t;
+    });
+    if(btn){var t2='＋ 새 에어컨 추가 ('+next()+')';if(btn.textContent!==t2)btn.textContent=t2;}
+  }
+  /* 실수로 눌렀을 때 바로 되돌리기 */
+  var ub=null,ut=null;
+  if(btn)btn.addEventListener('click',function(){
+    setTimeout(function(){
+      var all=cards(),w=all[all.length-1];if(!w)return;paint();
+      try{w.scrollIntoView({behavior:'smooth',block:'start'});}catch(_){}
+      if(ub)ub.remove();clearTimeout(ut);
+      ub=document.createElement('div');ub.className='m32-undo';
+      ub.innerHTML='<span>에어컨 '+(w._cuLbl?w._cuLbl():'')+' 카드를 새로 만들었습니다</span><button type="button">되돌리기</button>';
+      ub.querySelector('button').onclick=function(){var d=w.querySelector('.cu-hdr > .btn-del');if(d&&w.isConnected)d.click();ub.remove();ub=null;paint();};
+      zone.parentNode.insertBefore(ub,zone.nextSibling);
+      ut=setTimeout(function(){if(ub){ub.remove();ub=null;}},7000);
+    },30);
+  });
+  var tm=null;new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var t=ms[i].target;t=t.nodeType===1?t:t.parentElement;if(t&&t.closest&&t.closest('.m32-end'))continue;clearTimeout(tm);tm=setTimeout(paint,120);return;}}).observe(cu,{childList:true,subtree:true,characterData:true});
+  paint();
+})();
+</script>
+
+<!-- ════ m33 · 항목별 점검 결과 한눈에 (2026-11-17) — 결과 버튼 글자 표시 · 문제 항목 색 강조 · 보기 거르기 · 구분별 「모두 정상」
+   · 저장되는 자료와 기존 버튼 동작은 그대로이고 보이는 모양과 보기 거르기만 더합니다.
+   ※ 이 블록(m33-css · m33-js)만 지우면 바로 이전 화면으로 돌아갑니다. -->
+<style id="m33-css">
+#result-rows .rcard{border:1px solid #E4E9F2;border-radius:12px;margin-bottom:8px;transition:background .15s,border-color .15s}
+#result-rows .rcard .rc-main{padding:10px 8px 10px 10px;gap:9px}
+#result-rows .rcard .rc-name{font-size:14px;font-weight:700;color:#14192A;white-space:normal;line-height:1.35;word-break:keep-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+#result-rows .rcard .rc-name.empty{color:#9ca3af;font-weight:500}
+#result-rows .rcard .rc-note{font-size:12px;color:#6B7487;margin-top:2px}
+#result-rows .rcard .rc-dot{width:4px;height:30px}
+/* 결과 버튼: 글자로 · 고른 것만 진하게 */
+#result-rows .rc-seg{border:1px solid #DDE3EE;border-radius:10px;background:#F4F6FA;padding:2px;gap:2px}
+#result-rows .rc-seg button{border:0!important;border-radius:8px;background:transparent;min-width:40px;height:34px;padding:0 5px;font-family:inherit;font-size:12.5px;font-weight:800;color:#A3ABBC}
+#result-rows .rc-seg button.on-ok{background:#10B981;color:#fff;box-shadow:0 2px 5px -2px rgba(16,185,129,.7)}
+#result-rows .rc-seg button.on-warn{background:#F59E0B;color:#fff;box-shadow:0 2px 5px -2px rgba(245,158,11,.7)}
+#result-rows .rc-seg button.on-bad{background:#EF4444;color:#fff;box-shadow:0 2px 5px -2px rgba(239,68,68,.7)}
+/* 문제 항목은 줄 전체 색으로 */
+#result-rows .rcard.m33-warn{background:#FFF8E6;border-color:#F3C969}
+#result-rows .rcard.m33-bad{background:#FFF1F1;border-color:#F3A3A3}
+#result-rows .rcard.m33-hide,#result-rows .cat-sort-hdr.m33-hide{display:none!important}
+/* 위 요약 · 보기 거르기 */
+.m33-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:2px 0 12px}
+.m33-bar button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;min-height:52px;border-radius:12px;border:1.5px solid #E4E9F2;background:#fff;font-family:inherit;cursor:pointer;color:#5A6478;font-size:11.5px;font-weight:700}
+.m33-bar button b{font-size:18px;font-weight:800;line-height:1.1;color:#14192A}
+.m33-bar button[data-f=warn] b{color:#B45309}.m33-bar button[data-f=bad] b{color:#B42318}.m33-bar button[data-f=ok] b{color:#0E7A4E}
+.m33-bar button.on{border-color:#0E2350;background:#0E2350;color:#fff}
+.m33-bar button.on b{color:#fff}
+.m33-bar button.zero{opacity:.55}
+.m33-fnote{margin:-4px 0 10px;padding:8px 11px;border-radius:10px;background:#F0F4FF;color:#33457A;font-size:12.5px}
+/* 구분 머리: 크게 · 결과 요약 · 이 구분 모두 정상 */
+#result-rows .cat-sort-hdr{padding:10px 2px 6px!important}
+#result-rows .cat-sort-hdr > span:first-of-type{font-size:13.5px!important;font-weight:800!important}
+#result-rows .cat-sort-hdr > div:first-child{width:4px!important;height:18px!important}
+.m33-gs{display:inline-flex;gap:3px;font-size:11px;font-weight:800;white-space:nowrap}
+.m33-gs i{font-style:normal;padding:1px 6px;border-radius:999px}
+.m33-gs .w{background:#FFF1D6;color:#8A5A00}.m33-gs .b{background:#FDECEC;color:#B42318}
+.m33-gok{height:26px;padding:0 9px;border-radius:999px;border:1px solid #BFE6D3;background:#EFFAF4;color:#0E7A4E;font-family:inherit;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap}
+.m33-gok.done{opacity:.4;pointer-events:none}
+@media (max-width:380px){#result-rows .rc-seg button{min-width:38px;font-size:11.5px}}
+</style>
+<script id="m33-js">
+(function(){
+  var rows=document.getElementById('result-rows');if(!rows)return;
+  var LB={ok:'정상',warn:'주의',bad:'정비'};
+  var F='all';
+  function cards(){return [].slice.call(rows.querySelectorAll('.rcard'));}
+  function st(c){return c._statusSel?c._statusSel.value:'ok';}
+  function named(c){return !c._nameInp||c._nameInp.value.trim();}
+
+  /* 위 요약 · 보기 거르기 */
+  var bar=document.createElement('div');bar.className='m33-bar';
+  bar.innerHTML='<button type="button" data-f="all" class="on"><b>0</b>전체</button><button type="button" data-f="bad"><b>0</b>정비필요</button><button type="button" data-f="warn"><b>0</b>주의</button><button type="button" data-f="ok"><b>0</b>정상</button>';
+  var fnote=document.createElement('div');fnote.className='m33-fnote';fnote.style.display='none';
+  rows.parentNode.insertBefore(bar,rows);rows.parentNode.insertBefore(fnote,rows);
+  bar.addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;var f=b.getAttribute('data-f');F=(F===f&&f!=='all')?'all':f;paint();});
+
+  function decorate(c){
+    if(c._m33)return;c._m33=1;
+    var seg=c.querySelector('.rc-seg');
+    if(seg)[].forEach.call(seg.children,function(b,i){var k=['ok','warn','bad'][i];if(k&&LB[k]&&b.textContent!==LB[k])b.textContent=LB[k];});
+    if(c._statusSel)c._statusSel.addEventListener('change',function(){setTimeout(paint,0);});
+  }
+  function groupCards(h){var out=[],n=h.nextElementSibling;while(n&&!n.classList.contains('cat-sort-hdr')){if(n.classList.contains('rcard'))out.push(n);n=n.nextElementSibling;}return out;}
+
+  function paint(){
+    var cs=cards(),cnt={all:0,ok:0,warn:0,bad:0};
+    cs.forEach(function(c){
+      decorate(c);var s=st(c);
+      c.classList.toggle('m33-warn',s==='warn');c.classList.toggle('m33-bad',s==='bad');
+      if(named(c)){cnt.all++;cnt[s]=(cnt[s]||0)+1;}
+      c.classList.toggle('m33-hide',F!=='all'&&s!==F);
+    });
+    [].forEach.call(bar.children,function(b){var f=b.getAttribute('data-f');b.classList.toggle('on',f===F);b.classList.toggle('zero',f!=='all'&&!cnt[f]);var bb=b.querySelector('b');if(bb.textContent!==String(cnt[f]))bb.textContent=cnt[f];});
+    var shown=cs.filter(function(c){return !c.classList.contains('m33-hide');}).length;
+    if(F==='all'){fnote.style.display='none';}
+    else{fnote.style.display='';var t=shown?(LB[F]==='정비'?'정비필요':LB[F])+' 항목 '+shown+'개만 보고 있습니다 · 위 「전체」를 누르면 모두 보입니다':'해당하는 항목이 없습니다 · 위 「전체」를 누르면 모두 보입니다';if(fnote.textContent!==t)fnote.textContent=t;}
+    /* 구분 머리 */
+    [].forEach.call(rows.querySelectorAll('.cat-sort-hdr'),function(h){
+      var g=groupCards(h);
+      h.classList.toggle('m33-hide',F!=='all'&&!g.some(function(c){return !c.classList.contains('m33-hide');}));
+      var w=g.filter(function(c){return st(c)==='warn';}).length,bd=g.filter(function(c){return st(c)==='bad';}).length;
+      var gs=h.querySelector('.m33-gs');if(!gs){gs=document.createElement('span');gs.className='m33-gs';var cntEl=h.lastElementChild;h.insertBefore(gs,cntEl);}
+      var html=(bd?'<i class="b">정비 '+bd+'</i>':'')+(w?'<i class="w">주의 '+w+'</i>':'');if(gs.innerHTML!==html)gs.innerHTML=html;
+      var ok=h.querySelector('.m33-gok');
+      if(!ok){ok=document.createElement('button');ok.type='button';ok.className='m33-gok';ok.textContent='✓ 모두 정상';
+        ok.addEventListener('click',function(){groupCards(h).forEach(function(c){if(c._statusSel&&c._statusSel.value!=='ok'){c._statusSel.value='ok';c._statusSel.dispatchEvent(new Event('change'));}});if(window.__scheduleDraft)window.__scheduleDraft();paint();});
+        h.appendChild(ok);}
+      ok.classList.toggle('done',!w&&!bd);
+    });
+  }
+  var wrap=document.getElementById('result-rows-wrap');   // 항목을 새로 담거나 추가하면 다시 「전체」 보기로
+  if(wrap)wrap.addEventListener('click',function(e){if(e.target.closest('.btn-add,.btn-pick')&&F!=='all'){F='all';setTimeout(paint,0);}},true);
+  var tm=null;
+  new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var t=ms[i].target;t=t.nodeType===1?t:t.parentElement;if(t&&t.closest&&t.closest('.m33-gs,.m33-gok'))continue;clearTimeout(tm);tm=setTimeout(paint,60);return;}}).observe(rows,{childList:true,subtree:true});
+  rows.addEventListener('input',function(){clearTimeout(tm);tm=setTimeout(paint,150);});
+  paint();
+})();
+</script>
+
+<!-- ════ m34 · 새 보고서 기본 점검 항목 고르기 (2026-11-17) — 기본 항목 묶음 여러 개 · 항목 켜고 끄기 · 결과/비고 기본값
+   · 새 보고서를 열 때 담기는 기본 항목(settings/insp_preset)은 그대로 쓰고, 그 내용을 고른 묶음으로 바꿔 줍니다.
+   · 묶음 목록은 settings/insp_presets 에 저장(모든 기기 공유). 처음 열 때 지금 기본 항목이 「기본」 묶음이 됩니다.
+   ※ 이 블록(m34-css · m34-js)만 지우면 바로 이전 화면으로 돌아갑니다(기본 항목은 마지막에 고른 묶음 내용으로 남음). -->
+<style id="m34-css">
+.m34-bar{display:flex;align-items:center;gap:8px;margin:0 0 12px;padding:10px 10px 10px 12px;border-radius:14px;background:linear-gradient(135deg,#FFFBEF,#F5F8FF);border:1px solid #F1E2B4}
+.m34-bar .t{flex:1;min-width:0;font-size:12px;color:#5A6478;line-height:1.35}
+.m34-bar .t b{display:block;font-size:14.5px;color:#14192A;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m34-bar button{height:38px;padding:0 12px;border-radius:11px;border:0;font-family:inherit;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap}
+.m34-bar .chg{background:#0E2350;color:#fff}
+.m34-bar .set{background:#fff;color:#0E2350;border:1px solid #CBD5E6}
+.m34-hd,.m34-sets,.m34-ft{flex-shrink:0}
+/* 머리 버튼: 흰 바탕에서 안 보이던 글자 → 잘 보이게 (위 숫자 버튼이 있어 요약 글 · 구분 칩은 숨김) */
+#view-form .card-hdr:has(#res-stats) #res-stats,#view-form .card-hdr:has(#res-stats) #res-cat-chips{display:none!important}
+#view-form .card-hdr:has(#res-stats) > div:last-of-type button,#view-form .card-hdr:has(#res-stats) button{height:34px;padding:0 11px!important;border-radius:10px!important;border:1px solid #DDE3EE!important;background:#fff!important;color:#33457A!important;font-size:12px!important;font-weight:700!important}
+.m34-ov{position:fixed;inset:0;z-index:9000;background:rgba(10,20,45,.5);display:none;align-items:flex-end;justify-content:center}
+.m34-ov.show{display:flex}
+.m34-sh{width:100%;max-width:560px;max-height:92vh;display:flex;flex-direction:column;background:#F4F6FA;border-radius:20px 20px 0 0;overflow:hidden;box-shadow:0 -10px 30px rgba(0,0,0,.25)}
+@media (min-width:768px){.m34-ov{align-items:center}.m34-sh{border-radius:20px;max-height:86vh}}
+.m34-hd{display:flex;align-items:center;gap:8px;padding:14px 14px 10px;background:#0E2350;color:#fff}
+.m34-hd b{flex:1;font-size:16px;font-weight:800}
+.m34-hd button{width:34px;height:34px;border-radius:10px;border:0;background:rgba(255,255,255,.14);color:#fff;font-size:16px;cursor:pointer}
+.m34-sets{display:flex;gap:6px;overflow-x:auto;padding:10px 12px;background:#0E2350}
+.m34-sets button{flex-shrink:0;height:36px;padding:0 13px;border-radius:999px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);color:#fff;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.m34-sets button.on{background:#E2B43C;border-color:#E2B43C;color:#0E2350;font-weight:800}
+.m34-sets button.add{border-style:dashed}
+.m34-sets .star{font-size:11px;margin-left:3px}
+.m34-bd{flex:1;overflow-y:auto;padding:12px;-webkit-overflow-scrolling:touch}
+.m34-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.m34-meta input{flex:1 1 150px;min-width:0;height:40px;padding:0 12px;border-radius:10px;border:1px solid #DDE3EE;font-family:inherit;font-size:14px;font-weight:700;background:#fff}
+.m34-meta button{height:40px;padding:0 11px;border-radius:10px;border:1px solid #DDE3EE;background:#fff;color:#33457A;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+.m34-meta button.del{color:#B42318;border-color:#F3C1C1}
+.m34-info{font-size:12.5px;color:#5A6478;margin:0 2px 10px;line-height:1.5}
+.m34-info b{color:#0E2350}
+.m34-cat{background:#fff;border:1px solid #E4E9F2;border-radius:14px;margin-bottom:10px;overflow:hidden}
+.m34-ch{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid #EEF1F6}
+.m34-ch i{width:4px;height:18px;border-radius:2px}
+.m34-ch b{flex:1;font-size:14px;font-weight:800}
+.m34-ch span{font-size:12px;font-weight:700;color:#98A1B4}
+.m34-it{border-top:1px solid #F1F3F8}
+.m34-it:first-of-type{border-top:0}
+.m34-row{display:flex;align-items:center;gap:10px;padding:11px 12px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.m34-sw{position:relative;width:42px;height:24px;border-radius:999px;background:#D5DBE6;flex-shrink:0;transition:background .15s}
+.m34-sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s}
+.m34-it.on .m34-sw{background:#10B981}
+.m34-it.on .m34-sw::after{left:21px}
+.m34-nm{flex:1;min-width:0;font-size:14px;font-weight:600;color:#8A93A8;word-break:keep-all;line-height:1.35}
+.m34-it.on .m34-nm{color:#14192A;font-weight:800}
+.m34-my{font-size:10.5px;font-weight:800;color:#8A5A00;background:#FFF6DD;padding:1px 6px;border-radius:999px;margin-left:4px}
+.m34-op{display:none;padding:0 12px 12px 64px;gap:6px;flex-direction:column}
+.m34-it.on .m34-op{display:flex}
+.m34-sg{display:flex;gap:4px}
+.m34-sg button{flex:1;height:32px;border-radius:8px;border:1px solid #DDE3EE;background:#F7F9FC;color:#8A93A8;font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer}
+.m34-sg button.ok{background:#10B981;border-color:#10B981;color:#fff}
+.m34-sg button.warn{background:#F59E0B;border-color:#F59E0B;color:#fff}
+.m34-sg button.bad{background:#EF4444;border-color:#EF4444;color:#fff}
+.m34-op input{height:36px;padding:0 10px;border-radius:9px;border:1px solid #DDE3EE;font-family:inherit;font-size:13px;background:#FBFCFE}
+.m34-addit{display:flex;gap:6px;padding:10px 12px;border-top:1px dashed #E4E9F2;background:#FAFBFD}
+.m34-addit input{flex:1;min-width:0;height:36px;padding:0 10px;border-radius:9px;border:1px solid #DDE3EE;font-family:inherit;font-size:13px}
+.m34-addit button{height:36px;padding:0 12px;border-radius:9px;border:1px solid #CBD5E6;background:#fff;color:#0E2350;font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer;white-space:nowrap}
+.m34-ft{display:flex;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #E4E9F2}
+.m34-ft button{flex:1;height:48px;border-radius:13px;border:0;font-family:inherit;font-size:14.5px;font-weight:800;cursor:pointer}
+.m34-ft .cancel{flex:0 0 30%;background:#EEF1F6;color:#33457A}
+.m34-ft .save{background:#0E2350;color:#fff}
+.m34-pick .m34-pi{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:13px 14px;margin-bottom:8px;border-radius:14px;border:1.5px solid #E4E9F2;background:#fff;font-family:inherit;cursor:pointer}
+.m34-pick .m34-pi.on{border-color:#0E2350;box-shadow:0 0 0 3px rgba(14,35,80,.12)}
+.m34-pick .m34-pi b{display:block;font-size:15px;color:#14192A}
+.m34-pick .m34-pi span{font-size:12px;color:#6B7487}
+.m34-pick .m34-pi .r{margin-left:auto;font-size:12px;font-weight:800;color:#0E2350;white-space:nowrap}
+.m34-q{margin-top:6px;padding:12px;border-radius:14px;background:#fff;border:1px solid #E4E9F2;font-size:13px;color:#33457A}
+.m34-q label{display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer}
+.m34-q input{width:20px;height:20px}
+</style>
+<div class="m34-ov" id="m34-ov"><div class="m34-sh" id="m34-sh"></div></div>
+<script id="m34-js">
+(function(){
+  var rows=document.getElementById('result-rows');if(!rows||typeof inspPreset!=='function')return;
+  var KEY='hhc_insp_presets_v1';
+  var ST=null;   // {sets:[{id,name,items}],active}
+  function esc(t){return String(t==null?'':t).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function clone(o){return JSON.parse(JSON.stringify(o));}
+  function load(){
+    if(ST)return ST;
+    try{var v=JSON.parse(localStorage.getItem(KEY)||'null');if(v&&Array.isArray(v.sets)&&v.sets.length)ST=v;}catch(e){}
+    if(!ST)ST={sets:[{id:'s1',name:'기본',items:inspPreset()}],active:'s1'};
+    return ST;
+  }
+  function active(){var s=load();return s.sets.find(function(x){return x.id===s.active;})||s.sets[0];}
+  function persist(){
+    try{localStorage.setItem(KEY,JSON.stringify(ST));}catch(e){}
+    if(window.__savePresetSets)window.__savePresetSets(ST);
+  }
+  /* 고른 묶음을 실제 「새 보고서 기본 항목」으로 (기존 저장 자리 그대로 사용) */
+  function makeActive(id){
+    load();ST.active=id;var a=active();
+    try{localStorage.setItem(INSP_PRESET_KEY,JSON.stringify(a.items));}catch(e){}
+    if(window.__savePreset)window.__savePreset(a.items);
+    persist();paintBar();
+  }
+  window.__presetSetsLoaded=function(d){
+    var v={sets:d.sets.map(function(x){return {id:String(x.id),name:String(x.name||'묶음'),items:inspPresetNorm(x.items)};}),active:String(d.active||'')};
+    if(!v.sets.length)return;
+    if(!v.sets.some(function(x){return x.id===v.active;}))v.active=v.sets[0].id;
+    ST=v;try{localStorage.setItem(KEY,JSON.stringify(ST));}catch(e){}
+    paintBar();
+  };
+  /* 「⭐ 현재 항목을 기본값으로」를 누르면 지금 고른 묶음에 저장 */
+  var _save=window.inspPresetSave;
+  window.inspPresetSave=function(){
+    var before='';try{before=localStorage.getItem(INSP_PRESET_KEY)||'';}catch(e){}
+    _save&&_save();
+    var after='';try{after=localStorage.getItem(INSP_PRESET_KEY)||'';}catch(e){}
+    if(after&&after!==before){load();active().items=JSON.parse(after);persist();paintBar();}
+  };
+
+  /* ── 위 안내 줄 ── */
+  var bar=document.createElement('div');bar.className='m34-bar';
+  bar.innerHTML='<div class="t">⭐ 새 보고서 기본<b></b></div><button type="button" class="chg">묶음 바꾸기</button><button type="button" class="set">⚙ 항목 고르기</button>';
+  var pick=document.querySelector('#result-rows-wrap .btn-pick');
+  (pick?pick.parentNode:rows.parentNode).insertBefore(bar,pick?pick.nextSibling:rows);
+  bar.querySelector('.chg').onclick=openPick;bar.querySelector('.set').onclick=function(){openEdit(active().id);};
+  function paintBar(){var a=active();var t=a.name+' · '+a.items.length+'개';var b=bar.querySelector('.t b');if(b.textContent!==t)b.textContent=t;
+    var tp=(typeof reportType==='undefined'||reportType==='inspect');bar.style.display=tp?'':'none';}
+
+  var ov=document.getElementById('m34-ov'),sh=document.getElementById('m34-sh');
+  function close(){ov.classList.remove('show');document.body.style.overflow='';}
+  ov.addEventListener('click',function(e){if(e.target===ov)close();});
+  function show(){ov.classList.add('show');document.body.style.overflow='hidden';}
+
+  /* ── 묶음 바꾸기 ── */
+  function openPick(){
+    load();var cur=ST.active;
+    function render(){
+      sh.innerHTML='<div class="m34-hd"><b>기본 항목 묶음 고르기</b><button type="button" data-x>✕</button></div>'+
+        '<div class="m34-bd m34-pick"><div class="m34-info">고른 묶음이 <b>다음 새 보고서부터</b> 기본으로 담깁니다.</div>'+
+        ST.sets.map(function(s){return '<button type="button" class="m34-pi'+(s.id===cur?' on':'')+'" data-id="'+esc(s.id)+'"><div><b>'+esc(s.name)+(s.id===ST.active?' ⭐':'')+'</b><span>'+s.items.length+'개 · '+esc(s.items.slice(0,3).map(function(i){return i.name;}).join(', '))+(s.items.length>3?' …':'')+'</span></div><span class="r">'+(s.id===cur?'✓ 선택':'')+'</span></button>';}).join('')+
+        '<div class="m34-q"><label><input type="checkbox" id="m34-now"> 지금 작성 중인 보고서에도 바로 적용 (담긴 항목을 바꿉니다)</label></div></div>'+
+        '<div class="m34-ft"><button type="button" class="cancel" data-x>닫기</button><button type="button" class="save" data-ok>이 묶음으로 정하기</button></div>';
+    }
+    render();show();
+    sh.onclick=function(e){
+      if(e.target.closest('[data-x]'))return close();
+      var p=e.target.closest('.m34-pi');if(p){cur=p.getAttribute('data-id');var ck=sh.querySelector('#m34-now').checked;render();sh.querySelector('#m34-now').checked=ck;return;}
+      if(e.target.closest('[data-ok]')){
+        var now=sh.querySelector('#m34-now').checked;makeActive(cur);close();
+        if(now){if(document.querySelector('#result-rows .rcard')&&!confirm('지금 담긴 점검 항목을 지우고 「'+active().name+'」 묶음으로 바꿀까요?'))return;inspPresetApply(true);if(window.__scheduleDraft)window.__scheduleDraft();}
+        toast('⭐ 새 보고서 기본 항목: '+active().name);
+      }
+    };
+  }
+
+  /* ── 항목 고르기 (묶음 편집) ── */
+  function catalog(){
+    var out={};CAT.forEach(function(c){out[c]=[];});
+    Object.keys(ITEM_CATALOG).forEach(function(c){(typeof ipList==='function'?ipList(c):ITEM_CATALOG[c]).forEach(function(n){var k=catNorm(c);(out[k]=out[k]||[]).push(n);});});
+    return out;
+  }
+  function openEdit(id){
+    load();var W=clone(ST),cur=id||W.active;
+    function S(){return W.sets.find(function(x){return x.id===cur;})||W.sets[0];}
+    function find(nm){return S().items.find(function(i){return i.name===nm;});}
+    function render(keepScroll){
+      var sc=keepScroll?(sh.querySelector('.m34-bd')||{}).scrollTop:0;
+      var s=S(),cat=catalog();
+      s.items.forEach(function(i){if(!cat[i.cat])cat[i.cat]=[];if(cat[i.cat].indexOf(i.name)<0)cat[i.cat].push(i.name);});
+      var std={};Object.keys(ITEM_CATALOG).forEach(function(c){ITEM_CATALOG[c].forEach(function(n){std[n]=1;});});
+      var h='<div class="m34-hd"><b>새 보고서 기본 항목 고르기</b><button type="button" data-x>✕</button></div>'+
+        '<div class="m34-sets">'+W.sets.map(function(x){return '<button type="button" data-set="'+esc(x.id)+'" class="'+(x.id===cur?'on':'')+'">'+esc(x.name)+(x.id===W.active?'<span class="star">⭐</span>':'')+'</button>';}).join('')+'<button type="button" class="add" data-new>＋ 새 묶음</button></div>'+
+        '<div class="m34-bd"><div class="m34-meta"><input id="m34-name" value="'+esc(s.name)+'" placeholder="묶음 이름 (예: 정기 세척, 출장점검)"><button type="button" data-fill>지금 담긴 항목으로</button>'+(W.sets.length>1?'<button type="button" class="del" data-del>묶음 삭제</button>':'')+'</div>'+
+        '<div class="m34-info">켜 둔 항목 <b>'+s.items.length+'개</b>가 새 보고서에 기본으로 담깁니다. 켜진 항목은 기본 결과와 비고도 정할 수 있어요.</div>';
+      CAT.forEach(function(c){
+        var list=cat[c]||[];if(!list.length&&c!=='기타')return;
+        var col=(CAT_COLORS[c]||{bar:'#6b7280',txt:'#6b7280'});
+        var n=list.filter(function(nm){return find(nm);}).length;
+        h+='<div class="m34-cat"><div class="m34-ch"><i style="background:'+col.bar+'"></i><b style="color:'+col.txt+'">'+esc(c)+'</b><span>'+n+' / '+list.length+'</span></div>';
+        list.forEach(function(nm){var it=find(nm),on=!!it;
+          h+='<div class="m34-it'+(on?' on':'')+'" data-nm="'+esc(nm)+'" data-cat="'+esc(c)+'"><div class="m34-row" data-tg><span class="m34-sw"></span><span class="m34-nm">'+esc(nm)+(std[nm]?'':'<span class="m34-my">직접</span>')+'</span></div>'+
+            '<div class="m34-op"><div class="m34-sg">'+[['ok','정상'],['warn','주의'],['bad','정비필요']].map(function(k){return '<button type="button" data-st="'+k[0]+'" class="'+(on&&it.status===k[0]?k[0]:'')+'">'+k[1]+'</button>';}).join('')+'</div>'+
+            '<input type="text" data-note placeholder="기본 비고 (예: 이상 없음)" value="'+esc(on?it.note:'')+'"></div></div>';});
+        h+='<div class="m34-addit"><input type="text" placeholder="'+esc(c)+'에 항목 직접 추가" data-newit="'+esc(c)+'"><button type="button" data-addit="'+esc(c)+'">＋ 추가</button></div></div>';
+      });
+      h+='</div><div class="m34-ft"><button type="button" class="cancel" data-x>취소</button><button type="button" class="save" data-ok>저장하고 이 묶음을 기본으로</button></div>';
+      sh.innerHTML=h;if(sc)sh.querySelector('.m34-bd').scrollTop=sc;
+    }
+    function order(){   // 화면 순서(구분 → 항목)대로 정렬
+      var s=S(),cat=catalog(),idx={};var k=0;CAT.forEach(function(c){(cat[c]||[]).forEach(function(n){idx[n]=k++;});});
+      s.items.sort(function(a,b){var ca=CAT.indexOf(a.cat),cb=CAT.indexOf(b.cat);if(ca!==cb)return ca-cb;return (idx[a.name]==null?999:idx[a.name])-(idx[b.name]==null?999:idx[b.name]);});
+    }
+    render();show();
+    sh.oninput=function(e){
+      if(e.target.id==='m34-name'){S().name=e.target.value.trim()||'묶음';return;}
+      if(e.target.hasAttribute('data-note')){var w=e.target.closest('.m34-it'),it=find(w.getAttribute('data-nm'));if(it)it.note=e.target.value;}
+    };
+    sh.onclick=function(e){
+      var t=e.target;
+      if(t.closest('[data-x]')){if(JSON.stringify(W)!==JSON.stringify(ST)&&!confirm('바꾼 내용을 저장하지 않고 닫을까요?'))return;return close();}
+      var b;
+      if((b=t.closest('[data-set]'))){cur=b.getAttribute('data-set');return render();}
+      if(t.closest('[data-new]')){var nm=prompt('새 묶음 이름 (예: 출장점검, 실외기 포함)','');if(nm===null)return;var id='s'+Date.now().toString(36);W.sets.push({id:id,name:nm.trim()||'새 묶음',items:clone(S().items)});cur=id;toast('지금 묶음을 복사해 새 묶음을 만들었습니다');return render();}
+      if(t.closest('[data-del]')){if(!confirm('「'+S().name+'」 묶음을 삭제할까요?'))return;W.sets=W.sets.filter(function(x){return x.id!==cur;});if(W.active===cur)W.active=W.sets[0].id;cur=W.active;return render();}
+      if(t.closest('[data-fill]')){var r=inspRowsNow();if(!r.length){toast('담긴 점검 항목이 없습니다');return;}if(!confirm('지금 보고서에 담긴 항목 '+r.length+'개(결과 · 비고 포함)로 이 묶음을 채울까요?'))return;S().items=inspPresetNorm(r);return render(true);}
+      if((b=t.closest('[data-addit]'))){var c=b.getAttribute('data-addit'),inp=sh.querySelector('[data-newit="'+c.replace(/"/g,'\\"')+'"]'),v=(inp&&inp.value||'').trim();if(!v)return;
+        if(!find(v))S().items.push({cat:c,name:v,status:'ok',note:''});order();return render(true);}
+      if((b=t.closest('[data-st]'))){var w=b.closest('.m34-it'),it=find(w.getAttribute('data-nm'));if(it){it.status=b.getAttribute('data-st');render(true);}return;}
+      if(t.closest('[data-tg]')){var w2=t.closest('.m34-it'),nm2=w2.getAttribute('data-nm'),s=S(),i2=s.items.findIndex(function(x){return x.name===nm2;});
+        if(i2>=0)s.items.splice(i2,1);else{s.items.push({cat:w2.getAttribute('data-cat'),name:nm2,status:'ok',note:''});order();}
+        return render(true);}
+      if(t.closest('[data-ok]')){
+        if(!S().items.length){toast('켜 둔 항목이 없습니다');return;}
+        ST=W;ST.active=cur;makeActive(cur);close();toast('⭐ 「'+active().name+'」 '+active().items.length+'개를 새 보고서 기본 항목으로 저장했습니다');
+      }
+    };
+    sh.addEventListener('keydown',function(e){if(e.key==='Enter'&&e.target.hasAttribute('data-newit')){e.preventDefault();var bb=e.target.nextElementSibling;if(bb)bb.click();}});
+  }
+  paintBar();
+  /* 보고서 종류를 바꾸면 안내 줄 표시도 따라가게 */
+  document.addEventListener('click',function(){setTimeout(paintBar,50);},true);
+  window.__m34={openEdit:openEdit,openPick:openPick};
 })();
 </script>
 
