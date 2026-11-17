@@ -246,15 +246,43 @@ const hosts = new Set();
 let unsub = null, folded = false;
 async function custs(){ if (!CUSTS || Date.now() - CUSTS_AT > 30000){ CUSTS = await loadCustomers(); CUSTS_AT = Date.now(); } return CUSTS; }
 function reqNames(r){ return [r.condo, r.condo_name, r.customer_name].filter(Boolean); }
-async function renderAll(){
+// 🩹 (2026-11-17) 승인 기능 이전(11/16 15시~11/17 17시)에 접수된 의뢰는 위치는 있지만 loc_sync 칸이 없어
+//   승인 대기에 나타나지 않고 고객관리에도 반영되지 않았습니다 → 그 의뢰도 함께 봅니다
+let LEG = [];
+const LEG_FROM = '2026-11-16T00:00';
+function dropLeg(id){ LEG = LEG.filter(r => r.id !== id); }
+// 여러 곳에서 동시에 불러도 한 번에 하나씩 (같은 위치를 두 번 반영하지 않도록)
+let RQ = Promise.resolve();
+function renderAll(){ return (RQ = RQ.then(renderNow, renderNow)); }
+async function renderNow(){
   let list = [];
   try{
     const cs = await custs();
-    for (const r of PEND){
+    const seen = {}, all = [];
+    PEND.concat(LEG).forEach(r => { if (!seen[r.id]){ seen[r.id] = 1; all.push(r); } });
+    all.sort((a, b) => ts(b.loc.at || b.submitted_at) - ts(a.loc.at || a.submitted_at));   // 최근 요청부터
+    const autoDone = [];
+    for (const r of all){
       const c = matchCust(cs, r.phone, reqNames(r));
       const old = c && ok(c.loc) ? c.loc : null;
-      if (same(old, r.loc)){ updateDoc(doc(db(), 'requests', r.id), { loc_sync: 'same', loc_sync_at: new Date().toISOString() }).catch(() => {}); continue; }
+      if (same(old, r.loc)){ dropLeg(r.id); updateDoc(doc(db(), 'requests', r.id), { loc_sync: 'same', loc_sync_at: new Date().toISOString() }).catch(() => {}); continue; }
+      // ✅ 고객관리에 있는 고객인데 아직 등록된 위치가 없으면 → 바꿀 위치가 없으므로 승인 없이 바로 반영
+      if (c && !old){
+        try{
+          const now = new Date().toISOString();
+          await apply({ cust: c, phone: r.phone, name: c.name, newLoc: r.loc, src: 'customer', via: 'request', targets: [] });
+          c.loc = { ...clean(r.loc), at: now, src: 'customer', via: 'request' };   // 같은 고객의 더 오래된 요청은 다음 줄에서 비교됨
+          dropLeg(r.id);
+          await updateDoc(doc(db(), 'requests', r.id), { loc_sync: 'auto', loc_sync_at: now });
+          autoDone.push(c.name || r.condo || '고객');
+        }catch(e){ console.warn('[HHCLS] auto', e); }
+        continue;
+      }
       list.push({ r, c, old, key: c ? 'c:' + c.__id : 'p:' + (pn(r.phone) || nn(r.condo)) });
+    }
+    if (autoDone.length){
+      toast('📍 고객이 의뢰서에서 등록한 위치를 고객 정보에 반영했습니다 (' + autoDone.length + '건)');
+      window.dispatchEvent(new CustomEvent('hhcls-changed', { detail: { names: autoDone } }));
     }
   }catch(e){ console.warn('[HHCLS]', e); }
   // 같은 고객의 요청이 여러 건이면 가장 최근 것을 추천 (① 가장 마지막 등록)
@@ -291,6 +319,7 @@ async function onClick(e){
     if (a === 'no'){
       if (!confirm('이 위치 변경 요청을 거절할까요?\n고객 위치는 그대로 두고, 이 의뢰(예약)에 적힌 위치만 남습니다.')) return;
       await updateDoc(doc(db(), 'requests', x.r.id), { loc_sync: 'rejected', loc_sync_at: now });
+      dropLeg(x.r.id); renderAll();
       toast('거절했습니다 — 고객 위치는 그대로입니다');
       return;
     }
@@ -303,9 +332,11 @@ async function onClick(e){
     if (!r) return;
     await apply({ cust: x.c, phone: x.r.phone, name: x.c ? x.c.name : (x.r.condo || x.r.condo_name || ''), newLoc: x.r.loc, src: 'customer', via: 'request', targets: r });
     await updateDoc(doc(db(), 'requests', x.r.id), { loc_sync: 'approved', loc_sync_at: now });
+    dropLeg(x.r.id);
     // 같은 고객의 다른 대기 요청은 이 승인으로 정리
-    for (const y of (h._hlsList || [])) if (y !== x && y.key === x.key) await updateDoc(doc(db(), 'requests', y.r.id), { loc_sync: 'replaced', loc_sync_at: now }).catch(() => {});
-    CUSTS = null;
+    for (const y of (h._hlsList || [])) if (y !== x && y.key === x.key){ dropLeg(y.r.id); await updateDoc(doc(db(), 'requests', y.r.id), { loc_sync: 'replaced', loc_sync_at: now }).catch(() => {}); }
+    CUSTS = null; renderAll();
+    window.dispatchEvent(new CustomEvent('hhcls-changed'));
     toast('📍 승인했습니다 — 고객 위치' + (r.length ? '와 예정 일정 ' + r.length + '곳' : '') + '을 바꿨습니다');
   }catch(err){ console.warn('[HHCLS]', err); toast('처리하지 못했습니다: ' + (err.message || '')); }
 }
@@ -317,6 +348,11 @@ function watchPending(host){
     PEND = snap.docs.map(d => ({ ...d.data(), id: d.id })).filter(r => ok(r.loc));
     CUSTS = null; renderAll();
   }, e => console.warn('[HHCLS] pending', e));
+  // 🩹 승인 기능 이전에 접수된 위치 있는 의뢰 (한 번 읽기)
+  getDocs(query(collection(db(), 'requests'), where('submitted_at', '>=', LEG_FROM))).then(s => {
+    LEG = s.docs.map(d => ({ ...d.data(), id: d.id })).filter(r => ok(r.loc) && !r.loc_sync);
+    if (LEG.length) renderAll();
+  }).catch(e => console.warn('[HHCLS] legacy', e));
 }
 
 // ── 🧹 (2026-11-17) 첫 배포본 오류 정리 ──
