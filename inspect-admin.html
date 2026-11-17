@@ -1485,18 +1485,6 @@ function renderPhraseChips(reg){
   function mk(p,isCom){
     var b=document.createElement('button');b.type='button';b.className='ph-chip'+(isCom?' ph-chip-com':'');
     b.textContent=p;b.title=isCom?(p+'  (공통 문구)'):p;
-    if(reg.delMode){
-      b.onclick=function(){
-        var lk=isCom?reg.extraKey:k;
-        if(isCom&&!confirm('「'+p+'」는 공통 문구입니다.\n삭제하면 모든 점검 항목에서 사라집니다. 삭제할까요?'))return;
-        var arr=editPhraseList(lk),ix=arr.indexOf(p);
-        if(ix<0)return;
-        arr.splice(ix,1);persistPhrases();refreshPhraseChips(lk);
-        reg._undo={k:lk,p:p,i:ix};renderPhraseChips(reg);
-        toast('🗑 「'+p+'」 문구 삭제됨');
-      };
-      reg.box.appendChild(b);return;
-    }
     b.onclick=function(){
       var el=reg.el;
       if(reg.mode==='append'&&el.value.trim()){el.value=el.value.replace(/\s+$/,'')+'\n'+p;}
@@ -1508,27 +1496,15 @@ function renderPhraseChips(reg){
   }
   own.forEach(function(p){mk(p,false);});
   com.forEach(function(p){if(own.indexOf(p)<0)mk(p,true);});
-  reg.box.classList.toggle('ph-delmode',!!reg.delMode);
-  reg.box.style.display=(own.length||com.length)?'':'none';
+  reg.box.style.display=((own.length||com.length)&&!reg.delMode)?'':'none';
   if(reg.delBtn){
     reg.delBtn.classList.toggle('on',!!reg.delMode);
-    reg.delBtn.textContent=reg.delMode?'✓ 삭제 끝':(reg.compact?'🗑삭제':'🗑 문구 삭제');
+    reg.delBtn.textContent=reg.delMode?'✓ 편집 끝':(reg.compact?'✏️편집':'✏️ 문구 편집');
     reg.delBtn.style.display=(own.length||com.length||reg.delMode)?'':'none';
   }
   if(reg.delHint){
     reg.delHint.style.display=reg.delMode?'':'none';
-    if(reg.delMode){
-      reg.delHint.innerHTML='';
-      reg.delHint.appendChild(document.createTextNode((own.length||com.length)?'지울 문구를 누르세요. 회색(공통) 문구는 모든 항목에서 함께 지워집니다.':'남은 문구가 없습니다.'));
-      if(reg._undo){
-        var u=document.createElement('a');u.href='#';u.textContent='  ↺ 방금 지운 「'+reg._undo.p+'」 되돌리기';
-        u.style.cssText='color:#1D3FD6;font-weight:700;text-decoration:none';
-        u.onclick=function(e){e.preventDefault();var d=reg._undo;if(!d)return;
-          var arr=editPhraseList(d.k);if(arr.indexOf(d.p)<0)arr.splice(Math.min(d.i,arr.length),0,d.p);
-          reg._undo=null;persistPhrases();refreshPhraseChips(d.k);renderPhraseChips(reg);toast('↺ 문구 되돌림');};
-        reg.delHint.appendChild(u);
-      }
-    }
+    if(reg.delMode)phEditPanel(reg,k,own,com);
   }
   if(reg.scopeEl){
     reg.scopeEl.textContent = k ? ('💾 저장 위치: '+phraseLabel(k)+(com.length?'  ·  회색 칩은 공통 문구':'')) : '⚠ 항목명을 먼저 입력하면 이 항목 전용 문구를 저장할 수 있습니다';
@@ -1539,6 +1515,60 @@ function refreshPhraseChips(key){
   _phraseReg.forEach(function(r){if(!key||regKey(r)===key||r.extraKey===key)renderPhraseChips(r);});
 }
 window.__phRender=function(reg){if(reg)renderPhraseChips(reg);};
+// ── ✏️ 문구 편집 판: 순서 바꾸기(▲▼) · 글자 수정(눌러서 바로) · 삭제(✕) · 방금 지운 문구 되돌리기
+function phEditPanel(reg,k,own,com){
+  var P=reg.delHint;P.innerHTML='';
+  var hint=document.createElement('div');hint.className='phe-hint';
+  hint.textContent='▲▼ 순서 바꾸기 · 문구를 눌러 고치기 · ✕ 삭제 — 바꾸면 모든 기기에 바로 저장됩니다.';
+  P.appendChild(hint);
+  function section(title,lk,arr,isCom){
+    if(!lk)return;
+    var h=document.createElement('div');h.className='phe-sec';h.textContent=title+' · '+arr.length+'개';P.appendChild(h);
+    if(!arr.length){var e=document.createElement('div');e.className='phe-empty';e.textContent='저장된 문구가 없습니다.';P.appendChild(e);return;}
+    arr.forEach(function(p,i){
+      var row=document.createElement('div');row.className='phe-row'+(isCom?' com':'');
+      if(reg._flash&&reg._flash.k===lk&&reg._flash.p===p)row.classList.add('flash');
+      function mv(d){
+        var L=editPhraseList(lk),j=i+d;if(j<0||j>=L.length)return;
+        var t=L[i];L[i]=L[j];L[j]=t;reg._flash={k:lk,p:p};
+        persistPhrases();refreshPhraseChips(lk);renderPhraseChips(reg);
+      }
+      var up=document.createElement('button');up.type='button';up.className='phe-mv';up.textContent='▲';up.title='위로';up.disabled=(i===0);up.onclick=function(){mv(-1);};
+      var dn=document.createElement('button');dn.type='button';dn.className='phe-mv';dn.textContent='▼';dn.title='아래로';dn.disabled=(i===arr.length-1);dn.onclick=function(){mv(1);};
+      var inp=document.createElement('textarea');inp.className='phe-in';inp.rows=1;inp.value=p;inp.title='눌러서 고친 뒤 Enter';
+      inp.oninput=function(){inp.style.height='auto';inp.style.height=inp.scrollHeight+'px';};
+      inp.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();inp.blur();}else if(e.key==='Escape'){inp.value=p;inp.blur();}};
+      inp.onchange=function(){
+        var v=(inp.value||'').replace(/\s+/g,' ').trim(),L=editPhraseList(lk);
+        if(!v){inp.value=p;toast('빈 문구로는 바꿀 수 없습니다 — 지우려면 ✕');return;}
+        if(v===p)return;
+        if(L.indexOf(v)>=0){inp.value=p;toast('이미 있는 문구입니다');return;}
+        var ix=L.indexOf(p);if(ix<0)return;
+        L[ix]=v;reg._flash={k:lk,p:v};persistPhrases();refreshPhraseChips(lk);renderPhraseChips(reg);
+        toast('✓ 문구 수정됨'+(isCom?' (공통 — 모든 항목에 반영)':''));
+      };
+      var x=document.createElement('button');x.type='button';x.className='phe-x';x.textContent='✕';x.title='삭제';
+      x.onclick=function(){
+        if(isCom&&!confirm('「'+p+'」는 공통 문구입니다.\n삭제하면 모든 점검 항목에서 사라집니다. 삭제할까요?'))return;
+        var L=editPhraseList(lk),ix=L.indexOf(p);if(ix<0)return;
+        L.splice(ix,1);reg._undo={k:lk,p:p,i:ix};reg._flash=null;
+        persistPhrases();refreshPhraseChips(lk);renderPhraseChips(reg);
+        toast('🗑 「'+p+'」 문구 삭제됨');
+      };
+      row.appendChild(up);row.appendChild(dn);row.appendChild(inp);row.appendChild(x);P.appendChild(row);
+      requestAnimationFrame(function(){inp.oninput();});
+    });
+  }
+  section(k?('이 항목 문구 (초록)'):'문구',k,own,false);
+  if(reg.extraKey&&reg.extraKey!==k)section('공통 문구 (회색 · 모든 항목에 함께 표시)',reg.extraKey,getPhrases(reg.extraKey),true);
+  if(reg._undo){
+    var u=document.createElement('button');u.type='button';u.className='phe-undo';u.textContent='↺ 방금 지운 「'+reg._undo.p+'」 되돌리기';
+    u.onclick=function(){var d=reg._undo;if(!d)return;
+      var L=editPhraseList(d.k);if(L.indexOf(d.p)<0)L.splice(Math.min(d.i,L.length),0,d.p);
+      reg._undo=null;reg._flash={k:d.k,p:d.p};persistPhrases();refreshPhraseChips(d.k);renderPhraseChips(reg);toast('↺ 문구 되돌림');};
+    P.appendChild(u);
+  }
+}
 function attachPhraseChips(key,el,opts){
   opts=opts||{};
   if(!el)return null;
@@ -1563,8 +1593,8 @@ function attachPhraseChips(key,el,opts){
   mng.title='자주 쓰는 문구 추가·수정·삭제';
   mng.onclick=function(){var k=curKey();if(!k){toast('점검 항목명을 먼저 입력하세요');return;}openPhraseMng(k);};
   var del=document.createElement('button');del.type='button';del.className='ph-chip ph-chip-delb';
-  del.title='저장된 자동 문구를 눌러서 바로 삭제';
-  del.onclick=function(){if(!curKey()&&!opts.extraKey){toast('점검 항목명을 먼저 입력하세요');return;}reg.delMode=!reg.delMode;reg._undo=null;renderPhraseChips(reg);};
+  del.title='자동 문구 순서 바꾸기 · 수정 · 삭제';
+  del.onclick=function(){if(!curKey()&&!opts.extraKey){toast('점검 항목명을 먼저 입력하세요');return;}reg.delMode=!reg.delMode;reg._undo=null;reg._flash=null;renderPhraseChips(reg);};
   ctl.appendChild(save);ctl.appendChild(del);ctl.appendChild(mng);
   if(opts.extraKey){
     var mng2=document.createElement('button');mng2.type='button';mng2.className='ph-chip ph-chip-mng';
@@ -1575,7 +1605,7 @@ function attachPhraseChips(key,el,opts){
   }
   var scopeEl=null;
   if(opts.scope){scopeEl=document.createElement('div');scopeEl.className='ph-scope';}
-  var delHint=document.createElement('div');delHint.className='ph-delhint';delHint.style.display='none';
+  var delHint=document.createElement('div');delHint.className='phe';delHint.style.display='none';
   if(opts.parent){opts.parent.appendChild(box);opts.parent.appendChild(delHint);opts.parent.appendChild(ctl);if(scopeEl)opts.parent.appendChild(scopeEl);}
   else{el.parentNode.insertBefore(ctl,el.nextSibling);el.parentNode.insertBefore(box,ctl);el.parentNode.insertBefore(delHint,ctl);if(scopeEl)el.parentNode.insertBefore(scopeEl,ctl.nextSibling);}
   var reg={key:key,extraKey:opts.extraKey||null,el:el,box:box,scopeEl:scopeEl,delBtn:del,delHint:delHint,compact:!!opts.compact,delMode:false,mode:opts.mode||(el.tagName==='TEXTAREA'?'append':'replace')};
@@ -8870,13 +8900,27 @@ setTimeout(function(){
 #view-form .ph-chip-save{border-color:#C7D4F7;background:#F0F4FF;color:#1D3FD6}
 #view-form .ph-chip-mng{border-color:#E4E9F2;background:#fff;color:#5A6478}
 #view-form .ph-chip-com{border-color:#E4E9F2;background:#F6F8FC;color:#5A6478;font-weight:500}
-/* 자동 문구 삭제 모드 */
-body .ph-chip.ph-chip-delb,#view-form .ph-chip.ph-chip-delb{border:1px solid #F3C9C9;background:#fff;color:#DC2626}
-body .ph-chip.ph-chip-delb.on,#view-form .ph-chip.ph-chip-delb.on{border-color:#DC2626;background:#DC2626;color:#fff}
-body .ph-chips.ph-delmode .ph-chip,#view-form .ph-chips.ph-delmode .ph-chip{border:1px dashed #F0A8A8;background:#FFF5F5;color:#B91C1C;font-weight:600}
-.ph-chips.ph-delmode .ph-chip::after{content:'  ✕';font-weight:800}
-body .ph-chips.ph-delmode .ph-chip:active,#view-form .ph-chips.ph-delmode .ph-chip:active{background:#DC2626;color:#fff}
-.ph-delhint{font-size:10.5px;color:#B91C1C;margin-top:5px;line-height:1.4}
+/* 자동 문구 편집 (순서·수정·삭제) */
+body .ph-chip.ph-chip-delb,#view-form .ph-chip.ph-chip-delb{border:1px solid #C7D4F7;background:#fff;color:#16346E}
+body .ph-chip.ph-chip-delb.on,#view-form .ph-chip.ph-chip-delb.on{border-color:#0E2350;background:#0E2350;color:#fff}
+.phe{margin-top:6px;padding:9px;border:1px solid #E4E9F2;border-radius:12px;background:#fff;box-shadow:0 1px 2px rgba(14,35,80,.06),0 8px 18px -10px rgba(14,35,80,.18)}
+.phe-hint{font-size:10.5px;color:#5A6478;line-height:1.45;margin-bottom:4px}
+.phe-sec{font-size:10.5px;font-weight:800;color:#98A1B4;letter-spacing:.02em;margin:8px 2px 5px}
+.phe-empty{font-size:11.5px;color:#98A1B4;padding:4px 2px 2px}
+.phe-row{display:flex;align-items:center;gap:4px;margin-bottom:5px;padding:3px;border-radius:10px;background:#F2FAF8;border:1px solid #CFE7E3;transition:background .35s,box-shadow .35s}
+.phe-row.com{background:#F6F8FC;border-color:#E4E9F2}
+.phe-row.flash{background:#FFF8E1;border-color:#F0D58A;box-shadow:0 0 0 2px rgba(240,180,41,.25)}
+.phe-mv{flex-shrink:0;width:28px;height:32px;border-radius:8px;border:1px solid #E4E9F2;background:#fff;color:#16346E;font-size:11px;cursor:pointer;padding:0}
+.phe-mv:disabled{opacity:.3;cursor:default}
+.phe-mv:not(:disabled):active,.phe-x:active{transform:scale(.94)}
+.phe-in{flex:1;min-width:0;padding:0 9px;border:1px solid transparent;border-radius:8px;background:transparent;font-size:12.5px;font-weight:600;color:#14192A;font-family:inherit;box-sizing:border-box}
+.phe-row.com .phe-in{font-weight:500;color:#5A6478}
+.phe-in:focus{outline:none;background:#fff;border-color:#2563EB}
+.phe-x{flex-shrink:0;width:32px;height:32px;border-radius:8px;border:1px solid #F3C9C9;background:#fff;color:#DC2626;font-size:12px;font-weight:800;cursor:pointer;padding:0}
+.phe-undo{display:block;width:100%;margin-top:6px;padding:8px;border-radius:9px;border:1px dashed #C7D4F7;background:#F0F4FF;color:#1D3FD6;font-size:11.5px;font-weight:700;cursor:pointer}
+@media (prefers-reduced-motion:reduce){.phe-row{transition:none}}
+#view-form textarea.phe-in,.phe textarea.phe-in{height:auto;min-height:32px;padding:5px 6px;line-height:1.35;resize:none;overflow:hidden;white-space:pre-wrap;word-break:keep-all;border:1px solid transparent;border-radius:8px;background:transparent;box-shadow:none;margin:0;letter-spacing:-.02em}
+#view-form .phe-in:focus,.phe .phe-in:focus{background:#fff;border-color:#2563EB}
 #view-form .dst-btn{min-height:40px;border-radius:10px;font-size:13px;font-weight:700;border:1.5px solid #E4E9F2;background:#fff;color:#5A6478}
 #view-form .rt-btn{min-height:40px;border-radius:10px;font-size:13px;font-weight:700}
 #view-form .ev-btn{border-radius:12px;font-size:12.5px;font-weight:700;padding:12px 4px;transition:transform .12s}
