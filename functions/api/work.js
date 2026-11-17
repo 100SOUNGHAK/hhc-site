@@ -19,6 +19,10 @@
 //                  · 예전에 전환된 예약은 requests.loc 를 converted_booking_id 로 찾아 씀
 //               ③ 고객관리에 등록한 고객 위치 (customers.loc — 연락처, 없으면 이름·별칭으로 찾음) (2026-11-16)
 //               ④ settings/work_places.map[콘도명 키] (관리자가 「같은 콘도명이면 다음에도」로 저장한 위치)
+//  · 📎 첨부 사진 (2026-11-17) — work_edits/{날짜}.photos[작업ID] = [{id,url,t,w,h,name,path,tpath}]
+//      워크퍼밋 등. 직원 화면에는 url(원본) · t(작은 그림) · w · h · name 만 보냄. Storage 주소만 허용.
+//  · 속도 (2026-11-17): 열쇠 확인과 그날 일정 조회를 동시에, 의뢰 위치·고객 위치 조회도 동시에.
+//      고객 위치 목록은 서버 인스턴스에 10분간 기억(고객 전체를 매번 훑지 않음).
 // ─────────────────────────────────────────────────────────────────────────────
 import { getDoc, queryEq, queryIn, listAll, json, fail, rateLimited, nn, pn } from './_lib/fs.js';
 
@@ -138,6 +142,33 @@ function cleanLoc(l, src){
     addr: String(l.addr || '').slice(0, 300), pid: String(l.pid || '').slice(0, 300), src };
 }
 
+// ── 📎 첨부 사진 (워크퍼밋 등) ── Firebase Storage 다운로드 주소만 통과
+const PHOTO_OK = /^https:\/\/firebasestorage\.googleapis\.com\//;
+function cleanPhotos(a){
+  if (!Array.isArray(a)) return [];
+  return a.filter(p => p && PHOTO_OK.test(String(p.url || ''))).slice(0, 12).map(p => ({
+    id: String(p.id || '').slice(0, 40), url: String(p.url), t: PHOTO_OK.test(String(p.t || '')) ? String(p.t) : String(p.url),
+    w: Math.max(0, parseInt(p.w, 10) || 0), h: Math.max(0, parseInt(p.h, 10) || 0), name: String(p.name || '').slice(0, 60) }));
+}
+
+// ── 고객 위치 목록 (연락처 · 이름/별칭 → 위치) — 인스턴스에 10분 기억 ──
+let _cidx = null, _cidxAt = 0, _cidxP = null;
+async function custLocIndex(env){
+  if (_cidx && Date.now() - _cidxAt < 10 * 60e3) return _cidx;
+  if (_cidxP) return _cidxP;
+  _cidxP = (async () => {
+    const cs = await listAll(env, 'customers', 300, ['phone', 'name', 'aliases', 'loc']);
+    const byP = {}, byN = {};
+    for (const c of cs){
+      const l = cleanLoc(c && c.loc, 'cust'); if (!l) continue;
+      const p = pn(c.phone); if (p.length >= 6 && !byP[p]) byP[p] = l;
+      [c.name].concat(Array.isArray(c.aliases) ? c.aliases : []).forEach(a => { const k = nn(a); if (k && !byN[k]) byN[k] = l; });
+    }
+    _cidx = { byP, byN }; _cidxAt = Date.now(); return _cidx;
+  })();
+  try{ return await _cidxP; } finally { _cidxP = null; }
+}
+
 // 설치용 manifest
 function manifest(k){
   const q = k ? '?k=' + encodeURIComponent(k) : '';
@@ -156,6 +187,19 @@ export async function onRequestGet(context){
   if (rateLimited(request, 'work', 60)) return fail('too many requests', 429);
   if (!k) return fail('no-key', 403);
   try{
+    // 열쇠 확인(settings/work_link)과 그날 일정 조회를 한꺼번에 시작 — 왕복 한 번을 줄임
+    const dq = String(q.get('d') || '');
+    const pick = /^\d{4}-\d{2}-\d{2}$/.test(dq) ? { date: dq, mode: 'pick' } : null;
+    const auto = pickDay();
+    const fetchDay = date => Promise.all([
+      queryEq(env, 'schedules', 'date', date, 200),
+      queryEq(env, 'bookings', 'booking_date', date, 200),
+      getDoc(env, 'work_edits', date),
+      getDoc(env, 'settings', 'work_places').catch(() => null)
+    ]);
+    const first = pick || auto;
+    const dayP = first.mode === 'soon' ? null : fetchDay(first.date);
+    if (dayP) dayP.catch(() => {});                     // 열쇠가 틀려 버려지는 경우의 경고 방지
     const st = await getDoc(env, 'settings', 'work_link');
     if (!st) return fail('bad-key', 403);
     const isAdmin = !!(st.admin_key && st.admin_key === k);
@@ -163,47 +207,33 @@ export async function onRequestGet(context){
     if (!isAdmin && !staff) return fail('bad-key', 403);
     const who = staff ? String(staff.name || '') : '';
 
-    let day = pickDay();
-    const dq = String(q.get('d') || '');
-    if (isAdmin && /^\d{4}-\d{2}-\d{2}$/.test(dq)) day = { date: dq, mode: 'pick' };
+    const day = (isAdmin && pick) ? pick : auto;          // 날짜 지정(&d=)은 관리자 열쇠만
     if (day.mode === 'soon') return json({ ok: true, date: day.date, mode: 'soon', at: Date.now(), staff: who, jobs: [] });
 
-    const [sRows, bRows, ed, wp] = await Promise.all([
-      queryEq(env, 'schedules', 'date', day.date, 200),
-      queryEq(env, 'bookings', 'booking_date', day.date, 200),
-      getDoc(env, 'work_edits', day.date),
-      getDoc(env, 'settings', 'work_places').catch(() => null)
-    ]);
+    const [sRows, bRows, ed, wp] = await ((day === first && dayP) ? dayP : fetchDay(day.date));
     // 고객이 의뢰신청서에서 확정한 위치 — 이 날 확정 예약으로 전환된 의뢰만
     const bkIds = bRows.filter(b => b && b.status === 'confirmed').map(b => b.__id);
     const reqLoc = {};
     for (const b of bRows){ const l = b && b.status === 'confirmed' && cleanLoc(b.customer_loc, b.customer_loc && b.customer_loc.from === 'request' ? 'req' : 'bk'); if (l) reqLoc['bk_' + b.__id] = l; }
     for (const s of sRows){ const l = s && !s.booking_id && s.type === 'reserve' && cleanLoc(s.customer_loc, 'bk'); if (l) reqLoc[s.__id] = l; }
-    if (bkIds.some(id => !reqLoc['bk_' + id])){
-      try{
-        const rq = await queryIn(env, 'requests', 'converted_booking_id', bkIds.filter(id => !reqLoc['bk_' + id]), 50);
-        for (const r of rq){ const l = cleanLoc(r && r.loc, 'req'); if (l && !reqLoc['bk_' + r.converted_booking_id]) reqLoc['bk_' + r.converted_booking_id] = l; }
-      }catch(e){}
-    }
-    // ③ 고객관리 고객 위치 — 예약에 위치가 없는 일정만, 연락처 → 이름·별칭 순으로 찾음
+    // ② 예전 전환 예약의 의뢰 위치 · ③ 고객관리 고객 위치 — 두 조회를 동시에
+    const missBk = bkIds.filter(id => !reqLoc['bk_' + id]);
     const needC = [];
     for (const b of bRows){ if (b && b.status === 'confirmed' && !reqLoc['bk_' + b.__id]) needC.push(['bk_' + b.__id, b]); }
     for (const s of sRows){ if (s && !s.booking_id && s.type === 'reserve' && !reqLoc[s.__id]) needC.push([s.__id, s]); }
-    if (needC.length){
-      try{
-        const cs = await listAll(env, 'customers', 300, ['phone', 'name', 'aliases', 'loc']);
-        const byP = {}, byN = {};
-        for (const c of cs){
-          const l = cleanLoc(c && c.loc, 'cust'); if (!l) continue;
-          const p = pn(c.phone); if (p.length >= 6 && !byP[p]) byP[p] = l;
-          [c.name].concat(Array.isArray(c.aliases) ? c.aliases : []).forEach(a => { const k = nn(a); if (k && !byN[k]) byN[k] = l; });
-        }
-        for (const [id, o] of needC){
-          const p = pn(o.customer_phone);
-          const l = (p.length >= 6 && byP[p]) || byN[nn(o.customer_name)];
-          if (l) reqLoc[id] = l;
-        }
-      }catch(e){}
+    const [rq, cidx] = await Promise.all([
+      missBk.length ? queryIn(env, 'requests', 'converted_booking_id', missBk, 50).catch(() => []) : [],
+      needC.length ? custLocIndex(env).catch(() => null) : null
+    ]);
+    for (const r of rq){ const l = cleanLoc(r && r.loc, 'req'); if (l && !reqLoc['bk_' + r.converted_booking_id]) reqLoc['bk_' + r.converted_booking_id] = l; }
+    // ③ 고객관리 고객 위치 — 예약에 위치가 없는 일정만, 연락처 → 이름·별칭 순으로 찾음
+    if (cidx){
+      for (const [id, o] of needC){
+        if (reqLoc[id]) continue;
+        const p = pn(o.customer_phone);
+        const l = (p.length >= 6 && cidx.byP[p]) || cidx.byN[nn(o.customer_name)];
+        if (l) reqLoc[id] = l;
+      }
     }
     const base = [];
     for (const b of bRows){ if (b && b.status === 'confirmed') base.push(fromBooking('bk_' + b.__id, b)); }
@@ -217,11 +247,12 @@ export async function onRequestGet(context){
     const added = (ed && Array.isArray(ed.added)) ? ed.added.filter(x => x && x.id) : [];
     const locs = (ed && ed.locs && typeof ed.locs === 'object') ? ed.locs : {};
     const places = (wp && wp.map && typeof wp.map === 'object') ? wp.map : {};
+    const photos = (ed && ed.photos && typeof ed.photos === 'object') ? ed.photos : {};
     const bySort = (x, y) => (x.time_s || '99').localeCompare(y.time_s || '99');
     base.sort(bySort);
     if (isAdmin && q.get('raw')){
       base.forEach(j => { if (reqLoc[j.id]) j.rloc = reqLoc[j.id]; });
-      return json({ ok: true, date: day.date, mode: day.mode, at: Date.now(), base, edits, added, locs, places });
+      return json({ ok: true, date: day.date, mode: day.mode, at: Date.now(), base, edits, added, locs, places, photos });
     }
     const locOf = j => {
       const own = locs[j.id];
@@ -235,7 +266,7 @@ export async function onRequestGet(context){
       jobs.push(e ? clean(Object.assign({}, j, e, { id: j.id })) : j);
     }
     for (const x of added) jobs.push(clean(x));
-    jobs.forEach(j => { const l = locOf(j); if (l) j.loc = l; });
+    jobs.forEach(j => { const l = locOf(j); if (l) j.loc = l; const ph = cleanPhotos(photos[j.id]); if (ph.length) j.photos = ph; });
     jobs.sort(bySort);
     return json({ ok: true, date: day.date, mode: day.mode, at: Date.now(), staff: who, jobs });
   }catch(e){
