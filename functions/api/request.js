@@ -105,6 +105,8 @@ export async function onRequestPost(context){
       data.loc = { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6,
         name: String(lc.name || '').slice(0, 120), addr: String(lc.addr || '').slice(0, 300), pid: String(lc.pid || '').slice(0, 300),
         at: new Date().toISOString() };
+      // 고객이 직접 등록한 위치 → 고객관리 고객 위치에는 관리자 승인 후 반영 (/hhc-locsync.js 승인 대기 칸) (2026-11-17)
+      data.loc_sync = 'pending';
     }
   }
   // 🤝 추천 코드 — 추천 정보가 잘못돼도 의뢰 접수는 그대로 진행합니다
@@ -125,7 +127,7 @@ export async function onRequestPost(context){
   }
   try {
     const d = await createDoc(env, 'requests', data);
-    const push = await sendAdminPush(env, 'request').catch(() => ({ ok: false }));
+    const push = await sendAdminPush(env, 'request', data.loc ? { title: '📥 새 의뢰 · 📍 위치 승인 필요', body: '새 의뢰가 접수되었고 고객이 방문 위치를 등록했습니다 — 눌러서 확인·승인하세요' } : undefined).catch(() => ({ ok: false }));
     return json({ ok: true, id: d.__id, push });
   } catch (e) { return fail(e.message === 'env-missing' ? 'server-not-configured' : 'server-error', 500); }
 }

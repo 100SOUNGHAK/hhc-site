@@ -1307,7 +1307,8 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
 <body>
 <script>if(self===top)document.documentElement.classList.add('sa');</script>
 <script src="/hhc-sendmsg.js?v=20261116a"></script><!-- hhc-sendmsg.js 를 고치면 v= 숫자도 바꿉니다 (예전 파일이 남아 있지 않게) -->
-<script src="/hhc-loc.js" defer></script><!-- 📍 고객 방문 위치 등록 창 (의뢰서·예약관리·직원 일정표와 같은 구글맵 창) -->
+<script src="/hhc-loc.js" defer></script>
+<script type="module" src="/hhc-locsync.js"></script><!-- 📍 고객 위치 연동 · 변경 승인 (2026-11-17) --><!-- 📍 고객 방문 위치 등록 창 (의뢰서·예약관리·직원 일정표와 같은 구글맵 창) -->
 <!-- ══ 좌측 고정 메뉴 (독립 실행 시에만 표시 — 관리자 허브 안에서는 자동 숨김) ══ -->
 <aside id="sb">
   <div class="bd">HAPPY HOMECARE</div>
@@ -1352,6 +1353,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
     </div>
     <div class="seg" id="ca-seg"></div>
   </div>
+  <div id="locsync-host"></div><!-- 📍 고객이 의뢰신청서에서 등록한 위치 — 승인 대기 (/hhc-locsync.js) -->
   <div id="merge-host"></div>
   <div id="list"><div class="loading">불러오는 중...</div></div>
 </div>
@@ -1869,6 +1871,7 @@ function reqName(x){
 // 검색 전용 정규화 — 대소문자·공백·특수문자를 모두 무시 (예: "THE PARK-2" ↔ "THE PARK2" ↔ "the park 2")
 function sn(n){return String(n||'').toLowerCase().replace(/[^0-9a-z가-힣]/g,'');}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2600);}
+if(!window.toast)window.toast=toast;   // /hhc-locsync.js 안내도 같은 알림 칸으로
 function fmtRM(v){const n=parseFloat(v)||0;return 'RM '+n.toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function caToday(){const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 // 견적 합계 — 기본 합계 + 고객이 선택한 에어컨 옵션 금액
@@ -4068,10 +4071,15 @@ window.caLocPick=async function(idx){
   if(!r||!isFinite(r.lat)||!isFinite(r.lng))return;
   try{
     const mid=await caLocMaster(e);
-    const now=new Date().toISOString();
-    const loc={lat:+r.lat,lng:+r.lng,name:r.name||'',addr:r.addr||'',pid:r.pid||'',at:now};
-    await updateDoc(doc(db,'customers',mid),{loc,updated_at:now});
-    toast('📍 방문 위치가 저장되었습니다');
+    // 📍 (2026-11-17) 위치 연동 — 예정된 예약·일정표도 함께 바꿀지 확인 후 저장 (/hhc-locsync.js)
+    if(window.HHCLS){
+      await HHCLS.proposeAdmin({custId:mid,phone:e.phone,name:e.name,names:e.aliases||[],loc:r,via:'customer'});
+    }else{
+      const now=new Date().toISOString();
+      const loc={lat:+r.lat,lng:+r.lng,name:r.name||'',addr:r.addr||'',pid:r.pid||'',at:now,src:'admin',via:'customer'};
+      await updateDoc(doc(db,'customers',mid),{loc,updated_at:now});
+      toast('📍 방문 위치가 저장되었습니다');
+    }
     loadAll(true);
   }catch(err){toast('저장 실패: '+err.message);}
 };
@@ -7337,6 +7345,9 @@ try{
   });
   db=hhcFastDb(app);
   document.getElementById('fb-dot').classList.add('on');
+  // 📍 위치 연동 · 승인 대기 칸 (2026-11-17)
+  {const _ls=()=>{HHCLS.setDb(db);HHCLS.watchPending(document.getElementById('locsync-host'));};
+   if(window.HHCLS)_ls();else window.addEventListener('hhcls-ready',_ls,{once:true});}
   loadAll();
   subscribeAll();   // 실시간 반영
 }catch(e){

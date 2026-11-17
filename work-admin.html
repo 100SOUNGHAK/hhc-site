@@ -8,6 +8,7 @@
 <title>HHC 직원 일정표</title>
 <script type="module" src="/hhc-auth.js"></script>
 <script src="/hhc-loc.js" defer></script>
+<script type="module" src="/hhc-locsync.js"></script><!-- 📍 고객 위치 연동 · 변경 승인 (2026-11-17) -->
 <style>
 /* ─────────────────────────────────────────────────────────────
    work-admin.html — 직원 일정표 관리 (관리자 앱 「일정 → 직원 일정표」 탭)
@@ -360,6 +361,7 @@ const $=s=>document.querySelector(s);
 const SITE='https://happyhomecare.com.my';
 const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>e.classList.remove('on'),2400);}
+if(!window.toast)window.toast=toast;   // /hhc-locsync.js 안내도 같은 알림 칸으로
 function ask(title,text,yes){return new Promise(res=>{$('#cf-t').textContent=title;$('#cf-p').textContent=text;$('#cf-yes').textContent=yes||'확인';
   $('#cf').classList.add('on');const done=v=>{$('#cf').classList.remove('on');res(v);};$('#cf-no').onclick=()=>done(false);$('#cf-yes').onclick=()=>done(true);});}
 function newKey(){const a=new Uint8Array(18);crypto.getRandomValues(a);let s='';a.forEach(b=>s+=String.fromCharCode(b));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
@@ -546,6 +548,7 @@ $('#j-list').addEventListener('click',async e=>{
       const k=placeKey(place);
       if(k){await setDoc(doc(db,'settings','work_places'),{map:{[k]:{...r,place,updated_at:new Date().toISOString(),by:who()}},updated_at:new Date().toISOString()},{merge:true});RAW.places[k]=r;}
       await saveEdits('✓ 위치를 등록했습니다 — 직원 화면에 길 안내가 생깁니다');
+      await wlSync(id,r);
     }
   }catch(err){[RAW.edits,RAW.added,RAW.locs]=JSON.parse(snap);renderJobs();toast('저장하지 못했습니다: '+(err.message||''));}
 });
@@ -636,6 +639,7 @@ $('#ed-sv').onclick=async()=>{
   if(ED.kind==='base'){ if(sameAsSrc(v,ED.src)&&ED.st!=='hd')delete RAW.edits[ED.id]; else RAW.edits[ED.id]=v; }
   else if(ED.kind==='added'){const i=RAW.added.findIndex(x=>x.id===ED.id);RAW.added[i]={id:ED.id,...v};}
   else RAW.added.push({id:ED.id,...v});
+  const _prevOwn=RAW.locs[ED.id],_jid=ED.id,_newOwn=ED.own;
   if(ED.own)RAW.locs[ED.id]=ED.own;else delete RAW.locs[ED.id];
   const remember=ED.own&&!ED.own.off&&ED.rem&&placeKey(v.place)?{k:placeKey(v.place),l:ED.own}:null;
   try{
@@ -643,7 +647,8 @@ $('#ed-sv').onclick=async()=>{
       await setDoc(doc(db,'settings','work_places'),{map:{[remember.k]:{...remember.l,place:v.place,updated_at:new Date().toISOString(),by:who()}},updated_at:new Date().toISOString()},{merge:true});
       RAW.places[remember.k]=remember.l;
     }
-    await saveEdits(isNew?'✓ 일정을 추가했습니다':'✓ 저장했습니다 — 직원 화면에 바로 반영됩니다');}
+    await saveEdits(isNew?'✓ 일정을 추가했습니다':'✓ 저장했습니다 — 직원 화면에 바로 반영됩니다');
+    if(_newOwn&&!_newOwn.off&&JSON.stringify(_newOwn)!==JSON.stringify(_prevOwn||null))await wlSync(_jid,_newOwn);}
   catch(e){[RAW.edits,RAW.added,RAW.locs]=JSON.parse(snap);toast('저장하지 못했습니다: '+(e.message||''));}
 };
 $('#ed-x').onclick=closeEd;
@@ -659,6 +664,19 @@ $('#ed-danger').addEventListener('click',async e=>{const b=e.target.closest('[da
 $('#j-add').onclick=()=>openEd(null);
 
 // ── 📍 방문 위치 ──
+// (2026-11-17) 이 일정에 새 위치를 저장하면 → 예약·예약형 일정의 고객을 찾아
+//   고객관리 고객 위치·다른 예정 일정도 바꿀지 승인 받기 (/hhc-locsync.js). 고객을 알 수 없는 일정(구글 캘린더 등)은 그대로.
+async function wlSync(jid,loc){
+  if(!window.HHCLS||!loc||loc.off||!isFinite(loc.lat)||!db)return;
+  try{
+    HHCLS.setDb(db);
+    let o=null;
+    if(/^bk_/.test(jid)){const d=await getDoc(doc(db,'bookings',jid.slice(3)));o=d.exists()?d.data():null;}
+    else if(!/^ad_|^add/.test(jid)){const d=await getDoc(doc(db,'schedules',jid));o=d.exists()?d.data():null;if(o&&(o.type!=='reserve'||o.booking_id))o=null;}
+    if(!o||!(o.customer_phone||o.customer_name))return;
+    await HHCLS.proposeAdmin({phone:o.customer_phone,name:o.customer_name,loc,via:'work',skip:{work:DAY+'|'+jid}});
+  }catch(e){console.warn('위치 연동',e);}
+}
 // 콘도명 → 저장 위치 키 (functions/api/work.js placeKey 와 같은 규칙)
 function placeKey(s){return String(s||'').toUpperCase().replace(/[^A-Z0-9가-힣]/g,'').slice(0,60);}
 // 직원 화면에 실제로 쓰일 위치: 이 일정에 등록 > 고객이 의뢰서에서 확정 > 같은 콘도명 저장 위치

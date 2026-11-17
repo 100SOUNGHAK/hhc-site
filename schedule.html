@@ -1192,6 +1192,7 @@ var HHCG_PH={},HHCG_NM={},HHCG_CPH={},HHCG_CNM={},HHCG_ON=false;
 // 📞 연락 경로 표시 (W=WhatsApp · K=카카오톡 · O=기타) — 총괄 고객관리와 같은 값(customers.ca_ch)을 씁니다.
 // 아무 기능도 하지 않는 표시 전용이며 관리 화면에만 보입니다 (공유 메시지·일정표 이미지에는 들어가지 않습니다).
 var HHCH_PH={},HHCH_NM={},HHCH_IDPH={},HHCH_IDNM={};
+var HHCH_LOCPH={},HHCH_LOCNM={}; // 📍 고객관리 고객 위치 (customers.loc · 연락처 / 이름·별칭) — 길 안내에 씀 (2026-11-17)
 var CH_LB={W:'💬 WhatsApp',K:'💛 카카오톡',O:'🌐 기타'};
 function chOK(v){v=String(v||'').toUpperCase();return CH_LB[v]?v:'';}
 var HHCG_PKG={silver:'실버',royal:'로얄',gold:'골드',diamond:'다이아',titanium:'티타늄',special:'스페셜해피홈'};
@@ -1208,10 +1209,11 @@ function hhcgWatch(onChange){
   if(HHCG_ON||!db)return;HHCG_ON=true;
   try{
     onSnapshot(collection(db,'customers'),function(snap){
-      var ph={},nm={},chp={},chn={},idp={},idn={};
+      var ph={},nm={},chp={},chn={},idp={},idn={},lp={},ln={};
       snap.docs.forEach(function(d){
         var c=d.data()||{},g=String(c.member||'').trim();
         var p0=hhcgPN(c.phone),ns=[c.name].concat(c.aliases||[]);
+        if(c.loc&&isFinite(c.loc.lat)&&isFinite(c.loc.lng)){if(p0.length>=6&&!lp[p0])lp[p0]=c.loc;ns.forEach(function(a){var k=hhcgNN(a);if(k&&!ln[k])ln[k]=c.loc;});}
         // 📞 연락 경로 표시 + 고객 문서 ID (등급이 없는 고객도 포함해야 하므로 먼저 담는다)
         var cv=chOK(c.ca_ch);
         if(p0){if(!idp[p0])idp[p0]=d.id;if(cv&&!chp[p0])chp[p0]=cv;}
@@ -1221,7 +1223,7 @@ function hhcgWatch(onChange){
         ns.forEach(function(a){var k=hhcgNN(a);if(k&&!nm[k])nm[k]=g;});
       });
       HHCG_PH=ph;HHCG_NM=nm;
-      HHCH_PH=chp;HHCH_NM=chn;HHCH_IDPH=idp;HHCH_IDNM=idn;
+      HHCH_PH=chp;HHCH_NM=chn;HHCH_IDPH=idp;HHCH_IDNM=idn;HHCH_LOCPH=lp;HHCH_LOCNM=ln;
       if(onChange)try{onChange();}catch(e){}
     },function(){});
     onSnapshot(collection(db,'contracts'),function(snap){
@@ -1399,7 +1401,7 @@ async function initApp(){
           customer_phone:b.customer_phone||'',
           customer_lang:b.customer_lang||'ko',
           customer_address:b.customer_address||'',
-          loc:(b.loc&&isFinite(b.loc.lat))?b.loc:null,
+          loc:(b.customer_loc&&isFinite(b.customer_loc.lat))?b.customer_loc:((b.loc&&isFinite(b.loc.lat))?b.loc:null),   // 📍 예약 위치는 customer_loc (2026-11-17 수정)
           sch_slot:(typeof b.sch_slot==='number')?b.sch_slot:null,
           sch_ovok:b.sch_ovok===true,
           booking_date:b.booking_date
@@ -1590,7 +1592,17 @@ function sxPlace(s,title){
 function sxMemoParts(memo){const lines=String(memo||'').split('\n').map(x=>x.trim()).filter(Boolean);let chips=[],rest=[];
   lines.forEach(l=>{if(!chips.length&&/^🔧/.test(l))chips=l.replace(/^🔧\s*/,'').split(/\s*[,·\/]\s*/).filter(Boolean).slice(0,4);else rest.push(l.replace(/^📝\s*/,''));});
   return {chips,rest};}
+// 📍 길 안내 위치: 예약·일정에 저장된 위치 > (예약·예약형 일정이면) 고객관리 고객 위치 > 주소 글자 (2026-11-17)
+function sxLoc(s){
+  if(s.loc&&isFinite(s.loc.lat))return s.loc;
+  if(s.customer_loc&&isFinite(s.customer_loc.lat))return s.customer_loc;
+  if(s.source==='booking'||s.type==='reserve'){
+    var p=hhcgPN(s.customer_phone),l=(p.length>=6&&HHCH_LOCPH[p])||HHCH_LOCNM[hhcgNN(s.customer_name)];
+    if(l&&isFinite(l.lat))return l;
+  }
+  return null;}
 function sxNavUrl(s){
+  {const _l=sxLoc(s);if(_l)s={...s,loc:_l};}
   if(s.loc&&isFinite(s.loc.lat))return 'https://www.google.com/maps/dir/?api=1&destination='+s.loc.lat+','+s.loc.lng+(s.loc.pid?'&destination_place_id='+encodeURIComponent(s.loc.pid):'')+'&travelmode=driving&dir_action=navigate';
   const q=String(s.customer_address||s.title||'').trim();if(!q)return '';
   return 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(q+', Malaysia')+'&travelmode=driving&dir_action=navigate';}
