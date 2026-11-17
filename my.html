@@ -2386,7 +2386,10 @@ const VIS=(P.get('v')||'iv,ip,ct,cp').split(',');
 const FOCUS=(P.get('f')||'').trim();
 // 안내한 섹션이 꺼져 있으면 그 섹션만 자동으로 켭니다 (안내와 화면이 어긋나지 않도록)
 //  · py(결제 요청) · ivl(결제 확인 → 인보이스 내역)도 인보이스 섹션을 켭니다 (2026-11-16)
-const FOCUS_VIS=(FOCUS==='py'||FOCUS==='ivl')?'iv':FOCUS;
+//  · rw(사과 보상 적립 → 💎 포인트 적립금 카드)도 적립금 카드가 인보이스 묶음에 있어 인보이스 섹션을 켭니다 (2026-11-17)
+const FOCUS_VIS=(FOCUS==='py'||FOCUS==='ivl'||FOCUS==='rw')?'iv':FOCUS;
+// 💎 pa= 사과 보상 적립 금액 — 강조 배지에 「RM 20 적립되었습니다」로 보여 줍니다
+const FOCUS_PA=Math.max(0,Math.floor(parseFloat(P.get('pa')||'')||0));
 if(FOCUS_VIS&&['iv','ip','ct','cp'].indexOf(FOCUS_VIS)>=0&&VIS.indexOf(FOCUS_VIS)<0)VIS.push(FOCUS_VIS);
 // 📌 fi= 가리키는 문서 번호(점검보고서 등) — 「지금 확인하실 일」에 그 문서 카드가 있으면 그 카드를 강조합니다
 const FOCUS_ID=(P.get('fi')||'').trim();
@@ -4964,10 +4967,11 @@ var FOCUS_SEC={iv:'sec-iv',ip:'sec-ip',ct:'sec-ct',cp:'sec-cp',qt:'sec-qt',
                bk:'brief',mm:'sec-mm',pt:'pyx-sec',ap:'a2hs-card',sv:'sec-sv',fee:'sec-fee',
                td:'brief',rq:'brief',
                py:'sec-iv',ivl:'sec-iv',
-               cr:'hcg'};   // cr = 정기관리 3·6개월 알림 → 「우리집 케어 현황」 (없으면 의뢰 요청서 카드)   // py = 결제 요청 → 「결제 예정」 카드(없으면 인보이스 내역) · ivl = 결제 확인 → 인보이스 내역   // rq = 의뢰 접수 완료 카드 (없으면 「지금 확인하실 일」 전체)   // td = 「지금 확인하실 일」 전체 (의뢰 접수 안내) · bk 는 예약 카드가 없으면 여기로
+               cr:'hcg',rw:'pt-card'};   // rw = 사과 보상 적립 → 💎 포인트 적립금 카드 (2026-11-17)   // cr = 정기관리 3·6개월 알림 → 「우리집 케어 현황」 (없으면 의뢰 요청서 카드)   // py = 결제 요청 → 「결제 예정」 카드(없으면 인보이스 내역) · ivl = 결제 확인 → 인보이스 내역   // rq = 의뢰 접수 완료 카드 (없으면 「지금 확인하실 일」 전체)   // td = 「지금 확인하실 일」 전체 (의뢰 접수 안내) · bk 는 예약 카드가 없으면 여기로
 var _hiDone=false,_hiActive=false;
 function hiClear(){
-  document.querySelectorAll('.hi-focus').forEach(function(el){el.classList.remove('hi-focus','done','hi-inset');});
+  document.querySelectorAll('.hi-focus').forEach(function(el){el.classList.remove('hi-focus','done','hi-inset','rw-hit');});
+  document.querySelectorAll('.rw-wrap').forEach(function(el){el.classList.remove('rw-wrap');});
   document.querySelectorAll('.hi-chip').forEach(function(el){el.remove();});
   document.querySelectorAll('.brf-rail.hi-on').forEach(function(el){el.classList.remove('hi-on');});
   var sp=document.getElementById('hi-spacer');
@@ -5006,7 +5010,7 @@ function focusSection(){
   var el=bkBrief()||document.getElementById(id);
   if(!el){                       // ① 계약서 요약 카드만 있는 경우 등 대체 위치
     if(FOCUS==='ct')el=document.getElementById('duo')||document.querySelector('.mbx');
-    if(FOCUS==='pt')el=document.querySelector('.ptc');
+    if(FOCUS==='pt'||FOCUS==='rw')el=document.querySelector('.ptc');
     if(FOCUS==='cr')el=document.querySelector('#brf-rail .brf[data-k="svreq"]');
     if(!el)return;               // 설치 안내(ap)는 이미 설치한 고객에게 카드가 없어 그냥 지나갑니다
   }
@@ -5052,7 +5056,10 @@ function focusSection(){
     if(t.parentNode&&t.parentNode.id==='brf-rail')t.parentNode.classList.add('hi-on');   // 같은 줄 다른 카드 흐리게 · 빛 여백
     var chip=document.createElement('span');
     chip.className='hi-chip';
-    chip.textContent=(FOCUS==='sv')
+    if(FOCUS==='rw'){t.classList.add('rw-hit');try{t.parentNode.classList.add('rw-wrap');}catch(e){}}
+    chip.textContent=(FOCUS==='rw')
+      ?(LANG==='en'?'\uD83D\uDC8E '+(FOCUS_PA?'RM '+FOCUS_PA+' added':'Points added'):'\uD83D\uDC8E '+(FOCUS_PA?'RM '+FOCUS_PA+' \uC801\uB9BD\uB418\uC5C8\uC2B5\uB2C8\uB2E4':'\uC801\uB9BD\uAE08\uC774 \uCD94\uAC00\uB418\uC5C8\uC2B5\uB2C8\uB2E4'))
+      :(FOCUS==='sv')
       ?(LANG==='en'?'\uD83D\uDCCC Request here':'\uD83D\uDCCC \uC5EC\uAE30\uC11C \uBC14\uB85C \uC758\uB8B0\uD558\uC138\uC694')
       :(LANG==='en'?'\uD83D\uDCCC Please check here':'\uD83D\uDCCC \uC5EC\uAE30\uB97C \uD655\uC778\uD574 \uC8FC\uC138\uC694');
     var _ovf='';try{_ovf=getComputedStyle(t).overflow;}catch(e){}
