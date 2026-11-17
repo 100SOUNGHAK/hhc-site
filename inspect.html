@@ -1184,10 +1184,19 @@ function ctaHTML(title,sub){return '<a class="todo-cta" href="'+wa()+'" target="
 /* 권장 사항이 비어 있으면 최종 의견 ③·④ 줄에서 뽑습니다 */
 function recFromOpinion(d){
   var S=sections(d.opinion||''),Se=sections(d.opinion_en||''),out=[];
+  /* 「장소: 내용」 줄을 제목(무엇을) + 설명(조치 계획)으로 나눕니다 */
+  function cut(x){var m=String(x||'').match(/^([^:：]{1,30})[:：]\s*(.+)$/);return m?{w:m[1].trim(),b:m[2].trim()}:{w:'',b:String(x||'').trim()};}
+  var DEF=arr(d.defects).filter(function(f){return f.status!=='done'&&f.defect&&f.action;});
+  var KW=[[/재발/,'재발 여부 관찰','Monitor for recurrence'],[/냉매|누설|저압/,'냉매 누설 정밀점검','Refrigerant leak check'],[/구배|단열|배수|결로/,'배수배관 개선','Drain pipe improvement'],
+    [/재방문/,'재방문 추가 조치','Return visit'],[/정상 운전이 되지|작동/,'작동 불량 점검·수리','Operation fault repair'],[/냉방 성능/,'냉방 성능 정밀점검','Cooling performance check'],
+    [/부품|교체/,'부품 수리·교체','Part repair / replacement'],[/세척|청소/,'세척·청소','Cleaning'],[/관찰/,'경과 관찰','Monitor'],[/점검/,'정밀점검','Detailed inspection']];
+  function head(b){var a=b.replace(/[.\s]+$/,'');var f=DEF.filter(function(f){var x=String(f.action).replace(/[.\s]+$/,'');return x&&(a.indexOf(x)>=0||x.indexOf(a)>=0);})[0];
+    if(f)return [f.defect,f.defect_en||''];for(var i=0;i<KW.length;i++)if(KW[i][0].test(b))return [KW[i][1],KW[i][2]];return ['권고 사항','Recommendation'];}
   S.forEach(function(s,si){if(!/조치|권고|권장/.test(s.h))return;var se=Se[si]||{li:[]};
     s.li.forEach(function(x,i){var tx=x.t;if(/완료/.test(tx)&&!/권고|권장|필요/.test(tx))return;
       var ty=/조속|즉시|빠른|시급/.test(tx)?'urgent':/재발|관찰|정기|노후/.test(tx)?'review':'regular';
-      out.push({type:ty,title:tx,title_en:(se.li[i]||{}).t||'',grp:x.g,grp_en:'',desc:''});});});
+      var k=cut(tx),ke=cut((se.li[i]||{}).t||''),hd=head(k.b);
+      out.push({type:ty,title:(k.w?k.w+' · ':'')+hd[0],title_en:(hd[1]&&(ke.w||!k.w))?((ke.w?ke.w+' · ':'')+hd[1]):'',desc:k.b,desc_en:ke.b,grp:'',grp_en:''});});});
   return out;
 }
 
