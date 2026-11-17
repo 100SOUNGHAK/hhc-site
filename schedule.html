@@ -488,6 +488,21 @@ body{background:#EBEFF6}
 /* FAB */
 .fab{border-radius:18px;width:56px;height:56px;font-size:28px;font-weight:300;background:linear-gradient(160deg,#16C7B5,#0C8577);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 3px 6px rgba(10,107,96,.3),0 16px 28px -10px rgba(10,107,96,.6)}
 
+/* 추가 슬롯 → 빈 슬롯 */
+.sx-mv{align-self:flex-start;margin-top:8px;border:0;font:inherit;font-size:12px;font-weight:800;color:#6B4E0E;background:linear-gradient(180deg,#FFF8E6,#F7EBCB);padding:6px 10px;border-radius:9px;cursor:pointer;box-shadow:inset 0 1px 0 #fff,0 0 0 1px #E8D6A8,0 3px 6px -3px rgba(139,105,30,.4)}
+.sx-mv:active{transform:scale(.96)}
+.sx-pin{align-self:flex-start;margin-top:6px;font-size:10.5px;font-weight:700;color:#8A6A1E}
+.sx-mvl{display:flex;flex-direction:column;gap:8px;margin-top:16px}
+.sx-mvl button{display:flex;align-items:center;gap:12px;border:1.5px dashed #C9D1DE;background:#FAFBFD;border-radius:16px;padding:12px 14px;font:inherit;text-align:left;cursor:pointer;transition:background .14s,transform .14s}
+.sx-mvl button:active{transform:scale(.98);background:#DDF6F2}
+.sx-mvl .no{width:26px;height:26px;border-radius:50%;background:#0B1633;color:#fff;font-size:12px;font-weight:800;display:grid;place-items:center;flex:none}
+.sx-mvl .t{flex:1;font-size:15px;font-weight:800;color:#131A2B}
+.sx-mvl .t small{display:block;font-size:11.5px;font-weight:600;color:#98A1B5;margin-top:1px}
+.sx-mvl b{font-size:12.5px;font-weight:800;color:#0A6B60;background:#DDF6F2;padding:7px 11px;border-radius:10px;white-space:nowrap}
+.sx-mvn{margin-top:12px;font-size:12px;color:#57617A;line-height:1.5;background:#F4F6FA;border-radius:12px;padding:10px 12px}
+.sx-mvb{display:block;width:100%;margin-top:10px;border:0;font:inherit;font-size:13px;font-weight:800;color:#6B4E0E;background:linear-gradient(180deg,#FFF8E6,#F7EBCB);padding:11px 0;border-radius:13px;cursor:pointer;box-shadow:inset 0 1px 0 #fff,0 0 0 1px #E8D6A8}
+.sx-mvb.r{color:#57617A;background:#F4F6FA;box-shadow:inset 0 1px 0 #fff,0 0 0 1px rgba(11,24,51,.06)}
+
 /* 상세 시트 */
 .sx-ov{position:fixed;inset:0;background:rgba(8,16,36,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:300}
 .sx-ov.on{opacity:1;pointer-events:auto}
@@ -1376,6 +1391,7 @@ async function initApp(){
           customer_lang:b.customer_lang||'ko',
           customer_address:b.customer_address||'',
           loc:(b.loc&&isFinite(b.loc.lat))?b.loc:null,
+          sch_slot:(typeof b.sch_slot==='number')?b.sch_slot:null,
           booking_date:b.booking_date
         });
       });
@@ -1535,8 +1551,12 @@ function sxConf(list){const r=new Set();
     if(hit){r.add(i);r.add(j);}}
   return r;}
 function sxSlotOf(t){const m=sxM(t);if(m==null)return -1;return m<660?0:m<780?1:m<900?2:3;}
-function sxSlots(ds,list){list=list||sxList(ds);const base=[null,null,null,null],extra=[];
-  list.forEach((s,i)=>{const k=sxSlotOf(s.time_s);if(k>=0&&base[k]===null)base[k]=i;else extra.push(i);});
+/* 직접 넣은 슬롯(추가 슬롯 → 빈 슬롯 옮기기) — 일정 시간은 그대로, 표시 칸만 지정
+   직접 만든 일정은 schedules.slot, 예약 일정은 bookings.sch_slot 에 0~3 으로 저장 */
+function sxOv(s){const v=s.source==='booking'?s.sch_slot:s.slot;return (typeof v==='number'&&v>=0&&v<4)?v:-1;}
+function sxSlots(ds,list){list=list||sxList(ds);const base=[null,null,null,null],extra=[],used=new Set();
+  list.forEach((s,i)=>{const k=sxOv(s);if(k>=0&&base[k]===null){base[k]=i;used.add(i);}});
+  list.forEach((s,i)=>{if(used.has(i))return;const k=sxSlotOf(s.time_s);if(k>=0&&base[k]===null)base[k]=i;else extra.push(i);});
   for(let k=0;k<(SX_ADDX[ds]||0);k++)extra.push(null);
   return {base,extra};}
 function sxBars(ds){const l=sxList(ds);if(!l.length)return '';const sl=sxSlots(ds,l),n=sl.extra.filter(x=>x!==null).length;
@@ -1799,6 +1819,7 @@ async function renderDay(ds){
   if(timed.length){const P=m=>Math.max(0,Math.min(100,(m-480)/660*100));
     trk='<div class="sx-trk">'+list.map((s,i)=>{const a=sxM(s.time_s);if(a==null)return '';return '<i class="sx-'+sxKind(s)+(cf.has(i)?' cf':'')+'" style="left:'+P(a)+'%;width:'+Math.max(1.5,P(sxEnd(s))-P(a))+'%"></i>';}).join('')
       +(ds===td&&nowM>=480&&nowM<=1140?'<span class="nw" style="left:'+P(nowM)+'%"></span>':'')+'</div><div class="sx-tax sx-num"><span>08</span><span>10</span><span>12</span><span>14</span><span>16</span><span>19'+sxT('시','')+'</span></div>';}
+  const canMove=ds>=td&&sl.base.some(z=>z===null);
   const card=(i,no,extra)=>{const s=list[i],v=displayList[i],done=sxIsDone(ds,s),k=sxKind(s),p=sxPlace(s,s.title),mp=sxMemoParts(v.memo),isAuto=s.source==='booking',url=sxNavUrl(s);
     const bdg=(schCh(s)||'')+(schGrade(s)||'');
     return '<div class="sx-sl"><span class="no'+(extra?' x':'')+'">'+no+'</span><div class="sch-item sx-card sx-'+k+(done?' done':'')+(cf.has(i)?' cf':'')+'" data-id="'+s._id+'" onclick="sxOpenDet(\''+s._id+'\',\''+ds+'\')">'
@@ -1807,7 +1828,9 @@ async function renderDay(ds){
       +(p?'<div class="sx-pl">'+SX_PIN+sxEsc(p)+'</div>':'')
       +(mp.chips.length?'<div class="sx-ch">'+mp.chips.map(z=>'<i>'+sxEsc(z)+'</i>').join('')+'</div>':'')
       +(mp.rest.length?'<div class="sx-mm">'+sxEsc(mp.rest.join(' · '))+'</div>':'')
-      +(cf.has(i)?'<span class="sx-cfx">⚠ '+sxT('다른 일정과 시간이 겹칩니다','Overlaps another schedule')+'</span>':'')+'</div>'
+      +(cf.has(i)?'<span class="sx-cfx">⚠ '+sxT('다른 일정과 시간이 겹칩니다','Overlaps another schedule')+'</span>':'')
+      +(extra&&canMove?'<button class="sx-mv" onclick="event.stopPropagation();sxMoveAsk(\''+s._id+'\',\''+ds+'\')">↥ '+sxT('빈 슬롯에 넣기','Move to open slot')+'</button>':'')
+      +(!extra&&sxOv(s)>=0?'<span class="sx-pin">📌 '+sxT('직접 넣은 슬롯','Placed manually')+'</span>':'')+'</div>'
       +((k!=='mn'&&!done&&url)?'<a class="sx-nv" href="'+url+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="'+sxT('길 안내','Directions')+'">'+SX_NAV+'</a>':'')
       +'</div></div>';};
   let h='',nowPut=ds!==td;
@@ -1849,6 +1872,7 @@ window.sxOpenDet=async function(id,ds){
   const list=sxList(selDate),idx=list.findIndex(x=>x._id===id),cf=sxConf(list);
   const v=await translateItem(schCleanItem(s));
   const done=sxIsDone(selDate,s),k=sxKind(s),isAuto=s.source==='booking',hasC=schHasCust(s),p=sxPlace(s,s.title),url=sxNavUrl(s);
+  const slx=sxSlots(selDate,list),inExtra=slx.extra.includes(idx),canMv=selDate>=myDateStr()&&slx.base.some(z=>z===null);
   const other=cf.has(idx)?list.filter((x,j)=>j!==idx&&cf.has(j)).map(x=>(x.time_s||'')+' '+schCleanItem(x).title).join(', '):'';
   const dur=(sxM(s.time_e)!=null&&sxM(s.time_s)!=null)?' · '+sxDur(sxM(s.time_e)-sxM(s.time_s)):'';
   const p2=selDate.split('-'),en=curLang==='en';
@@ -1868,9 +1892,33 @@ window.sxOpenDet=async function(id,ds){
       +'<button '+(hasC?'onclick="sxCloseDet();openCustomerAdmin(\''+id+'\')"':'disabled')+'><b>👤</b>'+sxT('고객','Customer')+'</button>'
       +'<button '+(!isAuto?'onclick="sxEditAt(\''+id+'\',\''+selDate+'\')"':'disabled')+'><b>✏️</b>'+sxT('수정','Edit')+'</button>'
     +'</div>'
+    +(inExtra&&canMv?'<button class="sx-mvb" onclick="sxMoveAsk(\''+id+'\',\''+selDate+'\')">↥ '+sxT('추가 슬롯 → 빈 슬롯에 넣기','Move to an open slot')+'</button>':'')
+    +(sxOv(s)>=0?'<button class="sx-mvb r" onclick="sxMoveTo(\''+id+'\',\''+selDate+'\',null)">↺ '+sxT((sxOv(s)+1)+'번 슬롯 지정 풀기 (시간 기준으로)','Undo manual slot (use time)')+'</button>':'')
     +'<div class="sx-src"><span>'+(isAuto?'📋 '+sxT('예약시스템에서 자동 반영된 일정','Auto from booking system'):'')+'</span>'
       +(!isAuto?'<button class="del" onclick="sxCloseDet();deleteItem(\''+id+'\')">🗑 '+sxT('삭제','Delete')+'</button>':'')+'</div>';
   document.getElementById('sx-ov').classList.add('on');document.getElementById('sx-det').classList.add('on');
+};
+/* ↥ 추가 슬롯 → 빈 슬롯 */
+window.sxMoveAsk=function(id,ds){
+  const s=sxFind(id);if(!s)return;const sl=sxSlots(ds),en=curLang==='en';
+  const open=sl.base.map((z,k)=>z===null?k:-1).filter(k=>k>=0);
+  if(!open.length){showToast(sxT('비어 있는 슬롯이 없습니다','No open slot'));return;}
+  document.getElementById('sx-det').innerHTML='<div class="sx-grab"></div>'
+    +'<div class="sx-sth"><div class="sx-tl sx-'+sxKind(s)+' sx-num"><b>'+(s.time_s||'—')+'</b>'+(s.time_e?'<small>~'+s.time_e+'</small>':'')+'<em>'+sxKindLbl(s)+'</em></div>'
+    +'<div style="min-width:0"><div class="nm">'+sxEsc(schCleanItem(s).title)+'</div><div class="sb">'+sxT('어느 빈 슬롯에 넣을까요?','Which open slot?')+'</div></div><button class="x" onclick="sxCloseDet()" aria-label="닫기">✕</button></div>'
+    +'<div class="sx-mvl">'+open.map(k=>'<button onclick="sxMoveTo(\''+id+'\',\''+ds+'\','+k+')"><span class="no">'+(k+1)+'</span><span class="t sx-num">'+SX_SLOT[k].s+' – '+SX_SLOT[k].e+'<small>'+(en?SX_SLOT[k].en:SX_SLOT[k].ko)+'</small></span><b>'+sxT('여기에 넣기','Place here')+'</b></button>').join('')+'</div>'
+    +'<div class="sx-mvn">'+sxT('일정 시간·예약 내용은 바뀌지 않고, 목록과 달력에서 보이는 칸만 옮겨집니다.','Only the display slot changes — the time and booking stay the same.')+'</div>';
+  document.getElementById('sx-ov').classList.add('on');document.getElementById('sx-det').classList.add('on');
+};
+window.sxMoveTo=async function(id,ds,k){
+  const s=sxFind(id);if(!s)return;sxCloseDet();
+  const isBk=s.source==='booking',key=isBk?'sch_slot':'slot',prev=s[key];
+  s[key]=k;renderCal();renderDay(ds);if(document.getElementById('sx-fs').classList.contains('on'))sxRenderFS();
+  try{
+    if(isBk)await updateDoc(doc(db,'bookings',s.real_booking_id),{sch_slot:k});
+    else await updateDoc(doc(db,'schedules',id),{slot:k});
+    showToast(k===null?sxT('시간 기준 칸으로 되돌렸습니다','Back to time-based slot'):sxT((k+1)+'번 슬롯에 넣었습니다','Placed in slot '+(k+1)));
+  }catch(e){s[key]=prev;renderCal();renderDay(ds);showToast(sxT('저장하지 못했습니다: ','Save failed: ')+(e&&e.message||''));}
 };
 window.sxCloseDet=function(){document.getElementById('sx-ov').classList.remove('on');document.getElementById('sx-det').classList.remove('on');};
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(document.getElementById('sx-det').classList.contains('on'))sxCloseDet();else if(document.getElementById('sx-fs').classList.contains('on'))sxCloseFS();});
