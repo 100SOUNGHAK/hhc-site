@@ -503,6 +503,15 @@ body{background:#EBEFF6}
 .sx-mvb{display:block;width:100%;margin-top:10px;border:0;font:inherit;font-size:13px;font-weight:800;color:#6B4E0E;background:linear-gradient(180deg,#FFF8E6,#F7EBCB);padding:11px 0;border-radius:13px;cursor:pointer;box-shadow:inset 0 1px 0 #fff,0 0 0 1px #E8D6A8}
 .sx-mvb.r{color:#57617A;background:#F4F6FA;box-shadow:inset 0 1px 0 #fff,0 0 0 1px rgba(11,24,51,.06)}
 
+/* 겹침 허용 */
+.sx-sl.jn{margin-top:-4px}
+.sx-sl.jn .no{background:#0A6B60;box-shadow:0 0 0 2px #fff,0 2px 5px rgba(10,107,96,.4)}
+.sx-sl.jn::before{content:"";position:absolute;left:8px;top:-14px;height:16px;border-left:2px dashed #9FD9D1}
+.sx-okb{align-self:flex-start;margin-top:6px;border:0;font:inherit;font-size:11.5px;font-weight:800;color:#0A6B60;background:#DDF6F2;padding:5px 9px;border-radius:8px;cursor:pointer;box-shadow:0 0 0 1px #B9E9E2}
+.sx-okb:active{transform:scale(.96)}
+.sx-okt{align-self:flex-start;margin-top:6px;font-size:10.5px;font-weight:800;color:#0A6B60;background:#EAF8F5;padding:3px 8px;border-radius:7px}
+.sx-mvb.ok{color:#0A6B60;background:linear-gradient(180deg,#F0FBF8,#DDF6F2);box-shadow:inset 0 1px 0 #fff,0 0 0 1px #B9E9E2}
+
 /* 상세 시트 */
 .sx-ov{position:fixed;inset:0;background:rgba(8,16,36,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:300}
 .sx-ov.on{opacity:1;pointer-events:auto}
@@ -1392,6 +1401,7 @@ async function initApp(){
           customer_address:b.customer_address||'',
           loc:(b.loc&&isFinite(b.loc.lat))?b.loc:null,
           sch_slot:(typeof b.sch_slot==='number')?b.sch_slot:null,
+          sch_ovok:b.sch_ovok===true,
           booking_date:b.booking_date
         });
       });
@@ -1543,12 +1553,16 @@ function sxDow(ds){const p=ds.split('-');return new Date(+p[0],+p[1]-1,+p[2]).ge
 function sxList(ds){return getMerged(ds).filter(s=>s.type!=='holiday');}
 function sxHols(ds){return getMerged(ds).filter(s=>s.type==='holiday');}
 /* 시간 겹침 — 끝 시간이 둘 다 있으면 시간이 겹칠 때, 없으면 시작 시간이 전후 1시간 이내일 때(예약관리 알림과 같은 기준) */
+/* 겹침 허용 — 직접 만든 일정은 schedules.ovok, 예약 일정은 bookings.sch_ovok = true
+   허용한 일정이 끼어 있는 겹침은 경고하지 않고, 같은 슬롯에 함께 놓습니다(달력에는 표시 안 함). */
+function sxOk(s){return s.source==='booking'?s.sch_ovok===true:s.ovok===true;}
+function sxPair(a,b){const as=sxM(a.time_s),bs=sxM(b.time_s);if(as==null||bs==null)return false;
+  const ae=sxM(a.time_e),be=sxM(b.time_e);
+  return (ae!=null&&be!=null&&ae>as&&be>bs)?(as<be&&bs<ae):Math.abs(as-bs)<=60;}
 function sxConf(list){const r=new Set();
   for(let i=0;i<list.length;i++)for(let j=i+1;j<list.length;j++){
-    const a=list[i],b=list[j],as=sxM(a.time_s),bs=sxM(b.time_s);if(as==null||bs==null)continue;
-    const ae=sxM(a.time_e),be=sxM(b.time_e);
-    const hit=(ae!=null&&be!=null&&ae>as&&be>bs)?(as<be&&bs<ae):Math.abs(as-bs)<=60;
-    if(hit){r.add(i);r.add(j);}}
+    const a=list[i],b=list[j];if(sxOk(a)||sxOk(b))continue;
+    if(sxPair(a,b)){r.add(i);r.add(j);}}
   return r;}
 function sxSlotOf(t){const m=sxM(t);if(m==null)return -1;return m<660?0:m<780?1:m<900?2:3;}
 /* 직접 넣은 슬롯(추가 슬롯 → 빈 슬롯 옮기기) — 일정 시간은 그대로, 표시 칸만 지정
@@ -1557,8 +1571,12 @@ function sxOv(s){const v=s.source==='booking'?s.sch_slot:s.slot;return (typeof v
 function sxSlots(ds,list){list=list||sxList(ds);const base=[null,null,null,null],extra=[],used=new Set();
   list.forEach((s,i)=>{const k=sxOv(s);if(k>=0&&base[k]===null){base[k]=i;used.add(i);}});
   list.forEach((s,i)=>{if(used.has(i))return;const k=sxSlotOf(s.time_s);if(k>=0&&base[k]===null)base[k]=i;else extra.push(i);});
+  const join=[[],[],[],[]];
+  for(let x=extra.length-1;x>=0;x--){const i=extra[x],a=list[i];
+    for(let k=0;k<4;k++){const j=base[k];if(j===null)continue;const b=list[j];
+      if((sxOk(a)||sxOk(b))&&sxPair(a,b)){join[k].unshift(i);extra.splice(x,1);break;}}}
   for(let k=0;k<(SX_ADDX[ds]||0);k++)extra.push(null);
-  return {base,extra};}
+  return {base,extra,join};}
 function sxBars(ds){const l=sxList(ds);if(!l.length)return '';const sl=sxSlots(ds,l),n=sl.extra.filter(x=>x!==null).length;
   return '<span class="sx-lb">'+sl.base.map(i=>i===null?'<i class="e"></i>':'<i class="sx-'+sxKind(l[i])+'"></i>').join('')+(n?'<b>+'+n+'</b>':'')+'</span>';}
 function sxIsDone(ds,s){const td=myDateStr();if(ds<td)return true;if(ds>td)return false;const e=sxEnd(s),n=myNow();return e!=null&&e<=n.getHours()*60+n.getMinutes();}
@@ -1681,7 +1699,7 @@ function sxRenderFS(){
       if(hol&&hol.length)rows+=myhBanner(ds);
       if(!l.length&&(off.length||(hol&&hol.length))){off.forEach(o=>{rows+='<div class="sx-hol" style="margin:0">🚫 '+sxEsc(schCleanItem(o).title||sxT('휴일','Off'))+'</div>';});}
       else if(ds<td){rows+=l.length?l.map((z,j)=>one(j)).join(''):'<div class="sx-wnone">'+sxT('일정 없음','No schedule')+'</div>';}
-      else{rows+=sl.base.map((j,k)=>j===null?'<button class="sx-wi em" onclick="sxAddAt(\''+ds+'\',\''+SX_SLOT[k].s+'\')"'+(ds<td?' disabled':'')+'><div class="tt sx-num"><b>'+(k+1)+sxT('번','')+'</b><small>'+SX_SLOT[k].s+'</small></div>'+sxT('비어 있음','Open')+(ds>=td?'<span class="ad">＋</span>':'')+'</button>':one(j)).join('')
+      else{rows+=sl.base.map((j,k)=>j===null?'<button class="sx-wi em" onclick="sxAddAt(\''+ds+'\',\''+SX_SLOT[k].s+'\')"'+(ds<td?' disabled':'')+'><div class="tt sx-num"><b>'+(k+1)+sxT('번','')+'</b><small>'+SX_SLOT[k].s+'</small></div>'+sxT('비어 있음','Open')+(ds>=td?'<span class="ad">＋</span>':'')+'</button>':one(j)+sl.join[k].map(one).join('')).join('')
         +sl.extra.filter(z=>z!==null).map(one).join('');}
       h+='<div class="'+c+'"><button class="sx-wdt" onclick="sxFsPick(\''+ds+'\')"><small>'+wk[i]+'</small><b class="sx-num">'+d.getDate()+'</b><em>'+(l.length?l.length+sxT('건',''):'')+'</em></button><div class="sx-wds">'+rows+'</div></div>';
     }
@@ -1820,9 +1838,9 @@ async function renderDay(ds){
     trk='<div class="sx-trk">'+list.map((s,i)=>{const a=sxM(s.time_s);if(a==null)return '';return '<i class="sx-'+sxKind(s)+(cf.has(i)?' cf':'')+'" style="left:'+P(a)+'%;width:'+Math.max(1.5,P(sxEnd(s))-P(a))+'%"></i>';}).join('')
       +(ds===td&&nowM>=480&&nowM<=1140?'<span class="nw" style="left:'+P(nowM)+'%"></span>':'')+'</div><div class="sx-tax sx-num"><span>08</span><span>10</span><span>12</span><span>14</span><span>16</span><span>19'+sxT('시','')+'</span></div>';}
   const canMove=ds>=td&&sl.base.some(z=>z===null);
-  const card=(i,no,extra)=>{const s=list[i],v=displayList[i],done=sxIsDone(ds,s),k=sxKind(s),p=sxPlace(s,s.title),mp=sxMemoParts(v.memo),isAuto=s.source==='booking',url=sxNavUrl(s);
+  const card=(i,no,extra,joined)=>{const s=list[i],v=displayList[i],done=sxIsDone(ds,s),k=sxKind(s),p=sxPlace(s,s.title),mp=sxMemoParts(v.memo),isAuto=s.source==='booking',url=sxNavUrl(s);
     const bdg=(schCh(s)||'')+(schGrade(s)||'');
-    return '<div class="sx-sl"><span class="no'+(extra?' x':'')+'">'+no+'</span><div class="sch-item sx-card sx-'+k+(done?' done':'')+(cf.has(i)?' cf':'')+'" data-id="'+s._id+'" onclick="sxOpenDet(\''+s._id+'\',\''+ds+'\')">'
+    return '<div class="sx-sl'+(joined?' jn':'')+'"><span class="no'+(extra?' x':'')+'">'+no+'</span><div class="sch-item sx-card sx-'+k+(done?' done':'')+(cf.has(i)?' cf':'')+'" data-id="'+s._id+'" onclick="sxOpenDet(\''+s._id+'\',\''+ds+'\')">'
       +'<div class="sx-tl sx-num"><b>'+(s.time_s||'—')+'</b>'+(s.time_e?'<small>~'+s.time_e+'</small>':'')+'<em>'+(done?sxT('완료','Done'):sxKindLbl(s))+'</em></div>'
       +'<div class="sx-cb"><div class="sx-cn">'+sxEsc(v.title)+(bdg?'<span class="sx-bdg" onclick="event.stopPropagation()">'+bdg+'</span>':'')+'</div>'
       +(p?'<div class="sx-pl">'+SX_PIN+sxEsc(p)+'</div>':'')
@@ -1830,6 +1848,8 @@ async function renderDay(ds){
       +(mp.rest.length?'<div class="sx-mm">'+sxEsc(mp.rest.join(' · '))+'</div>':'')
       +(cf.has(i)?'<span class="sx-cfx">⚠ '+sxT('다른 일정과 시간이 겹칩니다','Overlaps another schedule')+'</span>':'')
       +(extra&&canMove?'<button class="sx-mv" onclick="event.stopPropagation();sxMoveAsk(\''+s._id+'\',\''+ds+'\')">↥ '+sxT('빈 슬롯에 넣기','Move to open slot')+'</button>':'')
+      +(cf.has(i)?'<button class="sx-okb" onclick="event.stopPropagation();sxAllow(\''+s._id+'\',\''+ds+'\',true)">🤝 '+sxT('겹침 허용 · 같은 슬롯에','Allow overlap · same slot')+'</button>':'')
+      +(sxOk(s)&&!cf.has(i)&&(joined||list.some((z,j)=>j!==i&&sxPair(s,z)))?'<span class="sx-okt">🤝 '+sxT('겹침 허용 · 같은 슬롯에서 함께 진행','Overlap allowed · same slot')+'</span>':'')
       +(!extra&&sxOv(s)>=0?'<span class="sx-pin">📌 '+sxT('직접 넣은 슬롯','Placed manually')+'</span>':'')+'</div>'
       +((k!=='mn'&&!done&&url)?'<a class="sx-nv" href="'+url+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" aria-label="'+sxT('길 안내','Directions')+'">'+SX_NAV+'</a>':'')
       +'</div></div>';};
@@ -1842,7 +1862,7 @@ async function renderDay(ds){
     sl.base.forEach((i,k)=>{const S=SX_SLOT[k];
       if(i===null){h+=nowLine(sxM(S.e));const past=ds<td||(ds===td&&sxM(S.e)<=nowM);
         h+='<div class="sx-sl"><span class="no">'+(k+1)+'</span><button class="sx-es'+(past?' past':'')+'"'+(past?' disabled':' onclick="sxAddAt(\''+ds+'\',\''+S.s+'\')"')+'><div class="sn sx-num"><b>'+S.s+'</b><small>~'+S.e+'</small></div><div class="tx">'+sxT((k+1)+'번 슬롯 비어 있음','Slot '+(k+1)+' open')+'<small>'+(en?S.en:S.ko)+'</small></div>'+(past?'':'<span class="ad">＋ '+sxT('넣기','Add')+'</span>')+'</button></div>';}
-      else{h+=nowLine(sxM(list[i].time_s));h+=card(i,k+1,false);}});
+      else{h+=nowLine(sxM(list[i].time_s));h+=card(i,k+1,false);sl.join[k].forEach(j=>{h+=card(j,k+1,false,true);});}});
     if(sl.extra.length){h+='<div class="sx-xh">'+sxT('추가 슬롯','Extra slots')+'</div>';
       sl.extra.forEach((i,k)=>{h+=i===null?'<div class="sx-sl"><span class="no x">'+(5+k)+'</span><button class="sx-es" onclick="sxAddAt(\''+ds+'\',\'\')"><div class="sn sx-num"><b>—</b><small>'+sxT('시간 미정','No time')+'</small></div><div class="tx">'+sxT((5+k)+'번 슬롯 비어 있음','Slot '+(5+k)+' open')+'</div><span class="ad">＋ '+sxT('넣기','Add')+'</span></button></div>':card(i,5+k,true);});}
     h+='<button class="sx-add" onclick="sxAddSlot(\''+ds+'\')">＋ '+sxT('슬롯 추가 (기본 4개)','Add slot (default 4)')+'</button>';
@@ -1893,6 +1913,8 @@ window.sxOpenDet=async function(id,ds){
       +'<button '+(!isAuto?'onclick="sxEditAt(\''+id+'\',\''+selDate+'\')"':'disabled')+'><b>✏️</b>'+sxT('수정','Edit')+'</button>'
     +'</div>'
     +(inExtra&&canMv?'<button class="sx-mvb" onclick="sxMoveAsk(\''+id+'\',\''+selDate+'\')">↥ '+sxT('추가 슬롯 → 빈 슬롯에 넣기','Move to an open slot')+'</button>':'')
+    +(other?'<button class="sx-mvb ok" onclick="sxAllow(\''+id+'\',\''+selDate+'\',true)">🤝 '+sxT('겹침 허용 — 같은 슬롯에 함께 배치','Allow overlap — place in the same slot')+'</button>':'')
+    +(sxOk(s)?'<button class="sx-mvb r" onclick="sxAllow(\''+id+'\',\''+selDate+'\',false)">↺ '+sxT('겹침 허용 취소','Cancel overlap allowance')+'</button>':'')
     +(sxOv(s)>=0?'<button class="sx-mvb r" onclick="sxMoveTo(\''+id+'\',\''+selDate+'\',null)">↺ '+sxT((sxOv(s)+1)+'번 슬롯 지정 풀기 (시간 기준으로)','Undo manual slot (use time)')+'</button>':'')
     +'<div class="sx-src"><span>'+(isAuto?'📋 '+sxT('예약시스템에서 자동 반영된 일정','Auto from booking system'):'')+'</span>'
       +(!isAuto?'<button class="del" onclick="sxCloseDet();deleteItem(\''+id+'\')">🗑 '+sxT('삭제','Delete')+'</button>':'')+'</div>';
@@ -1909,6 +1931,16 @@ window.sxMoveAsk=function(id,ds){
     +'<div class="sx-mvl">'+open.map(k=>'<button onclick="sxMoveTo(\''+id+'\',\''+ds+'\','+k+')"><span class="no">'+(k+1)+'</span><span class="t sx-num">'+SX_SLOT[k].s+' – '+SX_SLOT[k].e+'<small>'+(en?SX_SLOT[k].en:SX_SLOT[k].ko)+'</small></span><b>'+sxT('여기에 넣기','Place here')+'</b></button>').join('')+'</div>'
     +'<div class="sx-mvn">'+sxT('일정 시간·예약 내용은 바뀌지 않고, 목록과 달력에서 보이는 칸만 옮겨집니다.','Only the display slot changes — the time and booking stay the same.')+'</div>';
   document.getElementById('sx-ov').classList.add('on');document.getElementById('sx-det').classList.add('on');
+};
+window.sxAllow=async function(id,ds,v){
+  const s=sxFind(id);if(!s)return;sxCloseDet();
+  const isBk=s.source==='booking',key=isBk?'sch_ovok':'ovok',prev=s[key];
+  s[key]=v;renderCal();renderDay(ds);if(document.getElementById('sx-fs').classList.contains('on'))sxRenderFS();
+  try{
+    if(isBk)await updateDoc(doc(db,'bookings',s.real_booking_id),{sch_ovok:v});
+    else await updateDoc(doc(db,'schedules',id),{ovok:v});
+    showToast(v?sxT('겹침을 허용했습니다 — 같은 슬롯에 함께 표시','Overlap allowed — shown in the same slot'):sxT('겹침 허용을 취소했습니다','Overlap allowance cancelled'));
+  }catch(e){s[key]=prev;renderCal();renderDay(ds);showToast(sxT('저장하지 못했습니다: ','Save failed: ')+(e&&e.message||''));}
 };
 window.sxMoveTo=async function(id,ds,k){
   const s=sxFind(id);if(!s)return;sxCloseDet();
