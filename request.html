@@ -2826,5 +2826,117 @@ document.getElementById('rq-loc').addEventListener('click',async e=>{
 })();
 rqLocRender();
 </script>
+<!-- ══ 2026-11-18 진행 단계 구분 (rqx-) ══════════════════════════════
+     · STEP 1 연락처(필수) → STEP 2 맡기실 일(필수 · 청소 또는 점검 중 하나 이상) → STEP 3 요청사항(선택)
+     · 왼쪽 세로 진행선 + 단계 머리표, 위쪽에 따라다니는 단계 표시줄(누르면 그 단계로 이동)
+     · 입력 칸·제출 자료는 바뀌지 않습니다. 화면 표시만 추가합니다. -->
+<style>
+.rq-stp{display:none!important}
+#rqx-bar{position:sticky;top:64px;z-index:105;margin:0 -15px 10px;padding:8px 15px 9px;background:rgba(246,248,252,.92);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-bottom:1px solid rgba(228,233,242,.9)}
+#rqx-bar .in{display:flex;align-items:center;gap:0}
+.rqx-b{flex:none;display:flex;align-items:center;gap:6px;border:0;background:none;padding:4px 2px;cursor:pointer;font-family:inherit;color:#98A1B4;font-size:12.5px;font-weight:800;letter-spacing:-.02em;white-space:nowrap}
+.rqx-b i{font-style:normal;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:900;background:#fff;color:#98A1B4;box-shadow:inset 0 0 0 1.5px #D5DCE8}
+.rqx-b.on{color:#0E2350}.rqx-b.on i{background:linear-gradient(180deg,#1B3F80,#0E2350);color:#fff;box-shadow:0 0 0 4px rgba(14,35,80,.12),0 4px 8px -3px rgba(14,35,80,.5)}
+.rqx-b.dn{color:#0F766E}.rqx-b.dn i{background:linear-gradient(180deg,#14958a,#0B5F59);color:#fff;box-shadow:0 3px 6px -3px rgba(11,95,89,.6)}
+.rqx-b.opt i{border-style:dashed}
+.rqx-ln{flex:1;height:3px;border-radius:2px;background:#E4E9F2;margin:0 6px;min-width:10px;position:relative;overflow:hidden}
+.rqx-ln::after{content:"";position:absolute;inset:0;width:0;background:#14958a;transition:width .3s ease}
+.rqx-ln.dn::after{width:100%}
+
+/* 세로 진행선 */
+#form-section{position:relative;padding-left:22px}
+#form-section::before{content:"";position:absolute;left:8px;top:6px;bottom:20px;width:2px;border-radius:1px;background:linear-gradient(180deg,#D5DCE8,#E4E9F2)}
+.rqx-h{position:relative;display:flex;align-items:center;gap:8px;margin:22px 0 10px;scroll-margin-top:120px}
+.rqx-h:first-of-type{margin-top:4px}
+.rqx-h .nd{position:absolute;left:-23px;top:50%;transform:translateY(-50%);width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:inset 0 0 0 2px #C9D2E0;display:grid;place-items:center;font-size:10.5px;font-weight:900;color:#98A1B4}
+.rqx-h .st{font-size:11.5px;font-weight:900;letter-spacing:.06em;color:#98A1B4}
+.rqx-h b{font-size:17px;font-weight:900;color:#0E2350;letter-spacing:-.035em}
+.rqx-h .tg{margin-left:auto;font-size:11.5px;font-weight:800;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.rqx-h .tg.req{background:#FDECEC;color:#C53030}
+.rqx-h .tg.opt{background:#EEF1F6;color:#5A6478}
+.rqx-h .tg.ok{background:#E6F5F3;color:#0F766E}
+.rqx-h.on .nd{background:linear-gradient(180deg,#1B3F80,#0E2350);box-shadow:0 0 0 4px rgba(14,35,80,.14);color:#fff}
+.rqx-h.on .st{color:#16346E}
+.rqx-h.dn .nd{background:linear-gradient(180deg,#14958a,#0B5F59);box-shadow:none;color:#fff}
+.rqx-h.dn .st{color:#0F766E}
+.rqx-sub#rqx-sub1,.rqx-sub#rqx-sub3{display:none}
+.rqx-sub{font-size:12.5px;color:#5A6478;margin:-4px 0 10px;line-height:1.5;word-break:keep-all}
+/* 단계별 카드 강조 */
+.card{transition:box-shadow .2s ease,transform .2s ease}
+.card.rqx-cur{box-shadow:0 0 0 2px #0E2350,0 10px 22px -8px rgba(14,35,80,.35),0 26px 40px -22px rgba(14,35,80,.45)}
+.card.rqx-later{opacity:.82}
+.card.done:not(.rqx-cur){box-shadow:0 0 0 1.5px #9FD8CF,0 8px 18px -10px rgba(15,118,110,.35)}
+.card .card-num{min-width:26px;width:auto;padding:0 6px}
+/* STEP 2 — 청소 / 또는 / 점검 */
+.rqx-or{display:flex;align-items:center;gap:10px;margin:-2px 0 11px;font-size:12px;font-weight:800;color:#98A1B4}
+.rqx-or::before,.rqx-or::after{content:"";flex:1;height:1px;background:repeating-linear-gradient(90deg,#C9D2E0 0 5px,transparent 5px 9px)}
+.rqx-or span{background:#fff;border-radius:999px;padding:3px 11px;box-shadow:0 1px 2px rgba(11,24,51,.08),0 4px 8px -4px rgba(11,24,51,.16)}
+html.rq-insp .rqx-or{display:none}
+@media (prefers-reduced-motion:reduce){.card,.rqx-ln::after{transition:none}}
+</style>
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const fs=$('form-section');if(!fs||!$('card-info'))return;
+  const INSP=document.documentElement.classList.contains('rq-insp');
+  const en=()=>(typeof isEn==='function'&&isEn());
+  const T={ko:{s:['연락처','맡기실 일','요청사항'],t:['연락드릴 정보를 알려주세요','청소할 품목을 담거나, 고장 점검을 요청해 주세요 · 둘 다도 가능','방문 희망 시간 · 주차 · 반려동물 등 (선택)'],
+               ti:'점검이 필요한 대수와 증상을 알려주세요',req:'필수',opt:'선택',ok:'완료',or:'또는',a:'청소 · 세척',b:'점검 · 수리'},
+           en:{s:['Contact','What we do','Requests'],t:['How can we reach you?','Add items to clean, or ask for a repair check — or both','Preferred time · parking · pets etc. (optional)'],
+               ti:'How many units, and what is wrong?',req:'Required',opt:'Optional',ok:'Done',or:'or',a:'Cleaning',b:'Inspection · repair'}};
+  // 위쪽 단계 표시줄
+  const bar=document.createElement('div');bar.id='rqx-bar';
+  bar.innerHTML='<div class="in"><button type="button" class="rqx-b" data-s="1"><i>1</i><span></span></button><span class="rqx-ln" data-l="1"></span><button type="button" class="rqx-b" data-s="2"><i>2</i><span></span></button><span class="rqx-ln" data-l="2"></span><button type="button" class="rqx-b opt" data-s="3"><i>3</i><span></span></button></div>';
+  fs.parentNode.insertBefore(bar,fs);
+  const _hd=document.querySelector('.header');const _top=()=>{if(_hd)bar.style.top=Math.round(_hd.getBoundingClientRect().height)+'px';};_top();addEventListener('resize',_top);
+  // 단계 머리표
+  function head(n){const h=document.createElement('div');h.className='rqx-h';h.id='rqx-h'+n;
+    h.innerHTML='<span class="nd">'+n+'</span><span class="st">STEP '+n+'</span><b></b><span class="tg"></span>';const s=document.createElement('div');s.className='rqx-sub';s.id='rqx-sub'+n;return [h,s];}
+  const put=(n,before)=>{const [h,s]=head(n);before.parentNode.insertBefore(h,before);before.parentNode.insertBefore(s,before);};
+  put(1,$('card-info'));
+  put(2,INSP?$('card-repair'):$('card-items'));
+  put(3,$('card-remarks'));
+  if(!INSP&&$('card-repair')){const o=document.createElement('div');o.className='rqx-or';o.id='rqx-or';o.innerHTML='<span></span>';$('card-repair').parentNode.insertBefore(o,$('card-repair'));}
+  const num=(id,v)=>{const c=document.querySelector('#'+id+' .card-num');if(c)c.textContent=v;};
+  bar.querySelectorAll('.rqx-b').forEach(b=>b.onclick=()=>{const h=$('rqx-h'+b.dataset.s);if(h)h.scrollIntoView({behavior:'smooth',block:'start'});});
+
+  function paint(){
+    const l=T[en()?'en':'ko'];
+    const nm=$('f-condo-name').value.trim(),un=$('f-condo-unit').value.trim(),ph=$('f-phone').value.trim();
+    const ok1=!!nm&&!(typeof hasHangul==='function'&&hasHangul(nm))&&!!un&&ph.replace(/\D/g,'').length>=9;
+    const ok2=(typeof picked!=='undefined'&&picked.length>0)||(typeof rpqQty!=='undefined'&&rpqQty>0);
+    const ok3=!!$('f-remarks').value.trim();
+    const cur=!ok1?1:(!ok2?2:3);
+    const done=[ok1,ok2,ok3];
+    [1,2,3].forEach(n=>{
+      const h=$('rqx-h'+n),s=$('rqx-sub'+n),b=bar.querySelector('[data-s="'+n+'"]');
+      h.querySelector('b').textContent=l.s[n-1];
+      s.textContent=(n===2&&INSP)?l.ti:l.t[n-1];
+      const tg=h.querySelector('.tg');
+      if(done[n-1]){tg.className='tg ok';tg.textContent='✓ '+l.ok;}
+      else{tg.className='tg '+(n===3?'opt':'req');tg.textContent=n===3?l.opt:l.req;}
+      h.classList.toggle('dn',done[n-1]&&n!==cur);h.classList.toggle('on',n===cur);
+      h.querySelector('.nd').textContent=(done[n-1]&&n!==cur)?'✓':n;
+      b.querySelector('span').textContent=l.s[n-1];
+      b.classList.toggle('on',n===cur);b.classList.toggle('dn',done[n-1]&&n!==cur);
+      b.querySelector('i').textContent=(done[n-1]&&n!==cur)?'✓':n;
+    });
+    bar.querySelectorAll('.rqx-ln').forEach(x=>x.classList.toggle('dn',done[+x.dataset.l-1]));
+    const o=$('rqx-or');if(o)o.querySelector('span').textContent=l.or;
+    // 카드 번호 · 강조
+    num('card-info','1');num('card-remarks','3');
+    if(INSP)num('card-repair','2');else{num('card-items','2-A');num('card-repair','2-B');}
+    const map={'card-info':1,'card-items':2,'card-repair':2,'card-remarks':3};
+    Object.keys(map).forEach(id=>{const c=$(id);if(!c)return;c.classList.toggle('rqx-cur',map[id]===cur&&!(cur===2&&ok2));c.classList.toggle('rqx-later',map[id]>cur&&map[id]!==3);});
+  }
+  window.rqxPaint=paint;
+  // 기존 진행 계산(rqProgress)이 돌 때마다 함께 갱신
+  if(typeof rqProgress==='function'){const _rp=rqProgress;rqProgress=function(){_rp.apply(this,arguments);try{paint();}catch(e){}};}
+  ['f-condo-name','f-condo-unit','f-phone','f-remarks'].forEach(id=>{const e=$(id);if(e)e.addEventListener('input',()=>{try{paint();}catch(_){} });});
+  document.addEventListener('click',e=>{if(e.target.closest('.lang-btn,[data-rqc],#rpq-minus,#rpq-plus,.pick-x,[data-qm],[data-qp]'))setTimeout(()=>{try{paint();}catch(_){}},30);});
+  paint();
+})();
+</script>
+
 </body>
 </html>
