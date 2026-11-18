@@ -2536,7 +2536,8 @@ window.ppkOpen=function(){
     var r=c.name?vpPtCalc(c,ps):{earn:0,used:0,bal:0};
     var t=calcTotals();
     _ppk.bal=Math.max(0,r.bal);
-    _ppk.max=Math.max(0,Math.floor(Math.min(_ppk.bal,t.grand-t.minC+t.pts)));
+    var _pay=t.grand-t.minC+t.pts+((window._creditAuto&&isPkgMember())?t.credit:0);   // 패키지 자동반영이면 적립잔액 차감분도 포인트로 대신할 수 있음
+    _ppk.max=Math.max(0,Math.floor(Math.min(_ppk.bal,_pay)));
     $('ppk-bal').innerHTML='<div><span>총 적립</span><b>'+r.earn+'</b></div><div><span>사용</span><b>'+r.used+'</b></div><div class="big"><span>사용 가능 잔액</span><b>RM '+_ppk.bal+'</b></div>';
     var q=[10,20,50].map(function(v){return '<button type="button"'+(v>_ppk.max?' disabled':'')+' onclick="ppkSet('+v+')">RM '+v+'</button>';}).join('');
     q+='<button type="button"'+(_ppk.max<1?' disabled':'')+' onclick="ppkSet('+_ppk.max+')">전액 RM '+_ppk.max+'</button><button type="button" onclick="ppkSet(0)">사용 안 함</button>';
@@ -3485,12 +3486,20 @@ function calcTotals(inv){
   var adjRows=_adjShow(inv?(inv.adjusts||[]):undefined,sub);      // 직접입력 조정 (+ · −) · % 줄은 소계 기준
   if(!inv){try{adjCalcRefresh();}catch(e){}}
   var adjSum=adjRows.reduce(function(a,x){return a+x.val;},0);
+  if(!inv&&vouchers.some(function(v){return v.type==='discount';})){
+    var _vb=Math.max(0,_adjR2(sub+taxRate/100*sub+adjSum));
+    vouchers.forEach(function(v){if(v.type!=='discount')return;var mx=_adjR2(_vb*(parseFloat(v.pct)||0)/100);v.max=mx;v.amt=v.manual?Math.min(parseFloat(v.amt)||0,mx):mx;});
+    vpSync();
+  }
+  var voucher=parseFloat(inv?inv.voucherAmt:val('voucher-amt'))||0;
+  var ptsUse=parseFloat(inv?inv.pointUse:val('point-use'))||0;   // 💎 해피포인트 사용 (-차감)
   var credit=parseFloat(inv?inv.creditUse:val('credit-use'))||0;
-  // 패키지 회원 자동반영: 비용소계 + 세금 − 할인 + 추가비용을 회원적립잔액에 실시간 반영
+  // 패키지 회원 자동반영: 비용소계 + 세금 − 할인 + 추가비용 − 상품/할인권 − 해피포인트 를 회원적립잔액에 실시간 반영
+  //   (2026-11-19 · 상품권·포인트를 먼저 빼고 남은 금액만 적립잔액에서 차감)
   if(!inv&&window._creditAuto&&isPkgMember()){
     var _cTax=taxRate/100*sub;
     var _cDisc=discType==='pct'?discVal/100*sub:discVal;
-    credit=Math.round((sub+_cTax-_cDisc+extra+adjSum)*100)/100;
+    credit=Math.round((sub+_cTax-_cDisc+extra+adjSum-voucher-ptsUse)*100)/100;
     if(credit<0)credit=0;
     var cEl=$('credit-use');
     if(cEl&&parseFloat(cEl.value)!==credit)cEl.value=credit;
@@ -3520,13 +3529,6 @@ function calcTotals(inv){
     }
     if(!_cp)window._creditPicked=false;
   }
-  if(!inv&&vouchers.some(function(v){return v.type==='discount';})){
-    var _vb=Math.max(0,_adjR2(sub+taxRate/100*sub+adjSum));
-    vouchers.forEach(function(v){if(v.type!=='discount')return;var mx=_adjR2(_vb*(parseFloat(v.pct)||0)/100);v.max=mx;v.amt=v.manual?Math.min(parseFloat(v.amt)||0,mx):mx;});
-    vpSync();
-  }
-  var voucher=parseFloat(inv?inv.voucherAmt:val('voucher-amt'))||0;
-  var ptsUse=parseFloat(inv?inv.pointUse:val('point-use'))||0;   // 💎 해피포인트 사용 (-차감)
   var voucherCode=((inv?(inv.voucherCode||''):val('voucher-code'))||'').trim().toUpperCase();
   var paidAmount=inv?(parseFloat(inv.paidAmount)||0):_payTotal();
   var tax=taxRate/100*sub;
