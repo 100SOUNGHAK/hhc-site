@@ -344,8 +344,35 @@ const T={
 };
 const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const LOGO='<svg viewBox="0 0 100 100" aria-hidden="true"><g fill="currentColor"><rect x="15" y="14" width="19" height="74" rx="3.5"/><rect x="66" y="14" width="19" height="74" rx="3.5"/><path d="M50 28 85 51v16L50 43 15 67V51Z"/></g></svg>';
-// 영문 화면 — 영문 입력이 있으면 영문, 없으면 한국어 원문
-function tx(ko,en){return (lang==='en'&&en&&String(en).trim())?String(en):String(ko||'');}
+// 영문 화면 — 영문 입력이 있으면 영문, 없으면(또는 한글이 섞여 있으면) 구글 번역으로 바꿔 보여 줍니다
+//  (2026-11-18) 번역 결과는 이 기기에 기억해 두어 다음에 열 때 바로 표시됩니다
+const HAS_KO=/[가-힣]/;
+const TR_KEY='hhc_rp_tr';
+let TRC={};try{TRC=JSON.parse(localStorage.getItem(TR_KEY)||'{}')||{};}catch(e){TRC={};}
+function trSave(){try{const ks=Object.keys(TRC);if(ks.length>300)ks.slice(0,ks.length-300).forEach(k=>delete TRC[k]);localStorage.setItem(TR_KEY,JSON.stringify(TRC));}catch(e){}}
+function tx(ko,en){
+  ko=String(ko||'');
+  if(lang!=='en')return ko;
+  if(en&&String(en).trim()&&!HAS_KO.test(en))return String(en);
+  if(!HAS_KO.test(ko))return ko;
+  return TRC[ko]||ko;
+}
+function gt(t){
+  return Promise.race([
+    fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=ko&tl=en&dt=t&q='+encodeURIComponent(t)).then(r=>r.json())
+      .then(j=>{const o=(j&&j[0])?j[0].map(x=>x&&x[0]||'').join(''):'';if(o&&!HAS_KO.test(o))TRC[t]=o.trim();}),
+    new Promise(r=>setTimeout(r,5000))
+  ]).catch(()=>{});
+}
+// 영문 화면을 그리기 전에 번역이 필요한 글을 한꺼번에 번역합니다
+function prepEn(m){
+  const need=[];
+  const add=(ko,en)=>{ko=String(ko||'');if(!ko||!HAS_KO.test(ko)||TRC[ko])return;if(en&&String(en).trim()&&!HAS_KO.test(en))return;if(need.indexOf(ko)<0)need.push(ko);};
+  add(m.symptom,m.symptom_en);add(m.result,m.result_en);
+  photos(m).concat(sphotos(m)).forEach(p=>add(p.cap,p.cap_en));
+  if(!need.length)return Promise.resolve();
+  return Promise.all(need.map(gt)).then(trSave);
+}
 function dfmt(d){
   const m=String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})/);if(!m)return d||'—';
   if(lang==='en'){const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return (+m[3])+' '+MO[+m[2]-1]+' '+m[1];}
@@ -356,10 +383,12 @@ function rno(m,id){
   return 'RP-'+(d||'000000')+'-'+String(id||'').slice(0,4).toUpperCase();
 }
 function photos(m){return (m.result_photos||[]).filter(p=>p&&(p.url||p.thumb));}
+function sphotos(m){return (m.symptom_photos||[]).filter(p=>p&&(p.url||p.thumb));}
+function phGrid(ps,set){return '<div class="ph'+(ps.length===1?' one':'')+'">'+ps.map((p,i)=>'<figure data-s="'+set+'" data-i="'+i+'"><img src="'+esc(p.thumb||p.url)+'" alt="" loading="lazy"><figcaption>'+esc(tx(p.cap,p.cap_en))+'</figcaption></figure>').join('')+'</div>';}
 function who(m){const c=String(m.condo||'').trim(),n=String(m.name||'').trim();return c&&n?(c+' ('+n+')'):(c||n||'—');}
 
 function render(){
-  const t=T[lang],m=M,ps=photos(m),done=m.status==='done';
+  const t=T[lang],m=M,ps=photos(m),sps=sphotos(m),done=m.status==='done';
   document.documentElement.lang=lang;
   document.title='Happy Home Care · '+t.top;
   const res=tx(m.result,m.result_en);
@@ -372,22 +401,24 @@ function render(){
         '<div class="hm"><div><div class="k">📄 '+t.no+'</div><div class="v">'+esc(rno(m,RID))+'</div></div>'+
           '<div><div class="k">🗓 '+t.visit+'</div><div class="v">'+esc(dfmt(m.visit_date||m.req_date))+'</div></div>'+
           '<div><div class="k">⏰ '+t.time+'</div><div class="v">'+esc(m.visit_time||'—')+'</div></div></div></div>'+
-      (m.symptom?'<div class="card"><div class="chd"><span class="ic">🔧</span>'+t.sym+'</div><div class="cbd">'+esc(tx(m.symptom,m.symptom_en))+'</div></div>':'')+
+      ((m.symptom||sps.length)?'<div class="card"><div class="chd"><span class="ic">🔧</span>'+t.sym+(sps.length?'<span class="cnt">📷 '+sps.length+t.ph+'</span>':'')+'</div>'+
+        (m.symptom?'<div class="cbd"'+(sps.length?' style="padding-bottom:4px"':'')+'>'+esc(tx(m.symptom,m.symptom_en))+'</div>':'')+
+        (sps.length?phGrid(sps,'s')+'<div class="zhint">'+t.zoom+'</div>':'')+'</div>':'')+
       '<div class="card res"><div class="chd"><span class="ic">✅</span>'+t.res+'</div>'+
         (res?'<div class="cbd">'+esc(res)+'</div>':'<div class="cbd mute">'+t.resWait+'</div>')+'</div>'+
       (ps.length?'<div class="card"><div class="chd"><span class="ic">📷</span>'+t.photos+'<span class="cnt">'+ps.length+t.ph+'</span></div>'+
-        '<div class="ph'+(ps.length===1?' one':'')+'">'+ps.map((p,i)=>'<figure data-i="'+i+'"><img src="'+esc(p.thumb||p.url)+'" alt="" loading="lazy"><figcaption>'+esc(tx(p.cap,p.cap_en))+'</figcaption></figure>').join('')+'</div>'+
+        phGrid(ps,'r')+
         '<div class="zhint">'+t.zoom+'</div></div>':'')+
       '<div class="card"><div class="ft"><div class="fi">📞</div><div><div class="ft1">Happy Works Services Sdn. Bhd.</div>'+
         '<div class="ft2"><a href="tel:+60172472774">+60 17-247 2774</a></div><div class="ft3">'+t.thanks+'</div></div></div></div>'+
     '</div>'+
     '<div id="rp-bar"><button onclick="window.print()">'+t.pdf+'</button><a class="prim" href="https://wa.me/60172472774?text='+encodeURIComponent('[Happy Home Care] '+rno(m,RID)+' ')+'" target="_blank" rel="noopener">'+t.ask+'</a></div>';
   document.getElementById('lk').onclick=()=>{lang='ko';render();};
-  document.getElementById('le').onclick=()=>{lang='en';render();};
-  document.querySelectorAll('.ph figure').forEach(f=>f.onclick=()=>lbOpen(+f.dataset.i));
+  document.getElementById('le').onclick=function(){if(lang==='en')return;this.textContent='…';lang='en';prepEn(M).then(render);};
+  document.querySelectorAll('.ph figure').forEach(f=>f.onclick=()=>lbOpen(+f.dataset.i,f.dataset.s));
   try{window.HDOC&&HDOC.refresh();}catch(e){}
 }
-function lbOpen(i){const p=photos(M)[i];if(!p)return;document.getElementById('lb-img').src=p.url||p.thumb;document.getElementById('lb-cap').textContent=tx(p.cap,p.cap_en);document.getElementById('lb').classList.add('on');}
+function lbOpen(i,set){const p=(set==='s'?sphotos(M):photos(M))[i];if(!p)return;document.getElementById('lb-img').src=p.url||p.thumb;document.getElementById('lb-cap').textContent=tx(p.cap,p.cap_en);document.getElementById('lb').classList.add('on');}
 window.lbClose=()=>document.getElementById('lb').classList.remove('on');
 
 // ══ 인쇄 · PDF 문서 양식 (A4) — 인보이스 · 견적서 · 계약서와 같은 양식 ══
@@ -396,7 +427,10 @@ window.HDOC_BUILD=function(){
   const H=window.HDOC,t=T[lang],m=M,ps=photos(m),done=m.status==='done',res=tx(m.result,m.result_en);
   const blocks=[];
   const box=(x,cls)=>'<div class="hx-nt" style="margin-top:7px"><div class="hx-nb w'+(cls?' '+cls:'')+'"><div class="hx-nx" style="font-size:11px;color:#14192A">'+x+'</div></div></div>';
-  if(m.symptom)blocks.push(H.sec(t.dIssue,'',box(esc(tx(m.symptom,m.symptom_en)))));
+  const sps=sphotos(m);
+  if(m.symptom||sps.length)blocks.push(H.sec(t.dIssue,sps.length?(sps.length+(lang==='en'?(sps.length===1?' photo':' photos'):'장')):'',
+    (m.symptom?box(esc(tx(m.symptom,m.symptom_en))):'')+
+    (sps.length?'<div class="hx-ph rp">'+sps.map(p=>'<figure><img src="'+esc(p.url||p.thumb)+'" alt=""><figcaption>'+esc(tx(p.cap,p.cap_en))+'</figcaption></figure>').join('')+'</div>':'')));
   blocks.push(H.sec(t.dRes,'',box(res?esc(res):esc(t.resWait),'g')));
   if(ps.length)blocks.push(H.sec(t.dPh,ps.length+(lang==='en'?(ps.length===1?' photo':' photos'):'장'),
     '<div class="hx-ph rp">'+ps.map(p=>'<figure><img src="'+esc(p.url||p.thumb)+'" alt=""><figcaption>'+esc(tx(p.cap,p.cap_en))+'</figcaption></figure>').join('')+'</div>'));
@@ -413,7 +447,7 @@ window.HDOC_BUILD=function(){
 };
 
 function fail(msg){document.getElementById('st-load').style.display='none';document.getElementById('st-err').style.display='flex';if(msg)document.getElementById('err-msg').innerHTML=msg;}
-function show(){document.getElementById('st-load').style.display='none';document.getElementById('app').style.display='block';render();}
+function show(){const go=()=>{document.getElementById('st-load').style.display='none';document.getElementById('app').style.display='block';render();};if(lang==='en')prepEn(M).then(go,go);else go();}
 
 // 미리보기용 예시 (?demo=1)
 const DEMO={condo:'GEO LAKE A-08-08',name:'김민수',status:'done',req_date:'2026-10-28',visit_date:'2026-10-30',visit_time:'14:00',
