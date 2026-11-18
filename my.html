@@ -551,6 +551,12 @@ const ICONS=`<svg width="0" height="0" style="position:absolute" aria-hidden="tr
 document.addEventListener('DOMContentLoaded',()=>{document.body.insertAdjacentHTML('afterbegin',ICONS);
   const t=document.createElement('div');t.className='toast';t.id='toast';document.body.appendChild(t);});
 try{const q=new URLSearchParams(location.search).get('lang');if(q==='en')LANG='en';}catch(e){}
+// 💰 일부 사용한 상품권 잔액 (2026-11-18 · 인보이스 사용 기록 uses 가 있을 때만 숫자, 없으면 null)
+function cpBal(c){
+  if(!c||c.type==='discount'||!Array.isArray(c.uses)||!c.uses.length)return null;
+  const m=String(c.value||'').replace(/,/g,'').match(/[0-9]+(\.[0-9]+)?/),v=m?parseFloat(m[0]):0;
+  return Math.max(0,Math.round((v-c.uses.reduce((a,u)=>a+(parseFloat(u&&u.amt)||0),0))*100)/100);
+}
 function S(){
   const rows=careRows(),cnt={ok:0,warn:0,bad:0};rows.forEach(r=>cnt[r.st]++);
   const score=Math.round(rows.reduce((a,r)=>a+(r.st==='bad'?0:Math.min(100,40+r.rem*.6)),0)/rows.length);
@@ -1222,7 +1228,7 @@ function buildFromApi(j,svc){
     lastVisit:dates.pop()||todayISO(),
     bookings:(j.bookings||[]).map(b=>({id:b.__id,d:String(b.booking_date||'').slice(0,10),t:String(b.booking_time||''),st:b.status,it:String(b.booking_items||'')})),
     quotes:(j.quotes||[]).map(q=>({id:q.__id,no:q.qno||'',s:q.subject||'',se:q.subjectEn||'',d:q.issueDate||'',v:q.validUntil||'',t:(parseFloat(q.baseTotal)||0)+((q.customerChoice&&parseFloat(q.customerChoice.price))||0)})),
-    coupons:(j.coupons||[]).filter(c=>c.status==='active').map(c=>({id:c.__id,v:c.value||'',ex:c.expiry||'',ty:c.type})),
+    coupons:(j.coupons||[]).filter(c=>c.status==='active').map(c=>({id:c.__id,v:c.value||'',ex:c.expiry||'',ty:c.type,bal:cpBal(c)})),
     m});
 }
 function S(){
@@ -1869,7 +1875,7 @@ function render(){
   reps.forEach((r,i)=>{if(r.st!=='done'&&r.vd>=iso(TODAY))al.push('<button class="alert am" data-k="mm" data-a="rep:'+i+'"><span class="ic">'+WR.replace(/24/g,'22')+'</span><span class="tx"><small>'+(en?'Repair visit scheduled':'수리 방문 예정')+'</small><b>'+dd(r.vd)+' '+r.vt+'</b><span class="s">'+esc(en?r.sym_en||r.sym:r.sym)+'<br><span class="wp">'+(en?'Pre-register your WORK PERMIT':'WORK PERMIT 사전등록 필수')+'</span></span></span><span class="go ln" data-a="go" data-u="'+ea(wpUrl({d:r.vd,t:r.vt,it:en?r.sym_en||r.sym:r.sym,qt:'mm'}))+'">'+(en?'Work permit':'작업방문등록')+'</span></button>');});
   // ⑤ 사용 가능한 상품권 (만료가 가장 가까운 것)
   {const cs=(RAW.coupons||[]).filter(x=>String(x.status||'active')==='active'&&!(x.expiry&&String(x.expiry)<td0)).sort((a,b)=>String(a.expiry||'9999').localeCompare(String(b.expiry||'9999')));
-   if(cs.length){const c=cs[0];al.push(AL('coupon','gd','🎫',en?'Voucher ready':'사용 가능한 상품권'+(cs.length>1?' '+cs.length+'장':''),esc(c.value||''),(c.expiry?(en?'Valid until ':'')+dd(String(c.expiry).slice(0,10))+(en?'':' 까지'):'')+(c.code?' · '+esc(c.code):''),L.tView,'ln','data-a="go" data-u="'+ea(BASE+'/coupon.html?id='+encodeURIComponent(c.__id)+(en?'&lang=en':''))+'"'));}}
+   if(cs.length){const c=cs[0],_b=cpBal(c);al.push(AL('coupon','gd','🎫',en?'Voucher ready':'사용 가능한 상품권'+(cs.length>1?' '+cs.length+'장':''),_b!=null?((en?'Balance RM ':'잔액 RM ')+_b.toFixed(2)+' / '+esc(c.value||'')):esc(c.value||''),(c.expiry?(en?'Valid until ':'')+dd(String(c.expiry).slice(0,10))+(en?'':' 까지'):'')+(c.code?' · '+esc(c.code):''),L.tView,'ln','data-a="go" data-u="'+ea(BASE+'/coupon.html?id='+encodeURIComponent(c.__id)+(en?'&lang=en':''))+'"'));}}
   const bad=s.rows.filter(r=>r.st==='bad');
   if(bad.length)al.push('<button class="alert am" data-a="care:'+bad[0].k+'"><span class="ic">'+ic(bad[0].ic,22)+'</span><span class="tx"><small>'+L.tCare+'</small><b>'+bad.map(r=>(en?r.en:r.ko)).join(', ')+'</b><span class="s">'+(en?bad.length+' item(s) past the recommended date':bad.length+'개 품목 권장일 지남')+'</span></span><span class="go ln">'+L.tBook+'</span></button>');
   if(FOCUS==='sv'||FOCUS==='cr')al.unshift(AL('svreq','gd','📋',en?'Request form':'의뢰 요청서',en?'Submit a service request':'서비스 의뢰 신청 접수하기',en?'Pick items and get an estimate right away':'품목을 고르면 예상 금액도 바로 확인돼요',en?'Request':'의뢰하기','','data-a="book"'));
@@ -1913,7 +1919,7 @@ function render(){
     (evs.length>2?(TLN<evs.length?'<button class="tlm" data-more="1">'+(en?'Show '+(evs.length-TLN)+' more ▾':'이력 '+(evs.length-TLN)+'건 더 보기 ▾')+'</button>':'<button class="tlm" data-less="1">'+(en?'Show less ▴':'접기 ▴')+'</button>'):'')+'</div>';
   // 상품권 · 견적서
   if(D.coupons.length||D.quotes.length){h+='<div class="h"><h2>'+(en?'Vouchers & quotes':'상품권 · 견적서')+'</h2></div><div class="tl" id="s-vq">'+
-    D.coupons.map(c=>'<button class="ev" data-a="go" data-u="'+ea(BASE+'/coupon.html?id='+encodeURIComponent(c.id)+(en?'&lang=en':''))+'"><span class="dt"><b style="font-size:20px">🎁</b></span><span class="tx"><b>'+(en?'Gift voucher ':'상품권 ')+c.v+'</b><small>'+(en?'Valid until ':'유효기간 ')+dd(c.ex)+'</small><span class="tg"><span class="o">'+(en?'Usable':'사용 가능')+'</span></span></span></button>').join('')+
+    D.coupons.map(c=>'<button class="ev" data-a="go" data-u="'+ea(BASE+'/coupon.html?id='+encodeURIComponent(c.id)+(en?'&lang=en':''))+'"><span class="dt"><b style="font-size:20px">🎁</b></span><span class="tx"><b>'+(en?'Gift voucher ':'상품권 ')+c.v+(c.bal!=null?' · '+(en?'Balance RM ':'잔액 RM ')+c.bal.toFixed(2):'')+'</b><small>'+(en?'Valid until ':'유효기간 ')+dd(c.ex)+'</small><span class="tg"><span class="o">'+(en?'Usable':'사용 가능')+'</span></span></span></button>').join('')+
     D.quotes.map(q=>'<button class="ev" data-a="go" data-u="'+ea(BASE+'/quote.html?id='+encodeURIComponent(q.id)+'&lang='+LANG)+'"><span class="dt"><b style="font-size:20px">📝</b></span><span class="tx"><b>'+(en?(q.se||'Quotation'):q.s)+' · RM '+f0(q.t)+'</b><small>'+q.no+' · '+(en?'valid until ':'유효기간 ')+dd(q.v)+'</small></span></button>').join('')+'</div>';}
   // 포인트(회원) · 추천
   if(M)h+='<button class="pts" data-a="points"><span class="tx"><small>'+L.ptL+'<span class="cash">'+(en?'Use like cash':'현금처럼 사용')+'</span></small><b class="num">RM '+f2(D.points.bal)+'</b><span class="s">'+L.rate+'</span></span>'+ic('i-chev',18)+'</button>';
