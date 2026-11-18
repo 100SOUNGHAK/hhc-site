@@ -605,6 +605,11 @@ function renderQR(){
   }
   function build(c,st){
     var isDisc=c.type==='discount';
+    // 💰 일부 사용한 상품권 잔액 (2026-11-18 · uses 기록이 있을 때만)
+    var _uses=(!isDisc&&Array.isArray(c.uses))?c.uses:[];
+    var _num=function(v){var m=String(v||'').replace(/,/g,'').match(/[0-9]+(\.[0-9]+)?/);return m?parseFloat(m[0]):0;};
+    var _rm=function(n){return 'RM '+(Math.round(n*100)/100).toFixed(2);};
+    var _rem=Math.max(0,_num(c.value)-_uses.reduce(function(a,u){return a+(parseFloat(u.amt)||0);},0));
     var buyer=c.buyer||c.name||'',recv=c.receiver||buyer;
     var _m=String(recv||'').match(/[A-Za-z가-힣]/);
     var ini=(_m?_m[0]:'H').toUpperCase();
@@ -631,6 +636,7 @@ function renderQR(){
          '<div class="gv-kd gv-eg">'+(isDisc?'Discount Coupon':'Gift Voucher')+(LANG==='en'?'':'<small>'+(isDisc?'할인권':'상품권')+'</small>')+'</div>'+
          '<div class="gv-am gv-eg'+(amLen>6?' gv-sm':'')+'">'+amH+'</div>'+
          (cond?'<div class="gv-cd gv-eg">'+E(cond)+'</div>':'')+
+         (_uses.length&&st==='ok'?'<div class="gv-cd gv-eg"><b>'+(LANG==='en'?'Remaining ':'남은 금액 ')+E(_rm(_rem))+'</b></div>':'')+
          '<div class="gv-bt gv-eg"><div><div class="gv-k">'+(LANG==='en'?'RECIPIENT':'받는 분')+'</div>'+
          '<div class="gv-v">'+E(recv||'—')+(c.receiver?'':'<small>'+E(t.same)+'</small>')+'</div></div>'+
          '<div class="gv-r"><div class="gv-k">'+(LANG==='en'?'VALID THRU':'유효기간')+'</div><div class="gv-v">'+E(c.expiry||t.noLimit)+'</div></div></div>'+
@@ -661,6 +667,8 @@ function renderQR(){
        (c.expiry?'<div class="row"><span class="k">'+E(t.exp)+'</span><span class="v">'+E(c.expiry)+E(t.until)+'</span></div>':'')+
        '<div class="row"><span class="k">'+E(t.iss)+'</span><span class="v">'+E(c.issuedAt||'—')+'</span></div>'+
        (cond?'<div class="row"><span class="k">'+(LANG==='en'?'Condition':'사용 조건')+'</span><span class="v">'+E(cond)+'</span></div>':'')+
+       (_uses.length?'<div class="row"><span class="k">'+(LANG==='en'?'Remaining':'남은 금액')+'</span><span class="v"><b>'+E(_rm(_rem))+'</b> / '+E(c.value||'')+'</span></div>'+
+         _uses.map(function(u){return '<div class="row"><span class="k">'+(LANG==='en'?'Used':'사용')+(u.at?' · '+E(String(u.at).slice(0,10)):'')+'</span><span class="v">− '+E(_rm(parseFloat(u.amt)||0))+'</span></div>';}).join(''):'')+
        '</div></div>';
     // 이용 안내 — 눈에 띄게
     var I_BOOK='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M9 7h7M9 11h5"/></svg>';

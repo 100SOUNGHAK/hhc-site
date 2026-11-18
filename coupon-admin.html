@@ -318,6 +318,11 @@ function stOf(c){
   return 'ok';
 }
 function couponLink(id){return PAGE_BASE+'?id='+id;}
+// 💰 상품권 잔액 (2026-11-18) — 인보이스에서 일부만 쓴 경우 uses [{inv,amt,at}] 기록 · 잔액 = 금액 − 사용 합계
+function cpnNum(v){var m=String(v||'').replace(/,/g,'').match(/[0-9]+(\.[0-9]+)?/);return m?parseFloat(m[0]):0;}
+function cpnUses(c){return Array.isArray(c&&c.uses)?c.uses:[];}
+function cpnRemain(c){return Math.max(0,Math.round((cpnNum(c.value)-cpnUses(c).reduce(function(a,u){return a+(parseFloat(u.amt)||0);},0))*100)/100);}
+function cpnRM(n){return 'RM '+(Math.round(n*100)/100).toFixed(2);}
 
 // ── 고객 마이페이지 링크 (customers 컬렉션에서 이름/별칭으로 문서 id를 찾는다)
 var MY_BASE='https://happyhomecare.com.my/my.html';
@@ -444,11 +449,16 @@ function mkItem(cpn,q){
     :('구매·받는 <span class="who">'+hl(cpn.name,q)+'</span>');
   var histN=(cpn.history||[]).length;
   var line3=['발급 '+(cpn.issuedAt||'-'),cpn.expiry?('유효 ~'+cpn.expiry):'',cpn.cond||'',histN?('🕘 고객변경 '+histN+'회'):''].filter(Boolean).join(' · ');
+  var _us=cpnUses(cpn),balHtml='';
+  if(!isD&&_us.length){
+    balHtml='<div class="vsub" style="color:#0a7a4a;font-weight:700">💰 잔액 '+cpnRM(cpnRemain(cpn))+' / '+esc(cpn.value||'')+'</div>'+
+      '<div class="vsub">'+_us.map(function(u){return '🧾 '+esc(u.inv||'')+' · −'+cpnRM(parseFloat(u.amt)||0)+(u.at?' ('+esc(String(u.at).slice(0,10))+')':'');}).join('<br>')+'</div>';
+  }
   d.innerHTML=
     '<div class="top"><span class="vtype '+(isD?'discount':'gift')+'">'+(isD?'🏷️ 할인권':'🎫 상품권')+'</span><span class="vamt">'+esc(cpn.value||'')+'</span>'+stLbl+'</div>'+
     '<span class="vcode">'+hl(cpn.code,q)+'</span>'+
     '<div class="vsub">'+who+'</div>'+
-    '<div class="vsub">'+line3+'</div>'+
+    '<div class="vsub">'+line3+'</div>'+balHtml+
     '<div class="vact"></div><div class="vmore"></div>';
   var act=d.querySelector('.vact'),more=d.querySelector('.vmore');
   function mk(host,label,cls,fn){var b=document.createElement('button');b.type='button';b.className='vbtn'+(cls?' '+cls:'');b.textContent=label;b.onclick=fn;host.appendChild(b);return b;}
