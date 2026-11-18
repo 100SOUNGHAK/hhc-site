@@ -3321,7 +3321,8 @@ function liDcTagHtml(liId){
 function ivLiDc(t,li){return ((t&&t.adjusts)||[]).filter(function(a){return a.li&&li&&a.li===li.id&&a.val<0&&a.amt>0.005;});}
 function ivLiDcTx(a,mode,fa){   // mode : 'ko' | 'en' | 'bi'
   var ko=a.name||'할인',en=ivFreeEn(ko,'')||'Discount';
-  var nm=mode==='en'?en:(mode==='bi'&&en&&en!==ko?ko+' · '+en:ko);
+  var enOk=!ivHasKo(en);   // 번역이 아직 없으면 영문 화면에는 「Discount」 (한글이 남지 않게)
+  var nm=mode==='en'?(enOk?en:'Discount'):(mode==='bi'&&enOk&&en!==ko?ko+' · '+en:ko);
   return nm+_adjPctTx(a)+' − '+fa(a.amt);
 }
 function pkDcRows(liId){var r=[];adjusts.forEach(function(a,i){if(a.li===liId)r.push(i);});return r;}
@@ -4424,7 +4425,11 @@ function buildInvAppHTML(inv,lang){
       h+='<div class="ivr"><div class="nm"><div class="t">'+ivaNameHTML(_nm)+'</div>'+
            (sp&&!_tg?'<div class="s">'+E(sp)+'</div>':'')+
            '<div class="mm num">'+E(q)+' × '+fa(li.price)+(da>0?'<span class="dc">'+L('할인 ','Disc. ')+E(dTxt)+'</span>':'')+'</div>'+
-           ivLiDc(t,li).map(function(a){return '<div class="ldc">🏷️ '+E(ivLiDcTx(a,en?'en':'ko',fa))+'</div>';}).join('')+'</div>'+
+           ivLiDc(t,li).map(function(a){
+             // 영문 화면 : 할인명이 사전에 없으면 온라인 번역(data-ivtr)으로 바꿔 한글이 남지 않게 (결제 요약 줄과 같은 방식)
+             var ko=a.name||'할인',nm=en?ivFreeEn(ko,''):ko;
+             var nmH=(en&&ivHasKo(ko))?'<span data-ivtr="'+E(ko).replace(/"/g,'&quot;')+'">'+E(ivHasKo(nm)?'Discount':nm)+'</span>':E(nm);
+             return '<div class="ldc">🏷️ '+nmH+E(_adjPctTx(a)+' − '+fa(a.amt))+'</div>';}).join('')+'</div>'+
          '<div class="c num">'+E(q)+'</div><div class="c num">'+fa(li.price)+'</div>'+
          (hasDisc?'<div class="c num dcv">'+(da>0?E(dTxt):'—')+'</div>':'')+
          '<div class="c a num">'+fa(amt)+'</div></div>';
