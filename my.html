@@ -177,7 +177,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;letter
 .mstage{position:relative;margin-top:16px;padding-bottom:14px;perspective:1000px}
 .mstage:after{content:'';position:absolute;left:12%;right:12%;bottom:0;height:22px;border-radius:50%;background:radial-gradient(closest-side,rgba(0,0,0,.6),rgba(0,0,0,0));filter:blur(4px);z-index:0}
 .mcard{margin-top:0!important;height:206px!important;border-radius:20px!important;z-index:1;transform-style:preserve-3d;
-  transform:rotateX(var(--rx,7deg)) rotateY(var(--ry,0deg)) translateZ(0)!important;transition:transform .5s cubic-bezier(.22,.61,.36,1),box-shadow .5s;
+  transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateZ(0)!important;transition:transform .5s cubic-bezier(.22,.61,.36,1),box-shadow .5s;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.45),inset 0 0 0 1.5px rgba(227,201,138,.65),
     0 1px 0 #E3C98A,0 2px 0 #C9A44C,0 3px 0 #B08D3A,0 4px 0 #8F6F28,0 5px 0 #6E5418,
     0 18px 26px -8px rgba(0,0,0,.65),0 40px 60px -24px rgba(0,0,0,.8),0 0 46px -8px rgba(227,201,138,.38)!important}
@@ -196,6 +196,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;letter
 .mcard .t span{text-shadow:0 1px 0 rgba(0,0,0,.6)}
 .mcard>*:not(.shn):not(.glr):not(.chip2):not(.rim){position:relative;z-index:3}
 .mcard>.pb{position:absolute!important}
+/* 회원권 카드 : 정면에서 좌우로 천천히 돌아감 (손가락으로 만지면 따라 기울고, 떼면 다시 천천히 움직임) */
+@property --ry{syntax:'<angle>';inherits:false;initial-value:0deg}
+@property --rx{syntax:'<angle>';inherits:false;initial-value:0deg}
+@property --gx{syntax:'<percentage>';inherits:false;initial-value:20%}
+.mcard:not(.live){animation:mcSway 7.5s ease-in-out infinite;transition:box-shadow .5s!important}
+@keyframes mcSway{0%,100%{--ry:-10deg;--rx:1.5deg;--gx:12%}50%{--ry:10deg;--rx:-1.5deg;--gx:88%}}
 @property --ma{syntax:'<angle>';inherits:false;initial-value:0deg}
 .mcard .rim{position:absolute!important;inset:0;border-radius:inherit;padding:1.8px;z-index:4;pointer-events:none;
   background:conic-gradient(from var(--ma),rgba(227,201,138,.18) 0deg,#FFF4CF 38deg,#E3C98A 62deg,rgba(227,201,138,.18) 110deg,rgba(227,201,138,.18) 200deg,#F6E3A8 238deg,#C9A44C 258deg,rgba(227,201,138,.18) 300deg);
@@ -208,7 +214,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;letter
 .mcard .t span{background:linear-gradient(90deg,#F3DFA6,#FFF8E1 45%,#C9A44C 70%,#F3DFA6);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent!important;text-shadow:none!important;filter:drop-shadow(0 1px 0 rgba(0,0,0,.55));animation:mcFoil 5s ease-in-out infinite}
 @keyframes mcFoil{0%,100%{background-position:100% 0}50%{background-position:0 0}}
 .mcard .v{font-size:38px!important}
-@media (prefers-reduced-motion:reduce){.mcard{transform:none!important}.mcard .shn,.mcard .rim,.mstage:before,.mcard .t span{animation:none}}
+@media (prefers-reduced-motion:reduce){.mcard{transform:none!important;animation:none!important}.mcard .shn,.mcard .rim,.mstage:before,.mcard .t span{animation:none}}
 /* 엄지 영역: 아래 고정 */
 .dock{position:fixed;left:0;right:0;bottom:0;z-index:9;padding:10px 16px calc(12px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(250,249,246,0),var(--paper) 30%)}
 .dock-in{max-width:448px;margin:0 auto;display:flex;gap:8px}
@@ -1948,9 +1954,10 @@ function render(){
   try{pnInit();}catch(e){}
 }
 function mcTilt(){const m=document.querySelector('.mcard');if(!m||matchMedia('(prefers-reduced-motion:reduce)').matches)return;
-  m.onpointermove=e=>{const r=m.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;m.style.setProperty('--ry',(x*14).toFixed(2)+'deg');m.style.setProperty('--rx',(7-y*12).toFixed(2)+'deg');m.style.setProperty('--gx',((x+.5)*100).toFixed(0)+'%');m.style.setProperty('--sx',(100-(x+.5)*120).toFixed(0)+'%');};
-  m.onpointerleave=()=>{['--ry','--rx','--gx','--sx'].forEach(k=>m.style.removeProperty(k));};
-  if(window.DeviceOrientationEvent&&!mcTilt.o){mcTilt.o=1;addEventListener('deviceorientation',e=>{const k=document.querySelector('.mcard');if(!k||e.gamma==null)return;k.style.setProperty('--ry',Math.max(-10,Math.min(10,e.gamma/3)).toFixed(1)+'deg');k.style.setProperty('--gx',(50+Math.max(-40,Math.min(40,e.gamma))).toFixed(0)+'%');});}}
+  // 손가락·마우스로 만지는 동안만 그 방향으로 기울고(.live), 떼면 1.2초 뒤 다시 천천히 좌우로 돌아갑니다
+  let tm=null;
+  m.onpointermove=e=>{clearTimeout(tm);m.classList.add('live');const r=m.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;m.style.setProperty('--ry',(x*16).toFixed(2)+'deg');m.style.setProperty('--rx',(-y*10).toFixed(2)+'deg');m.style.setProperty('--gx',((x+.5)*100).toFixed(0)+'%');m.style.setProperty('--sx',(100-(x+.5)*120).toFixed(0)+'%');};
+  m.onpointerleave=m.onpointerup=m.onpointercancel=()=>{clearTimeout(tm);tm=setTimeout(()=>{['--ry','--rx','--gx','--sx'].forEach(k=>m.style.removeProperty(k));m.classList.remove('live');},1200);};}
 let PMPOS='care',TLN=2,ALN=2,IVN=4,SELM=false,SEL=[];
 function bkTitle(it){const segs=String(it).split(/\),\s*/);const s0=segs[0];const nm=s0.split('(')[0];const m=s0.match(/\((\d+대)(?:\/([^)]*))?/g);const last=m?m[m.length-1].replace(/^\(/,''):'';const [cnt,meth]=last.split('/');return nm+(cnt&&/대/.test(cnt)?' '+cnt:'')+(meth?' · '+meth.split('·').pop().trim():'')+(segs.length>1?' 외 '+(segs.length-1)+'건':'');}
 document.addEventListener('click',e=>{
