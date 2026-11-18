@@ -15,6 +15,11 @@
 //    HHC_ORIGIN         출발지 — 주소 글자 또는 "위도,경도" (Secret)
 //  셋 중 하나라도 없으면 ready:false → 화면은 구역 요금표만 보여 줌
 //
+//  GET /api/travel?eta=1&olat=..&olng=..&lat=..&lng=..   → {ok, minutes, km}   (2026-11-18)
+//      · 스케쥴 「방문 안내 → 🚗 이동중」 메시지용: 지금 내 위치 → 방문 위치 자동차 소요시간
+//      · 구글맵 내비게이션처럼 지금 교통 상황을 반영(TRAFFIC_AWARE) · 저장(캐시)하지 않음
+//      · 방문 위치 좌표가 없으면 lat/lng 대신 daddr=주소 글자
+//
 //  GET /api/travel?mem=1&c={고객문서ID}  → {ok, exempt, warranty, last}   (2026-11-16)
 //      · exempt: 패키지 회원(유효 계약 적립잔액 합계 RM500 초과) · warranty: 마지막 에어컨 서비스 30일 이내
 //      · 잔액 RM500 이하면 회원 면제 제외 (무상점검 제한 규정). 금액·계약 내용은 돌려주지 않음
@@ -31,6 +36,7 @@ export async function onRequestGet(context){
   const ready = !!(env.GMAPS_BROWSER_KEY && env.GMAPS_SERVER_KEY && env.HHC_ORIGIN);
 
   if (q.get('mem')) return memberExempt(request, env, (q.get('c') || '').trim());
+  if (q.get('eta')) return eta(request, env, q);
 
   if (q.get('cfg')) {
     if (rateLimited(request, 'travel-cfg', 60)) return fail('too many requests', 429);
@@ -89,6 +95,47 @@ export async function onRequestGet(context){
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=2592000' }
   })));
   return json(out);
+}
+
+// 🚗 이동중 안내 — 지금 위치 → 방문 위치 소요시간 (교통 반영, 구글맵 내비게이션 기준)
+const inMY = (a, b) => isFinite(a) && isFinite(b) && a >= 0.8 && a <= 7.6 && b >= 99.5 && b <= 119.5;
+async function eta(request, env, q){
+  if (!originAllowed(request)) return fail('forbidden', 403);
+  if (rateLimited(request, 'travel-eta', 20)) return fail('too many requests', 429);
+  if (!env.GMAPS_SERVER_KEY) return fail('server-not-configured', 503);
+  const olat = Number(q.get('olat')), olng = Number(q.get('olng'));
+  if (!inMY(olat, olng)) return fail('bad-origin', 400);
+  const lat = Number(q.get('lat')), lng = Number(q.get('lng'));
+  const daddr = String(q.get('daddr') || '').trim().slice(0, 200);
+  let destination;
+  if (q.get('lat') && inMY(lat, lng)) destination = { location: { latLng: { latitude: lat, longitude: lng } } };
+  else if (daddr) destination = { address: daddr + ', Malaysia' };
+  else return fail('bad-destination', 400);
+  let r;
+  try {
+    r = await fetch(ROUTES_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': env.GMAPS_SERVER_KEY,
+        'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration'
+      },
+      body: JSON.stringify({
+        origin: { location: { latLng: { latitude: olat, longitude: olng } } },
+        destination,
+        travelMode: 'DRIVE',
+        routingPreference: 'TRAFFIC_AWARE',
+        regionCode: 'MY',
+        units: 'METRIC'
+      })
+    });
+  } catch (e) { return fail('route-unreachable', 502); }
+  if (!r.ok) return fail('route-error-' + r.status, 502);
+  const d = await r.json().catch(() => ({}));
+  const best = (d.routes || [])[0];   // 구글이 추천하는 첫 경로 = 내비게이션이 안내하는 경로
+  if (!best || !best.duration) return json({ ok: false, error: 'no-route' }, 200);
+  const minutes = Math.max(1, Math.round(parseInt(String(best.duration), 10) / 60));
+  return json({ ok: true, minutes, km: Math.round((best.distanceMeters || 0) / 100) / 10 });
 }
 
 function parseOrigin(s){

@@ -2209,6 +2209,101 @@ function vrMyLink(name,phone,en,focus){
   return b+'/my.html?c='+encodeURIComponent(id)+'&v=iv,ip,ct,cp&lang='+(en?'en':'ko')+'&f='+(focus||'bk');
 }
 
+// ══════════════════════════════════════════════════════════════
+// 🚗 이동중 안내 (2026-11-18)
+//    「OOO에서 출발 예정. OO분 후 도착 예상입니다. 곧 방문드릴게요.」
+//    · OOO : 이 휴대폰의 지금 위치(GPS) → 구글맵 지역명 (Mont Kiara 처럼 영문 지역명)
+//    · OO분: 지금 위치 → 방문 위치 구글맵 자동차 소요시간(교통 반영, /api/travel?eta=1) + 10분
+//    · 방문 위치 = 길 안내와 같은 순서 (예약·일정 위치 > 고객관리 고객 위치 > 주소 글자)
+// ══════════════════════════════════════════════════════════════
+var MV_EXTRA=10;
+function mvEsc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}   // 구글맵 소요시간에 더하는 여유(분) — 주차·엘리베이터·경비실 등록
+function getMovingMsg(name,lang,area,mins){
+  var A=area||'000',M=(mins!=null&&mins!=='')?mins:'00';
+  if(lang==='en')
+    return 'Hello, '+name+' 😊\n\n🚗 *We\'re on our way*\n📍 Leaving from '+A+'.\n⏱ Expected to arrive in about '+M+' min.\n\n👉 See you very soon!';
+  return '안녕하세요, '+name+' 고객님 😊\n\n🚗 *이동 중입니다*\n📍 '+A+'에서 출발 예정.\n⏱ '+M+'분 후 도착 예상입니다.\n\n👉 곧 방문드릴게요.';
+}
+var _mvMapsP=null;
+function mvMaps(){   // 지역명 변환(Geocoder)용 구글 지도 — 영문 지역명으로 받습니다
+  if(window.google&&google.maps&&google.maps.Geocoder)return Promise.resolve(true);
+  if(_mvMapsP)return _mvMapsP;
+  _mvMapsP=fetch('/api/travel?cfg=1',{cache:'no-store'}).then(r=>r.json()).then(cfg=>{
+    if(!cfg||!cfg.ready||!cfg.key)throw new Error('maps-off');
+    return new Promise((res,rej)=>{
+      window.__hhcMvInit=()=>res(true);
+      const sc=document.createElement('script');
+      sc.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(cfg.key)+'&v=weekly&language=en&region=MY&loading=async&callback=__hhcMvInit';
+      sc.async=true;sc.onerror=()=>rej(new Error('maps-off'));
+      document.head.appendChild(sc);
+    });
+  }).catch(e=>{_mvMapsP=null;throw e;});
+  return _mvMapsP;
+}
+function mvHere(){
+  return new Promise((res,rej)=>{
+    if(!navigator.geolocation){rej(new Error('geo-none'));return;}
+    navigator.geolocation.getCurrentPosition(
+      p=>res({lat:p.coords.latitude,lng:p.coords.longitude}),
+      e=>rej(new Error(e&&e.code===1?'geo-denied':'geo-fail')),
+      {enableHighAccuracy:true,timeout:15000,maximumAge:60000});
+  });
+}
+// 지역명: 동네(neighborhood) > 구역(sublocality) > 도시(locality) 순서로 가장 먼저 나오는 이름
+async function mvArea(pt){
+  await mvMaps();
+  const gc=new google.maps.Geocoder();
+  const r=await gc.geocode({location:pt});
+  const res=(r&&r.results)||[];
+  for(const ty of ['neighborhood','sublocality_level_1','sublocality','locality','administrative_area_level_2']){
+    for(const x of res){
+      const c=(x.address_components||[]).find(a=>(a.types||[]).indexOf(ty)>=0);
+      if(c&&c.long_name&&!/^\d+$/.test(c.long_name))return c.long_name;
+    }
+  }
+  return '';
+}
+async function mvEta(pt,item){
+  const L=sxLoc(item);
+  let q='/api/travel?eta=1&olat='+pt.lat.toFixed(6)+'&olng='+pt.lng.toFixed(6);
+  if(L)q+='&lat='+(+L.lat).toFixed(6)+'&lng='+(+L.lng).toFixed(6);
+  else{
+    const a=String(item.customer_address||'').trim();
+    if(!a)throw new Error('no-dest');
+    q+='&daddr='+encodeURIComponent(a);
+  }
+  const r=await fetch(q,{cache:'no-store'});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok||!d.ok)throw new Error(d.error||('eta-'+r.status));
+  return {min:d.minutes,km:d.km,dest:L?(L.name||''):String(item.customer_address||'')};
+}
+// 지금 위치 → {area, gmin(구글맵 분), total(+10분), km, dest, err}
+async function mvInfo(item){
+  const out={area:'',gmin:null,total:null,km:null,dest:'',err:''};
+  let pt;
+  try{pt=await mvHere();}catch(e){out.err=e.message;return out;}
+  const [a,t]=await Promise.allSettled([mvArea(pt),mvEta(pt,item)]);
+  if(a.status==='fulfilled')out.area=a.value;
+  if(t.status==='fulfilled'){out.gmin=t.value.min;out.total=t.value.min+MV_EXTRA;out.km=t.value.km;out.dest=t.value.dest;}
+  else out.err=(t.reason&&t.reason.message)||'eta';
+  if(!out.area&&!out.err)out.err='area';
+  return out;
+}
+function mvErrText(e,en){
+  const K={
+    'geo-denied':['위치 권한이 꺼져 있습니다 · 브라우저 주소창의 위치 허용을 켜 주세요','Location permission is off · allow location for this site'],
+    'geo-none':['이 기기에서는 위치를 쓸 수 없습니다','Location is not available on this device'],
+    'geo-fail':['지금 위치를 찾지 못했습니다 · 잠시 후 다시 계산해 주세요','Could not get your location · try again'],
+    'no-dest':['방문 위치·주소가 없어 소요시간을 계산하지 못했습니다','No visit location/address to calculate time'],
+    'area':['지역명을 찾지 못했습니다 · 000 을 직접 고쳐 주세요','Area name not found · please edit 000'],
+  };
+  const k=K[e]||['소요시간을 계산하지 못했습니다 ('+e+') · 00 을 직접 고쳐 주세요','Could not calculate travel time ('+e+') · please edit 00'];
+  return en?k[1]:k[0];
+}
+
+// 방문 안내 메시지 꼬리말 — 마이페이지 링크 없이 연락처만 (2026-11-18)
+//  ※ 카카오톡 카드의 「마이페이지 열기」 버튼은 그대로 붙습니다
+function vrTailNoMy(){return '\n\n📞 +60 17-247 2774 · Happy Home Care';}
 window.sendVisitReminder=function(itemId){
   // bookings/schedules 양쪽에서 해당 항목 찾기
   let item=null;
@@ -2244,11 +2339,11 @@ window.sendVisitReminder=function(itemId){
   const copiedLabel=lang==='en'?'✓ Copied! Paste in KakaoTalk':'✓ 복사됨! 카카오톡에 붙여넣기 하세요';
   const tplLabels=isRepair
     ?(lang==='en'
-      ?[{k:'now',l:'⚡ Now'},{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'}]
-      :[{k:'now',l:'⚡ 지금 방문'},{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'}])
+      ?[{k:'now',l:'⚡ Now'},{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'},{k:'move',l:'🚗 On the way'}]
+      :[{k:'now',l:'⚡ 지금 방문'},{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'},{k:'move',l:'🚗 이동중'}])
     :(lang==='en'
-      ?[{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'}]
-      :[{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'}]);
+      ?[{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'},{k:'move',l:'🚗 On the way'}]
+      :[{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'},{k:'move',l:'🚗 이동중'}]);
   // 예약일 기준 기본 템플릿 자동 선택: 당일→'today', 내일→'tomorrow', 그 외→'pre'
   let defTpl='pre';
   try{
@@ -2269,8 +2364,12 @@ window.sendVisitReminder=function(itemId){
     <div style="background:#fff;border-radius:20px;padding:22px;max-width:440px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.14)">
       <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:4px">${title}</div>
       <div style="font-size:12px;color:#8a8f9a;margin-bottom:11px">${subtitle}</div>
-      <div style="display:flex;gap:6px;margin-bottom:10px" id="visit-tpl-row">
-        ${tplLabels.map(t=>`<button data-tpl="${t.k}" style="${chipBase}">${t.l}</button>`).join('')}
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap" id="visit-tpl-row">
+        ${tplLabels.map(t=>`<button data-tpl="${t.k}" style="${chipBase}${t.k==='move'?';flex-basis:100%;border-color:#C9A24A;color:#8A6A1F':''}">${t.l}</button>`).join('')}
+      </div>
+      <div id="visit-mv" style="display:none;align-items:center;gap:8px;background:#FBF6EA;border:1px solid #EADBB4;border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;line-height:1.5;color:#5B4A1E">
+        <div id="visit-mv-t" style="flex:1;min-width:0"></div>
+        <button id="visit-mv-re" type="button" style="flex-shrink:0;padding:6px 9px;border:1px solid #D9C48F;border-radius:8px;background:#fff;color:#8A6A1F;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit">🔄 ${lang==='en'?'Recalc':'다시 계산'}</button>
       </div>
       <textarea id="visit-msg-box" rows="9" style="width:100%;box-sizing:border-box;background:#f5f6f8;border:1px solid #e5e7eb;border-radius:10px;padding:12px;font-size:12px;color:#333;line-height:1.8;resize:vertical;font-family:inherit;margin-bottom:11px"></textarea>
       <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:7px">
@@ -2292,10 +2391,37 @@ window.sendVisitReminder=function(itemId){
       b.style.borderColor=on?'#0BB5A4':'#e5e7eb';
     });
     curTpl=tpl;
+    document.getElementById('visit-mv').style.display=(tpl==='move')?'flex':'none';
+    if(tpl==='move'){mvShow();return;}
     document.getElementById('visit-msg-box').value=
       (isRepair?getRepairReminderMsg(name,dateStr,lang,tpl,timeS,symptom)
-               :getVisitReminderMsg(name,dateStr,lang,tpl,timeS))+vrTail(VR_URL,lang==='en');
+               :getVisitReminderMsg(name,dateStr,lang,tpl,timeS))+vrTailNoMy();
   }
+  // 🚗 이동중 — 지금 위치·소요시간을 계산해 문구에 넣습니다 (한 번 계산하면 이 창에서는 다시 씀)
+  const EN=(lang==='en');
+  let mv=null,mvBusy=false;
+  function mvFill(){
+    if(curTpl!=='move')return;
+    const box=document.getElementById('visit-msg-box');
+    box.value=getMovingMsg(name,lang,mv&&mv.area,mv&&mv.total)+vrTailNoMy();
+    const st=document.getElementById('visit-mv-t');
+    if(mvBusy){st.innerHTML='⏳ '+(EN?'Getting your location and Google Maps driving time…':'지금 위치와 구글맵 이동 시간을 확인하는 중…');return;}
+    if(!mv)return;
+    let h='';
+    if(mv.area)h+='📍 '+(EN?'Now: ':'지금 위치: ')+'<b>'+mvEsc(mv.area)+'</b>';
+    if(mv.gmin!=null)h+=(h?'<br>':'')+'🚗 '+(EN?'Google Maps ':'구글맵 ')+mv.gmin+(EN?' min':'분')+(mv.km?' ('+mv.km+'km)':'')+' + '+MV_EXTRA+(EN?' min = ':'분 = ')+'<b>'+mv.total+(EN?' min':'분')+'</b>'
+      +(mv.dest?'<span style="color:#9A8550"> → '+mvEsc(mv.dest)+'</span>':'');
+    if(mv.err)h+=(h?'<br>':'')+'<span style="color:#B42318">⚠ '+mvEsc(mvErrText(mv.err,EN))+'</span>';
+    st.innerHTML=h;
+  }
+  async function mvShow(force){
+    if(mv&&!force){mvFill();return;}
+    if(mvBusy)return;
+    mvBusy=true;mvFill();
+    try{mv=await mvInfo(item);}catch(e){mv={area:'',gmin:null,total:null,err:(e&&e.message)||'eta'};}
+    mvBusy=false;mvFill();
+  }
+  document.getElementById('visit-mv-re').addEventListener('click',()=>mvShow(true));
   document.querySelectorAll('#visit-tpl-row button').forEach(b=>{
     b.addEventListener('click',()=>setTpl(b.dataset.tpl));
   });
