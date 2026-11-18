@@ -2818,6 +2818,10 @@ function render(){
   });
 
   var fb = document.getElementById('btnFlip');
+  /* 📱 QR 보기: QR 카드 + 「개인 명함 보기」 카드만 남긴다 (2026-11-19) */
+  var qrv = document.getElementById('flip').classList.contains('back');
+  document.body.classList.toggle('qrv', qrv);
+  if(qrv) person = false;   /* 아래 뒤집기 버튼을 「개인 명함 보기」 모양으로 */
   document.getElementById('fbT').textContent = person ? t.btnFlip : t.btnFlipBack;
   document.getElementById('fbD').textContent = person ? t.btnFlipD : t.btnFlipBackD;
   /* 앞면에서는 회사 로고, 회사 정보 화면에서는 대표 사진 — 어디로 가는지 그림으로 보여준다 */
@@ -2832,7 +2836,8 @@ function render(){
   fb.setAttribute('aria-pressed', person ? 'false' : 'true');
   document.getElementById('btnQrTop').setAttribute('aria-pressed',
     document.getElementById('flip').classList.contains('back') ? 'true' : 'false');
-  document.getElementById('quickActs').hidden = false;
+  person = (mode === 'person');
+  document.getElementById('quickActs').hidden = !person;   /* 회사 정보에서는 왓츠앱 상담~연락처 저장 박스 숨김 (2026-11-19) */
   document.getElementById('infoTitle').textContent = person ? t.hInfo : t.hCompany;
   /* 개인 명함 앞면: 연락처 목록은 바로 위 왓츠앱·전화·이메일 버튼과 겹치므로 숨긴다 (회사 정보 화면에만 표시) */
   document.getElementById('infoBox').hidden = person;
@@ -2877,12 +2882,19 @@ function render(){
   /* 개인 명함: 연락 버튼 → 서비스별 안내 → 바로가기 → 이벤트·혜택 → 도움 상식(에어컨 안내장) → 결제 방법
      회사 정보: 연락 버튼 → 회사 정보 → 서비스 기준 → 서비스 안내 → 결제 방법 */
   var company = (mode === 'company');
-  var order = company ? ['infoBox','stdBox','svcBox','payBox'] : ['guideBox','linkBox','perkBox','gbnBox','payBox'];
+  var order = company ? ['infoBox','stdBox','svcBox'] : ['guideBox','linkBox','perkBox','gbnBox','payBox'];
+  document.getElementById('payBox').hidden = company;   /* 회사 정보에서는 결제 방법 삭제 (2026-11-19) */
   ['guideBox','linkBox','gbnBox'].forEach(function(id){ document.getElementById(id).hidden = company; });
   if(company) document.getElementById('perkBox').hidden = true;
   document.getElementById('stdBox').hidden = !company;
   var ref = document.getElementById('quickActs');
   order.forEach(function(id){ var el = document.getElementById(id); ref.parentNode.insertBefore(el, ref.nextSibling); ref = el; });
+  /* 「회사 정보 보기」·「개인 명함 보기」 버튼 — 두 화면 모두 맨 아래, QR 보기에서만 명함 바로 아래 (2026-11-19) */
+  (function(){
+    var stg = document.querySelector('.na-stage');
+    if(!qrv){ ref.parentNode.insertBefore(fb, ref.nextSibling); fb.classList.add('at-end'); }
+    else { stg.parentNode.insertBefore(fb, stg.nextSibling); fb.classList.remove('at-end'); }
+  })();
   document.getElementById('hLinks').hidden = (mode === 'company');
   if(typeof guideRender === 'function') guideRender(t);
   var gdB = document.getElementById('gdBanner');                 /* 서비스 안내 페이지로 바로 이동 */
@@ -3367,6 +3379,9 @@ document.addEventListener('keydown', function(e){
 document.getElementById('btnFlip').addEventListener('click', function(){
   var card = document.getElementById('flip');
   if(card.classList.contains('mode-switch')) return;
+  if(card.classList.contains('back')){            /* QR 보기 → 개인 명함 */
+    card.classList.remove('back'); mode = 'person'; render(); window.scrollTo(0, 0); return;
+  }
   card.classList.remove('back');
   var change = function(){
     mode = (mode === 'person') ? 'company' : 'person';
@@ -3541,6 +3556,68 @@ function acGuidesUrl(k){
 /* QR 면으로 뒤집으면 원래 높이로 (QR이 잘리지 않게) */
 .na-flip.back .na-side.f .na-face.co{aspect-ratio:auto;min-height:338px}
 @media (prefers-reduced-motion:reduce){.na-side.f .na-face.co::after{animation:none;display:none}}
+/* 📱 QR 보기 (2026-11-19) — QR 카드 + 「개인 명함 보기」 카드만 */
+body.qrv .naw > *:not(.na-top):not(.na-seg):not(.na-stage):not(#btnFlip):not(#ownTop){display:none!important}
+body.qrv #naBar{display:none!important}
+body.qrv .na-side.b .na-face{cursor:zoom-in}
+.qf-hint{display:inline-flex;align-items:center;gap:6px;margin-top:4px;padding:7px 14px;border-radius:999px;background:rgba(227,201,138,.16);border:1px solid rgba(227,201,138,.4);font-size:12px;font-weight:800;color:#f3dc9a;letter-spacing:.02em}
+.na-flipbtn.at-end{margin-top:22px}
+#face{cursor:pointer}
+/* QR 전체 화면 */
+.qrfs{position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;
+  padding:max(24px,env(safe-area-inset-top)) 22px max(24px,env(safe-area-inset-bottom));background:#fdfcf9;color:#0f2540;
+  animation:qrfsIn .22s ease}
+.qrfs[hidden]{display:none}
+@keyframes qrfsIn{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+.qrfs .qf-t{margin:0;font-size:12px;font-weight:850;letter-spacing:.22em;color:#9c7629}
+.qrfs .qf-box{width:min(88vw,72vh,520px);aspect-ratio:1;padding:4%;background:#fff;border-radius:22px;box-shadow:0 18px 50px rgba(15,37,64,.16),inset 0 0 0 1px rgba(15,37,64,.08)}
+.qrfs .qf-box svg{width:100%;height:100%;display:block}
+.qrfs .qf-u{margin:0;font-size:15px;font-weight:800;color:#0f2540;word-break:break-all;text-align:center}
+.qrfs .qf-d{margin:-8px 0 0;font-size:13px;color:#5a6b82;text-align:center}
+.qrfs .qf-x{position:absolute;top:max(14px,env(safe-area-inset-top));right:14px;width:46px;height:46px;border:0;border-radius:50%;
+  background:#0f2540;color:#fff;font-size:22px;line-height:46px;cursor:pointer;box-shadow:0 6px 16px rgba(15,37,64,.25)}
+@media (prefers-reduced-motion:reduce){.qrfs{animation:none}}
 </style>
+<div class="qrfs" id="qrFs" hidden role="dialog" aria-modal="true" aria-label="QR">
+  <button type="button" class="qf-x" id="qrFsX" aria-label="닫기">✕</button>
+  <p class="qf-t">SCAN TO OPEN</p>
+  <div class="qf-box" id="qrFsBox"></div>
+  <p class="qf-u" id="qrFsU"></p>
+  <p class="qf-d" id="qrFsD"></p>
+</div>
+<script>
+/* 🪪 명함 그림을 누르면 개인 명함 ↔ 회사 정보 전환 (2026-11-19) */
+(function(){
+  var f = document.getElementById('face'); if(!f) return;
+  f.addEventListener('click', function(){
+    if(document.getElementById('flip').classList.contains('back')) return;
+    document.getElementById('btnFlip').click();
+  });
+})();
+/* 📱 QR 카드를 누르면 전체 화면으로 크게 (2026-11-19) */
+(function(){
+  var face = document.querySelector('.na-side.b .na-face'), fs = document.getElementById('qrFs');
+  if(!face || !fs) return;
+  function isEn(){ return document.documentElement.lang === 'en'; }
+  var hint = document.createElement('span'); hint.className = 'qf-hint'; face.appendChild(hint);
+  function zoomLabel(){ hint.textContent = isEn() ? '⤢ Tap to enlarge' : '⤢ 눌러서 크게 보기'; }
+  zoomLabel(); new MutationObserver(zoomLabel).observe(document.documentElement, { attributes:true, attributeFilter:['lang'] });
+  function open(){
+    var src = document.getElementById(isEn() ? 'qrEn' : 'qrKo');
+    var svg = src && src.querySelector('svg'); if(!svg) return;
+    var box = document.getElementById('qrFsBox'); box.innerHTML = '';
+    var c = svg.cloneNode(true); c.style.setProperty('--qr-bg', '#fff'); c.style.setProperty('--qr-fg', '#0f2540'); box.appendChild(c);
+    document.getElementById('qrFsU').textContent = (document.getElementById('qrUrl') || {}).textContent || '';
+    document.getElementById('qrFsD').textContent = isEn() ? 'Point your phone camera at the code' : '휴대폰 카메라로 찍으면 바로 열립니다';
+    document.getElementById('qrFsX').setAttribute('aria-label', isEn() ? 'Close' : '닫기');
+    fs.hidden = false; document.documentElement.style.overflow = 'hidden';
+  }
+  function close(){ fs.hidden = true; document.documentElement.style.overflow = ''; }
+  face.addEventListener('click', function(){ if(document.getElementById('flip').classList.contains('back')) open(); });
+  document.getElementById('qrFsX').addEventListener('click', function(e){ e.stopPropagation(); close(); });
+  fs.addEventListener('click', function(e){ if(e.target === fs) close(); });
+  document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && !fs.hidden) close(); });
+})();
+</script>
 </body>
 </html>
