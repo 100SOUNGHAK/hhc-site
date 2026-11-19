@@ -26,6 +26,21 @@ function okEndpoint(u){
   catch(e){ return false; }
 }
 const clip=(s,n)=>Array.from(String(s||'')).slice(0,n).join('');
+// 🛡 관리자(직원) 기기 구분 (2026-11-19)
+//  · 직원앱 알림을 허용한 기기는 push_subs 에 「기기 주소 끝 48자」 ID 로 등록돼 있다 (staffapp.html setupPush 와 같은 규칙)
+//  · 그런 기기가 고객 마이페이지를 열어 본 것만으로 고객 기기로 등록되던 문제를 막는다.
+//    고객 기기로 인정하는 것은 「그 마이페이지에서 직접 알림 켜기를 누른」 등록(explicit)뿐.
+const adminId=ep=>String(ep||'').replace(/[^a-zA-Z0-9]/g,'').slice(-48);
+async function isAdminDev(env,ep){ const id=adminId(ep); if(!id) return false; try{ return !!(await getDoc(env,'push_subs',id)); }catch(e){ return false; } }
+// 발송 대상에서 「관리자 기기인데 직접 켠 적 없는」 등록을 빼고, 그 등록은 지운다 → [보낼 기기, 정리한 수]
+async function realDevs(env,subs){
+  const keep=[]; let cleaned=0;
+  await Promise.all(subs.map(async s=>{
+    if(s.explicit!==true&&await isAdminDev(env,s.endpoint)){ await deleteDoc(env,'cust_push',s.__id).catch(()=>{}); cleaned++; }
+    else keep.push(s);
+  }));
+  return [keep,cleaned];
+}
 
 export async function onRequestPost(context){
   const req=context.request, env=context.env||{};
@@ -42,11 +57,25 @@ export async function onRequestPost(context){
     const cu=await getDoc(env,'customers',c);
     if(!cu) return fail('not found',404);
     const id=await subId(ep);
-    await patchDoc(env,'cust_push',id,{
+    const rec={
       c, name:String(cu.name||''), endpoint:ep, keys:{p256dh:String(k.p256dh),auth:String(k.auth)},
       lang:b.lang==='en'?'en':'ko', ua:clip(req.headers.get('User-Agent'),200), updated_at:new Date().toISOString(),
-    });
-    return json({ok:true});
+    };
+    // 조용한 재등록(quiet) : 마이페이지를 열 때마다 자동으로 부르는 것 — 「이미 이 고객의 기기」일 때만 갱신한다.
+    //  · 다른 고객 기기이거나(가족이 다른 링크를 연 경우) 처음 보는 기기면 아무것도 바꾸지 않고 mine:false
+    //  · 관리자 기기는 직접 켠 등록(explicit)이 아니면 고객 기기로 보지 않고, 잘못 들어가 있던 등록은 지운다
+    if(b.quiet){
+      const cur=await getDoc(env,'cust_push',id);
+      if(!cur||cur.c!==c) return json({ok:true,mine:false});
+      const adm=await isAdminDev(env,ep);
+      if(adm&&cur.explicit!==true){ await deleteDoc(env,'cust_push',id).catch(()=>{}); return json({ok:true,mine:false,adm:true}); }
+      await patchDoc(env,'cust_push',id,rec);
+      return json({ok:true,mine:true,adm});
+    }
+    // 직접 「알림 켜기」를 누른 등록
+    rec.explicit=true;
+    await patchDoc(env,'cust_push',id,rec);
+    return json({ok:true,mine:true});
   }
 
   // ── 고객: 이 기기 등록 해제 ──
@@ -71,8 +100,8 @@ export async function onRequestPost(context){
     if(!(age>=0&&age<5*60e3)) return fail('expired',410);
     const url=(typeof o.url==='string'&&o.url.charAt(0)==='/'&&o.url.charAt(1)!=='/')?o.url:'';
     const payload={kind:'cust',title:clip(o.title,60)||'Happy Home Care',body:clip(o.body,180),url,tag:'hhc-c-'+id};
-    const subs=await queryEq(env,'cust_push','c',String(o.c||''),20);
-    let sent=0,removed=0,failed=0;
+    const [subs,cleaned]=await realDevs(env,await queryEq(env,'cust_push','c',String(o.c||''),20));
+    let sent=0,removed=cleaned,failed=0;
     await Promise.all(subs.map(async s=>{
       try{
         const st=await sendPush({endpoint:s.endpoint,keys:s.keys},payload,priv);
@@ -128,8 +157,15 @@ async function autoPush(env,dry){
   const today=ymd(my), tmr=ymd(new Date(my.getTime()+86400e3)), yst=ymd(new Date(my.getTime()-86400e3));
 
   // 알림을 켠 고객과 그 기기
-  const subs=await listAll(env,'cust_push');
-  if(!subs.length) return json({ok:true,today,jobs:0,note:'no subscribers'});
+  const subs0=await listAll(env,'cust_push');
+  if(!subs0.length) return json({ok:true,today,jobs:0,note:'no subscribers'});
+  // 관리자 기기(직접 켠 적 없는 등록)는 대상에서 뺀다 — 확인용(dry) 호출에서는 지우지 않고 빼기만
+  let subs=subs0;
+  try{
+    const adm=new Set((await listAll(env,'push_subs')).map(r=>r.endpoint).filter(Boolean));
+    subs=subs0.filter(s=>s.explicit===true||!adm.has(s.endpoint));
+    if(!dry) await Promise.all(subs0.filter(s=>subs.indexOf(s)<0).map(s=>deleteDoc(env,'cust_push',s.__id).catch(()=>{})));
+  }catch(e){ subs=subs0; }
   const byC={}; subs.forEach(s=>{ if(s.c) (byC[s.c]=byC[s.c]||[]).push(s); });
   const custs=await batchGet(env,'customers',Object.keys(byC));
   // 고객별 「내 문서」 판정 — /api/my 와 같은 규칙 (추가 연결 · 소속 이동 · 떼어냄 · 전화/이름/별칭)

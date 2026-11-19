@@ -1101,9 +1101,14 @@ function stack_k(k){const s=document.querySelector('.shx');if(s)s.dataset.k=k;}
 const BASE=location.origin;
 const P0=new URLSearchParams(location.search);
 let CID=(P0.get('c')||'').trim();
+// 👁 관리자 미리보기 (2026-11-19) : 관리자 앱의 「고객화면」처럼 다른 화면 안(iframe)에서 열렸거나 주소에 pv=1 이 있으면 미리보기로 봅니다.
+//  · 미리보기는 이 기기의 「마지막 고객」을 바꾸지 않고(설치해 둔 마이페이지 앱이 그 고객으로 바뀌던 문제),
+//    이 기기를 그 고객의 알림 기기로 등록하지도 않습니다.
+let IS_PV=false;try{IS_PV=P0.get('pv')==='1'||window.top!==window.self;}catch(e){IS_PV=true;}
 // 고객번호 기억 : 주소에 c 없이 열려도(설치된 앱 아이콘 등) 마지막 고객 페이지로 다시 엽니다 — 기존 마이페이지와 같은 저장값(hhc_my_last)
 try{
-  if(CID){localStorage.setItem('hhc_my_last',JSON.stringify({c:CID,v:P0.get('v')||'',lang:P0.get('lang')||''}));localStorage.setItem('hhc_myc_last',CID);}
+  if(CID&&IS_PV){/* 미리보기 — 기억하지 않음 */}
+  else if(CID){localStorage.setItem('hhc_my_last',JSON.stringify({c:CID,v:P0.get('v')||'',lang:P0.get('lang')||''}));localStorage.setItem('hhc_myc_last',CID);}
   else{const _s=JSON.parse(localStorage.getItem('hhc_my_last')||'null');const _c=(_s&&_s.c)||localStorage.getItem('hhc_myc_last')||'';
     if(_c){const q=new URLSearchParams(location.search);q.set('c',_c);if(_s&&_s.v&&!q.get('v'))q.set('v',_s.v);if(_s&&_s.lang&&!q.get('lang'))q.set('lang',_s.lang);location.replace(location.pathname+'?'+q.toString()+location.hash);}}
 }catch(e){}
@@ -1722,6 +1727,7 @@ const PN_T={
 };
 function pnB64(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';const b=atob(s),u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u;}
 function pnPost(o){return fetch('/api/cpush',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)}).then(r=>r.json()).catch(()=>({ok:false}));}
+let _pnMine=null,_pnAdm=false;   // 이 기기가 이 고객의 알림 기기인지(서버 확인 결과) · 직원앱 알림도 쓰는 기기인지
 async function pnReg(){
   if(!('serviceWorker' in navigator))return null;
   let r=await navigator.serviceWorker.getRegistration('/');
@@ -1746,14 +1752,22 @@ async function pnPaint(){
   if(perm==='denied'){
     el.className='pnc no';el.innerHTML='<div class="pn-t">'+L.noT+'</div><div class="pn-s">'+L.noS+'</div>';return;
   }
+  // 조용한 재등록 (2026-11-19) : 서버가 「이미 이 고객의 기기」일 때만 갱신합니다.
+  //  · 다른 고객의 기기이거나 관리자 기기면 mine:false → 「알림 켜기」 버튼을 보여 주고, 직접 눌러야 이 고객 기기가 됩니다.
+  //  · 서버에 닿지 못했을 때는 예전처럼 받는 중으로 표시합니다.
+  if(sub&&_pnMine===null){
+    const q=await pnPost({op:'sub',c:CID,sub:sub.toJSON(),lang:LANG,quiet:true});
+    _pnMine=!(q&&q.ok&&q.mine===false);_pnAdm=!!(q&&q.adm);
+  }
+  if(sub&&_pnMine===false)sub=null;
   if(sub){
     el.className='pnc on';
     el.innerHTML='<div class="pn-row"><div><div class="pn-t">'+L.onT+'</div><div class="pn-s">'+L.onS+'</div></div>'+
       '<button type="button" class="pn-off" id="pn-off">'+L.off+'</button></div>';
-    pnPost({op:'sub',c:CID,sub:sub.toJSON(),lang:LANG});   // 조용히 다시 등록
     document.getElementById('pn-off').onclick=async()=>{
-      try{await pnPost({op:'unsub',c:CID,endpoint:sub.endpoint});await sub.unsubscribe();}catch(e){}
-      pnPaint();
+      // 직원앱 알림도 함께 쓰는 기기(_pnAdm)는 서버 등록만 지웁니다 — 기기 등록까지 끊으면 직원앱 알림도 끊기기 때문
+      try{await pnPost({op:'unsub',c:CID,endpoint:sub.endpoint});if(!_pnAdm)await sub.unsubscribe();}catch(e){}
+      _pnMine=false;pnPaint();
     };
     return;
   }
@@ -1777,7 +1791,7 @@ async function pnOn(b){
       const s=await r.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:pnB64(PN_KEY)});
       const res=await pnPost({op:'sub',c:CID,sub:s.toJSON(),lang:LANG});
       if(!res||!res.ok)throw new Error('save');
-      ok=true;
+      ok=true;_pnMine=true;
     }
   }catch(e){alert(L.err);}
   pnSheetClose();
@@ -1819,7 +1833,7 @@ function pnSheet(){
     const b=o.querySelector('#pn-sh-on');b.onclick=()=>pnOn(b);
   },1500);   // 화면이 다 그려진 뒤에
 }
-function pnInit(){if(!CID||IS_INAPP)return;pnPaint();}
+function pnInit(){if(!CID||IS_INAPP||IS_PV)return;pnPaint();}
 </script>
 <script>
 

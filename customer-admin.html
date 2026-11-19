@@ -6101,6 +6101,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     catch(err){toast('⚠️ 안내장 이미지를 만들지 못했습니다: '+((err&&err.message)||''));}
   });
   mk.querySelector('#cs-wa').addEventListener('click',async()=>{
+    try{if(window._csPnAuto)window._csPnAuto();}catch(_){}   // 🔔 알림 켠 고객에게는 앱 알림도 함께
     if(state.tpl==='rev'){revWa();return;}   // ⭐ 리뷰 이벤트 : 이미지 + 문구
     if(GDS[state.tpl]||state.tpl==='pti'||state.tpl==='mvo'){gdWa();return;}   // 📘 에어컨 안내장 · 💎 적립포인트 · 🚚 이사 안내 : 그림 + 문구
     if(careOn()&&await careSend('wa'))return;   // 🌿 정기관리 : 안내장 이미지 + 문구
@@ -6118,8 +6119,12 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   {
     const pb=mk.querySelector('#cs-pn'),pc=mk.querySelector('#cs-pn-n');
     let pnN=0;
-    getDocs(query(collection(db,'cust_push'),where('c','==',mid))).then(s=>{
-      pnN=s.size;
+    // 관리자(직원앱) 기기는 세지 않습니다 (2026-11-19) — 고객화면을 열어 본 관리자 기기가 고객 기기로 잡혀 「n대」가 부풀던 문제.
+    //  고객이 그 마이페이지에서 직접 「알림 켜기」를 누른 등록(explicit)은 그대로 셉니다.
+    Promise.all([getDocs(query(collection(db,'cust_push'),where('c','==',mid))),
+                 getDocs(collection(db,'push_subs')).catch(()=>null)]).then(([s,a])=>{
+      const adm=new Set();if(a)a.forEach(d=>{const ep=(d.data()||{}).endpoint;if(ep)adm.add(ep);});
+      pnN=0;s.forEach(d=>{const x=d.data()||{};if(x.explicit===true||!adm.has(x.endpoint))pnN++;});
       if(pnN){pb.disabled=false;pb.style.opacity='';pc.textContent=pnN>1?pnN+'대':'';pb.title='앱 알림 보내기 · 등록된 휴대폰 '+pnN+'대';}
       else pb.title='이 고객은 아직 마이페이지에서 앱 알림을 켜지 않았습니다';
     }).catch(()=>{pb.title='앱 알림 기기를 확인하지 못했습니다';});
@@ -6128,9 +6133,26 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
       const ls=String(waText(msg())||'').split('\n').map(s=>s.trim()).filter(Boolean)
         .filter(s=>!/https?:\/\//.test(s)&&!/^(👉|📞|☎)/.test(s));
       if(ls.length>1)ls.shift();   // 첫 줄 인사 제외
-      return Array.from(ls.slice(0,2).join(' ')).slice(0,170).join('');
+      // WhatsApp 굵게(*…*)·기울임(_…_) 표시는 알림에서 글자로 보이므로 지웁니다
+      return Array.from(ls.slice(0,2).join(' ').replace(/\*/g,'').replace(/(^|\s)_([^_]+)_(?=\s|$)/g,'$1$2')).slice(0,170).join('');
     };
     const pnUrl=()=>{let u=String(link()||'');if(u.indexOf(BASE)===0)u=u.slice(BASE.length);return u.charAt(0)==='/'?u:'/my?c='+encodeURIComponent(mid);};
+    // 🔔 함께 보내기 (2026-11-19) : WhatsApp·카카오톡으로 보낼 때, 알림을 켠 고객에게는 같은 안내를 앱 알림으로도 자동 발송합니다.
+    //  · 묻지 않고 보내고 결과만 아래에 알려 줍니다 · 같은 안내(종류·언어·내용)는 이 창에서 한 번만 (WhatsApp 과 카톡을 둘 다 눌러도 알림은 1번)
+    const pnDone=new Set();
+    window._csPnAuto=async()=>{
+      if(!pnN)return;
+      const title=state.en?'Happy Home Care':'해피홈케어',body=pnBody(),url=pnUrl();
+      const key=(state.tpl||'')+'|'+(state.en?'en':'ko')+'|'+body;
+      if(!body||pnDone.has(key))return;
+      pnDone.add(key);
+      try{
+        const ref=await addDoc(collection(db,'cust_push_out'),{c:mid,name:e.name||'',title,body,url,tpl:state.tpl||'',lang:state.en?'en':'ko',via:'auto',created_at:new Date().toISOString()});
+        const r=await fetch('/api/cpush',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'send',id:ref.id})}).then(x=>x.json());
+        if(r&&r.ok&&r.sent)setTimeout(()=>toast('🔔 앱 알림도 함께 보냈습니다 ('+r.sent+'대)'),1800);
+        else pnDone.delete(key);
+      }catch(err){pnDone.delete(key);}
+    };
     pb.addEventListener('click',async()=>{
       if(!pnN)return;
       const title=state.en?'Happy Home Care':'해피홈케어',body=pnBody(),url=pnUrl();
@@ -6156,6 +6178,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
       try{navigator.clipboard.writeText(nm).catch(()=>{});}catch(_){}
       toast('💛 「'+nm+'」 이름이 복사되었습니다 · 공유창 검색칸에 붙여넣으세요');
     }
+    try{if(window._csPnAuto)window._csPnAuto();}catch(_){}   // 🔔 알림 켠 고객에게는 앱 알림도 함께
     try{await kkSendGo();}finally{setTimeout(()=>{window._kkNameClip='';},1500);}
   });
   const kkSendGo=async()=>{
