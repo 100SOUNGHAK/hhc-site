@@ -2157,7 +2157,7 @@ function vrWaUrl(phone,text){
   return wa+'?text='+encodeURIComponent(text);
 }
 // 카카오톡 카드 발송 (마이페이지 발송과 동일)
-async function vrKkSend(msg,url,en){
+async function vrKkSend(msg,url,en,btnTitle){
   var key=await vrKkKey(false);
   if(!key){alert('카카오 JavaScript 키가 등록되지 않았습니다.');return false;}
   var K;
@@ -2171,7 +2171,7 @@ async function vrKkSend(msg,url,en){
       objectType:'text',
       text:vrKkText(msg),
       link:{mobileWebUrl:url,webUrl:url},
-      buttons:[{title:(en?'Open MY PAGE':'마이페이지 열기'),link:{mobileWebUrl:url,webUrl:url}}]
+      buttons:[{title:(btnTitle||(en?'Open MY PAGE':'마이페이지 열기')),link:{mobileWebUrl:url,webUrl:url}}]
     });
     return true;
   }catch(err){alert('카카오톡 공유 실패 · 메시지 복사를 이용해 주세요');return false;}
@@ -2223,6 +2223,12 @@ function getMovingMsg(name,lang,area,mins){
   if(lang==='en')
     return 'Hello, '+name+' 😊\n\n🚗 *We\'re on our way*\n📍 Leaving from '+A+'.\n⏱ Expected to arrive in about '+M+' min.\n\n👉 See you very soon!';
   return '안녕하세요, '+name+' 고객님 😊\n\n🚗 *이동 중입니다*\n📍 '+A+'에서 출발 예정.\n⏱ '+M+'분 후 도착 예상입니다.\n\n👉 곧 방문드릴게요.';
+}
+// 🏢 가드하우스 도착 안내 (2026-11-19) — 마이페이지 링크 없이 보내는 짧은 도착 알림
+function getArrivedMsg(name,lang){
+  if(lang==='en')
+    return 'Hello, '+name+' 😊\n\n🏢 *We\'ve arrived at the guardhouse*\n📝 We\'ll come up right after the entry check-in.\n\n🙏 Thank you for waiting a moment.';
+  return '안녕하세요, '+name+' 고객님 😊\n\n🏢 *가드하우스에 도착했습니다*\n📝 출입 수속 후 곧 방문드리겠습니다.\n\n🙏 잠시만 기다려 주세요.';
 }
 var _mvMapsP=null;
 function mvMaps(){   // 지역명 변환(Geocoder)용 구글 지도 — 영문 지역명으로 받습니다
@@ -2339,11 +2345,11 @@ window.sendVisitReminder=function(itemId){
   const copiedLabel=lang==='en'?'✓ Copied! Paste in KakaoTalk':'✓ 복사됨! 카카오톡에 붙여넣기 하세요';
   const tplLabels=isRepair
     ?(lang==='en'
-      ?[{k:'now',l:'⚡ Now'},{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'},{k:'move',l:'🚗 On the way'}]
-      :[{k:'now',l:'⚡ 지금 방문'},{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'},{k:'move',l:'🚗 이동중'}])
+      ?[{k:'now',l:'⚡ Now'},{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'},{k:'move',l:'🚗 On the way'},{k:'arrive',l:'🏢 Arrived'}]
+      :[{k:'now',l:'⚡ 지금 방문'},{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'},{k:'move',l:'🚗 이동중'},{k:'arrive',l:'🏢 가드하우스 도착'}])
     :(lang==='en'
-      ?[{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'},{k:'move',l:'🚗 On the way'}]
-      :[{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'},{k:'move',l:'🚗 이동중'}]);
+      ?[{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'},{k:'move',l:'🚗 On the way'},{k:'arrive',l:'🏢 Arrived'}]
+      :[{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'},{k:'move',l:'🚗 이동중'},{k:'arrive',l:'🏢 가드하우스 도착'}]);
   // 예약일 기준 기본 템플릿 자동 선택: 당일→'today', 내일→'tomorrow', 그 외→'pre'
   let defTpl='pre';
   try{
@@ -2365,7 +2371,7 @@ window.sendVisitReminder=function(itemId){
       <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:4px">${title}</div>
       <div style="font-size:12px;color:#8a8f9a;margin-bottom:11px">${subtitle}</div>
       <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap" id="visit-tpl-row">
-        ${tplLabels.map(t=>`<button data-tpl="${t.k}" style="${chipBase}${t.k==='move'?';flex-basis:100%;border-color:#C9A24A;color:#8A6A1F':''}">${t.l}</button>`).join('')}
+        ${tplLabels.map(t=>`<button data-tpl="${t.k}" style="${chipBase}${(t.k==='move'||t.k==='arrive')?';flex:1 1 calc(50% - 3px);border-color:#C9A24A;color:#8A6A1F':''}">${t.l}</button>`).join('')}
       </div>
       <div id="visit-mv" style="display:none;align-items:center;gap:8px;background:#FBF6EA;border:1px solid #EADBB4;border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;line-height:1.5;color:#5B4A1E">
         <div id="visit-mv-t" style="flex:1;min-width:0"></div>
@@ -2393,6 +2399,7 @@ window.sendVisitReminder=function(itemId){
     curTpl=tpl;
     document.getElementById('visit-mv').style.display=(tpl==='move')?'flex':'none';
     if(tpl==='move'){mvShow();return;}
+    if(tpl==='arrive'){document.getElementById('visit-msg-box').value=getArrivedMsg(name,lang)+vrTailNoMy();return;}
     document.getElementById('visit-msg-box').value=
       (isRepair?getRepairReminderMsg(name,dateStr,lang,tpl,timeS,symptom)
                :getVisitReminderMsg(name,dateStr,lang,tpl,timeS))+vrTailNoMy();
@@ -2466,7 +2473,9 @@ window.sendVisitReminder=function(itemId){
         setTimeout(()=>{tip.style.display='none';tip.textContent=_o;},4500);
       }
     }
-    const ok=await vrKkSend(m,VR_URL,lang==='en');
+    const ok=(curTpl==='arrive')
+      ?await vrKkSend(m,vrBase()+'/home'+(lang==='en'?'?lang=en':''),lang==='en',(lang==='en'?'Happy Home Care':'해피홈케어'))
+      :await vrKkSend(m,VR_URL,lang==='en');
     if(ok!==false)logSend(vrWaText(m),'kakao');
   });
   document.getElementById('visit-copy-btn').addEventListener('click',()=>{
