@@ -10,6 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { getDoc, listAll, batchGet, queryEq, json, fail, rateLimited, nn, pn } from './_lib/fs.js';
 import { refCfg, ensureRefCode, maskName } from './_lib/ref.js';
+import { gateMy } from './_lib/myauth.js';
 
 const PICK = {   // 각 문서에서 고객명·전화를 읽는 자리
   invoices:    x => [x.customer && x.customer.name, x.customer && x.customer.phone],
@@ -54,6 +55,12 @@ export async function onRequestGet(context){
   try { m = await getDoc(env, 'customers', CID); }
   catch (e) { return fail(e.message === 'env-missing' ? 'server-not-configured' : 'server-error', 500); }
   if (!m) return fail('not-found', 404);
+
+  // 🔐 본인 확인 (2026-11-19) — 인증이 켜져 있고 번호가 등록된 고객은 「마이페이지 열쇠」가 있어야 자료를 내줌
+  let gate;
+  try { gate = await gateMy(env, request, CID, m); } catch (e) { return fail('server-error', 500); }
+  if (!gate.ok) return json({ ok: false, error: 'auth', mask: gate.mask }, 401);
+  delete m.my_auth_at; delete m.my_auth_n;
 
   const keys = [nn(m.name)].concat((m.aliases || []).map(nn)).filter(Boolean);
   const mp = pn(m.phone);
@@ -114,6 +121,7 @@ export async function onRequestGet(context){
     delete m.ref_code;
     const out = {
       ok: true,
+      auth: gate.mode,
       m,
       ref: { on: rc.on, pts: rc.pts, newOn: rc.newOn && rc.newPts > 0, newPts: rc.newPts, code: refCode, list: refs },
       ptStart: String((ps && ps.pt_start) || ''),
