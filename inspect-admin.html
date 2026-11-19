@@ -10387,5 +10387,258 @@ kind==='washer'?'세부 진단':'(문제가 있는 에어컨마다 「거실1 �
 })();
 </script>
 
+<script id="m35-js">
+/* m35 — 전·후 사진 한 번에 올리기 + 정리 창 (청소 사진 · 세척 사진)
+   · 여러 장을 한 번에 고르면 촬영 시간순으로 줄 세운 뒤, 가장 긴 시간 공백(5분 이상)을 기준으로 전/후를 자동으로 나눕니다(없으면 반반).
+   · 정리 창에서 ⇄ 로 전↔후 옮기기, ▲▼ 로 위/아래 순서 바꾸기, ✕ 삭제. 고객 보고서는 같은 줄끼리 전·후 짝으로 보입니다.
+   · 「적용」을 누를 때만 실제 사진 칸에 반영됩니다(저장 자료 모양은 그대로: cleanBefore/cleanAfter, wBeforePhotos/wAfterPhotos). */
+(function(){
+  var PAIRS=[{b:'clean-before-photos',a:'clean-after-photos',lb:'clean-before-lbl',la:'clean-after-lbl',name:'청소'},
+             {b:'w-before-photos',a:'w-after-photos',name:'세척'}];
+  var css=document.createElement('style');css.textContent=
+  '.m35-bar{display:flex;gap:6px;padding:10px 12px 0}'+
+  '.m35-bar button{flex:1;line-height:1.25;border:none;border-radius:10px;padding:10px 8px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}'+
+  '.m35-up{background:linear-gradient(180deg,#14306b,#0F1C3F);color:#fff;box-shadow:0 2px 0 #07102a,0 4px 10px rgba(15,28,63,.25)}'+
+  '.m35-up b{display:block;color:#f0c040;font-size:10.5px;font-weight:600;margin-top:2px}'+
+  '.m35-org{background:#eef7f6;color:#0b6b63;box-shadow:inset 0 0 0 1px #bfe3df}'+
+  '.m35-org[disabled]{opacity:.4}'+
+  '.m35-ov{position:fixed;inset:0;z-index:99990;background:rgba(10,18,40,.55);display:flex;align-items:flex-end;justify-content:center}'+
+  '.m35-sh{background:#f6f7fb;width:100%;max-width:640px;height:94vh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -8px 30px rgba(0,0,0,.3)}'+
+  '.m35-hd{background:#0F1C3F;color:#fff;padding:14px 16px 12px}'+
+  '.m35-hd h3{margin:0;font-size:16px;font-weight:800}'+
+  '.m35-hd p{margin:4px 0 0;font-size:11.5px;color:#c9d3ee;line-height:1.5}'+
+  '.m35-tools{display:flex;gap:6px;padding:8px 12px;background:#fff;border-bottom:1px solid #e6e8ef;overflow-x:auto;-webkit-overflow-scrolling:touch}'+
+  '.m35-tools button{border:1px solid #d5dae6;background:#fff;border-radius:8px;padding:6px 9px;font-size:11.5px;font-weight:600;color:#334;cursor:pointer;font-family:inherit}'+
+  '.m35-colh{display:grid;grid-template-columns:22px 1fr 1fr;gap:8px;padding:8px 12px 6px;background:#fff;position:sticky;top:0;z-index:2;border-bottom:1px solid #eef0f5}'+
+  '.m35-colh span{font-size:12.5px;font-weight:800;text-align:center;padding:5px 0;border-radius:8px}'+
+  '.m35-colh .cb{background:#fdecea;color:#c0392b}.m35-colh .ca{background:#e6f6ee;color:#0a7a4a}'+
+  '.m35-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}'+
+  '.m35-row{display:grid;grid-template-columns:22px 1fr 1fr;gap:8px;padding:6px 12px;align-items:stretch}'+
+  '.m35-no{font-size:11px;font-weight:800;color:#8a93a8;display:flex;align-items:center;justify-content:center}'+
+  '.m35-cell{background:#fff;border-radius:12px;box-shadow:0 1px 0 #e3e6ee,0 3px 8px rgba(15,28,63,.07);overflow:hidden;display:flex;flex-direction:column;transition:transform .15s}'+
+  '.m35-cell.b{border-top:3px solid #e74c3c}.m35-cell.a{border-top:3px solid #2ecc71}'+
+  '.m35-cell.flash{transform:scale(1.03);box-shadow:0 0 0 3px #f0c040}'+
+  '.m35-cell img{width:100%;height:118px;object-fit:cover;display:block;background:#eee}'+
+  '.m35-cell .tm{font-size:10px;color:#5b6478;padding:4px 6px 0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'+
+  '.m35-cell .tm.warn{color:#8a6400;background:#fff6dc}'+
+  '.m35-tools button{white-space:nowrap}'+
+  '.m35-cell .ctl{display:grid;grid-template-columns:1fr 1fr 1.3fr .8fr;gap:3px;padding:5px}'+
+  '.m35-cell .ctl button{border:none;border-radius:7px;height:32px;font-size:13px;font-weight:800;cursor:pointer;background:#eef1f7;color:#0F1C3F;font-family:inherit}'+
+  '.m35-cell .ctl button[disabled]{opacity:.28}'+
+  '.m35-cell .ctl .sw{background:#fff6dc;color:#8a6400;font-size:11.5px}'+
+  '.m35-cell .ctl .x{background:#fdecea;color:#c0392b}'+
+  '.m35-empty{border:1.5px dashed #cfd5e3;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#a3abbd;min-height:80px}'+
+  '.m35-ft{display:flex;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid #e6e8ef}'+
+  '.m35-ft button{flex:1;border:none;border-radius:11px;padding:13px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit}'+
+  '.m35-ft .cc{background:#eef1f7;color:#334;flex:.6}.m35-ft .ok{background:#0F1C3F;color:#fff}.m35-ft .ok b{color:#f0c040}'+
+  '.m35-sum{font-size:11.5px;color:#556;padding:0 12px 8px;background:#fff}'+
+  '.m35-wait{position:fixed;inset:0;z-index:99991;background:rgba(10,18,40,.55);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:700}';
+  document.head.appendChild(css);
+
+  function $(id){return document.getElementById(id);}
+  function lbl(P,side){var e=$(side==='b'?P.lb:P.la);return e?e.textContent.trim():(P.name+(side==='b'?' 전':' 후'));}
+  function fmt(t){if(!t)return'';var d=new Date(t);return (d.getMonth()+1)+'/'+d.getDate()+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);}
+  function current(cid){var c=$(cid);if(!c)return[];return Array.from(c.querySelectorAll('.ph-item')).map(function(it){var k=it.dataset.key;return {src:photoData[k]!==undefined?photoData[k]:(it.querySelector('img')||{}).src,t:0,old:k};}).filter(function(x){return !!x.src;});}
+
+  /* 가장 긴 시간 공백(5분 이상)에서 나누기, 없으면 반반 */
+  function autoSplit(list){
+    var n=list.length;if(n<2)return n;
+    var best=-1,gap=0;
+    for(var i=1;i<n;i++){var g=(list[i].t||0)-(list[i-1].t||0);if(g>gap){gap=g;best=i;}}
+    return gap>=5*60*1000?best:Math.ceil(n/2);
+  }
+
+  function addBar(P){
+    var b=$(P.b);if(!b)return;var card=b.closest('.card');if(!card||card.querySelector('.m35-bar'))return;
+    var body=card.querySelector('.card-body');if(!body)return;
+    var bar=document.createElement('div');bar.className='m35-bar';
+    bar.innerHTML='<button type="button" class="m35-up">📥 한 번에 올리기<b>🤖 오염 인식 · 짝 자동</b></button><button type="button" class="m35-org">↕ 전·후 정리</button>';
+    var inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;inp.style.display='none';
+    bar.appendChild(inp);body.insertBefore(bar,body.firstChild);
+    bar.querySelector('.m35-up').onclick=function(){inp.click();};
+    bar.querySelector('.m35-org').onclick=function(){openSheet(P,[]);};
+    inp.onchange=function(){var fs=Array.from(inp.files||[]).filter(function(f){return f&&f.type&&f.type.indexOf('image')===0;});inp.value='';if(fs.length)bulk(P,fs);};
+    P.orgBtn=bar.querySelector('.m35-org');refreshBtn(P);
+  }
+  function refreshBtn(P){if(!P.orgBtn)return;var n=current(P.b).length+current(P.a).length;P.orgBtn.disabled=!n;P.orgBtn.textContent=n?('↕ 전·후 정리 ('+n+')'):'↕ 전·후 정리';}
+
+  function bulk(P,files){
+    var w=document.createElement('div');w.className='m35-wait';w.textContent='사진 '+files.length+'장 준비 중…';document.body.appendChild(w);
+    files.sort(function(x,y){return (x.lastModified||0)-(y.lastModified||0);});
+    Promise.all(files.map(function(f){return compressImage(f,1600,0.78).then(function(u){return {src:u,t:f.lastModified||0};}).catch(function(){return null;});}))
+      .then(async function(list){
+        list=list.filter(Boolean);
+        w.textContent='🤖 오염 여부 · 같은 부위 짝 분석 중… ('+list.length+'장)';
+        var r=await classify(list);
+        w.remove();openSheet(P,list,r);
+      });
+  }
+
+  /* ── 자동 분류: ① Claude(사진 판독) → ② 실패 시 기기 안 판정(시간 공백 + 모양 비교) ── */
+  var AI_MODEL='claude-opus-5-5';
+  function aiKey(){var k='';try{k=localStorage.getItem('hhc_ak')||'';}catch(e){}
+    if(!k){k=(prompt('사진 자동 분류에 쓸 Claude API 키를 한 번만 넣어 주세요.\n(일정표·보고서 자동 작성과 같은 키 · 이 기기에만 저장 · 비우면 기기 안 판정만 합니다)')||'').trim();if(k)try{localStorage.setItem('hhc_ak',k);}catch(e){}}
+    return k;}
+  function loadImg(src){return new Promise(function(res){var im=new Image();if(!/^data:/.test(src))im.crossOrigin='anonymous';im.onload=function(){res(im);};im.onerror=function(){res(null);};im.src=src;});}
+  async function thumb(o,max){var im=await loadImg(o.src);if(!im)return null;var r=Math.min(1,max/Math.max(im.width,im.height)),cv=document.createElement('canvas');cv.width=Math.round(im.width*r);cv.height=Math.round(im.height*r);
+    var x=cv.getContext('2d');x.drawImage(im,0,0,cv.width,cv.height);try{return {cv:cv,url:cv.toDataURL('image/jpeg',.72)};}catch(e){return {cv:null,url:null};}}
+  async function aiSort(list){
+    var key=aiKey();if(!key)return null;
+    var content=[{type:'text',text:'사진 '+list.length+'장입니다. 번호 순서대로 붙어 있습니다.'}];
+    for(var i=0;i<list.length;i++){var o=list[i],tb=await thumb(o,480);
+      content.push({type:'text',text:'[사진 '+(i+1)+']'});
+      if(tb&&tb.url)content.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:tb.url.split(',')[1]}});
+      else if(/^https?:/.test(o.src))content.push({type:'image',source:{type:'url',url:o.src}});
+      else content.push({type:'text',text:'(사진 불러오기 실패)'});}
+    var sys='당신은 에어컨·세탁기·주방후드·커튼·쇼파 청소 업체의 현장 사진 분류 담당입니다.\n'+
+      '각 사진이 청소 전(오염: 먼지·곰팡이·검은 점/얼룩·기름때·물때·녹·이물질이 보임)인지 청소 후(같은 부위가 깨끗함)인지 판정하세요.\n'+
+      '그리고 같은 부위·같은 각도로 찍은 사진끼리 「청소 전 ↔ 청소 후」 짝을 지으세요(한 사진은 한 짝에만). 짝이 없는 사진은 짝에 넣지 마세요.\n'+
+      '판정이 애매하면 c(확신도)를 낮게 주세요. what 은 찍힌 부위를 한국어 2~8자로(예: 송풍팬, 열교환기, 필터, 드레인팬, 세탁조, 후드 필터).\n'+
+      '반드시 JSON 하나만 출력: {"photos":[{"i":1,"s":"before","c":0.95,"what":"송풍팬"}],"pairs":[[1,5]]}  (s 는 before 또는 after, pairs 는 [전 번호, 후 번호])';
+    var ctrl=(typeof AbortController!=='undefined')?new AbortController():null,timer=setTimeout(function(){try{ctrl&&ctrl.abort();}catch(e){}},90000);
+    try{
+      var res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctrl?ctrl.signal:undefined,
+        headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:AI_MODEL,max_tokens:3000,system:sys,messages:[{role:'user',content:content}]})});
+      clearTimeout(timer);var data=await res.json();
+      if(res.status===401){try{localStorage.removeItem('hhc_ak');}catch(e){}return {err:'API 키가 맞지 않음'};}
+      if(data.error)return {err:String(data.error.message||'오류').slice(0,40)};
+      var out=(data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+      var m=out.match(/\{[\s\S]*\}/);if(!m)return {err:'답 형식 오류'};
+      var j=JSON.parse(m[0]);if(!j.photos||!j.photos.length)return {err:'답 형식 오류'};
+      return j;
+    }catch(e){clearTimeout(timer);return {err:e&&e.name==='AbortError'?'응답이 너무 늦음':'연결 오류'};}
+  }
+  /* 기기 안 모양 비교: 24×24 흑백 + 윤곽 → 상관도 (색·오염보다 구도에 민감) */
+  async function feat(o){if(o.fv!==undefined)return o.fv;var tb=await thumb(o,96);o.fv=null;if(!tb||!tb.cv)return null;
+    var N=24,cv=document.createElement('canvas');cv.width=N;cv.height=N;var x=cv.getContext('2d');x.drawImage(tb.cv,0,0,N,N);
+    var d;try{d=x.getImageData(0,0,N,N).data;}catch(e){return null;}
+    var g=[],i,y,xx;for(i=0;i<N*N;i++)g.push(.299*d[i*4]+.587*d[i*4+1]+.114*d[i*4+2]);
+    var e=[];for(y=0;y<N;y++)for(xx=0;xx<N;xx++){var a=g[y*N+xx],r=xx<N-1?g[y*N+xx+1]:a,b=y<N-1?g[(y+1)*N+xx]:a;e.push(Math.abs(a-r)+Math.abs(a-b));}
+    function z(v){var m=0;v.forEach(function(q){m+=q;});m/=v.length;var sd=0;v.forEach(function(q){sd+=(q-m)*(q-m);});sd=Math.sqrt(sd/v.length)||1;return v.map(function(q){return (q-m)/sd;});}
+    /* 오염 점수: 어두움 + 잔무늬(얼룩·점) + 누런/갈색 기운 — 같은 부위 두 장을 비교할 때만 씀 */
+    var lm=0,em=0,br=0;for(i=0;i<N*N;i++){lm+=g[i];em+=e[i];br+=Math.max(0,d[i*4]-d[i*4+2]);}
+    o.dirt=(1-lm/N/N/255)+em/N/N/60+br/N/N/100;
+    o.fv=z(g).concat(z(e));return o.fv;}
+  function sim(a,b){if(!a||!b)return -1;var s2=0;for(var i=0;i<a.length;i++)s2+=a[i]*b[i];return s2/a.length;}
+  /* 청소 전 순서는 그대로 두고, 청소 후를 가장 닮은 사진끼리 같은 줄로 */
+  async function localPair(B,A){
+    for(var i=0;i<B.length;i++)await feat(B[i]);for(i=0;i<A.length;i++)await feat(A[i]);
+    var cand=[];B.forEach(function(b,bi){A.forEach(function(a,ai){cand.push([sim(b.fv,a.fv),bi,ai]);});});
+    cand.sort(function(x,y){return y[0]-x[0];});
+    var ub={},ua={},row=new Array(B.length).fill(null),n=0;
+    cand.forEach(function(c){if(c[0]<0.15||ub[c[1]]||ua[c[2]])return;ub[c[1]]=1;ua[c[2]]=1;row[c[1]]=A[c[2]];n++;});
+    /* 짝 찾은 줄을 먼저(청소 전 원래 순서), 짝 없는 사진은 뒤로 */
+    var nb=[],na=[],lb=[];
+    B.forEach(function(b,i){if(row[i]){nb.push(b);na.push(row[i]);}else lb.push(b);});
+    return {B:nb.concat(lb),A:na.concat(A.filter(function(a,ai){return !ua[ai];})),n:n};
+  }
+  async function classify(list){
+    var j=await aiSort(list),why='';
+    if(j&&!j.err){
+      var info={};j.photos.forEach(function(p){var o=list[(p.i|0)-1];if(o){o.ai={s:p.s==='after'?'a':'b',c:+p.c||0,what:String(p.what||'').slice(0,12)};}});
+      list.forEach(function(o){if(!o.ai)o.ai={s:'b',c:0,what:''};});
+      var B=[],A=[],used={};
+      (j.pairs||[]).forEach(function(pr){var b=list[(pr[0]|0)-1],a=list[(pr[1]|0)-1];if(!b||!a||used[pr[0]]||used[pr[1]]||b===a)return;used[pr[0]]=used[pr[1]]=1;b.ai.s='b';a.ai.s='a';B.push(b);A.push(a);});
+      var np=B.length;
+      list.forEach(function(o,i){if(used[i+1])return;(o.ai.s==='a'?A:B).push(o);});
+      var low=list.filter(function(o){return o.ai.c<0.7;}).length;
+      return {B:B,A:A,note:'🤖 사진을 보고 오염 여부로 나누고, 같은 부위끼리 '+np+'쌍 짝지었습니다'+(low?' · 노란 표시 '+low+'장은 확인해 주세요':'')};
+    }
+    if(j&&j.err)why=' (AI '+j.err+')';else why=' (AI 키 없음)';
+    return await localClassify(list,why);
+  }
+  /* AI 없이: 비슷한 모양끼리 먼저 짝 → 짝 안에서 더 지저분한 쪽이 「전」. 짝 없는 사진은 전체 오염 점수 중간값으로 */
+  async function localClassify(list,why){
+    for(var i=0;i<list.length;i++){delete list[i].ai;await feat(list[i]);}
+    var cand=[];for(i=0;i<list.length;i++)for(var j2=i+1;j2<list.length;j2++)cand.push([sim(list[i].fv,list[j2].fv),i,j2]);
+    cand.sort(function(x,y){return y[0]-x[0];});
+    var used={},pairs=[];
+    cand.forEach(function(c){if(c[0]<0.2||used[c[1]]||used[c[2]])return;used[c[1]]=used[c[2]]=1;
+      var x=list[c[1]],y=list[c[2]];pairs.push((x.dirt||0)>=(y.dirt||0)?[x,y]:[y,x]);});
+    var ds=list.map(function(o){return o.dirt||0;}).sort(function(a,b){return a-b;}),med=ds[Math.floor(ds.length/2)]||0;
+    pairs.sort(function(p1,p2){return (p1[0].t||0)-(p2[0].t||0);});
+    var B=pairs.map(function(q){return q[0];}),A=pairs.map(function(q){return q[1];});
+    list.forEach(function(o,i){if(used[i])return;((o.dirt||0)>=med?B:A).push(o);});
+    return {B:B,A:A,note:'기기 안 판정: 비슷한 모양끼리 '+pairs.length+'쌍 짝짓고 더 어둡고 얼룩진 쪽을 「전」으로 했습니다 — 꼭 확인해 주세요'+why};
+  }
+
+  function openSheet(P,fresh,pre){
+    var B=current(P.b),A=current(P.a);
+    var splitNote='';
+    if(pre){B=B.concat(pre.B);A=A.concat(pre.A);splitNote=pre.note;}
+    var startB=B.slice(),startA=A.slice(),flashObj=null;
+    var ov=document.createElement('div');ov.className='m35-ov';
+    var lb=lbl(P,'b'),la=lbl(P,'a');
+    ov.innerHTML='<div class="m35-sh"><div class="m35-hd"><h3>'+P.name+' 사진 전·후 정리</h3><p>🤖 사진을 보고 오염 여부로 자동 분류 · 같은 부위끼리 같은 줄<br>⇄ 로 '+lb+'↔'+la+' 옮기기 · ▲▼ 로 위/아래 순서 바꾸기<br>같은 줄 사진이 고객 보고서에서 전·후 짝으로 보입니다</p></div>'+
+      '<div class="m35-tools"><button type="button" data-t="ai">🤖 AI로 다시 분류</button><button type="button" data-t="pair">🔗 비슷한 모양끼리 짝 맞추기</button><button type="button" data-t="time">🕒 시간순 나누기</button><button type="button" data-t="swapall">⇄ 전·후 통째로 바꾸기</button></div>'+
+      '<div class="m35-sum"></div>'+
+      '<div class="m35-body"><div class="m35-colh"><i></i><span class="cb">'+lb+'</span><span class="ca">'+la+'</span></div><div class="m35-rows"></div></div>'+
+      '<div class="m35-ft"><button type="button" class="cc">취소</button><button type="button" class="ok">적용 <b>✓</b></button></div></div>';
+    document.body.appendChild(ov);
+    var rows=ov.querySelector('.m35-rows'),sum=ov.querySelector('.m35-sum');
+    function cell(o,side,i,len){
+      if(!o)return '<div class="m35-empty">빈 칸</div>';
+      return '<div class="m35-cell '+side+(o===flashObj?' flash':'')+'"><img src="'+o.src+'" alt="">'+(o.ai&&(o.ai.what||o.ai.c)?'<div class="tm'+(o.ai.c<0.7||o.ai.s!==side?' warn':'')+'">🤖 '+(o.ai.what||'')+(o.ai.c<0.7||o.ai.s!==side?' · 확인 필요':' · '+Math.round(o.ai.c*100)+'%')+'</div>':(o.t?'<div class="tm">🕒 '+fmt(o.t)+'</div>':''))+
+        '<div class="ctl"><button type="button" data-a="up" data-s="'+side+'" data-i="'+i+'"'+(i===0?' disabled':'')+'>▲</button>'+
+        '<button type="button" data-a="dn" data-s="'+side+'" data-i="'+i+'"'+(i===len-1?' disabled':'')+'>▼</button>'+
+        '<button type="button" class="sw" data-a="sw" data-s="'+side+'" data-i="'+i+'">'+(side==='b'?'후로 ▶':'◀ 전으로')+'</button>'+
+        '<button type="button" class="x" data-a="x" data-s="'+side+'" data-i="'+i+'">✕</button></div></div>';
+    }
+    function render(){
+      var n=Math.max(B.length,A.length),h='';
+      for(var i=0;i<n;i++)h+='<div class="m35-row"><div class="m35-no">'+(i+1)+'</div>'+cell(B[i],'b',i,B.length)+cell(A[i],'a',i,A.length)+'</div>';
+      if(!n)h='<div style="text-align:center;color:#99a;padding:40px 0;font-size:13px">사진이 없습니다</div>';
+      rows.innerHTML=h;
+      sum.innerHTML=lb+' <b>'+B.length+'</b>장 · '+la+' <b>'+A.length+'</b>장'+(B.length!==A.length&&B.length&&A.length?' <span style="color:#b7791f">— 장수가 달라 짝이 어긋납니다</span>':'')+(splitNote?'<br><span style="color:#0b6b63">✓ '+splitNote+'</span>':'');
+      setTimeout(function(){flashObj=null;var f=rows.querySelector('.flash');if(f)f.classList.remove('flash');},450);
+    }
+    function all(){return B.concat(A).slice().sort(function(x,y){return (x.t||0)-(y.t||0);});}
+    ov.addEventListener('click',function(e){
+      var t=e.target.closest('button');if(!t)return;
+      if(t.dataset.a){
+        var L=t.dataset.s==='b'?B:A,O=t.dataset.s==='b'?A:B,i=+t.dataset.i,o=L[i];
+        if(t.dataset.a==='up'&&i>0){L.splice(i,1);L.splice(i-1,0,o);flashObj=o;}
+        else if(t.dataset.a==='dn'&&i<L.length-1){L.splice(i,1);L.splice(i+1,0,o);flashObj=o;}
+        else if(t.dataset.a==='sw'){L.splice(i,1);O.splice(Math.min(i,O.length),0,o);flashObj=o;}
+        else if(t.dataset.a==='x'){L.splice(i,1);}
+        splitNote='';render();return;
+      }
+      if(t.dataset.t==='time'){var l=all(),k=autoSplit(l);B=l.slice(0,k);A=l.slice(k);splitNote=l.some(function(x){return x.t;})?'시간순으로 다시 나눴습니다':'시간 정보가 없어 반반으로 나눴습니다';render();return;}
+      if(t.dataset.t==='ai'||t.dataset.t==='pair'){
+        var busy=t.dataset.t==='ai'?'🤖 사진 분석 중…':'🔗 모양 비교 중…',w=document.createElement('div');w.className='m35-wait';w.textContent=busy;document.body.appendChild(w);
+        (async function(){
+          if(t.dataset.t==='ai'){var l3=B.concat(A);l3.forEach(function(o){delete o.ai;});var r=await classify(l3);B=r.B;A=r.A;splitNote=r.note;}
+          else{var lp=await localPair(B,A);B=lp.B;A=lp.A;splitNote='🔗 청소 전 순서에 맞춰 비슷한 모양끼리 '+lp.n+'쌍 짝지었습니다';}
+          w.remove();render();})();
+        return;}
+      if(t.dataset.t==='swapall'){var tmp=B;B=A;A=tmp;splitNote='';render();return;}
+      if(t.classList.contains('cc')){ov.remove();return;}
+      if(t.classList.contains('ok')){apply(P,B,A);ov.remove();}
+    });
+    ov.addEventListener('click',function(e){if(e.target===ov&&confirm('정리 창을 닫을까요? (적용하지 않은 변경은 사라집니다)'))ov.remove();});
+    render();
+  }
+
+  function apply(P,B,A){
+    [P.b,P.a].forEach(function(cid){var c=$(cid);if(!c)return;c.querySelectorAll('.ph-item').forEach(function(it){var k=it.dataset.key;if(k)delete photoData[k];it.remove();});});
+    var stamp=Date.now();
+    function put(cid,list){var c=$(cid);if(!c)return;list.forEach(function(o,i){var key=cid+'-s'+stamp+'-'+i;photoData[key]=o.src;addPhotoThumb(c,key,o.src);});}
+    put(P.b,B);put(P.a,A);
+    if(window.updatePhotoBadges)updatePhotoBadges();
+    if(window.__scheduleDraft)window.__scheduleDraft();
+    refreshBtn(P);
+  }
+
+  function init(){PAIRS.forEach(addBar);}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+  /* 사진이 추가·삭제·복원될 때 「정리」 버튼 장수 갱신 */
+  var mo=new MutationObserver(function(){PAIRS.forEach(refreshBtn);});
+  PAIRS.forEach(function(P){[P.b,P.a].forEach(function(id){var c=$(id);if(c)mo.observe(c,{childList:true});});});
+  window.__m35={open:function(i){openSheet(PAIRS[i||0],[]);}};
+})();
+</script>
+
+
 </body>
 </html>
