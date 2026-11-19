@@ -8578,7 +8578,10 @@ setTimeout(function(){
   function bodyId(){var t=RT();return t==='install'?'install-form-body':(isWFam(t)?'washer-form-body':(t==='fabric'?'fabric-form-body':'inspect-form-body'));}
   function CID(t){return t==='install'?'if-client':(isWFam(t)?'w-client':(t==='fabric'?'fb-client':'f-client'));}
   function DID(t){return t==='install'?'if-date':(isWFam(t)?'w-date':(t==='fabric'?'fb-date':'f-date'));}
-  function visible(el){return !!(el&&el.offsetParent!==null);}
+  function visible(el){if(!el)return false;if(el.offsetParent!==null)return true;
+    /* m36 단계별 작성: 다른 단계에 있어서 잠시 숨겨진 칸도 「보이는 칸」으로 셉니다 */
+    var c=document.body.classList.contains('m36')&&el.closest&&el.closest('[data-m36]');if(!c)return false;
+    for(var e=el;e&&e!==c;e=e.parentElement){if(getComputedStyle(e).display==='none')return false;}return c.style.display!=='none';}
   function cards(){var b=$(bodyId());if(!b)return [];return [].slice.call(b.querySelectorAll(':scope > .card')).filter(function(c){return c.style.display!=='none';});}
   function phCount(id){var e=$(id);return e?e.querySelectorAll('.ph-item').length:0;}
   function nPhotos(){try{return Object.keys(photoData).length;}catch(e){return 0;}}
@@ -8649,6 +8652,7 @@ setTimeout(function(){
     return w;}
   /* 저장 확인창에 함께 (그래도 저장 가능) */
   window.__m27soft=function(){return issues().filter(function(x){return x.soft;}).map(function(x){return x.msg;});};
+  window.__m27issues=issues;   /* m36 단계별 작성에서 단계마다 빠진 곳을 셀 때 씀 */
 
   /* ── 완성도 ── */
   function progress(){
@@ -8769,7 +8773,7 @@ setTimeout(function(){
       var cls='m27-pi '+st,tx=st==='done'?'✓':st==='err'?'!':st==='need'?'·':'';if(i.className!==cls)i.className=cls;if(i.textContent!==tx)i.textContent=tx;});
   }
   ov.addEventListener('click',function(e){var b=e.target.closest('[data-go]');if(b){go($(b.getAttribute('data-go')));return;}if(e.target.closest('[data-ck]'))openCheck();});
-  function go(el){if(!el)return;var _cb=el.closest&&el.closest('.cu-body');if(_cb&&_cb.style.display==='none'&&_cb.previousElementSibling)_cb.previousElementSibling.click();   /* 접힌 에어컨 카드 펼치기 */
+  function go(el){if(!el)return;if(window.__m36reveal)window.__m36reveal(el);var _cb=el.closest&&el.closest('.cu-body');if(_cb&&_cb.style.display==='none'&&_cb.previousElementSibling)_cb.previousElementSibling.click();   /* 접힌 에어컨 카드 펼치기 */
     var hh=(document.querySelector('.hdr')||{}).offsetHeight||0,nh=($('section-nav')||{}).offsetHeight||0;
     window.scrollTo({top:el.getBoundingClientRect().top+window.pageYOffset-(hh+nh+16),behavior:'smooth'});
     el.classList.remove('m27-flash');void el.offsetWidth;el.classList.add('m27-flash');
@@ -10648,6 +10652,421 @@ kind==='washer'?'세부 진단':'(문제가 있는 에어컨마다 「거실1 �
 })();
 </script>
 
+
+<!-- ════ m36 · 단계별 작성 (2026-11-19) — 점검보고서 · 출장점검/수리
+   · 긴 한 페이지를 6단계(기본 → 측정 → 결과 → 조치 → 사진 → 마무리)로 나눠 한 번에 한 단계만 보여 줍니다.
+   · 위 단계 막대: 단계마다 ✓ 끝남 · ! 바로잡을 곳 · 숫자 확인할 곳. 누르면 그 단계로 이동.
+   · 「다음」을 누를 때 그 단계에 빠진 곳이 있으면 먼저 보여 줍니다(그래도 넘어갈 수 있음).
+   · 종합 판정은 맨 끝 「마무리」 단계로 — 측정 · 결과 · 결함을 다 넣은 뒤 고릅니다.
+   · 한꺼번에 바꾸는 버튼(전체 양호 등)은 이미 고른 「주의 · 정비 · 누설」이 있으면 확인창을 먼저 띄웁니다.
+   · 항목 관리 버튼 6개 → 「⋯ 항목 관리」 하나로.
+   · 「한 화면에 모두 보기」를 누르면 예전처럼 한 페이지로(이 기기에 기억 · localStorage hhc_m36).
+   ※ 이 블록(m36-css · m36-js)만 지우면 예전 화면으로 돌아갑니다. (m27 블록의 __m27issues · __m36reveal 두 줄은 남아 있어도 문제없음) -->
+<style id="m36-css">
+.m36-bar,.m36-hd,.m36-ft,.m36-tools,.m36-full,#m36-prev,#m36-next{display:none}
+body.m36 #section-nav,body.m36 .m36-hid,body.m36 #insp-progress-box{display:none!important}
+body.m36 .m36-bar{display:flex}
+body.m36 .m36-hd{display:block}
+body.m36 .m36-tools{display:flex}
+body:not(.m36) .m36-full.on{display:flex}
+/* 단계마다 보이는 카드 */
+body.m36-s0 [data-m36]:not([data-m36="0"]),body.m36-s1 [data-m36]:not([data-m36="1"]),body.m36-s2 [data-m36]:not([data-m36="2"]),
+body.m36-s3 [data-m36]:not([data-m36="3"]),body.m36-s4 [data-m36]:not([data-m36="4"]),body.m36-s5 [data-m36]:not([data-m36="5"]){display:none!important}
+/* 첫 단계에만: 보고서 종류 · 출장/수리 구분 */
+body.m36:not(.m36-s0) .m26-rt,body.m36:not(.m36-s0) #dispatch-kind-row,body.m36:not(.m36-s0) #edit-mode-tag{display:none!important}
+/* 마지막 단계에만: 사진 합계 · 미리보기 · 저장 */
+body.m36:not(.m36-last) #photo-summary-bar,body.m36:not(.m36-last) .m29-pvbtn,body.m36:not(.m36-last) #btn-save{display:none!important}
+
+/* ── 단계 막대 ── */
+.m36-bar{position:sticky;top:0;z-index:21;gap:0;margin:0 -2px 10px;padding:10px 2px 8px;background:#F2F5FA;overflow-x:auto;scrollbar-width:none}
+.m36-bar::-webkit-scrollbar{display:none}
+@media (max-width:767px){.m36-bar{top:var(--m-hh,0px);margin:0 -14px 10px;padding:10px 8px 8px}}
+.m36-bar button{position:relative;flex:1 0 54px;display:flex;flex-direction:column;align-items:center;gap:5px;border:0;background:none;padding:0;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.m36-bar button::before{content:"";position:absolute;top:14px;left:-50%;right:50%;height:2px;background:#DCE2EC;z-index:0}
+.m36-bar button:first-child::before{display:none}
+.m36-bar button.dn::before,.m36-bar button.cur::before{background:#0E2350}
+.m36-bar i{position:relative;z-index:1;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:13.5px;font-weight:800;background:#fff;color:#98A1B4;box-shadow:inset 0 0 0 2px #DCE2EC;transition:background .16s,color .16s,box-shadow .16s}
+.m36-bar .dn i{background:#0E2350;color:#fff;box-shadow:none}
+.m36-bar .cur i{background:#fff;color:#0E2350;box-shadow:inset 0 0 0 2.5px #0E2350,0 0 0 4px rgba(14,35,80,.10)}
+.m36-bar span{font-size:12px;font-weight:700;color:#98A1B4;white-space:nowrap;letter-spacing:-.02em}
+.m36-bar .cur span{color:#0E2350;font-weight:800}.m36-bar .dn span{color:#5A6478}
+.m36-bar em{position:absolute;z-index:2;top:-4px;left:calc(50% + 7px);min-width:17px;height:17px;padding:0 4px;border-radius:999px;box-sizing:border-box;display:grid;place-items:center;font-style:normal;font-size:10.5px;font-weight:800;color:#fff;background:#F0B429;box-shadow:0 0 0 2px #F2F5FA}
+.m36-bar em.r{background:#DC2626}
+
+/* ── 단계 머리 ── */
+.m36-hd{margin:2px 2px 12px}
+.m36-hd .t{display:flex;align-items:baseline;gap:8px}
+.m36-hd .t small{font-size:12.5px;font-weight:800;color:#98A1B4;font-variant-numeric:tabular-nums}
+.m36-hd .t b{flex:1;font-size:19px;font-weight:800;color:#14192A;letter-spacing:-.03em}
+.m36-hd .t button{flex:0 0 auto;border:0;background:none;padding:4px 0;font-family:inherit;font-size:12px;font-weight:700;color:#5A6478;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.m36-hd p{margin:6px 0 0;font-size:13.5px;line-height:1.55;color:#5A6478}
+.m36-hd p b{color:#0E2350}
+.m36-hd .nt{margin-top:10px;padding:10px 12px;border-radius:12px;background:#FFF8E6;font-size:13px;line-height:1.5;color:#7A5A00}
+.m36-hd .nt b{display:block;margin-bottom:6px;font-size:13.5px;color:#7A5A00}
+.m36-hd .nt button{display:flex;align-items:center;gap:8px;width:100%;min-height:40px;margin-top:4px;padding:8px 10px;border:0;border-radius:10px;background:#fff;text-align:left;font-family:inherit;cursor:pointer}
+.m36-hd .nt button i{flex:0 0 auto;font-style:normal;font-size:11px;font-weight:800;padding:2px 7px;border-radius:999px;background:#FFF1CC;color:#7A5A00}
+.m36-hd .nt button.r i{background:#FDE2E2;color:#B42318}
+.m36-hd .nt button span{flex:1;min-width:0;font-size:13px;line-height:1.4;color:#14192A}
+.m36-hd .nt button em{flex:0 0 auto;font-style:normal;font-size:12px;font-weight:800;color:#2563EB}
+.m36-hd .ok{margin-top:10px;padding:10px 12px;border-radius:12px;background:#E7F6EE;font-size:13.5px;font-weight:700;color:#0E7A4E}
+
+/* ── 아래 이전/다음 (PC) ── */
+.m36-ft{gap:8px;margin:4px 0 14px}
+@media (min-width:768px){body.m36 .m36-ft{display:flex}}
+.m36-ft button{height:50px;border-radius:13px;font-family:inherit;font-size:15px;font-weight:800;cursor:pointer}
+.m36-ft .pv{flex:0 0 120px;border:1.5px solid #D8DFEC;background:#fff;color:#0E2350}
+.m36-ft .nx{flex:1;border:0;background:#0E2350;color:#fff}
+.m36-ft button:active{transform:scale(.98)}
+body.m36-last .m36-ft .nx{display:none}   /* 마지막 단계는 바로 아래 저장 버튼을 씀 */
+
+/* ── 휴대폰 아래 바: ◀ · 점검 · 다음 ▶ ── */
+@media (max-width:767px){
+  body.m36 #m26-next{display:none!important}
+  body.m36 #m36-prev{display:block;flex:0 0 48px;width:48px;padding:0;background:#EEF2FA;color:#0E2350;font-size:18px}
+  body.m36 #m36-prev:disabled{opacity:.35}
+  body.m36:not(.m36-last) #m36-next{display:block;flex:0 0 auto;min-width:132px;padding:0 18px;background:#0E2350;color:#fff;font-size:15.5px}
+  /* 왼쪽 아래 계정 표시(K)가 ◀ 버튼을 가리지 않게 바 위로 */
+  body.m36.m26-onform #hhcAuthChip{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+  body.m36:not(.m36-last) .m26-bar .m29-eye,body.m36:not(.m36-last) #m26-save{display:none!important}
+  body.m36 .m26-bar .m27-s small{display:none}
+}
+
+/* ── 항목 관리 ── */
+.m36-tools{gap:8px;margin:0 0 10px}
+.m36-tools button{height:44px;border-radius:12px;font-family:inherit;font-size:14px;font-weight:800;cursor:pointer}
+.m36-tools .pk{flex:1;border:1.5px solid #BFD0F5;background:#F3F7FF;color:#1D3FD6}
+.m36-tools .mn{flex:0 0 auto;padding:0 14px;border:1.5px solid #D8DFEC;background:#fff;color:#0E2350}
+body.m36 #result-rows-wrap .btn-pick{display:none!important}
+.m36-mi{display:flex;align-items:center;gap:12px;width:100%;margin-bottom:6px;padding:13px 14px;border:0;border-radius:12px;background:#fff;text-align:left;font-family:inherit;cursor:pointer;box-shadow:0 1px 2px rgba(14,35,80,.06)}
+.m36-mi i{flex:0 0 34px;height:34px;border-radius:10px;display:grid;place-items:center;font-style:normal;font-size:16px;background:#EEF2FA}
+.m36-mi div{flex:1;min-width:0}.m36-mi b{display:block;font-size:14.5px;font-weight:800;color:#14192A}.m36-mi small{display:block;margin-top:2px;font-size:12px;line-height:1.45;color:#98A1B4}
+.m36-mi.w b{color:#B42318}
+
+/* ── 예전 화면에서 단계별로 돌아가기 ── */
+.m36-full{align-items:center;justify-content:space-between;gap:8px;margin:0 0 10px;padding:10px 12px;border-radius:12px;background:#fff;box-shadow:0 1px 2px rgba(14,35,80,.06);font-size:13px;color:#5A6478}
+.m36-full button{border:0;border-radius:999px;background:#0E2350;color:#fff;font-family:inherit;font-size:12.5px;font-weight:800;padding:8px 12px;cursor:pointer;white-space:nowrap}
+@media (prefers-reduced-motion:reduce){.m36-bar i,.m36-ft button{transition:none}}
+/* ════ 3D 입체감 (점검 · 출장점검 작성 화면) — 규칙 하나: 카드는 떠 있고 · 고른 버튼은 튀어나오고 · 안 고른 버튼과 입력칸은 들어가 있다 ════ */
+#view-form #inspect-form-body > .card{background:linear-gradient(180deg,#fff 0,#fff 70%,#FAFBFD 100%);margin-bottom:18px;
+  box-shadow:inset 0 1px 0 #fff,0 0 0 1px rgba(14,35,80,.05),0 1px 2px rgba(11,24,51,.10),0 8px 16px -4px rgba(11,24,51,.16),0 26px 44px -16px rgba(11,24,51,.30)}
+#view-form #inspect-form-body .card-icon{background:linear-gradient(160deg,#fff,#E1E8F3);box-shadow:inset 0 1px 0 #fff,0 1px 0 #C6D0E2,0 3px 6px -2px rgba(14,35,80,.28)}
+/* 입력칸: 살짝 들어간 칸 */
+#view-form #inspect-form-body :is(input[type=text],input[type=tel],input[type=number],input[type=date],input:not([type]),select,textarea):not(:focus){box-shadow:inset 0 2px 3px rgba(14,35,80,.09)}
+#view-form #inspect-form-body .mvb{background:#F1F4F9;border-color:#E0E6F0;box-shadow:inset 0 2px 4px rgba(14,35,80,.10)}
+/* 에어컨 카드 · 하위 카드: 한 단계 낮게 떠 있음 */
+#view-form #cool-units .cu-item{box-shadow:inset 0 1px 0 #fff,0 2px 0 rgba(14,35,80,.06),0 10px 18px -8px rgba(14,35,80,.34),0 22px 34px -20px rgba(14,35,80,.34)}
+#view-form #cool-units .cu-num{background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.38),rgba(255,255,255,0) 46%),var(--ac,#0E2350);box-shadow:0 2px 0 rgba(0,0,0,.25),0 4px 8px -2px rgba(14,35,80,.45)}
+#view-form #inspect-form-body .unit-item:not(.cu-item),#view-form #result-rows .rcard{box-shadow:inset 0 1px 0 #fff,0 1px 2px rgba(11,24,51,.08),0 5px 10px -5px rgba(11,24,51,.22)}
+/* 항목별 결과 정상/주의/정비: 들어간 홈 안에서 고른 것만 튀어나옴 */
+#view-form #result-rows .rc-seg{background:#E8ECF3;border-color:#D9E0EB;box-shadow:inset 0 2px 4px rgba(14,35,80,.16),inset 0 -1px 0 rgba(255,255,255,.7)}
+#view-form #result-rows .rc-seg button{color:#98A1B4;transition:transform .14s,box-shadow .14s}
+#view-form #result-rows .rc-seg button.on-ok{color:#fff;background:linear-gradient(180deg,#25CC92,#0E9E6D);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 2px 0 #0A7350,0 5px 9px -3px rgba(14,158,109,.6);transform:translateY(-1px)}
+#view-form #result-rows .rc-seg button.on-warn{color:#fff;background:linear-gradient(180deg,#FDB548,#E88B00);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 2px 0 #A86500,0 5px 9px -3px rgba(232,139,0,.6);transform:translateY(-1px)}
+#view-form #result-rows .rc-seg button.on-bad{color:#fff;background:linear-gradient(180deg,#F56B6B,#D63434);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),0 2px 0 #9E2222,0 5px 9px -3px rgba(214,52,52,.6);transform:translateY(-1px)}
+/* 양호/저하/측정불가 · 실외기 판정 · 누설: 안 고른 것은 들어가 있고, 고른 것은 튀어나옴 */
+#view-form #inspect-form-body :is(.rsel-btn,.jdg-btn,.leak-btn){min-height:42px;border:1px solid #DCE2EC;border-radius:11px;background:#EDF0F5;color:#8A93A6;font-weight:700;
+  box-shadow:inset 0 2px 3px rgba(14,35,80,.12);transition:transform .14s,box-shadow .14s}
+#view-form #inspect-form-body :is(.rsel-btn.ok,.jdg-ok,.leak-ok){background:linear-gradient(180deg,#fff,#DDF5E8)!important;border-color:#33B979!important;color:#0A7A4A!important;
+  box-shadow:inset 0 1px 0 #fff,0 3px 0 #2AA86C,0 7px 12px -5px rgba(16,150,90,.5);transform:translateY(-2px)}
+#view-form #inspect-form-body :is(.rsel-btn.warn,.jdg-watch){background:linear-gradient(180deg,#fff,#FFEFD2)!important;border-color:#E9A23B!important;color:#9A5A00!important;
+  box-shadow:inset 0 1px 0 #fff,0 3px 0 #D88F22,0 7px 12px -5px rgba(216,143,34,.5);transform:translateY(-2px)}
+#view-form #inspect-form-body :is(.jdg-repair,.leak-bad){background:linear-gradient(180deg,#fff,#FDE1E1)!important;border-color:#E55B5B!important;color:#B42318!important;
+  box-shadow:inset 0 1px 0 #fff,0 3px 0 #CC3E3E,0 7px 12px -5px rgba(204,62,62,.5);transform:translateY(-2px)}
+#view-form #inspect-form-body .rsel-btn.na{background:linear-gradient(180deg,#fff,#E6EAF1)!important;border-color:#7A869C!important;color:#334155!important;
+  box-shadow:inset 0 1px 0 #fff,0 3px 0 #6B778C,0 7px 12px -5px rgba(51,65,85,.45);transform:translateY(-2px)}
+/* 종합 판정 4칸: 모두 떠 있고, 고른 것은 더 높이 */
+#view-form #ev-row .ev-btn{box-shadow:inset 0 1px 0 rgba(255,255,255,.85),0 3px 0 rgba(14,35,80,.13),0 7px 12px -6px rgba(14,35,80,.32);transition:transform .16s,box-shadow .16s}
+#view-form #ev-row .ev-btn.sel{transform:translateY(-3px);box-shadow:0 0 0 2.5px currentColor,0 5px 0 rgba(14,35,80,.20),0 14px 22px -8px rgba(14,35,80,.45)}
+/* 단계 막대 */
+.m36-bar i{background:linear-gradient(180deg,#fff,#EBEFF6);box-shadow:inset 0 0 0 2px #DCE2EC,0 2px 0 #CBD3E2,0 4px 8px -3px rgba(14,35,80,.28)}
+.m36-bar .dn i{background:linear-gradient(180deg,#26458A,#0E2350);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 2px 0 #06122B,0 5px 10px -3px rgba(14,35,80,.55)}
+.m36-bar .cur i{transform:translateY(-2px);box-shadow:inset 0 0 0 2.5px #0E2350,0 3px 0 #0E2350,0 8px 14px -4px rgba(14,35,80,.45)}
+/* 주요 버튼: 남색 + 아래 두께 */
+#m36-next,.m36-ft .nx,#view-form #btn-save,.m36-tools .pk,.m36-tools .mn,.m36-ft .pv{transition:transform .14s,box-shadow .14s}
+body.m36 #m36-next,.m36-ft .nx,#view-form #btn-save{background:linear-gradient(180deg,#1C3A78,#0E2350)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 3px 0 #06122B,0 8px 16px -6px rgba(14,35,80,.6)}
+body.m36 #m36-next:active,.m36-ft .nx:active,#view-form #btn-save:active{transform:translateY(2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.18),0 1px 0 #06122B,0 3px 6px -3px rgba(14,35,80,.5)}
+.m36-tools .pk{box-shadow:inset 0 1px 0 #fff,0 2px 0 #A9BDEB,0 5px 10px -5px rgba(29,63,214,.35)}
+.m36-tools .mn,.m36-ft .pv{box-shadow:inset 0 1px 0 #fff,0 2px 0 #CBD3E2,0 5px 10px -5px rgba(14,35,80,.3)}
+/* 냉방 측정 사진: 카드 맨 위 */
+#view-form .m36-cuph{margin:0 0 12px;padding:10px 12px;border-radius:12px;background:var(--acs,#EEF2FA);box-shadow:inset 0 1px 3px rgba(14,35,80,.10)}
+#view-form .m36-cuph > .fl{font-size:13px;font-weight:800;color:#0E2350;margin-bottom:8px}
+@media (prefers-reduced-motion:reduce){#view-form #inspect-form-body *,.m36-bar i{transition:none!important}}
+
+</style>
+<script id="m36-js">
+(function(){
+  'use strict';
+  function $(id){return document.getElementById(id);}
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function RT(){try{return reportType;}catch(e){return 'inspect';}}
+  function toast2(m){if(typeof toast==='function')toast(m);}
+  var KEY='hhc_m36';
+  function wanted(){try{return localStorage.getItem(KEY)!=='0';}catch(e){return true;}}
+  function setWanted(v){try{localStorage.setItem(KEY,v?'1':'0');}catch(e){}}
+
+  /* 단계 정의 — a: 그 단계에 들어갈 카드 안의 요소 id (카드 = 가장 가까운 .card) */
+  var STEPS=[
+    {n:'기본',t:'기본 정보',a:['dispatch-info-card','f-client','equip-rows'],
+     g:'고객 · 연락처 · 날짜와 점검할 설비를 적습니다.',gd:'출동 사유와 현장에서 한 일, 고객 정보를 적습니다.'},
+    {n:'측정',t:'측정',a:['cool-units','msr-rows','leak-rows','outdoor-sets'],
+     g:'에어컨마다 <b>흡입 · 토출 온도</b>를 넣으면 양호/주의가 자동으로 정해집니다. 측정하지 않은 칸은 비워 두세요 — 고객 보고서에 나오지 않습니다.'},
+    {n:'결과',t:'항목별 점검 결과',a:['result-rows'],
+     g:'문제가 있는 항목만 <b>주의</b>나 <b>정비</b>로 바꾸고 이유를 적으세요. 나머지는 「정상」 그대로 두면 됩니다.'},
+    {n:'조치',t:'결함 · 조치 · 권장 정비',a:['defect-rows','rec-rows','problem-rows'],
+     g:'발견한 결함과 한 조치를 적습니다. <b>✨ 자동 추천은 「＋ 담기」를 눌러야</b> 고객 보고서에 들어갑니다.'},
+    {n:'사진',t:'작업 사진 · 영상',a:['work-photos','work-videos','clean-before-photos'],
+     g:'청소 전 · 후 사진은 <b>같은 장수</b>로 올리면 고객 화면에서 짝이 맞습니다.'},
+    {n:'마무리',t:'판정 · 최종 의견',a:['ev-row','f-opinion'],
+     g:'지금까지 넣은 내용으로 <b>추천 판정</b>이 나옵니다. 확인해서 고른 뒤 최종 의견을 자동 작성하세요.'}
+  ];
+  var LAST=STEPS.length-1;
+  var cur=0,active=false,cardsOf=[],seen={},ALL=[];
+
+  /* ── 화면 요소 만들기 ── */
+  var nav=$('section-nav'),body=$('inspect-form-body');
+  if(!nav||!body)return;
+  var bar=document.createElement('div');bar.className='m36-bar';bar.setAttribute('role','tablist');bar.setAttribute('aria-label','작성 단계');
+  nav.parentNode.insertBefore(bar,nav.nextSibling);
+  var hd=document.createElement('div');hd.className='m36-hd';
+  body.insertBefore(hd,body.firstChild);
+  var ft=document.createElement('div');ft.className='m36-ft';
+  ft.innerHTML='<button type="button" class="pv">◀ 이전</button><button type="button" class="nx"></button>';
+  body.parentNode.insertBefore(ft,body.nextSibling);
+  var full=document.createElement('div');full.className='m36-full';
+  full.innerHTML='<span>한 화면에 모두 보는 중</span><button type="button">단계별로 보기</button>';
+  nav.parentNode.insertBefore(full,nav);
+  full.querySelector('button').addEventListener('click',function(){setWanted(true);apply(true);});
+
+  /* 휴대폰 아래 바에 ◀ / 다음 ▶ */
+  var mb=document.querySelector('.m26-bar'),bp=null,bn=null;
+  if(mb){
+    bp=document.createElement('button');bp.type='button';bp.id='m36-prev';bp.textContent='◀';bp.setAttribute('aria-label','이전 단계');
+    bn=document.createElement('button');bn.type='button';bn.id='m36-next';
+    mb.insertBefore(bp,mb.firstChild);mb.appendChild(bn);
+    bp.addEventListener('click',function(){goStep(cur-1);});
+    bn.addEventListener('click',next);
+  }
+  ft.querySelector('.pv').addEventListener('click',function(){goStep(cur-1);});
+  ft.querySelector('.nx').addEventListener('click',function(){if(cur<LAST)next();else{var s=$('btn-save');if(s)s.scrollIntoView({behavior:'smooth',block:'center'});}});
+  bar.addEventListener('click',function(e){var b=e.target.closest('button[data-s]');if(b)goStep(+b.getAttribute('data-s'));});
+  hd.addEventListener('click',function(e){
+    var q=e.target.closest('[data-iss]');if(q){var a=ALL[+q.getAttribute('data-iss')];if(a&&a.x.el){reveal(a.x.el);setTimeout(function(){focusEl(a.x.el);},60);}return;}
+    if(e.target.closest('[data-allck]')){var ck=document.getElementById('m27-s');if(ck)ck.click();else{var pb=document.getElementById('m27-ckbtn');if(pb)pb.click();}return;}
+    if(e.target.closest('[data-full]')){setWanted(false);apply(true);toast2('한 화면에 모두 보기로 바꿨습니다');}});
+
+  /* ── 카드에 단계 표시 ── */
+  function tag(){
+    cardsOf=STEPS.map(function(){return [];});
+    STEPS.forEach(function(st,i){st.a.forEach(function(id){var el=$(id);if(!el)return;var c=el.closest('.card');if(!c||!body.contains(c))return;
+      c.setAttribute('data-m36',i);if(cardsOf[i].indexOf(c)<0)cardsOf[i].push(c);});});
+    /* 카드가 아닌 진행률 상자 */
+    var pb=$('insp-progress-val');if(pb){var box=pb.parentNode&&pb.parentNode.parentNode;if(box&&box.parentNode===body)box.id=box.id||'insp-progress-box';}
+    /* 한눈에 카드는 마무리 단계에서 판정 위로 */
+    var ov=$('m27-ov'),evc=$('ev-row')&&$('ev-row').closest('.card');
+    if(ov){
+      if(active&&evc){if(ov.nextSibling!==evc)body.insertBefore(ov,evc);ov.setAttribute('data-m36',LAST);}
+      else{ov.removeAttribute('data-m36');if(ov.parentNode!==nav.parentNode)nav.parentNode.insertBefore(ov,nav);}
+    }
+  }
+  function shown(c){/* 보고서 종류 때문에 숨겨진 카드는 빼고 */
+    for(var e=c;e&&e!==body;e=e.parentElement){if(e.style&&e.style.display==='none')return false;}return true;}
+  function stepUsable(i){return cardsOf[i]&&cardsOf[i].some(shown);}
+
+  /* ── 단계별 빠진 곳 ── */
+  function stepOf(el){var c=el&&el.closest&&el.closest('[data-m36]');return c?+c.getAttribute('data-m36'):-1;}
+  function issuesBy(){
+    var L=[];try{L=window.__m27issues?window.__m27issues():[];}catch(e){}
+    var by=STEPS.map(function(){return [];});
+    L.forEach(function(x){var s=stepOf(x.el);if(s<0){/* 위치를 모르는 것: 기본 정보 칸이면 0, 아니면 마무리 */s=(x.el&&(x.el.id==='f-client'||x.el.id==='f-date'))?0:LAST;}by[s].push(x);});
+    return by;
+  }
+  function filled(i){
+    return cardsOf[i].filter(shown).some(function(c){
+      if(c.querySelector('.ph-item,.rcard,.cu-item,.unit-item,.ev-btn.sel,.ev-btn.on'))return true;
+      var ins=c.querySelectorAll('input[type=text]:not([readonly]),input[type=tel],input[type=number]:not([readonly]),input:not([type]):not([readonly]),textarea');
+      for(var k=0;k<ins.length;k++){var v=String(ins[k].value||'').trim();if(v&&v!=='+60')return true;}return false;});
+  }
+
+  /* ── 그리기 ── */
+  var lastBy=null;
+  function draw(){
+    if(!active)return;
+    var by=issuesBy();lastBy=by;
+    var bh=STEPS.map(function(st,i){
+      if(!stepUsable(i))return '';
+      var L=by[i],r=L.filter(function(x){return x.l==='r';}).length;
+      var dn=i!==cur&&seen[i]&&filled(i)&&!L.length;
+      var badge=L.length&&i!==cur?'<em class="'+(r?'r':'')+'">'+(r?'!':L.length)+'</em>':'';
+      return '<button type="button" role="tab" data-s="'+i+'" class="'+(i===cur?'cur':dn?'dn':'')+'" aria-selected="'+(i===cur)+'"><i>'+(dn?'✓':(i+1))+'</i>'+badge+'<span>'+st.n+'</span></button>';
+    }).join('');
+    if(bar._h!==bh){bar._h=bh;bar.innerHTML=bh;}
+    var st=STEPS[cur],ord=usable(),pos=ord.indexOf(cur)+1;
+    var g=(RT()==='dispatch'&&st.gd)?st.gd:st.g;
+    var mine=by[cur],nr=mine.filter(function(x){return x.l==='r';}).length;
+    var hh2='<div class="t"><small>'+pos+' / '+ord.length+'</small><b>'+esc(st.t)+'</b><button type="button" data-full="1">한 화면에 모두 보기</button></div><p>'+g+'</p>'+
+      (cur===LAST?lastList(by):'');
+    if(hd._h!==hh2){hd._h=hh2;hd.innerHTML=hh2;}
+    var nx=nextOf(cur);
+    var nl=nx<0?'':'다음 · '+STEPS[nx].n+' ▶';
+    function tx(el,t){if(el&&el.textContent!==t)el.textContent=t;}
+    tx(bn,nl);tx(ft.querySelector('.nx'),nx<0?'💾 저장으로 이동':nl);
+    var pvx=prevOf(cur);ft.querySelector('.pv').disabled=pvx<0;ft.querySelector('.pv').style.visibility=pvx<0?'hidden':'';
+    if(bp)bp.disabled=pvx<0;
+  }
+  /* 마무리 단계: 저장 전에 확인할 곳을 단계 이름과 함께 (누르면 그 칸으로) */
+  function lastList(by){
+    ALL=[];by.forEach(function(L,i){L.forEach(function(x){ALL.push({s:i,x:x});});});
+    if(!ALL.length)return '<div class="ok">✓ 빠진 곳이 없습니다 — 판정을 고르고 저장하세요.</div>';
+    ALL.sort(function(a,b){return (a.x.l==='r'?0:1)-(b.x.l==='r'?0:1)||a.s-b.s;});
+    var nr=ALL.filter(function(a){return a.x.l==='r';}).length;
+    return '<div class="nt"><b>저장 전에 확인할 곳 '+ALL.length+'개'+(nr?' · 바로잡을 곳 '+nr+'개':'')+'</b>'+
+      ALL.slice(0,5).map(function(a,k){return '<button type="button" class="'+(a.x.l==='r'?'r':'')+'" data-iss="'+k+'"><i>'+STEPS[a.s].n+'</i><span>'+esc(a.x.msg)+'</span><em>고치기 ›</em></button>';}).join('')+
+      (ALL.length>5?'<button type="button" data-allck="1"><span>나머지 '+(ALL.length-5)+'개 보기</span><em>›</em></button>':'')+'</div>';
+  }
+  function usable(){var a=[];for(var i=0;i<STEPS.length;i++)if(stepUsable(i))a.push(i);return a;}
+  function nextOf(i){for(var k=i+1;k<STEPS.length;k++)if(stepUsable(k))return k;return -1;}
+  function prevOf(i){for(var k=i-1;k>=0;k--)if(stepUsable(k))return k;return -1;}
+
+  function setClasses(){
+    var b=document.body;for(var i=0;i<STEPS.length;i++)b.classList.toggle('m36-s'+i,active&&i===cur);
+    b.classList.toggle('m36',active);b.classList.toggle('m36-last',active&&cur===LAST);
+  }
+  function top(){var v=$('view-form');if(!v)return;var hh=(document.querySelector('.hdr')||{}).offsetHeight||0;
+    var y=Math.max(0,(cur===0?v:bar).getBoundingClientRect().top+window.pageYOffset-hh-(cur===0?0:4));
+    if(cur===0)y=0;window.scrollTo({top:y,behavior:'auto'});}
+  function goStep(i,noScroll){
+    if(!active)return;if(i<0||i>LAST)return;
+    if(!stepUsable(i)){var n=i>cur?nextOf(i):prevOf(i);if(n<0)return;i=n;}
+    seen[cur]=true;cur=i;seen[i]=true;tag();setClasses();draw();if(!noScroll)top();
+    if(typeof window.__scheduleDraft==='function'){}  /* 자료는 바뀌지 않음 */
+  }
+
+  /* 다음: 이 단계에 빠진 곳이 있으면 먼저 보여 주기 */
+  var dim=document.createElement('div');dim.className='m27-dim';dim.id='m36-dim';
+  var sh=document.createElement('div');sh.className='m27-sh';sh.id='m36-sh';sh.setAttribute('role','dialog');
+  sh.innerHTML='<div class="hd"><b id="m36-sht"></b><button type="button" aria-label="닫기">✕</button></div><div class="bd" id="m36-shb"></div>';
+  document.body.appendChild(dim);document.body.appendChild(sh);
+  function openSh(t,h){$('m36-sht').textContent=t;$('m36-shb').innerHTML=h;dim.classList.add('on');sh.classList.add('on');}
+  function closeSh(){dim.classList.remove('on');sh.classList.remove('on');}
+  dim.addEventListener('click',closeSh);sh.querySelector('.hd button').addEventListener('click',closeSh);
+  var SHL=[],shAct={};
+  function next(){
+    var nx=nextOf(cur);if(nx<0)return;
+    var L=(issuesBy()[cur]||[]);
+    if(!L.length){goStep(nx);return;}
+    SHL=L;var E=L.filter(function(x){return x.l==='r';}),W=L.filter(function(x){return x.l!=='r';});
+    var it=function(x){return '<button type="button" class="m27-vi '+x.l+'" data-i="'+L.indexOf(x)+'"><i>'+(x.l==='r'?'!':'·')+'</i><div><b>'+esc(x.msg)+'</b>'+(x.sub?'<small>'+esc(x.sub)+'</small>':'')+'</div><span>고치기 ›</span></button>';};
+    openSh('「'+STEPS[cur].n+'」 단계 확인',
+      (E.length?'<div class="vh">먼저 바로잡아 주세요 ('+E.length+')</div>'+E.map(it).join(''):'')+
+      (W.length?'<div class="vh">확인하면 좋아요 ('+W.length+')</div>'+W.map(it).join(''):'')+
+      '<button type="button" class="m27-pbtn" data-go="1">'+(E.length?'나중에 고치고 다음으로':'확인했어요 · 다음으로')+'</button>');
+    shAct.next=nx;
+  }
+  $('m36-shb').addEventListener('click',function(e){
+    var b=e.target.closest('[data-i]');
+    if(b){var x=SHL[+b.getAttribute('data-i')];closeSh();if(x&&x.el)setTimeout(function(){reveal(x.el);focusEl(x.el);},240);return;}
+    if(e.target.closest('[data-go]')){closeSh();goStep(shAct.next);return;}
+    var m=e.target.closest('[data-m]');if(m){closeSh();var f=MENU[m.getAttribute('data-m')];if(f)setTimeout(f,200);}
+  });
+  function focusEl(el){var hh=(document.querySelector('.hdr')||{}).offsetHeight||0,bh=bar.offsetHeight||0;
+    var cb=el.closest&&el.closest('.cu-body');if(cb&&cb.style.display==='none'&&cb.previousElementSibling)cb.previousElementSibling.click();
+    window.scrollTo({top:el.getBoundingClientRect().top+window.pageYOffset-(hh+bh+16),behavior:'smooth'});
+    el.classList.remove('m27-flash');void el.offsetWidth;el.classList.add('m27-flash');
+    if(el.matches&&el.matches('input,textarea'))setTimeout(function(){try{el.focus({preventScroll:true});}catch(_){}},450);}
+
+  /* 다른 단계에 있는 칸으로 이동하라는 요청(저장 전 점검 등)이 오면 그 단계를 먼저 엽니다 */
+  function reveal(el){if(!active||!el)return;var s=stepOf(el);if(s>=0&&s!==cur){cur=s;tag();setClasses();draw();}}
+  window.__m36reveal=reveal;
+  var _siv=Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView=function(){try{if(active&&body.contains(this))reveal(this);}catch(e){}return _siv.apply(this,arguments);};
+
+  /* ── 켜고 끄기 ── */
+  function apply(reset){
+    var want=wanted()&&(RT()==='inspect'||RT()==='dispatch');
+    var was=active;active=want;
+    full.classList.toggle('on',!want&&(RT()==='inspect'||RT()==='dispatch'));
+    if(reset||!was){cur=0;seen={0:true};var ed=false;try{ed=!!currentEditId;}catch(e){}if(ed)STEPS.forEach(function(_,k){seen[k]=true;});}
+    tag();
+    if(active&&!stepUsable(cur)){var n=nextOf(cur);cur=n<0?0:n;}
+    setClasses();
+    if(active){draw();top();}
+  }
+
+  /* ── 항목 관리 (항목별 점검 결과) ── */
+  var rw=$('result-rows-wrap');
+  var HIDE_ON=['window.bulkResultOk()','sortResultRows()','inspPresetReload()','inspPresetSave()'];
+  function hideTools(){
+    HIDE_ON.forEach(function(o){var b=document.querySelector('[onclick="'+o+'"]');if(b)b.classList.add('m36-hid');});
+    var m34=document.querySelector('.m34-bar');if(m34)m34.classList.add('m36-hid');
+  }
+  var tools=document.createElement('div');tools.className='m36-tools';
+  tools.innerHTML='<button type="button" class="pk">🔧 점검 항목 담기 · 빼기</button><button type="button" class="mn">⋯ 항목 관리</button>';
+  if(rw)rw.insertBefore(tools,rw.firstChild);
+  tools.querySelector('.pk').addEventListener('click',function(){if(typeof window.openItemPicker==='function')window.openItemPicker();else{var p=document.querySelector('#result-rows-wrap .btn-pick');if(p)p.click();}});
+  var MENU={
+    ok:function(){window.bulkResultOk();},
+    sort:function(){if(typeof window.sortResultRows==='function')window.sortResultRows();else if(typeof sortResultRows==='function')sortResultRows();},
+    reload:function(){if(typeof window.inspPresetReload==='function')window.inspPresetReload();},
+    save:function(){if(typeof window.inspPresetSave==='function')window.inspPresetSave();},
+    pack:function(){var b=document.querySelector('.m34-bar .chg');if(b)b.click();},
+    pick:function(){var b=document.querySelector('.m34-bar .set');if(b)b.click();}
+  };
+  tools.querySelector('.mn').addEventListener('click',function(){
+    var cnt=document.querySelectorAll('#result-rows .rcard').length,isI=RT()==='inspect';
+    var mi=function(k,ic,t,s,w){return '<button type="button" class="m36-mi'+(w?' w':'')+'" data-m="'+k+'"><i>'+ic+'</i><div><b>'+t+'</b><small>'+s+'</small></div></button>';};
+    openSh('항목 관리',
+      '<div class="vh">이 보고서</div>'+
+      mi('ok','✓','전체 「정상」으로','담긴 '+cnt+'개 항목을 모두 정상으로 바꿉니다. 주의 · 정비로 고른 항목이 있으면 먼저 확인합니다.')+
+      mi('sort','⇅','구분별로 정렬','오염상태 · 열교환 · 배수 · 운전 순서로 모읍니다.')+
+      mi('reload','↺','기본 항목으로 다시 채우기','지금 담긴 항목을 지우고 새 보고서 기본 항목으로 바꿉니다.',true)+
+      (isI?'<div class="vh">새 보고서 기본값 (모든 기기 공통)</div>'+
+      mi('pack','📦','기본 항목 묶음 바꾸기','새 보고서를 열 때 담기는 묶음을 고릅니다.')+
+      mi('pick','⚙','기본 항목 고르기','묶음 안의 항목을 켜고 끕니다.')+
+      mi('save','⭐','지금 항목을 기본값으로','지금 담긴 항목 · 결과 · 비고를 새 보고서의 기본으로 저장합니다.',true):''));
+  });
+
+  /* ── 한꺼번에 바꾸는 버튼: 이미 고른 문제가 있으면 확인 ── */
+  function ask(t,lines,ok){return window.inspAsk?window.inspAsk(t,lines,ok,'취소'):Promise.resolve(confirm(t+'\n\n'+lines.join('\n')));}
+  function names(arr){var s=arr.slice(0,4).join(', ');return s+(arr.length>4?' 외 '+(arr.length-4)+'개':'');}
+  if(typeof window.bulkResultOk==='function'){var _bro=window.bulkResultOk;
+    window.bulkResultOk=function(){var self=this,args=arguments,bad=[];
+      [].forEach.call(document.querySelectorAll('#result-rows .rcard'),function(c){if(c._statusSel&&(c._statusSel.value==='warn'||c._statusSel.value==='bad'))bad.push((c._nameInp&&c._nameInp.value.trim())||'이름 없는 항목');});
+      if(!bad.length)return _bro.apply(self,args);
+      ask('모두 「정상」으로 바꿀까요?',['주의 · 정비로 고른 '+bad.length+'개 항목이 정상으로 바뀝니다: '+names(bad),'적어 둔 비고는 그대로 남습니다 — 정상인데 문제 내용이 비고에 남지 않게 확인해 주세요.'],'모두 정상으로').then(function(y){if(y){_bro.apply(self,args);if(typeof window.ipRender==='function')try{ipRender();}catch(e){}}});};}
+  if(typeof window.bulkSetCoolOk==='function'){var _bco=window.bulkSetCoolOk;
+    window.bulkSetCoolOk=function(){var self=this,args=arguments,w=[];
+      [].forEach.call(document.querySelectorAll('#cool-units .cu-item'),function(it){if(it.querySelector('.rsel-warn-btn.warn'))w.push((it._cuLbl&&it._cuLbl())||'에어컨');});
+      if(!w.length)return _bco.apply(self,args);
+      ask('냉방 판정을 모두 「양호」로 바꿀까요?',['「주의」로 고른 에어컨 '+w.length+'대가 양호로 바뀝니다: '+names(w)],'모두 양호로').then(function(y){if(y)_bco.apply(self,args);});};}
+  if(typeof window.bulkSetLeakOk==='function'){var _blo=window.bulkSetLeakOk;
+    window.bulkSetLeakOk=function(){var self=this,args=arguments,n=document.querySelectorAll('#leak-rows .leak-bad, .cu-item .leak-bad').length;
+      if(!n)return _blo.apply(self,args);
+      ask('누설검사를 모두 「이상없음」으로 바꿀까요?',['「누설감지」로 고른 '+n+'곳이 이상없음으로 바뀝니다.'],'모두 이상없음으로').then(function(y){if(y)_blo.apply(self,args);});};}
+  /* 실외기 「판정 전체 양호」(버튼 안 함수) — 누르는 순간 가로채서 확인 */
+  document.addEventListener('click',function(e){
+    var b=e.target.closest&&e.target.closest('.qa-btn');if(!b||b._m36ok||b.textContent.indexOf('판정 전체 양호')<0)return;
+    var n=document.querySelectorAll('#msr-rows .jdg-btn.jdg-watch, #msr-rows .jdg-btn.jdg-repair').length;if(!n)return;
+    e.stopPropagation();e.preventDefault();
+    ask('실외기 판정을 모두 「양호」로 바꿀까요?',['「관찰」 · 「수리요망」으로 고른 '+n+'곳이 양호로 바뀝니다.'],'모두 양호로').then(function(y){if(y){b._m36ok=1;b.click();b._m36ok=0;}});
+  },true);
+
+  /* ── 다시 그리기 ── */
+  /* 냉방 측정 사진 칸을 에어컨 카드 맨 위로 (사진 → 온도 자동 입력 순서) */
+  function cuPhotoTop(){[].forEach.call(document.querySelectorAll('#cool-units .cu-item > .cu-body'),function(bd){
+    var pr=bd.querySelector(':scope > div > .photo-row[id^="cu-photos-"]');if(!pr)return;var blk=pr.parentNode;
+    if(!blk.classList.contains('m36-cuph'))blk.classList.add('m36-cuph');
+    if(bd.firstElementChild!==blk)bd.insertBefore(blk,bd.firstChild);});}
+  /* 계속 바뀌는 칸(자동저장 표시 등)이 있어도 멈추지 않게: 기다리는 동안 다시 미루지 않음 */
+  var tm=null;function schedule(){if(tm)return;tm=setTimeout(function(){tm=null;try{cuPhotoTop();hideTools();if(active){tag();draw();}}catch(e){console.warn('m36',e);}},300);}
+  var vf=$('view-form');
+  if(vf){['input','change','click'].forEach(function(ev){vf.addEventListener(ev,function(e){if(e.target.closest&&e.target.closest('.m36-bar,.m36-hd'))return;schedule();});});
+    new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var t=ms[i].target;t=t.nodeType===1?t:t.parentElement;if(t&&t.closest&&t.closest('.m36-bar,.m36-hd,.m36-ft,#m27-ov,#m27-rec,#m27-dsum,#m27-ckbtn'))continue;schedule();return;}}).observe(vf,{childList:true,subtree:true,characterData:true});}
+  ['switchReportType','setDispatchKind','newReport','editReport','switchView'].forEach(function(f){var o=window[f];if(typeof o!=='function')return;
+    window[f]=function(){var r=o.apply(this,arguments);var reset=(f!=='switchView');setTimeout(function(){apply(reset);},0);setTimeout(schedule,700);return r;};
+    try{if(f==='switchView')switchView=window[f];}catch(e){}});
+  cuPhotoTop();hideTools();apply(true);setTimeout(function(){cuPhotoTop();hideTools();apply(false);},1600);
+})();
+</script>
 
 </body>
 </html>
