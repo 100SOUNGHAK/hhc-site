@@ -10494,7 +10494,8 @@ kind==='washer'?'세부 진단':'(문제가 있는 에어컨마다 「거실1 �
       '각 사진이 청소 전(오염: 먼지·곰팡이·검은 점/얼룩·기름때·물때·녹·이물질이 보임)인지 청소 후(같은 부위가 깨끗함)인지 판정하세요.\n'+
       '그리고 같은 부위·같은 각도로 찍은 사진끼리 「청소 전 ↔ 청소 후」 짝을 지으세요(한 사진은 한 짝에만). 짝이 없는 사진은 짝에 넣지 마세요.\n'+
       '판정이 애매하면 c(확신도)를 낮게 주세요. what 은 찍힌 부위를 한국어 2~8자로(예: 송풍팬, 열교환기, 필터, 드레인팬, 세탁조, 후드 필터).\n'+
-      '반드시 JSON 하나만 출력: {"photos":[{"i":1,"s":"before","c":0.95,"what":"송풍팬"}],"pairs":[[1,5]]}  (s 는 before 또는 after, pairs 는 [전 번호, 후 번호])';
+      'cat 은 사진 종류 번호: 1 = 분해한 부품들을 한곳에 모아 놓은 전체 사진(여러 부품이 함께 보임), 2 = 에바포레이터(열교환기·냉각핀 코일), 3 = 블로워팬(송풍팬·시로코팬), 4 = 그 외 모든 사진(필터·드레인팬·커버·세탁조·후드 등).\n'+
+      '반드시 JSON 하나만 출력: {"photos":[{"i":1,"s":"before","c":0.95,"what":"송풍팬","cat":3}],"pairs":[[1,5]]}  (s 는 before 또는 after, pairs 는 [전 번호, 후 번호])';
     var ctrl=(typeof AbortController!=='undefined')?new AbortController():null,timer=setTimeout(function(){try{ctrl&&ctrl.abort();}catch(e){}},90000);
     try{
       var res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctrl?ctrl.signal:undefined,
@@ -10536,12 +10537,20 @@ kind==='washer'?'세부 진단':'(문제가 있는 에어컨마다 「거실1 �
   async function classify(list){
     var j=await aiSort(list),why='';
     if(j&&!j.err){
-      var info={};j.photos.forEach(function(p){var o=list[(p.i|0)-1];if(o){o.ai={s:p.s==='after'?'a':'b',c:+p.c||0,what:String(p.what||'').slice(0,12)};}});
+      var info={};j.photos.forEach(function(p){var o=list[(p.i|0)-1];if(o){var ct=p.cat|0;o.ai={s:p.s==='after'?'a':'b',c:+p.c||0,what:String(p.what||'').slice(0,12),cat:ct>=1&&ct<=4?ct:4};}});
       list.forEach(function(o){if(!o.ai)o.ai={s:'b',c:0,what:''};});
       var B=[],A=[],used={};
       (j.pairs||[]).forEach(function(pr){var b=list[(pr[0]|0)-1],a=list[(pr[1]|0)-1];if(!b||!a||used[pr[0]]||used[pr[1]]||b===a)return;used[pr[0]]=used[pr[1]]=1;b.ai.s='b';a.ai.s='a';B.push(b);A.push(a);});
       var np=B.length;
-      list.forEach(function(o,i){if(used[i+1])return;(o.ai.s==='a'?A:B).push(o);});
+      /* 고정 배치 순서: ① 분해 부품 전체 → ② 에바포레이터 → ③ 블로워팬 → ④ 그 외. 같은 종류 안에서는 촬영 시간·원래 순서 */
+      var ix=function(o){return list.indexOf(o);},cmp=function(x,y){return ((x.t||0)-(y.t||0))||(ix(x)-ix(y));};
+      var prs=B.map(function(b,i){return [b,A[i]];});
+      prs.sort(function(p1,p2){return (Math.min(p1[0].ai.cat,p1[1].ai.cat)-Math.min(p2[0].ai.cat,p2[1].ai.cat))||cmp(p1[0],p2[0]);});
+      B=prs.map(function(q){return q[0];});A=prs.map(function(q){return q[1];});
+      var lb=[],la=[];
+      list.forEach(function(o,i){if(used[i+1])return;(o.ai.s==='a'?la:lb).push(o);});
+      var bycat=function(x,y){return (x.ai.cat-y.ai.cat)||cmp(x,y);};
+      B=B.concat(lb.sort(bycat));A=A.concat(la.sort(bycat));
       var low=list.filter(function(o){return o.ai.c<0.7;}).length;
       return {B:B,A:A,note:'🤖 사진을 보고 오염 여부로 나누고, 같은 부위끼리 '+np+'쌍 짝지었습니다'+(low?' · 노란 표시 '+low+'장은 확인해 주세요':'')};
     }
@@ -10570,7 +10579,7 @@ kind==='washer'?'세부 진단':'(문제가 있는 에어컨마다 「거실1 �
     var startB=B.slice(),startA=A.slice(),flashObj=null;
     var ov=document.createElement('div');ov.className='m35-ov';
     var lb=lbl(P,'b'),la=lbl(P,'a');
-    ov.innerHTML='<div class="m35-sh"><div class="m35-hd"><h3>'+P.name+' 사진 전·후 정리</h3><p>🤖 사진을 보고 오염 여부로 자동 분류 · 같은 부위끼리 같은 줄<br>⇄ 로 '+lb+'↔'+la+' 옮기기 · ▲▼ 로 위/아래 순서 바꾸기<br>같은 줄 사진이 고객 보고서에서 전·후 짝으로 보입니다</p></div>'+
+    ov.innerHTML='<div class="m35-sh"><div class="m35-hd"><h3>'+P.name+' 사진 전·후 정리</h3><p>🤖 사진을 보고 오염 여부로 자동 분류 · 같은 부위끼리 같은 줄<br>위에서부터 ① 분해 부품 전체 ② 에바포레이터 ③ 블로워팬 ④ 그 외 순서<br>⇄ 로 '+lb+'↔'+la+' 옮기기 · ▲▼ 로 위/아래 순서 바꾸기<br>같은 줄 사진이 고객 보고서에서 전·후 짝으로 보입니다</p></div>'+
       '<div class="m35-tools"><button type="button" data-t="ai">🤖 AI로 다시 분류</button><button type="button" data-t="pair">🔗 비슷한 모양끼리 짝 맞추기</button><button type="button" data-t="time">🕒 시간순 나누기</button><button type="button" data-t="swapall">⇄ 전·후 통째로 바꾸기</button></div>'+
       '<div class="m35-sum"></div>'+
       '<div class="m35-body"><div class="m35-colh"><i></i><span class="cb">'+lb+'</span><span class="ca">'+la+'</span></div><div class="m35-rows"></div></div>'+
@@ -10579,7 +10588,7 @@ kind==='washer'?'세부 진단':'(문제가 있는 에어컨마다 「거실1 �
     var rows=ov.querySelector('.m35-rows'),sum=ov.querySelector('.m35-sum');
     function cell(o,side,i,len){
       if(!o)return '<div class="m35-empty">빈 칸</div>';
-      return '<div class="m35-cell '+side+(o===flashObj?' flash':'')+'"><img src="'+o.src+'" alt="">'+(o.ai&&(o.ai.what||o.ai.c)?'<div class="tm'+(o.ai.c<0.7||o.ai.s!==side?' warn':'')+'">🤖 '+(o.ai.what||'')+(o.ai.c<0.7||o.ai.s!==side?' · 확인 필요':' · '+Math.round(o.ai.c*100)+'%')+'</div>':(o.t?'<div class="tm">🕒 '+fmt(o.t)+'</div>':''))+
+      return '<div class="m35-cell '+side+(o===flashObj?' flash':'')+'"><img src="'+o.src+'" alt="">'+(o.ai&&(o.ai.what||o.ai.c)?'<div class="tm'+(o.ai.c<0.7||o.ai.s!==side?' warn':'')+'">🤖 '+(['','①','②','③','④'][o.ai.cat]||'')+' '+(o.ai.what||'')+(o.ai.c<0.7||o.ai.s!==side?' · 확인 필요':' · '+Math.round(o.ai.c*100)+'%')+'</div>':(o.t?'<div class="tm">🕒 '+fmt(o.t)+'</div>':''))+
         '<div class="ctl"><button type="button" data-a="up" data-s="'+side+'" data-i="'+i+'"'+(i===0?' disabled':'')+'>▲</button>'+
         '<button type="button" data-a="dn" data-s="'+side+'" data-i="'+i+'"'+(i===len-1?' disabled':'')+'>▼</button>'+
         '<button type="button" class="sw" data-a="sw" data-s="'+side+'" data-i="'+i+'">'+(side==='b'?'후로 ▶':'◀ 전으로')+'</button>'+
