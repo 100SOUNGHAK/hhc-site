@@ -1383,25 +1383,40 @@ a.nc-v{color:var(--navy-800)}
     <div class="na-flip" id="flip">
       <div class="na-side f">
         <section class="na-face ph" id="face">
-          <style>/* 처음 열릴 때 흐린 사진 → 서서히 선명 (2026-11-19) */ .na-face.ph .na-cover{overflow:hidden} .na-face.ph .na-cover img{filter:blur(14px) saturate(.75);opacity:.55;transform:scale(1.08);   transition:filter 4.2s cubic-bezier(.45,.05,.35,1),opacity 2.6s ease-out,transform 4.8s cubic-bezier(.33,.1,.25,1)} .na-face.ph .na-cover img.on{filter:none;opacity:1;transform:none} @media (prefers-reduced-motion:reduce){.na-face.ph .na-cover img{filter:none;opacity:1;transform:none;transition:none}}</style>
           <div class="na-cover" aria-hidden="true"><img src="namecard-cover.jpg" alt="" decoding="async"><video class="nb-vid" src="nc-bow.mp4" muted playsinline preload="auto" disablepictureinpicture></video></div>
-          <style>/* 🙇 대표 사진 인사 영상 (2026-11-19) — 사진이 선명해진 뒤 한 번 고개 숙여 인사하고, 끝나면 같은 사진으로 돌아옴 */
+          <style>/* 🙇 대표 사진 인사 영상 (2026-11-19) — 사진이 뜬 뒤 한 번 고개 숙여 인사하고, 끝나면 같은 사진으로 돌아옴 */
           .na-face .na-cover .nb-vid{display:none}
           .na-face.ph .na-cover .nb-vid{display:block;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 50%;opacity:0;transition:opacity .35s ease;pointer-events:none}
           .na-face.ph .na-cover .nb-vid.on{opacity:1}
           @media (prefers-reduced-motion:reduce){.na-face.ph .na-cover .nb-vid{display:none}}</style>
-          <script>/* 📸 대표 사진: 처음 열릴 때 흐림 → 서서히 선명 (2026-11-19)
-             페이지를 끝까지 읽고(DOMContentLoaded) + 사진을 받은 뒤에 시작해야 효과가 보임 */
+          <script>/* 🙇 대표 사진 인사 영상 (2026-11-19)
+             ① 처음 열면 사진이 뜨고 약 1.5초 뒤 한 번 인사
+             ② 사진(오른쪽 사람 부분)을 누르면 다시 인사 — 왼쪽 글자 부분을 누르면 예전처럼 회사 정보로 전환
+             ③ 회사 정보·QR 화면이나 다른 페이지를 보다가 개인 명함으로 돌아오면 다시 인사
+             데이터 절약 모드·「동작 줄이기」 설정이면 재생하지 않고 사진만 보임 */
           (function(){var i=document.querySelector('#face .na-cover img');if(!i)return;
-            var done=false;function on(){if(done)return;done=true;requestAnimationFrame(function(){requestAnimationFrame(function(){setTimeout(function(){i.classList.add('on')},120);
-              /* 🙇 인사 영상: 사진이 다 선명해진 뒤(약 5초) 한 번만 재생 */
-              setTimeout(function(){var v=i.parentNode.querySelector('.nb-vid');if(!v)return;
-                var c=navigator.connection;if((c&&c.saveData)||(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches))return;
-                function go(){v.classList.add('on');var pr=v.play();if(pr&&pr.catch)pr.catch(function(){v.classList.remove('on')})}
-                v.addEventListener('ended',function(){v.classList.remove('on')});
-                if(v.readyState>=3)go();else v.addEventListener('canplaythrough',go,{once:true});},5200)})})}
-            function ready(){if(i.complete&&i.naturalWidth)on();else{i.addEventListener('load',on);i.addEventListener('error',on)}setTimeout(on,4000)}
-            if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ready);else ready();})();</script>
+            var cv=i.parentNode,v=cv.querySelector('.nb-vid'),face=document.getElementById('face'),flip=document.getElementById('flip');if(!v)return;
+            function allowed(){var c=navigator.connection;return !((c&&c.saveData)||(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches))}
+            function shown(){return face.classList.contains('ph')&&!flip.classList.contains('back')&&document.visibilityState==='visible'}
+            function bow(){if(!allowed()||!shown())return false;if(!v.paused&&!v.ended)return true;
+              function go(){try{v.currentTime=0}catch(e){}v.classList.add('on');var pr=v.play();if(pr&&pr.catch)pr.catch(function(){v.classList.remove('on')})}
+              if(v.readyState>=3)go();else{v.addEventListener('canplaythrough',go,{once:true});try{v.load()}catch(e){}}return true}
+            v.addEventListener('ended',function(){v.classList.remove('on')});
+            var tm=0;function later(ms){clearTimeout(tm);tm=setTimeout(bow,ms)}
+            /* ① 처음 */
+            var done=false;function first(){if(done)return;done=true;later(1500)}
+            function ready(){if(i.complete&&i.naturalWidth)first();else{i.addEventListener('load',first);i.addEventListener('error',first)}setTimeout(first,4000)}
+            if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ready);else ready();
+            /* ② 사진을 누르면 다시 인사 (명함 전환보다 먼저 받아서 막음) */
+            cv.addEventListener('click',function(e){if(bow())e.stopPropagation()});
+            /* ③ 개인 명함으로 돌아오면 다시 인사 */
+            var was=shown();new MutationObserver(function(){var now=shown();if(now&&!was)later(700);if(!now){clearTimeout(tm);if(!v.paused){v.pause();v.classList.remove('on')}}was=now})
+              .observe(face,{attributes:true,attributeFilter:['class']});
+            new MutationObserver(function(){var now=shown();if(now&&!was)later(700);if(!now){clearTimeout(tm);if(!v.paused){v.pause();v.classList.remove('on')}}was=now})
+              .observe(flip,{attributes:true,attributeFilter:['class']});
+            var hid=0;document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')hid=Date.now();else if(done&&hid&&Date.now()-hid>1500)later(700);was=shown()});
+            window.addEventListener('pageshow',function(e){if(e.persisted)later(700)});
+          })();</script>
           <div class="na-head">
             <div class="na-id">
               <p class="na-kick" id="fKick" data-t="kicker">HAPPY HOME CARE</p>
