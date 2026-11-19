@@ -2224,6 +2224,24 @@ function getMovingMsg(name,lang,area,mins){
     return 'Hello, '+name+' 😊\n\n🚗 *We\'re on our way*\n📍 Leaving from '+A+'.\n⏱ Expected to arrive in about '+M+' min.\n\n👉 See you very soon!';
   return '안녕하세요, '+name+' 고객님 😊\n\n🚗 *이동 중입니다*\n📍 '+A+'에서 출발 예정.\n⏱ '+M+'분 후 도착 예상입니다.\n\n👉 곧 방문드릴게요.';
 }
+// ⏳ 지연 안내 (2026-11-19) — 이동중과 같은 방법으로 구글맵 소요시간을 계산해 넣습니다
+//    · 교통(delayT): 구글맵 소요시간 + 10분(MV_EXTRA, 이동중과 동일)
+//    · 작업(delayW): 구글맵 소요시간 + 작업 남은 시간(기본 60분)
+//    · 더하는 분은 이동중·교통·작업 모두 창에서 바로 바꿀 수 있음 (버튼별 따로 · 창을 열 때마다 기본값)
+var MV_EXTRA_DEF={move:10,delayT:10,delayW:60},MV_EXTRA_NOW={move:10,delayT:10,delayW:60};
+function mvExtraOf(tpl){return (MV_EXTRA_NOW[tpl]!=null)?MV_EXTRA_NOW[tpl]:MV_EXTRA;}
+function mvIsCalc(tpl){return tpl==='move'||tpl==='delayT'||tpl==='delayW';}
+function getDelayMsg(name,lang,kind,mins){
+  var M=(mins!=null&&mins!=='')?mins:'00';
+  if(lang==='en'){
+    if(kind==='work')
+      return 'Hello, '+name+' 😊\n\n🛠 *Visit delay notice*\nOur current job is running late, so we will arrive later than the scheduled visit time.\n⏱ We expect to arrive in about '+M+' min.\n\n🙏 We sincerely apologize.';
+    return 'Hello, '+name+' 😊\n\n🚗 *Arrival delay notice*\nWe are on our way, but heavy traffic is delaying our arrival.\n⏱ We expect to arrive in about '+M+' min.\n\n🙏 We sincerely apologize.';
+  }
+  if(kind==='work')
+    return '안녕하세요, '+name+' 고객님 😊\n\n🛠 *방문 지연 안내*\n현재 작업이 지연되고 있어 약속드린 방문 시간보다 늦어질 것 같습니다.\n⏱ 약 '+M+'분 후 도착 예상됩니다.\n\n🙏 죄송합니다.';
+  return '안녕하세요, '+name+' 고객님 😊\n\n🚗 *도착 지연 안내*\n현재 이동 중이나 교통체증으로 도착이 지연되고 있습니다.\n⏱ 약 '+M+'분 후 도착 예정입니다.\n\n🙏 죄송합니다.';
+}
 // 🏢 가드하우스 도착 안내 (2026-11-19) — 마이페이지 링크 없이 보내는 짧은 도착 알림
 function getArrivedMsg(name,lang){
   if(lang==='en')
@@ -2345,11 +2363,11 @@ window.sendVisitReminder=function(itemId){
   const copiedLabel=lang==='en'?'✓ Copied! Paste in KakaoTalk':'✓ 복사됨! 카카오톡에 붙여넣기 하세요';
   const tplLabels=isRepair
     ?(lang==='en'
-      ?[{k:'now',l:'⚡ Now'},{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'},{k:'move',l:'🚗 On the way'},{k:'arrive',l:'🏢 Arrived'}]
-      :[{k:'now',l:'⚡ 지금 방문'},{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'},{k:'move',l:'🚗 이동중'},{k:'arrive',l:'🏢 가드하우스 도착'}])
+      ?[{k:'now',l:'⚡ Now'},{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'},{k:'move',l:'🚗 On the way'},{k:'arrive',l:'🏢 Arrived'},{k:'delayT',l:'⏳ Delay (traffic)'},{k:'delayW',l:'⏳ Delay (work)'}]
+      :[{k:'now',l:'⚡ 지금 방문'},{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'},{k:'move',l:'🚗 이동중'},{k:'arrive',l:'🏢 가드하우스 도착'},{k:'delayT',l:'⏳ 지연 안내(교통)'},{k:'delayW',l:'⏳ 지연 안내(작업)'}])
     :(lang==='en'
-      ?[{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'},{k:'move',l:'🚗 On the way'},{k:'arrive',l:'🏢 Arrived'}]
-      :[{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'},{k:'move',l:'🚗 이동중'},{k:'arrive',l:'🏢 가드하우스 도착'}]);
+      ?[{k:'pre',l:'📅 Advance'},{k:'tomorrow',l:'🌙 Tomorrow'},{k:'today',l:'☀️ Today'},{k:'move',l:'🚗 On the way'},{k:'arrive',l:'🏢 Arrived'},{k:'delayT',l:'⏳ Delay (traffic)'},{k:'delayW',l:'⏳ Delay (work)'}]
+      :[{k:'pre',l:'📅 사전 안내'},{k:'tomorrow',l:'🌙 내일 방문'},{k:'today',l:'☀️ 당일 안내'},{k:'move',l:'🚗 이동중'},{k:'arrive',l:'🏢 가드하우스 도착'},{k:'delayT',l:'⏳ 지연 안내(교통)'},{k:'delayW',l:'⏳ 지연 안내(작업)'}]);
   // 예약일 기준 기본 템플릿 자동 선택: 당일→'today', 내일→'tomorrow', 그 외→'pre'
   let defTpl='pre';
   try{
@@ -2371,10 +2389,17 @@ window.sendVisitReminder=function(itemId){
       <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:4px">${title}</div>
       <div style="font-size:12px;color:#8a8f9a;margin-bottom:11px">${subtitle}</div>
       <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap" id="visit-tpl-row">
-        ${tplLabels.map(t=>`<button data-tpl="${t.k}" style="${chipBase}${(t.k==='move'||t.k==='arrive')?';flex:1 1 calc(50% - 3px);border-color:#C9A24A;color:#8A6A1F':''}">${t.l}</button>`).join('')}
+        ${tplLabels.map(t=>`<button data-tpl="${t.k}" style="${chipBase}${(t.k==='move'||t.k==='arrive')?';flex:1 1 calc(50% - 3px);border-color:#C9A24A;color:#8A6A1F':''}${(t.k==='delayT'||t.k==='delayW')?';flex:1 1 calc(50% - 3px);border-color:#E8A0A0;color:#B42318':''}">${t.l}</button>`).join('')}
       </div>
-      <div id="visit-mv" style="display:none;align-items:center;gap:8px;background:#FBF6EA;border:1px solid #EADBB4;border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;line-height:1.5;color:#5B4A1E">
+      <div id="visit-mv" style="display:none;flex-wrap:wrap;align-items:center;gap:8px;background:#FBF6EA;border:1px solid #EADBB4;border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:11.5px;line-height:1.5;color:#5B4A1E">
         <div id="visit-mv-t" style="flex:1;min-width:0"></div>
+        <div id="visit-dlw" style="display:none;order:3;flex-basis:100%;align-items:center;gap:6px;flex-wrap:nowrap;margin-top:2px;padding-top:8px;border-top:1px dashed #E2CF9C">
+          <span id="visit-dlw-l" style="flex:1;font-weight:700;color:#8A6A1F;font-size:12px"></span>
+          <button type="button" data-dlw="-10" style="width:30px;height:30px;border:1px solid #D9C48F;border-radius:8px;background:#fff;color:#8A6A1F;font-size:15px;font-weight:700;cursor:pointer">−</button>
+          <input id="visit-dlw-n" type="number" inputmode="numeric" min="0" max="600" step="5" value="10" style="width:58px;height:30px;box-sizing:border-box;border:1.5px solid #C9A24A;border-radius:8px;text-align:center;font-size:14px;font-weight:700;color:#5B4A1E;font-family:inherit;-moz-appearance:textfield;appearance:textfield">
+          <button type="button" data-dlw="10" style="width:30px;height:30px;border:1px solid #D9C48F;border-radius:8px;background:#fff;color:#8A6A1F;font-size:15px;font-weight:700;cursor:pointer">+</button>
+          <span>${lang==='en'?'min':'분'}</span>
+        </div>
         <button id="visit-mv-re" type="button" style="flex-shrink:0;padding:6px 9px;border:1px solid #D9C48F;border-radius:8px;background:#fff;color:#8A6A1F;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit">🔄 ${lang==='en'?'Recalc':'다시 계산'}</button>
       </div>
       <textarea id="visit-msg-box" rows="9" style="width:100%;box-sizing:border-box;background:#f5f6f8;border:1px solid #e5e7eb;border-radius:10px;padding:12px;font-size:12px;color:#333;line-height:1.8;resize:vertical;font-family:inherit;margin-bottom:11px"></textarea>
@@ -2397,8 +2422,15 @@ window.sendVisitReminder=function(itemId){
       b.style.borderColor=on?'#0BB5A4':'#e5e7eb';
     });
     curTpl=tpl;
-    document.getElementById('visit-mv').style.display=(tpl==='move')?'flex':'none';
-    if(tpl==='move'){mvShow();return;}
+    document.getElementById('visit-mv').style.display=mvIsCalc(tpl)?'flex':'none';
+    document.getElementById('visit-dlw').style.display=mvIsCalc(tpl)?'flex':'none';
+    if(mvIsCalc(tpl)){
+      document.getElementById('visit-dlw-l').textContent=(tpl==='delayW')
+        ?(lang==='en'?'🛠 Job time left':'🛠 작업 남은 시간')
+        :(lang==='en'?'➕ Extra time':'➕ 여유 시간');
+      document.getElementById('visit-dlw-n').value=mvExtraOf(tpl);
+    }
+    if(mvIsCalc(tpl)){mvShow();return;}
     if(tpl==='arrive'){document.getElementById('visit-msg-box').value=getArrivedMsg(name,lang)+vrTailNoMy();return;}
     document.getElementById('visit-msg-box').value=
       (isRepair?getRepairReminderMsg(name,dateStr,lang,tpl,timeS,symptom)
@@ -2408,17 +2440,19 @@ window.sendVisitReminder=function(itemId){
   const EN=(lang==='en');
   let mv=null,mvBusy=false;
   function mvFill(){
-    if(curTpl!=='move')return;
+    if(!mvIsCalc(curTpl))return;
     const box=document.getElementById('visit-msg-box');
-    box.value=getMovingMsg(name,lang,mv&&mv.area,mv&&mv.total)+vrTailNoMy();
+    const X=mvExtraOf(curTpl),TOT=(mv&&mv.gmin!=null)?mv.gmin+X:null;
+    box.value=(curTpl==='move'?getMovingMsg(name,lang,mv&&mv.area,TOT)
+              :getDelayMsg(name,lang,curTpl==='delayW'?'work':'traffic',TOT))+vrTailNoMy();
     const st=document.getElementById('visit-mv-t');
     if(mvBusy){st.innerHTML='⏳ '+(EN?'Getting your location and Google Maps driving time…':'지금 위치와 구글맵 이동 시간을 확인하는 중…');return;}
     if(!mv)return;
     let h='';
     if(mv.area)h+='📍 '+(EN?'Now: ':'지금 위치: ')+'<b>'+mvEsc(mv.area)+'</b>';
-    if(mv.gmin!=null)h+=(h?'<br>':'')+'🚗 '+(EN?'Google Maps ':'구글맵 ')+mv.gmin+(EN?' min':'분')+(mv.km?' ('+mv.km+'km)':'')+' + '+MV_EXTRA+(EN?' min = ':'분 = ')+'<b>'+mv.total+(EN?' min':'분')+'</b>'
+    if(mv.gmin!=null)h+=(h?'<br>':'')+'🚗 '+(EN?'Google Maps ':'구글맵 ')+mv.gmin+(EN?' min':'분')+(mv.km?' ('+mv.km+'km)':'')+' + '+X+(EN?' min = ':'분 = ')+'<b>'+TOT+(EN?' min':'분')+'</b>'
       +(mv.dest?'<span style="color:#9A8550"> → '+mvEsc(mv.dest)+'</span>':'');
-    if(mv.err)h+=(h?'<br>':'')+'<span style="color:#B42318">⚠ '+mvEsc(mvErrText(mv.err,EN))+'</span>';
+    if(mv.err&&!(mv.err==='area'&&curTpl!=='move'))h+=(h?'<br>':'')+'<span style="color:#B42318">⚠ '+mvEsc(mvErrText(mv.err,EN))+'</span>';
     st.innerHTML=h;
   }
   async function mvShow(force){
@@ -2429,6 +2463,16 @@ window.sendVisitReminder=function(itemId){
     mvBusy=false;mvFill();
   }
   document.getElementById('visit-mv-re').addEventListener('click',()=>mvShow(true));
+  // ➕ 더하는 시간(분) — 이동중·지연(교통)은 여유 시간, 지연(작업)은 작업 남은 시간.
+  //    바꾸면 합계·문구가 바로 다시 계산됩니다 (위치는 다시 찾지 않음) · 버튼별로 따로 기억, 창을 새로 열면 기본값
+  for(const k in MV_EXTRA_DEF)MV_EXTRA_NOW[k]=MV_EXTRA_DEF[k];
+  const dlwN=document.getElementById('visit-dlw-n');
+  const dlwSet=v=>{v=Math.max(0,Math.min(600,Math.round(+v||0)));if(mvIsCalc(curTpl))MV_EXTRA_NOW[curTpl]=v;mvFill();return v;};
+  dlwN.addEventListener('input',()=>{if(dlwN.value!=='')dlwSet(dlwN.value);});
+  dlwN.addEventListener('change',()=>{dlwN.value=dlwSet(dlwN.value);});
+  document.querySelectorAll('#visit-dlw button[data-dlw]').forEach(b=>b.addEventListener('click',()=>{
+    dlwN.value=dlwSet(mvExtraOf(curTpl)+(+b.dataset.dlw));
+  }));
   document.querySelectorAll('#visit-tpl-row button').forEach(b=>{
     b.addEventListener('click',()=>setTpl(b.dataset.tpl));
   });
