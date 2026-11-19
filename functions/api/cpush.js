@@ -4,6 +4,7 @@
 // POST {op:'sub',   c, sub:{endpoint,keys:{p256dh,auth}}, lang}  ← 마이페이지 「알림 받기」 : 이 기기를 고객에게 등록
 // POST {op:'unsub', c, endpoint}                                  ← 마이페이지 「알림 끄기」 : 등록 삭제
 // POST {op:'send',  id}                                           ← 관리자 고객관리 「🔔 앱 알림」
+// POST {op:'open',  id, ep}                                       ← 고객이 알림을 눌러 열었을 때 (sw.js) — 열람 기록 (2026-11-19)
 //
 // · 고객 기기 목록은 cust_push 컬렉션 (문서 ID = 기기 주소의 SHA-256 앞 32자 → 같은 기기는 한 문서)
 // · 관리자 발송은 「관리자만 쓸 수 있는」 cust_push_out 문서(규칙상 관리자 전용)를 먼저 만들고, 그 문서 ID 로 부른다.
@@ -41,6 +42,20 @@ async function realDevs(env,subs){
   }));
   return [keep,cleaned];
 }
+// 📋 기기별 발송 결과 기록 (2026-11-19) — 고객관리 「알림 이력 · 기기 현황」에서 봅니다
+//  st : 푸시 서버 응답 코드 (2xx = 접수 · 404/410 = 끊김(정리됨) · 그 밖 = 실패) · -1 = 보내는 중 오류
+const okSt=st=>st>=200&&st<300;
+async function sendOne(env,s,payload,priv,oid){
+  let st=-1;
+  try{ st=await sendPush({endpoint:s.endpoint,keys:s.keys},payload,priv); }catch(e){ st=-1; }
+  const at=new Date().toISOString();
+  if(st===404||st===410) await deleteDoc(env,'cust_push',s.__id).catch(()=>{});
+  else await patchDoc(env,'cust_push',s.__id,{last_status:st,last_at:at,last_oid:oid,
+    ok_n:(s.ok_n||0)+(okSt(st)?1:0),fail_n:okSt(st)?0:(s.fail_n||0)+1}).catch(()=>{});   // fail_n = 연속 실패 수
+  return {id:s.__id,st,ua:clip(s.ua,120),app:!!s.app};
+}
+const tally=devs=>({sent:devs.filter(d=>okSt(d.st)).length,removed:devs.filter(d=>d.st===404||d.st===410).length,
+  failed:devs.filter(d=>!okSt(d.st)&&d.st!==404&&d.st!==410).length});
 
 export async function onRequestPost(context){
   const req=context.request, env=context.env||{};
@@ -60,6 +75,7 @@ export async function onRequestPost(context){
     const rec={
       c, name:String(cu.name||''), endpoint:ep, keys:{p256dh:String(k.p256dh),auth:String(k.auth)},
       lang:b.lang==='en'?'en':'ko', ua:clip(req.headers.get('User-Agent'),200), updated_at:new Date().toISOString(),
+      app:b.app===true,   // 홈 화면 앱으로 켰는지 (아니면 브라우저)
     };
     // 조용한 재등록(quiet) : 마이페이지를 열 때마다 자동으로 부르는 것 — 「이미 이 고객의 기기」일 때만 갱신한다.
     //  · 다른 고객 기기이거나(가족이 다른 링크를 연 경우) 처음 보는 기기면 아무것도 바꾸지 않고 mine:false
@@ -99,19 +115,25 @@ export async function onRequestPost(context){
     const age=Date.now()-Date.parse(o.created_at||0);
     if(!(age>=0&&age<5*60e3)) return fail('expired',410);
     const url=(typeof o.url==='string'&&o.url.charAt(0)==='/'&&o.url.charAt(1)!=='/')?o.url:'';
-    const payload={kind:'cust',title:clip(o.title,60)||'Happy Home Care',body:clip(o.body,180),url,tag:'hhc-c-'+id};
+    const payload={kind:'cust',title:clip(o.title,60)||'Happy Home Care',body:clip(o.body,180),url,tag:'hhc-c-'+id,oid:id};
     const [subs,cleaned]=await realDevs(env,await queryEq(env,'cust_push','c',String(o.c||''),20));
-    let sent=0,removed=cleaned,failed=0;
-    await Promise.all(subs.map(async s=>{
-      try{
-        const st=await sendPush({endpoint:s.endpoint,keys:s.keys},payload,priv);
-        if(st===404||st===410){ await deleteDoc(env,'cust_push',s.__id).catch(()=>{}); removed++; }
-        else if(st>=200&&st<300) sent++;
-        else failed++;
-      }catch(e){ failed++; }
-    }));
-    await patchDoc(env,'cust_push_out',id,{sent_at:new Date().toISOString(),sent,removed,failed,total:subs.length}).catch(()=>{});
+    const devs=await Promise.all(subs.map(x=>sendOne(env,x,payload,priv,id)));
+    const t=tally(devs); const sent=t.sent, removed=t.removed+cleaned, failed=t.failed;
+    await patchDoc(env,'cust_push_out',id,{sent_at:new Date().toISOString(),sent,removed,failed,total:subs.length,devs}).catch(()=>{});
     return json({ok:true,sent,removed,failed,total:subs.length});
+  }
+  // ── 고객: 알림을 눌러 열었음 (sw.js) ── 첫 열람 시각 · 열람 수 · 연 기기
+  if(op==='open'){
+    const id=String(b.id||'');
+    if(!id||id.length>160) return fail('bad request');
+    const o=await getDoc(env,'cust_push_out',id);
+    if(!o||!o.sent_at) return fail('not found',404);
+    const d=b.ep?await subId(String(b.ep)):'';
+    const ods=Array.isArray(o.open_devs)?o.open_devs.slice(0,20):[];
+    if(d&&ods.indexOf(d)<0) ods.push(d);
+    await patchDoc(env,'cust_push_out',id,{opened_at:o.opened_at||new Date().toISOString(),opens:(o.opens||0)+1,open_devs:ods,last_open_at:new Date().toISOString()}).catch(()=>{});
+    if(d){ const s0=await getDoc(env,'cust_push',d); if(s0&&s0.c===o.c) await patchDoc(env,'cust_push',d,{last_open_at:new Date().toISOString()}).catch(()=>{}); }
+    return json({ok:true});
   }
   // ── 자동 알림 (2단계) : 캘린더 Worker 가 매일 오전 9시(MYT)에 부름 ──
   if(op==='auto') return autoPush(env,b&&b.dry);
@@ -203,19 +225,15 @@ async function autoPush(env,dry){
     const devs=byC[j.c]||[];
     const url='/my?c='+encodeURIComponent(j.c)+'&f='+j.f;
     if(dry){ out.push({kind:j.kind,devices:devs.length}); continue; }   // 확인용 — 고객·문서 ID 는 돌려주지 않음
-    let sent=0,removed=0,failed=0;
-    await Promise.all(devs.map(async s=>{
+    const res=await Promise.all(devs.map(s=>{
       const lang=s.lang==='en'?'en':'ko';
       const m=AUTO_MSG[j.kind][lang](Object.assign({time:timeOf(j.d.timeRaw,lang)},j.d));
-      try{
-        const st=await sendPush({endpoint:s.endpoint,keys:s.keys},{kind:'cust',title:m.title,body:m.body,url,tag:'hhc-'+key},priv);
-        if(st===404||st===410){ await deleteDoc(env,'cust_push',s.__id).catch(()=>{}); removed++; }
-        else if(st>=200&&st<300) sent++; else failed++;
-      }catch(e){ failed++; }
+      return sendOne(env,s,{kind:'cust',title:m.title,body:m.body,url,tag:'hhc-'+key,oid:key},priv,key);
     }));
+    const {sent,removed,failed}=tally(res);
     const m0=AUTO_MSG[j.kind].ko(Object.assign({time:timeOf(j.d.timeRaw,'ko')},j.d));
     await patchDoc(env,'cust_push_out',key,{auto:true,kind:j.kind,c:j.c,title:m0.title,body:m0.body,url,
-      created_at:new Date().toISOString(),sent_at:new Date().toISOString(),sent,removed,failed,total:devs.length}).catch(()=>{});
+      created_at:new Date().toISOString(),sent_at:new Date().toISOString(),sent,removed,failed,total:devs.length,devs:res}).catch(()=>{});
     out.push({kind:j.kind,sent,removed,failed});   // 응답에 문서·고객 ID 를 싣지 않음 (누구나 부를 수 있는 창구)
   }
   return json({ok:true,today,tomorrow:tmr,dry:!!dry,jobs:jobs.length,result:out});

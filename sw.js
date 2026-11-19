@@ -13,6 +13,12 @@ self.addEventListener('notificationclick', function (e) {
   var url = (e.notification.data && e.notification.data.url) || '';
   // 🔔 고객 앱 알림 : 열려 있는 마이페이지 창이 있으면 그 창에서 열고, 없으면 새로 엽니다
   if (url && e.notification.data.cust) {
+    // 📋 열람 기록 (2026-11-19) — 고객관리 「알림 이력」에 「열어 봄」으로 표시됩니다. 실패해도 화면 열기는 그대로.
+    var oid = e.notification.data.oid || '';
+    if (oid) e.waitUntil(self.registration.pushManager.getSubscription().then(function (s) {
+      return fetch('/api/cpush', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true,
+        body: JSON.stringify({ op: 'open', id: oid, ep: (s && s.endpoint) || '' }) });
+    }).catch(function () {}));
     e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
       for (var i = 0; i < list.length; i++) {
         var c = list[i];
@@ -56,7 +62,7 @@ self.addEventListener('push', function (e) {
     e.waitUntil(self.registration.showNotification(d.title || 'Happy Home Care', {
       body: d.body || '', icon: 'icon-192.png', badge: 'icon-192.png',
       tag: d.tag || 'hhc-cust', renotify: true, timestamp: Date.now(),
-      data: { url: cu, cust: true }
+      data: { url: cu, cust: true, oid: (typeof d.oid === 'string' ? d.oid.slice(0, 160) : '') }
     }));
     return;
   }
