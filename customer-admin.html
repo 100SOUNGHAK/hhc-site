@@ -289,6 +289,7 @@ html.sa body{padding-left:222px}
 .pnm-msg{background:#0E2350;color:#fff;border-radius:12px;padding:11px 13px;font-size:12.5px;line-height:1.55;margin-bottom:6px}
 .pnm-msg .k{font-size:10.5px;font-weight:800;color:#E3C98A;letter-spacing:.04em;margin-bottom:3px}
 .pnm-msg b{display:block;font-size:13px}
+.pnm-go{display:flex;gap:8px;margin:8px 0 2px}.pnm-go .btn{padding:11px 14px;font-size:13.5px}.pnm-go .btn.p{flex:1}
 .pnm-h{font-size:12.5px;font-weight:900;color:#0E2350;margin:14px 0 4px}
 .pnm-h.sub{color:var(--warn)}.pnm-h small{display:block;font-size:10.5px;font-weight:600;color:var(--ink3);margin-top:2px}
 .pnm-emp{font-size:12px;color:var(--ink3);line-height:1.65;padding:10px 4px;text-align:center}
@@ -4310,7 +4311,10 @@ window.caPnDev=function(cid,opts){
   const paint=()=>{
     const d=pnDevs(cid),a=pnAdmDevs(cid),os=pnOuts(cid).slice(0,12);
     let b='';
-    if(opts.send)b+='<div class="pnm-msg"><div class="k">보낼 알림</div><b>'+esc(opts.send.title)+'</b><div>'+esc(opts.send.body)+'</div></div>';
+    // 보내기 버튼은 맨 위 — 보낼 알림 바로 아래 (2026-11-19)
+    if(opts.send)b+='<div class="pnm-msg"><div class="k">보낼 알림</div><b>'+esc(opts.send.title)+'</b><div>'+esc(opts.send.body)+'</div></div>'+
+      '<div class="pnm-go"><button class="btn" type="button" onclick="document.getElementById(\'ca-pn-mask\').remove()">취소</button>'+
+      '<button class="btn p" type="button" id="pnm-go"'+(busy||!d.length?' disabled':'')+'>'+(busy?'보내는 중…':(d.length?'🔔 '+d.length+'대에 보내기':'받을 기기 없음'))+'</button></div>';
     b+='<div class="pnm-h">📱 받는 기기 '+d.length+'대</div>';
     b+=d.length?d.map(s=>pnDevRow(s,false)).join(''):'<div class="pnm-emp">알림을 켠 기기가 없습니다. 고객이 마이페이지(또는 설치한 앱)에서 「🔔 알림 켜기」를 누르면 여기에 나타납니다.</div>';
     if(a.length)b+='<div class="pnm-h sub">관리자 기기 '+a.length+'대 <small>고객화면을 열어 본 직원 기기 — 발송하지 않으며 다음 발송 때 자동 정리됩니다</small></div>'+a.map(s=>pnDevRow(s,true)).join('');
@@ -4318,14 +4322,13 @@ window.caPnDev=function(cid,opts){
     b+=os.length?os.map(o=>pnOutRow(o,false)).join(''):'<div class="pnm-emp">아직 보낸 앱 알림이 없습니다.</div>';
     b+='<div class="pnm-nt">✅ 접수 = 알림 서버가 받음(대부분 정상 수신) · 👀 열어 봄 = 고객이 알림을 눌러 열었음 · 휴대폰 화면에 떴는지는 구글·애플이 알려 주지 않습니다.</div>';
     const host=document.getElementById('pnm-b');if(host)host.innerHTML=b;
-    const sb=document.getElementById('pnm-go');if(sb){sb.disabled=!d.length;sb.textContent=d.length?'🔔 '+d.length+'대에 보내기':'받을 기기 없음';}
+    const g=document.getElementById('pnm-go');
+    if(g&&opts.send)g.onclick=async()=>{if(busy)return;busy=true;paint();try{await opts.send.go();}finally{mk.remove();}};
   };
-  const foot=opts.send?'<button class="btn" onclick="document.getElementById(\'ca-pn-mask\').remove()">취소</button><button class="btn p" id="pnm-go">🔔 보내기</button>'
-                      :'<button class="btn" onclick="document.getElementById(\'ca-pn-mask\').remove()">닫기</button>';
+  let busy=false;
+  const foot=opts.send?'':'<button class="btn" onclick="document.getElementById(\'ca-pn-mask\').remove()">닫기</button>';
   const mk=pnModal('🔔 앱 알림 — '+esc(nm||'고객'),'',foot);
   mk._re=paint;paint();
-  const g=document.getElementById('pnm-go');
-  if(g&&opts.send)g.onclick=async()=>{g.disabled=true;g.textContent='보내는 중…';try{await opts.send.go();}finally{mk.remove();}};
 };
 // ── 전체 발송 이력 ──
 let _pnLogF='all';
