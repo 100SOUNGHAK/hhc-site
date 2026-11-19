@@ -4854,7 +4854,7 @@ window.caPtUseDel=async function(idx,ui){
 //  · 💎 사용 · ➕ 적립 추가 · ➖ 적립 차감을 같은 창에서 — 위 탭으로 바꿈, 처리 후 잔액을 바로 보여 줌
 //  · ⭐ 자주 쓰는 메모: 종류별로 settings/points 의 pt_memos 에 저장 → 눌러서 바로 입력 (모든 기기 공통)
 //  · 수정: 내역 줄을 누르면 같은 창이 「수정」으로 열림 (ui = pt_used 또는 pt_adj 의 순번)
-const PT_MEMO_DEF={use:['서비스 결제 시 차감'],plus:['지인 추천 보상','이벤트 보너스 적립','리뷰 작성 보상','과거 이용분 보상'],minus:['착오 적립 정정']};
+const PT_MEMO_DEF={use:['서비스 결제 시 차감'],plus:['지인 추천 보상','이벤트 보너스 적립','리뷰 작성 보상','과거 이용분 보상','감사 보상 적립'],minus:['착오 적립 정정']};
 function ptMemosOf(v){
   const o={};['use','plus','minus'].forEach(k=>{
     const a=v&&Array.isArray(v[k])?v[k]:null;
@@ -4998,7 +4998,7 @@ window.caPtAdjEdit=(idx,ai)=>{const e=entries[idx],u=e&&e.master&&(e.master.pt_a
 //  · 문구에 적립 이름(메모)·금액이 그대로 들어감 — 이름에 「사과·불편」이 있으면 사과 문구
 //  · 고객이 링크를 열면 마이페이지 💎 포인트 적립금 카드가 화면 가운데로 와서 강조됨
 //  · 나중에 보내려면 포인트 내역의 적립 추가 줄 오른쪽 📤
-const PT_MEMO_EN={'불편 사과 보상':'Apology credit','지인 추천 보상':'Referral reward','이벤트 보너스 적립':'Event bonus','리뷰 작성 보상':'Review reward','과거 이용분 보상':'Reward for past services'};
+const PT_MEMO_EN={'불편 사과 보상':'Apology credit','감사 보상 적립':'Thank-you credit','감사 보상':'Thank-you credit','지인 추천 보상':'Referral reward','이벤트 보너스 적립':'Event bonus','리뷰 작성 보상':'Review reward','과거 이용분 보상':'Reward for past services'};
 function ptMemoEn(m){m=String(m||'').trim();if(PT_MEMO_EN[m])return PT_MEMO_EN[m];return /[가-힣]/.test(m)?'':m;}   // 사전에 없는 한글 이름은 영문 문구에서 뺍니다
 function ptIdxOf(mid){return entries.findIndex(x=>x.master&&x.master.__id===mid);}
 function ptSendGo(mid,amt,memo){
@@ -5933,10 +5933,14 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
       // 🌿 정기관리 알림 — 그림(마지막 관리일이 들어간 안내장)은 기존 그대로 함께 나갑니다.
       const six=(state.tpl==='care6');
       const ld=/^\d{4}-\d{2}-\d{2}$/.test(state.careDate||'')?sDay(state.careDate,en):'';
+      // 마지막 청소 뒤 지난 개월 수 — 「[ 3개월 경과 ]」 (2026-11-19 · 같은 날짜가 되어야 한 달로 셉니다, careDue 와 같은 셈)
+      let el='';
+      if(ld){const t=new Date(),cd=state.careDate;let mo=(t.getFullYear()-parseInt(cd.slice(0,4),10))*12+(t.getMonth()+1-parseInt(cd.slice(5,7),10));if(t.getDate()<parseInt(cd.slice(8,10),10))mo--;
+        if(mo>=1)el=en?(' [ '+mo+(mo===1?' month':' months')+' ago ]'):(' [ '+mo+'개월 경과 ]');}
       return en
-        ?(hi+(six?'🔧 *6-month air-con cleaning reminder*':'🌿 *3-month air-con cleaning reminder*')+(ld?'\n🗓 Last cleaning: '+ld:'')+
+        ?(hi+(six?'🔧 *6-month air-con cleaning reminder*':'🌿 *3-month air-con cleaning reminder*')+(ld?'\n🗓 Last cleaning: '+ld+el:'')+
           '\n\n👉 '+(six?'After 6 months, cooling gets weaker\n      and your electricity bill can go up.':'Cleaning every 3 months keeps the air fresh,\n      free of smell and mould.')+sLk('📅 Book a cleaning'))
-        :(hi+(six?'🔧 *에어컨 청소 6개월 알림*':'🌿 *에어컨 청소 3개월 알림*')+(ld?'\n🗓 마지막 청소 '+ld:'')+
+        :(hi+(six?'🔧 *에어컨 청소 6개월 알림*':'🌿 *에어컨 청소 3개월 알림*')+(ld?'\n🗓 마지막 청소 '+ld+el:'')+
           '\n\n👉 '+(six?'6개월이 넘으면 냉방이 약해지고\n      전기요금이 늘 수 있습니다.':'3개월마다 청소하면 냄새·곰팡이 없이\n      깨끗한 공기를 유지할 수 있습니다.')+sLk('📅 청소 예약하기'));
     }
     if(state.tpl==='rqf'){
@@ -5961,11 +5965,15 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
         :(hi+'💎 *해피포인트 — RM 100마다 RM 1 적립*\n✔ 신청 · 카드 필요 없음 (자동 적립)\n✔ 유효기간 없음\n✔ RM 10부터 현금처럼 사용\n\n👉 따로 하실 일은 없습니다.'+sLk('💎 포인트 안내 보기'));
     }
     if(state.tpl==='cmp'){
-      // 💎 적립 안내 — 적립 이름(메모)·금액을 그대로 넣습니다. 이름에 「사과·불편」이 있으면 사과 문구로 (2026-11-17)
-      const a=cmpAmt(),am='RM '+a,mm=String(state.cmpMemo||'').trim(),sorry=/사과|불편|apolog/i.test(mm);
+      // 💎 적립 안내 — 적립 이름(메모)·금액을 그대로 넣습니다. 이름에 「사과·불편」이 있으면 사과 문구로 (2026-11-17) · 「감사」가 있으면 감사 문구로 (2026-11-19)
+      const a=cmpAmt(),am='RM '+a,mm=String(state.cmpMemo||'').trim(),sorry=/사과|불편|apolog/i.test(mm),thanks=!sorry&&/감사|thank/i.test(mm);
       if(sorry)return en
         ?('Dear '+nm+', we sincerely apologise for the inconvenience 🙏\n\n💎 *As an apology, we have added '+am+' to your points.*\n👉 Please check it on My Page below.'+sLk('💎 View my points'))
         :(nm+' 고객님, 불편을 드려 진심으로 죄송합니다 🙏\n\n💎 *사과의 의미로 '+am+' 적립해 드렸습니다.*\n👉 아래 마이페이지에서 확인해 주세요.'+sLk('💎 적립금 확인'));
+      // 🙏 감사 보상 적립 — 이름에 「감사」가 있으면 감사 문구로 (2026-11-19)
+      if(thanks)return en
+        ?('Dear '+nm+', thank you for always choosing Happy Home Care 🙏\n\n💎 *As a thank-you, we have added '+am+' to your points.*\n👉 Please check it on My Page below.'+sLk('💎 View my points'))
+        :(nm+' 고객님, 늘 이용해 주셔서 진심으로 감사합니다 🙏\n\n💎 *감사의 의미로 '+am+' 적립해 드렸습니다.*\n👉 아래 마이페이지에서 확인해 주세요.'+sLk('💎 적립금 확인'));
       return en
         ?(hi+'💎 *'+am+' added to your points*'+(ptMemoEn(mm)?'\n🏷 '+ptMemoEn(mm):'')+'\n👉 Please check it on My Page below.'+sLk('💎 View my points'))
         :(hi+'💎 *'+(mm?koRo(mm)+' ':'')+am+' 적립해 드렸습니다.*\n👉 아래 마이페이지에서 확인해 주세요.'+sLk('💎 적립금 확인'));

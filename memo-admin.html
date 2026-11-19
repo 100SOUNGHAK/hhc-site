@@ -133,6 +133,15 @@ textarea.fi{resize:vertical;line-height:1.6}
 .sb-wa{background:#22c55e;color:#fff}
 .sb-ka{background:#FAE100;color:#3d2c00}
 .sb-cp{background:#fff;border:1px solid var(--bdr)!important;color:var(--ink2)}
+/* 🔔 고객 앱 알림 (2026-11-19) — 발송 버튼 아래 상태 줄 */
+.pnm{margin-top:9px;font-size:10.5px;line-height:1.5;color:#B8C0D4}
+.pnm:empty{display:none}
+.pnm .pnm-on{display:block;background:var(--pri-bg);border-radius:11px;padding:10px 12px;color:var(--ink2)}
+.pnm .pnm-on b{color:var(--ink);font-size:11.5px}
+.pnm .pnm-bd{display:block;margin-top:6px;background:#fff;border-radius:9px;padding:8px 10px;color:var(--ink);font-size:11px;word-break:keep-all}
+.pnm .pnm-bd small{display:block;color:var(--ink3);font-size:9.5px;font-weight:700;margin-bottom:2px}
+.pnm button{margin-top:8px;width:100%;font-family:inherit;font-size:11.5px;font-weight:800;padding:10px 6px;border-radius:10px;border:none;background:var(--navy);color:#fff;cursor:pointer}
+.pnm button:disabled{opacity:.5;cursor:default}
 .note{background:#fffbeb;border:1px solid #fde68a;border-radius:11px;padding:11px 13px;font-size:10.5px;color:#78350f;line-height:1.6;margin-top:10px}
 
 #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#111827;color:#fff;font-size:12.5px;font-weight:700;border-radius:10px;padding:10px 18px;z-index:9999;display:none}
@@ -401,7 +410,7 @@ function hhcFastDb(app){
 
 
 let db=null,ST=null;
-let MEMOS=[],SNIPS=[],CUSTS=[];
+let MEMOS=[],SNIPS=[],CUSTS=[],PN_CUSTS=[];
 
 var HHCC_LIST=[],HHCC_TS=0;
 function hccPN(p){p=String(p||'').replace(/[^0-9]/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');}
@@ -1173,7 +1182,7 @@ async function loadAll(force){
     MEMOS=dedupe(ms.docs.map(d=>Object.assign({__id:d.id},d.data())));
     SNIPS=dedupe(ss.docs.map(d=>Object.assign({__id:d.id},d.data())));
     buildCusts(
-      cs.docs.map(d=>Object.assign({__id:d.id},d.data())),
+      (PN_CUSTS=cs.docs.map(d=>Object.assign({__id:d.id},d.data()))),   // 🔔 앱 알림용 — 고객 문서 번호를 그대로 보관
       rs.docs.map(d=>Object.assign({__id:d.id},d.data()))
     );
     renderList();
@@ -1773,7 +1782,7 @@ function paintSend(){
             :(ch==='kakao'
               ?'<button class="sb-ka" data-send="cp">💛 카톡용 복사</button><button class="sb-wa" data-send="wa">💚 왓챕으로 보내기</button>'
               :'<button class="sb-cp" data-send="cp" style="background:var(--navy);color:#fff;border:none!important">📋 메시지 복사</button><button class="sb-wa" data-send="wa">💚 왓챕으로 보내기</button>'))+
-        '</div></div>'+
+        '</div><div class="pnm" id="sd-pn"></div></div>'+
       '<div class="note">'+L('ctNote')+'</div>';
     return;
   }
@@ -1802,13 +1811,101 @@ function paintSend(){
           :(ch==='kakao'
             ?'<button class="sb-ka" data-send="cp">💛 카톡용 복사</button><button class="sb-wa" data-send="wa">💚 왓챕으로 보내기</button>'
             :'<button class="sb-cp" data-send="cp" style="background:var(--navy);color:#fff;border:none!important">📋 메시지 복사</button><button class="sb-wa" data-send="wa">💚 왓챕으로 보내기</button>'))+
-      '</div></div>'+
+      '</div><div class="pnm" id="sd-pn"></div></div>'+
     '<div class="note">노란 부분은 자동으로 채워집니다 — 호칭은 <b>콘도명(고객명)</b>, 날짜·시각은 <b>방문 예정일/예정시각</b>에서 가져옵니다. 콘도명이나 고객명 한쪽만 있으면 있는 쪽만 들어갑니다.<br>'+
       '<b>💚 왓챕</b>은 WhatsApp이 바로 열리며 메시지가 채워집니다. <b>💛 카톡</b>은 카카오톡이 외부 자동발송을 막고 있어 메시지를 복사해 드립니다 — 카톡에 붙여넣기만 하시면 됩니다.<br>'+
       '<b>📥 방문 접수</b>는 점검 요청을 받은 직후 접수 확인용으로 보냅니다.<br>'+
       '<b>③ 작업방문등록 안내</b>는 고객이 방문에 동의한 뒤 보내는 메시지입니다 — 회사명·차량·직원 정보가 담긴 작업방문등록 안내장 링크가 들어갑니다.<br>'+
       '발송하면 이 요청은 <b>📞 연락완료</b>로 자동 변경되고 발송 기록이 남습니다.</div>';
 }
+/* ═══ 🔔 고객 앱 알림 — 메모장 메시지 발송 (2026-11-19) ═══════════════════
+   · 마이페이지에서 「알림 켜기」를 한 고객이면, 왓챕 발송·카톡용 복사를 누를 때 같은 안내가 앱 알림으로도 함께 나갑니다.
+     (묻지 않고 보내고 결과만 알려 줍니다 · 같은 내용은 이 창에서 한 번만)
+   · 「🔔 앱 알림만 보내기」 버튼으로 알림만 따로 보낼 수도 있습니다.
+   · 고객 찾기는 마이페이지(/api/my)와 같은 규칙 — 연결(ca_links·ca_link) → 전화번호 → 이름/별칭. 한 명으로 좁혀질 때만 보냅니다.
+   · 발송은 고객관리와 같은 길: 관리자만 쓸 수 있는 cust_push_out 에 기록 → /api/cpush 가 확인 후 발송 (고객관리 「🔔 알림 이력」에 함께 보임)
+   · 알림을 누르면: 방문 결과 보고서 → 보고서 화면 / 수리요청 → 마이페이지 「수리 방문 예정」 / 커튼 → 마이페이지 */
+const PN_DEV={},PN_DONE=new Set();
+function pnCid(m){
+  if(!m||!PN_CUSTS.length)return '';
+  const has=id=>PN_CUSTS.some(c=>c.__id===id);
+  const ls=Array.isArray(m.ca_links)?m.ca_links:[];
+  for(const v of ls){const id=String(v||'').indexOf('m:')===0?String(v).slice(2):'';if(id&&has(id))return id;}
+  if(m.ca_link){const id=String(m.ca_link).indexOf('m:')===0?String(m.ca_link).slice(2):'';return (id&&has(id))?id:'';}
+  const off=Array.isArray(m.ca_off)?m.ca_off:[],nn=v=>String(v||'').toLowerCase().replace(/\s+/g,'');
+  const mp=pn(m.phone),mn=nn(m.name);
+  const pool=PN_CUSTS.filter(c=>off.indexOf('m:'+c.__id)<0);
+  const byPh=mp.length>=6?pool.filter(c=>pn(c.phone)===mp):[];
+  if(byPh.length===1)return byPh[0].__id;
+  const byNm=mn?(byPh.length?byPh:pool).filter(c=>[c.name].concat(c.aliases||[]).some(a=>nn(a)===mn)):[];
+  return byNm.length===1?byNm[0].__id:'';
+}
+// 알림을 켠 휴대폰 수 — 관리자(직원앱) 기기는 세지 않습니다 (고객이 직접 켠 등록은 셉니다)
+async function pnDevN(cid){
+  const c=PN_DEV[cid];if(c&&Date.now()-c.at<60000)return c.n;
+  const [s,a]=await Promise.all([getDocs(query(collection(db,'cust_push'),where('c','==',cid))),getDocs(collection(db,'push_subs')).catch(()=>null)]);
+  const adm=new Set();if(a)a.forEach(d=>{const ep=(d.data()||{}).endpoint;if(ep)adm.add(ep);});
+  let n=0;s.forEach(d=>{const x=d.data()||{};if(x.explicit===true||!adm.has(x.endpoint))n++;});
+  PN_DEV[cid]={n:n,at:Date.now()};return n;
+}
+// 문구 → 알림 내용 : 인사 · 👉 안내(이어지는 줄 포함) · 주소 · 연락처 줄을 빼고 핵심 두 줄
+function pnBody(txt){
+  const ls=String(txt||'').split('\n').filter(s=>s.trim()&&!/^\s/.test(s)).map(s=>s.trim())
+    .filter(s=>!/https?:\/\//.test(s)&&!/^(👉|📞|☎)/.test(s));
+  if(ls.length>1)ls.shift();
+  return Array.from(ls.slice(0,2).join(' ').replace(/\*/g,'')).slice(0,170).join('');
+}
+function pnUrl(m,n,cid){
+  if(n===5||n===6)return '/repair?id='+encodeURIComponent(m.__id)+(n===6?'&lang=en':'');
+  return '/my?c='+encodeURIComponent(cid)+(isCt(m)?'':'&f=mm')+(n===6?'&lang=en':'');
+}
+async function pnSend(m,n,txt,via){
+  const cid=pnCid(m);if(!cid)return null;
+  const body=pnBody(txt);if(!body)return null;
+  const o={c:cid,name:String(m.name||m.condo||''),title:n===6?'Happy Home Care':'해피홈케어',body:body,url:pnUrl(m,n,cid),tpl:(isCt(m)?'memo-ct':'memo-')+n,lang:n===6?'en':'ko',src:'memo',memo_id:m.__id,created_at:nowIso()};
+  if(via)o.via=via;
+  const ref=await addDoc(collection(db,'cust_push_out'),o);
+  return fetch('/api/cpush',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op:'send',id:ref.id})}).then(x=>x.json());
+}
+// 왓챕 발송 · 복사와 함께 — 알림을 켠 고객에게만, 같은 내용은 한 번만
+async function pnAuto(m,n,txt){
+  try{
+    const cid=pnCid(m);if(!cid)return;
+    const key=m.__id+'|'+n+'|'+pnBody(txt);if(PN_DONE.has(key))return;
+    if(!(await pnDevN(cid)))return;
+    PN_DONE.add(key);
+    const r=await pnSend(m,n,txt,'auto');
+    if(r&&r.ok&&r.sent)setTimeout(()=>toast('🔔 앱 알림도 함께 보냈습니다 ('+r.sent+'대)'),2700);
+    else{PN_DONE.delete(key);if(r&&r.ok&&!r.sent)delete PN_DEV[cid];}
+  }catch(e){console.warn(e);}
+}
+async function pnPaint(){
+  const el=document.getElementById('sd-pn');if(!el)return;
+  const m=MEMOS.find(x=>x.__id===sendId);if(!m){el.innerHTML='';return;}
+  const cid=pnCid(m),at=sendId+'|'+sendTpl;el.dataset.at=at;
+  if(!cid){el.textContent='🔕 앱 알림 — 고객관리에서 이 고객을 찾지 못해 보낼 수 없습니다 (전화번호나 이름이 같아야 합니다)';return;}
+  let n=0;try{n=await pnDevN(cid);}catch(e){el.textContent='🔕 앱 알림 기기를 확인하지 못했습니다';return;}
+  if(el.dataset.at!==at||!document.body.contains(el))return;   // 그 사이 다른 메시지를 골랐으면 그리지 않음
+  if(!n){el.textContent='🔕 이 고객은 아직 마이페이지에서 앱 알림을 켜지 않았습니다';return;}
+  el.innerHTML='<span class="pnm-on"><b>🔔 앱 알림 켜진 고객 · 휴대폰 '+n+'대</b><br>왓챕 발송이나 복사를 누르면 아래 알림도 함께 나갑니다.'+
+    '<span class="pnm-bd"><small>'+(sendTpl===6?'Happy Home Care':'해피홈케어')+'</small>'+esc(pnBody(msgText(m,sendTpl)))+'</span>'+
+    '<button type="button" data-pn="1">🔔 앱 알림만 보내기</button></span>';
+}
+{const _ps=paintSend;paintSend=function(){_ps.apply(this,arguments);try{pnPaint();}catch(_){}};}
+document.getElementById('sd-body').addEventListener('click',async ev=>{
+  const b=ev.target.closest('[data-pn]');if(!b)return;
+  const m=MEMOS.find(x=>x.__id===sendId);if(!m)return;
+  b.disabled=true;
+  try{
+    const txt=await hhcShortLinks(msgText(m,sendTpl));
+    const r=await pnSend(m,sendTpl,txt,'');
+    if(r&&r.ok&&r.sent){toast('🔔 앱 알림을 보냈습니다 ('+r.sent+'대)');PN_DONE.add(m.__id+'|'+sendTpl+'|'+pnBody(txt));}
+    else if(r&&r.ok&&r.failed)toast('❌ 앱 알림 발송 실패 ('+r.failed+'대) — 고객관리 🔔 알림 이력에서 확인하세요');
+    else if(r&&r.ok){toast('⚠️ 보낼 수 있는 기기가 없습니다 — 고객이 알림을 끈 것 같습니다');delete PN_DEV[pnCid(m)];pnPaint();}
+    else toast('⚠️ 앱 알림을 보내지 못했습니다'+(r&&r.error?': '+r.error:''));
+  }catch(e){toast('⚠️ 앱 알림을 보내지 못했습니다');}
+  b.disabled=false;
+});
 document.getElementById('sd-body').addEventListener('click',async ev=>{
   if(ev.target.closest('.rp-open'))return;   // 보고서 미리보기 링크는 그대로 열립니다
   const t=ev.target.closest('[data-tpl]');
@@ -1828,6 +1925,7 @@ document.getElementById('sd-body').addEventListener('click',async ev=>{
     try{await navigator.clipboard.writeText(ktxt);toast('✓ 메시지가 복사되었습니다 — 붙여넣기 하세요');}
     catch(_){prompt('복사해서 사용하세요:',ktxt);}
   }
+  pnAuto(m,sendTpl,txt);   // 🔔 알림 켠 고객에게는 앱 알림도 함께
   await markSent(m,sendTpl,txt,b.dataset.send==='wa'?'whatsapp':(m.channel||'other'));
 });
 async function markSent(m,tpl,txt,ch){
