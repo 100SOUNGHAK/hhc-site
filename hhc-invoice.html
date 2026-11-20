@@ -1579,6 +1579,67 @@ function fillMemberSelect(id,includeAll,includeNonMember){
   opts+=MEMBER_TIERS.map(function(m){return '<option value="'+m+'">'+m+'</option>';}).join('');
   el.innerHTML=opts;
 }
+// ── 회원구분 반영 (2026-11-20) ─────────────────────────────
+//  · 고객관리 화면은 계약서만 있는 고객을 「패키지 - 골드」·「패키지 - 골드(사업)」처럼 보여 주는데,
+//    인보이스 선택칸은 「패키지 - 골드회원」·「패키지(사업) - 골드회원」 형식이라 값이 맞지 않으면 빈칸이 됐다.
+//  · ivMemNorm : 어떤 표기든 선택칸 형식으로 맞춤 / ivSetMember : 목록에 없는 등급도 칸을 추가해 그대로 표시
+//  · ivMemberFallback : 고객 기록에 회원구분이 없으면 계약서(package_id)로 등급을 찾아 채움
+//    (고객관리에서 「(없음)」으로 직접 지정한 고객 ca_member_set 은 건드리지 않음)
+var IV_MEM_KO={silver:'실버',royal:'로얄',gold:'골드',diamond:'다이아',titanium:'티타늄',special:'스페셜해피홈'};
+function ivMemNorm(v){
+  v=String(v==null?'':v).trim();if(!v)return '';
+  if(MEMBER_TIERS.indexOf(v)>=0)return v;
+  if(/^vvip$/i.test(v))return 'VVIP';
+  var m=v.match(/^패키지\s*(\(사업\))?\s*-\s*(.+?)\s*(\(사업\))?$/);
+  if(m){
+    var biz=!!(m[1]||m[3]),t=m[2].replace(/\s*회원$/,'');
+    if(t==='스페셜해피홈')return '패키지'+(biz?'(사업)':'')+' - 스페셜해피홈';
+    var c='패키지'+(biz?'(사업)':'')+' - '+t+'회원';
+    if(MEMBER_TIERS.indexOf(c)>=0)return c;
+  }
+  return v;
+}
+function ivMemFromPkg(pid){
+  pid=String(pid||'');if(!pid)return '';
+  var biz=/-biz$/.test(pid),t=IV_MEM_KO[pid.replace(/-biz$/,'')];
+  return t?ivMemNorm('패키지'+(biz?'(사업)':'')+' - '+t):'';
+}
+//  ※ 저장된 인보이스 문서는 자동으로 바꾸지 않음 — 수정 화면에 보이는 값만 바뀌고, 「수정 저장」해야 반영됨
+function ivSetMember(v){
+  var el=$('c-member');if(!el)return;
+  v=ivMemNorm(v);
+  if(v&&!Array.prototype.some.call(el.options,function(o){return o.value===v;})){
+    var o=document.createElement('option');o.value=v;o.textContent=v;el.appendChild(o);
+  }
+  el.value=v;
+}
+async function ivMemberFallback(name,phone,cust){
+  try{
+    if(val('c-member'))return;
+    if(cust&&cust.ca_member_set)return;
+    var np=_custNormPhone(phone),nm=String(name||'').trim();
+    if(!np&&!nm)return;
+    var all=await loadCtAll();
+    var hit=all.filter(function(c){return c.pkg&&((np&&_custNormPhone(c.phone)===np)||(nm&&String(c.name||'').trim()===nm));})
+               .sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));})[0];
+    if(!hit||val('c-member'))return;
+    // 그사이 다른 고객으로 바뀌었으면 넣지 않음
+    if(String(val('c-name')||'').trim()!==nm&&_custNormPhone(val('c-phone'))!==np)return;
+    var mv=ivMemFromPkg(hit.pkg);if(!mv)return;
+    ivSetMember(mv);
+    if(App&&typeof App.onMemberChange==='function'){try{App.onMemberChange();}catch(e){}}
+    showToast('✓ 계약서 기준 회원구분 「'+mv+'」 반영됨');
+  }catch(e){}
+}
+// 고객명·전화번호를 직접 입력했을 때도 회원구분을 채움 (비어 있을 때만)
+function ivAutoMember(){
+  if(val('c-member'))return;
+  var nm=val('c-name'),ph=val('c-phone');
+  var c=(typeof _bkFindCust==='function')?_bkFindCust(nm,ph):null;
+  if(c&&c.member){ivSetMember(c.member);if(App&&typeof App.onMemberChange==='function'){try{App.onMemberChange();}catch(e){}}return;}
+  ivMemberFallback(nm,ph,c);
+}
+document.addEventListener('change',function(e){var t=e.target;if(t&&(t.id==='c-name'||t.id==='c-phone'))setTimeout(ivAutoMember,1300);});
 var currentFilter='all',currentSort='date',sortDir=1,selYear=new Date().getFullYear();
 var viewingId=null,statusEditId=null,currentNav='list';
 var issuer={name:'Happy Works Services Sdn. Bhd.',email:'admin@happyhomecare.com.my',phone:'+60 12-000 0000',addr:'Kuala Lumpur, Malaysia',biz:''};
@@ -2196,7 +2257,9 @@ function loadInvToForm(inv){
   setVal('c-email',inv.customer&&inv.customer.email||'');
   setVal('c-addr',inv.customer&&inv.customer.addr||'');
   setVal('c-biz',inv.customer&&inv.customer.biz||'');
-  setVal('c-member',inv.customer&&inv.customer.member||'');
+  // 기존 인보이스: 저장된 문서는 그대로 두고, 수정 화면에서만 회원구분을 맞춰 보여 줌 → 「수정 저장」할 때 반영
+  ivSetMember(inv.customer&&inv.customer.member||'');
+  if(!(inv.customer&&inv.customer.member))ivMemberFallback(inv.customer&&inv.customer.name,inv.customer&&inv.customer.phone,(typeof _bkFindCust==='function')?_bkFindCust(inv.customer&&inv.customer.name,inv.customer&&inv.customer.phone):null);
   setVal('tax-rate',inv.taxRate||0);
   setVal('credit-use',inv.creditUse||0);setVal('voucher-amt',inv.voucherAmt||0);setVal('voucher-code',inv.voucherCode||'');setVal('point-use',inv.pointUse||0);
   try{pkfLoad(inv);}catch(e){}
@@ -6776,7 +6839,7 @@ window.selectCNameSuggest=function(id){
   var c=customers.find(function(x){return x.id===id;});
   if(!c)return;
   setVal('c-name',c.name||'');setVal('c-phone',c.phone||'+60');setVal('c-email',c.email||'');
-  setVal('c-addr',c.addr||'');setVal('c-biz',c.biz||'');setVal('c-member',c.member||'');
+  setVal('c-addr',c.addr||'');setVal('c-biz',c.biz||'');ivSetMember(c.member||'');ivMemberFallback(c.name,c.phone,c);
   var box=$('c-name-suggest');if(box){box.style.display='none';box.innerHTML='';}
   showToast(c.member?'✓ 고객정보 + 회원정보("'+c.member+'") 반영됨':'✓ 고객정보 반영됨');
   App.onMemberChange();
@@ -6799,7 +6862,8 @@ function renderRecentCustChips(){
 window.selectRecentCust=function(i){
   var cu=(window._recentCustList||[])[i];if(!cu)return;
   setVal('c-name',cu.name||'');setVal('c-phone',cu.phone||'+60');setVal('c-email',cu.email||'');
-  setVal('c-addr',cu.addr||'');setVal('c-biz',cu.biz||'');setVal('c-member',cu.member||'');
+  setVal('c-addr',cu.addr||'');setVal('c-biz',cu.biz||'');ivSetMember(cu.member||'');
+  if(!cu.member)ivAutoMember();
   showToast('✓ "'+cu.name+'" 고객정보 반영됨');
   App.onMemberChange();
 };
@@ -6903,7 +6967,7 @@ window.showCustInvoiceHistory=function(custId){
 
 function newInvFromCust(id){
   var c=customers.find(function(x){return x.id===id;});if(!c)return;
-  App.resetForm();setVal('c-name',c.name||'');setVal('c-phone',c.phone||'+60');setVal('c-email',c.email||'');setVal('c-addr',c.addr||'');setVal('c-biz',c.biz||'');setVal('c-member',c.member||'');
+  App.resetForm();setVal('c-name',c.name||'');setVal('c-phone',c.phone||'+60');setVal('c-email',c.email||'');setVal('c-addr',c.addr||'');setVal('c-biz',c.biz||'');ivSetMember(c.member||'');ivMemberFallback(c.name,c.phone,c);
   App.onMemberChange();
   Nav('new');showToast('고객 정보 불러옴 ✓');
 }
@@ -8470,14 +8534,20 @@ function applyBookingTransfer(){
     setVal('c-phone',exCust.phone||d.phone||'+60');
     if(exCust.email)setVal('c-email',exCust.email);
     if(exCust.biz)setVal('c-biz',exCust.biz);
-    if(exCust.member)setVal('c-member',exCust.member);
+    // 회원구분: 고객관리에서 보낸 값(계약서 기준 포함) → 고객 기록 → 계약서 순
+    if(d.member)ivSetMember(d.member);else if(exCust.member)ivSetMember(exCust.member);
+    if(!exCust.email&&d.email)setVal('c-email',d.email);
     setVal('c-addr',d.addr||exCust.addr||'');
     if(App&&typeof App.onMemberChange==='function'){try{App.onMemberChange();}catch(e){}}
   }else{
     setVal('c-name',d.name||'');
     setVal('c-phone',d.phone||'+60');
     setVal('c-addr',d.addr||'');
+    if(d.email)setVal('c-email',d.email);
+    if(d.member)ivSetMember(d.member);
+    if(App&&typeof App.onMemberChange==='function'){try{App.onMemberChange();}catch(e){}}
   }
+  if(!d.memberFixed)ivMemberFallback(d.name,d.phone,exCust);
   // 품목 반영
   lineItems=[];expandedLI={};
   var needPrice=0;
@@ -8828,7 +8898,7 @@ function loadInvDraft(d){
   var _dn=d.id;if(invNumTaken(_dn)||!_dn)_dn=genId(d.date||today());
   setVal('inv-num',_dn);setVal('inv-date',d.date);setVal('inv-due',d.due);setVal('inv-status',d.status||'billing');setVal('inv-currency',d.currency||'MYR');
   var c=d.customer||{};
-  setVal('c-name',c.name);setVal('c-phone',c.phone||'+60');setVal('c-email',c.email);setVal('c-addr',c.addr);setVal('c-biz',c.biz);setVal('c-member',c.member);
+  setVal('c-name',c.name);setVal('c-phone',c.phone||'+60');setVal('c-email',c.email);setVal('c-addr',c.addr);setVal('c-biz',c.biz);ivSetMember(c.member);
   setVal('tax-rate',d.taxRate||'0');
   try{pkfLoad(d.free_use?d:null);}catch(e){}
   adjusts=_legacyAdjLoad(d);renderAdjusts();setVal('credit-use',d.creditUse||'0');setVal('voucher-amt',d.voucherAmt||'0');setVal('voucher-code',d.voucherCode||'');setVal('point-use',d.pointUse||'0');
