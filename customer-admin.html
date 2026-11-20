@@ -1972,9 +1972,13 @@ function caKkAuto(m){
   return {t:cut(t,60),d:cut(d,90)};
 }
 // 영어 발송은 영어 그림 — og-*-en.jpg (안내장 그림 멤버십·공동계약·이사 안내도 영어판 있음) (2026-11-21)
-const CA_KK_EN=/^og-(quote|invoice|contract|booking|my|voucher|pay|permit|visitfee|points|svcreport|received|paid|care|app|repair|reqform|confirmed|moveout|joint|membership)\.(jpg|png)$/;
-function caKkImg(tpl,m,en){
+// 💎 적립 안내는 적립 이름(문구)에 따라 — 불편 보상 · 지인 추천 보상 · 리뷰 감사 (2026-11-21)
+function caPtKind(m){const s=String(m||'');return /사과|불편|apolog/i.test(s)?'sorry':/추천|referr/i.test(s)?'referral':/리뷰|review/i.test(s)?'review':'';}
+const CA_KK_EN=/^og-(pt-sorry|pt-referral|pt-review|quote|invoice|contract|booking|my|voucher|pay|permit|visitfee|points|svcreport|received|paid|care|app|repair|reqform|confirmed|moveout|joint|membership)\.(jpg|png)$/;
+function caKkImg(tpl,m,en,hint){   // hint = 적립 안내의 적립 이름 (그림 고르기에만 씀)
   let f=CA_KK_IMG[tpl]||((typeof GDS!=='undefined'&&GDS[tpl])?'og-ac-guides.jpg':'');
+  const pk=tpl==='cmp'?caPtKind(m+' '+String(hint||'')):'';
+  if(pk)f='og-pt-'+pk+'.jpg';
   if(!f)return null;
   if(en&&CA_KK_EN.test(f))f=f.replace(/\.(jpg|png)$/,'-en.$1');
   const a=caKkAuto(m);
@@ -5442,8 +5446,10 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     const fx=(state.tpl==='ins'&&curCoupon()&&curCoupon().__id)?'&fi='+encodeURIComponent(curCoupon().__id):'';
     // 사과 보상 적립은 적립 금액(pa=)도 함께 — 마이페이지 강조 배지에 「RM 20 적립」으로 보입니다
     const fa=(state.tpl==='cmp'&&cmpAmt()>0)?'&pa='+cmpAmt():'';
+    // 💎 적립 종류 표시(pk=) — 링크 미리보기 그림만 바뀝니다 (불편 보상·추천 보상·리뷰 감사, functions/r.js) (2026-11-21)
+    const _pk=state.tpl==='cmp'?caPtKind(state.cmpMemo):'';
     if(state.tpl==='cmp'&&v.indexOf('iv')<0)v.push('iv');   // 적립금 카드는 인보이스 묶음에 들어 있어 항상 켭니다
-    return BASE+page+encodeURIComponent(mid)+'&v='+(v.join(',')||'iv')+'&lang='+(state.en?'en':'ko')+(f?'&f='+f+fx+fa:'');
+    return BASE+page+encodeURIComponent(mid)+'&v='+(v.join(',')||'iv')+'&lang='+(state.en?'en':'ko')+(f?'&f='+f+fx+fa+(_pk?'&pk='+_pk:''):'');
   }
   // ── 발송 메시지 템플릿 ──────────────────────────────
   // basic  : 기본 안내 (마이페이지 문서 확인 안내)
@@ -6586,7 +6592,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
         t:(en?'🔗 Here is our digital name card.':'🔗 전자명함 보내드립니다.'),
         d:(en?'Tap [Service Request] below · see our care services & prices.'
              :'하단 [의뢰(예약) 신청] · [서비스·가격 확인] 가능합니다.')}
-      :caKkImg(state.tpl,msg(),en);   // 🖼 그 밖의 종류도 그림 카드 (2026-11-20) · 영어는 영어 그림
+      :caKkImg(state.tpl,msg(),en,state.cmpMemo);   // 적립 안내는 적립 이름도 함께 보고 그림을 고릅니다   // 🖼 그 밖의 종류도 그림 카드 (2026-11-20) · 영어는 영어 그림
     await kkShareMsg(e.name,msg(),link(),en,kkT,kkImg);
     careMark('kk');
   };

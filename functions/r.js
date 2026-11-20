@@ -94,7 +94,13 @@ async function metaFor(env, origin, target){
   const en = /^\/(hhc-invoice|hhcinvoice|inv)(\.html)?$/i.test(t.pathname) ? t.searchParams.get('ml') === 'en' : isEn(t);
   const f = t.searchParams.get('f') || '';
   if (/^\/(my|mypage|my-en)(\.html)?$/i.test(t.pathname) && MY_FOCUS[f]) {
-    const [img, tk, te, dk, de] = MY_FOCUS[f];
+    let [img, tk, te, dk, de] = MY_FOCUS[f];
+    // 💎 적립 안내 종류(pk=) — 불편 보상 · 지인 추천 보상 · 리뷰 감사 (2026-11-21)
+    const PK = { sorry: ['pt-sorry', '불편 보상 적립 · Apology | Happy Home Care', 'Apology Points | Happy Home Care', '불편을 드려 진심으로 죄송합니다 · 사과의 의미로 적립해 드렸습니다', 'We are truly sorry · Happy Points have been added as an apology'],
+                 referral: ['pt-referral', '지인 추천 보상 · Referral | Happy Home Care', 'Referral Reward | Happy Home Care', '소개해 주셔서 감사합니다 · 추천 보상이 적립되었습니다', 'Thank you for referring us · your reward has been added'],
+                 review: ['pt-review', '리뷰 감사 적립 · Review | Happy Home Care', 'Review Thanks | Happy Home Care', '소중한 리뷰 감사합니다 · 감사 적립해 드렸습니다', 'Thank you for your review · Happy Points have been added'] };
+    const pk = f === 'rw' && PK[t.searchParams.get('pk')];
+    if (pk) [img, tk, te, dk, de] = pk;
     return { title: en ? te : tk, desc: en ? de : dk, image: `${SITE}/og-${img}${en ? '-en' : ''}.jpg`, w: '1200', h: '630' };
   }
   for (const [re, img, tk, te, dk, de] of TYPES) {
