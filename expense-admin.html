@@ -333,6 +333,41 @@ body.gx-on{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
 .vd-wa{color:#0E7A43}
 .vd-del{color:#DC2626}
 </style>
+<style id="scn-css">
+/* ═══ 영수증 스캔 맞추기 ═══ */
+.scn{position:fixed;inset:0;z-index:800;background:#0A0F1C;display:flex;flex-direction:column;color:#fff;touch-action:none;user-select:none;-webkit-user-select:none}
+.scn-top{display:flex;align-items:center;justify-content:space-between;padding:calc(10px + env(safe-area-inset-top)) 10px 10px}
+.scn-ttl{font-size:15.5px;font-weight:800}
+.scn-tb{border:none;background:rgba(255,255,255,.1);color:#fff;border-radius:11px;padding:10px 14px;font-size:14px;font-weight:700;min-width:70px}
+.scn-ok{background:linear-gradient(135deg,#e3c98a,#c9a44c);color:#1d1606}
+.scn-ok:disabled{opacity:.4}
+.scn-stage{flex:1;position:relative;overflow:hidden;margin:0 6px}
+.scn-stage canvas#scn-cv{position:absolute;left:0;top:0}
+.scn-svg{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+.scn-svg polygon{fill:rgba(20,149,138,.18);stroke:#2DD4BF;stroke-width:2.5;stroke-linejoin:round}
+.scn-h{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;touch-action:none;cursor:grab;display:flex;align-items:center;justify-content:center}
+.scn-h::after{content:"";width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid #14958a;box-shadow:0 2px 8px rgba(0,0,0,.5)}
+.scn-h.drag::after{background:#2DD4BF}
+.scn-mag{position:absolute;width:120px;height:120px;border-radius:50%;overflow:hidden;border:3px solid #fff;box-shadow:0 6px 18px rgba(0,0,0,.6);display:none;pointer-events:none;left:10px;top:10px}
+.scn-mag::after{content:"";position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px;border:2px solid #2DD4BF;border-radius:50%}
+.scn-out{position:absolute;inset:0;margin:auto;max-width:100%;max-height:100%;object-fit:contain;box-shadow:0 10px 30px rgba(0,0,0,.6);background:#fff}
+.scn-busy{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(10,15,28,.6)}
+.scn-busy span{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.25);border-top-color:#2DD4BF;animation:scnSp 0.8s linear infinite}
+.scn-busy em{font-style:normal;font-size:13.5px;font-weight:700;color:rgba(255,255,255,.85)}
+@keyframes scnSp{to{transform:rotate(360deg)}}
+.scn-msg{min-height:22px;text-align:center;font-size:12.5px;font-weight:600;color:rgba(255,255,255,.72);padding:8px 16px 0}
+.scn-msg.w{color:#F6C453}
+.scn-bot{display:flex;justify-content:space-around;padding:10px 8px calc(12px + env(safe-area-inset-bottom))}
+.scn-bb{border:none;background:none;color:rgba(255,255,255,.85);display:flex;flex-direction:column;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:6px 10px;border-radius:12px;min-width:76px}
+.scn-bb i{font-style:normal;font-size:21px;line-height:1}
+.scn-bb.on{background:rgba(45,212,191,.16);color:#5EEAD4}
+.scn-seg{display:flex;align-self:center;background:rgba(255,255,255,.1);border-radius:12px;padding:3px}
+.scn-seg button{border:none;background:none;color:rgba(255,255,255,.75);font-size:12.5px;font-weight:700;padding:9px 11px;border-radius:9px}
+.scn-seg button.on{background:#fff;color:#0B1633}
+.scn-bb:active{background:rgba(255,255,255,.1)}
+.xr-th .xr-scn{position:absolute;left:3px;bottom:3px;width:auto;height:20px;border-radius:6px;border:none;background:rgba(11,22,51,.78);color:#fff;font-size:10px;font-weight:800;line-height:20px;padding:0 6px;top:auto;right:auto}
+@media (prefers-reduced-motion:reduce){.scn-busy span{animation-duration:2s}}
+</style>
 <script type="module" src="/hhc-auth.js"></script>
 </head>
 <body>
@@ -576,6 +611,33 @@ body.gx-on{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
   <div class="pv-c" id="pv-cnt"></div>
 </div>
 
+<!-- 영수증 스캔 맞추기 (2026-11-20) -->
+<div id="scn" class="scn hidden">
+  <div class="scn-top">
+    <button class="scn-tb" onclick="scnCancel()">취소</button>
+    <div class="scn-ttl" id="scn-ttl">영수증 맞추기</div>
+    <button class="scn-tb scn-ok" id="scn-ok" onclick="scnNext()">다음</button>
+  </div>
+  <div class="scn-stage" id="scn-stage">
+    <canvas id="scn-cv"></canvas>
+    <svg id="scn-svg" class="scn-svg"><polygon id="scn-poly"></polygon></svg>
+    <div class="scn-h" data-i="0"></div><div class="scn-h" data-i="1"></div><div class="scn-h" data-i="2"></div><div class="scn-h" data-i="3"></div>
+    <div class="scn-mag" id="scn-mag"><canvas id="scn-magc" width="120" height="120"></canvas></div>
+    <img id="scn-out" class="scn-out hidden" alt="">
+    <div class="scn-busy hidden" id="scn-busy"><span></span><em id="scn-busy-t">영수증을 찾는 중…</em></div>
+  </div>
+  <div class="scn-msg" id="scn-msg"></div>
+  <div class="scn-bot" id="scn-bot-adj">
+    <button class="scn-bb" onclick="scnAuto()"><i>✨</i><span>자동 찾기</span></button>
+    <button class="scn-bb" onclick="scnFull()"><i>⛶</i><span>사진 전체</span></button>
+    <button class="scn-bb" onclick="scnUseOrig()"><i>🖼</i><span>원본 그대로</span></button>
+  </div>
+  <div class="scn-bot hidden" id="scn-bot-res">
+    <button class="scn-bb" onclick="scnBack()"><i>↩</i><span>다시 맞추기</span></button>
+    <button class="scn-bb" onclick="scnRotate()"><i>⟳</i><span>회전</span></button>
+    <span class="scn-seg"><button id="scn-m-color" onclick="scnMode('color')">원본 색</button><button id="scn-m-doc" class="on" onclick="scnMode('doc')">문서</button><button id="scn-m-strong" onclick="scnMode('strong')">선명하게</button></span>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 
 <div id="view-modal" class="xsh hidden" onclick="if(event.target===this)closeView()">
@@ -891,10 +953,238 @@ function removeReceiptFile(p){
   [p.path,p.tpath].forEach(function(x){if(x){try{STG.ref(x).delete().catch(function(){});}catch(e){}}});
 }
 // 등록 화면의 사진(아직 저장 전)
-window.qiAddFiles=function(inp){
-  Array.prototype.forEach.call(inp.files||[],function(f){if(/^image\//.test(f.type)||/\.(jpe?g|png|heic|webp)$/i.test(f.name))qiFiles.push({file:f,url:URL.createObjectURL(f)});});
-  inp.value='';renderQiPhotos();
+window.qiAddFiles=async function(inp){
+  var fs=Array.prototype.filter.call(inp.files||[],function(f){return /^image\//.test(f.type)||/\.(jpe?g|png|heic|webp)$/i.test(f.name);});
+  inp.value='';
+  if(fs.length===1){ // 한 장이면 바로 스캔 맞추기
+    var r=await scanReceipt(fs[0]);if(!r)return;
+    qiFiles.push({file:r,orig:fs[0],url:URL.createObjectURL(r)});
+  }else fs.forEach(function(f){qiFiles.push({file:f,orig:f,url:URL.createObjectURL(f)});});
+  renderQiPhotos();
 };
+window.qiRescan=async function(i){
+  var f=qiFiles[i];if(!f)return;
+  var r=await scanReceipt(f.orig||f.file);if(!r)return;
+  URL.revokeObjectURL(f.url);f.file=r;f.url=URL.createObjectURL(r);renderQiPhotos();
+};
+// ═══ 영수증 스캔 맞추기 (2026-11-20) ═══
+//  · 사진에서 영수증 네 모서리를 찾아(OpenCV) 반듯하게 펴고, 문서 모드로 배경을 하얗게 정리합니다.
+//  · 사진 처리 도구는 「스캔 맞추기」를 처음 열 때 한 번만 받고, 이후에는 휴대폰에 저장된 것을 씁니다.
+var CV_URL='https://cdn.jsdelivr.net/npm/@techstark/opencv-js@4.10.0-release.1/dist/opencv.js';
+var _cvP=null;
+function loadCV(){
+  if(_cvP)return _cvP;
+  _cvP=new Promise(function(res,rej){
+    function ready(){return window.cv&&window.cv.Mat&&window.cv.imread;}
+    // ⚠️ cv 는 then 을 가진 객체라 Promise 결과로 넘기면 무한 반복됨 → true 로만 알림
+    function wait(){var n=0;(function poll(){if(ready())return res(true);if(++n>600)return rej(new Error('사진 처리 도구 준비 시간 초과'));setTimeout(poll,100);})();}
+    if(ready())return res(true);
+    var s=document.createElement('script');s.src=CV_URL;s.async=true;
+    s.onload=wait;
+    s.onerror=function(){_cvP=null;rej(new Error('사진 처리 도구를 받지 못했습니다'));};
+    document.head.appendChild(s);
+  });
+  return _cvP;
+}
+var SC={src:null,q:null,res:null,doc:true,rot:0,done:null,step:'adj',disp:null};
+function scnT(ko,en){return curLang==='en'?en:ko;}
+function scnMsg(t,warn){var m=$('scn-msg');m.textContent=t||'';m.classList.toggle('w',!!warn);}
+function scnBusy(on,t){$('scn-busy').classList.toggle('hidden',!on);if(t)$('scn-busy-t').textContent=t;}
+// 파일 → 작업용 캔버스(긴 변 2000px)
+function fileToCanvas(file){
+  return new Promise(function(res,rej){
+    var url=URL.createObjectURL(file),img=new Image();
+    img.onload=function(){var w=img.naturalWidth,h=img.naturalHeight,r=Math.min(1,2000/Math.max(w,h));
+      var c=document.createElement('canvas');c.width=Math.round(w*r);c.height=Math.round(h*r);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);res(c);};
+    img.onerror=function(){URL.revokeObjectURL(url);rej(new Error('사진을 읽을 수 없습니다'));};
+    img.src=url;
+  });
+}
+// 열기: 결과 Blob(잘라 편 사진) 또는 원본 File, 취소하면 null
+window.scanReceipt=function(file){
+  return new Promise(async function(resolve){
+    SC.done=resolve;SC.file=file;SC.mode=(function(){try{return localStorage.getItem('hhc_scan_mode')||'doc';}catch(e){return 'doc';}})();SC.rot=0;SC.res=null;scnModeBtns();
+    $('scn').classList.remove('hidden');document.body.style.overflow='hidden';
+    scnStep('adj');scnBusy(true,scnT('사진 불러오는 중…','Loading photo…'));scnMsg('');
+    try{SC.src=await fileToCanvas(file);}catch(e){scnBusy(false);showToast(e.message);scnClose(file);return;}
+    SC.q=scnDefaultQuad();scnLayout();
+    scnBusy(true,scnT('영수증을 찾는 중… (처음 한 번은 조금 걸립니다)','Finding receipt… (first time takes a moment)'));
+    try{await loadCV();var q=scnDetect();
+      if(q){SC.q=q;scnMsg(scnT('영수증을 찾았습니다 · 모서리 점을 끌어 맞출 수 있어요','Receipt found · drag the corners to adjust'));}
+      else scnMsg(scnT('자동으로 찾지 못했습니다 · 네 모서리 점을 영수증 끝에 맞춰 주세요','Could not find it · drag the four corners to the receipt'),true);
+    }catch(e){console.warn(e);scnMsg(scnT('자동 찾기를 쓸 수 없습니다 · 모서리 점을 직접 맞춰 주세요','Auto-detect unavailable · drag the corners'),true);}
+    scnBusy(false);scnLayout();
+  });
+};
+function scnClose(result){
+  $('scn').classList.add('hidden');document.body.style.overflow='';
+  var d=SC.done;SC.done=null;SC.src=null;SC.res=null;if(d)d(result);
+}
+window.scnCancel=function(){scnClose(null);};
+window.scnUseOrig=function(){scnClose(SC.file);};
+function scnDefaultQuad(){var w=SC.src.width,h=SC.src.height,mx=w*.06,my=h*.06;return [[mx,my],[w-mx,my],[w-mx,h-my],[mx,h-my]];}
+window.scnFull=function(){var w=SC.src.width,h=SC.src.height;SC.q=[[0,0],[w,0],[w,h],[0,h]];scnLayout();scnMsg(scnT('사진 전체를 선택했습니다','Whole photo selected'));};
+window.scnAuto=async function(){
+  scnBusy(true,scnT('영수증을 찾는 중…','Finding receipt…'));
+  try{await loadCV();var q=scnDetect();if(q){SC.q=q;scnMsg(scnT('영수증을 찾았습니다','Receipt found'));}else scnMsg(scnT('자동으로 찾지 못했습니다 · 모서리 점을 직접 맞춰 주세요','Could not find it · drag the corners'),true);}
+  catch(e){scnMsg(e.message,true);}
+  scnBusy(false);scnLayout();
+};
+function orderQuad(p){
+  var s=p.map(function(a){return a[0]+a[1];}),d=p.map(function(a){return a[1]-a[0];});
+  var tl=p[s.indexOf(Math.min.apply(null,s))],br=p[s.indexOf(Math.max.apply(null,s))];
+  var tr=p[d.indexOf(Math.min.apply(null,d))],bl=p[d.indexOf(Math.max.apply(null,d))];
+  return [tl,tr,br,bl];
+}
+function polyArea(q){var a=0;for(var i=0;i<4;i++){var j=(i+1)%4;a+=q[i][0]*q[j][1]-q[j][0]*q[i][1];}return Math.abs(a)/2;}
+// 모서리 찾기: ① 테두리 선(Canny) ② 밝은 종이 영역(Otsu) 두 방법 중 그럴듯한 사각형
+function scnDetect(){
+  var cv=window.cv,W=SC.src.width,H=SC.src.height,r=Math.min(1,600/Math.max(W,H));
+  var sm=document.createElement('canvas');sm.width=Math.round(W*r);sm.height=Math.round(H*r);
+  sm.getContext('2d').drawImage(SC.src,0,0,sm.width,sm.height);
+  var A=sm.width*sm.height,best=null,bestScore=0;
+  var src=cv.imread(sm),gray=new cv.Mat(),blur=new cv.Mat(),bin=new cv.Mat(),k=cv.Mat.ones(5,5,cv.CV_8U);
+  cv.cvtColor(src,gray,cv.COLOR_RGBA2GRAY);cv.GaussianBlur(gray,blur,new cv.Size(5,5),0);
+  function consider(m){
+    var cs=new cv.MatVector(),hi=new cv.Mat();
+    cv.findContours(m,cs,hi,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE);
+    for(var i=0;i<cs.size();i++){
+      var c=cs.get(i),ar=cv.contourArea(c);
+      if(ar<A*0.08){c.delete();continue;}
+      var peri=cv.arcLength(c,true),q=null;
+      for(var eps=0.015;eps<=0.08&&!q;eps+=0.01){
+        var ap=new cv.Mat();cv.approxPolyDP(c,ap,eps*peri,true);
+        if(ap.rows===4&&cv.isContourConvex(ap)){q=[];for(var j=0;j<4;j++)q.push([ap.data32S[j*2],ap.data32S[j*2+1]]);}
+        ap.delete();
+      }
+      if(!q){ // 네 점으로 안 줄어들면 최소 회전 사각형
+        var rr=cv.minAreaRect(c),pts=cv.RotatedRect.points(rr);q=pts.map(function(p){return [p.x,p.y];});
+        if(ar/(rr.size.width*rr.size.height)<0.8)q=null;
+      }
+      if(q){var qa=polyArea(q),score=qa/A;
+        // 사진 테두리 전체에 붙은 사각형은 감점
+        var edge=q.filter(function(p){return p[0]<3||p[1]<3||p[0]>sm.width-4||p[1]>sm.height-4;}).length;
+        if(edge>=3)score*=0.3;
+        if(score>bestScore&&score<0.985){bestScore=score;best=q;}}
+      c.delete();
+    }
+    cs.delete();hi.delete();
+  }
+  try{
+    cv.Canny(blur,bin,40,120);cv.dilate(bin,bin,k);consider(bin);
+    cv.threshold(blur,bin,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU);cv.morphologyEx(bin,bin,cv.MORPH_CLOSE,k);consider(bin);
+  }finally{src.delete();gray.delete();blur.delete();bin.delete();k.delete();}
+  if(!best||bestScore<0.08)return null;
+  return orderQuad(best.map(function(p){return [p[0]/r,p[1]/r];}));
+}
+// 화면 배치
+function scnLayout(){
+  var st=$('scn-stage'),cv=$('scn-cv');if(!SC.src)return;
+  var sw=st.clientWidth,sh=st.clientHeight,s=Math.min(sw/SC.src.width,sh/SC.src.height);
+  var w=Math.round(SC.src.width*s),h=Math.round(SC.src.height*s),ox=Math.round((sw-w)/2),oy=Math.round((sh-h)/2);
+  SC.disp={s:s,ox:ox,oy:oy};
+  var dpr=window.devicePixelRatio||1;cv.width=w*dpr;cv.height=h*dpr;cv.style.width=w+'px';cv.style.height=h+'px';cv.style.left=ox+'px';cv.style.top=oy+'px';
+  cv.getContext('2d').drawImage(SC.src,0,0,cv.width,cv.height);
+  scnDrawQuad();
+}
+function scnDrawQuad(){
+  var d=SC.disp;if(!d||!SC.q)return;
+  var pts=SC.q.map(function(p){return [d.ox+p[0]*d.s,d.oy+p[1]*d.s];});
+  $('scn-poly').setAttribute('points',pts.map(function(p){return p.join(',');}).join(' '));
+  [].forEach.call(document.querySelectorAll('.scn-h'),function(h,i){h.style.left=pts[i][0]+'px';h.style.top=pts[i][1]+'px';});
+}
+(function(){
+  var drag=-1;
+  function pos(e){var r=$('scn-stage').getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];}
+  function mag(px,py){
+    var m=$('scn-mag'),c=$('scn-magc'),x=c.getContext('2d'),d=SC.disp;
+    var sx=(px-d.ox)/d.s,sy=(py-d.oy)/d.s,z=60/d.s/2.2; // 약 2.2배 확대
+    x.fillStyle='#000';x.fillRect(0,0,120,120);
+    x.drawImage(SC.src,sx-z,sy-z,z*2,z*2,0,0,120,120);
+    m.style.display='block';
+    var st=$('scn-stage');m.style.left=(px<st.clientWidth/2?st.clientWidth-130:10)+'px';m.style.top='10px';
+  }
+  document.addEventListener('pointerdown',function(e){
+    var h=e.target.closest&&e.target.closest('.scn-h');if(!h||SC.step!=='adj')return;
+    drag=+h.dataset.i;h.classList.add('drag');h.setPointerCapture&&h.setPointerCapture(e.pointerId);e.preventDefault();
+  });
+  document.addEventListener('pointermove',function(e){
+    if(drag<0)return;var p=pos(e),d=SC.disp;
+    var x=Math.max(0,Math.min(SC.src.width,(p[0]-d.ox)/d.s)),y=Math.max(0,Math.min(SC.src.height,(p[1]-d.oy)/d.s));
+    SC.q[drag]=[x,y];scnDrawQuad();mag(d.ox+x*d.s,d.oy+y*d.s);
+  });
+  function end(){if(drag<0)return;[].forEach.call(document.querySelectorAll('.scn-h'),function(h){h.classList.remove('drag');});drag=-1;$('scn-mag').style.display='none';}
+  document.addEventListener('pointerup',end);document.addEventListener('pointercancel',end);
+  window.addEventListener('resize',function(){if(!$('scn').classList.contains('hidden')&&SC.step==='adj')scnLayout();});
+})();
+function scnStep(s){
+  SC.step=s;var adj=s==='adj';
+  $('scn-bot-adj').classList.toggle('hidden',!adj);$('scn-bot-res').classList.toggle('hidden',adj);
+  ['scn-cv','scn-svg'].forEach(function(id){$(id).style.visibility=adj?'':'hidden';});
+  [].forEach.call(document.querySelectorAll('.scn-h'),function(h){h.style.display=adj?'':'none';});
+  $('scn-out').classList.toggle('hidden',adj);
+  $('scn-ok').textContent=adj?scnT('다음','Next'):scnT('사용하기','Use');
+  $('scn-ttl').textContent=adj?scnT('영수증 맞추기','Fit receipt'):scnT('스캔 결과','Scan result');
+}
+window.scnBack=function(){scnStep('adj');scnLayout();scnMsg(scnT('모서리 점을 끌어 다시 맞춰 주세요','Drag the corners to adjust'));};
+// 펴기 + 문서 모드
+function scnRender(){
+  var cv=window.cv,q=orderQuad(SC.q);
+  function dd(a,b){return Math.hypot(a[0]-b[0],a[1]-b[1]);}
+  var w=Math.round(Math.max(dd(q[0],q[1]),dd(q[3],q[2]))),h=Math.round(Math.max(dd(q[0],q[3]),dd(q[1],q[2])));
+  var lim=2000/Math.max(w,h);if(lim<1){w=Math.round(w*lim);h=Math.round(h*lim);}
+  w=Math.max(w,40);h=Math.max(h,40);
+  var src=cv.imread(SC.src),dst=new cv.Mat();
+  var a=cv.matFromArray(4,1,cv.CV_32FC2,[].concat(q[0],q[1],q[2],q[3]));
+  var b=cv.matFromArray(4,1,cv.CV_32FC2,[0,0,w,0,w,h,0,h]);
+  var M=cv.getPerspectiveTransform(a,b);
+  cv.warpPerspective(src,dst,M,new cv.Size(w,h),cv.INTER_LINEAR,cv.BORDER_REPLICATE,new cv.Scalar());
+  src.delete();a.delete();b.delete();M.delete();
+  if(SC.rot){var rr=new cv.Mat();cv.rotate(dst,rr,[cv.ROTATE_90_CLOCKWISE,cv.ROTATE_180,cv.ROTATE_90_COUNTERCLOCKWISE][SC.rot-1]);dst.delete();dst=rr;}
+  var out=new cv.Mat();
+  if(SC.mode==='doc'||SC.mode==='strong'){
+    // 그림자·어두운 구석을 빼고 종이를 하얗게: 회색 ÷ 배경(크게 흐린 값)
+    var g=new cv.Mat(),bg=new cv.Mat(),k=cv.getStructuringElement(cv.MORPH_RECT,new cv.Size(15,15));
+    cv.cvtColor(dst,g,cv.COLOR_RGBA2GRAY);cv.dilate(g,bg,k);cv.medianBlur(bg,bg,21);
+    cv.divide(g,bg,out,255);
+    cv.normalize(out,out,0,255,cv.NORM_MINMAX);
+    if(SC.mode==='strong'){
+      // 흐리거나 바랜 글씨 살리기: 부분 대비 강화(CLAHE) + 윤곽 선명하게 + 글씨 더 진하게
+      var cl=new cv.CLAHE(3.0,new cv.Size(8,8));cl.apply(out,out);cl.delete();
+      var bl=new cv.Mat();cv.GaussianBlur(out,bl,new cv.Size(0,0),1.6);
+      cv.addWeighted(out,1.8,bl,-0.8,0,out);bl.delete();
+      out.convertTo(out,-1,1.45,-95);
+    }else out.convertTo(out,-1,1.25,-50); // 글씨 진하게
+    g.delete();bg.delete();k.delete();
+  }else{dst.convertTo(out,-1,1.08,4);}
+  var c=document.createElement('canvas');cv.imshow(c,out);dst.delete();out.delete();
+  return c;
+}
+async function scnShowResult(){
+  scnBusy(true,scnT('반듯하게 펴는 중…','Straightening…'));
+  await new Promise(function(r){setTimeout(r,30);});
+  try{await loadCV();var c=scnRender();
+    SC.res=await new Promise(function(r){c.toBlob(r,'image/jpeg',0.9);});
+    var o=$('scn-out');if(o.src)URL.revokeObjectURL(o.src);o.src=URL.createObjectURL(SC.res);
+    scnStep('res');scnMsg(scnT('잘 나왔으면 「사용하기」를 눌러 주세요','Tap “Use” if it looks right'));
+  }catch(e){console.error(e);scnMsg(scnT('펴기에 실패했습니다 · 원본 그대로 쓸 수 있습니다','Could not process · you can use the original'),true);}
+  scnBusy(false);
+}
+window.scnNext=function(){
+  if(SC.step==='adj'){
+    if(polyArea(SC.q)<(SC.src.width*SC.src.height)*0.01){scnMsg(scnT('선택한 영역이 너무 작습니다','Selected area is too small'),true);return;}
+    scnShowResult();
+  }else{
+    var f=SC.res;
+    try{f=new File([SC.res],'receipt_'+Date.now()+'.jpg',{type:'image/jpeg'});}catch(e){}
+    scnClose(f);
+  }
+};
+window.scnRotate=function(){SC.rot=(SC.rot+1)%4;scnShowResult();};
+function scnModeBtns(){['color','doc','strong'].forEach(function(m){var b=$('scn-m-'+m);if(b)b.classList.toggle('on',SC.mode===m);});}
+window.scnMode=function(m){SC.mode=m;try{localStorage.setItem('hhc_scan_mode',m);}catch(e){}scnModeBtns();scnShowResult();};
+
 window.qiRemoveFile=function(i){var f=qiFiles.splice(i,1)[0];if(f)URL.revokeObjectURL(f.url);renderQiPhotos();};
 function qiClearFiles(){qiFiles.forEach(function(f){URL.revokeObjectURL(f.url);});qiFiles=[];renderQiPhotos();}
 function renderQiPhotos(){
@@ -903,7 +1193,7 @@ function renderQiPhotos(){
   var first=el.querySelector('.xr-add');
   qiFiles.forEach(function(f,i){
     var d=document.createElement('div');d.className='xr-th';
-    d.innerHTML='<img alt="" src="'+f.url+'" onclick="openPvList(qiFiles.map(function(x){return x.url;}),'+i+')"><button type="button" onclick="qiRemoveFile('+i+')" aria-label="삭제">×</button>';
+    d.innerHTML='<img alt="" src="'+f.url+'" onclick="openPvList(qiFiles.map(function(x){return x.url;}),'+i+')"><button type="button" onclick="qiRemoveFile('+i+')" aria-label="삭제">×</button><button type="button" class="xr-scn" onclick="qiRescan('+i+')">✂ '+(curLang==='en'?'Fit':'맞추기')+'</button>';
     el.insertBefore(d,first);
   });
 }
@@ -955,6 +1245,7 @@ async function setItemPhotos(it,photos){
 window.sheetAddFiles=async function(inp){
   var it=curEditItem();var files=Array.prototype.slice.call(inp.files||[]);inp.value='';
   if(!it||!files.length)return;
+  if(files.length===1){var r=await scanReceipt(files[0]);if(!r)return;files=[r];}
   sheetUploading+=files.length;renderSheetPhotos();
   try{
     var add=[];
@@ -1343,6 +1634,7 @@ var I18N_MAP={
   '모든 항목에 영수증이 있습니다':'All items have receipts','더 보기':'Show more','해제':'Clear','선택':'Select',
   '청구서':'Claims','항목':'Items','영수증 첨부':'Receipts attached','CSV 저장':'Export CSV','청구서 상세':'Claim Details','항목 내역':'Items','청구서 문서':'Document',
   'PDF':'PDF','이미지':'Image','검색 결과가 없습니다':'No matching claims',
+  '영수증 맞추기':'Fit receipt','취소':'Cancel','다음':'Next','자동 찾기':'Auto','사진 전체':'Whole photo','원본 그대로':'Original','다시 맞추기':'Re-fit','회전':'Rotate','원본 색':'Color','문서':'Document','선명하게':'Sharpen',
   '1월':'Jan','2월':'Feb','3월':'Mar','4월':'Apr','5월':'May','6월':'Jun','7월':'Jul','8월':'Aug','9월':'Sep','10월':'Oct','11월':'Nov','12월':'Dec'
 };
 // 품목명은 기존 영문 사전(CATS_EN) 재사용
