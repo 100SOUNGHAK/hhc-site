@@ -1770,8 +1770,19 @@ function genId(dateStr){
   var d=dateStr||today();
   var ymd=d.replace(/-/g,'');
   var prefix='HHC'+ymd;
-  var n=invoices.filter(function(i){return i.id&&i.id.startsWith(prefix);}).length+1;
-  return prefix+String(n).padStart(2,'0');
+  // ⚠️ 개수+1 이 아니라 「가장 큰 번호+1」 — 중간 번호가 삭제돼도 이미 있는 번호를 다시 만들지 않습니다.
+  //    (예전: 01 삭제 후 02만 남으면 새 번호가 02 → 저장 시 다른 고객 인보이스를 덮어씀, 2026-11-20 수정)
+  var mx=0;
+  invoices.forEach(function(i){
+    var id=String(i.id||'');if(id.indexOf(prefix)!==0)return;
+    var k=parseInt(id.slice(prefix.length),10);if(isFinite(k)&&k>mx)mx=k;
+  });
+  return prefix+String(mx+1).padStart(2,'0');
+}
+// 이 번호를 「지금 수정 중인 문서가 아닌」 다른 인보이스가 이미 쓰고 있는지
+function invNumTaken(num){
+  num=String(num||'').trim();if(!num)return null;
+  return invoices.find(function(i){return i.id===num&&i._docId&&i._docId!==window._invEditDocId;})||null;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -5695,8 +5706,19 @@ async function saveInv(){
   try{
     // 수정 중이던 문서가 있으면 그 문서를 덮어쓰고, 없을 때만 새로 만듭니다.
     //  · 번호(인보이스번호)로만 찾으면 번호가 바뀐 순간 새 인보이스가 하나 더 생깁니다.
-    var ex=(window._invEditDocId&&invoices.find(function(i){return i._docId===window._invEditDocId;}))
-           ||invoices.find(function(i){return i.id===inv.id;});
+    //  · ⚠️ 새 인보이스인데 번호가 이미 다른 인보이스에 있으면 덮어쓰지 않고 새 번호를 붙입니다.
+    //    (임시저장 복구·번호 직접 수정·중간 번호 삭제 때 다른 고객 인보이스가 사라지던 문제, 2026-11-20)
+    var ex=(window._invEditDocId&&invoices.find(function(i){return i._docId===window._invEditDocId;}))||null;
+    if(!ex){
+      var _tk=invNumTaken(inv.id);
+      if(_tk){
+        var _old=inv.id;inv.id=genId(inv.date||today());setVal('inv-num',inv.id);
+        showToast('⚠ '+_old+' 번호는 이미 '+(((_tk.customer||{}).name)||'다른 고객')+' 인보이스에 있어 '+inv.id+'(으)로 저장합니다',5000);
+      }
+    }else if(ex.id!==inv.id){
+      var _tk2=invNumTaken(inv.id);
+      if(_tk2){hideLoad();showToast('⚠ '+inv.id+' 번호는 이미 '+(((_tk2.customer||{}).name)||'다른 고객')+' 인보이스에 있습니다. 다른 번호로 바꿔 주세요',5000);return null;}
+    }
     if(ex&&ex._docId){await DB.collection('invoices').doc(ex._docId).set(inv);inv._docId=ex._docId;window._invEditDocId=ex._docId;}
     else{var ref=await DB.collection('invoices').add(inv);inv._docId=ref.id;window._invEditDocId=ref.id;}
     autoSaveCust(inv.customer);
@@ -8098,6 +8120,9 @@ async function init(){
       window.__hhcReady&&window.__hhcReady();
       invoices=snap.docs.map(function(d){return Object.assign({},d.data(),{_docId:d.id});});
       lsSet(LINV,JSON.stringify(invoices));
+      // 새 인보이스 번호는 처음에 휴대폰에 남아 있던 옛 목록으로 만들어집니다.
+      //  최신 목록이 도착했을 때 그 번호가 이미 다른 인보이스에 있으면 바로 새 번호로 바꿉니다. (2026-11-20)
+      try{if(!window._invEditDocId&&invNumTaken(val('inv-num')))setVal('inv-num',genId(val('inv-date')||today()));}catch(_e){}
       autoUpdateInvoiceStatus();
       renderList();renderAcc();renderYearTabs();setSS('on');
       renderRecentCustChips();
@@ -8294,7 +8319,10 @@ function saveInvDraft(){
 function scheduleInvDraft(){_invDraftDirty=true;clearTimeout(_invDraftTimer);_invDraftTimer=setTimeout(saveInvDraft,1500);}
 function clearInvDraft(){_invDraftDirty=false;try{localStorage.removeItem(INV_DRAFT);}catch(e){}var ind=$('inv-autosave-ind');if(ind)ind.textContent='';var b=$('inv-draft-banner');if(b)b.remove();}
 function loadInvDraft(d){
-  setVal('inv-num',d.id);setVal('inv-date',d.date);setVal('inv-due',d.due);setVal('inv-status',d.status||'billing');setVal('inv-currency',d.currency||'MYR');
+  window._invEditDocId='';
+  // 임시저장 번호가 그사이 다른 인보이스에 쓰였으면 새 번호로 바꿉니다 (덮어쓰기 방지)
+  var _dn=d.id;if(invNumTaken(_dn)||!_dn)_dn=genId(d.date||today());
+  setVal('inv-num',_dn);setVal('inv-date',d.date);setVal('inv-due',d.due);setVal('inv-status',d.status||'billing');setVal('inv-currency',d.currency||'MYR');
   var c=d.customer||{};
   setVal('c-name',c.name);setVal('c-phone',c.phone||'+60');setVal('c-email',c.email);setVal('c-addr',c.addr);setVal('c-biz',c.biz);setVal('c-member',c.member);
   setVal('tax-rate',d.taxRate||'0');
