@@ -312,6 +312,11 @@ select.in{text-overflow:ellipsis;padding-right:28px}
     <div class="sub-t">어디에 보일까요?</div>
     <div class="chk"><label><input type="checkbox" id="a-w-home">홈페이지</label><label><input type="checkbox" id="a-w-card">전자명함</label><label><input type="checkbox" id="a-w-event">이벤트 안내장</label></div>
   </div>
+  <div class="card" id="a-ev-box" hidden>
+    <h3>🎉 무상적립 이벤트 배수</h3>
+    <div class="hint">멤버십 안내장 · 공동계약 안내장 · 홈페이지 · 전자명함 · 스마트 절약(/smart) · 고객관리 멤버십 발송 문구가 모두 이 설정을 따릅니다. 이벤트를 <b>끝낼 때는 위 「고객에게 보이기」를 끄세요</b> — 기본 적립금(1배)으로 계산됩니다. 배수를 바꾸면 아래 제목의 「2배」 글자도 함께 고쳐 주세요.</div>
+    <div class="seg" id="a-mult" style="margin-top:10px"></div>
+  </div>
   <div class="card">
     <h3><span class="no">1</span>내용</h3>
     <div class="hint">아래 상자가 홈페이지에 보이는 카드 모양입니다.</div>
@@ -1293,7 +1298,7 @@ const ALW_SEED=[
    d_ko:'멤버십 패키지 신규 가입 고객 대상 · 기간 한정. 재계약 시 특별 적립 혜택도 드립니다.',d_en:'For new membership package sign-ups · limited period. Special credit is also given on renewal.',
    how_ko:'✔ 가입 즉시 적립 · 마이페이지에서 잔액 확인',how_en:'✔ Credited on sign-up · check your balance on MY PAGE',
    dt_ko:'기간 한정',dt_en:'Limited period',ct_ko:'',ct_en:'',cd_ko:'',cd_en:'',
-   tag:false,teal:false,link:'/membership',home:true,card:false,event:false,calc:null},
+   tag:false,teal:false,link:'/membership',home:true,card:false,event:false,calc:null,mult:2},
   {id:'points',on:true,val:'P',rb_ko:'',rb_en:'',
    t_ko:'해피포인트 1% 적립',t_en:'Happy Points · earn 1%',
    d_ko:'결제 RM 100마다 RM 1 · 유효기간 없이 현금처럼',d_en:'RM 1 per RM 100 · no expiry, use like cash',
@@ -1338,6 +1343,7 @@ function cleanAlw(a){
   if(!/^\/[A-Za-z0-9_\-\/#?=&.]*$/.test(o.link))o.link='/home';
   o.calc=(a.calc&&a.calc.it&&!calc(Object.assign({kind:'pct'},a.calc)).err)?{it:a.calc.it,m:a.calc.m,q:Math.max(1,parseInt(a.calc.q,10)||1),kind:a.calc.kind||'pct',val:+a.calc.val}:null;
   if(!o.id)o.id='a'+Date.now().toString(36);
+  if(o.id==='pkg10')o.mult=MULTS.includes(+a.mult)?+a.mult:2;
   return o;
 }
 window.alwMove=function(i,d){const L=alwList(),j=i+d;if(j<0||j>=L.length)return;[L[i],L[j]]=[L[j],L[i]];saveAlw(L,'순서를 바꿨습니다');};
@@ -1360,6 +1366,7 @@ function showAlw(){
   $('a-link').innerHTML=LINKS_OPT.map(x=>'<option value="'+x[0]+'"'+(x[0]===AED.link?' selected':'')+'>'+esc(x[1])+' ('+x[0]+')</option>').join('')+'<option value="_"'+(isStd?'':' selected')+'>직접 입력</option>';
   $('a-link2').hidden=isStd;$('a-link2').value=isStd?'':(AED.link||'');
   $('a-calc-on').checked=!!(AED.calc&&AED.calc.it);
+  $('a-ev-box').hidden=AED.id!=='pkg10';renderMult();
   aRefresh();window.scrollTo(0,0);
 }
 function aRefresh(){
@@ -1381,6 +1388,13 @@ function aRefresh(){
     '<b>'+esc(P.aTxt(a,'t',ko)||'제목')+'</b><p>'+esc(P.aTxt(a,'d',ko)||'설명')+'</p>'+(P.aTxt(a,'how',ko)?'<div class="mh">'+esc(P.aTxt(a,'how',ko))+'</div>':'')+
     (P.aTxt(a,'dt',ko)?'<div class="md">'+esc(P.aTxt(a,'dt',ko))+'</div>':'')+'</div>';
 }
+/* 🎉 패키지 무상적립 이벤트 배수 (pkg10 만) */
+const MULTS=[1.5,2,2.5,3];
+function renderMult(){
+  const cur=+AED.mult||2;
+  $('a-mult').innerHTML=MULTS.map(m=>'<button type="button" class="'+(m===cur?'on':'')+'" onclick="setMult('+m+')">'+m+'배</button>').join('');
+}
+window.setMult=function(m){AED.mult=m;adirty=true;renderMult();};
 function renderACalc(){
   const c=AED.calc,k=c.kind||'pct';
   $('a-calc').innerHTML='<div class="two sel"><select class="in" onchange="acSet(\'it\',this.value)">'+itemOpts(c.it)+'</select>'+

@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<script src="/hhc-ev.js"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>스마트한 비용 절감 — 회원제 패키지 · 전자상품권 | Happy Home Care</title>
 <meta name="format-detection" content="telephone=no">
@@ -26,7 +27,8 @@
      스마트 절약 안내장 /smart (2026-11-13)
        · 전자명함 「회원 전용 패키지상품 안내」 → 이 화면
        · 회원제 패키지 카드(왼쪽·위) 누르면 /membership, 전자상품권 카드 누르면 /evoucher
-       · 프로모션(무상적립금 2배)이 끝나면 PROMO=false → 기본 BONUS(+10~30%)로 표시
+       · 프로모션(무상적립금 이벤트) 진행·종료와 배수는 관리자 「월별 프로모션 → 상시 혜택 → 패키지 신규가입 무상적립금」을 따름 (hhc-ev.js)
+         끝나면 기본 BONUS(+10~30%)로 표시
        · 주소 끝 ?lang=en → 영문
      ══════════════════════════════════════════════════════════════ -->
 <style>
@@ -398,8 +400,17 @@ body.bk .sm-wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
 
 <script>
 (function(){
-  /* 프로모션(패키지 신규가입 무상적립금 2배) 진행 중이면 true — 끝나면 false 로 바꾸면 기본 BONUS 로 표시 */
-  var PROMO = true;
+  /* 프로모션(패키지 신규가입 무상적립금 이벤트) — 진행 여부 · 배수는 관리자 프로모션 설정(hhc-ev.js)을 따릅니다.
+     문구 속 {M}=배수 · {MW}/{mw}=Double(×3) · {SP}=스페셜 이용 한도 · {DC}=최대 상시할인 효과 % */
+  var PROMO = true, M = 2;
+  function evSync(){var e=window.HHCEv?HHCEv.get():{on:true,mult:2};PROMO=!!e.on;M=+e.mult||2;}
+  evSync();
+  function fx(t){
+    var mm=PROMO?M:1, w=M===2?'Double':'×'+M;
+    var dc=Math.max.apply(null,[[2500,250],[5000,750],[10000,2000],[20000,5000],[50000,15000]].map(function(x){return Math.floor(x[1]*mm/(x[0]+x[1]*mm)*100);}));
+    return String(t).replace(/\{M\}/g,M).replace(/\{MW\}/g,w).replace(/\{mw\}/g,M===2?'double':'×'+M)
+      .replace(/\{SP\}/g,'RM '+(50000+15000*M).toLocaleString('en-MY')).replace(/\{DC\}/g,dc);
+  }
   var TIERS = [
     {ko:'로얄', en:'Royal', b:10},
     {ko:'골드', en:'Gold', b:15},
@@ -412,14 +423,14 @@ body.bk .sm-wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
       kicker:'HAPPY HOMECARE',
       h1:'완벽한 서비스,<br><em>스마트한 비용 절감.</em>',
       sub:'같은 프리미엄 케어를 더 합리적으로 — 해피홈케어 고객님만의 세 가지 절약 팁',
-      subP:'지금 회원제 패키지 가입 시 적립금 2배 — 프리미엄 케어를 가장 합리적으로',
-      st2:'적립금', st3:'2배', st4:'프로모션 진행중',
+      subP:'지금 회원제 패키지 가입 시 적립금 {M}배 — 프리미엄 케어를 가장 합리적으로',
+      st2:'적립금', st3:'{M}배', st4:'프로모션 진행중',
       vTg:'TIP 02 · 가볍게 시작', vTt:'전자상품권', vLb:'할인 구매', vPay:'결제 RM 900',
       v1:'에어컨부터 매트리스까지 모든 서비스', v2:'휴대폰으로 전하는 품격 있는 선물',
       vRc:'<b>추천</b> · 연 1~2회 이용, 감사 선물', vGo:'전자상품권 안내 보기',
-      mTg:'TIP 01 · 자주 이용한다면', mTgP:'TIP 01 · 지금 가입하면 적립금 2배', mTt:'회원제 패키지', mUp:'최대 적립',
+      mTg:'TIP 01 · 자주 이용한다면', mTgP:'TIP 01 · 지금 가입하면 적립금 {M}배', mTt:'회원제 패키지', mUp:'최대 적립',
       lg1:'기본 BONUS', lg2:'프로모션 적용시',
-      m1:'유효기간 없는 선불 적립 · 최대 37% 상시할인 효과', m2:'출장점검비 · 최소청구 면제 등 부가혜택 최대 11가지',
+      m1:'유효기간 없는 선불 적립 · 최대 {DC}% 상시할인 효과', m2:'출장점검비 · 최소청구 면제 등 부가혜택 최대 11가지',
       mRc:'<b>추천</b> · 정기 관리, 장기 사용(1년 이상)', mGo:'패키지 혜택 자세히 보기',
       pTg:'TIP 03 · 모든 고객', pFree:'가입 없이 자동', pTt:'해피포인트', pLb:'자동 적립',
       pEx:'RM 100 결제마다 <b>RM 1</b> 적립',
@@ -429,7 +440,7 @@ body.bk .sm-wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
       tr1:'전문 장비 분해 세척', tr2:'점검보고서 제공', tr3:'한국어 상담',
       ftH:'현명한 선택, 지금 상담해 보세요',
       nt:'BONUS % = 납부액 대비 추가 적립금 (예: 스페셜해피홈 RM 50,000 납부 → RM 65,000 사용) · 가정용 기준 · 상품권 1회 최대 2장, 환불·현금 교환 불가',
-      ntP:'적립금 2배: 프로모션 기간 중 회원제 패키지 신규 가입 시 · BONUS % = 납부액 대비 추가 적립금 (예: 스페셜해피홈 RM 50,000 납부 → RM 80,000 사용) · 가정용 기준 · 상품권 1회 최대 2장, 환불·현금 교환 불가',
+      ntP:'적립금 {M}배: 프로모션 기간 중 회원제 패키지 신규 가입 시 · BONUS % = 납부액 대비 추가 적립금 (예: 스페셜해피홈 RM 50,000 납부 → {SP} 사용) · 가정용 기준 · 상품권 1회 최대 2장, 환불·현금 교환 불가',
       wa:'안녕하세요. 회원제 패키지 · 전자상품권 상담 원합니다.',
       back:'명함으로', title:'스마트한 비용 절감 — 회원제 패키지 · 전자상품권 | Happy Home Care'
     },
@@ -437,14 +448,14 @@ body.bk .sm-wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
       kicker:'HAPPY HOMECARE',
       h1:'Perfect service,<br><em>smarter savings.</em>',
       sub:'The same premium care at better value — three ways to save',
-      subP:'Join a membership now and get double bonus credit',
-      st2:'BONUS', st3:'×2', st4:'PROMOTION ON',
+      subP:'Join a membership now and get {mw} bonus credit',
+      st2:'BONUS', st3:'×{M}', st4:'PROMOTION ON',
       vTg:'TIP 02 · Easy start', vTt:'E-Voucher', vLb:'off face value', vPay:'You pay RM 900',
       v1:'Every service, aircon to mattress', v2:'A thoughtful gift, sent by phone',
       vRc:'<b>Ideal for</b> · 1–2 visits a year, gifting', vGo:'See e-voucher details',
-      mTg:'TIP 01 · For regular care', mTgP:'TIP 01 · Double bonus now', mTt:'Membership Package', mUp:'Up to',
+      mTg:'TIP 01 · For regular care', mTgP:'TIP 01 · {MW} bonus now', mTt:'Membership Package', mUp:'Up to',
       lg1:'Standard bonus', lg2:'With promotion',
-      m1:'Prepaid credit, no expiry · up to 37% off, always', m2:'Free call-outs, no min. charge · up to 11 perks',
+      m1:'Prepaid credit, no expiry · up to {DC}% off, always', m2:'Free call-outs, no min. charge · up to 11 perks',
       mRc:'<b>Ideal for</b> · Regular care, 1+ year use', mGo:'See membership benefits',
       pTg:'TIP 03 · Every customer', pFree:'Automatic, no sign-up', pTt:'Happy Points', pLb:'back automatically',
       pEx:'<b>RM 1</b> for every RM 100 you pay',
@@ -454,7 +465,7 @@ body.bk .sm-wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
       tr1:'Professional deep cleaning', tr2:'Detailed inspection reports', tr3:'Korean &amp; English support',
       ftH:'Make the smart choice — talk to us',
       nt:'BONUS % = extra credit on amount paid (e.g. Special Happy Home: pay RM 50,000, use RM 65,000) · Residential rates · Max 2 vouchers per service, non-refundable',
-      ntP:'Double bonus: new package sign-ups during the promotion · BONUS % = extra credit on amount paid (e.g. Special Happy Home: pay RM 50,000, use RM 80,000) · Residential rates · Max 2 vouchers per service, non-refundable',
+      ntP:'{MW} bonus: new package sign-ups during the promotion · BONUS % = extra credit on amount paid (e.g. Special Happy Home: pay RM 50,000, use {SP}) · Residential rates · Max 2 vouchers per service, non-refundable',
       wa:'Hello, I would like to ask about the e-voucher and membership packages.',
       back:'Back to card', title:'Smarter Savings — Membership · E-Voucher | Happy Home Care'
     }
@@ -464,11 +475,11 @@ body.bk .sm-wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
   var fromCard = q.get('from') === 'card' || (document.referrer || '').indexOf('/namecard') > -1 || /\/nce?(\?|$)/.test(document.referrer || '');
 
   function bars(L){
-    var h = '', k = PROMO ? 2.4 : 4.8;
+    var h = '', k = PROMO ? 144 / (30 * M) : 4.8;
     TIERS.forEach(function(t, i){
-      var total = PROMO ? t.b * 2 : t.b, last = i === TIERS.length - 1;
+      var total = PROMO ? Math.round(t.b * M) : t.b, last = i === TIERS.length - 1;
       h += '<div class="sm-bar' + (last ? ' top' : '') + '"><span class="num">+' + total + '%</span>' +
-        '<div class="st' + (PROMO ? '' : ' solo') + '">' + (PROMO ? '<div class="up" style="height:' + Math.round(t.b * k) + 'px"></div>' : '') +
+        '<div class="st' + (PROMO ? '' : ' solo') + '">' + (PROMO ? '<div class="up" style="height:' + Math.round(t.b * (M - 1) * k) + 'px"></div>' : '') +
         '<div class="dn" style="height:' + Math.round(t.b * k) + 'px"></div></div>' +
         '<span class="nm">' + t[L] + '</span></div>';
     });
@@ -481,14 +492,14 @@ body.bk .sm-wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
     [].forEach.call(document.querySelectorAll('[data-t]'), function(el){
       var k = el.getAttribute('data-t');
       if(PROMO && L[k + 'P'] != null) k = k + 'P';
-      if(L[k] != null) el.innerHTML = L[k];
+      if(L[k] != null) el.innerHTML = fx(L[k]);
     });
     document.getElementById('smSt').style.display = PROMO ? '' : 'none';
-    document.getElementById('mBig').textContent = '+' + (PROMO ? 60 : 30) + '%';
+    document.getElementById('mBig').textContent = '+' + Math.round(PROMO ? 30 * M : 30) + '%';
     var mb = document.getElementById('mBars'); if(mb) mb.innerHTML = bars(lang);
     var lg = document.getElementById('mLgd'); if(lg) lg.children[1].style.display = PROMO ? '' : 'none';
     if(window.SMC) SMC.lang(lang);
-    document.getElementById('smNt').innerHTML = PROMO ? L.ntP : L.nt;
+    document.getElementById('smNt').innerHTML = fx(PROMO ? L.ntP : L.nt);
     var sfx = '?from=smart' + (lang === 'en' ? '&lang=en' : '');
     document.getElementById('goV').href = 'evoucher' + sfx;
     document.getElementById('goM').href = 'membership' + sfx;
@@ -519,6 +530,7 @@ body.bk .sm-wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
     });
   });
   render();
+  window.__smRender = function(){ evSync(); render(); };
 
   if(fromCard){
     var b = document.getElementById('hhcBackToCard');
@@ -534,7 +546,8 @@ body.bk .sm-wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
 /* 💳 회원제 패키지 3D 카드 — 3초마다 등급 순환 + 천천히 회전 · 빛줄기 (membership.html 과 같은 카드) */
 (function(){
   var cd=document.getElementById('smCard'),ln=document.getElementById('smMcl');if(!cd||!ln)return;
-  var MULT=2;   /* 무상적립 배수 — 위 PROMO(2배 이벤트)와 맞춰 주세요. 이벤트가 끝나면 1 */
+  /* 무상적립 배수 — 관리자 프로모션 설정(hhc-ev.js)을 따름. 이벤트가 끝나면 1 */
+  function MX(){var e=window.HHCEv?HHCEv.get():{on:true,mult:2};return e.on?(+e.mult||2):1;}
   var K=[['royal','Royal','로얄',2500,250],['gold','Gold','골드',5000,750],['diamond','Diamond','다이아몬드',10000,2000],['titanium','Titanium','티타늄',20000,5000],['special','Special Happy Home','스페셜 해피홈',50000,15000]];
   var MARK='<svg viewBox="0 0 100 100" aria-hidden="true"><g fill="currentColor"><rect x="15" y="14" width="19" height="74" rx="3.5"/><rect x="66" y="14" width="19" height="74" rx="3.5"/><path d="M50 28 85 51v16L50 43 15 67V51Z"/></g></svg>';
   var CHIP='<svg viewBox="0 0 46 36" aria-hidden="true"><defs><linearGradient id="smChipG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff4cf"/><stop offset=".45" stop-color="#d9b867"/><stop offset="1" stop-color="#9c7a2c"/></linearGradient></defs><rect x=".5" y=".5" width="45" height="35" rx="6" fill="url(#smChipG)" stroke="rgba(0,0,0,.35)"/><g fill="none" stroke="rgba(70,50,10,.55)" stroke-width="1"><path d="M15 .5v11c0 2-1 3-3 3H.5M31 .5v11c0 2 1 3 3 3h11.5M15 35.5v-11c0-2-1-3-3-3H.5M31 35.5v-11c0-2 1-3 3-3h11.5"/><rect x="15" y="11" width="16" height="14" rx="3"/><path d="M23 .5V11M23 25v10.5"/></g></svg>';
@@ -542,7 +555,7 @@ body.bk .sm-wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
   var i=1,L=document.documentElement.lang==='en'?'en':'ko',touchT=0,flipT=0;
   function rm(n){return 'RM '+Number(n).toLocaleString('en-MY');}
   function draw(){
-    var t=K[i],b=t[4]*MULT,u=t[3]+b,d=Math.floor(b/u*100),en=L==='en';
+    var t=K[i],b=t[4]*MX(),u=t[3]+b,d=Math.floor(b/u*100),en=L==='en';
     cd.className='mb-card t-'+t[0];
     cd.innerHTML='<span class="edge" aria-hidden="true"></span><span class="glare" aria-hidden="true"></span>'+
       '<div class="r1"><span class="br"><span class="mk">'+MARK+'</span><span class="bn">HAPPY HOME CARE<small>PREMIUM MEMBERSHIP</small></span></span><b class="tn">'+(t[0]==='special'?'SPECIAL':t[1].toUpperCase())+'</b></div>'+
@@ -568,6 +581,8 @@ body.bk .sm-wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
     cd.style.setProperty('--ry',((px-.5)*34).toFixed(1)+'deg');cd.style.setProperty('--rx',((.5-py)*24).toFixed(1)+'deg');cd.style.setProperty('--mx',(px*100).toFixed(0)+'%');cd.style.setProperty('--my',(py*100).toFixed(0)+'%');});
   sc.addEventListener('pointerleave',function(){touchT=performance.now();cd.classList.remove('drag');});
   window.SMC={lang:function(l){L=l==='en'?'en':'ko';draw();}};
+  /* 🎉 이벤트 설정이 바뀌어 있으면 카드와 위 안내 문구를 다시 그림 */
+  if(window.HHCEv)HHCEv.on(function(){draw();if(window.__smRender)window.__smRender();});
   draw();requestAnimationFrame(idle);
   setInterval(function(){if(performance.now()-touchT>3000&&!document.hidden)next();},3200);
 })();

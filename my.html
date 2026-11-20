@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<script src="/hhc-ev.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Happy Home Care · 마이페이지</title>
 <meta name="theme-color" content="#0B1833">
@@ -986,7 +987,10 @@ const PROMO={
    cats:['Air-con cleaning (all types)','Washer · dryer cleaning (all types)','Kitchen hood · fridge cleaning','Mattress · sofa cleaning','Curtain collection laundry'],
    notes:[['✅','Eligible','Air-con, washer, dryer, kitchen hood and fridge cleaning, mattress and sofa cleaning'],['🚫','Not included','Items not listed, parts, materials, repairs and call-out fees'],['⚙️','How it applies','No request needed — applied automatically at booking and shown on your invoice'],['➕','Combining','Not with other coupons or promotions · always-on offers (curtain 30% · group booking) can be combined'],['💡','Minimum charge','RM 320']],
    always:[['30%','30% off curtain on-site cleaning','Washed in place, no need to take them down'],['10%','Book together with neighbours','5+ homes · 3+ air-cons together, up to 10% off'],['2×','Double bonus on a new package','10th anniversary · limited time'],['1%','Happy Points','RM 1 for every RM 100 paid · use like cash']]},
- tiers:[['R','로얄','Royal',2500,500,20,3000],['G','골드','Gold',5000,1500,30,6500,1],['D','다이아몬드','Diamond',10000,4000,40,14000],['T','티타늄','Titanium',20000,10000,50,30000],['S','스페셜 해피홈','Special Happy Home',50000,30000,60,80000]],
+ /* 등급 [표시, 이름, 영문, 납부, 기본 무상적립, (계산) %, (계산) 이용 한도, 인기] — 무상적립 이벤트 배수는 관리자 프로모션 설정(hhc-ev.js)을 따름 */
+ tiersBase:[['R','로얄','Royal',2500,250],['G','골드','Gold',5000,750,0,0,1],['D','다이아몬드','Diamond',10000,2000],['T','티타늄','Titanium',20000,5000],['S','스페셜 해피홈','Special Happy Home',50000,15000]],
+ ev(){const e=window.HHCEv?HHCEv.get():{on:true,mult:2};return {on:!!e.on,m:e.on?(+e.mult||2):1,mult:+e.mult||2,tag:e.tag||['10주년 기념','10th anniversary']};},
+ get tiers(){const m=this.ev().m;return this.tiersBase.map(t=>{const b=t[4]*m;return [t[0],t[1],t[2],t[3],b,Math.round(b/t[3]*100),t[3]+b,t[7]];});},
  gv:[300,500,1000,2000]
 };
 (function(){
@@ -1111,9 +1115,10 @@ SX.promo=function(tab){PMT=tab||PMT;const E=LANG==='en',P=PROMO[LANG],tx=(k,e)=>
       '<button class="pm-cta" data-sx="book">'+tx('할인가로 예약 신청하기','Book at the discount price')+' ›</button>';
   }else if(PMT==='pk'){
     const curT=(D.tier||'').toLowerCase();
-    b='<div class="pm-x2"><b>2×</b><span>'+tx('10주년 기념 · 기간 한정<br>패키지 신규가입 시 무상적립금 2배','10th anniversary · limited time<br>Double bonus credit on a new package')+'</span></div>'+
-      '<div class="pm-h">'+tx('이렇게 계산돼요 · 골드 예시','How it works · Gold example')+'</div><div class="pm-calc"><div><small>'+tx('납부','Pay')+'</small><b>RM 5,000</b></div><i>+</i><div><small>'+tx('무상적립','Bonus')+'</small><b>RM 1,500</b></div><i>=</i><div class="lim"><small>'+tx('이용 한도','You can use')+'</small><b>RM 6,500</b></div></div>'+
-      '<div class="pm-h">'+tx('등급 안내 (이벤트 적용 금액)','Tiers (with the event)')+'</div><div class="pm-l">'+PROMO.tiers.map(t=>{const me=curT&&(t[2].toLowerCase()===curT||(curT==='special'&&t[0]==='S'));
+    const EVn=PROMO.ev(),GT=PROMO.tiers[1];
+    b=(EVn.on?'<div class="pm-x2"><b>'+EVn.mult+'×</b><span>'+tx(EVn.tag[0]+' · 기간 한정<br>패키지 신규가입 시 무상적립금 '+EVn.mult+'배',EVn.tag[1]+' · limited time<br>'+(EVn.mult===2?'Double':'×'+EVn.mult)+' bonus credit on a new package')+'</span></div>':'')+
+      '<div class="pm-h">'+tx('이렇게 계산돼요 · 골드 예시','How it works · Gold example')+'</div><div class="pm-calc"><div><small>'+tx('납부','Pay')+'</small><b>RM '+f0(GT[3])+'</b></div><i>+</i><div><small>'+tx('무상적립','Bonus')+'</small><b>RM '+f0(GT[4])+'</b></div><i>=</i><div class="lim"><small>'+tx('이용 한도','You can use')+'</small><b>RM '+f0(GT[6])+'</b></div></div>'+
+      '<div class="pm-h">'+(EVn.on?tx('등급 안내 (이벤트 적용 금액)','Tiers (with the event)'):tx('등급 안내','Tiers'))+'</div><div class="pm-l">'+PROMO.tiers.map(t=>{const me=curT&&(t[2].toLowerCase()===curT||(curT==='special'&&t[0]==='S'));
         return '<div class="pm-tr'+(me?' cur':'')+'"><span class="tg">'+t[0]+'</span><span><b>'+(E?t[2]:t[1])+(t[7]?'<em>'+tx('인기','Popular')+'</em>':'')+(me?'<em class="me">'+tx('현재 등급','Your tier')+'</em>':'')+'<em class="pc">+'+t[5]+'%</em></b><small>RM '+f0(t[3])+' '+tx('납부','paid')+' + '+f0(t[4])+' '+tx('적립','bonus')+'</small></span><span class="lm"><small>'+tx('이용 한도','Use up to')+'</small><b>RM '+f0(t[6])+'</b></span></div>';}).join('')+'</div>'+
       '<div class="pm-h">'+tx('회원 혜택','Member benefits')+'</div><div class="pm-l">'+[['🛠',tx('무상 점검 출장 무제한','Unlimited free inspection visits')],['➕',tx('할인행사 할인금액 50% 추가 할인 (예: RM10 할인 행사 시 RM5 적용)','Extra 50% of promotion discounts (e.g. RM10 promotion discount → RM5 applied)')],['🧾',tx('최소청구비용 면제','No minimum charge')],['🌀',tx('실링팬 무상 청소 · 전등/콘센트 무상 교체 (등급별)','Free ceiling-fan cleaning · light/socket replacement (by tier)')],['⏳',tx('유효기간 없음 · 이용할 때마다 자동 차감','No expiry · deducted automatically')]].map(n=>'<div class="pm-r"><span class="ic">'+n[0]+'</span><span class="tx"><b>'+n[1]+'</b></span></div>').join('')+'</div>'+
       '<div class="pm-nt" style="margin-top:12px">'+tx('※ 적립금 잔액이 RM 500 이하이면 등급별 추가 혜택은 적용되지 않아요.<br>※ 결제 확인 즉시 효력이 발생하며 환불은 불가해요. 불가피한 사유로 사전 통보 시 양도 또는 전자상품권 전환이 가능해요.','※ Tier extras don’t apply when the balance is RM 500 or less.<br>※ Effective on payment and non-refundable; with prior notice it can be transferred or converted to an e-voucher.')+'</div>'+
@@ -1257,7 +1262,7 @@ function buildFromApi(j,svc){
   const ev=evtLive(j.promos),al=(j.promos||[]).find(p=>p&&p.month==='_always');
   NOPROMO=!ev;
   const J=v=>{try{return typeof v==='string'?JSON.parse(v):(v||[]);}catch(e){return [];}};
-  if(al){const ai=J(al.items);PROMO.ko.always=ai.map(i=>[String(i.val||''),i.t_ko||'',String(i.d_ko||'').split('\n')[0]]);PROMO.en.always=ai.map(i=>[String(i.val||''),enOnly(i.t_en||i.t_ko,'Always-on offer'),enOnly(String(i.d_en||i.d_ko||'').split('\n')[0],'')]);}
+  if(al){const ai=J(al.items).filter(i=>i&&i.on!==false);PROMO.ko.always=ai.map(i=>[String(i.val||''),i.t_ko||'',String(i.d_ko||'').split('\n')[0]]);PROMO.en.always=ai.map(i=>[String(i.val||''),enOnly(i.t_en||i.t_ko,'Always-on offer'),enOnly(String(i.d_en||i.d_ko||'').split('\n')[0],'')]);}
   if(ev){const it=J(ev.items).filter(r=>r&&+r.val>0),nt=J(ev.notes),disp=J(ev.disp)||{};
     const mo=+String(ev.month||ev.from).slice(5,7);PROMO.to=String(ev.to);PROMO.from=String(ev.from);
     const pc=it.filter(r=>r.kind==='pct').sort((a,b)=>b.val-a.val)[0],pr=it.filter(r=>r.kind!=='pct'&&r.kind!=='off').sort((a,b)=>a.val-b.val)[0];
