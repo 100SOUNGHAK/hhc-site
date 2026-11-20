@@ -20,12 +20,60 @@ const EN = {
   'moveout':   ['og-move-en.jpg',   'Moving out — 2 services you need | Happy Home Care', 'Air-con · curtains before you hand over the keys'],
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 고객 문서 페이지를 링크로 「바로」 보낼 때의 미리보기 그림 (2026-11-21)
+//  결제 계좌(/pay)처럼 짧은 링크(/r)를 거치지 않는 발송은 페이지 자체 머리글을 읽는데,
+//  회사 아이콘(icon-512)이거나 그림 설정이 없었습니다 → 문서에 맞는 그림(og-*.jpg)으로.
+//  영어 링크(lang=en · 인보이스는 ml=en · my-en)는 영어 그림. 제목·설명은 페이지 것을 그대로 두고,
+//  페이지에 제목 태그가 없을 때만 아래 이름을 넣습니다.
+// ─────────────────────────────────────────────────────────────────────────────
+const DOC = {
+  'pay': ['pay', '결제 계좌 안내', 'Payment details'], 'points': ['points', '해피포인트 안내', 'Happy Point'],
+  'workpermit': ['permit', '작업방문 등록 안내', 'Work permit'], 'evoucher': ['voucher', '전자상품권 안내', 'E-voucher'],
+  'coupon': ['voucher', '상품권 · 할인권', 'Gift voucher'], 'quote': ['quote', '견적서', 'Quotation'],
+  'admin': ['contract', '계약서 · 이용내역', 'Contract & usage'], 'customer': ['contract', '계약서 · 이용내역', 'Contract & usage'],
+  'booking': ['booking', '예약서', 'Booking'], 'hhc-invoice': ['invoice', '인보이스', 'Invoice'], 'inv': ['invoice', '인보이스', 'Invoice'],
+  'repair': ['repair', '방문 결과 보고서', 'Service visit report'],
+  'my': ['my', 'MY PAGE', 'MY PAGE'], 'my-en': ['my', 'MY PAGE', 'MY PAGE'], 'mypage': ['my', 'MY PAGE', 'MY PAGE'],
+};
+// 마이페이지 링크의 발송 종류(f=) → 그림 (functions/r.js 와 같은 표)
+const MY_F = { py:'invoice', ivl:'paid', rw:'points', ip:'svcreport', ct:'contract', cp:'voucher', qt:'quote', bk:'booking',
+               rq:'received', mm:'repair', ap:'app', sv:'reqform', cr:'care' };
+const PK = { sorry:'pt-sorry', referral:'pt-referral', review:'pt-review' };
+
+async function docPreview(context, url, key){
+  const res = await context.next();
+  const type = res.headers.get('content-type') || '';
+  if (!res.ok || type.indexOf('text/html') < 0) return res;
+  const q = url.searchParams, [base, tk, te] = DOC[key];
+  const en = (key === 'hhc-invoice' || key === 'inv') ? q.get('ml') === 'en' : (q.get('lang') === 'en' || key === 'my-en');
+  let img = base;
+  if (base === 'my'){ const f = q.get('f') || ''; img = MY_F[f] || 'my'; if (f === 'rw' && PK[q.get('pk')]) img = PK[q.get('pk')]; }
+  const src = `${SITE}/og-${img}${en ? '-en' : ''}.jpg`, title = (en ? te : tk) + ' | Happy Home Care';
+  let hasTitle = false, hasSite = false;
+  const drop = { element(el){ el.remove(); } };
+  return new HTMLRewriter()
+    .on('meta[property="og:image"], meta[property="og:image:width"], meta[property="og:image:height"], meta[property="og:image:type"], meta[name="twitter:image"], meta[name="twitter:card"]', drop)
+    // 영어 링크는 페이지의 한국어 제목·설명 대신 영어 제목
+    .on('meta[property="og:title"], meta[name="twitter:title"]', { element(el){ if (en) el.setAttribute('content', title); if (el.getAttribute('property') === 'og:title') hasTitle = true; } })
+    .on('meta[property="og:description"], meta[name="twitter:description"]', { element(el){ if (en) el.setAttribute('content', te + ' · Happy Home Care'); } })
+    .on('meta[property="og:site_name"]', { element(){ hasSite = true; } })
+    .on('head', { element(el){ el.onEndTag(function(end){
+        end.before((hasTitle ? '' : `<meta property="og:title" content="${title}">`) +
+                   (hasSite ? '' : '<meta property="og:site_name" content="Happy Home Care">') +
+                   `<meta property="og:image" content="${src}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">` +
+                   `<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${src}">`, { html: true });
+      }); } })
+    .transform(res);
+}
+
 export async function onRequest(context){
   const { request } = context;
   if (request.method !== 'GET') return context.next();
   const url = new URL(request.url);
   const m = /^\/([a-z-]+?)(\.html)?$/.exec(url.pathname);
   const key = m && m[1];
+  if (key && DOC[key]) return docPreview(context, url, key);
   if (!key || !EN[key] || url.searchParams.get('lang') !== 'en') return context.next();
 
   const res = await context.next();
