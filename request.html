@@ -585,6 +585,8 @@ body{background:var(--rq-soft)}
 .calc-box{border-radius:14px;margin-bottom:12px;box-shadow:var(--rq-e1)}
 .calc-teaser{padding:11px 13px!important;gap:10px!important}
 .calc-teaser em{display:none!important}
+.pick-it.qt{background:linear-gradient(120deg,#FFFBF0,#FDF4DD);border-color:#EBD39A}
+.pick-it.qt .nm b{white-space:normal;word-break:keep-all}
 /* 📐 간편 견적 배너 그림 (2026-11-20) — 팁 문구 대신 그림 한 장, 펼침 화살표는 오른쪽 아래 */
 .calc-box{background:#0a1a30!important;border:1px solid rgba(201,164,76,.6)}
 .calc-box::before{display:none}
@@ -1460,6 +1462,7 @@ function applyLang(){
   $('hero-sub').innerHTML=esc(l.heroSub).replace(/\n/g,'<br>');
   $('hs1').textContent=l.hs1;$('hs2').textContent=l.hs2;$('hs3').textContent=l.hs3;
   $('calc-ttl').textContent=l.calcTtl;
+  try{if(typeof rqQtNote==='function')rqQtNote();}catch(_e){}
   { const bn=$('calcBn'); if(bn){ bn.src=isEn()?'og-calc-en.jpg':'og-calc.jpg'; bn.alt=l.calcTtl; } }
   $('calc-sub').textContent=l.calcSub;
   $('calc-add-btn').textContent=l.calcAddBtn;
@@ -1914,11 +1917,12 @@ function renderPicked(){
       .map(c=>pkNoteHtml(c,'pick-note')).join('');
     el.innerHTML=notes+picked.map((p,i)=>{
       const c=catOf(p.catId);
-      const freeIn=p.free?'<input class="free-in" data-i="'+i+'" value="'+esc(p.text)+'" placeholder="'+esc(l.freePh)+'">':'';
-      return '<div class="pick-it">'+
-        '<span class="ic">'+c.ic+'</span>'+
-        '<div class="nm"><b>'+esc(itemTitle(p))+'</b><span>'+esc(catName(c))+'</span></div>'+
-        '<div class="qty-st"><button type="button" data-qm="'+i+'">−</button><b>'+p.qty+'</b><button type="button" data-qp="'+i+'">＋</button></div>'+
+      const freeIn=(p.free&&!p.qt)?'<input class="free-in" data-i="'+i+'" value="'+esc(p.text)+'" placeholder="'+esc(l.freePh)+'">':'';
+      // 📄 견적서에서 넘어온 항목(p.qt)은 고쳐 쓰는 칸·수량 없이 견적서 표시로만 (2026-11-20)
+      return '<div class="pick-it'+(p.qt?' qt':'')+'">'+
+        '<span class="ic">'+(p.qt?'📄':c.ic)+'</span>'+
+        '<div class="nm"><b>'+esc(itemTitle(p))+'</b><span>'+esc(p.qt?(isEn()?'Quotation':'견적서'):catName(c))+'</span></div>'+
+        (p.qt?'':'<div class="qty-st"><button type="button" data-qm="'+i+'">−</button><b>'+p.qty+'</b><button type="button" data-qp="'+i+'">＋</button></div>')+
         '<button type="button" class="pick-x" data-x="'+i+'">✕</button>'+
         freeIn+
       '</div>';
@@ -1982,6 +1986,23 @@ $('pk-bg').addEventListener('click',closePicker);
   });
   if(picked.length)renderPicked();
 })();
+// 📄 견적서에서 「서비스 의뢰 신청」으로 열면 (?qt=견적번호, 2026-11-20)
+//   · 견적 내용 한 줄은 위 ?pk= 로 의뢰 품목에 이미 담겨 있습니다 · 다른 품목도 함께 담을 수 있습니다
+//   · 의뢰 품목 칸 위에 안내 한 줄 + 관리자 알림 메일에 「견적서 기준 의뢰」 표시
+const RQ_QT=String(new URLSearchParams(location.search).get('qt')||'').trim().slice(0,40);
+if(RQ_QT){picked.forEach(function(p){if(p.free&&p.text&&p.text.indexOf(RQ_QT)>-1)p.qt=true;});if(picked.length)renderPicked();}
+function rqQtNote(){
+  if(!RQ_QT)return;
+  let n=$('rq-qt-note');
+  if(!n){const bd=document.querySelector('#card-items .card-body');if(!bd)return;
+    n=document.createElement('div');n.id='rq-qt-note';
+    n.style.cssText='display:flex;gap:9px;align-items:flex-start;background:linear-gradient(120deg,#FFF8E6,#FDF1D2);border:1px solid #EBD39A;color:#6B4E12;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:700;line-height:1.55;margin-bottom:12px;word-break:keep-all';
+    bd.insertBefore(n,bd.firstChild);}
+  n.innerHTML='<span style="font-size:17px;line-height:1.1">📄</span><span><b style="display:block;font-size:13px;color:#4A3408">'+
+    esc(isEn()?'Quotation '+RQ_QT+' added':'견적서 '+RQ_QT+' 내용이 담겼습니다')+'</b>'+
+    esc(isEn()?'Add other items too if you need them.':'다른 품목이 필요하시면 함께 담아 주세요.')+'</span>';
+}
+rqQtNote();
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('pk-sheet').classList.contains('hidden'))closePicker();});
 
 // ══ 2026-11-18 품목 선택 시트 v2 ══════════════════════════════════
@@ -2558,7 +2579,7 @@ $('btn-submit').addEventListener('click',async()=>{
       customer_name:condoName,
       customer_phone:phone,
       customer_address:condoUnit,
-      booking_date:RQ_INSP?'[출장점검/진단 요청 / Inspection Request]':'[서비스 의뢰 요청 / Service Request]',
+      booking_date:RQ_INSP?'[출장점검/진단 요청 / Inspection Request]':(RQ_QT?'[견적서 기준 의뢰 / Quotation Request] '+RQ_QT:'[서비스 의뢰 요청 / Service Request]'),
       booking_time:'',
       booking_items:itemLines,
       booking_memo:(remarks||'—')+(window.__rqLoc?'\n📍 '+(window.__rqLoc.name||'')+' https://www.google.com/maps/search/?api=1&query='+window.__rqLoc.lat+','+window.__rqLoc.lng:''),
