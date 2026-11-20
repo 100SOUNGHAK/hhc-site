@@ -430,7 +430,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
       <button onclick="sendQuoteWa()" style="padding:11px 6px;background:#25D366;color:#fff;border:none;border-radius:10px;font-size:12.5px;font-weight:700">💬 WhatsApp</button>
-      <button onclick="sendQuoteKakao()" style="padding:11px 6px;background:#FEE500;color:#3A1D1D;border:none;border-radius:10px;font-size:12.5px;font-weight:700">카카오 복사</button>
+      <button onclick="sendQuoteKakao()" style="padding:11px 6px;background:#FEE500;color:#3A1D1D;border:none;border-radius:10px;font-size:12.5px;font-weight:700">💛 카카오톡</button>
       <button onclick="sendQuoteEmail()" style="padding:11px 6px;background:#0F1729;color:#fff;border:none;border-radius:10px;font-size:12.5px;font-weight:700">📧 이메일</button>
     </div>
     <div id="sm-email-note" style="display:none;margin:-2px 0 8px;font-size:11px;line-height:1.55;color:var(--gray)"></div>
@@ -1632,7 +1632,52 @@ function updateQuoteMsg(){
 function openQuotePreview(){var l=gid('sm-link').textContent;if(l)window.open(l,'_blank');}
 function copyQuoteLink(){var l=gid('sm-link').textContent;if(l)navigator.clipboard.writeText(l).then(function(){toast('✓ 링크 복사됨');});}
 function sendQuoteWa(){window.open('https://wa.me/?text='+encodeURIComponent(gid('sm-msg').value),'_blank');}
-function sendQuoteKakao(){navigator.clipboard.writeText(gid('sm-msg').value.replace(/\*([^*\n]+)\*/g,'$1')).then(function(){toast('✓ 카카오 메시지 복사됨');});}
+/* 💛 카카오톡 발송 (2026-11-20) — 그림 카드(견적서 그림 + 제목 + 「견적서 보기」 버튼)로 보냅니다.
+   · 전체 문구는 먼저 복사해 둡니다(카드는 4줄까지만 보이므로 필요하면 이어서 붙여 보내기).
+   · 카카오 키는 고객관리와 같은 값(settings/kakao)을 씁니다. 공유창을 열 수 없으면 예전처럼 복사만 합니다.
+   · 왓츠앱은 그대로 문구 + 링크 — 링크 미리보기에 같은 견적서 그림이 붙습니다(functions/r.js). */
+var QA_KK_SDKS=['https://t1.kakaocdn.net/kakao_js_sdk/2.7.5/kakao.min.js','https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js','https://developers.kakao.com/sdk/js/kakao.js'];
+function qaKkWin(){try{if(window.top&&window.top!==window&&window.top.location.origin===location.origin)return window.top;}catch(_){}return window;}
+function qaKkLoad(){
+  var W=qaKkWin();if(W.Kakao)return Promise.resolve(W.Kakao);if(W.__hhcKkLoad)return W.__hhcKkLoad;
+  W.__hhcKkLoad=new Promise(function(res,rej){var i=0;(function next(){
+    if(i>=QA_KK_SDKS.length){W.__hhcKkLoad=null;rej(new Error('sdk'));return;}
+    var sc=W.document.createElement('script');sc.src=QA_KK_SDKS[i++];sc.async=true;
+    sc.onload=function(){W.Kakao?res(W.Kakao):next();};sc.onerror=function(){try{sc.remove();}catch(_){}next();};
+    W.document.head.appendChild(sc);})();});
+  return W.__hhcKkLoad;
+}
+function qaKkCard(){
+  var l=document.querySelector('input[name="qlang"]:checked'),en=!!(l&&l.value==='en');
+  var ctx=window._quoteCtx||{},kd=document.querySelector('input[name="qkind"]:checked');
+  var proceed=!!(kd&&kd.value==='proceed'&&gid('sm-kind').style.display!=='none');
+  var tot=(!ctx.hasAc&&ctx.total>0)?ctx.total.toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
+  var t,d;
+  if(proceed){t=en?'Thank you for deciding to proceed':'작업 진행 결정에 감사드립니다';
+    d=en?'Please make an advance payment for the materials. We\'ll share the schedule once confirmed.':'자재(에어컨) 비용을 선입금해 주시면 확인 후 주문·일정을 안내드립니다.';}
+  else{t=(en?'Your quotation is ready':'요청하신 견적서입니다')+(tot?' · RM '+tot:'');
+    d=ctx.hasAc?(en?'Choose your air-con model — the final amount is calculated automatically.':'견적서에서 에어컨 모델을 고르시면 최종 금액이 자동 계산됩니다.')
+               :(en?'If it looks good, just reply 「OK」 and we\'ll book your visit.':'괜찮으시면 「진행」이라고 회신만 주세요. 바로 일정을 잡아 드립니다.');}
+  return {t:t,d:d,btn:en?'View quotation':'견적서 보기',link:en?(shortUrls.en||shortUrls.ko):shortUrls.ko};
+}
+async function sendQuoteKakao(){
+  var plain=gid('sm-msg').value.replace(/\*([^*\n]+)\*/g,'$1');
+  try{await navigator.clipboard.writeText(plain);}catch(_){}
+  var c=qaKkCard();
+  if(!c.link){toast('✓ 카카오 메시지 복사됨');return;}
+  var key='';try{key=localStorage.getItem('hhc_kakao_key')||'';}catch(_){}
+  if(!key&&window._qaKakaoKey){try{key=await window._qaKakaoKey();}catch(_){}}
+  if(!key){toast('✓ 메시지 복사됨 · 카카오 키가 없어 카드 공유는 고객관리에서 키 등록 후 가능합니다');return;}
+  var K;try{K=await qaKkLoad();}catch(_){toast('✓ 메시지 복사됨 · 카카오톡 공유를 불러오지 못했습니다');return;}
+  try{if(!K.isInitialized())K.init(key);}catch(_){toast('✓ 메시지 복사됨 · 카카오 키를 확인해 주세요');return;}
+  var share=K.Share||K.Link;if(!share||!share.sendDefault){toast('✓ 메시지 복사됨 · 이 브라우저는 카카오톡 공유를 지원하지 않습니다');return;}
+  toast('💛 카카오톡 공유창을 엽니다 · 전체 메시지도 복사되었습니다');
+  var lk={mobileWebUrl:c.link,webUrl:c.link};
+  try{share.sendDefault({objectType:'feed',
+    content:{title:c.t,description:c.d,imageUrl:'https://happyhomecare.com.my/og-quote.jpg',imageWidth:1200,imageHeight:630,link:lk},
+    buttons:[{title:c.btn,link:lk}]});}
+  catch(_){toast('카카오톡 공유 실패 · 메시지는 복사해 두었습니다');}
+}
 /* 📧 이메일 발송 — 휴대폰 · PC의 메일 앱이 받는 사람 · 제목 · 본문이 채워진 채로 열립니다 (보내기만 누르면 됩니다)
    · 보낸 이메일 주소는 견적서와 고객 마스터(비어 있을 때만)에 저장해 다음 발송 때 자동으로 채웁니다 */
 function sendQuoteEmail(){
@@ -2093,6 +2138,8 @@ window.__savePriceOverride=async function(key,price){
   }catch(e){console.warn('단가 저장 실패:',e);toast('⚠ 단가 저장 실패 — 네트워크 확인');}
 };
 
+// 💛 카카오 JavaScript 키 (고객관리와 같은 settings/kakao) — 견적서 카카오톡 카드 발송용 (2026-11-20)
+window._qaKakaoKey=async function(){const d=await getDoc(doc(DB,'settings','kakao'));const v=d.exists()?(d.data()||{}).jsKey||'':'';if(v){try{localStorage.setItem('hhc_kakao_key',v);}catch(_){}}return v;};
 // 견적서 안내사항 — 저장한 문구 · 지운 기본 문구 (settings/quote_notices 문서)
 (async function loadNoticeLib(){
   if(!DB)return;
