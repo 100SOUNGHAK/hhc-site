@@ -899,6 +899,7 @@ html.sa body:has(.app-body.active){padding-left:200px}
 .bkl-pin{color:#174EA6;font-weight:700;text-decoration:none}
 </style>
 <script type="module" src="/hhc-auth.js"></script>
+<script src="/hhc-kkcard.js"></script>
 </head>
 <body>
 <script>if(self===top)document.documentElement.classList.add('sa');</script>
@@ -2839,10 +2840,10 @@ document.getElementById('btn-kakao-link').addEventListener('click',async()=>{
   const phone=document.getElementById('c-phone').value||'';
   const lang=document.querySelector('input[name="c-lang"]:checked')?.value||'ko';
   url=await hhcShortUrl(_linkWithLang(url,lang));   // 🔗 짧은 주소로
-  const msg=HHCMsg.noBold(getMsg(name,phone,url,selectedDates,scheduleMap,lang));   // 카카오는 굵은 글씨(*…*) 미지원
-  navigator.clipboard.writeText(msg).then(()=>{
-    const ok=document.getElementById('kakao-ok');ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
-  }).catch(()=>prompt('복사 후 카카오톡에 붙여넣기 하세요:',msg));
+  // 💛 카카오톡 그림 카드(예약서 그림 + 「날짜 고르기」) — 전체 문구도 함께 복사됩니다 (2026-11-20)
+  const msg=getMsg(name,phone,url,selectedDates,scheduleMap,lang);
+  await hhcKkCard({msg,url,img:'og-booking.jpg',btn:lang==='en'?'Pick a date':'날짜 고르기',en:lang==='en'});
+  const ok=document.getElementById('kakao-ok');ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
 });
 
 // ── LIST ──
@@ -3445,11 +3446,13 @@ async function sendInvWA(id){
 }
 
 // ── 인보이스 카카오 메시지 복사
-function sendInvKakao(id){
+async function sendInvKakao(id){
   const b=allBookings.find(x=>x.__id===id);
   if(!b)return;
-  const msg=HHCMsg.noBold(buildInvMsg(b,b.customer_lang||'ko'));   // 카카오는 굵은 글씨(*…*) 미지원
-  navigator.clipboard.writeText(msg).then(()=>showToast('✓ 카카오 메시지 복사됨'));
+  const lang=b.customer_lang||'ko';
+  // 💛 카카오톡 그림 카드(인보이스 그림 + 「인보이스 보기」) — 전체 문구도 함께 복사 (2026-11-20)
+  await hhcKkCard({msg:buildInvMsg(b,lang),img:'og-invoice.jpg',btn:lang==='en'?'View invoice':'인보이스 보기',en:lang==='en'});
+  showToast('✓ 카카오 메시지 복사됨');
 }
 
 // ── 인보이스 보기 (새 탭)
@@ -4027,6 +4030,8 @@ async function vrKkSend(msg,url,en){
   catch(err){alert('카카오 키가 올바르지 않습니다 · 다시 등록해 주세요');VR_KEY='';try{localStorage.removeItem('hhc_kakao_key');}catch(_){}return false;}
   var share=K.Share||K.Link;
   if(!share||!share.sendDefault){alert('이 브라우저에서는 카카오톡 공유를 지원하지 않습니다 · 메시지 복사를 이용해 주세요');return false;}
+  // 🖼 예약 방문 안내는 예약 확정 그림 카드로 (2026-11-20) — 도우미가 없으면 예전 글 카드
+  if(window.hhcKkCard){return await hhcKkCard({msg,url,img:'og-confirmed.jpg',btn:en?'Open MY PAGE':'마이페이지 열기',en});}
   try{
     share.sendDefault({
       objectType:'text',
@@ -4277,11 +4282,11 @@ async function showConfirmMsgModal(b,goCust){
   document.getElementById('confirm-wa-btn').addEventListener('click',()=>{
     window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
   });
-  document.getElementById('confirm-kakao-btn').addEventListener('click',()=>{
-    navigator.clipboard.writeText(msg).then(()=>{
-      const ok=document.getElementById('confirm-kakao-ok');
-      ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
-    }).catch(()=>prompt('복사 후 붙여넣기:',msg));
+  document.getElementById('confirm-kakao-btn').addEventListener('click',async()=>{
+    // 💛 카카오톡 그림 카드(예약 확정 그림 + 「예약 보기」) — 전체 문구도 함께 복사 (2026-11-20)
+    await hhcKkCard({msg,img:'og-confirmed.jpg',btn:lang==='en'?'View booking':'예약 보기',en:lang==='en'});
+    const ok=document.getElementById('confirm-kakao-ok');
+    ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
   });
   let _closed=false;
   function closeConfirmMsg(go){
@@ -4416,8 +4421,10 @@ window.sendKakao=async function(id){
   const msg=b.status==='confirmed'
     ?await bkConfirmMsg(b)
     :await bkResendMsg(b);
-  const kmsg=HHCMsg.noBold(msg);   // 카카오는 굵은 글씨(*…*) 미지원
-  navigator.clipboard.writeText(kmsg).then(()=>showToast('✓ 복사됨! 붙여넣기 하세요')).catch(()=>prompt('복사 후 붙여넣기:',kmsg));
+  // 💛 카카오톡 그림 카드 — 확정이면 예약 확정 그림, 아니면 예약서 그림 (2026-11-20)
+  const en=lang==='en',cf=b.status==='confirmed';
+  await hhcKkCard({msg,img:cf?'og-confirmed.jpg':'og-booking.jpg',btn:cf?(en?'View booking':'예약 보기'):(en?'Pick a date':'날짜 고르기'),en});
+  showToast('✓ 메시지도 복사됨 · 필요하면 붙여넣기 하세요');
 };
 // ── NEW BOOKING RESET ──
 document.getElementById('btn-save').addEventListener('click',()=>{},true);

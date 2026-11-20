@@ -620,6 +620,7 @@ html.sa body:has(.app-body.active){padding-left:200px}
 })();
 </script>
 <script type="module" src="/hhc-auth.js"></script>
+<script src="/hhc-kkcard.js"></script>
 <script type="module" src="/hhc-locsync.js?v=20261117d"></script><!-- 📍 고객 위치 연동 · 변경 승인 (2026-11-17) -->
 <style>
 /* 🤝 추천 링크 의뢰 표시 (2026-11-12) */
@@ -1948,11 +1949,11 @@ document.getElementById('slm-wa').addEventListener('click',async()=>{
   window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
 });
 document.getElementById('slm-kakao').addEventListener('click',async()=>{
-  const msg=HHCMsg.noBold(_sendMsgs[_sendLang](await hhcShortUrl(_getSendLink())));   // 카카오는 굵은 글씨(*…*) 미지원
-  navigator.clipboard.writeText(msg).then(()=>{
-    const ok=document.getElementById('slm-copy-ok');
-    if(ok){ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);}
-  }).catch(()=>prompt('복사 후 카카오톡에 붙여넣기:',msg));
+  // 💛 카카오톡 그림 카드(의뢰서 그림 + 「의뢰서 작성」) — 전체 문구도 함께 복사 (2026-11-20)
+  const msg=_sendMsgs[_sendLang](await hhcShortUrl(_getSendLink())),en=_sendLang==='en';
+  await hhcKkCard({msg,img:'og-reqform.jpg',btn:en?'Open request form':'의뢰서 작성',en});
+  const ok=document.getElementById('slm-copy-ok');
+  if(ok){ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);}
 });
 
 // ── 의뢰 예약전환 ──
@@ -2097,8 +2098,10 @@ document.getElementById('req-list').addEventListener('click',async e=>{
     const r=allRequests.find(x=>x.__id===kakaoBtn.dataset.kakao);
     if(!r)return;
     const msg=r.status==='completed'?await buildDoneMsg(r):buildMsg(r,false);
-    const kmsg=HHCMsg.noBold(msg);   // 카카오는 굵은 글씨(*…*) 미지원
-    navigator.clipboard.writeText(kmsg).then(()=>showToast('✓ 복사됨! 카카오톡에 붙여넣기 하세요')).catch(()=>prompt('복사:',kmsg));
+    // 💛 카카오톡 그림 카드(의뢰 접수 그림) — 전체 문구도 함께 복사 (2026-11-20)
+    const smsg=await hhcShortLinks(msg),en=/^(Hello|Dear|Hi)\b/.test(String(smsg).trim());
+    await hhcKkCard({msg:smsg,img:'og-received.jpg',btn:en?'View details':'접수 내용 보기',en});
+    showToast('✓ 메시지도 복사됨 · 필요하면 붙여넣기 하세요');
     return;
   }
 
@@ -2208,10 +2211,11 @@ function showCompleteModal(r,msg,onComplete){
     <button class="modal-btn modal-btn-cancel" id="m-cancel">취소</button>`;
 
   document.getElementById('m-wa').onclick=async()=>window.open(`https://wa.me/?text=${encodeURIComponent(await hhcShortLinks(msg))}`,'_blank');
-  document.getElementById('m-kakao').onclick=()=>{
-    navigator.clipboard.writeText(HHCMsg.noBold(msg)).then(()=>{
-      const ok=document.getElementById('modal-copy-ok');ok.style.display='block';setTimeout(()=>ok.style.display='none',2500);
-    });
+  document.getElementById('m-kakao').onclick=async()=>{
+    // 💛 카카오톡 그림 카드(의뢰 접수 그림) — 전체 문구도 함께 복사 (2026-11-20)
+    const smsg=await hhcShortLinks(msg),en=/^(Hello|Dear|Hi)\b/.test(String(smsg).trim());
+    await hhcKkCard({msg:smsg,img:'og-received.jpg',btn:en?'View details':'접수 내용 보기',en});
+    const ok=document.getElementById('modal-copy-ok');ok.style.display='block';setTimeout(()=>ok.style.display='none',2500);
   };
   document.getElementById('m-complete').onclick=()=>{ov.classList.remove('open');onComplete();};
   document.getElementById('m-cancel').onclick=()=>ov.classList.remove('open');

@@ -166,6 +166,7 @@ textarea.fi{resize:vertical;line-height:1.6}
 @media(max-width:600px){input:not([type=checkbox]),select,textarea{font-size:16px!important}.fi{font-size:16px!important}}
 </style>
 <script type="module" src="/hhc-auth.js"></script>
+<script src="/hhc-kkcard.js"></script>
 <style id="mv2">
 /* ══ 2026-11-16 메모장 개편 — 한눈에 · 누르기 쉽게 · HHC 색 ══ */
 :root{--navy:#0E2350;--pri:#2563EB;--pri-bg:#EEF3FF;--bg:#F2F4F8;--bdr:#E4E9F2;--ink:#14192A;--ink2:#5A6478;--ink3:#98A1B4;--ok:#0E9B63;--bad:#DC2626;--warn:#B45309;
@@ -1944,8 +1945,17 @@ document.getElementById('sd-body').addEventListener('click',async ev=>{
     window.open(wa+'?text='+encodeURIComponent(txt),'_blank');
   }else{
     const ktxt=txt.replace(/\*([^*\n]+)\*/g,'$1');   // 복사(카카오 등)는 굵은 글씨 별표를 뗍니다
-    try{await navigator.clipboard.writeText(ktxt);toast('✓ 메시지가 복사되었습니다 — 붙여넣기 하세요');}
-    catch(_){prompt('복사해서 사용하세요:',ktxt);}
+    // 💛 카톡 고객은 그림 카드로 공유 (2026-11-20) — 문구에 주소가 없으면 예전처럼 복사만
+    let _kk=false;
+    if((m.channel||'')==='kakao'&&window.hhcKkCard&&/https?:\/\//.test(txt)){
+      const _en=/^(Hello|Dear|Hi)\b/.test(txt.trim()),_t=(/\*([^*\n]+)\*/.exec(txt)||[])[1]||'';
+      const _img=(sendTpl===5||sendTpl===6)?'og-repair.jpg':/접수|received/i.test(_t)?'og-received.jpg'
+               :/확정|방문합니다|방문 안내|confirmed|visit/i.test(_t)?'og-confirmed.jpg':/일정|schedule|date/i.test(_t)?'og-booking.jpg':'og-my.jpg';
+      _kk=await hhcKkCard({msg:txt,img:_img,btn:(sendTpl===5||sendTpl===6)?(_en?'View result':'결과 보기'):(_en?'View details':'자세히 보기'),en:_en});
+    }
+    if(_kk)toast('💛 카카오톡 공유창을 엽니다 · 전체 메시지도 복사되었습니다');
+    else{try{await navigator.clipboard.writeText(ktxt);toast('✓ 메시지가 복사되었습니다 — 붙여넣기 하세요');}
+    catch(_){prompt('복사해서 사용하세요:',ktxt);}}
   }
   pnAuto(m,sendTpl,txt);   // 🔔 알림 켠 고객에게는 앱 알림도 함께
   await markSent(m,sendTpl,txt,b.dataset.send==='wa'?'whatsapp':(m.channel||'other'));
