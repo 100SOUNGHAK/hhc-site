@@ -90,15 +90,16 @@ async function pageMeta(env, origin, path){
 async function metaFor(env, origin, target){
   let t; try { t = new URL(target, SITE); } catch (_) { return null; }
   if (!OUR_HOSTS.test(t.hostname)) return null;
-  const en = isEn(t);
+  // 인보이스 주소는 항상 lang=en 이 붙어 있어, 발송 언어 표시(ml=en)가 있을 때만 영어 (2026-11-21)
+  const en = /^\/(hhc-invoice|hhcinvoice|inv)(\.html)?$/i.test(t.pathname) ? t.searchParams.get('ml') === 'en' : isEn(t);
   const f = t.searchParams.get('f') || '';
   if (/^\/(my|mypage|my-en)(\.html)?$/i.test(t.pathname) && MY_FOCUS[f]) {
     const [img, tk, te, dk, de] = MY_FOCUS[f];
-    return { title: en ? te : tk, desc: en ? de : dk, image: `${SITE}/og-${img}.jpg`, w: '1200', h: '630' };
+    return { title: en ? te : tk, desc: en ? de : dk, image: `${SITE}/og-${img}${en ? '-en' : ''}.jpg`, w: '1200', h: '630' };
   }
   for (const [re, img, tk, te, dk, de] of TYPES) {
     if (re.test(t.pathname)) return { title: en ? te : tk, desc: en ? de : dk,
-      image: `${SITE}/og-${img}.jpg`, w: '1200', h: '630' };
+      image: `${SITE}/og-${img}${en ? '-en' : ''}.jpg`, w: '1200', h: '630' };   // 영어 발송은 영어 그림(og-*-en.jpg)
   }
   const m = await pageMeta(env, origin, t.pathname);
   if (!m || /icon-512\.png$/.test(m.image || '')) return m && m.title ? { ...m, image: '' } : null;

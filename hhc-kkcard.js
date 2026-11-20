@@ -18,6 +18,7 @@
 (function(){
   if (window.hhcKkCard) return;
   var SITE = 'https://happyhomecare.com.my';
+  var EN_IMGS = /\/og-(quote|invoice|contract|booking|my|voucher|pay|permit|visitfee|points|svcreport|received|paid|care|app|repair|reqform|confirmed)\.jpg$/;
   var SDKS = ['https://t1.kakaocdn.net/kakao_js_sdk/2.7.5/kakao.min.js',
               'https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js',
               'https://developers.kakao.com/sdk/js/kakao.js'];
@@ -78,6 +79,8 @@
     var two = p.links.filter(function(l){ return l.url !== url; })[0];
     if (two && o.btn2 !== false) btns.push({ title: cut(o.btn2 || two.label || (en ? 'More' : '자세히'), 14), link: { mobileWebUrl: two.url, webUrl: two.url } });
     var img = o.img ? (/^https?:/.test(o.img) ? o.img : SITE + '/' + String(o.img).replace(/^\//, '')) : SITE + '/og-my.jpg';
+    // 영어 발송은 그림도 영어판(og-*-en.jpg) — 영어판이 있는 그림만 바꿉니다 (2026-11-21)
+    if (en && EN_IMGS.test(img)) img = img.replace(/\.jpg$/, '-en.jpg');
     try{
       share.sendDefault({ objectType: 'feed',
         content: { title: cut(o.title || p.title || 'Happy Home Care', 60), description: cut(o.desc != null ? o.desc : p.desc, 90),

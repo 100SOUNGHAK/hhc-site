@@ -6431,8 +6431,11 @@ function setMsgLang(lang){
 }
 window.setMsgLang=setMsgLang;
 
+// 발송 언어 표시(ml=en) — 고객 화면은 이 값을 쓰지 않고, 링크 미리보기 그림만 영어판으로 바꿉니다 (functions/r.js, 2026-11-21)
+//   (인보이스 주소는 원래 lang=en 이 항상 붙어 있어 그것만으로는 발송 언어를 알 수 없습니다)
+function ivMsgLnk(id){return getLnk(id)+(msgLang&&msgLang!=='ko'?'&ml=en':'');}
 async function buildMsgAsync(inv){
-  var lnk=getLnk(inv.id);
+  var lnk=ivMsgLnk(inv.id);
   var shortLnk=await shorten(lnk);
   var status=inv.status||val('inv-status')||'billing';
   var statusTpls=msgTemplates[status]||msgTemplates.billing;
@@ -6484,7 +6487,7 @@ async function shareKakao(id){
   hideLoad();
   cpTxt(ivNoBold(msg));   // 카카오는 굵은 글씨(*…*) 미지원 — 전체 문구는 먼저 복사해 둡니다
   // 💛 그림 카드로 공유 (2026-11-20) — 실패하면 예전처럼 복사만
-  var lnk=getLnk(inv.id),shortLnk=tinyCache[lnk]||lnk;
+  var lnk=ivMsgLnk(inv.id),shortLnk=tinyCache[lnk]||lnk;
   var ok=await ivKkCard(inv,shortLnk);
   if(!ok)showToast('카카오톡 메시지 복사됨',3000);
 }
@@ -6525,7 +6528,8 @@ function ivKkText(inv){
         paid:['Bayaran diterima · '+amt,'Terima kasih! Lihat butiran dalam invois.'],btn:'Lihat invois'}
   }[lg];
   var K=T[st]||T.billing;
-  return {t:K[0],d:K[1],btn:T.btn,img:st==='paid'?'og-paid.jpg':'og-invoice.jpg'};
+  var sfx=lg==='ko'?'':'-en';   // 영어·말레이어 발송은 영어 그림
+  return {t:K[0],d:K[1],btn:T.btn,img:(st==='paid'?'og-paid':'og-invoice')+sfx+'.jpg'};
 }
 async function ivKkCard(inv,link){
   if(!link)return false;
