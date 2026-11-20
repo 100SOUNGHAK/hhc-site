@@ -504,6 +504,8 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 .qt:active{transform:translateY(3px);box-shadow:inset 0 1px 0 #fff,0 1px 1px rgba(11,24,51,.08),0 1px 0 0 #DCE2EC}
 .qt .nm{font-size:14px;font-weight:700;line-height:1.3;letter-spacing:-.01em;word-break:keep-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;padding-right:32px}
 .qt.on .nm{padding-right:14px}
+.qt .en{font-size:10.5px;color:#98A1B4;font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:30px}
+.qt.on .en{color:rgba(255,255,255,.5);padding-right:10px}
 .qt .ft{margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between;gap:6px;padding-top:8px}
 .qt .pr{font-size:15px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;white-space:nowrap;min-width:0}
 .qt .pr small{font-size:11px;font-weight:700;color:#98A1B4;margin-left:2px}
@@ -3302,7 +3304,7 @@ function openSvcPicker(){
   $('sk-bg').classList.remove('hidden');$('sk').classList.remove('hidden');
   var q=$('sk-q');if(q)q.value='';
   pkSub='전체';pkS2='전체';
-  pkRail();pickerRender();pkFoot();
+  pkRail();pickerRender();pkFoot();pkKoFetch();
   // 품목 선택 시트와 카테고리 레일 스크롤을 최상단으로
   var skList=$('sk-list');if(skList)skList.scrollTop=0;
   var pkRailEl=$('sk-rail');if(pkRailEl)pkRailEl.scrollTop=0;
@@ -3357,7 +3359,7 @@ function pickerRender(){
     }else s2el.style.display='none';
   }
   var list=services.filter(function(s){
-    if(q)return ((s.cat||'')+' '+(s.subcat||'')+' '+(s.sub2||'')+' '+(s.name||'')).toLowerCase().indexOf(q)>=0;
+    if(q)return ((s.cat||'')+' '+(s.subcat||'')+' '+(s.sub2||'')+' '+(s.name||'')+' '+(s.name_ko||'')+' '+pkKo(s)).toLowerCase().indexOf(q)>=0;
     if(pkSub!=='전체'&&s.subcat!==pkSub)return false;
     if(pkS2!=='전체'&&s2s.length&&s.sub2!==pkS2)return false;
     return true;
@@ -3380,6 +3382,71 @@ function pickerRender(){
   });
   listEl.innerHTML=html;
 }
+// 품목 빠른 선택 화면에서는 한글 이름으로 보여 줍니다 · 인보이스에 저장되는 이름은 그대로
+//  ① 항목설정의 한글명(name_ko) → ② 이 기기에 저장된 번역 → ③ 낱말 사전 순서로 고릅니다.
+//  관리 코드(HHC10991 …)는 빼고, [Light] 같은 앞 꼬리표는 [전등] 처럼 바꿉니다.
+//  한글명이 없는 품목은 화면을 열 때 온라인 번역(영→한)으로 한 번 바꿔 이 기기에 저장해 둡니다.
+var PK_KO_KEY='hhc_pk_ko',_pkKoC=null;
+function pkKoCache(){if(_pkKoC)return _pkKoC;try{_pkKoC=JSON.parse(localStorage.getItem(PK_KO_KEY)||'{}')||{};}catch(e){_pkKoC={};}return _pkKoC;}
+var _pkTagKo=null;
+function pkTagMap(){if(_pkTagKo)return _pkTagKo;_pkTagKo=(function(){var m={};try{Object.keys(IV_TAG_EN).forEach(function(k){m[IV_TAG_EN[k].toLowerCase()]=k;});}catch(e){}
+  [['light','전등'],['electric outlet','전기콘센트'],['extra costs','추가비용'],['extra cost','추가비용'],['other','기타'],['others','기타'],
+   ['refrigerator','냉장고'],['fridge','냉장고'],['washer','세탁기'],['washing machine','세탁기'],['dryer','건조기'],['sofa','쇼파'],
+   ['mattress','매트리스'],['curtain','커튼'],['carpet','카페트'],['ceiling fan','실링팬'],['kitchen hood','주방후드'],['hood','주방후드'],
+   ['air purifier','공기청정기'],['wall-mounted ac','벽걸이형 에어컨'],['cassette ac','카세트형 에어컨'],['outdoor unit','실외기'],
+   ['repair','수리'],['materials','자재비'],['material','자재비'],['labor','인건비'],['installation','설치']].forEach(function(d){if(!m[d[0]])m[d[0]]=d[1];});
+  return m;})();return _pkTagKo;}
+var _pkEnKo=null;
+function pkEnKoList(){if(_pkEnKo)return _pkEnKo;_pkEnKo=(function(){var a=[];try{IV_EN_WORD.forEach(function(d){a.push([d[1],d[0]]);});}catch(e){}
+  [['replacement service','교체 서비스'],['service charge','서비스 요금'],['on-side','출장'],['on-site','출장'],['hazard pay','위험 수당'],
+   ['scaffolding','비계(작업 발판)'],['paint','페인트'],['steam','스팀'],['chemical','약품'],['basic','기본'],['dismantle','분해'],
+   ['overhaul','분해'],['charge','요금'],['fee','비용'],['transport','운반'],['gas top up','냉매 보충'],['gas','냉매'],['leak','누설'],
+   ['test','검사'],['unit','대'],['set','세트']].forEach(function(d){a.push(d);});
+  return a.sort(function(x,y){return y[0].length-x[0].length;});})();return _pkEnKo;}
+function pkSplitName(n){
+  var v=ivStripCode(String(n||'')).replace(/\s{2,}/g,' ').trim();
+  var m=v.match(/^\[([^\]]{1,40})\]\s*(.*)$/);
+  return m?{tag:m[1].trim(),body:m[2].trim()}:{tag:'',body:v};
+}
+function pkKoDict(b){
+  var v=String(b||'');
+  pkEnKoList().forEach(function(d){var re=new RegExp('(^|[^A-Za-z])'+d[0].replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'(?=$|[^A-Za-z])','ig');v=v.replace(re,function(_,p){return p+d[1];});});
+  return v.replace(/\s{2,}/g,' ').trim();
+}
+function pkNeedKo(s){return !!(s&&!s.name_ko&&s.name&&!ivHasKo(s.name));}
+function pkKo(s){
+  if(!s)return '';
+  if(s.name_ko)return s.name_ko;
+  if(!pkNeedKo(s))return s.name||'';
+  var c=pkKoCache(),p=pkSplitName(s.name);
+  var tag=p.tag?('['+(pkTagMap()[p.tag.toLowerCase()]||c[p.tag]||p.tag)+'] '):'';
+  return tag+(p.body?(c[p.body]||pkKoDict(p.body)):'');
+}
+// 영문명을 작게 함께 보여 줄지 (자동으로 바꾼 이름일 때만 — 맞게 바뀌었는지 확인용)
+function pkEnSub(s){return pkNeedKo(s)?ivStripCode(s.name).replace(/\s{2,}/g,' ').trim():'';}
+var _pkKoBusy=false;
+function pkKoFetch(){
+  if(_pkKoBusy)return;
+  var c=pkKoCache(),need=[];
+  (services||[]).forEach(function(s){
+    if(!pkNeedKo(s))return;var p=pkSplitName(s.name);
+    if(p.body&&!c[p.body]&&need.indexOf(p.body)<0)need.push(p.body);
+    if(p.tag&&!pkTagMap()[p.tag.toLowerCase()]&&!c[p.tag]&&need.indexOf(p.tag)<0)need.push(p.tag);
+  });
+  if(!need.length)return;
+  _pkKoBusy=true;
+  Promise.all(need.slice(0,80).map(function(v){
+    return fetch('https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ko&dt=t&q='+encodeURIComponent(v.toLowerCase()))
+      .then(function(r){return r.json();})
+      .then(function(j){var tr=(j&&j[0])?j[0].map(function(x){return x[0];}).join('').trim():'';if(tr&&ivHasKo(tr))c[v]=tr;})
+      .catch(function(){});
+  })).then(function(){
+    _pkKoBusy=false;
+    try{localStorage.setItem(PK_KO_KEY,JSON.stringify(c));}catch(e){}
+    var sk=$('sk');if(sk&&!sk.classList.contains('hidden')){pickerRender();pkFoot();}
+  });
+}
+function pkLiKo(li){var sv=li&&li.svcId&&services.find(function(x){return x.id===li.svcId;});return sv?pkKo(sv):((li&&li.name)||'');}
 function pkLiNet(li){
   var la=(li.price||0)*(li.qty||1);
   var da=li.discType==='pct'?la*((li.discVal||0)/100):(li.discVal||li.disc||0);
@@ -3388,10 +3455,10 @@ function pkLiNet(li){
 }
 function pkRowHtml(s){
   var li=pkItemOf(s.id),u=s.unit?'<small>/'+ivxEsc(s.unit)+'</small>':'';
-  if(!li)return '<div class="qt" id="pkrow-'+s.id+'" onclick="pkAdd(\''+s.id+'\')"><div class="nm">'+ivxEsc(s.name||'')+'</div>'+
+  if(!li)return '<div class="qt" id="pkrow-'+s.id+'" onclick="pkAdd(\''+s.id+'\')"><div class="nm">'+ivxEsc(pkKo(s))+'</div>'+(pkEnSub(s)?'<div class="en">'+ivxEsc(pkEnSub(s))+'</div>':'')+
     '<div class="ft"><span class="pr">'+fmtAmt(s.price||0)+u+'</span><span class="add">+</span></div></div>';
   var a=pkLiNet(li),q=parseFloat(li.qty)||1;
-  return '<div class="qt on" id="pkrow-'+s.id+'" onclick="pkQty(\''+s.id+'\',1)"><span class="ok">✓</span><div class="nm">'+ivxEsc(s.name||'')+'</div>'+
+  return '<div class="qt on" id="pkrow-'+s.id+'" onclick="pkQty(\''+s.id+'\',1)"><span class="ok">✓</span><div class="nm">'+ivxEsc(pkKo(s))+'</div>'+(pkEnSub(s)?'<div class="en">'+ivxEsc(pkEnSub(s))+'</div>':'')+
     '<div class="ft"><span class="pr">'+fmtAmt(a.net)+
       ((parseFloat(li.price)||0)!==(parseFloat(s.price)||0)?'<span class="chg">단가 '+fmtAmt(li.price||0)+'</span>':'')+
       (a.disc>0.005?'<span class="dcs">할인 −'+fmtAmt(a.disc)+'</span>':'')+'</span></div>'+
@@ -3415,8 +3482,9 @@ var _pkEd='';
 window.pkEdOpen=function(svcId){
   if(!pkItemOf(svcId))return;_pkEd=svcId;
   var s=services.find(function(x){return x.id===svcId;})||{};
-  $('qe-nm').textContent=s.name||'';
-  $('qe-sub').textContent=(s.subcat||'')+(s.sub2?' · '+s.sub2:'')+' · 기본 단가 '+fmtAmt(s.price||0)+(s.unit?' / '+s.unit:'');
+  $('qe-nm').textContent=pkKo(s);
+  var _en=pkEnSub(s);
+  $('qe-sub').textContent=(_en?_en+' · ':'')+(s.subcat||'')+(s.sub2?' · '+s.sub2:'')+' · 기본 단가 '+fmtAmt(s.price||0)+(s.unit?' / '+s.unit:'');
   $('qe-p').value=pkItemOf(svcId).price;
   pkEdDraw();$('qe-bg').classList.remove('hidden');$('qe').classList.remove('hidden');
 };
@@ -3537,7 +3605,7 @@ function pkDcCalc(){
 function pkDcDraw(){
   var li=(lineItems||[]).find(function(x){return x.id===_pkDc.li;});if(!li)return;
   var base=pkDcBase();
-  $('pkdc-item').innerHTML='<b>'+ivxEsc(li.name||'')+'</b><span>'+fmtAmt(li.price||0)+' × '+(li.qty||1)+' = <b>'+fmtAmt(base)+'</b></span>';
+  $('pkdc-item').innerHTML='<b>'+ivxEsc(pkLiKo(li))+'</b><span>'+fmtAmt(li.price||0)+' × '+(li.qty||1)+' = <b>'+fmtAmt(base)+'</b></span>';
   // ① 이 품목에 적용된 할인
   var cur=pkDcRows(_pkDc.li),rows=_adjNorm(undefined);
   $('pkdc-cur').innerHTML=cur.length?('<div class="pkdc-h">이 품목에 적용된 할인</div>'+cur.map(function(i){
@@ -3630,7 +3698,7 @@ function pkFoot(){
   var dAll=discSum+(t.adjDisc||0);
   if(de)de.textContent=dAll>0.005?('할인 −'+fmtAmt(dAll)):'';
   if(tr)tr.innerHTML=lineItems.map(function(li,i){
-    return '<button type="button" class="qk-ch" onclick="pkTrayGo('+i+')">'+ivxEsc(li.name||'(항목명 없음)')+' <i>×'+(parseFloat(li.qty)||1)+'</i>'+
+    return '<button type="button" class="qk-ch" onclick="pkTrayGo('+i+')">'+ivxEsc(pkLiKo(li)||'(항목명 없음)')+' <i>×'+(parseFloat(li.qty)||1)+'</i>'+
       '<span class="x" onclick="event.stopPropagation();pkTrayDel('+i+')" aria-label="빼기">✕</span></button>';
   }).join('');
   if(_pkEd)pkEdDraw();
