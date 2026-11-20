@@ -708,7 +708,259 @@ function termsOf(cpn,en){
   t.push(en?'Not valid on the date of issue.':'발행 당일에는 사용할 수 없습니다.');
   return t;
 }
+// ── 쿠폰 이미지 금속 카드 (2026-11-20) — 고객 화면(coupon.html)과 같은 디자인
+//    상품권 = 샴페인 골드 금속판 · 할인권 = 청록 금속판. NEWCARD=false 로 바꾸면 예전 남색 티켓 그림으로 돌아갑니다.
+var NEWCARD=true;
+var CG_FAM="'HHC CG','Times New Roman',serif";
+var SANS="-apple-system,BlinkMacSystemFont,'Noto Sans KR',sans-serif";
+var _cgReady=false,_cgWait=[];
+(function(){
+  // 금액 글꼴 Cormorant Garamond — 캔버스는 'lnum' 을 따로 줄 수 없어 글꼴 등록 때 붙임(없으면 「1,OOO」처럼 보임)
+  try{
+    if(typeof FontFace==='undefined'){_cgReady=true;return;}
+    var B='https://cdn.jsdelivr.net/npm/@fontsource/cormorant-garamond@5.3.0/files/cormorant-garamond-latin-';
+    var a=new FontFace('HHC CG','url('+B+'600-normal.woff2) format("woff2")',{weight:'600',style:'normal',featureSettings:'"lnum" 1'});
+    var b=new FontFace('HHC CG','url('+B+'500-italic.woff2) format("woff2")',{weight:'500',style:'italic',featureSettings:'"lnum" 1'});
+    Promise.all([a.load(),b.load()]).then(function(fs){fs.forEach(function(f){document.fonts.add(f);});})
+      .catch(function(){}).then(function(){_cgReady=true;var w=_cgWait;_cgWait=[];w.forEach(function(fn){try{fn();}catch(e){}});});
+  }catch(e){_cgReady=true;}
+})();
+function whenCg(fn){if(_cgReady)fn();else _cgWait.push(fn);}
+var HMARK=(typeof Path2D!=='undefined')?new Path2D('M18.5 14h12a3.5 3.5 0 0 1 3.5 3.5v67a3.5 3.5 0 0 1-3.5 3.5h-12A3.5 3.5 0 0 1 15 84.5v-67A3.5 3.5 0 0 1 18.5 14ZM69.5 14h12a3.5 3.5 0 0 1 3.5 3.5v67a3.5 3.5 0 0 1-3.5 3.5h-12A3.5 3.5 0 0 1 66 84.5v-67A3.5 3.5 0 0 1 69.5 14ZM50 28 85 51v16L50 43 15 67V51Z'):null;
+function drawMark(x,px,py,sz,col){
+  if(!HMARK)return;
+  x.save();x.translate(px,py);x.scale(sz/100,sz/100);x.fillStyle=col;x.fill(HMARK);x.restore();
+}
+// 음각 글씨 — 위쪽 어둡게·아래쪽 밝게 한 번씩 깔고 본 글씨
+function egText(x,t,px,py,col,dc){
+  x.fillStyle=dc?'rgba(0,30,26,.45)':'rgba(255,248,225,.75)';x.fillText(t,px,py+1);
+  if(!dc){x.fillStyle='rgba(90,66,18,.22)';x.fillText(t,px,py-1);}
+  x.fillStyle=col;x.fillText(t,px,py);
+}
+function fitText(x,t,maxW){
+  t=String(t||'');if(x.measureText(t).width<=maxW)return t;
+  while(t.length>1&&x.measureText(t+'…').width>maxW)t=t.slice(0,-1);
+  return t+'…';
+}
 function drawCoupon(cpn,lang){
+  if(!NEWCARD)return drawCouponOld(cpn,lang);
+  var en=lang==='en';
+  var s=stOf(cpn);
+  var dc=cpn.type==='discount';
+  var SC=2, W=680, P=40;
+  var cond=cpn.cond?(en?trCond(cpn.cond):cpn.cond):'';
+  var uses=dc?[]:cpnUses(cpn);
+  var showRem=uses.length&&s==='ok';
+  var buyer=cpn.name||'', recv=cpn.receiver||buyer;
+  var terms=termsOf(cpn,en);
+
+  // ── 세로 배치
+  var hdY=36, hdH=56;
+  var cX=P, cY=hdY+hdH+18, cW=W-P*2;
+  var extras=(cond?1:0)+(showRem?1:0);
+  var cH=Math.round(cW/1.586)+Math.max(0,extras*32-40);
+  var rows=en?[
+    ['Purchaser',buyer||'—'],
+    ['Valid until',cpn.expiry?cpn.expiry:'No limit'],
+    ['Issued',cpn.issuedAt||'—']
+  ]:[
+    ['구매(양도)고객',(buyer||'—')+(buyer?' 님':'')],
+    ['유효기간',cpn.expiry?cpn.expiry+' 까지':'제한 없음'],
+    ['발급일',cpn.issuedAt||'—']
+  ];
+  if(cond)rows.push([en?'Condition':'사용 조건',cond]);
+  if(uses.length)rows.push([en?'Remaining':'남은 금액',cpnRM(cpnRemain(cpn))+' / '+(cpn.value||'')]);
+  var inY=cY+cH+34, inH=58+rows.length*46;
+  var qY=inY+inH+16, qS=150, qH=qS+44;
+  var stY=qY+qH+16, stH=54;
+  var tmY=stY+stH+26, tmH=40+30*terms.length;
+  var ftY=tmY+tmH+20;
+  var H=ftY+30;
+
+  var cv=document.createElement('canvas');cv.width=W*SC;cv.height=H*SC;
+  var x=cv.getContext('2d');x.scale(SC,SC);
+  x.textBaseline='alphabetic';
+
+  // ── 바탕 (밝은 상아색)
+  var bg=x.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#F7F4EC');bg.addColorStop(1,'#EEF1F6');
+  x.fillStyle=bg;x.fillRect(0,0,W,H);
+
+  // ── 머리 줄
+  x.fillStyle='#0E2350';roundRect(x,P,hdY,hdH,hdH,15);x.fill();
+  drawMark(x,P+12,hdY+12,32,'#e3c98a');
+  x.fillStyle='#0E2350';x.font='800 21px '+SANS;x.fillText('Happy Home Care',P+hdH+14,hdY+25);
+  x.fillStyle='#8a93a3';x.font='800 11.5px '+SANS;
+  x.fillText(dc?'D I G I T A L   D I S C O U N T   C O U P O N':'D I G I T A L   G I F T   V O U C H E R',P+hdH+14,hdY+47);
+
+  // ── 금속 카드
+  x.save();
+  x.shadowColor=dc?'rgba(4,50,45,.42)':'rgba(90,66,18,.42)';x.shadowBlur=36;x.shadowOffsetY=18;
+  x.fillStyle=dc?'#0d5f58':'#d4b56a';roundRect(x,cX,cY,cW,cH,32);x.fill();
+  x.restore();
+  x.save();
+  roundRect(x,cX,cY,cW,cH,32);x.clip();
+  if(s!=='ok'){try{x.filter='grayscale(.75) brightness(.97)';}catch(e){}}
+  // 금속 바탕 (125°)
+  var ang=125*Math.PI/180, dx=Math.sin(ang), dy=-Math.cos(ang);
+  var half=(Math.abs(cW*dx)+Math.abs(cH*dy))/2, mx=cX+cW/2, my=cY+cH/2;
+  var mg=x.createLinearGradient(mx-dx*half,my-dy*half,mx+dx*half,my+dy*half);
+  if(dc){mg.addColorStop(0,'#1a8c82');mg.addColorStop(.30,'#0d5f58');mg.addColorStop(.52,'#3fb0a3');mg.addColorStop(.74,'#0b5a53');mg.addColorStop(1,'#16857a');}
+  else{mg.addColorStop(0,'#e8d39b');mg.addColorStop(.28,'#d4b56a');mg.addColorStop(.52,'#f3e4b8');mg.addColorStop(.74,'#c7a457');mg.addColorStop(1,'#e6cf94');}
+  x.fillStyle=mg;x.fillRect(cX,cY,cW,cH);
+  // 왼쪽 위 빛
+  var hl=x.createRadialGradient(cX+cW*.15,cY,0,cX+cW*.15,cY,cW*.62);
+  hl.addColorStop(0,dc?'rgba(190,240,230,.45)':'rgba(255,250,232,.95)');hl.addColorStop(1,dc?'rgba(190,240,230,0)':'rgba(255,250,232,0)');
+  x.fillStyle=hl;x.fillRect(cX,cY,cW,cH);
+  // 헤어라인 (가로결)
+  for(var hx=cX;hx<cX+cW;hx+=4){
+    x.fillStyle='rgba(255,255,255,.10)';x.fillRect(hx,cY,1,cH);
+    x.fillStyle='rgba(0,0,0,.035)';x.fillRect(hx+1,cY,1,cH);
+  }
+  // 워터마크 H
+  var wS=Math.min(cW*.46,250), wX=cX+cW-34-wS, wY=cY+cH/2-wS*.54;
+  if(HMARK){
+    x.save();x.translate(wX,wY);x.scale(wS/100,wS/100);
+    x.fillStyle=dc?'rgba(255,255,255,.03)':'rgba(255,255,255,.14)';x.translate(0,1.6*100/wS);x.fill(HMARK);
+    x.translate(0,-3.2*100/wS);x.fillStyle=dc?'rgba(0,0,0,.05)':'rgba(110,82,24,.06)';x.fill(HMARK);
+    x.translate(0,1.6*100/wS);x.fillStyle=dc?'rgba(255,255,255,.08)':'rgba(143,111,40,.16)';x.fill(HMARK);
+    x.restore();
+  }
+  var ink=dc?'#f2fbf9':'#0f2540', sub=dc?'rgba(225,247,243,.72)':'rgba(15,37,64,.55)';
+  var L=cX+38, R=cX+cW-38;
+  // 윗줄 — 로고 · HAPPY HOME CARE · 상태
+  drawMark(x,L,cY+32,30,dc?'#e3c98a':'#0f2540');
+  x.font='800 17px '+SANS;
+  var brand='H A P P Y   H O M E   C A R E';
+  egText(x,brand,L+42,cY+54,ink,dc);
+  var pill=s==='used'?(en?'USED':'사용완료'):(s==='exp'?(en?'EXPIRED':'기간만료'):(en?'✓ VALID':'✓ 사용 가능'));
+  x.font='800 16px '+SANS;x.textAlign='right';egText(x,pill,R,cY+54,sub,dc);x.textAlign='left';
+  // 아래에서부터 배치
+  var noY=cY+cH-30, vY=noY-42, kY=vY-27, divY=kY-24;
+  var lineY=divY-22;
+  var extraLines=[];
+  if(showRem)extraLines.unshift({t:(en?'Remaining ':'남은 금액 ')+cpnRM(cpnRemain(cpn)),b:true});
+  if(cond)extraLines.unshift({t:cond,b:false});
+  var amtY=lineY-extraLines.length*32;
+  for(var ei=0;ei<extraLines.length;ei++){
+    x.font=(extraLines[ei].b?'800 ':'700 ')+'20px '+SANS;
+    egText(x,fitText(x,extraLines[ei].t,cW-80),L,amtY+32*(ei+1),dc?'rgba(240,252,250,.9)':'rgba(15,37,64,.72)',dc);
+  }
+  // 금액
+  var av=String(cpn.value||''), am=av.match(/^RM\s*([\d,.]+)$/i), ap=av.match(/^([\d,.]+)\s*%$/);
+  var num=am?am[1]:(ap?ap[1]:av);
+  var nSz=num.length>6?80:104;
+  var ax=L;
+  var amtCol=dc?'#ffffff':'#0f2540';
+  if(am){x.font='600 38px '+CG_FAM;egText(x,'RM',ax,amtY,amtCol,dc);ax+=x.measureText('RM').width+12;}
+  x.font='600 '+nSz+'px '+CG_FAM;
+  if(x.measureText(num).width>R-ax-(ap?60:0)){nSz=Math.floor(nSz*(R-ax-(ap?60:0))/x.measureText(num).width);x.font='600 '+nSz+'px '+CG_FAM;}
+  egText(x,num,ax,amtY,amtCol,dc);
+  if(ap){var nw=x.measureText(num).width;x.font='600 58px '+CG_FAM;egText(x,'%',ax+nw+4,amtY,amtCol,dc);}
+  // 종류 (Gift Voucher · 상품권)
+  var kdY=amtY-nSz*.86-10;
+  x.font='italic 500 30px '+CG_FAM;
+  var kd=dc?'Discount Coupon':'Gift Voucher';
+  egText(x,kd,L,kdY,dc?'#cdeee8':'#5b4515',dc);
+  if(!en){var kw=x.measureText(kd).width;x.font='700 18px '+SANS;
+    egText(x,dc?'할 인 권':'상 품 권',L+kw+14,kdY,dc?'rgba(225,247,243,.8)':'rgba(91,69,21,.75)',dc);}
+  // 구분선
+  x.fillStyle=dc?'rgba(255,255,255,.25)':'rgba(15,37,64,.18)';x.fillRect(L,divY,R-L,1.5);
+  // 받는 분 · 유효기간
+  x.font='800 14.5px '+SANS;
+  egText(x,en?'R E C I P I E N T':'받 는  분',L,kY,sub,dc);
+  x.textAlign='right';egText(x,en?'V A L I D   T H R U':'유 효 기 간',R,kY,sub,dc);
+  x.font='700 23px '+SANS;
+  var exTxt=cpn.expiry||(en?'No limit':'제한 없음');
+  var exW=x.measureText(exTxt).width;
+  egText(x,exTxt,R,vY,ink,dc);x.textAlign='left';
+  var nm=fitText(x,recv||'—',R-L-exW-40-(cpn.receiver?0:140));
+  egText(x,nm,L,vY,ink,dc);
+  if(!cpn.receiver&&recv){var nmw=x.measureText(nm).width;x.font='600 15px '+SANS;
+    egText(x,en?'(same as purchaser)':'(구매고객과 동일)',L+nmw+10,vY,sub,dc);}
+  // 일련번호
+  x.font='700 19px ui-monospace,SFMono-Regular,Menlo,monospace';
+  egText(x,'No. '+(cpn.code||'—'),L,noY,dc?'rgba(225,247,243,.72)':'rgba(15,37,64,.62)',dc);
+  // 윗변 빛·아랫변 그림자
+  x.filter='none';
+  x.fillStyle=dc?'rgba(255,255,255,.35)':'rgba(255,255,255,.7)';x.fillRect(cX,cY,cW,1.5);
+  x.fillStyle=dc?'rgba(0,0,0,.25)':'rgba(120,90,30,.35)';x.fillRect(cX,cY+cH-1.5,cW,1.5);
+  x.restore();
+  // 사용완료 · 기간만료 도장
+  if(s!=='ok'){
+    var stp=s==='used'?(en?'USED':'사용완료'):(en?'EXPIRED':'기간만료');
+    x.save();x.translate(cX+cW/2,cY+cH/2);x.rotate(-10*Math.PI/180);
+    x.font='700 48px "Noto Serif KR",Georgia,serif';
+    var sw=x.measureText(stp).width+76;
+    var red=s==='exp';
+    x.fillStyle=dc&&!red?'rgba(235,250,247,.7)':'rgba(253,248,232,.55)';roundRect(x,-sw/2,-42,sw,84,16);x.fill();
+    x.strokeStyle=red?'rgba(158,36,32,.85)':(dc?'rgba(11,79,73,.85)':'rgba(15,37,64,.85)');x.lineWidth=5;roundRect(x,-sw/2,-42,sw,84,16);x.stroke();
+    x.fillStyle=red?'#9E2420':(dc?'#0b4f49':'#0f2540');x.textAlign='center';x.fillText(stp,0,17);
+    x.restore();x.textAlign='left';
+  }
+
+  // ── 흰 패널 공통
+  function panel(py,ph){
+    x.save();x.shadowColor='rgba(14,35,80,.08)';x.shadowBlur=18;x.shadowOffsetY=6;
+    x.fillStyle='#ffffff';roundRect(x,P,py,W-P*2,ph,22);x.fill();x.restore();
+    x.strokeStyle='rgba(14,35,80,.07)';x.lineWidth=1;roundRect(x,P,py,W-P*2,ph,22);x.stroke();
+  }
+  // ── 정보
+  panel(inY,inH);
+  x.fillStyle='#0E2350';x.font='800 17px '+SANS;
+  x.fillText(dc?(en?'Coupon Details':'할인권 정보'):(en?'Voucher Details':'상품권 정보'),P+26,inY+36);
+  rows.forEach(function(rw,i){
+    var ry=inY+58+i*46;
+    x.fillStyle='rgba(14,35,80,.07)';x.fillRect(P+24,ry,W-P*2-48,1);
+    x.fillStyle='#8a93a3';x.font='600 16px '+SANS;x.fillText(rw[0],P+26,ry+30);
+    x.fillStyle='#14192A';x.font='700 18px '+SANS;x.textAlign='right';
+    x.fillText(fitText(x,rw[1],W-P*2-220),W-P-26,ry+30);x.textAlign='left';
+  });
+
+  // ── 코드 + QR
+  panel(qY,qH);
+  var qx=P+24, qy=qY+22;
+  var qrCv=makeQrCanvas(couponLink(cpn._id||''),qS*2);
+  if(qrCv){x.drawImage(qrCv,qx,qy,qS,qS);}
+  else{x.fillStyle='#f3f4f8';roundRect(x,qx,qy,qS,qS,10);x.fill();}
+  x.strokeStyle='#0E2350';x.lineWidth=3;
+  var bo=8,bl=18;
+  [[qx-bo,qy-bo,1,1],[qx+qS+bo,qy-bo,-1,1],[qx-bo,qy+qS+bo,1,-1],[qx+qS+bo,qy+qS+bo,-1,-1]].forEach(function(c){
+    x.beginPath();x.moveTo(c[0]+c[2]*bl,c[1]);x.lineTo(c[0],c[1]);x.lineTo(c[0],c[1]+c[3]*bl);x.stroke();
+  });
+  var tx=qx+qS+34;
+  x.fillStyle='#8a93a3';x.font='800 13px '+SANS;x.fillText(en?'C O U P O N   C O D E':'쿠 폰  코 드',tx,qY+50);
+  x.fillStyle='#0E2350';x.font='800 27px ui-monospace,SFMono-Regular,Menlo,monospace';
+  x.fillText(fitText(x,cpn.code||'—',W-P-24-tx),tx,qY+88);
+  x.fillStyle='#5A6478';x.font='600 15px '+SANS;
+  var qt=en?['Show this QR at service —','staff scan it to verify.']:['서비스 때 이 QR을 보여 주세요.','직원이 스캔해 바로 확인합니다.'];
+  x.fillText(qt[0],tx,qY+132);x.fillText(qt[1],tx,qY+156);
+
+  // ── 상태
+  var stTxt=en
+    ?(s==='ok'?'✓ This voucher is valid':(s==='used'?'Already used'+(cpn.usedAt?' ('+cpn.usedAt+')':''):'This voucher has expired'))
+    :(s==='ok'?'✓ 사용 가능한 '+(dc?'할인권':'상품권')+'입니다':(s==='used'?'이미 사용된 '+(dc?'할인권':'상품권')+'입니다'+(cpn.usedAt?' ('+cpn.usedAt+')':''):'유효기간이 지난 '+(dc?'할인권':'상품권')+'입니다'));
+  x.fillStyle=s==='ok'?'#E7F6EF':(s==='used'?'#ECEEF2':'#FBEAE8');roundRect(x,P,stY,W-P*2,stH,16);x.fill();
+  x.strokeStyle=s==='ok'?'rgba(16,150,100,.28)':(s==='used'?'rgba(14,35,80,.12)':'rgba(190,50,40,.25)');x.lineWidth=1.5;roundRect(x,P,stY,W-P*2,stH,16);x.stroke();
+  x.fillStyle=s==='ok'?'#0E7A52':(s==='used'?'#5A6478':'#B0352A');x.font='800 18px '+SANS;x.textAlign='center';
+  x.fillText(stTxt,W/2,stY+34);x.textAlign='left';
+
+  // ── 유의사항
+  x.fillStyle='#B08A3A';x.font='900 14px '+SANS;x.fillText(en?'T E R M S':'유 의 사 항',P+4,tmY+16);
+  terms.forEach(function(line,i){
+    var ly=tmY+46+30*i;
+    x.fillStyle='#C9A44C';x.beginPath();x.arc(P+8,ly-5,3,0,7);x.fill();
+    x.fillStyle='#5A6478';x.font='500 15.5px '+SANS;x.fillText(line,P+22,ly);
+  });
+
+  // ── 푸터
+  x.fillStyle='#98A1B4';x.font='600 13px '+SANS;x.textAlign='center';
+  x.fillText((en?'Verify: ':'쿠폰 확인 ')+'happyhomecare.com.my/coupon  ·  📞 +60 17-247 2774',W/2,ftY);
+  x.textAlign='left';
+  return cv;
+}
+// 예전 남색 티켓 그림 (NEWCARD=false 일 때만)
+function drawCouponOld(cpn,lang){
   var en=lang==='en';
   var s=stOf(cpn);
   var W=680,P=40;
@@ -913,6 +1165,7 @@ window.openPv=function(cpn){
   _pvTarget=cpn;
   gid('pv-img').src=drawCoupon(cpn).toDataURL('image/png');
   gid('pvBg').classList.add('show');
+  if(!_cgReady)whenCg(function(){if(_pvTarget===cpn)gid('pv-img').src=drawCoupon(cpn).toDataURL('image/png');});
 };
 window.closePv=function(){gid('pvBg').classList.remove('show');};
 window.dlPvImg=function(){
@@ -964,6 +1217,7 @@ window.renderSendMsg=function(){
   gid('send-msg').textContent=msgOf(_sendTarget,curLang());
   // 언어 전환 시 쿠폰 이미지도 같은 언어로 다시 그림
   try{gid('send-img').src=drawCoupon(_sendTarget,curLang()).toDataURL('image/png');}catch(e){}
+  if(!_cgReady){var _t0=_sendTarget;whenCg(function(){if(_sendTarget===_t0)try{gid('send-img').src=drawCoupon(_t0,curLang()).toDataURL('image/png');}catch(e){}});}
 };
 window.sendWA=async function(){if(!_sendTarget)return;
   var _t=await hhcShortLinks(msgOf(_sendTarget,curLang()));   // 🔗 문구 속 상품권·마이페이지 주소 단축
