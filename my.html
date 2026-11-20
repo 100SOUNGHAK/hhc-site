@@ -160,6 +160,11 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;letter
 .mcard.pc{background:url(mp-bg-points.jpg) 78% 50%/cover}
 .mcard.pc:before{background:linear-gradient(95deg,rgba(6,58,54,.94) 0%,rgba(8,80,74,.72) 48%,rgba(8,80,74,.08) 100%)}
 .mcard .up{display:inline-block;margin-top:8px;font-size:11.5px;font-weight:800;color:#F3DFA6}
+.mcard .jtb{margin-left:8px;font-size:10.5px;font-weight:800;letter-spacing:0;color:#0E2350;background:linear-gradient(180deg,#F3DFA6,#C9A44C);border-radius:999px;padding:2px 9px;box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 2px 6px rgba(0,0,0,.35)}
+.jtnote{display:flex;align-items:center;gap:10px;width:100%;margin-top:14px;padding:10px 14px;border:1px solid rgba(227,201,138,.35);border-radius:14px;background:linear-gradient(158deg,rgba(255,255,255,.12),rgba(255,255,255,.04));color:#fff;text-align:left;font:inherit;cursor:pointer;position:relative;z-index:2}
+.jtnote:active{transform:scale(.99)}
+.jtn-ic{font-size:18px}.jtn-tx{flex:1;min-width:0}.jtn-tx b{display:block;font-size:13px;font-weight:800;color:#F3DFA6}
+.jtn-tx small{display:block;font-size:11px;color:rgba(255,255,255,.65);margin-top:2px;line-height:1.45}.jtn-ar{color:rgba(255,255,255,.55);font-size:18px}
 .lgd{display:flex;gap:14px;margin:-4px 4px 10px;font-size:11.5px;font-weight:750;color:var(--ink2)}
 .lgd span{display:inline-flex;align-items:center;gap:6px}
 .lgd i{width:10px;height:10px;border-radius:3px}
@@ -1223,6 +1228,8 @@ function buildFromApi(j,svc){
   if(acts.length){const top=acts.slice().sort((a,b)=>balCalc(b).remain-balCalc(a).remain)[0];let T0=0,U0=0;acts.forEach(c=>{const b=balCalc(c);T0+=b.total;U0+=b.netUsed;});
     const R0=acts.reduce((a,c)=>a+balCalc(c).remain,0);
     member={no:top.contract_no||'',pkg:top.package_id,date:top.contract_date||'',total:R0+U0,used:U0,use:[],ended:(j.contracts||[]).length-acts.length};
+    // 👥 공동계약 (2026-11-20) — 공동계약자 이름만(joint_members) · 잔액·이용내역은 본인 것만
+    {const jc=acts.find(c=>c.joint_id)||null;if(jc){const jm=(Array.isArray(jc.joint_members)?jc.joint_members:[]).slice().sort((a,b)=>(a.seq||0)-(b.seq||0));member.joint={n:jm.length||1,seq:parseInt(jc.joint_seq)||1,names:jm.map(x=>String(x.name||''))};}}
     const TM={silver:['실버','Silver'],royal:['로얄','Royal'],gold:['골드','Gold'],diamond:['다이아','Diamond'],titanium:['티타늄','Titanium'],special:['스페셜','Special']};
     const k=String(top.package_id||'').replace(/-biz$/,'');tierKo=(TM[k]||['',''])[0];tier=(TM[k]||['',''])[1];
     CT_LINK=BASE+'/admin.html?view='+encodeURIComponent(top.__id)+'&mode=all';}
@@ -1977,9 +1984,13 @@ function render(){
   let h=pickerHTML(true)+'<section class="lounge"><div class="bar"><span class="lg">'+LOGO+'</span><b>HAPPY HOME CARE</b><button class="bell" data-a="noti" aria-label="알림">'+ic('i-bell',18)+'<i></i></button><div class="lng"><button data-l="ko" class="'+(en?'':'on')+'">한국어</button><button data-l="en" class="'+(en?'on':'')+'">EN</button></div></div>'+
     '<div class="wel"><small>'+(en?'Welcome back,':'안녕하세요,')+'</small><div class="nm'+(window._nmIn?'':' in')+'"><span class="t">'+nm+'</span>'+L.sfx+'</div>'+myVerBadge(en)+'</div>';window._nmIn=1;
   if(M){
+    const JT=M.joint;
     h+='<div class="mstage"><button class="mcard" data-a="member" style="display:block;width:100%;text-align:left"><div class="t"><span>'+(D.tier||'').toUpperCase()+' MEMBER</span><em>'+M.no+'</em></div>'+
-    '<div class="lb">'+L.memL+'</div><div class="v num">RM '+f2(s.memRem).split('.')[0]+'<small>.'+f2(s.memRem).split('.')[1]+'</small></div>'+
+    '<div class="lb">'+(JT?(en?'My balance':'내 회원권 잔액')+'<span class="jtb">👥 '+(en?'Joint · '+JT.n:'공동계약 '+JT.n+'인')+'</span>':L.memL)+'</div><div class="v num">RM '+f2(s.memRem).split('.')[0]+'<small>.'+f2(s.memRem).split('.')[1]+'</small></div>'+
     '<div class="pb"><div class="tr"><i style="width:'+s.memPct+'%"></i></div><div><span>'+L.used+' RM '+f2(M.used)+'</span><span>'+s.memPct+'% '+L.left+'</span></div></div><span class="chip2"></span><span class="glr"></span><span class="shn"></span><span class="rim"></span></button></div>';
+    if(JT){const oth=JT.names.filter((x,i)=>i!==JT.seq-1);
+      h+='<button class="jtnote" data-a="member"><span class="jtn-ic">👥</span><span class="jtn-tx"><b>'+(en?'Joint membership with '+esc(oth.join(', ')||'—'):esc(oth.join(', ')||'—')+'님과 함께하는 공동계약')+'</b>'+
+        '<small>'+(en?'Same terms & benefits for everyone · balance and usage shown here are yours only':'계약 조건·혜택은 모두 같게 · 여기 보이는 잔액·이용내역은 본인 것만')+'</small></span><span class="jtn-ar">›</span></button>';}
   }else{
     h+='<div class="mstage"><button class="mcard pc" data-a="points" style="display:block;width:100%;text-align:left"><div class="t"><span>HAPPY POINTS</span><em>'+(en?'Customer':'고객')+'</em></div>'+
     '<div class="lb">'+L.ptL+'<span class="cash">'+(en?'Use like cash':'현금처럼 사용')+'</span></div><div class="v num">RM '+f2(D.points.bal).split('.')[0]+'<small>.'+f2(D.points.bal).split('.')[1]+'</small></div>'+
