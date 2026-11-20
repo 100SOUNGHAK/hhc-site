@@ -3368,40 +3368,25 @@ function benSyncUI(){
   });
   if(typeof freeUIRender==='function')try{freeUIRender();}catch(e){}
 }
-// 예전 계약서의 「실링팬/전등 무상제공(등급 설명 한 줄)」 체크를 그 계약 등급에 맞는 수량 항목으로 바꿔 보여 줌
-//  (계약서를 다시 저장할 때만 실제로 바뀜 — 맞는 수량이 없으면 이전 문구를 그대로 둠)
-function benMigrateLegacy(pkgId){
-  const base=String(pkgId||'').replace('-biz','');
-  ['ceiling','bulb'].forEach(kind=>{
-    const cbs=[...document.querySelectorAll('[data-benefit]')];
-    const tierOn=cbs.some(cb=>cb.checked&&benItem(cb.dataset.benefit).grp===kind);
-    const legKey=FREE_KEYS[kind].find(k=>benItem(k).legacy===kind&&cbs.some(cb=>cb.dataset.benefit===k&&cb.checked));
-    if(!legKey)return;
-    let ok=tierOn;
-    if(!tierOn){
-      const r=FREE_RULE[legKey]||{},v=r['*']||r[base];
-      if(v){
-        const t=BENEFITS.find(b=>b.grp===kind&&b.tot===v[0]&&(b.per||null)===(v[1]||null));
-        if(t){const cb=cbs.find(x=>x.dataset.benefit===t.key);if(cb){cb.checked=true;ok=true;}}
-      }
-    }
-    if(ok)cbs.forEach(cb=>{if(benItem(cb.dataset.benefit).legacy===kind)cb.checked=false;});
-  });
-}
-// 저장된 혜택 불러오기 (기존 항목: 값 없으면 체크 / 등급·이전 문구 항목: 값 없으면 해제)
+// 저장된 혜택 불러오기 — 기존 계약서·양도양수·갱신은 저장된 그대로 유지 (2026-11-20)
+//  · 이전 항목: 예전과 같은 규칙(값 없으면 체크) · 새 수량별 항목: 값 없으면 해제
+//  · 예전 「실링팬/전등 한 줄 문구」도 바꾸지 않고 그대로 보여 줌
 function benLoad(bens,pkgId){
   bens=bens||{};
   document.querySelectorAll('[data-benefit]').forEach(cb=>{
     const k=cb.dataset.benefit;
-    cb.checked=bens[k]!==undefined?!!bens[k]:!benIsTier(k);
+    cb.checked=bens[k]!==undefined?!!bens[k]:!benItem(k).grp;
   });
-  benMigrateLegacy(pkgId);
   benSyncUI();
+}
+// 새 계약서(신규 작성)인지 — 기존 계약 수정·양도양수·갱신이면 false
+function benIsNewContract(){
+  return !currentEditId&&!renewFrom&&currentContractKind==='new';
 }
 // 가정용 패키지를 고르면 등급별 기본 혜택 자동 선택
 function benApplyPkgDefault(pkgId){
   const note=document.getElementById('ben-auto-note');
-  const list=PKG_BEN_DEFAULT[pkgId];
+  const list=benIsNewContract()?PKG_BEN_DEFAULT[pkgId]:null;
   if(!list){if(note)note.style.display='none';return false;}
   document.querySelectorAll('[data-benefit]').forEach(cb=>{cb.checked=list.includes(cb.dataset.benefit);});
   benSyncUI();
@@ -3880,7 +3865,8 @@ function resetForm(){
   document.getElementById('f-special-bonus').value='0';
   document.querySelectorAll('input[name="svc"]')[0].checked=true;
   document.querySelectorAll('.svc-opt').forEach((o,i)=>o.classList.toggle('sel',i===0));
-  benLoad({},'');
+  document.querySelectorAll('[data-benefit]').forEach(cb=>{cb.checked=!benIsTier(cb.dataset.benefit);});
+  benSyncUI();
   {const n=document.getElementById('ben-auto-note');if(n)n.style.display='none';}
   document.getElementById('clink-box').style.display='none';
   updateTotal();renderUsage();
