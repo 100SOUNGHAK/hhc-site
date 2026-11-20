@@ -502,7 +502,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 .qt{position:relative;border-radius:15px;background:linear-gradient(180deg,#fff,#FAFBFD);color:#14192A;padding:12px 12px 10px;min-height:104px;display:flex;flex-direction:column;cursor:pointer;user-select:none;-webkit-user-select:none;
   box-shadow:inset 0 1px 0 #fff,0 1px 2px rgba(11,24,51,.08),0 4px 0 -1px #DCE2EC,0 10px 18px -10px rgba(11,24,51,.30);transition:transform .14s,box-shadow .14s}
 .qt:active{transform:translateY(3px);box-shadow:inset 0 1px 0 #fff,0 1px 1px rgba(11,24,51,.08),0 1px 0 0 #DCE2EC}
-.qt .nm{font-size:14px;font-weight:700;line-height:1.3;letter-spacing:-.01em;word-break:keep-all;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;padding-right:32px}
+.qt .nm{font-size:14px;font-weight:700;line-height:1.3;letter-spacing:-.01em;word-break:keep-all;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;padding-right:32px}
 .qt.on .nm{padding-right:14px}
 .qt .en{font-size:10.5px;color:#98A1B4;font-weight:600;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:30px}
 .qt.on .en{color:rgba(255,255,255,.5);padding-right:10px}
@@ -3422,6 +3422,23 @@ function pkKo(s){
   var tag=p.tag?('['+(pkTagMap()[p.tag.toLowerCase()]||c[p.tag]||p.tag)+'] '):'';
   return tag+(p.body?(c[p.body]||pkKoDict(p.body)):'');
 }
+// 품목 선택 타일 이름 (2026-11-20) — 분류 안에서는 앞의 [제품 꼬리표]를 빼고 작업명만 보여 줍니다
+//  예) 벽걸이형 분류 안 「[벽걸이형 에어컨] 기본세척」 → 「기본세척」
+//  쇼파는 꼬리표를 빼지 않고 [쇼파-건식] → [건식], [쇼파-습식] → [습식] 으로 짧게 바꿉니다
+//  ※ 품목 선택 화면에서만 적용 — 인보이스·고객 문서에 저장되는 이름은 그대로입니다
+var PK_TAGLESS=['에어컨','세탁기','매트리스','커튼','건조기','주방후드','후드','냉장고','실링팬','식탁의자','공기청정기','카페트','카펫'];
+function pkTileName(s){
+  var n=ivStripCode(pkKo(s)).replace(/\s{2,}/g,' ').trim(),sub=String((s&&s.subcat)||'').replace(/\s+/g,'');
+  var m=n.match(/^\[([^\]]{1,40})\]\s*(.*)$/);
+  if(!m)return n;
+  if(/쇼파|소파/.test(sub)){
+    if(/건식/.test(m[1]))return '[건식] '+m[2];
+    if(/습식/.test(m[1]))return '[습식] '+m[2];
+    return n;
+  }
+  if(PK_TAGLESS.some(function(k){return sub.indexOf(k)>=0;})&&m[2])return m[2];
+  return n;
+}
 // 영문명을 작게 함께 보여 줄지 (자동으로 바꾼 이름일 때만 — 맞게 바뀌었는지 확인용)
 function pkEnSub(s){return pkNeedKo(s)?ivStripCode(s.name).replace(/\s{2,}/g,' ').trim():'';}
 var _pkKoBusy=false;
@@ -3446,7 +3463,7 @@ function pkKoFetch(){
     var sk=$('sk');if(sk&&!sk.classList.contains('hidden')){pickerRender();pkFoot();}
   });
 }
-function pkLiKo(li){var sv=li&&li.svcId&&services.find(function(x){return x.id===li.svcId;});return sv?pkKo(sv):((li&&li.name)||'');}
+function pkLiKo(li){var sv=li&&li.svcId&&services.find(function(x){return x.id===li.svcId;});return ivStripCode(sv?pkKo(sv):((li&&li.name)||''));}
 function pkLiNet(li){
   var la=(li.price||0)*(li.qty||1);
   var da=li.discType==='pct'?la*((li.discVal||0)/100):(li.discVal||li.disc||0);
@@ -3455,10 +3472,10 @@ function pkLiNet(li){
 }
 function pkRowHtml(s){
   var li=pkItemOf(s.id),u=s.unit?'<small>/'+ivxEsc(s.unit)+'</small>':'';
-  if(!li)return '<div class="qt" id="pkrow-'+s.id+'" onclick="pkAdd(\''+s.id+'\')"><div class="nm">'+ivxEsc(pkKo(s))+'</div>'+(pkEnSub(s)?'<div class="en">'+ivxEsc(pkEnSub(s))+'</div>':'')+
+  if(!li)return '<div class="qt" id="pkrow-'+s.id+'" onclick="pkAdd(\''+s.id+'\')"><div class="nm">'+ivxEsc(pkTileName(s))+'</div>'+(pkEnSub(s)?'<div class="en">'+ivxEsc(pkEnSub(s))+'</div>':'')+
     '<div class="ft"><span class="pr">'+fmtAmt(s.price||0)+u+'</span><span class="add">+</span></div></div>';
   var a=pkLiNet(li),q=parseFloat(li.qty)||1;
-  return '<div class="qt on" id="pkrow-'+s.id+'" onclick="pkQty(\''+s.id+'\',1)"><span class="ok">✓</span><div class="nm">'+ivxEsc(pkKo(s))+'</div>'+(pkEnSub(s)?'<div class="en">'+ivxEsc(pkEnSub(s))+'</div>':'')+
+  return '<div class="qt on" id="pkrow-'+s.id+'" onclick="pkQty(\''+s.id+'\',1)"><span class="ok">✓</span><div class="nm">'+ivxEsc(pkTileName(s))+'</div>'+(pkEnSub(s)?'<div class="en">'+ivxEsc(pkEnSub(s))+'</div>':'')+
     '<div class="ft"><span class="pr">'+fmtAmt(a.net)+
       ((parseFloat(li.price)||0)!==(parseFloat(s.price)||0)?'<span class="chg">단가 '+fmtAmt(li.price||0)+'</span>':'')+
       (a.disc>0.005?'<span class="dcs">할인 −'+fmtAmt(a.disc)+'</span>':'')+'</span></div>'+
