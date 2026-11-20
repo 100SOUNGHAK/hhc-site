@@ -6482,7 +6482,65 @@ async function shareKakao(id){
   showLoad('링크 단축 중...');
   var msg=await buildMsgAsync(inv);
   hideLoad();
-  cpTxt(ivNoBold(msg));showToast('카카오톡 메시지 복사됨',3000);   // 카카오는 굵은 글씨(*…*) 미지원
+  cpTxt(ivNoBold(msg));   // 카카오는 굵은 글씨(*…*) 미지원 — 전체 문구는 먼저 복사해 둡니다
+  // 💛 그림 카드로 공유 (2026-11-20) — 실패하면 예전처럼 복사만
+  var lnk=getLnk(inv.id),shortLnk=tinyCache[lnk]||lnk;
+  var ok=await ivKkCard(inv,shortLnk);
+  if(!ok)showToast('카카오톡 메시지 복사됨',3000);
+}
+/* 💛 인보이스 카카오톡 그림 카드 (2026-11-20)
+   · 청구·연체 → 인보이스 그림(og-invoice.jpg), 결제완료 → 결제 확인 그림(og-paid.jpg)
+   · 카드: 제목(상태 · 금액) + 한 줄 설명(기한·결제 방법) + 「인보이스 보기」 버튼 — 카카오는 제목+설명 4줄까지만 보입니다
+   · 카카오 키는 고객관리·견적서와 같은 값(settings/kakao, 기기에 저장된 hhc_kakao_key)
+   · 왓츠앱은 그대로 문구 + 링크 — 링크 미리보기에 같은 인보이스 그림이 붙습니다(functions/r.js) */
+var IV_KK_SDKS=['https://t1.kakaocdn.net/kakao_js_sdk/2.7.5/kakao.min.js','https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js','https://developers.kakao.com/sdk/js/kakao.js'];
+function ivKkWin(){try{if(window.top&&window.top!==window&&window.top.location.origin===location.origin)return window.top;}catch(_){}return window;}
+function ivKkLoad(){
+  var W=ivKkWin();if(W.Kakao)return Promise.resolve(W.Kakao);if(W.__hhcKkLoad)return W.__hhcKkLoad;
+  W.__hhcKkLoad=new Promise(function(res,rej){var i=0;(function next(){
+    if(i>=IV_KK_SDKS.length){W.__hhcKkLoad=null;rej(new Error('sdk'));return;}
+    var sc=W.document.createElement('script');sc.src=IV_KK_SDKS[i++];sc.async=true;
+    sc.onload=function(){W.Kakao?res(W.Kakao):next();};sc.onerror=function(){try{sc.remove();}catch(_){}next();};
+    W.document.head.appendChild(sc);})();});
+  return W.__hhcKkLoad;
+}
+async function ivKkKey(){
+  var k='';try{k=localStorage.getItem('hhc_kakao_key')||'';}catch(_){}
+  if(k||!DB)return k;
+  try{var d=await DB.collection('settings').doc('kakao').get();k=(d.exists&&(d.data()||{}).jsKey)||'';if(k){try{localStorage.setItem('hhc_kakao_key',k);}catch(_){}}}catch(_){}
+  return k;
+}
+function ivKkText(inv){
+  var st=inv.status||val('inv-status')||'billing',lg=msgLang==='en'?'en':(msgLang==='ms'?'ms':'ko');
+  var amt=fmtAmt(inv.total||0,inv.currency),due=inv.due?ivDay(inv.due,lg):'',cash=ivIsCash(inv);
+  var T={
+    ko:{billing:['인보이스 · '+amt,(due?'결제 기한 '+due+' · ':'')+(cash?'방문 시 직원에게 현금으로 결제해 주세요.':'결제 계좌·방법은 인보이스에서 확인하세요.')],
+        overdue:['결제 기한이 지났습니다 · '+amt,(due?'기한 '+due+' · ':'')+'이미 이체하셨다면 영수증을 보내 주세요.'],
+        paid:['결제가 확인되었습니다 · '+amt,'이용해 주셔서 감사합니다. 인보이스에서 내역을 확인하세요.'],btn:'인보이스 보기'},
+    en:{billing:['Invoice · '+amt,(due?'Due '+due+' · ':'')+(cash?'Please pay our staff in cash during the visit.':'Payment details are in the invoice.')],
+        overdue:['Payment overdue · '+amt,(due?'Due '+due+' · ':'')+'If you have already paid, please send us the receipt.'],
+        paid:['Payment received · '+amt,'Thank you! You can view the details in the invoice.'],btn:'View invoice'},
+    ms:{billing:['Invois · '+amt,(due?'Tarikh akhir '+due+' · ':'')+(cash?'Sila bayar tunai kepada kakitangan kami semasa lawatan.':'Butiran bayaran ada dalam invois.')],
+        overdue:['Bayaran tertunggak · '+amt,(due?'Tarikh akhir '+due+' · ':'')+'Jika sudah bayar, sila hantar resit.'],
+        paid:['Bayaran diterima · '+amt,'Terima kasih! Lihat butiran dalam invois.'],btn:'Lihat invois'}
+  }[lg];
+  var K=T[st]||T.billing;
+  return {t:K[0],d:K[1],btn:T.btn,img:st==='paid'?'og-paid.jpg':'og-invoice.jpg'};
+}
+async function ivKkCard(inv,link){
+  if(!link)return false;
+  var key=await ivKkKey();
+  if(!key){showToast('메시지 복사됨 · 카카오 키가 없어 카드 공유는 고객관리에서 키 등록 후 가능합니다',4000);return true;}
+  var K;try{K=await ivKkLoad();}catch(_){showToast('메시지 복사됨 · 카카오톡 공유를 불러오지 못했습니다',3500);return true;}
+  try{if(!K.isInitialized())K.init(key);}catch(_){showToast('메시지 복사됨 · 카카오 키를 확인해 주세요',3500);return true;}
+  var share=K.Share||K.Link;if(!share||!share.sendDefault){showToast('메시지 복사됨 · 이 브라우저는 카카오톡 공유를 지원하지 않습니다',3500);return true;}
+  var c=ivKkText(inv),lk={mobileWebUrl:link,webUrl:link};
+  showToast('💛 카카오톡 공유창을 엽니다 · 전체 메시지도 복사되었습니다',3000);
+  try{share.sendDefault({objectType:'feed',
+    content:{title:c.t,description:c.d,imageUrl:'https://happyhomecare.com.my/'+c.img,imageWidth:1200,imageHeight:630,link:lk},
+    buttons:[{title:c.btn,link:lk}]});}
+  catch(_){showToast('카카오톡 공유 실패 · 메시지는 복사해 두었습니다',3500);}
+  return true;
 }
 function quickEmail(id){
   var inv=invoices.find(function(i){return i.id===id;});if(!inv)return;
