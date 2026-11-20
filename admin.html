@@ -3931,6 +3931,7 @@ function jtRender(){
   box.style.display='';
   jtAllocInit();
   const c=jtCur(),sibs=c&&c.joint_id?jtSibs(c.joint_id):[];
+  jtHealMembers(sibs);
   let h='<div class="ck-box-t">👥 공동계약 / Joint Contract</div>'+
     '<div class="jt-tip">골드 이상 등급만 · 아래 「계약상품」의 <b>납부금액·적립금은 계약 전체 금액</b>입니다. 그 사용가능금액을 계약자별로 <b>배분</b>해 주세요. 계약 조건·부가혜택은 모두 같게, 잔액·이용내역은 계약자마다 따로 관리되고, 고객 화면에는 다른 계약자의 <b>이름만</b> 보입니다.</div>';
   if(sibs.length){
@@ -3979,6 +3980,17 @@ function jtRender(){
   jtMvHint();
 }
 window.jtRender=jtRender;
+// 공동계약자 이름 목록이 실제 계약자와 다르면(중복·빠짐) 조용히 바로잡음
+let _jtHealing=false;
+async function jtHealMembers(sibs){
+  if(_jtHealing||!sibs||!sibs.length||!db)return;
+  const want=JSON.stringify(jtMembersOf(sibs));
+  const bad=sibs.filter(x=>JSON.stringify(Array.isArray(x.joint_members)?x.joint_members.map(m=>({seq:parseInt(m.seq)||0,name:String(m.name||'')})):[])!==want);
+  if(!bad.length)return;
+  _jtHealing=true;
+  try{for(const x of bad)await updateDoc(doc(db,'contracts',x.__id),{joint_members:JSON.parse(want)});}catch(e){console.warn('공동계약자 목록 정리 실패',e);}
+  _jtHealing=false;
+}
 window.jtEqual=function(){
   const t=jtTotals(),rows=jtAllocRows();if(!rows.length||t.T<=0)return;
   const each=Math.floor(t.T/rows.length*100)/100;let acc=0;
@@ -4133,10 +4145,11 @@ async function jtAfterSave(id,data,prep){
       if(window.HHCC_upsert)try{HHCC_upsert(nd.name,nd.phone);}catch(e){}
     }
     jtDraft=[];
-    const others=jtSibs(jid).filter(x=>x.__id!==id&&!touched.some(t=>t.__id===x.__id));   // 배분 목록에 없던 문서(없어야 정상)
+    const others=jtSibs(jid).filter(x=>x.__id!==id&&!touched.some(t=>t.__id===x.__id)&&!made.some(t=>t.__id===x.__id));   // 배분 목록에 없던 문서(없어야 정상)
     const all=[Object.assign({},src,{__id:id,joint_seq:parseInt(src.joint_seq)||1})].concat(touched,others,made).sort((a,b)=>(parseInt(a.joint_seq)||0)-(parseInt(b.joint_seq)||0));
-    const members=jtMembersOf(all);
-    for(const x of all)await updateDoc(doc(db,'contracts',x.__id),{joint_members:members});
+    const _seen={},uniq=all.filter(x=>_seen[x.__id]?false:(_seen[x.__id]=1));   // 같은 계약자가 두 번 들어가지 않게
+    const members=jtMembersOf(uniq);
+    for(const x of uniq)await updateDoc(doc(db,'contracts',x.__id),{joint_members:members});
     jtAllocFor='';jtRender();
   }catch(e){console.error('공동계약 저장 실패',e);showModal('공동계약 정리 실패','이 계약은 저장되었지만 다른 공동계약자 반영 중 문제가 생겼습니다. 다시 저장해 주세요. '+(e.message||''),false);}
 }
@@ -4863,6 +4876,7 @@ function renderList(){
   document.getElementById('list-tbody').innerHTML=filtered.map(c=>{
     if(c.__jtHead){
       const m=c.mem,f=m[0]||{},pk=PACKAGES.find(p=>p.id===f.package_id);
+      if(listStFilter==='all')jtHealMembers(m);
       const al=m.reduce((s,x)=>s+(parseFloat(x.joint_alloc)||0),0),rm=m.reduce((s,x)=>s+ncBalance(x).remain,0);
       return `<tr class="jt-gh"><td colspan="7"><span class="jt-gh-t">👥 공동계약 ${m.length}인</span><span class="jt-gh-no">${ncEsc(cxaNo(f,f.__id))}</span>`+
         `<span class="jt-gh-m">${pk?ncEsc(String(pk.label).split(' / ')[0]):''}${f.joint_paid!=null?` · 전체 납부 RM ${fmt(f.joint_paid)} · 배분 합계 RM ${fmt(al)}`:''} · 잔액 합계 <b>RM ${fmt(rm)}</b></span></td></tr>`;
@@ -5228,7 +5242,7 @@ window.adjLabelEn=adjLabelEn;window.koreanizeUsageDesc=koreanizeUsageDesc;
 function ckInfo(c,isEn){
   const X=(k,e)=>isEn?e:k,k=c&&c.contract_kind;
   if(c&&c.joint_id){   // 👥 공동계약 — 공동계약자는 이름만
-    const jm=(Array.isArray(c.joint_members)?c.joint_members:[]).slice().sort((a,b)=>(a.seq||0)-(b.seq||0));
+    const _jk={},jm=(Array.isArray(c.joint_members)?c.joint_members:[]).filter(m=>{const k=(m.seq||0)+'|'+(m.name||'');return _jk[k]?false:(_jk[k]=1);}).sort((a,b)=>(a.seq||0)-(b.seq||0));
     const n=jm.length||1,me=parseInt(c.joint_seq)||1;
     const rows=[[X('공동계약자','Joint Contractors'),jm.map(m=>(m.seq||'')+'. '+ncEsc(m.name||'')).join(' · ')||ncEsc(c.name||'')],
       [X('계약자 순번','Contractor No.'),isEn?(me+' of '+n):(me+'번 / 총 '+n+'명')]];

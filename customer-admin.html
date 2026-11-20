@@ -44,7 +44,8 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .src{font-size:10px;font-weight:800;border-radius:5px;padding:2px 6px}
 .src.ct{background:var(--pri-bg);color:var(--pri)}.src.iv{background:var(--ok-bg);color:var(--ok)}.src.ip{background:var(--warn-bg);color:var(--warn)}.src.cp{background:var(--vio-bg);color:var(--vio)}.src.bk{background:#e0f2fe;color:#0369a1}.src.rq{background:#fce7f3;color:#be185d}.src.qt{background:#f1f5f9;color:#475569}.src.sc{background:var(--gold-bg);color:var(--gold)}
 .pill{font-size:10px;font-weight:800;border-radius:5px;padding:2px 7px;white-space:nowrap}
-.pill.ok{background:var(--ok-bg);color:var(--ok)}.pill.warn{background:var(--warn-bg);color:var(--warn)}.pill.bad{background:var(--bad-bg);color:var(--bad)}.pill.blue{background:var(--pri-bg);color:var(--pri)}.pill.vio{background:var(--vio-bg);color:var(--vio)}.pill.gold{background:var(--gold-bg);color:var(--gold)}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}.pill.warn{background:var(--warn-bg);color:var(--warn)}.pill.bad{background:var(--bad-bg);color:var(--bad)}.pill.blue{background:var(--pri-bg);color:var(--pri)}.pill.vio{background:var(--vio-bg);color:var(--vio)}.pill.gold{background:var(--gold-bg);color:var(--gold)}.pill.jt{background:#EEF2FB;color:#1A2F5E}
+.balc-jt{margin-top:8px;font-size:11.5px;line-height:1.55;color:#1A2F5E;background:#EEF2FB;border-radius:8px;padding:6px 9px}.balc-jt b{font-weight:800}
 .cbtns{display:flex;flex-direction:column;gap:5px}
 .empty{text-align:center;color:var(--ink3);font-size:13px;padding:40px 0}
 /* 상세 드로어 */
@@ -2424,7 +2425,20 @@ function caBal(c){
   const cnt=h.filter(u=>(parseFloat(u.amount)||0)>0).length;
   return {paid,bonus,total,netUsed:Math.max(0,used-disc-carry),remain:total-used+disc+carry,cnt,rows:h};
 }
+// 👥 공동계약 (2026-11-20) — 같은 계약서번호로 묶인 계약자. 계약 전체 금액 joint_paid·joint_bonus, 이 사람 배분액 joint_alloc
+function caJt(x){
+  if(!x||!x.joint_id)return null;
+  const k={},jm=(Array.isArray(x.joint_members)?x.joint_members:[]).filter(m=>{const t=(m.seq||0)+'|'+(m.name||'');return k[t]?false:(k[t]=1);}).sort((a,b)=>(a.seq||0)-(b.seq||0));
+  const seq=parseInt(x.joint_seq)||1;
+  return {n:jm.length||1,seq,others:jm.filter(m=>(parseInt(m.seq)||0)!==seq).map(m=>String(m.name||'')),
+    alloc:x.joint_alloc!=null?parseFloat(x.joint_alloc)||0:null,paid:x.joint_paid!=null?parseFloat(x.joint_paid)||0:null,bonus:(parseFloat(x.joint_bonus)||0)+(parseFloat(x.joint_spec)||0)};
+}
+function caJtPill(x){const j=caJt(x);return j?'<span class="pill jt">👥 공동계약 '+j.n+'인 · '+j.seq+'번</span>':'';}
+function caJtLine(x){const j=caJt(x);if(!j)return '';
+  return '<div class="balc-jt">👥 <b>공동계약 '+j.n+'인</b>'+(j.others.length?' · 함께: '+esc(j.others.join(', ')):'')+
+    (j.alloc!=null?' · 이 고객 배분 <b>'+fmtRM(j.alloc)+'</b>':'')+(j.paid!=null?' · 계약 전체 납부 '+fmtRM(j.paid)+(j.bonus>0?' + 보너스 '+fmtRM(j.bonus):''):'')+'</div>';}
 function isPkg(e){return /^패키지/.test(e.member||'')||e.docs.contracts.length>0;}
+function caJtOf(e){return (e.docs&&e.docs.contracts||[]).find(x=>x.joint_id&&x.status!=='ended')||null;}
 function isVVIP(e){return (e.member||'').toUpperCase()==='VVIP';}
 
 // ═══ 렌더 ═══
@@ -2446,6 +2460,7 @@ function renderStats(){
   const nIp=act.filter(x=>x.docs.inspections.length>0).length;
   const nCp=act.filter(x=>x.docs.coupons.length>0).length;
   const nQt=act.filter(x=>x.docs.quotes.length>0).length;
+  const nJt=act.filter(x=>!!caJtOf(x)).length;
   // 🌿 정기관리 도래 — 에어컨 인보이스 기준 3개월(3~5개월) · 6개월 이상
   // 💳 미수금 — 청구중(만기 전) · 연체중(만기 지남)
   const nBl=act.filter(x=>billStat(x).bn>0).length;
@@ -2471,13 +2486,13 @@ function renderStats(){
   const seg=(f,lb,n)=>'<button type="button" class="sg'+(curFilter===f?' on':'')+'" onclick="setFilter(\''+f+'\')">'+lb+'<i>'+n+'</i></button>';
   const sg=document.getElementById('ca-seg');
   if(sg)sg.innerHTML=
-    seg('all','전체',total)+seg('vvip','VVIP',vvip)+seg('package','패키지',pkg)+seg('contract','계약',nCt)+
+    seg('all','전체',total)+seg('vvip','VVIP',vvip)+seg('package','패키지',pkg)+(nJt?seg('joint','👥 공동계약',nJt):'')+seg('contract','계약',nCt)+
     seg('invoice','인보이스',nIv)+seg('inspect','점검',nIp)+seg('coupon','상품권',nCp)+seg('quote','견적',nQt)+
     seg('inactive','비활성',inact);
   const hs=document.getElementById('ca-hs');
   if(hs)hs.textContent='활성 고객 '+total+'명'+(nOd?' · 연체 '+nOd+'명':'')+(inact?' · 비활성 '+inact+'명':'');
 }
-const FILTERS=[['all','전체'],['contract','📑 계약'],['package','📦 패키지'],['vvip','👑 VVIP'],['invoice','💳 인보이스'],['inspect','🔧 점검'],['coupon','🎫 상품권'],['quote','🧾 견적'],['bill','🧾 청구중'],['overdue','⏰ 연체중'],['care3','🌿 3개월 경과'],['care6','🔧 6개월 경과'],['badphone','⚠️ 연락처 불완전'],['nophone','연락처 없음'],['inactive','⏸ 비활성']];
+const FILTERS=[['all','전체'],['contract','📑 계약'],['package','📦 패키지'],['joint','👥 공동계약'],['vvip','👑 VVIP'],['invoice','💳 인보이스'],['inspect','🔧 점검'],['coupon','🎫 상품권'],['quote','🧾 견적'],['bill','🧾 청구중'],['overdue','⏰ 연체중'],['care3','🌿 3개월 경과'],['care6','🔧 6개월 경과'],['badphone','⚠️ 연락처 불완전'],['nophone','연락처 없음'],['inactive','⏸ 비활성']];
 function renderChips(){
   // 필터 칩 줄은 제거됨 — 상단 요약 카드가 같은 필터 역할을 합니다 (요소가 있으면 기존대로 표시)
   const el=document.getElementById('chips');
@@ -2493,6 +2508,7 @@ function passFilter(e){
   switch(curFilter){
     case 'contract':return e.docs.contracts.length>0;
     case 'package':return isPkg(e);
+    case 'joint':return !!caJtOf(e);
     case 'vvip':return isVVIP(e);
     case 'invoice':return e.docs.invoices.length>0;
     case 'inspect':return e.docs.inspections.length>0;
@@ -2973,6 +2989,10 @@ window.caCareUndo=async function(idx,k){
   }catch(err){toast('저장 실패: '+err.message);}
 };
 function memberBadge(e){
+  const _jc=(e.docs&&e.docs.contracts||[]).find(x=>x.joint_id&&x.status!=='ended');
+  return memberBadge0(e)+(_jc?caJtPill(_jc):'');
+}
+function memberBadge0(e){
   if(isVVIP(e))return '<span class="pill gold">👑 VVIP</span>';
   if(/^패키지/.test(e.member||''))return '<span class="pill blue">📦 '+esc(e.member)+'</span>';
   if(e.member)return '<span class="pill blue">👑 '+esc(e.member)+'</span>';
@@ -2986,7 +3006,7 @@ function renderList(){
   const qRaw=document.getElementById('q').value.trim();
   const q=sn(qRaw);
   const qNum=qRaw.replace(/[^0-9]/g,'');
-  const list=entries.filter(e=>{
+  let list=entries.filter(e=>{
     if(!passFilter(e))return false;
     if(!q&&!qNum)return true;
     if(q&&sn(e.name).includes(q))return true;
@@ -2998,6 +3018,8 @@ function renderList(){
     if(qNum.length>=4&&String(e.phone||'').replace(/[^0-9]/g,'').includes(qNum))return true;
     return false;
   });
+  // 👥 공동계약 구분에서는 같은 계약끼리 붙여서(계약서번호 → 순번)
+  if(curFilter==='joint'){const K=e=>{const c=caJtOf(e);return c?String(c.contract_no||c.joint_id)+'|'+('00'+(parseInt(c.joint_seq)||0)).slice(-3):'~';};list=list.slice().sort((a,b)=>K(a).localeCompare(K(b)));}
   const host=document.getElementById('list');
   // ── 지금 보고 있는 구분 · 검색 결과 안내 줄 ──
   const _flb=(FILTERS.find(f=>f[0]===curFilter)||['','전체'])[1].replace(/^[^\w가-힣]+\s*/,'');
@@ -3420,14 +3442,14 @@ window.openDrawer=function(idx){
     if(_live.length){
       const _pct=_sumTotal>0?Math.max(0,Math.min(100,Math.round(_sumRemain/_sumTotal*100))):0;
       h+='<div class="balc-sum"><div class="k">사용 가능 잔액'+(_live.length>1?' (유효 계약 합계)':'')+
-         (_solo?'<b class="balc-pk">'+esc(pkgLabel(_solo.package_id)||'패키지')+'</b><span class="pill ok">✅ 유효</span>':'')+'</div>'+
+         (_solo?'<b class="balc-pk">'+esc(pkgLabel(_solo.package_id)||'패키지')+'</b><span class="pill ok">✅ 유효</span>'+caJtPill(_solo):'')+'</div>'+
          '<div class="v">'+fmtRM(_sumRemain)+'</div>'+
          '<div class="balc-bar"><i style="width:'+_pct+'%"></i></div>'+
          '<div class="balc-bl"><span>사용 '+fmtRM(_sumUsed)+'</span><span>'+(_pct>0?_pct+'% 남음':'전액 사용')+'</span></div>';
       if(_solo){
         const _sb=caBal(_solo);
-        h+='<div class="balc-r2 solo"><span>계약일 '+esc(_solo.contract_date||'—')+'</span>'+
-           '<span>납입 '+fmtRM(_sb.paid)+(_sb.bonus>0?' + 보너스 '+fmtRM(_sb.bonus):'')+'</span>'+
+        h+=caJtLine(_solo)+'<div class="balc-r2 solo"><span>계약일 '+esc(_solo.contract_date||'—')+'</span>'+
+           (caJt(_solo)?'':'<span>납입 '+fmtRM(_sb.paid)+(_sb.bonus>0?' + 보너스 '+fmtRM(_sb.bonus):'')+'</span>')+
            '<span>이용 '+_sb.cnt+'회 · 사용 '+fmtRM(_sb.netUsed)+'</span>'+
            '<a class="balc-go" target="_blank" rel="noopener" data-t="📑 계약서 '+esc(pkgLabel(_solo.package_id)||'')+' '+esc(_solo.contract_date||'')+'" href="'+BASE+'/admin.html?view='+encodeURIComponent(_solo.__id)+'&mode=all&lang=ko" onclick="return caView(this.href,this.dataset.t,event)">이용내역 ↗</a></div>';
       }
@@ -3440,11 +3462,11 @@ window.openDrawer=function(idx){
       const pct=b.total>0?Math.max(0,Math.min(100,Math.round(b.remain/b.total*100))):0;
       return '<div class="balc-r'+(end?' off':'')+'">'+
         '<div class="balc-r1"><b>'+esc(pkgLabel(x.package_id)||'패키지')+'</b>'+
-        (end?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏹ 종료</span>':'<span class="pill ok">✅ 유효</span>')+
-        '<span class="balc-rv">'+fmtRM(b.remain)+'</span></div>'+
+        (end?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏹ 종료</span>':'<span class="pill ok">✅ 유효</span>')+caJtPill(x)+
+        '<span class="balc-rv">'+fmtRM(b.remain)+'</span></div>'+caJtLine(x)+
         '<div class="balc-bar sm"><i style="width:'+pct+'%"></i></div>'+
         '<div class="balc-r2"><span>계약일 '+esc(x.contract_date||'—')+'</span>'+
-        '<span>납입 '+fmtRM(b.paid)+(b.bonus>0?' + 보너스 '+fmtRM(b.bonus):'')+'</span>'+
+        (caJt(x)?'':'<span>납입 '+fmtRM(b.paid)+(b.bonus>0?' + 보너스 '+fmtRM(b.bonus):'')+'</span>')+
         '<span>이용 '+b.cnt+'회 · 사용 '+fmtRM(b.netUsed)+'</span>'+
         '<a class="balc-go" target="_blank" rel="noopener" data-t="📑 계약서 '+esc(pkgLabel(x.package_id)||'')+' '+esc(x.contract_date||'')+'" href="'+BASE+'/admin.html?view='+encodeURIComponent(x.__id)+'&mode=all&lang=ko" onclick="return caView(this.href,this.dataset.t,event)">이용내역 ↗</a></div>'+
         '</div>';
@@ -3574,8 +3596,8 @@ window.openDrawer=function(idx){
     let usage=[];try{usage=typeof x.usage_history==='string'?JSON.parse(x.usage_history||'[]'):(x.usage_history||[]);}catch(_){ }
     const ctEnded=x.status==='ended';
     return '<div class="drow"'+(ctEnded?' style="opacity:.6;background:#f8fafc"':'')+'><span class="id">'+esc(pkgLabel(x.package_id)||'패키지')+'</span>'+
-      (ctEnded?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏹ 종료</span>':'<span class="pill ok">✅ 유효</span>')+
-      '<span class="pill blue">납입 '+fmtRM(x.amount_paid)+'</span><span class="m">'+esc(x.contract_date||'')+' · 이용내역 '+usage.length+'건</span><a class="open-btn" target="_blank" rel="noopener" data-t="✏️ 계약서 수정 — '+esc(pkgLabel(x.package_id)||'')+' '+esc(x.contract_date||'')+'" href="'+window.caEditUrl('contracts',x)+'" onclick="return caView(this.href,this.dataset.t,event)">✏️ 열기·수정</a>'+rowBtns('contracts',x.__id)+'</div>';
+      (ctEnded?'<span class="pill" style="background:#f1f5f9;color:#64748b">⏹ 종료</span>':'<span class="pill ok">✅ 유효</span>')+caJtPill(x)+
+      (caJt(x)&&caJt(x).alloc!=null?'<span class="pill blue">배분 '+fmtRM(caJt(x).alloc)+'</span>':'<span class="pill blue">납입 '+fmtRM(x.amount_paid)+'</span>')+'<span class="m">'+esc(x.contract_date||'')+' · 이용내역 '+usage.length+'건</span><a class="open-btn" target="_blank" rel="noopener" data-t="✏️ 계약서 수정 — '+esc(pkgLabel(x.package_id)||'')+' '+esc(x.contract_date||'')+'" href="'+window.caEditUrl('contracts',x)+'" onclick="return caView(this.href,this.dataset.t,event)">✏️ 열기·수정</a>'+rowBtns('contracts',x.__id)+'</div>';
   }).join(''):'<div class="dnone">계약서 없음</div>';
   h+='</div>';
   // 상품권
