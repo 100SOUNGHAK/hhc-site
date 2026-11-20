@@ -733,6 +733,12 @@ body.qm-lock{overflow:hidden}
 .cpn.off b{color:#c4d3e4;font-weight:700;font-size:13px}
 .cpn.off .ic{filter:grayscale(1);opacity:.5}
 .calc-tot{text-align:right}
+.calc-req{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;margin-top:18px;min-height:58px;padding:9px 16px;border-radius:14px;text-decoration:none;
+  background:linear-gradient(120deg,#F1DCA2,#C9A44C);color:#0b1a33;box-shadow:0 14px 28px -14px rgba(201,164,76,.9);transition:transform .14s,filter .14s}
+.calc-req .t1{font-size:16px;font-weight:900;letter-spacing:-.02em}
+.calc-req .t2{font-size:11.5px;font-weight:700;opacity:.78}
+.calc-req:hover{filter:brightness(1.05)}
+.calc-req:active{transform:scale(.98)}
 .calc-tot .k{font-size:11.5px;font-weight:800;letter-spacing:.14em;color:var(--gold-300)}
 .calc-tot .v{font-family:'Noto Serif KR',serif;font-size:38px;font-weight:600;color:#fff;line-height:1.1;letter-spacing:-.03em}
 
@@ -4722,6 +4728,8 @@ html[lang=en] .hp2 .gq-en,html[lang=en] .mp2 .gq-en{display:inline}html[lang=en]
           <div class="k">예상 합계</div><div class="v" id="cTot">RM 0</div>
         </div>
       </div>
+      <!-- 📋 이 견적으로 의뢰 신청 — 계산한 품목이 의뢰 요청서 「의뢰 품목」에 바로 담깁니다 (2026-11-20) -->
+      <a class="calc-req" id="cReq" href="/request" target="_top"><span class="t1">📋 이 견적으로 의뢰 신청</span><span class="t2">품목이 의뢰서에 바로 담깁니다 →</span></a>
       </div>
     </div>
 
@@ -5697,7 +5705,35 @@ setTimeout(function(){var d=document.getElementById('dcard');if(d)d.classList.ad
       document.getElementById('cDisc').textContent='− '+fmt(disc);
     }
     document.getElementById('cTot').textContent=fmt(tot);
+    reqLink();
   }
+  /* 📋 이 견적으로 의뢰 신청 (2026-11-20) — 계산기 품목을 ?ci=[{t,c,q}] 로 넘깁니다 (의뢰서가 같은 품목·방식으로 담음)
+     · 의뢰서의 「가격 · 서비스」 창 안에서 열린 경우: 의뢰서에 메시지로 바로 담고 창을 닫음 (응답이 없으면 그냥 이동) */
+  function reqItems(){
+    return [].map.call(rowsEl.children,function(row){
+      var it=ITEMS[+row.querySelector('.ci').value],m=it.m[+row.querySelector('.ct').value||0]||it.m[0];
+      return {t:it.n,c:m[0],q:Math.max(1,parseInt(row.querySelector('.cq').value||'1',10))};
+    });
+  }
+  function reqLink(){
+    var a=document.getElementById('cReq');if(!a)return;
+    var en=window.currentSiteLang==='en';
+    a.href='/request?ci='+encodeURIComponent(JSON.stringify(reqItems()))+(en?'&lang=en':'');
+    a.querySelector('.t1').textContent=en?'📋 Request this estimate':'📋 이 견적으로 의뢰 신청';
+    a.querySelector('.t2').textContent=en?'Items go straight into the request form →':'품목이 의뢰서에 바로 담깁니다 →';
+  }
+  (function(){
+    var a=document.getElementById('cReq');if(!a)return;
+    a.addEventListener('click',function(e){
+      if(window.parent===window)return;
+      e.preventDefault();
+      var href=a.href,done=false;
+      function onAck(ev){if(ev.data&&ev.data.hhcCalcAck!=null){done=true;window.removeEventListener('message',onAck);}}
+      window.addEventListener('message',onAck);
+      try{window.parent.postMessage({hhcCalcItems:reqItems()},'*');}catch(_e){}
+      setTimeout(function(){if(!done){window.removeEventListener('message',onAck);try{window.top.location.href=href;}catch(_e){window.open(href,'_blank');}}},500);
+    });
+  })();
 
   addBtn.addEventListener('click',function(){ addRow(0,null,1); calc(); });
   addRow(0,1,2);

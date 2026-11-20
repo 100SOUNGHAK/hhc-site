@@ -1930,9 +1930,18 @@ const CALC_TO_PK={
 };
 const CALC_M_TO_PK={"전용약품세척":'약품세척',"분해약품세척":'분해세척',"건식진공흡입방식":'건식방식',"습식스팀살균방식":'습식살균방식'};
 function calcToPickAdd(){
-  if(!calcItems.length)return;
+  if(!calcListToPicked(calcItems))return;
+  renderPicked();
+  const b=$('calcToPick');if(b){b.classList.add('done');b.disabled=true;$('calcToPickT').textContent=isEn()?'Added to your items ✓':'의뢰 품목에 담았습니다 ✓';}
+  rqFlashItems();
+}
+function rqFlashItems(){
+  const ci=$('card-items');
+  if(ci){ci.scrollIntoView({behavior:'smooth',block:'center'});ci.classList.remove('rq-flash');void ci.offsetWidth;ci.classList.add('rq-flash');}
+}
+function calcListToPicked(list){
   let added=0;
-  calcItems.forEach(function(it){
+  (list||[]).forEach(function(it){
     if(it.c==='__addon')return;
     const m=CALC_TO_PK[it.t],meth=CALC_M_TO_PK[it.c]||it.c;
     let n=Math.max(1,Math.min(99,it.q|0));
@@ -1951,12 +1960,34 @@ function calcToPickAdd(){
     }
     added++;
   });
-  if(!added)return;
+  return added;
+}
+// 🏠 홈페이지 견적 계산기에서 넘어온 품목 [{t,c,q}] → 이 화면 계산기 + 의뢰 품목에 함께 반영 (2026-11-20)
+//   · 주소 ?ci=… (홈페이지에서 「이 견적으로 의뢰 신청」) · 또는 「가격 · 서비스」 창 안의 홈페이지가 보내는 메시지
+function rqAddCalcItems(arr){
+  const list=(Array.isArray(arr)?arr:[]).slice(0,40).map(function(x){
+    const t=String(x&&x.t||''),c=String(x&&x.c||''),q=Math.max(1,Math.min(9999,parseInt(x&&x.q,10)||1));
+    return (CALC_PRICES[t]&&CALC_PRICES[t][c]!=null)?{t:t,c:c,q:q,price:CALC_PRICES[t][c]}:null;
+  }).filter(Boolean);
+  if(!list.length)return 0;
+  list.forEach(function(it){calcItems.push(it);});
+  try{calcRender();}catch(_e){}
+  const n=calcListToPicked(list);
   renderPicked();
   const b=$('calcToPick');if(b){b.classList.add('done');b.disabled=true;$('calcToPickT').textContent=isEn()?'Added to your items ✓':'의뢰 품목에 담았습니다 ✓';}
-  const ci=$('card-items');
-  if(ci){ci.scrollIntoView({behavior:'smooth',block:'center'});ci.classList.remove('rq-flash');void ci.offsetWidth;ci.classList.add('rq-flash');}
+  return n;
 }
+(function(){
+  let ci=null;try{ci=JSON.parse(new URLSearchParams(location.search).get('ci')||'null');}catch(e){ci=null;}
+  if(ci&&rqAddCalcItems(ci))setTimeout(rqFlashItems,400);
+  window.addEventListener('message',function(e){
+    const d=e.data;if(!d||!Array.isArray(d.hhcCalcItems))return;
+    if(!/^https:\/\/([a-z0-9-]+\.)*(happyhomecare\.com\.my|hhc-3p8\.pages\.dev)$/.test(e.origin)&&e.origin!==location.origin)return;
+    const n=rqAddCalcItems(d.hhcCalcItems);
+    try{e.source&&e.source.postMessage({hhcCalcAck:n},e.origin);}catch(_e){}
+    if(n){try{window.__hvHide&&window.__hvHide();}catch(_e){}setTimeout(rqFlashItems,350);}
+  });
+})();
 function calcToPickState(){
   const b=$('calcToPick');if(!b)return;
   b.classList.remove('done');
@@ -2615,6 +2646,7 @@ function buildMsg(condoName,condoUnit,phone,remarks){
   }
   var hb=$('btn-home'); if(hb)hb.addEventListener('click',show);
   var hc=$('hv-close'); if(hc)hc.addEventListener('click',function(){hide(false);});
+  window.__hvHide=function(){hide(false);};   // 홈페이지 견적 계산기에서 품목을 담으면 창을 닫고 요청서로 (2026-11-20)
   var hbk=$('hv-back'); if(hbk)hbk.addEventListener('click',function(){
     // 홈페이지 안에서 이동했으면 그 안에서 뒤로, 아니면 요청서로 돌아옵니다
     try{if(fr.contentWindow&&fr.contentWindow.history.length>1){fr.contentWindow.history.back();return;}}catch(e){}
