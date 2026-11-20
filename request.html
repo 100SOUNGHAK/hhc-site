@@ -587,6 +587,14 @@ body{background:var(--rq-soft)}
 .calc-teaser em{display:none!important}
 .pick-it.qt{background:linear-gradient(120deg,#FFFBF0,#FDF4DD);border-color:#EBD39A}
 .pick-it.qt .nm b{white-space:normal;word-break:keep-all}
+.calc-to-pick{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;min-height:50px;margin-top:14px;border:0;border-radius:13px;cursor:pointer;
+  background:linear-gradient(120deg,#F1DCA2,#C9A44C);color:#0a1a30;font-family:inherit;font-size:15px;font-weight:900;letter-spacing:-.02em;
+  box-shadow:0 12px 24px -12px rgba(201,164,76,.9);transition:transform .14s,opacity .2s}
+.calc-to-pick:active{transform:scale(.98)}
+.calc-to-pick:disabled{opacity:.4;cursor:default;box-shadow:none}
+.calc-to-pick.done{background:linear-gradient(120deg,#16a394,#0B5F59);color:#fff}
+#card-items.rq-flash{animation:rqFlash 1.2s ease 2}
+@keyframes rqFlash{50%{box-shadow:0 0 0 3px #C9A44C,0 12px 26px -8px rgba(201,164,76,.7)}}
 /* 📐 간편 견적 배너 그림 (2026-11-20) — 팁 문구 대신 그림 한 장, 펼침 화살표는 오른쪽 아래 */
 .calc-box{background:#0a1a30!important;border:1px solid rgba(201,164,76,.6)}
 .calc-box::before{display:none}
@@ -790,6 +798,8 @@ html.rq-insp #card-items,html.rq-insp #calcBox,html.rq-insp #rpq-fee-btn{display
         <div class="calc-note" id="calc-note1">최소청구금액 RM320 미만이면 RM320이 청구됩니다. 실제 금액은 방문 후 확정됩니다.</div>
         <div class="calc-note" id="calc-note2">※ 진행 중인 이벤트 할인은 조건 충족 시 자동 반영됩니다. (공동의뢰 할인·패키지 회원 혜택 제외)</div>
         <div class="calc-note" id="calc-note3">본 견적가격은 예상안내가격으로 실제 청구 금액과 다를 수 있습니다.</div>
+        <!-- 🛒 계산한 품목을 아래 「의뢰 품목」에 바로 담기 (2026-11-20) -->
+        <button type="button" class="calc-to-pick" id="calcToPick" disabled>🛒 <span id="calcToPickT">의뢰 품목에 바로 담기</span></button>
       </div>
     </div>
   </div>
@@ -1897,7 +1907,58 @@ function calcRender(){
   }
   $('calcTotal').textContent='RM '+total.toLocaleString();
   reqPromoNotes();
+  try{calcToPickState();}catch(_e){}
 }
+// ══ 🛒 간편 견적 → 의뢰 품목 바로 담기 (2026-11-20) ══
+//  · 계산기 품목 이름 · 세척 방식을 의뢰 품목 카탈로그(PK_CATS)의 같은 품목으로 바꿔 담습니다 (이미 담긴 품목이면 수량만 더함)
+//  · 커튼(SQ · KG · 면적)처럼 수량 단위가 다른 품목은 1건으로 담고, 카탈로그에 없는 품목은 「기타」 직접 입력으로 담습니다
+//  · 세탁기 초과 중량 추가비용 줄은 담지 않습니다 (방문 시 확인)
+const CALC_TO_PK={
+  "벽걸이 에어컨":['ac_home','벽걸이형'],"매립천정형 에어컨":['ac_home','매립형 (덕트)'],"천정형 에어컨":['ac_home','천정형 (카세트)'],"실외기 에어컨":['ac_home','실외기'],
+  "세탁기 (통돌이형, 19kg 이하)":['washer',null,'통돌이세탁기'],"세탁기 (드럼형, 10kg 이하)":['washer',null,'드럼세탁기'],
+  "의류 건조기":['dryer',null,'완전분해세척'],"주방후드":['hood',null,'완전분해세척'],
+  "냉장고 (싱글도어)":['fridge',null,'단문형'],"냉장고 (더블도어)":['fridge',null,'양문형'],"공기청정기":['purifier',null,'공기청정기 청소'],
+  "매트리스":['mattress',null,'@'],"쇼파 [I형]":['sofa','@','I 형'],"쇼파 [L형]":['sofa','@','L 형'],
+  "커튼 (현장세탁, 1 SQ당)":['curtain',null,'현장세탁',1],"커튼 (전문수거방식, 1KG당)":['curtain',null,'수거세탁',1],"커튼 (약식 스팀 살균, 콘도 면적)":['curtain',null,'약식 스팀 살균',1],
+  "식탁의자 스팀세탁 (1개당)":['chair',null,'스팀세탁'],"실링팬 간이청소 (1개당)":['fan',null,'간이청소'],"실링팬 분해청소 (1개당)":['fan',null,'분해청소'],
+  "전등·콘센트 교체 (1개당)":['etc',null,'전등교체']
+};
+const CALC_M_TO_PK={"전용약품세척":'약품세척',"분해약품세척":'분해세척',"건식진공흡입방식":'건식방식',"습식스팀살균방식":'습식살균방식'};
+function calcToPickAdd(){
+  if(!calcItems.length)return;
+  let added=0;
+  calcItems.forEach(function(it){
+    if(it.c==='__addon')return;
+    const m=CALC_TO_PK[it.t],meth=CALC_M_TO_PK[it.c]||it.c;
+    let n=Math.max(1,Math.min(99,it.q|0));
+    let grp=null,svc=null,c=null;
+    if(m){
+      c=catOf(m[0]);if(m[3])n=1;
+      const gKo=m[1]==='@'?meth:m[1],sKo=m[2]==='@'?meth:(m[2]||meth);
+      (c&&c.groups||[]).forEach(function(g){if((g.ko||null)!==(gKo||null))return;(g.svcs||[]).forEach(function(v){if(v[0]===sKo){grp=g.ko?[g.ko,g.en]:null;svc=v;}});});
+    }
+    if(c&&svc){
+      const key=itemKey(c.id,grp,svc),ex=picked.find(function(p){return p.key===key;});
+      if(ex)ex.qty=Math.min(99,ex.qty+n);else picked.push({key:key,catId:c.id,grp:grp,svc:svc,qty:n});
+    }else{
+      const txt=calcLabel(it.t)+' · '+calcLabel(it.c)+(it.q>1?' × '+it.q:'');
+      picked.push({key:'free|'+Date.now()+Math.random(),catId:'etc',free:true,text:txt,qty:1});
+    }
+    added++;
+  });
+  if(!added)return;
+  renderPicked();
+  const b=$('calcToPick');if(b){b.classList.add('done');b.disabled=true;$('calcToPickT').textContent=isEn()?'Added to your items ✓':'의뢰 품목에 담았습니다 ✓';}
+  const ci=$('card-items');
+  if(ci){ci.scrollIntoView({behavior:'smooth',block:'center'});ci.classList.remove('rq-flash');void ci.offsetWidth;ci.classList.add('rq-flash');}
+}
+function calcToPickState(){
+  const b=$('calcToPick');if(!b)return;
+  b.classList.remove('done');
+  b.disabled=!calcItems.some(function(it){return it.c!=='__addon';});
+  $('calcToPickT').textContent=isEn()?'Add these to my request':'의뢰 품목에 바로 담기';
+}
+(function(){const b=$('calcToPick');if(b)b.addEventListener('click',calcToPickAdd);})();
 window.calcRefreshLang=function(){
   if(!$('calcQuickTabs'))return;
   calcRenderQuick();
