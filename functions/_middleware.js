@@ -12,12 +12,12 @@ const SITE = 'https://happyhomecare.com.my';
 const EN = {
   'guides':    ['og-guides-en.jpg',    'Our service process in photos | Happy Home Care', 'Air-con · washer · dryer · sofa · mattress · curtains'],
   'ac-guides': ['og-ac-guides-en.jpg', 'Air-con: good to know | Happy Home Care', 'Causes & fixes by symptom · before you book'],
-  'smart':     ['og-smart-en.jpg',     'Smart ways to save | Happy Home Care', 'Membership bonus credit · E-voucher 10% off'],
+  'smart':     ['og-save-en.jpg',      'Smart ways to save | Happy Home Care', 'Membership bonus credit · E-voucher 10% off'],
   'prices':    ['og-prices-en.jpg',    'Prices by service | Happy Home Care', 'Air-con · washer · sofa · mattress · curtain prices at a glance'],
   'fees':      ['og-fees-en.jpg',      'Extra charges | Happy Home Care', 'Minimum charge · parking · booking deposit'],
   'visit-fee': ['og-visitfee-en.jpg',  'On-site check fee | Happy Home Care', 'Enter your address to see your on-site check fee'],
   'calc':      ['og-calc-en.jpg',      'Quick price calculator | Happy Home Care', 'Pick your items and see the estimate instantly'],
-  'moveout':   ['og-moveout-en.jpg',   'Moving out — 2 services you need | Happy Home Care', 'Air-con · curtains before you hand over the keys'],
+  'moveout':   ['og-move-en.jpg',   'Moving out — 2 services you need | Happy Home Care', 'Air-con · curtains before you hand over the keys'],
 };
 
 export async function onRequest(context){
