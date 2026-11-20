@@ -31,7 +31,7 @@ const TYPES = [
   [/^\/booking(\.html)?$/i, 'booking',
     '예약서 · Booking | Happy Home Care', 'Booking | Happy Home Care',
     '편하신 날짜를 골라 예약을 확정해 주세요', 'Pick a date that suits you to confirm'],
-  [/^\/(my|mypage)(\.html)?$/i, 'my',
+  [/^\/(my|mypage|my-en)(\.html)?$/i, 'my',
     '마이페이지 · MY PAGE | Happy Home Care', 'MY PAGE | Happy Home Care',
     '우리 집 케어 현황, 한곳에서 확인', 'Reports, invoices, points and bookings in one place'],
   [/^\/(coupon|evoucher)(\.html)?$/i, 'voucher',
@@ -50,6 +50,24 @@ const TYPES = [
     '해피포인트 · Happy Point | Happy Home Care', 'Happy Point | Happy Home Care',
     '이용할수록 쌓이는 해피포인트', 'Earn points every time you use our service'],
 ];
+
+// 마이페이지 링크는 발송 종류(f=)마다 다른 그림 — 고객관리 발송 창 FOCUS_OF 와 같은 표시 (2026-11-20)
+//   f 가 없으면(기본 안내) 마이페이지 그림 그대로
+const MY_FOCUS = {
+  py:  ['invoice',   '결제 안내 · Payment | Happy Home Care', 'Payment Due | Happy Home Care', '결제 예정 금액과 결제 방법 안내', 'Amount due and how to pay'],
+  ivl: ['paid',      '결제 확인 · Payment Confirmed | Happy Home Care', 'Payment Confirmed | Happy Home Care', '결제가 확인되었습니다 · 이용해 주셔서 감사합니다', 'Your payment is confirmed · thank you'],
+  rw:  ['points',    '적립 안내 · Happy Point | Happy Home Care', 'Happy Point | Happy Home Care', '해피포인트가 적립되었습니다', 'Happy Points have been added to your account'],
+  ip:  ['svcreport', '점검보고서 · Report | Happy Home Care', 'Service Report | Happy Home Care', '작업이 끝났습니다 · 보고서를 확인하세요', 'Your service report is ready'],
+  ct:  ['contract',  '계약서 · 이용내역 | Happy Home Care', 'Contract & Usage | Happy Home Care', '계약서와 이용내역을 한눈에 확인', 'Your package contract and usage at a glance'],
+  cp:  ['voucher',   '상품권 · E-Voucher | Happy Home Care', 'E-Voucher | Happy Home Care', '고객님께 드리는 상품권 · 할인권', 'Your gift voucher · check the balance'],
+  qt:  ['quote',     '견적서 · Quotation | Happy Home Care', 'Quotation | Happy Home Care', '요청하신 견적서가 도착했습니다', 'Your quotation is ready'],
+  bk:  ['booking',   '예약 안내 · Booking | Happy Home Care', 'Booking | Happy Home Care', '예약 일정을 확인해 주세요', 'Please check your booking'],
+  rq:  ['received',  '의뢰 접수 · Request Received | Happy Home Care', 'Request Received | Happy Home Care', '의뢰가 접수되었습니다 · 확인 후 일정과 견적을 안내드립니다', 'We received your request · we\'ll be in touch shortly'],
+  mm:  ['repair',    '수리요청 처리 · Service Visit | Happy Home Care', 'Service Visit | Happy Home Care', '수리요청 처리 결과를 확인하세요', 'See the result of your service request'],
+  ap:  ['app',       '앱 설치 안내 · Install App | Happy Home Care', 'Install App | Happy Home Care', '마이페이지를 홈 화면에 설치하세요', 'Add MY PAGE to your home screen'],
+  sv:  ['reqform',   '서비스 의뢰 · Request | Happy Home Care', 'Service Request | Happy Home Care', '필요한 서비스를 바로 신청하세요', 'Request a service in a minute'],
+  cr:  ['care',      '우리집 케어 현황 · My Home Care | Happy Home Care', 'My Home Care | Happy Home Care', '품목별 마지막 청소일과 관리 시기를 한눈에 확인하세요', 'Last cleaning dates and next care at a glance'],
+};
 
 const isEn = (t) => /[?&](lang=en|en=1)\b/i.test(t.search) || /-en(\.html)?$/i.test(t.pathname);
 
@@ -73,6 +91,11 @@ async function metaFor(env, origin, target){
   let t; try { t = new URL(target, SITE); } catch (_) { return null; }
   if (!OUR_HOSTS.test(t.hostname)) return null;
   const en = isEn(t);
+  const f = t.searchParams.get('f') || '';
+  if (/^\/(my|mypage|my-en)(\.html)?$/i.test(t.pathname) && MY_FOCUS[f]) {
+    const [img, tk, te, dk, de] = MY_FOCUS[f];
+    return { title: en ? te : tk, desc: en ? de : dk, image: `${SITE}/og-${img}.jpg`, w: '1200', h: '630' };
+  }
   for (const [re, img, tk, te, dk, de] of TYPES) {
     if (re.test(t.pathname)) return { title: en ? te : tk, desc: en ? de : dk,
       image: `${SITE}/og-${img}.jpg`, w: '1200', h: '630' };
