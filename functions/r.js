@@ -63,7 +63,7 @@ const MY_FOCUS = {
   qt:  ['quote',     '견적서 · Quotation | Happy Home Care', 'Quotation | Happy Home Care', '요청하신 견적서가 도착했습니다', 'Your quotation is ready'],
   bk:  ['booking',   '예약 안내 · Booking | Happy Home Care', 'Booking | Happy Home Care', '예약 일정을 확인해 주세요', 'Please check your booking'],
   rq:  ['received',  '의뢰 접수 · Request Received | Happy Home Care', 'Request Received | Happy Home Care', '의뢰가 접수되었습니다 · 확인 후 일정과 견적을 안내드립니다', 'We received your request · we\'ll be in touch shortly'],
-  mm:  ['repair',    '수리요청 처리 · Service Visit | Happy Home Care', 'Service Visit | Happy Home Care', '수리요청 처리 결과를 확인하세요', 'See the result of your service request'],
+  mm:  ['confirmed', '수리 방문 안내 · Service Visit | Happy Home Care', 'Service Visit | Happy Home Care', '방문 일정을 확인해 주세요', 'Please check your visit schedule'],
   ap:  ['app',       '앱 설치 안내 · Install App | Happy Home Care', 'Install App | Happy Home Care', '마이페이지를 홈 화면에 설치하세요', 'Add MY PAGE to your home screen'],
   sv:  ['reqform',   '서비스 의뢰 · Request | Happy Home Care', 'Service Request | Happy Home Care', '필요한 서비스를 바로 신청하세요', 'Request a service in a minute'],
   cr:  ['care',      '우리집 케어 현황 · My Home Care | Happy Home Care', 'My Home Care | Happy Home Care', '품목별 마지막 청소일과 관리 시기를 한눈에 확인하세요', 'Last cleaning dates and next care at a glance'],

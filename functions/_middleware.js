@@ -38,7 +38,7 @@ const DOC = {
 };
 // 마이페이지 링크의 발송 종류(f=) → 그림 (functions/r.js 와 같은 표)
 const MY_F = { py:'invoice', ivl:'paid', rw:'points', ip:'svcreport', ct:'contract', cp:'voucher', qt:'quote', bk:'booking',
-               rq:'received', mm:'repair', ap:'app', sv:'reqform', cr:'care' };
+               rq:'received', mm:'confirmed', ap:'app', sv:'reqform', cr:'care' };
 const PK = { sorry:'pt-sorry', referral:'pt-referral', review:'pt-review' };
 
 async function docPreview(context, url, key){
