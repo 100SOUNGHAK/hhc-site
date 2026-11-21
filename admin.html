@@ -2817,6 +2817,7 @@ const BENEFITS=[
   {key:"ceilingSpecial",legacy:"ceiling",ko:"실링팬청소서비스 무상제공",en:"Free Ceiling Fan Cleaning",dko:"스페셜해피홈: 무제한 (단, 1회 청소 시마다 최대 10대까지만 제공)",den:"Special Happy Home: unlimited (max 10 units per visit)"},
   {key:"bulbSpecial",legacy:"bulb",ko:"전등/콘센트 교체 서비스 무상제공",en:"Free Light/Socket Replacement",dko:"무제한 (단, 1회 5대 이내) [ 전등/콘센트 사전구비 시]",den:"Unlimited (up to 5 per visit) [if lights/sockets provided]"},
   {key:"regularVisit",ko:"전담 정기 점검 방문 서비스 무상 제공",en:"Free Dedicated Regular Inspection Visit",dko:"3~6개월 주기 선택 가능",den:"Choose a 3–6 month visit cycle"},
+  {key:"priority",nw:1,ko:"최우선 예약 · 전담 케어",en:"Priority Booking & Dedicated Care",dko:"예약 시 일정을 최우선으로 배정하고, 전담 담당자가 관리합니다.",den:"Your bookings are scheduled first, and a dedicated staff member looks after your home."},
   {key:"ceiling",legacy:"ceiling",ko:"실링팬청소서비스 무상제공",en:"Free Ceiling Fan Cleaning",dko:"로얄: 5대 / 골드~티타늄: 10대까지 무상",den:"Royal: up to 5 / Gold~Titanium: up to 10 units free"},
   {key:"bulb",legacy:"bulb",ko:"전등/콘센트 교체 서비스 무상제공",en:"Free Light/Socket Replacement",dko:"5대까지 무상교체 (골드~티타늄 / 전등/콘센트 사전구비 시)",den:"Up to 5 units free (Gold~Titanium, if lights/sockets provided)"},
 ];
@@ -2833,16 +2834,18 @@ const FREE_RULE={
 };
 BENEFITS.forEach(function(b){if(b.grp)FREE_RULE[b.key]={'*':b.per?[b.tot,b.per]:[b.tot]};});
 const FREE_KEYS={ceiling:['ceil5','ceil10','ceil15','ceilU5','ceilU10','ceilingDetail','ceiling','ceilingSpecial'],bulb:['bulb5','bulb10','bulbU5','bulbDetail','bulb','bulbSpecial']};
-// ── 가정용 패키지 선택 시 기본으로 체크되는 부가 서비스·혜택 (2026-11-20) ──
-//  여기에 없는 항목은 해제됨. 실버·사업용 패키지는 자동 선택하지 않음(기존 선택 유지).
+// ── 가정용 패키지 선택 시 기본으로 체크되는 부가 서비스·혜택 (2026-11-21 멤버십 안내장 기준) ──
+//  membership.html 의 TB/CMP 표와 같게 맞춤 — 혜택이 바뀌면 세 곳을 함께 고칠 것.
+//  여기에 없는 항목은 해제됨. 실버·사업용 패키지는 자동 선택하지 않음(체크 상태를 건드리지 않음).
 const PKG_BEN_DEFAULT=(function(){
-  const top=['promo','minbill','parking','deposit','repair'];
+  const base=['inspect','promo','minbill'];                 // 전 등급: 무상 점검 출장 · 할인행사 중복 · 최소청구 면제
+  const gold=base.concat(['parking','deposit']);            // 골드↑: 주차비 · 예약보증금 면제
   return {
-    royal:['promo','minbill','ceil5'],
-    gold:top.concat(['ceil10','bulb5']),
-    diamond:top.concat(['ceil15','bulb10']),
-    titanium:top.concat(['ceilU5','bulb10']),
-    special:top.concat(['ceilU5','bulb10'])
+    royal:   base.concat(['ceil5']),
+    gold:    gold.concat(['repair','ceil10','bulb5']),
+    diamond: gold.concat(['repair','ceil15','bulb10']),
+    titanium:gold.concat(['repair20','ceilU5','bulb10','priority']),
+    special: gold.concat(['repair20','ceilU10','bulbU5','priority','regularVisit'])
   };
 })();
 const PKG_TIER_KO={royal:'로얄',gold:'골드',diamond:'다이아몬드',titanium:'티타늄',special:'스페셜해피홈'};
@@ -3476,7 +3479,7 @@ function initBenefits(){
   c.innerHTML='';
   BENEFITS.forEach((b,idx)=>{
     const el=document.createElement('div');
-    const tierItem=!!(b.grp||b.legacy),on0=!tierItem;
+    const tierItem=!!(b.grp||b.legacy),on0=!tierItem&&!b.nw;
     el.className='ben-item'+(on0?' on':'')+(b.grp?' ben-tier':'')+(b.legacy?' ben-legacy':'');
     el.dataset.key=b.key;
     el.innerHTML=`<label class="ben-label"><input type="checkbox" ${on0?'checked':''} data-benefit="${b.key}"><div class="ben-box"></div><div><div class="ben-ko">${b.ko}${b.legacy?' <span class="ben-old">이전 문구</span>':''}</div><div class="ben-en">${b.en}</div><div class="ben-desc">${b.dko}</div></div></label><div class="ben-order-btns"><button type="button" class="ben-order-btn" data-move="up" data-key="${b.key}" ${idx===0?'disabled':''}>▲</button><button type="button" class="ben-order-btn" data-move="down" data-key="${b.key}" ${idx===BENEFITS.length-1?'disabled':''}>▼</button></div>`;
@@ -3516,13 +3519,20 @@ function benLoad(bens,pkgId){
   bens=bens||{};
   document.querySelectorAll('[data-benefit]').forEach(cb=>{
     const k=cb.dataset.benefit;
-    cb.checked=bens[k]!==undefined?!!bens[k]:!benItem(k).grp;
+    cb.checked=bens[k]!==undefined?!!bens[k]:!(benItem(k).grp||benItem(k).nw);
   });
   benSyncUI();
 }
-// 새 계약서(신규 작성)인지 — 기존 계약 수정·양도양수·갱신이면 false
+// 등급별 기본 혜택을 자동 선택할 계약서인지 — 신규 작성 · 갱신 계약(2026-11-21 추가)이면 true
+//  기존 계약 수정 · 양도양수는 false (저장된 혜택 그대로)
 function benIsNewContract(){
-  return !currentEditId&&!renewFrom&&(currentContractKind==='new'||(currentContractKind==='joint'&&!(jtCur()||{}).joint_id));
+  if(currentEditId)return false;
+  if(renewFrom)return renewFrom.mode==='renewal';
+  return currentContractKind==='new'||(currentContractKind==='joint'&&!(jtCur()||{}).joint_id);
+}
+// 새 양식 기본 상태 — 일반 항목 체크, 등급별 수량 항목·새 항목(nw) 해제
+function benResetDefault(){
+  document.querySelectorAll('[data-benefit]').forEach(cb=>{const b=benItem(cb.dataset.benefit);cb.checked=!(benIsTier(cb.dataset.benefit)||b.nw);});
 }
 // 가정용 패키지를 고르면 등급별 기본 혜택 자동 선택
 function benApplyPkgDefault(pkgId){
@@ -3532,7 +3542,7 @@ function benApplyPkgDefault(pkgId){
   document.querySelectorAll('[data-benefit]').forEach(cb=>{cb.checked=list.includes(cb.dataset.benefit);});
   benSyncUI();
   if(note){
-    note.innerHTML='🎁 <b>'+PKG_TIER_KO[pkgId]+'</b> 기본 혜택 '+list.length+'개를 자동으로 선택했습니다 — 「부가 서비스 및 혜택」에서 바꿀 수 있습니다';
+    note.innerHTML='🎁 '+(renewFrom?'갱신 계약 — 현재 기준 ':'')+'<b>'+PKG_TIER_KO[pkgId]+'</b> 기본 혜택 '+list.length+'개를 자동으로 선택했습니다 — 「부가 서비스 및 혜택」에서 바꿀 수 있습니다';
     note.style.display='block';
   }
   if(typeof updateProgress==='function')updateProgress();
@@ -3848,6 +3858,8 @@ function startLinked(id,mode){
   if(tr){ckSet('f-tr-from',c.name);ckSet('f-tr-amt',rem.toFixed(2));ckSet('f-tr-date',today());setContractKind('transfer');trZero();}
   else{ckSet('f-rn-date',c.contract_date);ckSet('f-rn-no',no);ckSet('f-rn-pkg',c.package_id);setContractKind('renewal');}
   renewFrom={id:c.__id,no:no,name:c.name||'',mode:tr?'transfer':'renewal'};
+  // 갱신은 현재 기준 등급별 기본 혜택으로 다시 선택 (가정용 패키지만 · 사업용·실버는 기존 혜택 그대로)
+  if(!tr)benApplyPkgDefault(c.package_id);
   lkSyncCarry();
   if(typeof syncTierUIFromSelect==='function')syncTierUIFromSelect();
   if(typeof updateProgress==='function')updateProgress();
@@ -4329,7 +4341,7 @@ function resetForm(){
   document.getElementById('f-special-bonus').value='0';
   document.querySelectorAll('input[name="svc"]')[0].checked=true;
   document.querySelectorAll('.svc-opt').forEach((o,i)=>o.classList.toggle('sel',i===0));
-  document.querySelectorAll('[data-benefit]').forEach(cb=>{cb.checked=!benIsTier(cb.dataset.benefit);});
+  benResetDefault();
   benSyncUI();
   {const n=document.getElementById('ben-auto-note');if(n)n.style.display='none';}
   document.getElementById('clink-box').style.display='none';
