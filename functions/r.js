@@ -132,6 +132,8 @@ async function metaFor(env, origin, target){
   return m;
 }
 
+const MEMO = new Map();   // 같은 인스턴스 안에서 다시 쓰는 결과
+
 export async function onRequestGet(context){
   const { request, env } = context;
   const url = new URL(request.url);
@@ -139,13 +141,25 @@ export async function onRequestGet(context){
   const k = (url.searchParams.get('k') || '').trim();
   if (!page.ok || !k || k.length > 64) return page;
 
-  let m = null;
-  try {
-    const rows = await queryEq(env, 'shorts', 'key', k, 1);
-    const target = rows[0] && typeof rows[0].url === 'string' ? rows[0].url : '';
-    if (target) m = await metaFor(env, url.origin, target);
-  } catch (_) { m = null; }
+  // ⚡ 빠른 응답 (2026-11-21) — 왓츠앱은 미리보기 응답이 늦으면 큰 그림 대신 작은 썸네일을 붙입니다.
+  //    단축 주소 → 그림 정보는 바뀌지 않으므로, 한 번 찾은 결과를 Cloudflare 캐시(7일)와 메모리에 보관해
+  //    다음부터는 데이터베이스를 거치지 않고 바로 응답합니다. (관리자 화면이 주소를 만들 때 미리 한 번 열어 둡니다)
+  let m = MEMO.get(k) || null;
+  const ckey = new Request(url.origin + '/__r_meta?k=' + encodeURIComponent(k));
+  if (!m) { try { const c = await caches.default.match(ckey); if (c) m = await c.json(); } catch (_) {} }
+  if (!m) {
+    try {
+      const rows = await queryEq(env, 'shorts', 'key', k, 1);
+      const target = rows[0] && typeof rows[0].url === 'string' ? rows[0].url : '';
+      if (target) m = await metaFor(env, url.origin, target);
+    } catch (_) { m = null; }
+    if (m) {
+      try { context.waitUntil(caches.default.put(ckey, new Response(JSON.stringify(m), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'max-age=604800' } }))); } catch (_) {}
+    }
+  }
   if (!m) return page;
+  if (MEMO.size > 500) MEMO.clear();
+  MEMO.set(k, m);
 
   const set = (v) => ({ element(el){ if (v) el.setAttribute('content', v); } });
   const res = new HTMLRewriter()
