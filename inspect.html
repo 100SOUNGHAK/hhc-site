@@ -352,6 +352,11 @@ html.pdfdoc .ac3d .ac-f{box-shadow:inset 0 2px 0 #fff,inset 0 -3px 5px rgba(14,3
 .ck-grp h5{font-size:12px;font-weight:800;color:var(--ink3);letter-spacing:.04em;margin:0 4px 6px}
 .ck-row{display:flex;gap:12px;padding:13px 14px;align-items:flex-start;border-bottom:1px solid var(--line);animation:rise .3s var(--ease) both}
 .ck-row:last-child{border-bottom:0}
+.ck-more{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:13px 14px;border:0;border-top:1px solid var(--line);background:var(--soft,#F6F8FC);color:var(--n,#0E2350);font:inherit;font-size:14px;font-weight:700;cursor:pointer;border-radius:0 0 14px 14px;-webkit-tap-highlight-color:transparent}
+.ck-more i{font-style:normal;font-size:12px;transition:transform .18s}
+.ck-more.up i{transform:rotate(180deg)}
+.ck-more:active{background:#EDF1F8}
+@media print{.ck-more{display:none!important}}
 .ck-row .ic{width:22px;height:22px;font-size:12px;margin-top:1px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;flex-shrink:0}
 .ck-row b{display:block;font-size:15px;font-weight:700;line-height:1.4}
 .ck-row p{font-size:13.5px;color:var(--ink2);margin-top:1px;line-height:1.5}
@@ -1155,14 +1160,22 @@ function checksHTML(rs){
   if(f==='issue'&&cW+cB===0)f='all';
   var list=rs.filter(function(r){var l=stOf(r.status);return f==='all'||(f==='ok'?l==='ok':l!=='ok');});
   if(f==='issue')list.sort(function(x,y){return LVR[stOf(y.status)]-LVR[stOf(x.status)];});
-  var rows;
+  var rows,okMore='';
   if(f==='issue')rows=list.map(rowHTML).join('');
-  else{var g={},order=[];list.forEach(function(r){var k=v(r,'cat')||'—';if(!g[k]){g[k]=[];order.push(k);}g[k].push(r);});
-    rows=order.map(function(k){return '<div class="ck-grp" style="margin:0"><h5 style="padding:12px 14px 0">'+esc(k)+'</h5>'+g[k].map(rowHTML).join('')+'</div>';}).join('');}
+  else{
+    /* 양호 항목은 처음 2개만 보이고 나머지는 「더 보기」로 펼침 (주의·정비 필요는 항상 보임, PDF는 전체) */
+    var okN=0,okHid=0;
+    if(!ST.pdf&&!ST.okAll&&f==='all'&&cW+cB===0){list=list.filter(function(r){if(stOf(r.status)!=='ok')return true;okN++;if(okN<=2)return true;okHid++;return false;});}
+    else list.forEach(function(r){if(stOf(r.status)==='ok')okN++;});
+    var g={},order=[];list.forEach(function(r){var k=v(r,'cat')||'—';if(!g[k]){g[k]=[];order.push(k);}g[k].push(r);});
+    rows=order.map(function(k){return '<div class="ck-grp" style="margin:0"><h5 style="padding:12px 14px 0">'+esc(k)+'</h5>'+g[k].map(rowHTML).join('')+'</div>';}).join('');
+    if(!ST.pdf&&okHid)okMore='<button type="button" class="ck-more" data-okm="1"><span>'+(LANG==='ko'?'양호 항목 '+okHid+'개 더 보기':'Show '+okHid+' more good item'+(okHid>1?'s':''))+'</span><i>▾</i></button>';
+    else if(!ST.pdf&&ST.okAll&&f==='all'&&cW+cB===0&&okN>2)okMore='<button type="button" class="ck-more up" data-okm="0"><span>'+(LANG==='ko'?'양호 항목 접기':'Show less')+'</span><i>▾</i></button>';
+  }
   if(!list.length)rows='<div class="empty">'+t('noneAny')+'</div>';
   return '<div class="rp-card ck-sum"><div class="donut2">'+donut(cO,cW,cB)+'<b class="num">'+cO+'/'+n+'<small>'+t('lv').ok+'</small></b></div><div class="ck-flt">'+
    [['issue',cW+cB],['all',n],['ok',cO]].map(function(x){return '<button data-f="'+x[0]+'" class="'+(f===x[0]?'on':'')+'"><span>'+t('flt')[x[0]]+'</span><em class="num">'+x[1]+'</em></button>';}).join('')+
-   '</div></div><div class="rp-card ck-list" id="ckl">'+rows+'</div>';
+   '</div></div><div class="rp-card ck-list" id="ckl">'+rows+okMore+'</div>';
 }
 function donut(o,w,b){var n=o+w+b||1,C=2*Math.PI*34,off=0,out='';
   [[b,'#DC2626'],[w,'#F0B429'],[o,'#0E9B63']].forEach(function(x){if(!x[0])return;var L=C*x[0]/n;out+='<circle cx="42" cy="42" r="34" fill="none" stroke="'+x[1]+'" stroke-width="13" stroke-dasharray="'+L.toFixed(2)+' '+(C-L+0.01).toFixed(2)+'" stroke-dashoffset="'+(-off).toFixed(2)+'"/>';off+=L;});
@@ -1600,6 +1613,7 @@ document.getElementById('app').addEventListener('click',function(e){
   var j=e.target.closest('[data-jump]');if(j){var i=U.findIndex(function(u){return u.lv===+j.dataset.jump;});if(i>=0)goUnit(i);return;}
   var tb=e.target.closest('[data-tab]');if(tb){ST.tab=tb.dataset.tab;render(true);return;}
   var f=e.target.closest('[data-f]');if(f){ST.issue=f.dataset.f;render(true);return;}
+  var om=e.target.closest('[data-okm]');if(om){ST.okAll=om.dataset.okm==='1';render(true);if(!ST.okAll){var ck=document.getElementById('ckl');if(ck&&ck.getBoundingClientRect().top<0)ck.scrollIntoView({block:'start'});}return;}
   var m=e.target.closest('[data-more]');if(m){var id=m.dataset.more,y0=m.getBoundingClientRect().top;ST.more[id]=!ST.more[id];render(true);if(!ST.more[id]){var n=document.querySelector('[data-more="'+id+'"]');if(n)window.scrollBy(0,n.getBoundingClientRect().top-y0);}return;}
   var opc=e.target.closest('.op.tap');if(opc&&!e.target.closest('a')){var sel=window.getSelection&&String(window.getSelection());if(sel&&sel.trim()&&!e.target.closest('#opm'))return;ST.opOpen=!ST.opOpen;document.getElementById('opb').classList.toggle('clip',!ST.opOpen);opc.classList.toggle('open',ST.opOpen);var ob=document.getElementById('opm');if(ob)ob.textContent=ST.opOpen?t('less')+' ▴':t('more')+' ▾';if(!ST.opOpen){var r=opc.getBoundingClientRect();if(r.top<70)window.scrollBy({top:r.top-80,behavior:'smooth'});}return;}
   if(e.target.closest('#acch')){ST.accOpen=!document.getElementById('acc').classList.contains('open');document.getElementById('acc').classList.toggle('open',ST.accOpen);return;}
