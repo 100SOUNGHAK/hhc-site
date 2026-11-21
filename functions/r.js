@@ -110,6 +110,9 @@ async function metaFor(env, origin, target){
                  ar: ['arrive', '가드하우스 도착 · Arrived | Happy Home Care', 'Arrived | Happy Home Care', '가드하우스에 도착했습니다 · 출입수속 후 곧 방문드리겠습니다', 'We have arrived at the guardhouse · see you shortly'],
                  dw: ['delayw', '도착 지연 안내 · Delay | Happy Home Care', 'Running Late | Happy Home Care', '앞 작업이 길어져 조금 늦어집니다 · 양해 부탁드립니다', 'The previous job took longer — running a little late'] };
     if ((f === 'bk' || f === 'mm') && VI[t.searchParams.get('vi')]) [img, tk, te, dk, de] = VI[t.searchParams.get('vi')];
+    // 🧾 작업 후 안내(f=ct&vi=aw) — 「보고서와 이용내역을 한눈에 확인」 그림 (2026-11-21)
+    if (f === 'ct' && t.searchParams.get('vi') === 'aw')
+      [img, tk, te, dk, de] = ['aftwork', '작업 완료 · 보고서와 이용내역 | Happy Home Care', 'Service Completed | Happy Home Care', '보고서와 이용내역을 한눈에 확인하세요', 'Your report & usage at a glance'];
     // 📅 사전 안내(vi=pd&vd=MMDD) — 방문 날짜가 찍힌 그림 og-d/MMDD.jpg (2026-11-21)
     const vd = t.searchParams.get('vd') || '';
     if ((f === 'bk' || f === 'mm') && t.searchParams.get('vi') === 'pd') {
