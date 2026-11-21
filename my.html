@@ -1189,6 +1189,8 @@ function evtLive(list){const t=todayISO();return (list||[]).filter(p=>p&&p.month
 const CARE_RE=[{k:'ac',ko:'에어컨',en:'Air-con',mo:3,re:/에어컨|AC\b|air.?con|실외기/i,ic:'i-ac'},{k:'wm',ko:'세탁기',en:'Washing machine',mo:12,re:/세탁기|washer|washing.?machine/i,ic:'i-wash'},
   {k:'dr',ko:'건조기',en:'Dryer',mo:24,re:/건조기|dryer/i,ic:'i-wash'},{k:'fb',ko:'매트리스 · 쇼파',en:'Mattress · Sofa',mo:6,re:/매트리스|쇼파|소파|카펫|카페트|mattress|sofa|carpet/i,ic:'i-sofa'},
   {k:'ct',ko:'커튼',en:'Curtain',mo:12,re:/커튼|curtain/i,ic:'i-curtain'},{k:'hd',ko:'주방후드',en:'Kitchen hood',mo:12,re:/후드|hood/i,ic:'i-hood'}];
+const CARE_CLEAN=/세척|청소|세탁(?!기)|살균|스팀|약품|wash(?!er|ing\s*machine)|clean|steam|overhaul|chemical|saniti|laundry/i;
+const CARE_NOT=/출장점검|점검|수리|repair|inspect|냉매|refrigerant|가스|\bgas\b|설치|install|부품|\bparts?\b|교체|replace|진공|vacuum|구매|구입|판매|purchase|\bbuy|\bsale|렌탈|rental/i;
 const RPT={inspect:['에어컨 점검보고서','AC inspection report','act-insp.jpg','inspect'],dispatch:['출장점검 보고서','On-site check report','act-insp.jpg','inspect'],
   install:['설치 기술보고서','Installation report','card-ac.jpg','install'],washer:['세탁기·건조기 점검보고서','Washer & dryer report','card-washer.jpg','washer'],
   hood:['주방후드 점검보고서','Kitchen hood report','card-hood.jpg','hood'],fabric:['패브릭 케어 보고서','Fabric care report','card-sofa.jpg','fabric']};
@@ -1227,7 +1229,8 @@ function buildFromApi(j,svc){
       url:BASE+'/'+M[3]+'?id='+encodeURIComponent(r.__id),sko:(n?('정상 '+ok+(w?' · 주의 '+w:'')):'작업 완료')+(ph?' · 사진 '+ph+'장':''),
       sen:(n?(ok+' OK'+(w?' · '+w+' to watch':'')):'Work completed')+(ph?' · '+ph+' photos':''),isNew:fresh&&first};});
   // 케어 (마지막 서비스일 → 다음 권장일)
-  const last={};invs.forEach(x=>{const d=String(x.date||'').slice(0,10);if(!d)return;(x.items||[]).forEach(li=>{const n=String(li.name||'')+' '+String(li.cat||'')+' '+String(li.subcat||'');CARE_RE.forEach(c=>{if(c.re.test(n)&&(!last[c.k]||d>last[c.k]))last[c.k]=d;});});});
+  //  · 권장주기는 「세척」 품목만 셈 — 수리·점검·설치·구매·부품·냉매 품목은 제외 (2026-11-21)
+  const last={};invs.forEach(x=>{const d=String(x.date||'').slice(0,10);if(!d)return;(x.items||[]).forEach(li=>{const n=String(li.name||'')+' '+String(li.cat||'')+' '+String(li.subcat||'');if(!CARE_CLEAN.test(n)||CARE_NOT.test(n))return;CARE_RE.forEach(c=>{if(c.re.test(n)&&(!last[c.k]||d>last[c.k]))last[c.k]=d;});});});
   const care=CARE_RE.filter(c=>last[c.k]).map(c=>({k:c.k,ic:c.ic,ko:c.ko,en:c.en,last:last[c.k],mo:c.mo}));
   // 회원권
   const acts=(j.contracts||[]).filter(c=>c.status!=='ended');
