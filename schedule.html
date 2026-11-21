@@ -2363,16 +2363,19 @@ window.sendVisitReminder=function(itemId){
   let VR_URL=vrMyLink(name,VR_PH,lang==='en',isRepair?'mm':'bk');
   // 🖼 안내 종류별 링크 (2026-11-21) — 같은 마이페이지 주소에 vi= 표시만 달리해 미리보기 그림을 고릅니다
   //    vi=1 예약 리마인드 · mv 이동중 · dt 지연(교통) · dw 지연(작업)  (functions/r.js)
-  const VR_LONG=VR_URL,VR_SH={},VR_KIND={pre:'1',tomorrow:'1',today:'1',move:'mv',delayT:'dt',delayW:'dw',arrive:'ar'};
+  const VR_LONG=VR_URL,VR_SH={},VR_KIND={pre:'pd',tomorrow:'tm',today:'td',move:'mv',delayT:'dt',delayW:'dw',arrive:'ar'};
   function vrUrlK(t){
     const k=VR_KIND[t];if(!k||VR_LONG.indexOf('vi=1')<0)return VR_URL;
     if(k==='1')return VR_URL;
     if(VR_SH[k])return VR_SH[k];
-    const L=VR_LONG.replace('vi=1','vi='+k);
+    // 사전 안내(pd)는 방문 날짜(vd=MMDD)도 함께 — 그 날짜가 찍힌 그림(og-d/MMDD.jpg)이 붙습니다 (2026-11-21)
+    const L=VR_LONG.replace('vi=1','vi='+k)+(k==='pd'&&VR_MD?'&vd='+VR_MD:'');
     hhcShortUrl(L).then(sv=>{if(sv&&sv!==L){VR_SH[k]=sv;const box=document.getElementById('visit-msg-box');if(box)box.value=box.value.split(L).join(sv);}}).catch(()=>{});
     return L;
   }
-  const VR_IMG={pre:'og-remind.jpg',tomorrow:'og-remind.jpg',today:'og-remind.jpg',move:'og-onway.jpg',delayT:'og-delay.jpg',delayW:'og-delayw.jpg',arrive:'og-arrive.jpg'};
+  const VR_MD=(/^\d{4}-(\d{2})-(\d{2})/.exec(String(dateStr||''))||[]).slice(1).join('');   // 방문 날짜 MMDD
+  const VR_IMG={pre:VR_MD?'https://happyhomecare.com.my/og-d/'+VR_MD+(lang==='en'?'-en':'')+'.jpg':'og-remind.jpg',tomorrow:'og-remind-tmr.jpg',today:'og-remind-today.jpg',   // 내일·오늘 글자 그림 (2026-11-21)
+    move:'og-onway.jpg',delayT:'og-delay.jpg',delayW:'og-delayw.jpg',arrive:'og-arrive.jpg'};
   const title=isRepair
     ?(lang==='en'?'🛠 Repair Visit Message':'🛠 수리 방문 안내 메시지')
     :(lang==='en'?'💬 Visit Reminder Message':'💬 방문 안내 메시지');

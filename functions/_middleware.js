@@ -48,7 +48,7 @@ async function docPreview(context, url, key){
   const q = url.searchParams, [base, tk, te] = DOC[key];
   const en = (key === 'hhc-invoice' || key === 'inv') ? q.get('ml') === 'en' : (q.get('lang') === 'en' || key === 'my-en');
   let img = base;
-  if (base === 'my'){ const f = q.get('f') || ''; img = MY_F[f] || 'my'; if (f === 'rw' && PK[q.get('pk')]) img = PK[q.get('pk')]; const VI = { '1':'remind', mv:'onway', dt:'delay', dw:'delayw', ar:'arrive' }; if ((f === 'bk' || f === 'mm') && VI[q.get('vi')]) img = VI[q.get('vi')]; }
+  if (base === 'my'){ const f = q.get('f') || ''; img = MY_F[f] || 'my'; if (f === 'rw' && PK[q.get('pk')]) img = PK[q.get('pk')]; const VI = { '1':'remind', tm:'remind-tmr', td:'remind-today', mv:'onway', dt:'delay', dw:'delayw', ar:'arrive' }; if ((f === 'bk' || f === 'mm') && VI[q.get('vi')]) img = VI[q.get('vi')]; if ((f === 'bk' || f === 'mm') && q.get('vi') === 'pd') img = /^(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(q.get('vd') || '') ? 'd/' + q.get('vd') : 'remind'; }
   const src = `${SITE}/og-${img}${en ? '-en' : ''}.jpg`, title = (en ? te : tk) + ' | Happy Home Care';
   let hasTitle = false, hasSite = false;
   const drop = { element(el){ el.remove(); } };

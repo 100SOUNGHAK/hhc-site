@@ -103,11 +103,24 @@ async function metaFor(env, origin, target){
     if (pk) [img, tk, te, dk, de] = pk;
     // 📅 예약 방문 안내(vi=) — 리마인드 · 이동중 · 지연(교통/작업) 그림 (2026-11-21)
     const VI = { '1': ['remind', '예약 방문 알림 · Reminder | Happy Home Care', 'Visit Reminder | Happy Home Care', '예정된 방문을 다시 알려 드려요 · 날짜와 시간을 확인해 주세요', 'A friendly reminder of your visit · please check the date and time'],
+                 tm: ['remind-tmr', '내일 방문 안내 · Tomorrow | Happy Home Care', 'See You Tomorrow | Happy Home Care', '내일 방문합니다 · 방문 시간을 확인해 주세요', 'See you tomorrow · please check the visit time'],
+                 td: ['remind-today', '오늘 방문 안내 · Today | Happy Home Care', 'See You Today | Happy Home Care', '오늘 방문합니다 · 방문 시간을 확인해 주세요', 'See you today · please check the visit time'],
                  mv: ['onway', '방문하러 가는 중 · On the way | Happy Home Care', 'On the Way | Happy Home Care', '지금 방문하러 가는 중입니다 · 곧 도착합니다', 'We are on our way · arriving soon'],
                  dt: ['delay', '도착 지연 안내 · Delay | Happy Home Care', 'Running Late | Happy Home Care', '교통 체증으로 조금 늦어집니다 · 양해 부탁드립니다', 'Stuck in traffic — running a bit late'],
                  ar: ['arrive', '가드하우스 도착 · Arrived | Happy Home Care', 'Arrived | Happy Home Care', '가드하우스에 도착했습니다 · 출입수속 후 곧 방문드리겠습니다', 'We have arrived at the guardhouse · see you shortly'],
                  dw: ['delayw', '도착 지연 안내 · Delay | Happy Home Care', 'Running Late | Happy Home Care', '앞 작업이 길어져 조금 늦어집니다 · 양해 부탁드립니다', 'The previous job took longer — running a little late'] };
     if ((f === 'bk' || f === 'mm') && VI[t.searchParams.get('vi')]) [img, tk, te, dk, de] = VI[t.searchParams.get('vi')];
+    // 📅 사전 안내(vi=pd&vd=MMDD) — 방문 날짜가 찍힌 그림 og-d/MMDD.jpg (2026-11-21)
+    const vd = t.searchParams.get('vd') || '';
+    if ((f === 'bk' || f === 'mm') && t.searchParams.get('vi') === 'pd') {
+      const mm = +vd.slice(0, 2), dd = +vd.slice(2, 4);
+      const ok = /^\d{4}$/.test(vd) && mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31;
+      const ME = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      [img, tk, te, dk, de] = ok
+        ? ['d/' + vd, mm + '월 ' + dd + '일 방문 예정 · Reminder | Happy Home Care', 'Visit on ' + dd + ' ' + ME[mm - 1] + ' | Happy Home Care',
+           mm + '월 ' + dd + '일 방문 예정입니다 · 방문 시간을 확인해 주세요', 'Your visit on ' + dd + ' ' + ME[mm - 1] + ' · please check the time']
+        : VI['1'];
+    }
     return { title: en ? te : tk, desc: en ? de : dk, image: `${SITE}/og-${img}${en ? '-en' : ''}.jpg`, w: '1200', h: '630' };
   }
   for (const [re, img, tk, te, dk, de] of TYPES) {

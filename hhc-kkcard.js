@@ -18,7 +18,7 @@
 (function(){
   if (window.hhcKkCard) return;
   var SITE = 'https://happyhomecare.com.my';
-  var EN_IMGS = /\/og-(quote|invoice|contract|booking|my|voucher|pay|permit|visitfee|points|svcreport|received|paid|care|app|repair|reqform|confirmed|remind|onway|delay|delayw|arrive)\.jpg$/;
+  var EN_IMGS = /\/og-(quote|invoice|contract|booking|my|voucher|pay|permit|visitfee|points|svcreport|received|paid|care|app|repair|reqform|confirmed|remind|remind-tmr|remind-today|onway|delay|delayw|arrive)\.jpg$/;
   var SDKS = ['https://t1.kakaocdn.net/kakao_js_sdk/2.7.5/kakao.min.js',
               'https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js',
               'https://developers.kakao.com/sdk/js/kakao.js'];
