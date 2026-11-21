@@ -75,14 +75,46 @@ async function docPreview(context, url, key){
     .transform(res);
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ⚡ 화면 파일 「바뀐 것만 다시 받기」 (2026-11-21)
+//  Cloudflare 가 HTML 을 압축하면서 ETag(파일 지문)를 지워 버려, 관리자 앱·전자명함 화면을 열 때마다
+//  파일 전체(인보이스 188KB·점검보고서 223KB 등)를 매번 새로 받고 있었습니다.
+//  → HTML 응답에 약한 ETag(W/"…")를 붙이고, 브라우저가 가진 지문과 같으면 「안 바뀜(304)」만 돌려줍니다.
+//  · 파일이 바뀌면 지문도 바뀌므로 올리자마자 새 화면이 그대로 반영됩니다(no-cache 규칙 유지).
+//  · 화면 내용·자료(Firestore)는 전혀 건드리지 않습니다. HTML 이 아닌 응답과 오류 응답은 그대로 통과.
+// ─────────────────────────────────────────────────────────────────────────────
+async function withEtag(request, res, rehash){
+  try{
+    const type = res.headers.get('content-type') || '';
+    if (res.status !== 200 || type.indexOf('text/html') < 0) return res;
+    let tag = rehash ? '' : (res.headers.get('etag') || '').replace(/^W\//, '');
+    let body = null;
+    if (!tag){
+      body = await res.arrayBuffer();
+      const d = new Uint8Array(await crypto.subtle.digest('SHA-1', body));
+      tag = '"' + Array.from(d, b => b.toString(16).padStart(2, '0')).join('') + '"';
+    }
+    const hdr = new Headers(res.headers);
+    hdr.set('etag', 'W/' + tag);
+    const inm = request.headers.get('if-none-match') || '';
+    if (inm && inm.split(',').some(t => t.trim().replace(/^W\//, '') === tag)){
+      hdr.delete('content-length'); hdr.delete('content-encoding');
+      return new Response(null, { status: 304, headers: hdr });
+    }
+    return new Response(body !== null ? body : res.body, { status: res.status, statusText: res.statusText, headers: hdr });
+  }catch(_){ return res; }
+}
+
 export async function onRequest(context){
   const { request } = context;
   if (request.method !== 'GET') return context.next();
   const url = new URL(request.url);
   const m = /^\/([a-z-]+?)(\.html)?$/.exec(url.pathname);
   const key = m && m[1];
-  if (key && DOC[key]) return docPreview(context, url, key);
-  if (!key || !EN[key] || url.searchParams.get('lang') !== 'en') return context.next();
+  // 문서 화면: 주소에 ?…가 없을 때(관리자 앱이 여는 인보이스·계약 화면)만 지문을 붙입니다 — 고객 링크는 그대로
+  if (key && DOC[key]){ const r = await docPreview(context, url, key); return url.search ? r : withEtag(request, r, true); }
+  if (!key || !EN[key] || url.searchParams.get('lang') !== 'en') return withEtag(request, await context.next(), false);
 
   const res = await context.next();
   const type = res.headers.get('content-type') || '';
