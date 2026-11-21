@@ -2207,7 +2207,8 @@ function vrMyLink(name,phone,en,focus){
   var b=vrBase();
   if(!id)return b+'/home'+(en?'?lang=en':'');
   // f= : 마이페이지에서 강조해 보여 줄 곳 (bk 예약 · mm 수리요청 처리내역)
-  return b+'/my.html?c='+encodeURIComponent(id)+'&v=iv,ip,ct,cp&lang='+(en?'en':'ko')+'&f='+(focus||'bk');
+  // vi=1 : 방문 안내 표시 — 링크 미리보기에 「방문 일정 확정」 그림이 붙습니다 (functions/r.js, 2026-11-21)
+  return b+'/my.html?c='+encodeURIComponent(id)+'&v=iv,ip,ct,cp&lang='+(en?'en':'ko')+'&f='+(focus||'bk')+'&vi=1';
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2329,6 +2330,13 @@ function mvErrText(e,en){
 // 방문 안내 메시지 꼬리말 — 마이페이지 링크 없이 연락처만 (2026-11-18)
 //  ※ 카카오톡 카드의 「마이페이지 열기」 버튼은 그대로 붙습니다
 function vrTailNoMy(){return '\n\n📞 +60 17-247 2774 · Happy Home Care';}
+// 🖼 예약 방문 안내(사전·내일·당일)는 예약 확인 링크 한 줄 — 왓츠앱은 링크가 있어야 미리보기 그림을 붙입니다 (2026-11-21)
+//    고객을 찾지 못해 마이페이지 주소가 없으면 예전처럼 연락처만
+function vrTailVisit(url,en,repair,live){
+  if(!url||/\/home(\?|$)/.test(url))return vrTailNoMy();   // 짧은 주소(/r)로 바뀐 뒤에도 그대로 씀
+  const lb=live?(en?'📍 Visit info':'📍 방문 안내'):repair?(en?'🔧 Visit details':'🔧 방문 안내 확인'):(en?'📅 View booking':'📅 예약 확인');
+  return '\n\n'+lb+' 👉 '+url+'\n📞 +60 17-247 2774 · Happy Home Care';
+}
 window.sendVisitReminder=function(itemId){
   // bookings/schedules 양쪽에서 해당 항목 찾기
   let item=null;
@@ -2353,6 +2361,18 @@ window.sendVisitReminder=function(itemId){
   // 📱 마이페이지 주소 · 고객 연락처 — 왓츠앱 본문과 카카오 카드 버튼이 함께 사용합니다
   const VR_PH=item.customer_phone||item.phone||'';
   let VR_URL=vrMyLink(name,VR_PH,lang==='en',isRepair?'mm':'bk');
+  // 🖼 안내 종류별 링크 (2026-11-21) — 같은 마이페이지 주소에 vi= 표시만 달리해 미리보기 그림을 고릅니다
+  //    vi=1 예약 리마인드 · mv 이동중 · dt 지연(교통) · dw 지연(작업)  (functions/r.js)
+  const VR_LONG=VR_URL,VR_SH={},VR_KIND={pre:'1',tomorrow:'1',today:'1',move:'mv',delayT:'dt',delayW:'dw',arrive:'ar'};
+  function vrUrlK(t){
+    const k=VR_KIND[t];if(!k||VR_LONG.indexOf('vi=1')<0)return VR_URL;
+    if(k==='1')return VR_URL;
+    if(VR_SH[k])return VR_SH[k];
+    const L=VR_LONG.replace('vi=1','vi='+k);
+    hhcShortUrl(L).then(sv=>{if(sv&&sv!==L){VR_SH[k]=sv;const box=document.getElementById('visit-msg-box');if(box)box.value=box.value.split(L).join(sv);}}).catch(()=>{});
+    return L;
+  }
+  const VR_IMG={pre:'og-remind.jpg',tomorrow:'og-remind.jpg',today:'og-remind.jpg',move:'og-onway.jpg',delayT:'og-delay.jpg',delayW:'og-delayw.jpg',arrive:'og-arrive.jpg'};
   const title=isRepair
     ?(lang==='en'?'🛠 Repair Visit Message':'🛠 수리 방문 안내 메시지')
     :(lang==='en'?'💬 Visit Reminder Message':'💬 방문 안내 메시지');
@@ -2432,10 +2452,11 @@ window.sendVisitReminder=function(itemId){
       document.getElementById('visit-dlw-n').value=mvExtraOf(tpl);
     }
     if(mvIsCalc(tpl)){mvShow();return;}
-    if(tpl==='arrive'){document.getElementById('visit-msg-box').value=getArrivedMsg(name,lang)+vrTailNoMy();return;}
+    if(tpl==='arrive'){document.getElementById('visit-msg-box').value=getArrivedMsg(name,lang)+vrTailVisit(vrUrlK('arrive'),lang==='en',isRepair,true);return;}   // 🖼 가드하우스 도착 그림 (2026-11-21)
     document.getElementById('visit-msg-box').value=
       (isRepair?getRepairReminderMsg(name,dateStr,lang,tpl,timeS,symptom)
-               :getVisitReminderMsg(name,dateStr,lang,tpl,timeS))+vrTailNoMy();
+               :getVisitReminderMsg(name,dateStr,lang,tpl,timeS))+
+      ((tpl==='pre'||tpl==='tomorrow'||tpl==='today')?vrTailVisit(vrUrlK(tpl),lang==='en',isRepair):vrTailNoMy());
   }
   // 🚗 이동중 — 지금 위치·소요시간을 계산해 문구에 넣습니다 (한 번 계산하면 이 창에서는 다시 씀)
   const EN=(lang==='en');
@@ -2445,7 +2466,7 @@ window.sendVisitReminder=function(itemId){
     const box=document.getElementById('visit-msg-box');
     const X=mvExtraOf(curTpl),TOT=(mv&&mv.gmin!=null)?mv.gmin+X:null;
     box.value=(curTpl==='move'?getMovingMsg(name,lang,mv&&mv.area,TOT)
-              :getDelayMsg(name,lang,curTpl==='delayW'?'work':'traffic',TOT))+vrTailNoMy();
+              :getDelayMsg(name,lang,curTpl==='delayW'?'work':'traffic',TOT))+vrTailVisit(vrUrlK(curTpl),lang==='en',isRepair,true);   // 🖼 링크가 있어야 왓츠앱 그림이 붙습니다
     const st=document.getElementById('visit-mv-t');
     if(mvBusy){st.innerHTML='⏳ '+(EN?'Getting your location and Google Maps driving time…':'지금 위치와 구글맵 이동 시간을 확인하는 중…');return;}
     if(!mv)return;
@@ -2520,8 +2541,9 @@ window.sendVisitReminder=function(itemId){
     }
     // 🖼 예약 방문 안내(사전·내일·당일)만 예약 확정 그림 카드 — 이동중·도착·지연 같은 짧은 알림은 지금처럼 글 카드 (2026-11-20)
     //    (클립보드에는 위에서 복사한 고객 이름을 그대로 둡니다 → copy:false)
-    const ok=(['pre','tomorrow','today'].indexOf(curTpl)>=0&&window.hhcKkCard)
-      ?await hhcKkCard({msg:m,url:VR_URL,img:'og-confirmed.jpg',btn:lang==='en'?'Open MY PAGE':'마이페이지 열기',en:lang==='en',copy:false,btn2:false})
+    //    (2026-11-21) 리마인드 · 이동중 · 지연(교통/작업)도 각자 그림 카드 — 도착(가드하우스)만 글 카드
+    const ok=(VR_IMG[curTpl]&&window.hhcKkCard)
+      ?await hhcKkCard({msg:m,url:vrUrlK(curTpl),img:VR_IMG[curTpl],btn:lang==='en'?'Open MY PAGE':'마이페이지 열기',en:lang==='en',copy:false,btn2:false})
       :(curTpl==='arrive')
       ?await vrKkSend(m,vrBase()+'/home'+(lang==='en'?'?lang=en':''),lang==='en',(lang==='en'?'Happy Home Care':'해피홈케어'))
       :await vrKkSend(m,VR_URL,lang==='en');

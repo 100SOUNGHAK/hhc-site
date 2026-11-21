@@ -101,6 +101,13 @@ async function metaFor(env, origin, target){
                  review: ['pt-review', '리뷰 감사 적립 · Review | Happy Home Care', 'Review Thanks | Happy Home Care', '소중한 리뷰 감사합니다 · 감사 적립해 드렸습니다', 'Thank you for your review · Happy Points have been added'] };
     const pk = f === 'rw' && PK[t.searchParams.get('pk')];
     if (pk) [img, tk, te, dk, de] = pk;
+    // 📅 예약 방문 안내(vi=) — 리마인드 · 이동중 · 지연(교통/작업) 그림 (2026-11-21)
+    const VI = { '1': ['remind', '예약 방문 알림 · Reminder | Happy Home Care', 'Visit Reminder | Happy Home Care', '예정된 방문을 다시 알려 드려요 · 날짜와 시간을 확인해 주세요', 'A friendly reminder of your visit · please check the date and time'],
+                 mv: ['onway', '방문하러 가는 중 · On the way | Happy Home Care', 'On the Way | Happy Home Care', '지금 방문하러 가는 중입니다 · 곧 도착합니다', 'We are on our way · arriving soon'],
+                 dt: ['delay', '도착 지연 안내 · Delay | Happy Home Care', 'Running Late | Happy Home Care', '교통 체증으로 조금 늦어집니다 · 양해 부탁드립니다', 'Stuck in traffic — running a bit late'],
+                 ar: ['arrive', '가드하우스 도착 · Arrived | Happy Home Care', 'Arrived | Happy Home Care', '가드하우스에 도착했습니다 · 출입수속 후 곧 방문드리겠습니다', 'We have arrived at the guardhouse · see you shortly'],
+                 dw: ['delayw', '도착 지연 안내 · Delay | Happy Home Care', 'Running Late | Happy Home Care', '앞 작업이 길어져 조금 늦어집니다 · 양해 부탁드립니다', 'The previous job took longer — running a little late'] };
+    if ((f === 'bk' || f === 'mm') && VI[t.searchParams.get('vi')]) [img, tk, te, dk, de] = VI[t.searchParams.get('vi')];
     return { title: en ? te : tk, desc: en ? de : dk, image: `${SITE}/og-${img}${en ? '-en' : ''}.jpg`, w: '1200', h: '630' };
   }
   for (const [re, img, tk, te, dk, de] of TYPES) {
