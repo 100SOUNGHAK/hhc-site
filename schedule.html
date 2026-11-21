@@ -2364,19 +2364,30 @@ window.sendVisitReminder=function(itemId){
   let VR_URL=vrMyLink(name,VR_PH,lang==='en',isRepair?'mm':'bk');
   // 🖼 안내 종류별 링크 (2026-11-21) — 같은 마이페이지 주소에 vi= 표시만 달리해 미리보기 그림을 고릅니다
   //    vi=1 예약 리마인드 · mv 이동중 · dt 지연(교통) · dw 지연(작업)  (functions/r.js)
-  const VR_LONG=VR_URL,VR_SH={},VR_KIND={pre:'pd',tomorrow:'tm',today:'td',move:'mv',delayT:'dt',delayW:'dw',arrive:'ar'};
+  const VR_LONG=VR_URL,VR_SH={},VR_KIND={pre:'pd',tomorrow:'tm',today:'td',move:'mv',delayT:'dt',delayW:'dw',arrive:'ar',now:'nw'};
+  // 이동중·지연은 도착까지 남은 분(mn)도 주소에 — 「00분 후 도착」이 찍힌 그림(og-mv / og-dt / og-dw)이 붙습니다 (2026-11-21)
+  let VR_MN=null;
+  const vrMnOk=n=>n!=null&&n>=1&&n<=180;
   function vrUrlK(t){
     const k=VR_KIND[t];if(!k||VR_LONG.indexOf('vi=1')<0)return VR_URL;
     if(k==='1')return VR_URL;
-    if(VR_SH[k])return VR_SH[k];
+    const mn=(t==='move'||t==='delayT'||t==='delayW')&&vrMnOk(VR_MN)?VR_MN:null;
+    const ck=k+(mn?'-'+mn:'');
+    if(VR_SH[ck])return VR_SH[ck];
     // 사전 안내(pd)는 방문 날짜(vd=MMDD)도 함께 — 그 날짜가 찍힌 그림(og-d/MMDD.jpg)이 붙습니다 (2026-11-21)
-    const L=VR_LONG.replace('vi=1','vi='+k)+(k==='pd'&&VR_MD?'&vd='+VR_MD:'');
-    hhcShortUrl(L).then(sv=>{if(sv&&sv!==L){VR_SH[k]=sv;const box=document.getElementById('visit-msg-box');if(box)box.value=box.value.split(L).join(sv);}}).catch(()=>{});
+    const L=VR_LONG.replace('vi=1','vi='+k)+(k==='pd'&&VR_MD?'&vd='+VR_MD:'')+(mn?'&mn='+mn:'');
+    hhcShortUrl(L).then(sv=>{if(sv&&sv!==L){VR_SH[ck]=sv;const box=document.getElementById('visit-msg-box');if(box)box.value=box.value.split(L).join(sv);}}).catch(()=>{});
     return L;
+  }
+  function vrImgK(t){
+    const en=lang==='en',S='https://happyhomecare.com.my/';
+    const set={move:'mv',delayT:'dt',delayW:'dw'}[t];
+    if(set&&vrMnOk(VR_MN))return S+'og-'+set+'/'+VR_MN+(en?'-en':'')+'.jpg';
+    return VR_IMG[t];
   }
   const VR_MD=(/^\d{4}-(\d{2})-(\d{2})/.exec(String(dateStr||''))||[]).slice(1).join('');   // 방문 날짜 MMDD
   const VR_IMG={pre:VR_MD?'https://happyhomecare.com.my/og-d/'+VR_MD+(lang==='en'?'-en':'')+'.jpg':'og-remind.jpg',tomorrow:'og-remind-tmr.jpg',today:'og-remind-today.jpg',   // 내일·오늘 글자 그림 (2026-11-21)
-    move:'og-onway.jpg',delayT:'og-delay.jpg',delayW:'og-delayw.jpg',arrive:'og-arrive.jpg'};
+    move:'og-onway.jpg',delayT:'og-delay.jpg',delayW:'og-delayw.jpg',arrive:'og-arrive.jpg',now:'og-now.jpg'};   // ⚡ 지금 방문 (2026-11-21)
   const title=isRepair
     ?(lang==='en'?'🛠 Repair Visit Message':'🛠 수리 방문 안내 메시지')
     :(lang==='en'?'💬 Visit Reminder Message':'💬 방문 안내 메시지');
@@ -2460,7 +2471,8 @@ window.sendVisitReminder=function(itemId){
     document.getElementById('visit-msg-box').value=
       (isRepair?getRepairReminderMsg(name,dateStr,lang,tpl,timeS,symptom)
                :getVisitReminderMsg(name,dateStr,lang,tpl,timeS))+
-      ((tpl==='pre'||tpl==='tomorrow'||tpl==='today')?vrTailVisit(vrUrlK(tpl),lang==='en',isRepair):vrTailNoMy());
+      ((tpl==='pre'||tpl==='tomorrow'||tpl==='today')?vrTailVisit(vrUrlK(tpl),lang==='en',isRepair)
+       :tpl==='now'?vrTailVisit(vrUrlK(tpl),lang==='en',isRepair,true):vrTailNoMy());   // ⚡ 지금 방문도 링크 한 줄 → 그림
   }
   // 🚗 이동중 — 지금 위치·소요시간을 계산해 문구에 넣습니다 (한 번 계산하면 이 창에서는 다시 씀)
   const EN=(lang==='en');
@@ -2469,6 +2481,7 @@ window.sendVisitReminder=function(itemId){
     if(!mvIsCalc(curTpl))return;
     const box=document.getElementById('visit-msg-box');
     const X=mvExtraOf(curTpl),TOT=(mv&&mv.gmin!=null)?mv.gmin+X:null;
+    VR_MN=TOT;   // 그림에 찍을 「00분 후」
     box.value=(curTpl==='move'?getMovingMsg(name,lang,mv&&mv.area,TOT)
               :getDelayMsg(name,lang,curTpl==='delayW'?'work':'traffic',TOT))+vrTailVisit(vrUrlK(curTpl),lang==='en',isRepair,true);   // 🖼 링크가 있어야 왓츠앱 그림이 붙습니다
     const st=document.getElementById('visit-mv-t');
@@ -2547,7 +2560,7 @@ window.sendVisitReminder=function(itemId){
     //    (클립보드에는 위에서 복사한 고객 이름을 그대로 둡니다 → copy:false)
     //    (2026-11-21) 리마인드 · 이동중 · 지연(교통/작업)도 각자 그림 카드 — 도착(가드하우스)만 글 카드
     const ok=(VR_IMG[curTpl]&&window.hhcKkCard)
-      ?await hhcKkCard({msg:m,url:vrUrlK(curTpl),img:VR_IMG[curTpl],btn:lang==='en'?'Open MY PAGE':'마이페이지 열기',en:lang==='en',copy:false,btn2:false})
+      ?await hhcKkCard({msg:m,url:vrUrlK(curTpl),img:vrImgK(curTpl),btn:lang==='en'?'Open MY PAGE':'마이페이지 열기',en:lang==='en',copy:false,btn2:false})
       :(curTpl==='arrive')
       ?await vrKkSend(m,vrBase()+'/home'+(lang==='en'?'?lang=en':''),lang==='en',(lang==='en'?'Happy Home Care':'해피홈케어'))
       :await vrKkSend(m,VR_URL,lang==='en');

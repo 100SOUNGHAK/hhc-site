@@ -27,6 +27,7 @@ const EN = {
 //  영어 링크(lang=en · 인보이스는 ml=en · my-en)는 영어 그림. 제목·설명은 페이지 것을 그대로 두고,
 //  페이지에 제목 태그가 없을 때만 아래 이름을 넣습니다.
 // ─────────────────────────────────────────────────────────────────────────────
+import { visitImg } from './api/_lib/vimg.js';   // 날짜·분이 찍힌 그림 (2026-11-21)
 const DOC = {
   'pay': ['pay', '결제 계좌 안내', 'Payment details'], 'points': ['points', '해피포인트 안내', 'Happy Point'],
   'workpermit': ['permit', '작업방문 등록 안내', 'Work permit'], 'evoucher': ['voucher', '전자상품권 안내', 'E-voucher'],
@@ -49,6 +50,13 @@ async function docPreview(context, url, key){
   const en = (key === 'hhc-invoice' || key === 'inv') ? q.get('ml') === 'en' : (q.get('lang') === 'en' || key === 'my-en');
   let img = base;
   if (base === 'my'){ const f = q.get('f') || ''; img = MY_F[f] || 'my'; if (f === 'rw' && PK[q.get('pk')]) img = PK[q.get('pk')]; const VI = { '1':'remind', tm:'remind-tmr', td:'remind-today', mv:'onway', dt:'delay', dw:'delayw', ar:'arrive' }; if ((f === 'bk' || f === 'mm') && VI[q.get('vi')]) img = VI[q.get('vi')]; if (f === 'ct' && q.get('vi') === 'aw') img = 'aftwork'; if ((f === 'bk' || f === 'mm') && q.get('vi') === 'pd') img = /^(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(q.get('vd') || '') ? 'd/' + q.get('vd') : 'remind'; }
+  // 📅 예약 확정·신청 날짜 / ⏱ 00분 후 도착 / ⚡ 지금 방문 / 🔧 점검 접수 — 예약서(id) 조회는 미리보기 로봇일 때만 (고객 화면은 느려지지 않게)
+  let W = '1200', H = '630';
+  if (base === 'my' || key === 'workpermit' || key === 'booking'){
+    const bot = /whatsapp|facebookexternalhit|facebot|kakaotalk-scrap|kakao|telegram|twitterbot|slackbot|discordbot|linkedinbot|line-poker|skypeuri|googlebot|bingbot/i.test(context.request.headers.get('user-agent') || '');
+    if (key !== 'booking' || bot){ let vx = null; try { vx = await visitImg(key === 'booking' ? context.env : null, url); } catch (_) {}
+      if (vx){ img = vx.img; W = vx.w; H = vx.h; } }
+  }
   const src = `${SITE}/og-${img}${en ? '-en' : ''}.jpg`, title = (en ? te : tk) + ' | Happy Home Care';
   let hasTitle = false, hasSite = false;
   const drop = { element(el){ el.remove(); } };
@@ -61,7 +69,7 @@ async function docPreview(context, url, key){
     .on('head', { element(el){ el.onEndTag(function(end){
         end.before((hasTitle ? '' : `<meta property="og:title" content="${title}">`) +
                    (hasSite ? '' : '<meta property="og:site_name" content="Happy Home Care">') +
-                   `<meta property="og:image" content="${src}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">` +
+                   `<meta property="og:image" content="${src}"><meta property="og:image:width" content="${W}"><meta property="og:image:height" content="${H}">` +
                    `<meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${src}">`, { html: true });
       }); } })
     .transform(res);

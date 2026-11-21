@@ -13,6 +13,7 @@
 //  이 파일은 미리보기 태그만 바꿉니다. 이동·보안 동작은 r.html · /api/r.js 그대로입니다.
 // ─────────────────────────────────────────────────────────────────────────────
 import { queryEq } from './api/_lib/fs.js';
+import { visitImg } from './api/_lib/vimg.js';   // 날짜·분이 찍힌 그림 (2026-11-21)
 
 const SITE = 'https://happyhomecare.com.my';
 const OUR_HOSTS = /^(www\.)?happyhomecare\.com\.my$|^hhc-3p8\.pages\.dev$/i;
@@ -93,6 +94,9 @@ async function metaFor(env, origin, target){
   // 인보이스 주소는 항상 lang=en 이 붙어 있어, 발송 언어 표시(ml=en)가 있을 때만 영어 (2026-11-21)
   const en = /^\/(hhc-invoice|hhcinvoice|inv)(\.html)?$/i.test(t.pathname) ? t.searchParams.get('ml') === 'en' : isEn(t);
   const f = t.searchParams.get('f') || '';
+  // 📅 예약 확정·신청 날짜 / ⏱ 00분 후 도착 / ⚡ 지금 방문 / 🔧 점검(수리) 접수 (2026-11-21)
+  const vx = await visitImg(env, t);
+  if (vx) return { title: en ? vx.te : vx.tk, desc: en ? vx.de : vx.dk, image: `${SITE}/og-${vx.img}${en ? '-en' : ''}.jpg`, w: vx.w, h: vx.h };
   if (/^\/(my|mypage|my-en)(\.html)?$/i.test(t.pathname) && MY_FOCUS[f]) {
     let [img, tk, te, dk, de] = MY_FOCUS[f];
     // 💎 적립 안내 종류(pk=) — 불편 보상 · 지인 추천 보상 · 리뷰 감사 (2026-11-21)

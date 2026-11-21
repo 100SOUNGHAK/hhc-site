@@ -2843,7 +2843,7 @@ document.getElementById('btn-kakao-link').addEventListener('click',async()=>{
   url=await hhcShortUrl(_linkWithLang(url,lang));   // 🔗 짧은 주소로
   // 💛 카카오톡 그림 카드(예약서 그림 + 「날짜 고르기」) — 전체 문구도 함께 복사됩니다 (2026-11-20)
   const msg=getMsg(name,phone,url,selectedDates,scheduleMap,lang);
-  await hhcKkCard({msg,url,img:'og-booking.jpg',btn:lang==='en'?'Pick a date':'날짜 고르기',en:lang==='en'});
+  await hhcKkCard({msg,url,img:bkDateImg('db',bkFirstCand(selectedDates),lang==='en'),btn:lang==='en'?'Pick a date':'날짜 고르기',en:lang==='en'});
   const ok=document.getElementById('kakao-ok');ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
 });
 
@@ -4285,7 +4285,7 @@ async function showConfirmMsgModal(b,goCust){
   });
   document.getElementById('confirm-kakao-btn').addEventListener('click',async()=>{
     // 💛 카카오톡 그림 카드(예약 확정 그림 + 「예약 보기」) — 전체 문구도 함께 복사 (2026-11-20)
-    await hhcKkCard({msg,img:'og-confirmed.jpg',btn:lang==='en'?'View booking':'예약 보기',en:lang==='en'});
+    await hhcKkCard({msg,img:bkDateImg('dc',b.booking_date,lang==='en'),btn:lang==='en'?'View booking':'예약 보기',en:lang==='en'});
     const ok=document.getElementById('confirm-kakao-ok');
     ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
   });
@@ -4348,6 +4348,11 @@ function bkItemLinesMsg(bi,en){
   }).join('\n');
 }
 // 이 예약 고객의 마이페이지 주소 (고객마스터: 연락처 → 이름·별칭 순으로 찾음)
+// 📅 예약 날짜 그림 (2026-11-21) — 예약 신청은 첫 후보일, 확정은 예약일이 찍힌 그림(og-db / og-dc)
+function bkMD(d){const m=/^\d{4}-(\d{2})-(\d{2})/.exec(String(d||''));return m?m[1]+m[2]:'';}
+function bkFirstCand(list){return (Array.isArray(list)?list:[]).map(String).filter(x=>/^\d{4}-\d{2}-\d{2}/.test(x)).sort()[0]||'';}
+function bkCandOf(b){let a=[];try{a=JSON.parse(b&&b.schedule_dates||'[]');}catch(_){}return bkFirstCand(a);}
+function bkDateImg(kind,d,en){const md=bkMD(d);return md?'https://happyhomecare.com.my/og-'+kind+'/'+md+(en?'-en':'')+'.jpg':(kind==='dc'?'og-confirmed.jpg':'og-booking.jpg');}
 async function bkMyPageUrl(b){
   const lang=(b.customer_lang||'ko')==='en'?'en':'ko';
   try{
@@ -4389,7 +4394,9 @@ async function bkConfirmMsg(b){
 async function bkResendMsg(b){
   const en=(b.customer_lang||'ko')==='en';
   const nm=b.customer_name||(en?'Customer':'고객');
-  const url=await hhcShortUrl(await bkMyPageUrl(b));
+  let _u=await bkMyPageUrl(b);const _md=bkMD(bkCandOf(b));
+  if(_md&&/\/my(-en)?\.html\?/.test(_u))_u+='&vi=bq&vd='+_md;   // 📅 미리보기에 첫 후보일 그림
+  const url=await hhcShortUrl(_u);
   const il=bkItemLinesMsg(b.booking_items,en);
   const SIG='📞 +60 17-247 2774 · Happy Home Care';
   // 2026-11 발송 문구 개편 — 마이페이지 발송 「예약 신청」과 같은 모양
@@ -4424,7 +4431,7 @@ window.sendKakao=async function(id){
     :await bkResendMsg(b);
   // 💛 카카오톡 그림 카드 — 확정이면 예약 확정 그림, 아니면 예약서 그림 (2026-11-20)
   const en=lang==='en',cf=b.status==='confirmed';
-  await hhcKkCard({msg,img:cf?'og-confirmed.jpg':'og-booking.jpg',btn:cf?(en?'View booking':'예약 보기'):(en?'Pick a date':'날짜 고르기'),en});
+  await hhcKkCard({msg,img:cf?bkDateImg('dc',b.booking_date,en):bkDateImg('db',bkCandOf(b),en),btn:cf?(en?'View booking':'예약 보기'):(en?'Pick a date':'날짜 고르기'),en});
   showToast('✓ 메시지도 복사됨 · 필요하면 붙여넣기 하세요');
 };
 // ── NEW BOOKING RESET ──

@@ -1030,7 +1030,7 @@ function who(m){
 // 🪪 작업방문등록 안내장 주소 — 표지 위에 방문 일정 카드(호칭 · 방문일 · 내용 · 상태)가 함께 나옵니다
 // 주소 값 인코딩 — 괄호 ( ) 도 %28 %29 로 바꿔 메시지 속 주소가 중간에 끊기지 않게 합니다
 const wpEnc=function(v){return encodeURIComponent(v).replace(/[()'!*]/g,function(c){return '%'+c.charCodeAt(0).toString(16).toUpperCase();});};
-function wpLinkMemo(m){
+function wpLinkMemo(m,bc){
   const q=['bk=1','k=v'];
   if(m.visit_date)q.push('d='+wpEnc(m.visit_date));
   const t=String(m.visit_time||'').trim();
@@ -1038,6 +1038,7 @@ function wpLinkMemo(m){
   q.push('nm='+wpEnc(who(m)));
   const it=String(m.symptom||'').trim().split('\n')[0].slice(0,60);
   if(it)q.push('it='+wpEnc(it));
+  if(bc&&m.visit_date)q.push('vi=bc');   // 📅 일정 확정 안내의 첫 링크 → 왓츠앱 미리보기에 확정 날짜 그림(og-dc) (2026-11-21)
   return 'https://happyhomecare.com.my/workpermit.html?'+q.join('&');
 }
 function wpLine(m){return '\n\n🪪 작업방문등록 안내장 (복사 · 전달용)\n🔗 '+(_hhcShortCache[wpLinkMemo(m)]||wpLinkMemo(m));}
@@ -1090,8 +1091,8 @@ function tplText(m,n){
   const hi='안녕하세요, '+who(m)+' 고객님 😊\n\n';
   const when=tplWhen(m);
   if(n===3)return hi+'✅ *방문 일정이 확정되었습니다*'+(when?'\n📅 '+when:'')+'\n\n'+
-    '📌 *방문 전 꼭 해 주세요*\n매니지먼트에 작업방문등록(Work Permit)\n'+
-    '🪪 등록에 필요한 정보 👉 '+(_hhcShortCache[wpLinkMemo(m)]||wpLinkMemo(m))+'\n\n'+SIG;
+    '📌 *작업방문등록 필수 요망*\n매니지먼트에 작업방문등록(Work Permit)\n'+
+    '🪪 등록에 필요한 정보 👉 '+(_hhcShortCache[wpLinkMemo(m,1)]||wpLinkMemo(m,1))+'\n\n'+SIG;
   // 📥 방문 접수 — 요청을 받은 직후 보내는 접수 확인
   if(n===7)return hi+'🔧 *점검 요청이 접수되었습니다*\n\n👉 방문 가능 일정을 확인해 바로 연락드립니다.\n      (따로 하실 일은 없습니다)\n\n'+SIG;
   if(n===1)return hi+'🚗 *지금 바로 방문 가능합니다*\n\n👉 괜찮으시면 「OK」라고 회신 부탁드립니다 🙏\n\n'+SIG;
@@ -1781,7 +1782,7 @@ window.sdOpenCust=function(){const m=MEMOS.find(x=>x.__id===sendId);if(m)window.
 
 function paintSend(){
   const m=MEMOS.find(x=>x.__id===sendId);if(!m)return;
-  try{const _wu=wpLinkMemo(m);if(!_hhcShortCache[_wu])hhcShortUrl(_wu).then(sh=>{if(sh!==_wu&&sendId===m.__id)try{paintSend();}catch(_){}});}catch(_){}
+  try{for(const _wu of [wpLinkMemo(m),wpLinkMemo(m,1)])if(!_hhcShortCache[_wu])hhcShortUrl(_wu).then(sh=>{if(sh!==_wu&&sendId===m.__id)try{paintSend();}catch(_){}});}catch(_){}
   const ok2=canTpl2(m);
   if(!ok2&&sendTpl===2)sendTpl=1;
   const ch=m.channel||'other';
@@ -1950,8 +1951,11 @@ document.getElementById('sd-body').addEventListener('click',async ev=>{
     let _kk=false;
     if((m.channel||'')==='kakao'&&window.hhcKkCard&&/https?:\/\//.test(txt)){
       const _en=/^(Hello|Dear|Hi)\b/.test(txt.trim()),_t=(/\*([^*\n]+)\*/.exec(txt)||[])[1]||'';
-      const _img=(sendTpl===5||sendTpl===6)?'og-repair.jpg':/접수|received/i.test(_t)?'og-received.jpg'
+      let _img=(sendTpl===5||sendTpl===6)?'og-repair.jpg':/접수|received/i.test(_t)?'og-received.jpg'
                :/확정|방문합니다|방문 안내|confirmed|visit/i.test(_t)?'og-confirmed.jpg':/일정|schedule|date/i.test(_t)?'og-booking.jpg':'og-my.jpg';
+      // 📅 일정 확정(3) — 확정된 방문 날짜가 찍힌 그림 og-dc/MMDD.jpg (2026-11-21)
+      const _md=/^\d{4}-(\d{2})-(\d{2})/.exec(String(m.visit_date||''));
+      if(sendTpl===3&&_md)_img='https://happyhomecare.com.my/og-dc/'+_md[1]+_md[2]+(_en?'-en':'')+'.jpg';
       _kk=await hhcKkCard({msg:txt,img:_img,btn:(sendTpl===5||sendTpl===6)?(_en?'View result':'결과 보기'):(_en?'View details':'자세히 보기'),en:_en});
     }
     if(_kk)toast('💛 카카오톡 공유창을 엽니다 · 전체 메시지도 복사되었습니다');

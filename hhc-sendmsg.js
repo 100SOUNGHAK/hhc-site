@@ -205,14 +205,16 @@ function rq(o){
   var il=items.length?(items.join('\n')+'\n'):'';
   return en
     ?(sHi(en,nm)+'\n\n📥 *Your request has been received*\n'+il+
-      '\n👉 Our team will contact you with a visit time.\n      (Nothing else needed from you)\n\n'+lk('📱 My Page',o.link)+'\n'+SIG)
+      '\n👉 Our staff will check and let you know the available dates.\n      (Nothing else needed from you)\n\n'+lk('📱 My Page',o.link)+'\n'+SIG)
     :(sHi(en,nm)+'\n\n📥 *의뢰가 접수되었습니다*\n'+il+
-      '\n👉 담당자가 확인 후 방문 일정을 연락드립니다.\n      (따로 하실 일은 없습니다)\n\n'+lk('📱 마이페이지',o.link)+'\n'+SIG);
+      '\n👉 담당 직원이 확인 후 가능 일정을 안내드리겠습니다.\n      (따로 하실 일은 없습니다)\n\n'+lk('📱 마이페이지',o.link)+'\n'+SIG);
 }
 // ✅ 예약 확정 안내 — 방문일시를 본문에 넣고, 상세는 마이페이지에서 확인하도록 짧게 유지
 //   o.name · o.en · o.link(마이페이지 주소)
 //   o.booking   : 방문일시를 적을 예약 (bookings 문서)
 //   o.wpBooking : 작업방문등록 안내장 표지에 보여 줄 예약 (생략하면 o.booking · null 이면 표지 카드 없음)
+// vi=bc : 예약 확정 표시 — 왓츠앱은 첫 링크로 미리보기를 만들므로, 작업방문등록 링크에 「예약 확정 + 날짜」 그림이 붙게 합니다 (2026-11-21)
+function bcMark(u){return u+(u.indexOf('?')>=0?'&':'?')+'vi=bc';}
 function bkc(o){
   var en=!!o.en,nm=o.name||'';
   var wb=('wpBooking' in o)?o.wpBooking:o.booking;
@@ -222,11 +224,11 @@ function bkc(o){
   var bkcL=lcN?('📍 '+lcN+'\n      '+(en?'(let us know if this is not correct)':'(위치가 다르면 알려 주세요)')+'\n'):'';
   return en
     ?(sHi(en,nm)+'\n\n✅ *Booking confirmed*\n'+(bkcW?'📅 '+bkcW+'\n':'')+bkcL+
-      '\n📌 *Before we arrive*\nRegister our visit (Work Permit) with management.\n'+
-      lk('🪪 Registration details',wpLink(wb,nm,true))+'\n\n'+lk('📱 Booking details',o.link)+'\n'+SIG)
+      '\n📌 *Work Permit registration required*\nPlease register our visit with management before we arrive.\n'+
+      lk('🪪 Registration details',bcMark(wpLink(wb,nm,true)))+'\n\n'+lk('📱 Booking details',o.link)+'\n'+SIG)
     :(sHi(en,nm)+'\n\n✅ *예약이 확정되었습니다*\n'+(bkcW?'📅 '+bkcW+'\n':'')+bkcL+
-      '\n📌 *방문 전 꼭 해 주세요*\n매니지먼트에 작업방문등록(Work Permit)\n'+
-      lk('🪪 등록에 필요한 정보',wpLink(wb,nm,false))+'\n\n'+lk('📱 예약 상세',o.link)+'\n'+SIG);
+      '\n📌 *작업방문등록 필수 요망*\n방문 전 매니지먼트에 작업방문등록(Work Permit)을 꼭 완료해 주세요.\n'+
+      lk('🪪 등록에 필요한 정보',bcMark(wpLink(wb,nm,false)))+'\n\n'+lk('📱 예약 상세',o.link)+'\n'+SIG);
 }
 
 window.HHCMsg={
