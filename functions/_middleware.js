@@ -10,7 +10,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 const SITE = 'https://happyhomecare.com.my';
 const EN = {
-  'guides':    ['og-guides-en.jpg',    'Our service process in photos | Happy Home Care', 'Air-con · washer · dryer · sofa · mattress · curtains'],
+  'guides':    ['og-guides-en.jpg?v=20261123', 'Our service process in photos & video | Happy Home Care', 'Air-con job videos & 3D · washer · dryer · sofa · mattress · curtains'],
   'ac-guides': ['og-ac-guides-en.jpg', 'Air-con: good to know | Happy Home Care', 'Causes & fixes by symptom · before you book'],
   'smart':     ['og-save-en.jpg',      'Smart ways to save | Happy Home Care', 'Membership bonus credit · E-voucher 10% off'],
   'prices':    ['og-prices-en.jpg',    'Prices by service | Happy Home Care', 'Air-con · washer · sofa · mattress · curtain prices at a glance'],
