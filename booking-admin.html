@@ -2992,6 +2992,7 @@ function renderList(){
         <button onclick="sendKakao('${b.__id}')"><i>📋</i>카카오톡 복사</button>
         ${extra||''}
         <div class="sep"></div>
+        ${b.status==='confirmed'&&!isDoneBooking(b)?`<button onclick="reschedBooking('${b.__id}')"><i>🔁</i>일정 취소 · 새 일정 안내</button>`:''}
         ${b.status!=='waiting'?`<button onclick="toWaitingBooking('${b.__id}')"><i>⏳</i>대기중으로 변경</button><div class="sep"></div>`:''}
         <button class="dgr" onclick="deleteBooking('${b.__id}')"><i>🗑</i>예약 삭제</button>
       </div>
@@ -3220,8 +3221,10 @@ function nxDpInit(){
   const bid=box.dataset.bid;
   if(NXDP.bid!==bid){
     const E=nxDpEls(bid),b=allBookings.find(x=>x.__id===bid)||{};
-    const mode=b.status==='waiting'||(!b.status)?'multi':'single';   // 응답 대기 = 후보 일정 다시 고르기
+    let mode=b.status==='waiting'||(!b.status)?'multi':'single';   // 응답 대기 = 후보 일정 다시 고르기
+    if(window._nxForceMulti===bid){mode='multi';window._nxForceMulti='';}   // 🔁 일정 취소 · 새 일정 안내
     E.md.value=mode;
+    if(mode==='multi'&&b.status==='confirmed')nxDpPrunePast(E);
     const M=nxDpGetMulti(E);
     const base=(mode==='multi'?(M.a.find(x=>x>=today())||M.a[0]):E.d.value)||E.d.value||today();
     NXDP={bid:bid,y:+base.slice(0,4),m:+base.slice(5,7)-1,mode:mode,act:(M.a.find(x=>x>=today())||M.a[0]||'')};
@@ -3254,6 +3257,8 @@ function nxBusyNear(ds,v){
   if(!ds)return false;const t0=bkTimeMin(nxTkey(v));if(t0===99999)return false;
   return nxBusy(ds,NXDP.bid).some(x=>{const t=bkTimeMin(x.t);return t!==99999&&Math.abs(t-t0)<=60;});
 }
+// 확정 예약을 취소하고 새 후보로 안내할 때 — 예전 후보(취소하는 날짜 포함)는 비우고 새로 고르기
+function nxDpPrunePast(E){nxDpSetMulti(E,[],{});}
 function nxDpCal(selFn,markFn){
   const Y=NXDP.y,Mo=NXDP.m,T0=today();
   const first=new Date(Y,Mo,1).getDay(),dim=new Date(Y,Mo+1,0).getDate();
@@ -3273,8 +3278,10 @@ function nxDpRender(){
   const box=document.getElementById('nxdp');if(!box)return;
   const bid=NXDP.bid,b=allBookings.find(x=>x.__id===bid)||{};
   const E=nxDpEls(bid);if(!E.d||!E.t||!E.sd)return;
-  const canMulti=b.status!=='confirmed';
-  const tabs=canMulti?`<div class="nxdp-mode"><button type="button" class="${NXDP.mode==='multi'?'on':''}" data-nxdp-mode="multi">📅 후보 일정 (여러 개)</button><button type="button" class="${NXDP.mode==='single'?'on':''}" data-nxdp-mode="single">✅ 확정 일시 (하나)</button></div>`:'';
+  const isCf=b.status==='confirmed';
+  // 확정 예약도 「🔁 취소 후 새 후보」로 바꿀 수 있습니다 (2026-11-23)
+  const tabs=isCf?`<div class="nxdp-mode"><button type="button" class="${NXDP.mode==='single'?'on':''}" data-nxdp-mode="single">✅ 확정 일시 변경</button><button type="button" class="${NXDP.mode==='multi'?'on':''}" data-nxdp-mode="multi">🔁 취소 후 새 후보 안내</button></div>`
+    :`<div class="nxdp-mode"><button type="button" class="${NXDP.mode==='multi'?'on':''}" data-nxdp-mode="multi">📅 후보 일정 (여러 개)</button><button type="button" class="${NXDP.mode==='single'?'on':''}" data-nxdp-mode="single">✅ 확정 일시 (하나)</button></div>`;
   const pres=nxDpPresets();
   if(NXDP.mode==='multi'){
     const M=nxDpGetMulti(E);
@@ -3288,7 +3295,8 @@ function nxDpRender(){
       <div class="nxdp-cu"><input type="text" id="nxdp-cu" placeholder="직접 입력 (예: 12, 12:30)"><button type="button" data-nxdp-add="1">+ 추가</button></div>
       ${M.a.length>1&&cur.length?`<button type="button" class="nxdp-copy" data-nxdp-copy="1">이 시간을 다른 날짜에도 똑같이 적용</button>`:''}`:'';
     const nT=M.a.reduce((s,d)=>s+((M.m[d]||[]).length),0);
-    const warn=b.status==='booked'?'<div class="nxdp-warn">⚠️ 고객이 이미 날짜를 고른 예약입니다. 후보 일정으로 저장하면 고객이 다시 고를 수 있도록 「고객 응답 대기」로 바뀝니다.</div>':'';
+    const warn=b.status==='booked'?'<div class="nxdp-warn">⚠️ 고객이 이미 날짜를 고른 예약입니다. 후보 일정으로 저장하면 고객이 다시 고를 수 있도록 「고객 응답 대기」로 바뀝니다.</div>'
+      :isCf?`<div class="nxdp-warn">🔁 저장하면 기존 확정 일정 <b>${b.booking_date?nxMd(b.booking_date):'날짜 미정'}${b.booking_time?' '+escHtml(nxTkey(b.booking_time)):''}</b>은 <b>취소</b>되고 캘린더에서도 지워집니다.<br>상태가 「대기중」으로 바뀌고, 고객에게 「기존 일정 취소 · 새 가능 일정」 안내를 보낼 수 있습니다.</div>`:'';
     box.innerHTML=`${tabs}${warn}<div class="nxdp-sel"><span>📅 후보 <b>${M.a.length}일 · 시간 ${nT}개</b></span>${M.a.length?'<button type="button" data-nxdp-clear="1">모두 지우기</button>':''}</div>
       ${cal}<div class="nxdp-lgs"><div class="nxdp-lg"><i class="nxdp-n">2</i> 그날 고른 시간 수 · 다시 누르면 날짜 빼기</div><div class="nxdp-lg"><i class="nxdp-bz">2건</i> 이미 확정된 다른 방문</div></div></div>
       <div class="nxdp-dcs">${dchips}</div>${nxDayBox(act)}${times}
@@ -3322,7 +3330,10 @@ document.addEventListener('click',function(e){
   const E=nxDpEls(NXDP.bid);if(!E.d||!E.t||!E.sd)return;
   let x;
   if((x=e.target.closest('[data-nxdp-nav]'))){NXDP.m+=+x.dataset.nxdpNav;if(NXDP.m<0){NXDP.m=11;NXDP.y--;}if(NXDP.m>11){NXDP.m=0;NXDP.y++;}nxDpRender();return;}
-  if((x=e.target.closest('[data-nxdp-mode]'))){NXDP.mode=x.dataset.nxdpMode;E.md.value=NXDP.mode;nxDpRender();return;}
+  if((x=e.target.closest('[data-nxdp-mode]'))){NXDP.mode=x.dataset.nxdpMode;E.md.value=NXDP.mode;
+    const _b=allBookings.find(y=>y.__id===NXDP.bid)||{};
+    if(NXDP.mode==='multi'&&_b.status==='confirmed'){nxDpPrunePast(E);const M=nxDpGetMulti(E);NXDP.act=M.a[0]||'';if(!M.a.length){const t=today();NXDP.y=+t.slice(0,4);NXDP.m=+t.slice(5,7)-1;}}
+    nxDpRender();return;}
   if(NXDP.mode==='multi'){
     const M=nxDpGetMulti(E);
     if((x=e.target.closest('[data-nxdp-d]'))){
@@ -3361,6 +3372,13 @@ document.addEventListener('click',function(e){
 });
 document.addEventListener('keydown',function(e){if(e.key==='Enter'&&e.target&&e.target.id==='nxdp-cu'){e.preventDefault();const bt=document.querySelector('[data-nxdp-add]');if(bt)bt.click();}});
 
+// 🔁 확정 예약 → 기존 일정 취소 후 새 가능 일정 안내 (2026-11-23)
+//    수정 화면을 「🔁 취소 후 새 후보 안내」로 열어 줍니다. 저장하면 대기중 + 캘린더 일정 삭제 + 안내 발송 창.
+window.reschedBooking=function(id){
+  window._nxForceMulti=id;NXDP.bid='';
+  window.startEditList(id);
+  setTimeout(function(){const p=document.getElementById('nxdp');if(p){try{p.scrollIntoView({block:'start',behavior:'smooth'});}catch(e){}}},200);
+};
 window.startEditList=function(id){
   const b=allBookings.find(x=>x.__id===id);
   pkSetArr('edit',b?buildEditPickedFromBooking(b):[]);
@@ -3435,13 +3453,23 @@ window.saveEditList=async function(id){
       updated.schedule_times=JSON.stringify(nxMulti.m);
       const _pv=allBookings.find(x=>x.__id===id);
       if(_pv&&_pv.status==='booked'){updated.status='waiting';updated.booking_date='';updated.booking_time='';}
+      // 🔁 확정 예약 → 기존 일정 취소 + 새 후보 안내: 취소한 일정을 남겨 안내 문구에 씁니다
+      if(_pv&&_pv.status==='confirmed'){
+        updated.status='waiting';updated.booking_date='';updated.booking_time='';
+        updated.resched_from={date:_pv.booking_date||'',time:_pv.booking_time||'',at:new Date().toISOString()};
+        updated.unconfirmed_at=new Date().toISOString();
+      }
     }
     await updateDoc(doc(db,'bookings',id),updated);
     if(window.HHCC_upsert)HHCC_upsert(name,phone,{addr:addr||''});
     // 이미 확정된 예약이면 일정 미러도 함께 갱신 — 그렇지 않으면 예약일 변경 시
     // 캘린더(새 예약 등록/일정 탭)에 변경 전 날짜의 일정이 그대로 남아 중복 표시된다.
     const existing=allBookings.find(x=>x.__id===id);
-    if(existing&&existing.status==='confirmed'){
+    const _wasCf=!!(existing&&existing.status==='confirmed');
+    if(_wasCf&&nxMulti){
+      await removeBookingMirror(id,existing);              // 🔁 취소한 확정 일정은 캘린더에서도 지움
+      Object.assign(existing,updated);                     // 바로 안내 문구를 만들 수 있게
+    }else if(_wasCf){
       await syncBookingMirror(id,updated);
     }
     editingListId=null;NXDP.bid='';
@@ -3457,7 +3485,12 @@ window.saveEditList=async function(id){
         `${_w} 일정으로 저장했습니다.\n\n고객과 이 일정으로 정하셨다면 지금 바로 확정할까요?\n· 캘린더에 방문 일정이 자동 등록됩니다\n· 확정 안내 메시지 화면이 이어서 표시됩니다`,
         true,()=>window.confirmBooking(id));
     }
-    if(nxMulti){
+    if(nxMulti&&_wasCf){
+      const _rf=updated.resched_from||{};
+      showModal('일정 취소 · 새 일정 안내',
+        `기존 확정 일정(${_rf.date?nxMd(_rf.date):''}${_rf.time?' '+nxTkey(_rf.time):''})을 취소하고\n새 후보 일정 ${nxMulti.a.length}일을 저장했습니다.\n\n지금 고객에게 「기존 일정 취소 · 새 가능 일정」 안내를 보낼까요?\n(확인을 누르면 WhatsApp 이 열립니다 · 카카오톡은 목록의 ⋮ → 카카오톡 복사)`,
+        true,()=>window.sendWA(id));
+    }else if(nxMulti){
       showModal('새 일정 보내기',
         `후보 일정 ${nxMulti.a.length}일을 저장했습니다.\n\n지금 고객에게 다시 보낼까요?\n(확인을 누르면 WhatsApp 이 열립니다 · 카카오톡은 목록의 ⋮ → 카카오톡 복사)`,
         true,()=>window.sendWA(id));
@@ -3926,6 +3959,7 @@ window.confirmBooking=async function(id,force){
   try{
     // 📍 예약에 위치가 없으면 고객관리에 등록한 고객 위치를 함께 저장 (직원 길 안내 · 확정 메시지에 쓰임)
     if(!(b.customer_loc&&isFinite(b.customer_loc.lat))){const _cu=bkCustLocFor(b.customer_phone,b.customer_name);if(_cu)b.customer_loc=_cu;}
+    b.resched_from=null;   // 🔁 취소·재안내 표시는 다시 확정하면 지움
     await updateDoc(doc(db,'bookings',id),{...b,status:'confirmed'});
     // schedules 컬렉션에 자동 등록 (기존 미러 제거 후 1건만 유지)
     await syncBookingMirror(id,b);
@@ -4500,6 +4534,16 @@ async function bkResendMsg(b){
   const url=await hhcShortUrl(_u);
   const il=bkItemLinesMsg(b.booking_items,en);
   const SIG='📞 +60 17-247 2774 · Happy Home Care';
+  // 🔁 확정 일정을 취소하고 새 후보를 보낸 예약 — 「기존 일정 취소 · 새 가능 일정」 문구 (2026-11-23)
+  const rf=b.status!=='confirmed'&&b.resched_from&&b.resched_from.date?b.resched_from:null;
+  if(rf){
+    const d=new Date(rf.date+'T00:00:00'),tk=String(rf.time||'').split('|')[0].trim(),te=String(rf.time||'').split('|')[1]||'';
+    const ko=(d.getMonth()+1)+'월 '+d.getDate()+'일('+'일월화수목금토'[d.getDay()]+')'+(tk?' '+tk:'');
+    const enD=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]+' '+d.getDate()+' ('+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]+')'+((te||tk)?', '+(te||tk).trim():'');
+    return en
+      ?('Hello, '+nm+' 😊\n\n🔁 *Your visit schedule has changed*\nYour booking on '+enD+' has been cancelled.'+(il?'\n'+il:'')+'\n\n👉 Please open the link and choose a new available date & time.\nSorry for the inconvenience 🙏\n\n📅 Choose a new date 👉 '+url+'\n'+SIG)
+      :('안녕하세요, '+nm+' 고객님 😊\n\n🔁 *방문 일정 변경 안내*\n기존 예약 '+ko+' 일정이 취소되었습니다.'+(il?'\n'+il:'')+'\n\n👉 링크를 열고 새로 가능한 날짜·시간을 골라 주세요.\n불편을 드려 죄송합니다 🙏\n\n📅 새 날짜 고르기 👉 '+url+'\n'+SIG);
+  }
   // 2026-11 발송 문구 개편 — 마이페이지 발송 「예약 신청」과 같은 모양
   return en
     ?('Hello, '+nm+' 😊\n\n📅 *Please choose your visit date*'+(il?'\n'+il:'')+'\n\n👉 Open the link and tap a date & time — that\'s it.\n\n📅 Choose a date 👉 '+url+'\n'+SIG)
