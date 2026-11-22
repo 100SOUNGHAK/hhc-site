@@ -32,6 +32,15 @@ body{font-family:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystem
 .pc-back button{font:inherit;font-size:17px;font-weight:800;color:#0f2540;background:linear-gradient(135deg,#f8e7b6,#e6c26f 55%,#c9a44c);
   border:0;border-radius:14px;padding:15px 26px;box-shadow:0 10px 22px -12px rgba(201,164,76,.9);cursor:pointer}
 .pc-back button:active{transform:scale(.97)}
+.pc-toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translate(-50%,16px);z-index:2147483647;
+  display:flex;align-items:center;gap:10px;width:max-content;max-width:calc(100% - 32px);box-sizing:border-box;padding:14px 18px;border-radius:16px;
+  background:#08172b;color:#fff;font-size:15px;line-height:1.45;font-weight:600;letter-spacing:-.01em;
+  box-shadow:0 2px 6px rgba(4,12,26,.4),0 18px 40px -12px rgba(4,12,26,.8);border:1px solid rgba(227,201,138,.45);
+  opacity:0;pointer-events:none;transition:opacity .18s,transform .18s}
+.pc-toast.on{opacity:1;transform:translate(-50%,0)}
+.pc-toast>b{color:#e3c98a;font-size:20px}
+.pc-toast span b{color:#e3c98a}
+@media (prefers-reduced-motion:reduce){.pc-toast{transition:none}}
 </style>
 <style id="pt-css">
 /* 👑 멤버십 패키지 안내 팝업 (pk.css) */
@@ -793,6 +802,7 @@ html.pt-lock,html.pt-lock body{overflow:hidden}
 </head>
 <body>
 <!-- 요금표를 닫았는데 이전 화면으로 돌아갈 수 없을 때(새 창으로 열린 경우)만 보입니다 -->
+<div class="pc-toast" id="pcToast" role="status"><b>↩︎</b><span id="pcTs">앱 맨 위 <b>✕(창 닫기)</b> 또는 휴대폰 <b>뒤로가기</b>를 누르면<br>보시던 글로 돌아갑니다</span></div>
 <div class="pc-back" id="pcBack">
   <b id="pcT">서비스 요금표를 닫았습니다</b>
   <p id="pcP">이 창을 닫으면 보시던 글로 돌아갑니다.</p>
@@ -1196,6 +1206,7 @@ html.pt-lock,html.pt-lock body{overflow:hidden}
     document.getElementById('pcT').textContent='Price list closed';
     document.getElementById('pcP').textContent='Close this window to go back to the post.';
     document.getElementById('pcRe').textContent='📋 View price list again';
+    document.getElementById('pcTs').innerHTML='Tap the <b>✕ at the top</b> or your phone\'s <b>Back</b><br>to return to the post';
   }
   window.PT_BOOK_URL='/request';
   if(!window.HHCPriceTable)return;
@@ -1205,11 +1216,20 @@ html.pt-lock,html.pt-lock body{overflow:hidden}
     HHCPriceTable.init(en?'en':'ko');
     HHCPriceTable.open(k&&HHCPriceTable.items.some(function(x){return x.k===k;})?k:null);
   }
-  /* 닫기 → 원래 글(썸네일 카드)로 돌아가기 */
+  /* 닫기 → 원래 글(썸네일 카드)로 돌아가기 (2026-11-22 수정)
+     · 같은 창에서 열렸으면(이전 화면 있음) 뒤로 가서 글로 돌아갑니다.
+     · 카페 앱이 새 창으로 열었으면 창을 닫지 않습니다(창 닫기는 앱 전체가 종료되는 경우가 있어 쓰지 않음).
+       대신 요금표를 그대로 두고, 위쪽 ✕ 또는 휴대폰 뒤로가기로 닫으라고 짧게 안내합니다. */
+  var toastT=null;
+  function hint(){
+    var t=document.getElementById('pcToast');
+    t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(function(){t.classList.remove('on');},4200);
+  }
   window.__pcLeave=function(){
-    back.classList.add('on');            // 돌아가지 못하면 이 안내가 남습니다
-    if(history.length>1){history.back();return;}
-    try{window.close();}catch(e){}
+    if(history.length>1){back.classList.add('on');history.back();return;}
+    var r=document.referrer||'';
+    if(/cafe\.naver\.com\/.+\/\d+|articleid=\d+|ArticleRead|\/articles\/\d+/i.test(r)){back.classList.add('on');location.replace(r);return;}
+    setTimeout(function(){show();hint();},0);   // 요금표는 다시 띄워 두고 안내
   };
   document.getElementById('pcRe').addEventListener('click',show);
   show();
