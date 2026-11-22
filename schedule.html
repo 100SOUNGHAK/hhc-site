@@ -1592,8 +1592,50 @@ function sxPlace(s,title){
   return '';}
 /* 메모 첫 줄이 「🔧 품목」이면 품목 칩으로, 아니면 짧은 메모로 */
 function sxMemoParts(memo){const lines=String(memo||'').split('\n').map(x=>x.trim()).filter(Boolean);let chips=[],rest=[];
-  lines.forEach(l=>{if(!chips.length&&/^🔧/.test(l))chips=l.replace(/^🔧\s*/,'').split(/\s*[,·\/]\s*/).filter(Boolean).slice(0,4);else rest.push(l.replace(/^📝\s*/,''));});
+  lines.forEach(l=>{if(!chips.length&&/^🔧/.test(l))chips=sxQtyChips(l.replace(/^🔧\s*/,''));else rest.push(l.replace(/^📝\s*/,''));});
   return {chips,rest};}
+/* 🔢 목록 칩은 품목·수량만 (2026-11-23) — 「에어컨(3대/실외기 · 기본세척), 에어컨(3대/벽걸이형 · 스팀살균세척)」 → 에어컨 3대 · 실외기 3대
+   같은 품목은 수량을 합칩니다. 세부(서비스 종류)는 일정을 눌러 여는 상세 화면에 기존대로 모두 나옵니다. */
+const SX_QCAT=[
+  [/실외기|outdoor/i,'실외기','Outdoor unit'],
+  [/에어컨|aircon|air[\s-]?con|a\/c/i,'에어컨','Aircon'],
+  [/쇼파|소파|sofa/i,'쇼파','Sofa'],
+  [/매트리스|mattress/i,'매트리스','Mattress'],
+  [/건조기|dryer/i,'건조기','Dryer'],
+  [/세탁기|washer|washing/i,'세탁기','Washer'],
+  [/냉장고|fridge|refrigerator/i,'냉장고','Fridge'],
+  [/커튼|curtain/i,'커튼','Curtain'],
+  [/후드|hood/i,'주방후드','Kitchen hood'],
+  [/실링팬|ceiling\s*fan/i,'실링팬','Ceiling fan'],
+  [/카페트|카펫|carpet/i,'카페트','Carpet'],
+  [/의자|chair/i,'식탁의자','Chair'],
+  [/공기청정기|purifier/i,'공기청정기','Air purifier'],
+  [/점검|수리|repair|inspect/i,'점검·수리','Inspection/Repair']
+];
+function sxQtySplit(t){const out=[];let d=0,cur='';for(const ch of String(t||'')){if(ch==='('||ch==='（')d++;if(ch===')'||ch==='）')d=Math.max(0,d-1);if(ch===','&&d===0){if(cur.trim())out.push(cur.trim());cur='';}else cur+=ch;}if(cur.trim())out.push(cur.trim());return out;}
+function sxQtyChips(line){
+  const en=(typeof sxT==='function')&&sxT('a','b')==='b';
+  const map=new Map(),loose=[];
+  sxQtySplit(line).forEach(x=>{
+    let nm='',q=0,sv='',u='';
+    let m=/^(.*)\(\s*(\d+)\s*(대|개|units?|ea|pcs?|세트|sets?)?\s*\/([^()]*)\)\s*$/i.exec(x);
+    if(m){nm=m[1];q=+m[2];u=m[3]||'';sv=m[4];}
+    else if((m=/^(.*?)\s+-\s+(.*?)\s*[×x]\s*(\d+)\s*(대|개|units?)?\s*$/i.exec(x))){nm=m[1];sv=m[2];q=+m[3];u=m[4]||'';}
+    else if((m=/^(.*?)\s*[×x]\s*(\d+)\s*(대|개|units?)?\s*$/i.exec(x))){nm=m[1];q=+m[2];u=m[3]||'';}
+    if(!q){loose.push(x);return;}
+    const base=String(nm).replace(/\([^()]*\)/g,'').replace(/^\[|\]$/g,'').trim();
+    const c=SX_QCAT.find(r=>r[0].test(sv)&&r[1]==='실외기')||SX_QCAT.find(r=>r[0].test(nm));
+    const key=c?c[1]:base;
+    const lbl=c?(en?c[2]:c[1]):base;
+    const unit=c&&c[1]==='점검·수리'?(en?'':'건'):(en?'':((u&&/^(대|개|세트)$/.test(u))?u:'대'));
+    const o=map.get(key)||{lbl,q:0,unit};o.q+=q;map.set(key,o);
+  });
+  const ORD=['에어컨','실외기','쇼파','매트리스','세탁기','건조기','냉장고','커튼','주방후드','실링팬','카페트','식탁의자','공기청정기'];
+  const oi=k=>{const i=ORD.indexOf(k);return i<0?99:i;};
+  const chips=[...map.entries()].sort((x,y)=>oi(x[0])-oi(y[0])).map(([k,o])=>en?(o.lbl+' × '+o.q):(o.lbl+' '+o.q+(o.unit||'')));
+  loose.forEach(x=>{const t=String(x).trim();chips.push(t.length>14?t.slice(0,13)+'…':t);});
+  return chips.slice(0,6);
+}
 // 📍 길 안내 위치: 예약·일정에 저장된 위치 > (예약·예약형·수리 일정이면) 고객관리 고객 위치 > 주소 글자 (2026-11-17 · 수리 2026-11-18)
 function sxLoc(s){
   if(s.loc&&isFinite(s.loc.lat))return s.loc;
