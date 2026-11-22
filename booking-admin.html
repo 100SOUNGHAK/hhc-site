@@ -2193,8 +2193,43 @@ async function connectFirebase(){
 }
 
 // ── 의뢰 데이터 자동 반영 ──
+// ── 👥 총괄 고객관리 · 고객 상세 「🗓️ 예약 등록」(수기등록)으로 들어온 경우 (2026-11-23) ──
+//    고객명·연락처·주소·발송 언어를 채우고 「바로 확정 등록」을 켠 채 확정 예약 정보 칸을 열어 둡니다.
+//    방문 위치는 저장 때 고객관리 고객 위치를 자동으로 씁니다(bkCustLocFor). 체크를 끄면 기존처럼 고객 링크 방식.
+function applyCustomerTransfer(){
+  let d={};
+  try{d=JSON.parse(localStorage.getItem('hhc_transfer_booking_c')||'{}');}catch(e){d={};}
+  try{localStorage.removeItem('hhc_transfer_booking_c');}catch(e){}
+  if(!d||!d.name)return;
+  try{resetNewForm();}catch(e){}
+  document.getElementById('c-name').value=d.name||'';
+  document.getElementById('c-phone').value=d.phone||'';
+  document.getElementById('c-address').value=d.addr||'';
+  const lk=document.querySelector('input[name="c-lang"][value="ko"]'),le=document.querySelector('input[name="c-lang"][value="en"]');
+  if(d.lang==='en'&&le){le.checked=true;if(lk)lk.checked=false;}else if(lk){lk.checked=true;}
+  window._bkFromCust=true;
+  document.getElementById('b-instant-confirm').checked=true;
+  switchTab('new');
+  // 확정 예약 정보 칸 펼치기 → 예약일로 이동
+  const body=document.getElementById('nb-body-confirm');
+  if(body&&!body.classList.contains('open')){
+    body.classList.add('open');
+    const ch=document.querySelector('.card-head.collapsible[data-target="nb-body-confirm"] .card-chev');if(ch)ch.classList.add('open');
+  }
+  try{bkLocRender();}catch(e){}
+  try{updateNewBookingProgress();}catch(e){}
+  setTimeout(function(){
+    try{document.getElementById('nb-card-confirm').scrollIntoView({behavior:'smooth',block:'start'});}catch(e){}
+    const t=document.createElement('div');
+    t.style.cssText='position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0D9488;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;z-index:999;font-family:inherit;max-width:92vw;text-align:center';
+    t.textContent='✓ '+(d.name||'고객')+' 정보 입력됨 — 예약일·시간·품목을 넣고 등록하세요';
+    document.body.appendChild(t);
+    setTimeout(function(){t.remove();},3500);
+  },400);
+}
 function applyTransferData(){
   const params=new URLSearchParams(window.location.search);
+  if(params.get('from')==='customer'){applyCustomerTransfer();return;}
   if(params.get('from')!=='request')return;
   try{
     const d=JSON.parse(localStorage.getItem('hhc_transfer_booking')||'{}');
@@ -2697,7 +2732,8 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
       showLoading(false);
       try{if(window.HHCLS.setDb)HHCLS.setDb(db);await HHCLS.proposeAdmin({phone,name,loc:window._bkLoc,via:'booking',skip:{booking:docId}});}catch(_e){}
     }
-    const _fromReq=!!window._transferFromRequestId;   // 의뢰관리 「예약전환」으로 들어온 등록인지
+    const _fromReq=!!window._transferFromRequestId||!!window._bkFromCust;   // 의뢰관리 「예약전환」 또는 고객 상세 「예약 등록」으로 들어온 등록인지
+    window._bkFromCust=false;
     if(window._transferFromRequestId){
       try{
         await updateDoc(doc(db,'requests',window._transferFromRequestId),{converted_to_booking:true,converted_booking_id:docId});
@@ -4439,7 +4475,7 @@ document.getElementById('btn-save').addEventListener('click',()=>{},true);
 function resetNewForm(){
   currentBookingId=null;selectedDates=[];scheduleMap={};currentDateForTime='';
   ['c-name','c-address','c-memo','b-date','b-time','b-items','b-memo'].forEach(id=>document.getElementById(id).value='');
-  window._bkLoc=null;window._bkLocPicked=false;bkLocRender();
+  window._bkLoc=null;window._bkLocPicked=false;bkLocRender();window._bkFromCust=false;
   document.getElementById('c-phone').value='+60 ';
   pkSetArr('new',[]);renderEditPicked();
   document.getElementById('b-instant-confirm').checked=false;
