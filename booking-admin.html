@@ -820,10 +820,31 @@ html.sa body:has(.app-body.active){padding-left:200px}
 .nxdp-sel b{font-weight:800}
 .nxdp-sel button{margin-left:auto;border:0;background:var(--red-bg);color:var(--red);border-radius:8px;padding:5px 9px;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}
 .nxdp-cal{background:#fff;border-radius:10px;padding:8px}
-.nxdp-cal .cal-day{aspect-ratio:auto;height:38px}
+.nxdp-cal .cal-day{aspect-ratio:auto;height:46px;justify-content:flex-start;padding-top:8px;gap:3px}
+/* 🟠 다른 확정 방문 — 달력 숫자 아래 「N건」, 시간 버튼 오른쪽 위 점 (2026-11-23) */
+.nxdp-bz{font-style:normal;font-size:9px;font-weight:800;line-height:1;padding:2px 4px;border-radius:6px;background:#FFF1DC;color:#B45309;pointer-events:none;white-space:nowrap}
+.cal-day.selected .nxdp-bz{background:rgba(255,255,255,.3);color:#fff}
+.cal-day.nxdp-past .nxdp-bz{background:#EEF1F6;color:#9AA4BA}
+.nxdp-lg .nxdp-bz{display:inline-block}
+.nxdp-lgs{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px}
+.nxdp-lgs .nxdp-lg{margin-top:0}
+.nxdp-free{font-size:11.5px;color:var(--teal-dk);background:var(--teal-lt);border-radius:8px;padding:6px 9px;margin-top:6px;line-height:1.45}
+.nxdp-new{font-style:normal;font-size:10.5px;font-weight:800;color:#fff;background:#F59E0B;border-radius:6px;padding:2px 6px;margin-left:5px;vertical-align:1px}
+.nxdp-day{background:#fff;border-radius:10px;padding:8px 10px;margin-top:8px;box-shadow:0 1px 2px rgba(11,24,51,.06)}
+.nxdp-day-h{font-size:12px;font-weight:800;color:var(--text2);display:flex;align-items:center;gap:6px}
+.nxdp-day-h b{color:#B45309}
+.nxdp-day-h.none b{color:var(--teal-dk)}
+.nxdp-day-r{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;align-items:baseline;padding:6px 0 2px;border-top:1px dashed var(--border);margin-top:6px;font-size:12.5px}
+.nxdp-day-r .tm{font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums;white-space:nowrap}
+.nxdp-day-r .nm{font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nxdp-day-r .it{grid-column:2;font-size:11.5px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nxdp-t{position:relative}
+.nxdp-t.bz::after{content:'';position:absolute;top:4px;right:5px;width:6px;height:6px;border-radius:50%;background:#F59E0B}
+.nxdp-t.on.bz::after{background:#FFE2A8}
+.nxdp-lg .nxdp-tdot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#F59E0B}
 .nxdp-cal .cal-day.nxdp-past{cursor:pointer;color:#AEB8CC}
 .nxdp-cal .cal-day.nxdp-past.selected{color:#fff}
-.nxdp-cand{position:absolute;bottom:4px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;background:#2563EB}
+.nxdp-cand{position:absolute;top:5px;left:6px;width:6px;height:6px;border-radius:50%;background:#2563EB}
 .cal-day.selected .nxdp-cand{background:#fff}
 .nxdp-lg{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text3);margin-top:6px;padding-left:2px}
 .nxdp-lg .nxdp-cand{position:static;transform:none;display:inline-block}
@@ -2305,6 +2326,8 @@ document.getElementById('btn-logout').addEventListener('click',()=>{setAuth(fals
 // ── 📎 총괄 고객관리 등에서 「열기·수정」으로 들어온 경우 ──
 //    예약 목록 탭으로 전환하고 해당 예약 카드로 이동해 잠시 강조합니다.
 window._bkOpenId=(function(){try{return new URLSearchParams(location.search).get('open')||'';}catch(e){return '';}})();
+// 고객 상세 「🗓️ 일정 수정」 → ?open=ID&edit=1 : 그 예약의 ✏️ 수정 화면(일정 달력)을 바로 엽니다 (2026-11-23)
+window._bkOpenEdit=(function(){try{return new URLSearchParams(location.search).get('edit')==='1';}catch(e){return false;}})();
 function bkTryOpen(){
   const k=window._bkOpenId;if(!k)return;
   if(!allBookings.some(function(x){return x.__id===k;}))return;   // 아직 목록에 없으면 다음 갱신 때
@@ -2317,6 +2340,11 @@ function bkTryOpen(){
     try{card.scrollIntoView({block:'center',behavior:'smooth'});}catch(e){}
     card.classList.add('open','hl');
     setTimeout(function(){card.classList.remove('hl');},4000);
+    if(window._bkOpenEdit){
+      window._bkOpenEdit=false;
+      try{window.startEditList(k);}catch(e){return;}
+      setTimeout(function(){const p=document.getElementById('nxdp');if(p){try{p.scrollIntoView({block:'start',behavior:'smooth'});}catch(e){}}},200);
+    }
   },250);
 }
 // 예약전환 등록 완료 안내 (예약목록 화면 위에 잠깐 표시)
@@ -3200,6 +3228,32 @@ function nxDpInit(){
   }
   nxDpRender();
 }
+// 그날 이미 확정된 다른 방문 (예약관리 확정 예약 + 캘린더 일정, 지금 고치는 예약은 빼고)
+function nxBusy(ds,ex){
+  const day=schedules[ds]||[],mir={},out=[];
+  day.forEach(s=>{
+    if(s.booking_id)mir[s.booking_id]=1;
+    if(s.booking_id&&s.booking_id===ex)return;
+    out.push({t:cleanTime(s.time_s?(s.time_e?s.time_s+'-'+s.time_e:s.time_s):''),name:(s.customer_name!=null&&s.customer_name!==''?s.customer_name:(s.title||'—')),items:s.items||''});
+  });
+  allBookings.forEach(b=>{
+    if(b.__id===ex||b.status!=='confirmed'||b.booking_date!==ds||mir[b.__id])return;
+    out.push({t:cleanTime(b.booking_time),name:b.customer_name||'—',items:b.booking_items||''});
+  });
+  return out.sort((a,b)=>bkTimeMin(a.t)-bkTimeMin(b.t));
+}
+// 그날 다른 방문 목록 (달력 아래)
+function nxDayBox(ds){
+  if(!ds)return '';
+  const L=nxBusy(ds,NXDP.bid);
+  if(!L.length)return `<div class="nxdp-day"><div class="nxdp-day-h none">📋 ${nxMd(ds)} · <b>다른 확정 방문 없음</b></div></div>`;
+  return `<div class="nxdp-day"><div class="nxdp-day-h">📋 ${nxMd(ds)} · 이미 확정된 방문 <b>${L.length}건</b></div>${L.map(x=>`<div class="nxdp-day-r"><span class="tm">${escHtml(x.t||'시간 미정')}</span><span class="nm">${escHtml(x.name)}</span>${x.items?`<span class="it">${escHtml(String(x.items).split('\n')[0])}</span>`:''}</div>`).join('')}</div>`;
+}
+// 시간 버튼 — 전후 1시간 안에 다른 확정 방문이 있으면 true
+function nxBusyNear(ds,v){
+  if(!ds)return false;const t0=bkTimeMin(nxTkey(v));if(t0===99999)return false;
+  return nxBusy(ds,NXDP.bid).some(x=>{const t=bkTimeMin(x.t);return t!==99999&&Math.abs(t-t0)<=60;});
+}
 function nxDpCal(selFn,markFn){
   const Y=NXDP.y,Mo=NXDP.m,T0=today();
   const first=new Date(Y,Mo,1).getDay(),dim=new Date(Y,Mo+1,0).getDate();
@@ -3209,7 +3263,8 @@ function nxDpCal(selFn,markFn){
   for(let d=1;d<=dim;d++){
     const ds=`${Y}-${String(Mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     let c='cal-day';if(ds<T0)c+=' past nxdp-past';if(selFn(ds))c+=' selected';if(ds===T0)c+=' today';if(ds===NXDP.act&&NXDP.mode==='multi')c+=' nxdp-act';
-    g+=`<button type="button" class="${c}" data-nxdp-d="${ds}"><span class="day-num">${d}</span>${markFn(ds)}</button>`;
+    const _bz=nxBusy(ds,NXDP.bid).length;
+    g+=`<button type="button" class="${c}" data-nxdp-d="${ds}"><span class="day-num">${d}</span>${markFn(ds)}${_bz?`<i class="nxdp-bz">${_bz}건</i>`:''}</button>`;
   }
   return `<div class="cal-wrap nxdp-cal"><div class="cal-header"><button type="button" class="cal-nav" data-nxdp-nav="-1">&#8249;</button><span class="cal-month">${Y}년 ${Mo+1}월</span><button type="button" class="cal-nav" data-nxdp-nav="1">&#8250;</button></div><div class="cal-grid">${g}</div>`;
 }
@@ -3229,14 +3284,14 @@ function nxDpRender(){
     const act=NXDP.act,cur=act?(M.m[act]||[]):[];
     const all=[];[...pres,...cur].forEach(v=>{if(!all.some(x=>nxTkey(x)===nxTkey(v)))all.push(v);});
     all.sort((a,b)=>bkTimeMin(nxTkey(a))-bkTimeMin(nxTkey(b)));
-    const times=act?`<div class="nxdp-th">${nxMd(act)} 가능 시간 <span>· 여러 개 선택</span></div><div class="nxdp-ts">${all.map(v=>`<button type="button" class="nxdp-t${cur.some(x=>nxTkey(x)===nxTkey(v))?' on':''}" data-nxdp-mt="${escAttr(v)}">${escHtml(nxTkey(v))}</button>`).join('')}</div>
+    const times=act?`<div class="nxdp-th">${nxMd(act)} 가능 시간 <span>· 여러 개 선택</span></div><div class="nxdp-ts">${all.map(v=>`<button type="button" class="nxdp-t${cur.some(x=>nxTkey(x)===nxTkey(v))?' on':''}${nxBusyNear(act,v)?' bz':''}" data-nxdp-mt="${escAttr(v)}">${escHtml(nxTkey(v))}</button>`).join('')}</div>
       <div class="nxdp-cu"><input type="text" id="nxdp-cu" placeholder="직접 입력 (예: 12, 12:30)"><button type="button" data-nxdp-add="1">+ 추가</button></div>
       ${M.a.length>1&&cur.length?`<button type="button" class="nxdp-copy" data-nxdp-copy="1">이 시간을 다른 날짜에도 똑같이 적용</button>`:''}`:'';
     const nT=M.a.reduce((s,d)=>s+((M.m[d]||[]).length),0);
     const warn=b.status==='booked'?'<div class="nxdp-warn">⚠️ 고객이 이미 날짜를 고른 예약입니다. 후보 일정으로 저장하면 고객이 다시 고를 수 있도록 「고객 응답 대기」로 바뀝니다.</div>':'';
     box.innerHTML=`${tabs}${warn}<div class="nxdp-sel"><span>📅 후보 <b>${M.a.length}일 · 시간 ${nT}개</b></span>${M.a.length?'<button type="button" data-nxdp-clear="1">모두 지우기</button>':''}</div>
-      ${cal}<div class="nxdp-lg"><i class="nxdp-n">2</i> 그날 고른 시간 수 · 다시 누르면 날짜 빼기</div></div>
-      <div class="nxdp-dcs">${dchips}</div>${times}
+      ${cal}<div class="nxdp-lgs"><div class="nxdp-lg"><i class="nxdp-n">2</i> 그날 고른 시간 수 · 다시 누르면 날짜 빼기</div><div class="nxdp-lg"><i class="nxdp-bz">2건</i> 이미 확정된 다른 방문</div></div></div>
+      <div class="nxdp-dcs">${dchips}</div>${nxDayBox(act)}${times}
       <div class="nxdp-note">저장하면 「🔁 링크 다시 보내기」로 고객에게 새 일정을 보낼 수 있습니다.</div>`;
     return;
   }
@@ -3248,12 +3303,16 @@ function nxDpRender(){
   const candT=(selD&&Array.isArray(ctimes[selD]))?ctimes[selD]:[];
   const all=[];[...candT,...pres].forEach(v=>{if(!all.some(x=>nxTkey(x)===nxTkey(v)))all.push(v);});
   if(selT&&!all.some(x=>nxTkey(x)===nxTkey(selT)))all.unshift(selT);
-  const chips=all.map(v=>`<button type="button" class="nxdp-t${nxTkey(v)===nxTkey(selT)?' on':''}${candT.some(x=>nxTkey(x)===nxTkey(v))?' cand':''}" data-nxdp-t="${escAttr(v)}">${escHtml(nxTkey(v))}</button>`).join('');
+  const chips=all.map(v=>`<button type="button" class="nxdp-t${nxTkey(v)===nxTkey(selT)?' on':''}${candT.some(x=>nxTkey(x)===nxTkey(v))?' cand':''}${nxBusyNear(selD,v)?' bz':''}" data-nxdp-t="${escAttr(v)}">${escHtml(nxTkey(v))}</button>`).join('');
   const dd=selD?new Date(selD+'T00:00:00'):null;
-  const selTxt=selD?`${dd.getMonth()+1}월 ${dd.getDate()}일 (${'일월화수목금토'[dd.getDay()]})${selT?' · '+escHtml(nxTkey(selT)):' · 시간 미정'}`:'날짜 미정';
+  const isNew=!!selD&&cands.length>0&&cands.indexOf(selD)<0;   // 후보에 없던 날짜 = 새 일정
+  const selTxt=selD?`${dd.getMonth()+1}월 ${dd.getDate()}일 (${'일월화수목금토'[dd.getDay()]})${selT?' · '+escHtml(nxTkey(selT)):' · 시간 미정'}${isNew?'<em class="nxdp-new">새 일정</em>':''}`:'날짜 미정';
+  const anyBz=all.some(v=>nxBusyNear(selD,v));
   box.innerHTML=`${tabs}<div class="nxdp-sel"><span>📅 <b>${selTxt}</b></span>${selD?'<button type="button" data-nxdp-clear="1">날짜 지우기</button>':''}</div>
-    ${cal}${cands.length?'<div class="nxdp-lg"><i class="nxdp-cand"></i> 고객에게 보낸 후보 날짜</div>':''}</div>
-    <div class="nxdp-th">시간 선택${candT.length?' <span>· 파란 버튼 = 이 날짜의 후보 시간</span>':''}</div>
+    ${cal}<div class="nxdp-lgs">${cands.length?'<div class="nxdp-lg"><i class="nxdp-cand"></i> 고객에게 보낸 후보 날짜</div>':''}<div class="nxdp-lg"><i class="nxdp-bz">2건</i> 이미 확정된 다른 방문</div></div>
+    ${cands.length?'<div class="nxdp-free">💡 후보가 아닌 날짜도 눌러서 <b>새 일정</b>으로 고를 수 있습니다 (시간은 아래 버튼 또는 직접 입력)</div>':''}</div>
+    ${nxDayBox(selD)}
+    <div class="nxdp-th">시간 선택${candT.length?' <span>· 파란 버튼 = 이 날짜의 후보 시간</span>':''}${anyBz?' <span>· <i class="nxdp-tdot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#F59E0B;vertical-align:1px"></i> 전후 1시간 안에 다른 방문</span>':''}</div>
     <div class="nxdp-ts">${chips}<button type="button" class="nxdp-t${selT?'':' on'}" data-nxdp-t="">미정</button></div>
     <div class="nxdp-cu"><input type="text" id="nxdp-cu" placeholder="직접 입력 (예: 12, 12:30)"><button type="button" data-nxdp-add="1">+ 적용</button></div>
     ${b.status!=='confirmed'?'<div class="nxdp-note">고객과 통화로 일정을 정했다면 날짜·시간을 고르고 저장하세요 — 바로 확정할지 물어봅니다.</div>':''}`;
@@ -3331,6 +3390,12 @@ window.saveEditList=async function(id){
     if(_nt.length){showToast(_nt.map(nxMd).join(', ')+' — 시간을 선택해주세요');NXDP.act=_nt[0];nxDpRender();return;}
   }   // 연락처는 비워 둬도 저장됩니다
   if(_ea.some(p=>p.free&&!(p.text||'').trim())){showToast('기타 항목의 요청 내용을 입력해주세요');return;}
+  // ⚠️ 확정 예약의 날짜·시간을 바꿀 때 — 같은 날 전후 1시간 안에 다른 확정 예약이 있으면 먼저 알림 (2026-11-23)
+  {const _o=allBookings.find(x=>x.__id===id);
+   if(!nxMulti&&_o&&_o.status==='confirmed'&&bdate&&(bdate!==_o.booking_date||nxTkey(btime)!==nxTkey(_o.booking_time))){
+     const _cl=bkFindClash(bdate,btime,id);
+     if(_cl.length&&!(await bkAsk('⚠️ 같은 시간대 예약 있음',bkClashText(bdate,btime,_cl).replace('그래도 확정하시겠습니까?','그래도 이 일정으로 바꾸시겠습니까?'))))return;
+   }}
   if(window.HHCC_fill){
     try{const _fl=await HHCC_fill({name:name,phone:phone});
       if(_fl.phone&&_fl.phone!==phone){phone=_fl.phone;document.getElementById('el-phone-'+id).value=phone;}
