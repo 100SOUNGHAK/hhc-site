@@ -1098,6 +1098,10 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
 .hdr .btn.crf-hb .rft{font-size:13px}
 .crf-n{position:absolute;top:-6px;right:-6px;min-width:19px;height:19px;border-radius:999px;background:#DC2626;color:#fff;font-size:11px;font-weight:900;display:flex;align-items:center;justify-content:center;padding:0 5px;box-shadow:0 0 0 2px #0E2350}
 .crf-n[hidden]{display:none}
+.pno-new{color:#DC2626;font-weight:900;font-size:11.5px;margin-left:4px}
+.pno-r .pno-ok{background:#DC2626!important;color:#fff!important;border-color:#DC2626!important;font-weight:800}
+.pnl-new{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 10px;padding:8px 10px;border-radius:10px;background:#FEF2F2;border:1px solid #FECACA;color:#B91C1C;font-size:12.5px;font-weight:800}
+.pnl-new button{border:1px solid #DC2626;background:#fff;color:#DC2626;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:800;cursor:pointer}
 .crf-top{display:flex;align-items:center;gap:10px;justify-content:space-between;background:#FBF5E6;border-radius:12px;padding:10px 12px;font-size:12.5px;color:var(--ink2);margin-bottom:6px}
 .crf-top b{color:#8F6F28}
 .crf-emp{font-size:12.5px;color:var(--ink3);line-height:1.7;text-align:center;padding:26px 8px}
@@ -4248,12 +4252,14 @@ window.caDelCustomer=async function(idx){
 //              👀 열어 봄 = 고객이 알림을 눌러 마이페이지를 열었음. 휴대폰 화면에 떴는지는 구글·애플이 알려 주지 않습니다.
 //  · 기기별 결과·열람 기록은 2026-11-19 부터 쌓입니다 (그 전 발송은 합계만 있음)
 // ═══════════════════════════════════════════════════════════════════════════
-const PN={subs:[],adm:new Set(),out:[],ready:false,_u:[]};
+const PN={subs:[],adm:new Set(),out:[],ready:false,_u:[],seen:new Set((()=>{try{return JSON.parse(localStorage.getItem('hhc_pn_seen')||'[]');}catch(e){return [];}})())};
 function pnSubscribe(){
   PN._u.forEach(u=>{try{u();}catch(e){}});
   PN._u=[
     onSnapshot(collection(db,'cust_push'),s=>{PN.subs=s.docs.map(d=>Object.assign({__id:d.id},d.data()||{}));PN.ready=true;pnRepaint();},err=>console.warn('cust_push',err.message)),
     onSnapshot(collection(db,'push_subs'),s=>{PN.adm=new Set(s.docs.map(d=>(d.data()||{}).endpoint).filter(Boolean));pnRepaint();},err=>console.warn('push_subs',err.message)),
+    // 🔴 알림 이력 빨간 숫자 — 확인한 발송 ID (모든 관리자 기기 공유, 2026-11-23)
+    onSnapshot(doc(db,'settings','pn_seen'),s=>{const v=(s&&s.exists&&s.exists())?((s.data()||{}).ids||[]):[];v.forEach(x=>PN.seen.add(x));try{localStorage.setItem('hhc_pn_seen',JSON.stringify([...PN.seen]));}catch(e){}pnRepaint();},err=>console.warn('pn_seen',err.message)),
     onSnapshot(query(collection(db,'cust_push_out'),orderBy('created_at','desc'),limit(200)),s=>{PN.out=s.docs.map(d=>Object.assign({__id:d.id},d.data()||{})).sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));pnRepaint();},err=>console.warn('cust_push_out',err.message)),
   ];
 }
@@ -4364,12 +4370,14 @@ function pnOutRow(o,withName){
   // 다시 보내기 : 실패·발송 안 됨·안 열어 봄일 때만, 받을 기기가 있을 때만
   const _st=pnOutState(o);
   const can=o.title&&o.body&&o.c&&pnDevs(o.c).length&&(_st==='fail'||_st==='stuck'||(_st==='sent'&&!o.opened_at));
+  const _new=pnIsNew(o);
   return '<div class="pno'+(pnNeedsAct(o)?' bad':'')+'">'+nm+
-    '<div class="pno-h"><span class="pno-t">'+pnT(o.created_at)+'</span><span class="pno-v">'+pnVia(o)+'</span></div>'+
+    '<div class="pno-h"><span class="pno-t">'+pnT(o.created_at)+(_new?' <span class="pno-new">● 새 항목</span>':'')+'</span><span class="pno-v">'+pnVia(o)+'</span></div>'+
     '<div class="pno-b"><b>'+esc(o.title||'')+'</b> '+esc(o.body||'')+'</div>'+
     '<div class="pno-r">'+pnOutRes(o)+
       (can?'<button type="button" onclick="caPnResend(\''+esc(o.__id)+'\')">🔁 다시 보내기</button>':'')+
-      (withName&&o.c?'<button type="button" onclick="caPnDev(\''+esc(o.c)+'\')">기기 보기</button>':'')+'</div></div>';
+      (withName&&o.c?'<button type="button" onclick="caPnDev(\''+esc(o.c)+'\')">기기 보기</button>':'')+
+      (_new?'<button type="button" class="pno-ok" onclick="caPnSeen(\''+esc(o.__id)+'\')">✔ 확인</button>':'')+'</div></div>';
 }
 // ── 고객별 기기 현황 · 이력 (opts.send = 발송 창의 「🔔 앱 알림」에서 열 때 : {title,body,go}) ──
 window.caPnDev=function(cid,opts){
@@ -4414,6 +4422,8 @@ window.caPnLog=function(f){
     const on=new Set(PN.subs.filter(pnReal).map(s=>s.c)).size;
     let b='<div class="pnl-sum"><div><b>'+on+'</b><span>알림 켠 고객</span></div><div><b>'+sent+'</b><span>접수된 발송</span></div>'+
       '<div class="'+(act?'bad':'')+'"><b>'+act+'</b><span>확인 필요</span></div><div><b>'+rd+'</b><span>열어 봄</span></div></div>';
+    const nNew=PN.out.filter(pnIsNew).length;
+    if(nNew>1)b+='<div class="pnl-new"><span>● 확인 안 한 항목 '+nNew+'건</span><button type="button" onclick="caPnSeen(\'*\')">✔ 모두 확인</button></div>';
     b+='<div class="pnl-f">'+FS.map(x=>'<button type="button" class="'+(x[0]===_pnLogF?'on':'')+'" onclick="caPnLog(\''+x[0]+'\')">'+x[1]+'</button>').join('')+'</div>';
     b+=rows.length?rows.map(o=>pnOutRow(o,true)).join(''):'<div class="pnm-emp">해당하는 발송이 없습니다.</div>';
     b+='<div class="pnm-nt">최근 200건 · 기기별 결과와 열람 기록은 2026-11-19 부터 쌓입니다.</div>';
@@ -4423,8 +4433,21 @@ window.caPnLog=function(f){
   if(!mk||!mk._log){mk=pnModal('🔔 앱 알림 이력','','<button class="btn" onclick="document.getElementById(\'ca-pn-mask\').remove()">닫기</button>');mk._log=true;}
   mk._re=paint;paint();
 };
+const pnRecentAct=()=>PN.out.filter(o=>pnNeedsAct(o)&&Date.now()-Date.parse(o.created_at||0)<7*864e5);
+const pnIsNew=o=>pnNeedsAct(o)&&Date.now()-Date.parse(o.created_at||0)<7*864e5&&!PN.seen.has(o.__id);
+window.caPnSeen=function(id){pnMarkSeen(id==='*'?null:[id]);const m=document.getElementById('ca-pn-mask');if(m&&m._re)try{m._re();}catch(e){}};
+function pnMarkSeen(only){   // only = 확인할 ID 목록 (없으면 확인 필요 전부)
+  const ids=(only||pnRecentAct().map(o=>o.__id)).filter(id=>id&&!PN.seen.has(id));
+  if(!ids.length)return;
+  ids.forEach(id=>PN.seen.add(id));
+  const keep=new Set(PN.out.map(o=>o.__id));                 // 최근 200건 밖으로 밀려난 ID는 정리
+  const all=[...PN.seen].filter(id=>keep.has(id));
+  try{localStorage.setItem('hhc_pn_seen',JSON.stringify(all));}catch(e){}
+  pnHdrBadge();
+  setDoc(doc(db,'settings','pn_seen'),{ids:all,updated_at:new Date().toISOString()},{merge:true}).catch(e=>console.warn('pn_seen',e.message));
+}
 function pnHdrBadge(){
-  const n=PN.out.filter(o=>pnNeedsAct(o)&&Date.now()-Date.parse(o.created_at||0)<7*864e5).length;
+  const n=pnRecentAct().filter(o=>!PN.seen.has(o.__id)).length;
   const el=document.getElementById('pnl-n');if(el){el.hidden=!n;el.textContent=n;}
 }
 // ── 기기 삭제 · 다시 보내기 ──
