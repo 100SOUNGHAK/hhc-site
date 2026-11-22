@@ -60,6 +60,16 @@
   .list li.done .ck{background:var(--teal);border-color:var(--teal)}
   .list li small{display:block;color:var(--mute);font-size:11px}
   .note{margin:0 14px 12px;padding:7px 9px;border-radius:7px;background:#fbf6e9;color:#7a6326;font-size:11.5px;line-height:1.4}
+  /* 투명 패널 — 뒤의 3D 부품이 비쳐 보이고, 글자는 흰 테두리 빛으로 또렷하게 (2026-11-22) */
+  .panel{background:rgba(255,255,255,.26);-webkit-backdrop-filter:blur(1.5px);backdrop-filter:blur(1.5px);border:1px solid rgba(255,255,255,.65);box-shadow:0 8px 26px rgba(18,40,74,.10)}
+  .panel .ph{background:rgba(18,40,74,.80)}
+  .panel .sec,.panel .list{text-shadow:0 0 2px #fff,0 0 5px #fff,0 0 9px rgba(255,255,255,.95)}
+  .panel .lb{color:#3d4856;font-weight:600}
+  .list li{color:#0f1c2b;font-weight:600;border-bottom-color:rgba(18,40,74,.18);opacity:.5}
+  .list li.show{opacity:1}
+  .list li .ck{background:rgba(255,255,255,.7)}
+  .chip{background:rgba(255,255,255,.72);color:#6b7785;text-shadow:none}
+  .note{background:rgba(251,246,233,.85)}
 
   /* title card */
   .tcard{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;
@@ -260,31 +270,97 @@ const wall = new THREE.Mesh(new THREE.PlaneGeometry(8, 6), new THREE.ShadowMater
 wall.position.z = 0; wall.receiveShadow = true;
 scene.add(wall);
 
+/* ---------------- procedural textures (실사 질감) ---------------- */
+function cvTex(w, h, draw, {srgb=false, rep=[1,1]}={}){
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  if(srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); t.anisotropy = 4;
+  return t;
+}
+// fine speckle for moulded ABS plastic (bump + roughness)
+function speckle(x, w, h, base, amp, n){
+  x.fillStyle = `rgb(${base},${base},${base})`; x.fillRect(0,0,w,h);
+  for(let i=0;i<n;i++){ const v = base + (Math.random()-0.5)*amp; x.fillStyle = `rgba(${v|0},${v|0},${v|0},.8)`; x.fillRect(Math.random()*w, Math.random()*h, 1+Math.random()*1.5, 1+Math.random()*1.5); }
+}
+const TX = {
+  abs:   cvTex(256,256,(x,w,h)=>speckle(x,w,h,128,70,9000), {rep:[24,24]}),
+  absR:  cvTex(256,256,(x,w,h)=>speckle(x,w,h,150,60,7000), {rep:[24,24]}),
+  foam:  cvTex(256,256,(x,w,h)=>{ x.fillStyle='#bbb'; x.fillRect(0,0,w,h);
+           for(let i=0;i<900;i++){ const r=3+Math.random()*6, g=150+Math.random()*90|0; x.fillStyle=`rgb(${g},${g},${g})`; x.beginPath(); x.arc(Math.random()*w,Math.random()*h,r,0,7); x.fill(); } }, {rep:[30,3]}),
+  mesh:  cvTex(64,64,(x,w,h)=>{ x.fillStyle='#000'; x.fillRect(0,0,w,h); x.fillStyle='#fff'; for(let i=0;i<w;i+=8){ x.fillRect(i,0,2,h); x.fillRect(0,i,w,2);} }, {rep:[90,30]}),
+  plate: cvTex(512,144,(x,w,h)=>{ x.fillStyle='#fff'; x.fillRect(0,0,w,h); x.fillStyle='#000';
+           for(let i=0;i<14;i++) for(let j=0;j<3;j++){ x.beginPath(); x.ellipse(24+i*35, 34+j*38, 9, 4, 0, 0, 7); x.fill(); }
+           [[60,118],[256,118],[452,118]].forEach(([cx,cy])=>{ x.beginPath(); x.arc(cx,cy,11,0,7); x.fill(); }); }),
+  fin:   cvTex(16,128,(x,w,h)=>{ for(let y=0;y<h;y++){ const v = 128+60*Math.sin(y/h*Math.PI*16); x.fillStyle=`rgb(${v|0},${v|0},${v|0})`; x.fillRect(0,y,w,1);} }, {rep:[1,1]}),
+};
+function label(w, h, draw){ return cvTex(w, h, draw, {srgb:true}); }
+const PCB_TX = label(512, 468, (x,w,h)=>{
+  x.fillStyle='#1c6a43'; x.fillRect(0,0,w,h);
+  x.strokeStyle='#2f8a5a'; x.lineWidth=3; x.lineCap='round';
+  for(let i=0;i<70;i++){ let px=Math.random()*w, py=Math.random()*h; x.beginPath(); x.moveTo(px,py);
+    for(let k=0;k<3;k++){ if(Math.random()<.5) px+= (Math.random()-.5)*160; else py+=(Math.random()-.5)*160; x.lineTo(px,py);} x.stroke(); }
+  x.fillStyle='#c9cdd1'; for(let i=0;i<160;i++){ x.beginPath(); x.arc(Math.random()*w,Math.random()*h,2.4,0,7); x.fill(); }
+  x.strokeStyle='#f1f4ee'; x.lineWidth=2; x.fillStyle='#f1f4ee'; x.font='bold 16px Arial';
+  [[40,40,110,70,'RY1'],[300,40,100,64,'RY2'],[60,250,70,90,'C12'],[250,170,140,110,'IC01'],[380,300,90,90,'T1']].forEach(([a,b,c,d,t])=>{ x.strokeRect(a,b,c,d); x.fillText(t,a+4,b-6); });
+  x.font='bold 20px Arial'; x.fillText('MAIN PCB  HHC-INV', 150, 440); x.font='14px Arial';
+  x.fillText('CN-FAN', 30, 430); x.fillText('CN-DISP', 400, 430); x.fillText('CN-STEP', 400, 30);
+});
+const MOTOR_TX = label(512, 128, (x,w,h)=>{
+  x.fillStyle='#d9dde0'; x.fillRect(0,0,w,h); x.fillStyle='#22262a'; x.font='bold 30px Arial'; x.fillText('BLDC FAN MOTOR', 20, 44);
+  x.font='20px Arial'; x.fillText('DC 310V  ·  30W  ·  4P', 20, 78); x.fillText('S/N 2611-0482  ·  MADE IN MALAYSIA', 20, 108);
+  x.fillStyle='#0fa3a3'; x.fillRect(440,20,52,52);
+});
+const SPEC_TX = label(512, 256, (x,w,h)=>{
+  x.fillStyle='#f6f6f2'; x.fillRect(0,0,w,h); x.strokeStyle='#333'; x.lineWidth=4; x.strokeRect(6,6,w-12,h-12);
+  x.fillStyle='#1d2733'; x.font='bold 30px Arial'; x.fillText('ROOM AIR CONDITIONER', 24, 50);
+  x.font='22px Arial'; ['MODEL  HHC-09INV / INDOOR UNIT','RATED  220-240V ~ 50Hz','COOLING  2.64 kW   ·   REFRIGERANT  R32','IP X0   ·   NET WEIGHT  8.5 kg'].forEach((t,i)=>x.fillText(t,24,95+i*38));
+});
+const WARN_TX = label(256, 128, (x,w,h)=>{
+  x.fillStyle='#f2c230'; x.fillRect(0,0,w,h); x.fillStyle='#111'; x.beginPath(); x.moveTo(40,100); x.lineTo(76,30); x.lineTo(112,100); x.closePath(); x.fill();
+  x.fillStyle='#f2c230'; x.font='bold 46px Arial'; x.fillText('!',68,92); x.fillStyle='#111'; x.font='bold 24px Arial'; x.fillText('HIGH', 130, 60); x.fillText('VOLTAGE', 130, 92);
+});
+const TERM_TX = label(256, 64, (x,w,h)=>{ x.fillStyle='#f4f4f0'; x.fillRect(0,0,w,h); x.fillStyle='#111'; x.font='bold 36px Arial'; ['L','N','1','2'].forEach((t,i)=>x.fillText(t, 20+i*62, 46)); });
+
 /* ---------------- materials ---------------- */
 const M = {
-  shell:  new THREE.MeshPhysicalMaterial({color:0xf6f7f4, roughness:0.3, clearcoat:0.6, clearcoatRoughness:0.22}),
-  inner:  new THREE.MeshStandardMaterial({color:0xe2e4e0, roughness:0.62}),
-  chassis:new THREE.MeshStandardMaterial({color:0xd9dcd8, roughness:0.68}),
-  drain:  new THREE.MeshStandardMaterial({color:0xe7e9e6, roughness:0.55}),
+  shell:  new THREE.MeshPhysicalMaterial({color:0xf3f4f1, roughness:0.42, clearcoat:0.25, clearcoatRoughness:0.4, bumpMap:TX.abs, bumpScale:0.15}),
+  panel:  new THREE.MeshPhysicalMaterial({color:0xf8f9f7, roughness:0.16, clearcoat:1.0, clearcoatRoughness:0.08}),
+  inner:  new THREE.MeshStandardMaterial({color:0xe2e4e0, roughness:0.62, bumpMap:TX.abs, bumpScale:0.3}),
+  chassis:new THREE.MeshStandardMaterial({color:0xd9dcd8, roughness:0.7, roughnessMap:TX.absR, bumpMap:TX.abs, bumpScale:0.4}),
+  drain:  new THREE.MeshStandardMaterial({color:0xe7e9e6, roughness:0.58, bumpMap:TX.abs, bumpScale:0.3}),
+  foam:   new THREE.MeshStandardMaterial({color:0xf4f4f0, roughness:0.95, bumpMap:TX.foam, bumpScale:1.2}),
   vane:   new THREE.MeshStandardMaterial({color:0xd3d7da, roughness:0.5}),
-  blower: new THREE.MeshPhysicalMaterial({color:0xc9d3db, roughness:0.42, clearcoat:0.2}),
-  fin:    new THREE.MeshStandardMaterial({color:0xc8cdd2, metalness:0.9, roughness:0.32}),
-  galv:   new THREE.MeshStandardMaterial({color:0xb4babf, metalness:0.85, roughness:0.45}),
+  blower: new THREE.MeshPhysicalMaterial({color:0xc4ccd3, roughness:0.38, clearcoat:0.25, side:THREE.DoubleSide}),
+  fin:    new THREE.MeshStandardMaterial({color:0xc9ced3, metalness:0.92, roughness:0.3, bumpMap:TX.fin, bumpScale:0.6}),
+  galv:   new THREE.MeshStandardMaterial({color:0xb4babf, metalness:0.85, roughness:0.45, bumpMap:TX.abs, bumpScale:0.2}),
+  plateM: new THREE.MeshStandardMaterial({color:0xb7bdc2, metalness:0.85, roughness:0.42, alphaMap:TX.plate, alphaTest:0.5}),
   copper: new THREE.MeshStandardMaterial({color:0xc27a4a, metalness:1.0, roughness:0.28}),
   brass:  new THREE.MeshStandardMaterial({color:0xb99a52, metalness:1.0, roughness:0.3}),
+  armaf:  new THREE.MeshStandardMaterial({color:0x1d1f22, roughness:0.92, bumpMap:TX.foam, bumpScale:0.6}),
   motor:  new THREE.MeshStandardMaterial({color:0x26282b, roughness:0.48, metalness:0.2}),
   rubber: new THREE.MeshStandardMaterial({color:0x55595e, roughness:0.85}),
   steel:  new THREE.MeshStandardMaterial({color:0xd0d4d8, metalness:1.0, roughness:0.22}),
-  ebox:   new THREE.MeshStandardMaterial({color:0x3e4349, roughness:0.55}),
+  ebox:   new THREE.MeshStandardMaterial({color:0x3e4349, roughness:0.55, bumpMap:TX.abs, bumpScale:0.3}),
   pcb:    new THREE.MeshStandardMaterial({color:0x1d6b45, roughness:0.45}),
+  pcbTop: new THREE.MeshStandardMaterial({map:PCB_TX, roughness:0.4}),
   black:  new THREE.MeshStandardMaterial({color:0x1a1b1d, roughness:0.4}),
   white:  new THREE.MeshStandardMaterial({color:0xf2f2ee, roughness:0.5}),
   relay:  new THREE.MeshStandardMaterial({color:0x2459a8, roughness:0.4}),
+  capB:   new THREE.MeshStandardMaterial({color:0x22406e, roughness:0.35}),
+  yellow: new THREE.MeshStandardMaterial({color:0xd8b84a, roughness:0.6}),
+  glass:  new THREE.MeshStandardMaterial({color:0xdfe8ee, roughness:0.05, metalness:0.1, transparent:true, opacity:0.55}),
   silver: new THREE.MeshStandardMaterial({color:0xcfd3d6, metalness:0.7, roughness:0.35}),
+  filter: new THREE.MeshStandardMaterial({color:0x3f454b, roughness:0.7, alphaMap:TX.mesh, alphaTest:0.4, side:THREE.DoubleSide}),
+  dark:   new THREE.MeshStandardMaterial({color:0x2b2f33, roughness:0.8}),
 };
+const lbl = (map)=>new THREE.MeshStandardMaterial({map, roughness:0.55, polygonOffset:true, polygonOffsetFactor:-2});
 const wireMats = [0xc0392b,0x1b1b1b,0x2c5aa0,0xd4a017,0x2e8b57,0xeeeeee].map(c=>new THREE.MeshStandardMaterial({color:c,roughness:0.5}));
 
 for(const k of ['shell','inner','chassis','drain','vane','blower','white']) M[k].envMapIntensity = 0.7;
+// rim light — lifts the silhouette edges like a product photo
+const rim = new THREE.DirectionalLight(0xe8f1ff, 0.9); rim.position.set(1.6, 1.8, -0.6); scene.add(rim);
 /* ---------------- helpers ---------------- */
 const V2 = (x,y)=>new THREE.Vector2(x,y);
 // extrude a profile drawn in (z,y) along the X axis, centred on x=0
@@ -341,7 +417,7 @@ const BLOW = {z:0.100, y:-0.040, r:0.050, x0:-0.405, x1:0.300};
 
 /* ======== 0. mounting plate (stays on the wall) ======== */
 const plate = new THREE.Group(); scene.add(plate);
-box(0.68,0.19,0.0025,M.galv,plate,0,0.005,0.003);
+box(0.68,0.19,0.0025,M.plateM,plate,0,0.005,0.003);
 for(let i=0;i<5;i++) box(0.64,0.008,0.004,M.galv,plate,0,-0.07+i*0.037,0.005);
 for(const x of [-0.28,-0.1,0.1,0.28]) box(0.03,0.012,0.012,M.galv,plate,x,0.098,0.008);
 
@@ -365,6 +441,15 @@ const back = makePart(0, 0, 0.04);
   cr.material = M.chassis; cr.geometry.rotateZ(Math.PI/2); cr.position.set(0.345,BLOW.y,BLOW.z);
   // pipe channel lip at bottom back
   box(0.84,0.012,0.03,M.chassis,back.inner,0,-0.136,0.022);
+  // stiffening ribs on the rear wall (visible once the coil is out)
+  for(let x=-0.39;x<=0.39;x+=0.065) box(0.004,0.1,0.008,M.chassis,back.inner,x,0.075,0.03);
+  box(0.82,0.004,0.008,M.chassis,back.inner,0,0.126,0.03);
+  // hooks that hang on the mounting plate
+  for(const x of [-0.28,-0.1,0.1,0.28]) box(0.028,0.014,0.006,M.chassis,back.inner,x,0.112,0.005);
+  // screw bosses
+  for(const x of [-0.36,0.0,0.24]){ const b = cylX(0.005,0.012,M.chassis,back.inner,x,0.02,0.032); b.rotation.set(0,Math.PI/2,0); }
+  // rating label
+  const sp = mesh(new THREE.PlaneGeometry(0.09,0.045), lbl(SPEC_TX), back.inner); sp.position.set(-0.3,0.062,0.0345);
 }
 
 /* ======== 6. evaporator ======== */
@@ -374,7 +459,7 @@ const evap = makePart(-0.06, 0.03, 0.13);
   const finShape = bandShape(path, 0.024, 1);
   const finGeo = new THREE.ExtrudeGeometry(finShape,{depth:0.00035,bevelEnabled:false});
   finGeo.rotateY(-Math.PI/2);
-  const X0 = -0.400, X1 = 0.282, pitch = 0.0042;
+  const X0 = -0.400, X1 = 0.282, pitch = 0.0034;
   const n = Math.floor((X1-X0)/pitch);
   const fins = new THREE.InstancedMesh(finGeo, M.fin, n);
   const mtx = new THREE.Matrix4();
@@ -414,6 +499,14 @@ const evap = makePart(-0.06, 0.03, 0.13);
   tube([[X1+0.02,0.10,0.13],[X1+0.05,0.10,0.10],[X1+0.06,0.06,0.05],[X1+0.06,-0.10,0.035]],0.0045,M.copper,evap.inner);
   tube([[X1+0.02,-0.03,0.19],[X1+0.075,-0.03,0.15],[X1+0.08,-0.06,0.06],[X1+0.08,-0.10,0.04]],0.003,M.copper,evap.inner);
   for(const [x,z] of [[X1+0.06,0.035],[X1+0.08,0.04]]){ const g=new THREE.CylinderGeometry(0.008,0.008,0.016,6); const m=mesh(g,M.brass,evap.inner); m.position.set(x,-0.11,z); }
+  // black foam insulation on the pipes leaving the coil
+  tube([[X1+0.06,0.04,0.045],[X1+0.06,-0.02,0.038],[X1+0.06,-0.095,0.035]],0.0085,M.armaf,evap.inner);
+  tube([[X1+0.08,-0.065,0.055],[X1+0.08,-0.095,0.04]],0.0068,M.armaf,evap.inner);
+  // pipe temperature sensor (clip + lead)
+  cylX(0.0045,0.012,M.copper,evap.inner,X1+0.03,0.10,0.122);
+  tube([[X1+0.036,0.10,0.122],[X1+0.05,0.11,0.118],[X1+0.07,0.115,0.10]],0.0012,M.black,evap.inner);
+  // capillary/distributor tubes
+  for(let i=0;i<3;i++) tube([[X1+0.016,0.0+i*0.03,0.18-i*0.02],[X1+0.04,0.02+i*0.02,0.15],[X1+0.075,-0.03,0.15]],0.0016,M.copper,evap.inner);
 }
 
 /* ======== 5. fan motor ======== */
@@ -426,6 +519,13 @@ const motor = makePart(0.345, BLOW.y, BLOW.z);
   cylX(0.004,0.03,M.steel,motor.inner,0.296,BLOW.y,BLOW.z,16);
   tube([[0.36,BLOW.y+0.03,BLOW.z],[0.37,BLOW.y+0.05,BLOW.z+0.01],[0.39,BLOW.y+0.06,BLOW.z+0.02],[0.40,BLOW.y+0.065,BLOW.z+0.05]],0.0035,M.black,motor.inner);
   const cn = box(0.012,0.01,0.018,M.white,motor.inner,0.40,BLOW.y+0.066,BLOW.z+0.06);
+  // product label wrapped on the can
+  const lg = new THREE.CylinderGeometry(0.0318,0.0318,0.036,32,1,true,-Math.PI*0.15,Math.PI*0.9); lg.rotateZ(Math.PI/2);
+  const lm = mesh(lg, lbl(MOTOR_TX), motor.inner); lm.position.set(0.335,BLOW.y,BLOW.z); lm.rotation.x = -0.3;
+  // steel mounting strap
+  const sg = new THREE.TorusGeometry(0.0335,0.0016,6,40,Math.PI); sg.rotateY(Math.PI/2);
+  for(const x of [0.326,0.364]){ const sm = mesh(sg, M.galv, motor.inner); sm.position.set(x,BLOW.y,BLOW.z); sm.rotation.x = Math.PI; }
+  box(0.05,0.003,0.012,M.galv,motor.inner,0.345,BLOW.y-0.034,BLOW.z);
 }
 
 /* ======== 4. PCB electrical box ======== */
@@ -438,13 +538,22 @@ const pcb = makePart(0.365, 0.062, 0.12);
   box(0.004,0.115,0.155,M.ebox,g,0.302,0.062,0.12);          // left
   box(0.004,0.115,0.155,M.ebox,g,0.428,0.062,0.12);          // right
   box(0.128,0.005,0.13,M.galv,g,0.365,0.122,0.115);          // metal cover
+  for(let i=0;i<6;i++) box(0.006,0.0012,0.05,M.dark,g,0.322+i*0.009,0.1247,0.07);   // cover vents
   // board on front face
   box(0.115,0.105,0.0016,M.pcb,g,0.365,0.062,0.197);
   const fz = 0.198;
+  const top = mesh(new THREE.PlaneGeometry(0.115,0.105), M.pcbTop, g); top.position.set(0.365,0.062,fz+0.0001);
+  // transformer (taped) · fuse · varistor
+  box(0.022,0.018,0.016,M.yellow,g,0.402,0.072,fz+0.008); box(0.024,0.004,0.018,M.galv,g,0.402,0.083,fz+0.009);
+  const fu = cylX(0.0028,0.02,M.glass,g,0.33,0.115-0.03,fz+0.004); cylX(0.0031,0.004,M.steel,g,0.321,0.085,fz+0.004); cylX(0.0031,0.004,M.steel,g,0.339,0.085,fz+0.004);
+  const vr = mesh(new THREE.CylinderGeometry(0.006,0.006,0.003,20),M.capB,g); vr.position.set(0.355,0.03,fz+0.007);
+  // warning sticker on the cover, terminal markings
+  const wn = mesh(new THREE.PlaneGeometry(0.05,0.025), lbl(WARN_TX), g); wn.rotation.x = -Math.PI/2; wn.position.set(0.365,0.1248,0.13);
+  const tl = mesh(new THREE.PlaneGeometry(0.056,0.012), lbl(TERM_TX), g); tl.position.set(0.365,-0.003,0.1811);
   box(0.026,0.02,0.018,M.relay,g,0.335,0.095,fz+0.009);
   box(0.022,0.018,0.016,M.relay,g,0.395,0.098,fz+0.008);
   for(const [x,y,r,h] of [[0.33,0.05,0.007,0.022],[0.348,0.05,0.006,0.018],[0.41,0.045,0.008,0.026],[0.392,0.06,0.004,0.012]]){
-    const c = mesh(new THREE.CylinderGeometry(r,r,h,20),M.black,g); c.rotation.x = Math.PI/2; c.position.set(x,y,fz+h/2);
+    const c = mesh(new THREE.CylinderGeometry(r,r,h,20),r>0.0065?M.capB:M.black,g); c.rotation.x = Math.PI/2; c.position.set(x,y,fz+h/2);
     const top = mesh(new THREE.CylinderGeometry(r*0.98,r*0.98,0.0008,20),M.silver,g); top.rotation.x=Math.PI/2; top.position.set(x,y,fz+h+0.0004);
   }
   // heat sink
@@ -467,7 +576,10 @@ const pcb = makePart(0.365, 0.062, 0.12);
 const blower = makePart((BLOW.x0+BLOW.x1)/2, BLOW.y, BLOW.z);
 {
   const g = blower.inner, segs = 10, L = BLOW.x1-BLOW.x0, sl = L/segs, nb = 32;
-  const bladeGeo = new THREE.BoxGeometry(sl, 0.012, 0.0013);
+  // curved blade section (radial, swept back) extruded along the fan axis
+  const bp = []; for(let i=0;i<=8;i++){ const t=i/8; bp.push(V2(0.034+0.0145*t, -0.0075*t*t+0.002*Math.sin(t*Math.PI))); }
+  const bladeGeo = new THREE.ExtrudeGeometry(bandShape(bp,0.0013,1),{depth:sl*0.985,bevelEnabled:false});
+  bladeGeo.rotateY(-Math.PI/2); bladeGeo.translate(sl/2,0,0); bladeGeo.computeVertexNormals();
   const blades = new THREE.InstancedMesh(bladeGeo, M.blower, segs*nb);
   const q = new THREE.Quaternion(), e = new THREE.Euler(), mx = new THREE.Matrix4(), s1 = new THREE.Vector3(1,1,1);
   let k = 0;
@@ -475,13 +587,14 @@ const blower = makePart((BLOW.x0+BLOW.x1)/2, BLOW.y, BLOW.z);
     const cx = BLOW.x0 + sl*(s+0.5);
     for(let b=0;b<nb;b++){
       const a = b/nb*Math.PI*2 + s*0.07;
-      e.set(a+0.55,0,0); q.setFromEuler(e);
-      mx.compose(new THREE.Vector3(cx, BLOW.y+0.042*Math.cos(a), BLOW.z+0.042*Math.sin(a)), q, s1);
+      e.set(a - Math.PI/2, 0, 0); q.setFromEuler(e);
+      mx.compose(new THREE.Vector3(cx, BLOW.y, BLOW.z), q, s1);
       blades.setMatrixAt(k++, mx);
     }
   }
   blades.castShadow = blades.receiveShadow = true; g.add(blades);
-  for(let s=0;s<=segs;s++) cylX(BLOW.r,0.0022,M.blower,g,BLOW.x0+s*sl,BLOW.y,BLOW.z,48);
+  for(let s=0;s<=segs;s++){ const d = cylX(BLOW.r,0.0024,M.blower,g,BLOW.x0+s*sl,BLOW.y,BLOW.z,48);
+    const rg = new THREE.TorusGeometry(BLOW.r-0.0008,0.0011,6,48); rg.rotateY(Math.PI/2); const rr = mesh(rg,M.blower,g); rr.position.set(BLOW.x0+s*sl,BLOW.y,BLOW.z); }
   cylX(0.012,0.012,M.blower,g,BLOW.x0-0.006,BLOW.y,BLOW.z);
   cylX(0.0035,0.02,M.steel,g,BLOW.x0-0.015,BLOW.y,BLOW.z,16);
   cylX(0.009,0.012,M.rubber,g,BLOW.x0-0.017,BLOW.y,BLOW.z);
@@ -497,13 +610,16 @@ let flapPivot;
                              V2(0.215,-0.112),V2(0.19,-0.128),V2(0.152,-0.134),V2(0.128,-0.112)]);
   mesh(extrudeX(s,0.84,0.0015), M.drain, g);
   // insulation foam strip in trough
-  box(0.82,0.004,0.054,M.white,g,0,-0.092,0.175);
+  box(0.82,0.005,0.054,M.foam,g,0,-0.0915,0.175);
   // drain outlet + hose stub (left)
   cylX(0.008,0.04,M.drain,g,-0.44,-0.1,0.17);
   tube([[-0.46,-0.1,0.17],[-0.47,-0.115,0.14],[-0.465,-0.135,0.08],[-0.46,-0.15,0.03]],0.008,M.rubber,g);
   // vertical louvers
   for(let x=-0.38;x<=0.381;x+=0.034){ box(0.0016,0.026,0.05,M.vane,g,x,-0.122,0.10); }
   box(0.78,0.003,0.004,M.vane,g,0,-0.112,0.085);
+  // stepping motor that swings the flap (right end) + lead
+  box(0.022,0.022,0.012,M.black,g,0.412,-0.118,0.165); cylX(0.011,0.006,M.silver,g,0.401,-0.118,0.165);
+  tube([[0.42,-0.108,0.165],[0.425,-0.09,0.15],[0.41,-0.07,0.13]],0.0014,M.white,g);
   // horizontal flap (hinged at front edge)
   flapPivot = new THREE.Group(); flapPivot.position.set(0,-0.139,0.172); g.add(flapPivot);
   const fp = [V2(0.050,-0.136),V2(0.08,-0.143),V2(0.115,-0.146),V2(0.15,-0.144),V2(0.172,-0.139)].map(p=>V2(p.x-0.172,p.y+0.139));
@@ -538,8 +654,18 @@ let ledMat;
   bars.castShadow = bars.receiveShadow = true; g.add(bars);
   box(W,0.006,0.008,M.shell,g,0,0.143,0.012);
   box(W,0.006,0.006,M.shell,g,0,0.1435,0.083);
-  // subtle panel seam
-  box(W-0.01,0.0012,0.0012,new THREE.MeshStandardMaterial({color:0xbfc4c6,roughness:0.6}),g,0,0.112,0.2272);
+  // glossy front panel (separate moulding with a chamfered edge)
+  { const pw = W-0.012, ph = 0.148, r = 0.006, ps = new THREE.Shape();
+    ps.moveTo(-pw/2+r,-ph/2); ps.lineTo(pw/2-r,-ph/2); ps.quadraticCurveTo(pw/2,-ph/2,pw/2,-ph/2+r); ps.lineTo(pw/2,ph/2-r); ps.quadraticCurveTo(pw/2,ph/2,pw/2-r,ph/2);
+    ps.lineTo(-pw/2+r,ph/2); ps.quadraticCurveTo(-pw/2,ph/2,-pw/2,ph/2-r); ps.lineTo(-pw/2,-ph/2+r); ps.quadraticCurveTo(-pw/2,-ph/2,-pw/2+r,-ph/2);
+    const pg = new THREE.ExtrudeGeometry(ps,{depth:0.0008,bevelEnabled:true,bevelThickness:0.0006,bevelSize:0.0012,bevelSegments:3,curveSegments:6});
+    const pm = mesh(pg, M.panel, g); pm.position.set(0,0.013,0.2276); }
+  // shadow gap between panel and top grille
+  box(W-0.01,0.0015,0.0015,M.dark,g,0,0.0895,0.2262);
+  // air filters under the top grille (come off with the case)
+  for(const x of [-0.215,0.215]){ box(0.41,0.002,0.13,M.filter,g,x,0.1355,0.083); box(0.41,0.004,0.004,M.white,g,x,0.1355,0.149); box(0.41,0.004,0.004,M.white,g,x,0.1355,0.017); }
+  // screw caps underneath
+  for(const x of [-0.34,0.34]){ const sc = mesh(new THREE.CylinderGeometry(0.0045,0.0045,0.002,16),M.panel,g); sc.position.set(x,-0.1395,0.185); }
   // display window
   const cv = document.createElement('canvas'); cv.width = 256; cv.height = 96;
   const cx = cv.getContext('2d');
@@ -550,7 +676,7 @@ let ledMat;
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
   ledMat = new THREE.MeshPhysicalMaterial({color:0x0b0d10, roughness:0.08, clearcoat:1, emissive:0xffffff, emissiveMap:tex, emissiveIntensity:1.2});
   const disp = mesh(new THREE.PlaneGeometry(0.064,0.024), ledMat, g);
-  disp.position.set(0.30,0.04,0.2292);
+  disp.position.set(0.30,0.04,0.2297);
   // Happy Home Care logo on the front cover
   const lc = document.createElement('canvas'); lc.width = 1024; lc.height = 160;
   const lx = lc.getContext('2d');
@@ -573,7 +699,7 @@ let ledMat;
   drawLogo(); document.fonts && document.fonts.ready.then(drawLogo);
   const logo = new THREE.Mesh(new THREE.PlaneGeometry(0.20,0.03125),
     new THREE.MeshPhysicalMaterial({map:logoTex, transparent:true, roughness:0.35, clearcoat:0.5, polygonOffset:true, polygonOffsetFactor:-2}));
-  logo.position.set(-0.24,-0.075,0.2293); g.add(logo);
+  logo.position.set(-0.24,-0.04,0.2298); g.add(logo);
 }
 
 
@@ -621,17 +747,17 @@ const SVC = [
     note:'약품·스팀은 사용하지 않습니다. 블로워·드레인판 안쪽은 범위 외. · No chemical or steam.',
     cam:{tx:-0.2,ty:0.14,tz:0.15,az:-0.08,el:0.14,d:2.45}, camM:{tx:0,ty:0.2,tz:0.14,az:-0.12,el:0.12,d:2.7} },
   { k:'약품세척', e:'Chemical Wash', short:'약품', sk:'+ 드레인판', se:'+ Drain pan', shEn:'Chem', scopeTxt:'외부케이스 + 드레인판 분리 · + Drain pan',
-    scope:['front','drain'], cleanLen:6.6,
-    clean: proc([['front',{chem:0.5, water:1}],['drain',{chem:0.45, water:1}],['evap',{chem:0.4, water:0.8}],['blower',{water:0.35}]]),
+    scope:['front','drain'], cleanLen:7.6,
+    clean: proc([['front',{chem:0.5, water:1}],['drain',{chem:0.45, water:1}],['evap',{chem:0.4, water:0.8}],['back',{chem:0.5, water:1}],['blower',{water:0.35}]]),
     items:[['드레인판(물받이) 분리','Drain pan removed','dis'],
-           ['약품 분사 — 에바포레이터 · 드레인판','Chemical sprayed on coil & drain pan','chem'],
+           ['약품 분사 — 에바포레이터 · 드레인판 · 송풍통로','Chemical sprayed on coil, drain pan & air duct','chem'],
            ['고압물 세척 — 약품·오염물 헹굼','Pressure water rinse','water'],
            ['재조립 · 배수 확인 · 작동 확인','Reassembled, drainage & test run','run']],
     note:'스팀은 사용하지 않습니다. 블로워는 장착된 상태로 헹굼 세척. · No steam. Blower rinsed in place.',
     cam:{tx:-0.12,ty:0.03,tz:0.15,az:0.0,el:0.14,d:2.95}, camM:{tx:0,ty:0.06,tz:0.14,az:-0.12,el:0.12,d:2.8} },
   { k:'스팀살균세척', e:'Steam Sterilization', short:'스팀살균', sk:'+ 드레인판 · 스팀', se:'+ Drain pan · steam', shEn:'Steam', scopeTxt:'외부케이스 + 드레인판 분리 · + Drain pan',
-    scope:['front','drain'], cleanLen:9.2,
-    clean: proc([['front',CWS(0.4,0.8,1)],['drain',CWS(0.45,0.85,1)],['evap',CWS(0.4,0.75,0.88)],['blower',{water:0.3, steam:0.45}]]),
+    scope:['front','drain'], cleanLen:10.4,
+    clean: proc([['front',CWS(0.4,0.8,1)],['drain',CWS(0.45,0.85,1)],['evap',CWS(0.4,0.75,0.88)],['back',CWS(0.4,0.8,1)],['blower',{water:0.3, steam:0.45}]]),
     items:[['드레인판(물받이) 분리','Drain pan removed','dis'],
            ['약품 분사','Chemical spray','chem'],
            ['고압물 세척','Pressure water rinse','water'],
@@ -641,7 +767,7 @@ const SVC = [
     cam:{tx:-0.12,ty:0.03,tz:0.15,az:0.0,el:0.14,d:2.95}, camM:{tx:0,ty:0.06,tz:0.14,az:-0.12,el:0.12,d:2.8} },
   { k:'반분해세척', e:'Semi-disassembly Cleaning', short:'반분해', sk:'+ 블로워', se:'+ Blower', shEn:'Semi', scopeTxt:'외부케이스 + 드레인판 + 블로워 분리 · + Blower',
     scope:['front','drain','blower'], cleanLen:10.8,
-    clean: proc([['front',CWS(0.4,0.8,1)],['blower',CWS(0.45,0.85,1)],['drain',CWS(0.45,0.85,1)],['evap',CWS(0.4,0.75,0.9)],['back',CWS(0.25,0.5,0.65)]]),
+    clean: proc([['front',CWS(0.4,0.8,1)],['blower',CWS(0.45,0.85,1)],['drain',CWS(0.45,0.85,1)],['evap',CWS(0.4,0.75,0.9)],['back',CWS(0.4,0.8,1)]]),
     items:[['블로워 · 드레인판 분리','Blower & drain pan removed','dis'],
            ['약품 분사 — 블로워 날개 · 송풍통로 포함','Chemical spray incl. blower & air duct','chem'],
            ['고압물 세척','Pressure water rinse','water'],
@@ -684,21 +810,70 @@ const ease = u=>u<0.5?4*u*u*u:1-Math.pow(-2*u+2,3)/2;
 const clamp01 = u=>Math.max(0,Math.min(1,u));
 const lerp = THREE.MathUtils.lerp;
 
-/* =============== dirt =============== */
+/* =============== dirt — 곰팡이 · 물때 · 먼지 얼룩 (세척하면 사라짐) =============== */
+// 얼룩 무늬: 흰 바탕(=깨끗) 위에 오염 무늬를 그림 → 오염도(uDirt)만큼 섞어서 표시
+function grimeTex(kind, rep){
+  const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d');
+  x.fillStyle = '#fff'; x.fillRect(0,0,512,512);
+  const blot = (cx, cy, r, col, a)=>{ const g = x.createRadialGradient(cx,cy,0,cx,cy,r); g.addColorStop(0,`rgba(${col},${a})`); g.addColorStop(.55,`rgba(${col},${a*.75})`); g.addColorStop(1,`rgba(${col},0)`); x.fillStyle = g; x.beginPath(); x.arc(cx,cy,r,0,7); x.fill(); };
+  const R = Math.random;
+  if(kind === 'mold'){                     // 검은 곰팡이 군락 (블로워 · 송풍통로 · 루버)
+    for(let i=0;i<72;i++){ const cx=R()*512, cy=R()*512, n=10+R()*26|0;
+      for(let k=0;k<n;k++) blot(cx+(R()-.5)*70, cy+(R()-.5)*70, 4+R()*16, R()<.7?'22,28,24':'46,58,40', .55+R()*.4); }
+    for(let i=0;i<4200;i++){ x.fillStyle=`rgba(25,30,26,${.3+R()*.6})`; x.fillRect(R()*512,R()*512,1+R()*2.5,1+R()*2.5); }
+    for(let i=0;i<14;i++) blot(R()*512,R()*512,40+R()*60,'110,100,80',.25);
+  } else if(kind === 'slime'){             // 물때 · 갈색 슬라임 + 곰팡이 점 (드레인판)
+    for(let i=0;i<32;i++) blot(R()*512,R()*512,40+R()*80,'140,105,52',.55+R()*.3);
+    for(let i=0;i<48;i++){ const cx=R()*512, cy=R()*512; for(let k=0;k<12;k++) blot(cx+(R()-.5)*55, cy+(R()-.5)*55, 3+R()*11,'28,32,24',.65+R()*.3); }
+    x.strokeStyle='rgba(120,90,45,.35)'; x.lineWidth=6; for(let i=0;i<10;i++){ x.beginPath(); const y=R()*512; x.moveTo(0,y); x.bezierCurveTo(170,y+R()*40-20,340,y+R()*40-20,512,y); x.stroke(); }
+  } else if(kind === 'dust'){              // 먼지 · 찌든 때 + 곰팡이 점 (에바포레이터)
+    for(let i=0;i<50;i++) blot(R()*512,R()*512,30+R()*70,'105,94,72',.55+R()*.3);
+    for(let i=0;i<5000;i++){ const v=90+R()*60|0; x.fillStyle=`rgba(${v},${v-8},${v-20},${.3+R()*.5})`; x.fillRect(R()*512,R()*512,1,2+R()*4); }
+    for(let i=0;i<34;i++){ const cx=R()*512, cy=R()*512; for(let k=0;k<10;k++) blot(cx+(R()-.5)*45, cy+(R()-.5)*45, 3+R()*10,'30,36,28',.7); }
+  } else {                                 // 케이스 — 누런 때 · 흐린 먼지 (가볍게)
+    for(let i=0;i<40;i++) blot(R()*512,R()*512,50+R()*90,'195,175,130',.45+R()*.25);
+    for(let i=0;i<1800;i++){ x.fillStyle=`rgba(150,140,120,${.15+R()*.3})`; x.fillRect(R()*512,R()*512,1.5,1.5); }
+    for(let i=0;i<16;i++){ const cx=R()*512, cy=R()*512; for(let k=0;k<8;k++) blot(cx+(R()-.5)*34, cy+(R()-.5)*34, 2+R()*7,'46,52,42',.6); }
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.anisotropy = 4;
+  return t;
+}
+// 재질에 얼룩을 덧씌움 — uDirt 0(깨끗) ~ 1(오염)
+function addGrime(mat, tex, k=1){
+  mat.map = tex; mat.userData.dirt = {value:1}; const K = k.toFixed(2);
+  mat.onBeforeCompile = (sh)=>{
+    sh.uniforms.uDirt = mat.userData.dirt;
+    sh.fragmentShader = 'uniform float uDirt;\n' + sh.fragmentShader.replace('#include <map_fragment>',
+      '#ifdef USE_MAP\n vec4 gTex = texture2D( map, vMapUv );\n diffuseColor.rgb *= mix( vec3(1.0), gTex.rgb, uDirt * '+K+' );\n#endif');
+  };
+  mat.needsUpdate = true;
+}
+const G = { mold:grimeTex('mold',7), slime:grimeTex('slime',6), dust:grimeTex('dust',9), case:grimeTex('case',3) };
+addGrime(M.blower, G.mold); addGrime(M.vane, G.mold); addGrime(M.chassis, G.mold, 0.7);
+addGrime(M.drain, G.slime); addGrime(M.foam, G.slime);
+addGrime(M.fin, G.dust);
+addGrime(M.shell, G.case, 0.65); addGrime(M.panel, G.case, 0.65);
+
 const DIRT = {
-  front:  [{m:M.shell,   dirty:0xe4ded0}],
-  drain:  [{m:M.drain,   dirty:0x9c8763},{m:M.vane,dirty:0x6f6a5f}],
-  blower: [{m:M.blower,  dirty:0x2f3330, rough:0.8}],
-  evap:   [{m:M.fin,     dirty:0x6e675a, rough:0.85, metal:0.35}],
-  back:   [{m:M.chassis, dirty:0x7c776c, rough:0.85}],
+  front:  [{m:M.shell,   dirty:0xe2d9c4},{m:M.panel, dirty:0xe4dbc6}],
+  drain:  [{m:M.drain,   dirty:0xb4a37e},{m:M.vane,dirty:0x8f8b7c},{m:M.foam,dirty:0xc6b994}],
+  blower: [{m:M.blower,  dirty:0x6f736b, rough:0.85}],
+  evap:   [{m:M.fin,     dirty:0x857d6c, rough:0.9, metal:0.35}],
+  back:   [{m:M.chassis, dirty:0xa29e90, rough:0.88, cleanTo:0xf1f2ee}],
 };
 Object.values(DIRT).flat().forEach(d=>{
-  d.clean = d.m.color.clone(); d.dirtyC = new THREE.Color(d.dirty);
+  d.clean = d.cleanTo !== undefined ? new THREE.Color(d.cleanTo) : d.m.color.clone(); d.dirtyC = new THREE.Color(d.dirty);
   d.r0 = d.m.roughness; d.m0 = d.m.metalness ?? 0;
 });
+// ✨ 세척이 끝난 부품은 은은하게 빛남 (끝나는 순간 한 번 더 밝게)
+function setGlow(id, g){
+  (DIRT[id]||[]).forEach(d=>{ if(d.m.emissive){ d.m.emissive.setRGB(1, 0.98, 0.93); d.m.emissiveIntensity = g; } });
+}
 function setDirt(id, v){
   (DIRT[id]||[]).forEach(d=>{
     d.m.color.copy(d.clean).lerp(d.dirtyC, v);
+    if(d.m.userData.dirt) d.m.userData.dirt.value = v;
     if(d.rough!==undefined) d.m.roughness = lerp(d.r0, d.rough, v);
     if(d.metal!==undefined) d.m.metalness = lerp(d.m0, d.metal, v);
   });
@@ -774,6 +949,12 @@ const FX = {
   steam:   makeFX({color:0xdde7ee, size:0.045, op:0.62, max:2600, grow:3.2, fin:0.06, fout:0.4, map:puffTex, drag:2.4, rise:0.2, order:12}),
   dust:    makeFX({color:0x8a8178, size:0.008, op:0.9, max:1500, grow:1.5, fout:0.55, drag:1.5, grav:-0.15}),
 };
+const starTex = canvasTex(x=>{ x.translate(32,32);
+  const g=x.createRadialGradient(0,0,0,0,0,30); g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(.25,'rgba(255,250,225,.55)'); g.addColorStop(1,'rgba(255,240,200,0)');
+  x.fillStyle=g; x.beginPath(); x.arc(0,0,30,0,7); x.fill();
+  x.fillStyle='#fff'; for(let r=0;r<2;r++){ x.rotate(Math.PI/4*r); x.beginPath(); x.moveTo(0,-30); x.lineTo(3,-3); x.lineTo(30,0); x.lineTo(3,3); x.lineTo(0,30); x.lineTo(-3,3); x.lineTo(-30,0); x.lineTo(-3,-3); x.closePath(); x.fill(); } });
+FX.star = makeFX({color:0xfff6d8, size:0.05, op:1, max:900, grow:-0.6, fin:0.25, fout:0.55, map:starTex, drag:1.2, rise:0.02, order:13});
+FX.star.pts.material.blending = THREE.AdditiveBlending;
 const TAG = {front:1,drain:2,blower:3,evap:4,back:5,pcb:6,motor:7};
 function spawn(f, p, v, life, tag=0){
   if(f.n >= f.max) return;
@@ -798,7 +979,16 @@ function clearFX(){ for(const f of Object.values(FX)){ f.n=0; f.pts.geometry.set
 const sprayState = {on:false, fx:'water', part:null, w:0, nozzle:new THREE.Vector3(), aim:new THREE.Vector3(), box:new THREE.Box3(), tip:new THREE.Vector3()};
 const tmpV = new THREE.Vector3(), tmpB = new THREE.Box3();
 const R = ()=>Math.random()-0.5;
+function emitStars(dt){
+  (state.sparkle||[]).forEach(id=>{
+    const def = P[id]; if(!def) return;
+    tmpB.setFromObject(def.part.outer); const mn = tmpB.min, mx = tmpB.max;
+    const n = Math.round(34*dt*(0.5+Math.random()));
+    for(let i=0;i<n;i++) spawn(FX.star, new THREE.Vector3(lerp(mn.x,mx.x,Math.random()), lerp(mn.y,mx.y,Math.random()), mx.z - Math.random()*0.02), [R()*0.04, 0.02+Math.random()*0.05, 0.02], 0.7+Math.random()*0.5);
+  });
+}
 function emit(dt){
+  emitStars(dt);
   const s = sprayState;
   if(!s.on) return;
   const b = s.box, sz = b.getSize(tmpV).clone(), tag = TAG[s.part]||0;
@@ -848,7 +1038,7 @@ function applyTime(t){
   state.svc = s; state.sum = t >= SUM_A;
   // reset all parts home
   Object.values(P).forEach(d=>{ d.part.outer.position.copy(d.part.home); d.part.outer.rotation.set(0,0,0); });
-  Object.keys(DIRT).forEach(id=>setDirt(id, state.sum?0.0:1));
+  Object.keys(DIRT).forEach(id=>{ setDirt(id, state.sum?0.0:1); setGlow(id, 0); }); state.sparkle = [];
   sprayState.on = false; gun.visible = false; brush.visible = false; state.cur = null; state.cleanIdx = -1;
   let flap = 0.75, led = 1;
   if(state.sum){ flap = 0.75; led = 1;
@@ -887,6 +1077,16 @@ function applyTime(t){
     if(lt >= c.a && lt < c.b){ state.cleanIdx = j; }
   });
   Object.entries(dirt).forEach(([id,v])=>setDirt(id,v));
+
+  // ✨ glow + sparkle once a part's cleaning is finished
+  const done = {};
+  s.clean.forEach(c=>{ const o = done[c.p] || (done[c.p] = {end:0, lvl:0}); o.end = Math.max(o.end, c.b); o.lvl = Math.max(o.lvl, c.lvl); });
+  Object.entries(done).forEach(([id,o])=>{
+    if(o.lvl < 0.8 || lt < o.end) return;
+    const since = lt - o.end, fade = 1 - ease(reU);
+    setGlow(id, (0.10 + 0.42*Math.exp(-since*2.4)) * fade);
+    if(since < 1.5 && fade > 0.5) state.sparkle.push(id);
+  });
 
   // phase name
   state.phase = lt < TITLE ? 'title' : lt < s.exEnd ? 'dis' : lt < s.clB ? 'clean' : lt < s.reB ? 'reasm' : 'run';
@@ -984,7 +1184,7 @@ SVC.forEach((s,i)=>{
     ['드레인판 (물받이)','Drain pan',          ['x','f','f','f','f']],
     ['블로워 (송풍팬)','Blower fan',           ['x','p','p','f','f']],
     ['에바포레이터 (냉각핀)','Evaporator coil',['p','p','p','p','f']],
-    ['송풍 통로 (뒷면케이스)','Air duct / chassis',['x','x','x','p','f']],
+    ['송풍 통로 (뒷면케이스)','Air duct / chassis',['x','p','p','p','f']],
     ['PCB · 팬모터','PCB & fan motor',          ['x','x','x','x','d']],
     ['본체 철거','Unit taken off the wall',     ['x','x','x','x','f']],
     ['세척 과정','Process'],
