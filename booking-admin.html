@@ -3224,7 +3224,7 @@ function nxDpInit(){
     let mode=b.status==='waiting'||(!b.status)?'multi':'single';   // 응답 대기 = 후보 일정 다시 고르기
     if(window._nxForceMulti===bid){mode='multi';window._nxForceMulti='';}   // 🔁 일정 취소 · 새 일정 안내
     E.md.value=mode;
-    if(mode==='multi'&&b.status==='confirmed')nxDpPrunePast(E);
+    if(mode==='multi'&&b.status==='confirmed')nxDpPrunePast(E,b);
     const M=nxDpGetMulti(E);
     const base=(mode==='multi'?(M.a.find(x=>x>=today())||M.a[0]):E.d.value)||E.d.value||today();
     NXDP={bid:bid,y:+base.slice(0,4),m:+base.slice(5,7)-1,mode:mode,act:(M.a.find(x=>x>=today())||M.a[0]||'')};
@@ -3257,8 +3257,25 @@ function nxBusyNear(ds,v){
   if(!ds)return false;const t0=bkTimeMin(nxTkey(v));if(t0===99999)return false;
   return nxBusy(ds,NXDP.bid).some(x=>{const t=bkTimeMin(x.t);return t!==99999&&Math.abs(t-t0)<=60;});
 }
-// 확정 예약을 취소하고 새 후보로 안내할 때 — 예전 후보(취소하는 날짜 포함)는 비우고 새로 고르기
-function nxDpPrunePast(E){nxDpSetMulti(E,[],{});}
+// 확정 예약을 취소하고 새 후보로 안내할 때 — 예전 후보 중 아직 쓸 수 있는 것만 남기기 (2026-11-23)
+//  · 지난 날짜 · 취소하는 날짜는 뺌
+//  · 다른 고객이 확정한 방문 시간(전후 1시간)과 겹치는 후보 시간은 뺌 → 남은 시간이 없는 날짜도 뺌
+function nxDpPrunePast(E,b){
+  let a=[],m={};
+  try{a=JSON.parse((b&&b.schedule_dates)||'[]');}catch(e){}
+  try{m=JSON.parse((b&&b.schedule_times)||'{}');}catch(e){}
+  if(!Array.isArray(a))a=[];if(!m||typeof m!=='object')m={};
+  const T=today(),cx=(b&&b.booking_date)||'',bid=(b&&b.__id)||'',keep=[],mm={};
+  a.forEach(d=>{
+    if(!d||d<T||d===cx)return;
+    const busy=nxBusy(d,bid).map(x=>bkTimeMin(x.t)).filter(t=>t!==99999);
+    const ts=(Array.isArray(m[d])?m[d]:[]).filter(v=>{const t0=bkTimeMin(nxTkey(v));return t0===99999||!busy.some(t=>Math.abs(t-t0)<=60);});
+    if(!ts.length)return;
+    keep.push(d);mm[d]=ts;
+  });
+  nxDpSetMulti(E,keep,mm);
+  return {kept:keep.length,all:a.length};
+}
 function nxDpCal(selFn,markFn){
   const Y=NXDP.y,Mo=NXDP.m,T0=today();
   const first=new Date(Y,Mo,1).getDay(),dim=new Date(Y,Mo+1,0).getDate();
@@ -3296,7 +3313,7 @@ function nxDpRender(){
       ${M.a.length>1&&cur.length?`<button type="button" class="nxdp-copy" data-nxdp-copy="1">이 시간을 다른 날짜에도 똑같이 적용</button>`:''}`:'';
     const nT=M.a.reduce((s,d)=>s+((M.m[d]||[]).length),0);
     const warn=b.status==='booked'?'<div class="nxdp-warn">⚠️ 고객이 이미 날짜를 고른 예약입니다. 후보 일정으로 저장하면 고객이 다시 고를 수 있도록 「고객 응답 대기」로 바뀝니다.</div>'
-      :isCf?`<div class="nxdp-warn">🔁 저장하면 기존 확정 일정 <b>${b.booking_date?nxMd(b.booking_date):'날짜 미정'}${b.booking_time?' '+escHtml(nxTkey(b.booking_time)):''}</b>은 <b>취소</b>되고 캘린더에서도 지워집니다.<br>상태가 「대기중」으로 바뀌고, 고객에게 「기존 일정 취소 · 새 가능 일정」 안내를 보낼 수 있습니다.</div>`:'';
+      :isCf?`<div class="nxdp-warn">🔁 저장하면 기존 확정 일정 <b>${b.booking_date?nxMd(b.booking_date):'날짜 미정'}${b.booking_time?' '+escHtml(nxTkey(b.booking_time)):''}</b>은 <b>취소</b>되고 캘린더에서도 지워집니다.<br>상태가 「대기중」으로 바뀌고, 고객에게 「기존 일정 취소 · 새 가능 일정」 안내를 보낼 수 있습니다.<br>📅 예전 후보 중 취소하는 날짜·지난 날짜·다른 고객 확정 시간(전후 1시간)은 빼고 남은 것만 미리 골라 두었습니다.</div>`:'';
     box.innerHTML=`${tabs}${warn}<div class="nxdp-sel"><span>📅 후보 <b>${M.a.length}일 · 시간 ${nT}개</b></span>${M.a.length?'<button type="button" data-nxdp-clear="1">모두 지우기</button>':''}</div>
       ${cal}<div class="nxdp-lgs"><div class="nxdp-lg"><i class="nxdp-n">2</i> 그날 고른 시간 수 · 다시 누르면 날짜 빼기</div><div class="nxdp-lg"><i class="nxdp-bz">2건</i> 이미 확정된 다른 방문</div></div></div>
       <div class="nxdp-dcs">${dchips}</div>${nxDayBox(act)}${times}
@@ -3332,7 +3349,7 @@ document.addEventListener('click',function(e){
   if((x=e.target.closest('[data-nxdp-nav]'))){NXDP.m+=+x.dataset.nxdpNav;if(NXDP.m<0){NXDP.m=11;NXDP.y--;}if(NXDP.m>11){NXDP.m=0;NXDP.y++;}nxDpRender();return;}
   if((x=e.target.closest('[data-nxdp-mode]'))){NXDP.mode=x.dataset.nxdpMode;E.md.value=NXDP.mode;
     const _b=allBookings.find(y=>y.__id===NXDP.bid)||{};
-    if(NXDP.mode==='multi'&&_b.status==='confirmed'){nxDpPrunePast(E);const M=nxDpGetMulti(E);NXDP.act=M.a[0]||'';if(!M.a.length){const t=today();NXDP.y=+t.slice(0,4);NXDP.m=+t.slice(5,7)-1;}}
+    if(NXDP.mode==='multi'&&_b.status==='confirmed'){nxDpPrunePast(E,_b);const M=nxDpGetMulti(E);NXDP.act=M.a[0]||'';if(!M.a.length){const t=today();NXDP.y=+t.slice(0,4);NXDP.m=+t.slice(5,7)-1;}}
     nxDpRender();return;}
   if(NXDP.mode==='multi'){
     const M=nxDpGetMulti(E);
