@@ -231,11 +231,18 @@ function bkc(o){
       lk('🪪 등록에 필요한 정보',bcMark(wpLink(wb,nm,false)))+'\n\n'+lk('📱 예약 상세',o.link)+'\n'+SIG);
 }
 
+// 💛 예약 확정 카카오 카드 전용 짧은 문구 (2026-11-23) — 왓츠앱·복사 문구는 그대로, 카톡 카드만
+//    제목 「예약이 확정되었습니다」 / 본문 「11월 25일(수) 오후 8:00 전후」 + 「작업방문등록 필수 요망.」 (위치 확인 문구는 뺌)
+function bkcKk(b,en){
+  var w=bkcWhen(b,en);
+  return {t:en?'Booking confirmed':'예약이 확정되었습니다',
+          d:(w?w+'\n':'')+(en?'Work Permit registration required.':'작업방문등록 필수 요망.')};
+}
 window.HHCMsg={
   BASE:BASE,SIG:SIG,ITEM_EN:ITEM_EN,
   toEn:toEn,trItemsEn:trItemsEn,sEnIt:sEnIt,rqIcon:rqIcon,rqItemLines2:rqItemLines2,
   bkcWhen:bkcWhen,sHi:sHi,wpLink:wpLink,myLink:myLink,
   noBold:noBold,whenOf:whenOf,lk:lk,
-  rq:rq,bkc:bkc
+  rq:rq,bkc:bkc,bkcKk:bkcKk
 };
 })();
