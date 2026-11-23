@@ -431,14 +431,17 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
   var BAL=parseFloat(q.get('b'));if(!(BAL>0))BAL=0;var BD=/^\d{4}-\d{2}-\d{2}$/.test(q.get('d')||'')?q.get('d'):'';
   var F={kind:'t',reason:'',leave:'',name:q.get('n')||'',condo:q.get('c')||'',phone:q.get('p')||'',no:q.get('no')||'',
     amtMode:'all',tr:[newTr()],vMode:'all',rows:[newV()],remarks:'',agree:false};
-  function newTr(){return {name:'',condo:'',phone:'',amt:''};}
-  function newV(){return {amt:'',qty:'1',name:'',condo:'',phone:''};}
+  function newTr(){return {name:'',condo:'',unit:'',phone:'',amt:''};}
+  function newV(){return {amt:'',qty:'1',name:'',condo:'',unit:'',phone:''};}
+  /* 계약자 「서비스 대상」 한 칸(예: Verve Suites B-21-08) → 콘도명 · 동호수 나누기 (본인 정보로 채우기용) */
+  function splitCondo(x){x=String(x||'').trim();var m=/^(.*?)[\s,]+(?:(?:UNIT|NO\.?)\s*)?#?([A-Z0-9]{1,4}(?:\s*-\s*[A-Z0-9]{1,4}){1,3})$/i.exec(x);
+    return (m&&/\d/.test(m[2])&&m[1].trim())?{c:m[1].trim(),u:m[2].replace(/\s+/g,'')}:{c:x,u:''};}
   var T={
    ko:{title:'양도 · 상품권 전환 신청서',intro:'아래 내용을 적어 접수해 주세요. 확인 후 왓츠앱으로 연락드립니다.',
      s1:'신청 종류',k:[['🔁 양도','다른 분께 넘기기'],['🎁 상품권 전환','상품권으로 받기']],
      s2:'신청 사유',r:[['home','✈️ 귀국'],['abroad','🌏 타 국가 이주']],leave:'출국(이주) 예정일',opt:'선택',
      s3:'계약자 정보',bal:'현재 적립잔액',balAt:function(d){return d?d.slice(5).replace('-','월 ').replace(/^0/,'')+'일 기준':'발송 시점 기준';},balN:'최종 금액은 처리할 때 다시 확인해 드립니다.',over:function(x){return '⚠️ 현재 적립잔액(RM '+x+')보다 많습니다.';},name:'계약자 이름',condo:'서비스 대상 (콘도명 · 동호수)',phone:'전화번호 (왓츠앱)',no:'계약번호',noH:'모르시면 비워 두세요. 이름 · 전화번호로 찾아 드립니다.',
-     s4t:'받는 분 · 양도 금액',am:[['all','잔액 전부 · 1명'],['part','금액 정해서 · 여러 명']],amt:'양도 금액 (RM)',who:'받는 분',rName:'이름',rCondo:'서비스 대상 (콘도명 · 동호수)',rPhone:'전화번호',rm:'삭제',addT:'＋ 받는 분 추가',tSum:'양도 합계',tAllH:'남은 잔액 전부를 한 분께 양도합니다. 여러 분께 나누려면 「금액 정해서」를 골라 주세요.',tN:function(a,n){return 'RM '+a+' · '+n+'명';},vNo:'상품권',vWho:'받는 분',me:'👤 본인 정보로 채우기',
+     s4t:'받는 분 · 양도 금액',am:[['all','잔액 전부 · 1명'],['part','금액 정해서 · 여러 명']],amt:'양도 금액 (RM)',who:'받는 분',rName:'이름',rCondo:'콘도명',rUnit:'동호수',rPhone:'전화번호',rm:'삭제',addT:'＋ 받는 분 추가',tSum:'양도 합계',tAllH:'남은 잔액 전부를 한 분께 양도합니다. 여러 분께 나누려면 「금액 정해서」를 골라 주세요.',tN:function(a,n){return 'RM '+a+' · '+n+'명';},vNo:'상품권',vWho:'받는 분',me:'👤 본인 정보로 채우기',
      amH:'합계가 남은 잔액보다 적으면 나머지는 계속 쓰실 수 있습니다.',
      s4v:'상품권 금액 · 장수',vm:[['all','남은 잔액 전부 1장'],['split','금액 · 장수 직접 정하기']],
      vA:'장당 금액 (RM)',vQ:'장수',vT:'받는 분',vTp:'본인이면 비움',add:'＋ 상품권 추가',sum:'상품권 합계',
@@ -450,7 +453,7 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
        '상품권으로 바꾸면 <b>회원 혜택은 종료</b>되고, 상품권 유효기간은 <b>발행일로부터 1년</b>입니다.'],agreeL:'위 내용을 확인했습니다',
      send:'신청 접수하기',sending:'접수 중…',wa:'궁금한 점은 <u>왓츠앱으로 먼저 문의하기</u>',
      e:{reason:'신청 사유를 골라 주세요.',name:'계약자 이름을 적어 주세요.',condo:'서비스 대상(콘도명)을 적어 주세요.',phone:'전화번호를 정확히 적어 주세요.',
-       tName:'받는 분 이름을 적어 주세요.',tCondo:'받는 분 서비스 대상(콘도명 · 동호수)을 적어 주세요.',tPhone:'받는 분 전화번호를 정확히 적어 주세요.',amt:'양도 금액을 적어 주세요.',vPhone:'상품권 받는 분 전화번호를 정확히 적어 주세요.',vName:'상품권 받는 분 이름을 적어 주세요.',vCondo:'상품권 받는 분 서비스 대상(콘도명 · 동호수)을 적어 주세요.',rows:'상품권 금액과 장수를 적어 주세요.',
+       tName:'받는 분 이름을 적어 주세요.',tCondo:'받는 분 콘도명을 적어 주세요.',tUnit:'받는 분 동호수를 적어 주세요.',tPhone:'받는 분 전화번호를 정확히 적어 주세요.',amt:'양도 금액을 적어 주세요.',vPhone:'상품권 받는 분 전화번호를 정확히 적어 주세요.',vName:'상품권 받는 분 이름을 적어 주세요.',vCondo:'상품권 받는 분 콘도명을 적어 주세요.',vUnit:'상품권 받는 분 동호수를 적어 주세요.',rows:'상품권 금액과 장수를 적어 주세요.',
        agree:'확인 사항에 체크해 주세요.',net:'접수하지 못했습니다. 잠시 후 다시 시도하시거나 왓츠앱으로 알려 주세요.'},
      doneH:'신청이 접수되었습니다',doneP:'남은 잔액을 확인한 뒤 왓츠앱으로 연락드리겠습니다.',doneNo:'접수번호',
      dK:'신청',dR:'사유',dTo:'받는 분',dAmt:'금액',all:'남은 잔액 전부',close:'닫기',ea:'장',tot:function(a,n){return 'RM '+a+' · '+n+'장';}},
@@ -458,7 +461,7 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
      s1:'What would you like?',k:[['🔁 Transfer','to another person'],['🎁 E-voucher','convert balance']],
      s2:'Reason',r:[['home','✈️ Returning home'],['abroad','🌏 Moving abroad']],leave:'Departure date',opt:'optional',
      s3:'Your details',bal:'Current balance',balAt:function(d){return d?'as of '+new Date(d+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'when sent';},balN:'We will confirm the final amount when processing.',over:function(x){return '⚠️ More than your current balance (RM '+x+').';},name:'Member name',condo:'Service property (condo · unit)',phone:'Phone (WhatsApp)',no:'Contract no.',noH:'Leave blank if unsure — we will find it by name and phone.',
-     s4t:'New member · amount',am:[['all','Full · 1 person'],['part','Set amounts · 1+']],amt:'Amount (RM)',who:'New member',rName:'Name',rCondo:'Service property (condo · unit)',rPhone:'Phone',rm:'Remove',addT:'＋ Add another person',tSum:'Transfer total',tAllH:'Your full balance goes to one person. To split it among several people, choose "Set amounts".',tN:function(a,n){return 'RM '+a+' · '+n+(n>1?' people':' person');},vNo:'Voucher',vWho:'Recipient',me:'👤 Fill with my details',
+     s4t:'New member · amount',am:[['all','Full · 1 person'],['part','Set amounts · 1+']],amt:'Amount (RM)',who:'New member',rName:'Name',rCondo:'Condo name',rUnit:'Unit no.',rPhone:'Phone',rm:'Remove',addT:'＋ Add another person',tSum:'Transfer total',tAllH:'Your full balance goes to one person. To split it among several people, choose "Set amounts".',tN:function(a,n){return 'RM '+a+' · '+n+(n>1?' people':' person');},vNo:'Voucher',vWho:'Recipient',me:'👤 Fill with my details',
      amH:'If the total is less than your balance, you keep using the rest.',
      s4v:'Voucher amounts',vm:[['all','Full balance, 1 voucher'],['split','Choose amounts']],
      vA:'Amount (RM)',vQ:'Qty',vT:'Recipient',vTp:'blank = me',add:'＋ Add voucher',sum:'Voucher total',
@@ -470,12 +473,12 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
        'Converting to e-vouchers <b>ends your member benefits</b>; vouchers are valid for <b>1 year from issue</b>.'],agreeL:'I have read and agree',
      send:'Submit application',sending:'Submitting…',wa:'Questions? <u>Ask us on WhatsApp first</u>',
      e:{reason:'Please choose a reason.',name:'Please enter the member name.',condo:'Please enter the service property.',phone:'Please enter a valid phone number.',
-       tName:'Please enter the new member\'s name.',tCondo:'Please enter the new member\'s service property.',tPhone:'Please enter a valid phone for the new member.',amt:'Please enter the amount.',vPhone:'Please enter a valid phone for the voucher recipient.',vName:'Please enter the voucher recipient\'s name.',vCondo:'Please enter the voucher recipient\'s service property.',rows:'Please enter voucher amount and quantity.',
+       tName:'Please enter the new member\'s name.',tCondo:'Please enter the new member\'s condo name.',tUnit:'Please enter the new member\'s unit no.',tPhone:'Please enter a valid phone for the new member.',amt:'Please enter the amount.',vPhone:'Please enter a valid phone for the voucher recipient.',vName:'Please enter the voucher recipient\'s name.',vCondo:'Please enter the voucher recipient\'s condo name.',vUnit:'Please enter the voucher recipient\'s unit no.',rows:'Please enter voucher amount and quantity.',
        agree:'Please tick the confirmation box.',net:'Could not submit. Please try again shortly or tell us on WhatsApp.'},
      doneH:'Application received',doneP:'We will check your remaining balance and contact you on WhatsApp.',doneNo:'Reference',
      dK:'Request',dR:'Reason',dTo:'To',dAmt:'Amount',all:'Full balance',close:'Close',ea:'',tot:function(a,n){return 'RM '+a+' · '+n+' voucher'+(n>1?'s':'');}}
   };
-  var el=document.getElementById('tf'),done=null,busy=false,err='';
+  var el=document.getElementById('tf'),done=null,busy=false,err='',pushed=false;
   function lang(){return (window.TW&&TW.get().lang)||'ko';}
   function L(){return T[lang()];}
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
@@ -494,7 +497,7 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
       var part=F.amtMode==='part',tt=tTotal();
       var cards=F.tr.map(function(r,i){
         return '<div class="tf-rc"><div class="rh"><b>'+l.who+' '+(i+1)+'</b>'+(F.tr.length>1?'<button type="button" class="rm" data-rmt="'+i+'">'+l.rm+'</button>':'')+'</div>'+
-          fld('tn'+i,l.rName,r.name,{req:1})+fld('tc'+i,l.rCondo,r.condo,{req:1})+
+          fld('tn'+i,l.rName,r.name,{req:1})+'<div class="q2">'+fld('tc'+i,l.rCondo,r.condo,{req:1,ph:'Verve Suites'})+fld('tu'+i,l.rUnit,r.unit,{req:1,ph:'B-21-08'})+'</div>'+
           (part?'<div class="q2">'+fld('tp'+i,l.rPhone,r.phone,{req:1,type:'tel',im:'tel',ph:'+60'})+fld('ta'+i,l.amt,r.amt,{req:1,im:'decimal',ph:'RM'})+'</div>'
                :fld('tp'+i,l.rPhone,r.phone,{req:1,type:'tel',im:'tel',ph:'+60'}))+'</div>';}).join('');
       return '<div class="tf-t"><i>4</i>'+l.s4t+'</div>'+seg('tf-ch two','amtMode',l.am,F.amtMode)+cards+
@@ -506,7 +509,7 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
       return '<div class="tf-rc"><div class="rh"><b>'+l.vNo+' '+(i+1)+'</b>'+(F.rows.length>1?'<button type="button" class="rm" data-rm="'+i+'">'+l.rm+'</button>':'')+'</div>'+
         '<div class="q2">'+fld('va'+i,l.vA,r.amt,{req:1,im:'decimal',ph:'1,000'})+fld('vq'+i,l.vQ,r.qty,{req:1,im:'numeric'})+'</div>'+
         '<button type="button" class="tf-me" data-me="'+i+'">'+l.me+'</button>'+
-        fld('vn'+i,l.vWho+' '+l.rName,r.name,{req:1})+fld('vc'+i,l.rCondo,r.condo,{req:1})+fld('vp'+i,l.rPhone,r.phone,{req:1,type:'tel',im:'tel',ph:'+60'})+'</div>';}).join('');
+        fld('vn'+i,l.vWho+' '+l.rName,r.name,{req:1})+'<div class="q2">'+fld('vc'+i,l.rCondo,r.condo,{req:1,ph:'Verve Suites'})+fld('vu'+i,l.rUnit,r.unit,{req:1,ph:'B-21-08'})+'</div>'+fld('vp'+i,l.rPhone,r.phone,{req:1,type:'tel',im:'tel',ph:'+60'})+'</div>';}).join('');
     var t=vTotal();
     return '<div class="tf-t"><i>4</i>'+l.s4v+'</div>'+seg('tf-ch two','vMode',l.vm,F.vMode)+
       (F.vMode==='all'?'<p class="tf-hint">'+l.vAllH+(BAL?' (RM '+fmt(BAL)+')':'')+'</p>':
@@ -544,17 +547,18 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
   }
   function paint(){el.innerHTML=done?doneHTML():formHTML();}
   function open(){if(window.TW)F.kind=TW.get().m;err='';paint();el.classList.add('on');document.body.style.overflow='hidden';el.scrollTop=0;
-    try{if(location.hash!=='#apply')history.pushState({tf:1},'','#apply');}catch(e){}}
+    try{if(location.hash!=='#apply'){history.pushState({tf:1},'','#apply');pushed=true;}}catch(e){}}
   function close(){el.classList.remove('on');document.body.style.overflow='';if(done){done=null;}
-    try{if(location.hash==='#apply')history.back();}catch(e){}}
-  window.addEventListener('popstate',function(){if(location.hash!=='#apply'&&el.classList.contains('on')){el.classList.remove('on');document.body.style.overflow='';done=null;}});
+    /* #apply 주소로 바로 열었을 때는 뒤로가기 대신 주소만 정리 — 뒤로가기를 하면 안내장을 벗어남 */
+    try{if(location.hash==='#apply'){if(pushed){pushed=false;history.back();}else history.replaceState(null,'',location.pathname+location.search);}}catch(e){}}
+  window.addEventListener('popstate',function(){if(location.hash!=='#apply'&&el.classList.contains('on')){pushed=false;el.classList.remove('on');document.body.style.overflow='';done=null;}});
   window.TF={relang:function(){if(el.classList.contains('on'))paint();},remode:function(){}};
   /* 입력 → F 에 바로 저장 (다시 그려도 내용 유지) */
   el.addEventListener('input',function(e){
     var t=e.target,k=t.dataset&&t.dataset.k;if(!k)return;
-    var m=/^v([aqncp])(\d+)$/.exec(k),mt=/^t([ncpa])(\d+)$/.exec(k);
-    if(m){F.rows[+m[2]][{a:'amt',q:'qty',n:'name',c:'condo',p:'phone'}[m[1]]]=t.value;var s=document.getElementById('tf-sum'),v=vTotal();if(s)s.textContent=L().tot(fmt(v.a),v.n);var o=document.getElementById('tf-vover');if(o)o.hidden=!(BAL&&v.a>BAL+0.005);}
-    else if(mt){F.tr[+mt[2]][{n:'name',c:'condo',p:'phone',a:'amt'}[mt[1]]]=t.value;var s2=document.getElementById('tf-tsum'),w=tTotal();if(s2)s2.textContent=L().tN(fmt(w.a),w.n);var o2=document.getElementById('tf-tover');if(o2)o2.hidden=!(BAL&&w.a>BAL+0.005);}
+    var m=/^v([aqncup])(\d+)$/.exec(k),mt=/^t([ncupa])(\d+)$/.exec(k);
+    if(m){F.rows[+m[2]][{a:'amt',q:'qty',n:'name',c:'condo',u:'unit',p:'phone'}[m[1]]]=t.value;var s=document.getElementById('tf-sum'),v=vTotal();if(s)s.textContent=L().tot(fmt(v.a),v.n);var o=document.getElementById('tf-vover');if(o)o.hidden=!(BAL&&v.a>BAL+0.005);}
+    else if(mt){F.tr[+mt[2]][{n:'name',c:'condo',u:'unit',p:'phone',a:'amt'}[mt[1]]]=t.value;var s2=document.getElementById('tf-tsum'),w=tTotal();if(s2)s2.textContent=L().tN(fmt(w.a),w.n);var o2=document.getElementById('tf-tover');if(o2)o2.hidden=!(BAL&&w.a>BAL+0.005);}
     else F[k]=t.value;
     var f=t.closest('.tf-f');if(f&&f.classList.contains('bad')){f.classList.remove('bad');clearErr();}
   });
@@ -571,7 +575,7 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
     if(b.dataset.addtr){F.tr.push(newTr());F.amtMode='part';document.getElementById('tf-s4').innerHTML=s4HTML();
       var tn=el.querySelectorAll('[data-k^="tn"]');if(tn.length)tn[tn.length-1].focus();return;}
     if(b.dataset.rmt){F.tr.splice(+b.dataset.rmt,1);document.getElementById('tf-s4').innerHTML=s4HTML();return;}
-    if(b.dataset.me){var v=F.rows[+b.dataset.me];v.name=F.name;v.condo=F.condo;v.phone=F.phone;document.getElementById('tf-s4').innerHTML=s4HTML();clearErr();return;}
+    if(b.dataset.me){var v=F.rows[+b.dataset.me],sc=splitCondo(F.condo);v.name=F.name;v.condo=sc.c;v.unit=sc.u;v.phone=F.phone;document.getElementById('tf-s4').innerHTML=s4HTML();clearErr();return;}
     if(b.dataset.addrow){F.rows.push(newV());document.getElementById('tf-s4').innerHTML=s4HTML();
       var ins=el.querySelectorAll('[data-k^="va"]');if(ins.length)ins[ins.length-1].focus();return;}
     if(b.dataset.rm){F.rows.splice(+b.dataset.rm,1);document.getElementById('tf-s4').innerHTML=s4HTML();return;}
@@ -589,6 +593,7 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
       for(var i=0;i<F.tr.length;i++){var r=F.tr[i];
         if(!r.name.trim())return ['tn'+i,l.tName];
         if(!r.condo.trim())return ['tc'+i,l.tCondo];
+        if(!r.unit.trim())return ['tu'+i,l.tUnit];
         if(digits(r.phone).length<9)return ['tp'+i,l.tPhone];
         if(F.amtMode==='part'&&!(num(r.amt)>0))return ['ta'+i,l.amt];}
     }else if(F.vMode==='split'){
@@ -597,6 +602,7 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
         if(!(num(v.amt)>0&&Math.floor(num(v.qty))>0))return ['va'+j,l.rows];
         if(!String(v.name).trim())return ['vn'+j,l.vName];
         if(!String(v.condo).trim())return ['vc'+j,l.vCondo];
+        if(!String(v.unit).trim())return ['vu'+j,l.vUnit];
         if(digits(v.phone).length<9)return ['vp'+j,l.vPhone];}
     }
     if(!F.agree)return ['agree',l.agree];
@@ -617,9 +623,9 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
     if(BAL){data.bal_shown=BAL;if(BD)data.bal_date=BD;}
     var tt=tTotal();
     if(F.kind==='t'){data.amt_mode=F.amtMode;
-      data.recipients=F.tr.map(function(r){var o={name:r.name.trim(),condo:r.condo.trim(),phone:r.phone.trim()};if(F.amtMode==='part')o.amt=num(r.amt);return o;});}
+      data.recipients=F.tr.map(function(r){var o={name:r.name.trim(),condo_name:r.condo.trim(),unit:r.unit.trim(),condo:(r.condo.trim()+' '+r.unit.trim()).trim(),phone:r.phone.trim()};if(F.amtMode==='part')o.amt=num(r.amt);return o;});}
     else{data.v_mode=F.vMode;if(F.vMode==='split')data.vouchers=F.rows.filter(function(r){return num(r.amt)>0&&Math.floor(num(r.qty))>0;})
-      .map(function(r){return {amt:num(r.amt),qty:Math.floor(num(r.qty)),to:String(r.name||'').trim(),condo:String(r.condo||'').trim(),phone:String(r.phone||'').trim()};});}
+      .map(function(r){return {amt:num(r.amt),qty:Math.floor(num(r.qty)),to:String(r.name||'').trim(),condo_name:String(r.condo||'').trim(),unit:String(r.unit||'').trim(),condo:(String(r.condo||'').trim()+' '+String(r.unit||'').trim()).trim(),phone:String(r.phone||'').trim()};});}
     busy=true;var sb=document.getElementById('tf-send');sb.disabled=true;sb.textContent=L().sending;
     try{
       var r=await fetch('/api/transfer',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});

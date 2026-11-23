@@ -2,9 +2,10 @@
 // POST /api/transfer — 회원권 잔액 양도 · 전자상품권 전환 신청서(transfer.html #apply) 접수 (2026-11-23)
 //  본문: {kind:'transfer'|'voucher', reason:'home'|'abroad', leave_date?, name, condo, phone, contract_no?,
 //         remarks?, lang, agree:true,
-//         // 양도   : amt_mode:'all'|'part', recipients:[{name, condo, phone, amt?}]
+//         // 양도   : amt_mode:'all'|'part', recipients:[{name, condo_name, unit, phone, amt?}]
 //         //          (all = 남은 잔액 전부 · 받는 분 1명 / part = 받는 분마다 금액 · 여러 명 가능)  (2026-11-23 여러 명)
-//         // 상품권 : v_mode:'all'|'split', vouchers?:[{amt, qty, to, condo, phone}] (split 일 때 · 받는 분 이름·콘도·전화 필수)
+//         // 상품권 : v_mode:'all'|'split', vouchers?:[{amt, qty, to, condo_name, unit, phone}] (split 일 때 · 받는 분 이름·콘도명·동호수·전화 필수)
+//         // condo = 콘도명 + 동호수 (관리자 화면 표시용으로 서버가 합쳐 저장)
 //        }
 //  → transfer_reqs 컬렉션에 새 문서(status:'new') + 관리자 기기 푸시 알림(「청구 → 양도·전환」 탭)
 //  응답: {ok:true, id, ref}   ref = 고객에게 보여 주는 짧은 접수번호 (TR-월일-4자리)
@@ -50,14 +51,15 @@ export async function onRequestPost(context){
     data.amt_mode = b.amt_mode === 'part' ? 'part' : 'all';
     const rs = Array.isArray(b.recipients) ? b.recipients.slice(0, data.amt_mode === 'all' ? 1 : MAX_TR) : [];
     data.recipients = rs.map(r => {
-      const o = { name: String((r && r.name) || '').trim().slice(0, 80), condo: String((r && r.condo) || '').trim().slice(0, 200),
-                  phone: String((r && r.phone) || '').trim().slice(0, 40) };
+      const cn = String((r && r.condo_name) || '').trim().slice(0, 160), un = String((r && r.unit) || '').trim().slice(0, 40);
+      const o = { name: String((r && r.name) || '').trim().slice(0, 80), condo_name: cn, unit: un,
+                  condo: (cn + ' ' + un).trim().slice(0, 200), phone: String((r && r.phone) || '').trim().slice(0, 40) };
       if (data.amt_mode === 'part') o.amt = num(r && r.amt);
       return o;
     });
     if (!data.recipients.length) return fail('missing-transferee', 400);
     for (const r of data.recipients) {
-      if (!r.name || !r.condo || digits(r.phone).length < 9) return fail('missing-transferee', 400);
+      if (!r.name || !r.condo_name || !r.unit || digits(r.phone).length < 9) return fail('missing-transferee', 400);
       if (data.amt_mode === 'part' && (!(r.amt > 0) || r.amt > MAX_AMT)) return fail('invalid-amount', 400);
     }
     if (data.amt_mode === 'part') data.t_total = Math.round(data.recipients.reduce((a, r) => a + r.amt, 0) * 100) / 100;
@@ -72,13 +74,14 @@ export async function onRequestPost(context){
         amt: num(r && r.amt),
         qty: Math.floor(num(r && r.qty)),
         to: String((r && r.to) || '').trim().slice(0, 80),
-        condo: String((r && r.condo) || '').trim().slice(0, 200),
+        condo_name: String((r && r.condo_name) || '').trim().slice(0, 160),
+        unit: String((r && r.unit) || '').trim().slice(0, 40),
         phone: String((r && r.phone) || '').trim().slice(0, 40),
-      }));
+      })).map(v => Object.assign(v, { condo: (v.condo_name + ' ' + v.unit).trim() }));
       if (!data.vouchers.length) return fail('missing-vouchers', 400);
       for (const v of data.vouchers) {
         if (!(v.amt > 0 && v.amt <= MAX_AMT && v.qty > 0 && v.qty <= MAX_QTY)) return fail('invalid-voucher', 400);
-        if (!v.to || !v.condo || digits(v.phone).length < 9) return fail('missing-voucher-recipient', 400);
+        if (!v.to || !v.condo_name || !v.unit || digits(v.phone).length < 9) return fail('missing-voucher-recipient', 400);
       }
       data.v_total = Math.round(data.vouchers.reduce((a, r) => a + r.amt * r.qty, 0) * 100) / 100;
       data.v_count = data.vouchers.reduce((a, r) => a + r.qty, 0);
