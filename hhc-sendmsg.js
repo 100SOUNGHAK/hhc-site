@@ -239,12 +239,14 @@ function bkcKk(b,en){
           d:(w?w+'\n':'')+(en?'Work Permit registration required.':'작업방문등록 필수 요망.')};
 }
 // 💛 의뢰 접수 카카오 카드 전용 본문 (2026-11-23) — 품목 목록 대신 한 줄. 왓츠앱·복사 문구는 그대로
+// 📅 예약 신청(날짜 고르기) 카카오 카드 전용 본문 (2026-11-23) — 품목 목록 대신
+function bkqKk(en){return en?'Please tap the link below to confirm your date.':'아래 링크 클릭 후 일정 확정 부탁드립니다.';}
 function rqKk(en){return en?'Our staff will check and get back to you.':'담당자가 확인 후 안내드리겠습니다.';}
 window.HHCMsg={
   BASE:BASE,SIG:SIG,ITEM_EN:ITEM_EN,
   toEn:toEn,trItemsEn:trItemsEn,sEnIt:sEnIt,rqIcon:rqIcon,rqItemLines2:rqItemLines2,
   bkcWhen:bkcWhen,sHi:sHi,wpLink:wpLink,myLink:myLink,
   noBold:noBold,whenOf:whenOf,lk:lk,
-  rq:rq,rqKk:rqKk,bkc:bkc,bkcKk:bkcKk
+  rq:rq,rqKk:rqKk,bkqKk:bkqKk,bkc:bkc,bkcKk:bkcKk
 };
 })();
