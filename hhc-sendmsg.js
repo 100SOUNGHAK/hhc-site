@@ -238,11 +238,13 @@ function bkcKk(b,en){
   return {t:en?'Booking confirmed':'예약이 확정되었습니다',
           d:(w?w+'\n':'')+(en?'Work Permit registration required.':'작업방문등록 필수 요망.')};
 }
+// 💛 의뢰 접수 카카오 카드 전용 본문 (2026-11-23) — 품목 목록 대신 한 줄. 왓츠앱·복사 문구는 그대로
+function rqKk(en){return en?'Our staff will check and get back to you.':'담당자가 확인 후 안내드리겠습니다.';}
 window.HHCMsg={
   BASE:BASE,SIG:SIG,ITEM_EN:ITEM_EN,
   toEn:toEn,trItemsEn:trItemsEn,sEnIt:sEnIt,rqIcon:rqIcon,rqItemLines2:rqItemLines2,
   bkcWhen:bkcWhen,sHi:sHi,wpLink:wpLink,myLink:myLink,
   noBold:noBold,whenOf:whenOf,lk:lk,
-  rq:rq,bkc:bkc,bkcKk:bkcKk
+  rq:rq,rqKk:rqKk,bkc:bkc,bkcKk:bkcKk
 };
 })();
