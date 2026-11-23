@@ -171,6 +171,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   <div class="pane" data-pane="inspect"><div class="pane-empty"><div class="spinner"></div></div></div>
   <div class="pane" data-pane="contract"><div class="pane-empty"><div class="spinner"></div></div></div>
   <div class="pane" data-pane="coupon"><div class="pane-empty"><div class="spinner"></div></div></div>
+  <div class="pane" data-pane="transfer"><div class="pane-empty"><div class="spinner"></div></div></div>
   <div class="pane" data-pane="expense"><div class="pane-empty"><div class="spinner"></div></div></div>
   <div class="pane" data-pane="quote"><div class="pane-empty"><div class="spinner"></div></div></div>
   <div class="pane" data-pane="homepage"><div class="pane-empty"><div class="spinner"></div></div></div>
@@ -203,6 +204,7 @@ var MENU=[
     {id:'inspect',  name:'점검보고서', icon:'🔧', src:'inspect-admin'},
     {id:'contract', name:'계약',       icon:'📑', src:'admin'},
     {id:'coupon',   name:'상품·할인권', icon:'🎫', src:'coupon-admin'},
+    {id:'transfer', name:'양도·전환',  icon:'🔁', src:'transfer-admin'},   // 회원권 잔액 양도 · 상품권 전환 신청 (2026-11-23)
     {id:'quote',    name:'견적서',     icon:'🧾', src:'quote-admin'}
   ]},
   {gid:'etc',  gname:'기타', gicon:'📂', items:[
@@ -513,8 +515,9 @@ try{db=hhcFastDb(initializeApp(CFG));}catch(e){}
 // ── 이미 본 문서 기억 (새로고침해도 같은 건으로 다시 울리지 않음) ──
 function loadSeen(k){try{return new Set(JSON.parse(localStorage.getItem(k)||'[]'));}catch(e){return new Set();}}
 function saveSeen(k,set){try{localStorage.setItem(k,JSON.stringify([...set].slice(-600)));}catch(e){}}
-const SEEN={requests:loadSeen('hhc_alert_rq'),bookings:loadSeen('hhc_alert_bk2')};
-const PEND={request:0,booking:0};
+const SEEN={requests:loadSeen('hhc_alert_rq'),bookings:loadSeen('hhc_alert_bk2'),transfer_reqs:loadSeen('hhc_alert_tr')};
+const PEND={request:0,booking:0,transfer:0};
+function pendAll(){return PEND.request+PEND.booking+PEND.transfer;}
 // 이전 실행 이력이 있는지 (있으면 앱이 닫혀 있던 사이 도착한 건도 알림)
 const INIT=(function(){try{var v=localStorage.getItem('hhc_alert_init')==='1';localStorage.setItem('hhc_alert_init','1');return v;}catch(e){return false;}})();
 function recentDoc(d){var t=Date.parse(d.booked_at||d.submitted_at||'')||0;return t>0&&(Date.now()-t)<72*3600*1000;}
@@ -714,7 +717,9 @@ function refreshUI(){
   setBadge(document.getElementById('gb-book'),PEND.request+PEND.booking);
   setBadge(document.querySelector('.tab[data-tab="request"]'),PEND.request);
   setBadge(document.querySelector('.tab[data-tab="booking"]'),PEND.booking);
-  const tot=PEND.request+PEND.booking;
+  setBadge(document.getElementById('gb-bill'),PEND.transfer);                     // 「청구」 갈래 — 양도·전환 신청
+  setBadge(document.querySelector('.tab[data-tab="transfer"]'),PEND.transfer);
+  const tot=pendAll();
   const base=document.title.replace(/^\(\d+\+?\) /,'');
   document.title=(tot>0?'('+tot+') ':'')+base;
 }
@@ -726,7 +731,7 @@ function showToast(tab,kind,n){
   const old=document.querySelector('.ntoast');if(old)old.remove();
   clearTimeout(toastTimer);
   const d=document.createElement('div');d.className='ntoast';
-  d.innerHTML='<span class="ic">'+(tab==='request'?'📥':'🛎️')+'</span>'+
+  d.innerHTML='<span class="ic">'+(tab==='request'?'📥':tab==='transfer'?'🔁':'🛎️')+'</span>'+
     '<div><b>'+kind+' '+n+'건 도착</b><span>눌러서 바로 확인하세요</span></div>'+
     '<button class="x" aria-label="닫기">✕</button>';
   d.addEventListener('click',function(e){
@@ -744,7 +749,7 @@ function alertHit(tab,kind,n){
   if(window.__hhcActiveTab===tab&&!document.hidden){showToast(tab,kind,n);ding();return;}   // 그 화면을 보는 중 — 토스트·알림음만
   PEND[tab]+=n;
   refreshUI();
-  appBadge(PEND.request+PEND.booking);   // 홈 화면 앱 아이콘 배지 (지원 기기)
+  appBadge(pendAll());   // 홈 화면 앱 아이콘 배지 (지원 기기)
   showToast(tab,kind,n);
   ding();
   // 앱이 뒤로 가 있거나 화면이 꺼져 있으면 안드로이드 알림창으로도 표시 (아이콘에 알림 점)
@@ -753,7 +758,7 @@ function alertHit(tab,kind,n){
 function watch(collName,tab,kind,pred){
   if(!db)return;
   let ready=false;
-  const key=collName==='requests'?'hhc_alert_rq':'hhc_alert_bk2';
+  const key=collName==='requests'?'hhc_alert_rq':collName==='transfer_reqs'?'hhc_alert_tr':'hhc_alert_bk2';
   try{
     onSnapshot(collection(db,collName),snap=>{
       if(!ready){
@@ -800,13 +805,15 @@ function watch(collName,tab,kind,pred){
 watch('requests','request','📥 새 의뢰요청',()=>true);
 // 예약관리: 고객이 예약 신청을 완료(신청완료 상태)한 건
 watch('bookings','booking','🛎️ 새 예약신청',d=>String(d.status||'')==='booked');
+// 양도·전환: 고객이 /transfer 신청서로 접수한 건 (2026-11-23)
+watch('transfer_reqs','transfer','🔁 새 양도·전환 신청',()=>true);
 
 // 해당 탭을 열면 배지 해제
 window.__hhcAlertClear=function(tab){
   clearSysNotifs();
-  if(tab==='request'||tab==='booking'){PEND[tab]=0;}
+  if(tab==='request'||tab==='booking'||tab==='transfer'){PEND[tab]=0;}
   refreshUI();
-  appBadge(PEND.request+PEND.booking);
+  appBadge(pendAll());
   primeAudio();   // 탭 전환도 사용자 제스처 — 알림음 재생 준비
 };
 window.__hhcTestAlert=alertHit;   // 표시 점검용

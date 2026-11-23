@@ -67,7 +67,7 @@ self.addEventListener('push', function (e) {
     return;
   }
   var url = (typeof d.url === 'string' && d.url.charAt(0) === '/') ? d.url : '';   // 우리 사이트 안 주소만
-  var tab = url ? (d.tab || 'link') : (d.tab === 'booking' ? 'booking' : 'request');
+  var tab = url ? (d.tab || 'link') : (d.tab === 'booking' || d.tab === 'transfer' ? d.tab : 'request');   // transfer = 양도·전환 신청 (2026-11-23)
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
     // 2026-11-10: 알림은 항상 표시합니다.
     //  · 예전에는 앱 창이 「보이는 중」이면 건너뛰었는데, 화면이 꺼지거나 다른 앱으로 넘어간 뒤에도

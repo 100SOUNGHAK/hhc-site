@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>HHC 양도 · 상품권 전환 신청</title>
+<!-- ══════════════════════════════════════════════════════════════
+     🔁 양도 · 상품권 전환 신청 관리 (transfer-admin.html) — 2026-11-23
+       · 고객이 /transfer 신청서로 접수한 건 (컬렉션 transfer_reqs, 서버 창구 functions/api/transfer.js)
+       · 관리자 앱 「청구 → 양도·전환」 탭. 새 신청이 오면 앱 알림 + 배지 (staffapp.html watch)
+       · 상태: new 새 신청 → checking 확인 중 → done 처리 완료 / cancel 취소
+       · 실제 처리: 양도 = 계약 화면(admin.html)의 「🔁 양도」 · 상품권 = 상품·할인권(coupon-admin.html) 발급 후
+         계약 이용내역에 차감 — 이 화면은 신청 확인 · 연락 · 진행 상태 기록용입니다.
+     ══════════════════════════════════════════════════════════════ -->
+<style>
+:root{
+  --navy:#0E2350;--navy2:#16346E;--pri:#2563EB;--pri-bg:#EFF6FF;
+  --ink:#14192A;--ink2:#5A6478;--ink3:#98A1B4;--line:#E4E9F2;--soft:#F6F8FC;
+  --ok:#0E9B63;--ok-bg:#ECFDF5;--warn:#B45309;--warn-bg:#FFF7ED;--red:#DC2626;--red-bg:#FEF2F2;--gold:#B98A16;--gold-bg:#FEF9EC;
+  --e1:0 1px 2px rgba(11,24,51,.09),0 5px 12px -3px rgba(11,24,51,.14);
+  --e2:0 1px 2px rgba(11,24,51,.10),0 8px 16px -4px rgba(11,24,51,.16),0 26px 44px -14px rgba(11,24,51,.34);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;background:var(--soft);color:var(--ink);padding:14px;max-width:1060px;margin:0 auto;word-break:keep-all}
+button{font-family:inherit;cursor:pointer}
+.num{font-variant-numeric:tabular-nums}
+.hdr{background:linear-gradient(120deg,#0B1833,#1b2f58);border-radius:14px;padding:14px 18px;color:#fff;display:flex;align-items:center;gap:10px;margin-bottom:12px;
+  box-shadow:0 3px 8px rgba(6,18,45,.25),0 14px 30px -14px rgba(6,18,45,.6)}
+.hdr .lg{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-size:18px;background:rgba(255,255,255,.1)}
+.hdr h1{font-size:17px;font-weight:900}
+.hdr .hs{font-size:11px;font-weight:700;color:#B9C7E2}
+.hdr .sp{flex:1}
+.fb-dot{width:8px;height:8px;border-radius:50%;background:#64748b}
+.fb-dot.on{background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,.8)}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:10px;scrollbar-width:none}
+.chip{flex:none;font-size:13px;font-weight:800;border:1.5px solid var(--line);background:#fff;color:var(--ink2);border-radius:999px;padding:8px 14px;white-space:nowrap}
+.chip b{margin-left:4px;font-variant-numeric:tabular-nums}
+.chip.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.chip.hot b{color:var(--red)}.chip.on.hot b{color:#FCA5A5}
+.srch{width:100%;font:inherit;font-size:15px;font-weight:600;border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;background:#fff;margin-bottom:12px}
+.srch:focus{outline:none;border-color:var(--pri)}
+.list{display:grid;gap:10px}
+@media (min-width:760px){.list{grid-template-columns:1fr 1fr}}
+.card{background:#fff;border-radius:14px;padding:14px 15px;box-shadow:var(--e1);cursor:pointer;transition:transform .14s}
+.card:active{transform:scale(.99)}
+.card.new{box-shadow:0 0 0 2px #F0B429,var(--e1)}
+.r1{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.kd{font-size:12px;font-weight:900;padding:3px 9px;border-radius:999px}
+.kd.t{background:var(--pri-bg);color:#1d4ed8}.kd.v{background:var(--gold-bg);color:var(--gold)}
+.pill{font-size:11.5px;font-weight:850;padding:3px 9px;border-radius:999px}
+.pill.new{background:#FEF3C7;color:#92400E}.pill.checking{background:var(--pri-bg);color:#1d4ed8}.pill.done{background:var(--ok-bg);color:var(--ok)}.pill.cancel{background:#F1F3F7;color:var(--ink3)}
+.r1 .tm{margin-left:auto;font-size:12px;font-weight:700;color:var(--ink3)}
+.nm{margin-top:8px;font-size:16.5px;font-weight:900;letter-spacing:-.02em}
+.nm small{font-size:13px;font-weight:700;color:var(--ink2);margin-left:6px}
+.sm{margin-top:5px;font-size:14px;font-weight:700;color:var(--ink2);display:flex;gap:8px;flex-wrap:wrap}
+.sm .am{color:var(--ink)}
+.empty{grid-column:1/-1;background:#fff;border-radius:14px;padding:38px 20px;text-align:center;color:var(--ink2);font-size:14.5px;line-height:1.6;box-shadow:var(--e1)}
+.empty b{display:block;font-size:16px;color:var(--ink);margin-bottom:4px}
+/* 상세 */
+.dim{position:fixed;inset:0;z-index:40;background:rgba(10,20,40,.45);display:none;align-items:flex-end;justify-content:center}
+.dim.on{display:flex}
+.sheet{width:100%;max-width:620px;max-height:92vh;overflow-y:auto;background:var(--soft);border-radius:20px 20px 0 0;padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+@media (min-width:760px){.dim{align-items:center}.sheet{border-radius:20px;max-height:88vh}}
+.sh-hd{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:8px;padding:14px 16px;background:linear-gradient(120deg,#0B1833,#1b2f58);color:#fff}
+.sh-hd b{flex:1;font-size:16px;font-weight:900}
+.sh-hd .x{width:34px;height:34px;border-radius:10px;border:0;color:#fff;background:rgba(255,255,255,.12);font-size:16px}
+.box{margin:12px 14px 0;background:#fff;border-radius:14px;padding:14px 15px;box-shadow:var(--e1)}
+.box h4{font-size:13px;font-weight:900;color:var(--ink3);margin-bottom:8px}
+.kv{display:grid;grid-template-columns:96px 1fr;gap:6px 10px;font-size:14.5px}
+.kv span{color:var(--ink3);font-weight:700}
+.kv b{font-weight:800;word-break:break-all}
+.vt{width:100%;border-collapse:collapse;font-size:14px;margin-top:4px}
+.vt th{font-size:12px;color:var(--ink3);text-align:left;font-weight:800;padding:6px 4px;border-bottom:1px solid var(--line)}
+.vt td{padding:8px 4px;border-bottom:1px solid var(--line);font-weight:700}
+.vt tfoot td{border:0;font-weight:900}
+.vt .r{text-align:right}
+.vt .rs{margin-top:2px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+.ct{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--soft);margin-top:8px}
+.ct div{flex:1;font-size:14px;font-weight:800}
+.ct small{display:block;font-size:12px;font-weight:700;color:var(--ink2)}
+.ct .bal{font-size:16px;font-weight:900;color:var(--navy)}
+.nomatch{font-size:13.5px;color:var(--ink2);font-weight:600}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ab{display:flex;align-items:center;justify-content:center;gap:6px;min-height:46px;border-radius:12px;border:1.5px solid var(--line);background:#fff;font-size:14px;font-weight:850;color:var(--ink);text-decoration:none}
+.ab.pri{background:var(--navy);border-color:var(--navy);color:#fff}
+.ab.wa{background:#E7F7EE;border-color:#BEE8D0;color:#0B7A43}
+.ab:active{transform:scale(.98)}
+.stx{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.stx button{min-height:42px;border-radius:11px;border:1.5px solid var(--line);background:#fff;font-size:13px;font-weight:850;color:var(--ink2)}
+.stx button.on{background:var(--navy);border-color:var(--navy);color:#fff}
+textarea.memo{width:100%;min-height:76px;font:inherit;font-size:14.5px;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;resize:vertical}
+textarea.memo:focus{outline:none;border-color:var(--pri)}
+.memo-s{margin-top:8px;display:flex;justify-content:flex-end}
+.memo-s button{border:0;border-radius:10px;padding:9px 16px;font-size:13.5px;font-weight:850;background:var(--navy);color:#fff}
+.del{display:block;margin:16px auto 0;border:0;background:none;color:var(--red);font-size:13.5px;font-weight:800}
+.guide{font-size:13.5px;color:var(--ink2);line-height:1.6}
+.guide b{color:var(--ink)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:60;background:#0B1833;color:#fff;font-size:14px;font-weight:800;padding:11px 18px;border-radius:12px;box-shadow:var(--e2);display:none}
+.toast.on{display:block}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<script type="module" src="/hhc-auth.js"></script>
+</head>
+<body>
+<div class="hdr"><div class="lg">🔁</div><div><h1>양도 · 상품권 전환 신청</h1><div class="hs">고객이 /transfer 신청서로 접수한 내역</div></div><div class="sp"></div><span class="fb-dot" id="fb-dot" title="연결 상태"></span></div>
+<div class="chips" id="chips"></div>
+<input class="srch" id="q" type="search" placeholder="이름 · 콘도 · 전화 · 접수번호 · 계약번호 검색" autocomplete="off">
+<div class="list" id="list"><div class="empty">불러오는 중…</div></div>
+<div class="dim" id="dim"><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, doc, updateDoc, deleteDoc, onSnapshot, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+function hhcFastDb(app){
+  try{return initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager(),cacheSizeBytes:150*1024*1024}),experimentalAutoDetectLongPolling:true});}
+  catch(e){return getFirestore(app);}
+}
+const FIREBASE_CFG={
+  apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",
+  authDomain:"happywork-packageplan.firebaseapp.com",
+  projectId:"happywork-packageplan",
+  storageBucket:"happywork-packageplan.firebasestorage.app",
+  messagingSenderId:"101289103022",
+  appId:"1:101289103022:web:d81aca7f3747dd26df673f"
+};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>(Number(n)||0).toLocaleString('en-MY',{minimumFractionDigits:0,maximumFractionDigits:2});
+const pn=p=>{p=String(p||'').replace(/\D/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');};
+const nn=s=>String(s||'').toLowerCase().replace(/\s+/g,'');
+const ST={new:'새 신청',checking:'확인 중',done:'처리 완료',cancel:'취소'};
+const RS={home:'✈️ 귀국',abroad:'🌏 타 국가 이주'};
+let db=null,ALL=[],CT=[],curF='open',openId=null;
+
+function when(iso){const d=new Date(iso);if(isNaN(d))return '';const t=Date.now()-d;
+  if(t<3600e3)return Math.max(1,Math.round(t/60e3))+'분 전';if(t<86400e3)return Math.round(t/3600e3)+'시간 전';
+  return (d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function amtTxt(r){
+  if(r.kind==='transfer')return r.amt_mode==='part'?'RM '+fmt(r.t_total!=null?r.t_total:r.amt)+(Array.isArray(r.recipients)&&r.recipients.length>1?' · '+r.recipients.length+'명':''):'잔액 전부';
+  return r.v_mode==='split'?'RM '+fmt(r.v_total)+' · '+(r.v_count||0)+'장':'잔액 전부 1장';
+}
+/* 계약 잔액 — admin.html ncBalance 와 같은 계산 (참고용) */
+function bal(c){
+  const total=(parseFloat(c.amount_paid)||0)+(parseFloat(c.bonus_credit)||0)+(parseFloat(c.special_bonus_credit)||0);
+  let h=[];try{h=typeof c.usage_history==='string'?JSON.parse(c.usage_history||'[]'):(c.usage_history||[]);}catch(e){}
+  const s=k=>h.reduce((a,u)=>a+(parseFloat(u[k])||0),0);
+  return total-s('amount')+s('discount')+s('carryover');
+}
+/* 신청과 맞는 계약 찾기 — 계약번호 > 전화번호 > 이름 */
+function matchCt(r){
+  const no=nn(r.contract_no).replace(/-/g,''),p=pn(r.phone),n=nn(r.name);
+  let m=[];
+  if(no)m=CT.filter(c=>nn(c.contract_no).replace(/-/g,'')===no);
+  if(!m.length&&p.length>=7)m=CT.filter(c=>pn(c.phone)===p);
+  if(!m.length&&n)m=CT.filter(c=>nn(c.name)===n);
+  return m.sort((a,b)=>(a.status==='ended')-(b.status==='ended'));
+}
+function counts(){const c={open:0,new:0,checking:0,done:0,cancel:0,all:ALL.length};
+  ALL.forEach(r=>{c[r.status]=(c[r.status]||0)+1;if(r.status==='new'||r.status==='checking')c.open++;});return c;}
+function paintChips(){
+  const c=counts(),F=[['open','진행 중'],['new','새 신청'],['checking','확인 중'],['done','처리 완료'],['cancel','취소'],['all','전체']];
+  $('chips').innerHTML=F.map(f=>'<button type="button" class="chip'+(curF===f[0]?' on':'')+(f[0]==='new'&&c.new?' hot':'')+'" data-f="'+f[0]+'">'+f[1]+'<b>'+(c[f[0]]||0)+'</b></button>').join('');
+}
+function paint(){
+  paintChips();
+  const q=nn($('q').value);
+  const rows=ALL.filter(r=>{
+    if(curF==='open'&&!(r.status==='new'||r.status==='checking'))return false;
+    if(curF!=='open'&&curF!=='all'&&r.status!==curF)return false;
+    if(!q)return true;
+    return [r.name,r.condo,r.phone,r.ref,r.contract_no,r.to_name,r.to_phone].concat((r.recipients||[]).map(x=>x.name+' '+x.phone+' '+x.condo)).some(x=>nn(x).indexOf(q)>=0);
+  });
+  if(!rows.length){
+    $('list').innerHTML='<div class="empty">'+(ALL.length?'<b>조건에 맞는 신청이 없습니다</b>위의 「전체」를 눌러 지난 신청을 보세요.'
+      :'<b>아직 접수된 신청이 없습니다</b>고객이 /transfer 안내장에서 신청하면 여기에 보이고 앱 알림이 울립니다.')+'</div>';return;
+  }
+  $('list').innerHTML=rows.map(r=>{
+    const t=r.kind==='transfer';
+    return '<div class="card'+(r.status==='new'?' new':'')+'" data-id="'+r.__id+'"><div class="r1">'+
+      '<span class="kd '+(t?'t':'v')+'">'+(t?'🔁 양도':'🎁 상품권 전환')+'</span><span class="pill '+esc(r.status)+'">'+(ST[r.status]||r.status)+'</span>'+
+      '<span class="tm">'+when(r.submitted_at)+'</span></div>'+
+      '<div class="nm">'+esc(r.name)+'<small>'+esc(r.condo)+'</small></div>'+
+      '<div class="sm">'+(t?'<span>→ '+esc(r.to_name)+'</span>':'')+'<span class="am num">'+amtTxt(r)+'</span><span>'+(RS[r.reason]||'')+(r.leave_date?' · '+r.leave_date.slice(5).replace('-','/')+' 출국':'')+'</span></div></div>';
+  }).join('');
+}
+function waLink(phone,msg){let p=String(phone||'').replace(/\D/g,'');if(p.indexOf('0')===0)p='6'+p;return 'https://wa.me/'+p+'?text='+encodeURIComponent(msg);}
+function openSheet(id){
+  const r=ALL.find(x=>x.__id===id);if(!r)return;openId=id;
+  const t=r.kind==='transfer',en=r.lang==='en',ms=matchCt(r);
+  const msg=en?('Hello '+r.name+', this is Happy Home Care. We have received your '+(t?'balance transfer':'e-voucher conversion')+' application ('+(r.ref||'')+'). We will check your remaining balance and get back to you shortly.')
+    :('안녕하세요 '+r.name+'님, 해피홈케어입니다. 회원권 잔액 '+(t?'양도':'상품권 전환')+' 신청('+(r.ref||'')+')을 접수했습니다. 남은 잔액을 확인한 뒤 다시 연락드리겠습니다.');
+  const sub=x=>[x.condo,x.phone].filter(Boolean).map(esc).join(' · ');
+  const vt=(!t&&r.v_mode==='split'&&Array.isArray(r.vouchers))?'<table class="vt"><thead><tr><th>장당 금액 × 장수</th><th>받는 분</th><th class="r">합계</th></tr></thead><tbody>'+
+    r.vouchers.map(v=>'<tr><td class="num">RM '+fmt(v.amt)+' × '+v.qty+'</td><td>'+esc(v.to||'본인')+(sub(v)?'<div class="rs">'+sub(v)+'</div>':'')+'</td><td class="r num">RM '+fmt(v.amt*v.qty)+'</td></tr>').join('')+
+    '</tbody><tfoot><tr><td colspan="2">상품권 합계 · '+(r.v_count||0)+'장</td><td class="r num">RM '+fmt(r.v_total)+'</td></tr></tfoot></table>':'';
+  // 양도 받는 분 (여러 명 · 2026-11-23) — 예전 신청(to_name·to_phone 만 있는 것)도 한 줄로 보여 줍니다
+  const RC=t?(Array.isArray(r.recipients)&&r.recipients.length?r.recipients:[{name:r.to_name,phone:r.to_phone,amt:r.amt}]):[];
+  const rt=t?'<table class="vt"><thead><tr><th>받는 분</th><th class="r">양도 금액</th></tr></thead><tbody>'+
+    RC.map(x=>'<tr><td>'+esc(x.name||'')+(x.phone?' <a href="'+waLink(x.phone,'')+'" target="_blank" rel="noopener" title="왓츠앱" style="text-decoration:none">💬</a>':'')+(sub(x)?'<div class="rs">'+sub(x)+'</div>':'')+'</td><td class="r num">'+(r.amt_mode==='part'?'RM '+fmt(x.amt):'잔액 전부')+'</td></tr>').join('')+
+    '</tbody>'+(r.amt_mode==='part'&&RC.length>1?'<tfoot><tr><td>양도 합계 · '+RC.length+'명</td><td class="r num">RM '+fmt(r.t_total)+'</td></tr></tfoot>':'')+'</table>':'';
+  const ct=ms.length?ms.slice(0,3).map(c=>'<div class="ct"><div>'+esc(c.contract_no||'(번호 없음)')+(c.status==='ended'?' · 종료':'')+'<small>'+esc(c.name||'')+' · '+esc(c.residence||'')+'</small></div><span class="bal num">RM '+fmt(bal(c))+'</span></div>').join('')+
+    '<div class="guide" style="margin-top:6px">잔액은 계약 화면과 같은 계산(참고용)입니다.</div>'
+    :'<div class="nomatch">이름 · 전화번호 · 계약번호로 맞는 계약을 찾지 못했습니다. 계약 화면에서 직접 찾아 주세요.</div>';
+  const how=t?'<b>처리 방법</b> — 계약 화면에서 해당 계약의 <b>「🔁 이 계약을 다른 분께 양도」</b>로 양도양수 계약서를 만들고, 양도금액'+(r.amt_mode==='part'?'(위 표의 금액)':'(잔액 전부)')+'을 넣어 저장합니다. 받는 분이 여러 명이면 한 분씩 차례로 양도양수 계약서를 만듭니다(일부 양도). 받는 분께 MY PAGE 링크를 보낸 뒤 「처리 완료」로 바꿔 주세요.'
+    :'<b>처리 방법</b> — 상품·할인권 화면에서 상품권을 '+(r.v_mode==='split'?'표대로 발급':'잔액 전부 1장으로 발급')+'(유효기간 1년, 자동)하고, 계약 이용내역에 발급 금액만큼 차감 줄을 넣습니다. 상품권 전환 후 회원 혜택은 종료됩니다.';
+  $('sheet').innerHTML='<div class="sh-hd"><b>'+(t?'🔁 잔액 양도':'🎁 상품권 전환')+' · '+esc(r.name)+'</b><button class="x" type="button" data-close="1">✕</button></div>'+
+    '<div class="box"><h4>진행 상태</h4><div class="stx">'+Object.keys(ST).map(k=>'<button type="button" data-st="'+k+'" class="'+(r.status===k?'on':'')+'">'+ST[k]+'</button>').join('')+'</div>'+
+      (r.processed_at?'<div class="guide" style="margin-top:8px">처리 완료 '+when(r.processed_at)+'</div>':'')+'</div>'+
+    '<div class="box"><h4>신청 내용</h4><div class="kv">'+
+      '<span>접수번호</span><b>'+esc(r.ref||'-')+'</b><span>접수</span><b>'+when(r.submitted_at)+'</b>'+
+      '<span>사유</span><b>'+(RS[r.reason]||'-')+(r.leave_date?' · '+esc(r.leave_date)+' 출국 예정':'')+'</b>'+
+      '<span>계약자</span><b>'+esc(r.name)+'</b><span>서비스 대상</span><b>'+esc(r.condo)+'</b>'+
+      '<span>전화</span><b>'+esc(r.phone)+'</b><span>계약번호</span><b>'+esc(r.contract_no||'(모름)')+'</b>'+
+      '<span>금액</span><b class="num">'+amtTxt(r)+'</b>'+
+      (r.bal_shown?'<span>고객이 본 잔액</span><b class="num">RM '+fmt(r.bal_shown)+(r.bal_date?' <small style="color:var(--ink3)">('+esc(r.bal_date)+' 기준)</small>':'')+'</b>':'')+
+      (r.remarks?'<span>남긴 말</span><b style="white-space:pre-wrap">'+esc(r.remarks)+'</b>':'')+
+      '<span>언어</span><b>'+(en?'English':'한국어')+'</b></div>'+rt+vt+'</div>'+
+    '<div class="box"><h4>맞는 계약 · 현재 잔액</h4>'+ct+'</div>'+
+    '<div class="box"><h4>연락 · 처리</h4><div class="acts">'+
+      '<a class="ab wa" target="_blank" rel="noopener" href="'+waLink(r.phone,msg)+'">💬 신청자에게 접수 안내</a>'+
+      (t?'<a class="ab wa" target="_blank" rel="noopener" href="'+waLink((RC[0]&&RC[0].phone)||r.to_phone,'')+'">💬 받는 분께 연락'+(RC.length>1?' (1번)':'')+'</a>':'<button class="ab" type="button" data-go="coupon">🎫 상품권 발급 화면</button>')+
+      '<button class="ab pri" type="button" data-go="contract">📑 계약 화면 열기</button>'+
+      '<a class="ab" href="tel:'+esc(String(r.phone).replace(/[^0-9+]/g,''))+'">📞 전화하기</a>'+
+    '</div><p class="guide" style="margin-top:10px">'+how+'</p></div>'+
+    '<div class="box"><h4>관리자 메모</h4><textarea class="memo" id="memo" placeholder="예) 잔액 RM 3,200 확인 · 받는 분과 통화 완료">'+esc(r.admin_note||'')+'</textarea><div class="memo-s"><button type="button" data-memo="1">메모 저장</button></div></div>'+
+    '<button class="del" type="button" data-del="1">이 신청 삭제</button>';
+  $('dim').classList.add('on');document.body.style.overflow='hidden';
+  if(r.status==='new')setStatus(id,'checking',true);   // 열어 보면 「확인 중」으로
+}
+function closeSheet(){$('dim').classList.remove('on');document.body.style.overflow='';openId=null;}
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),2200);}
+async function setStatus(id,st,quiet){
+  const up={status:st,updated_at:new Date().toISOString()};
+  if(st==='done')up.processed_at=new Date().toISOString();
+  try{await updateDoc(doc(db,'transfer_reqs',id),up);if(!quiet)toast('「'+ST[st]+'」로 바꿨습니다');}catch(e){toast('저장 실패: '+e.message);}
+}
+function goTab(tab,copy){
+  if(copy){try{navigator.clipboard.writeText(copy);toast('계약번호 '+copy+' 복사 — 계약 화면 검색칸에 붙여 넣으세요');}catch(e){}}
+  try{if(window.parent&&window.parent!==window&&window.parent.activate){window.parent.activate(tab);return;}}catch(e){}
+  location.href=tab==='coupon'?'coupon-admin.html':'admin.html';
+}
+document.addEventListener('click',async e=>{
+  const ch=e.target.closest('[data-f]');if(ch){curF=ch.dataset.f;paint();return;}
+  const cd=e.target.closest('.card');if(cd){openSheet(cd.dataset.id);return;}
+  if(e.target===$('dim')||e.target.closest('[data-close]')){closeSheet();return;}
+  const b=e.target.closest('button');if(!b||!openId)return;
+  const r=ALL.find(x=>x.__id===openId);if(!r)return;
+  if(b.dataset.st){await setStatus(openId,b.dataset.st);return;}
+  if(b.dataset.go){const m=matchCt(r)[0];goTab(b.dataset.go,b.dataset.go==='contract'&&m?m.contract_no:'');return;}
+  if(b.dataset.memo){try{await updateDoc(doc(db,'transfer_reqs',openId),{admin_note:$('memo').value.trim(),updated_at:new Date().toISOString()});toast('메모를 저장했습니다');}catch(er){toast('저장 실패: '+er.message);}return;}
+  if(b.dataset.del){if(!confirm('이 신청을 삭제할까요? 되돌릴 수 없습니다.'))return;try{await deleteDoc(doc(db,'transfer_reqs',openId));closeSheet();toast('삭제했습니다');}catch(er){toast('삭제 실패: '+er.message);}}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();});
+$('q').addEventListener('input',paint);
+
+try{
+  const app=initializeApp(FIREBASE_CFG);db=hhcFastDb(app);
+  onSnapshot(collection(db,'transfer_reqs'),snap=>{
+    window.__hhcReady&&window.__hhcReady();
+    ALL=snap.docs.map(d=>Object.assign({__id:d.id},d.data()||{})).sort((a,b)=>String(b.submitted_at||'').localeCompare(String(a.submitted_at||'')));
+    $('fb-dot').classList.add('on');paint();
+    if(openId&&$('dim').classList.contains('on')){const keep=$('memo')?$('memo').value:null;const sc=$('sheet').scrollTop;openSheet(openId);if(keep!=null)$('memo').value=keep;$('sheet').scrollTop=sc;}
+  },err=>{$('list').innerHTML='<div class="empty"><b>신청 내역을 불러오지 못했습니다</b>'+esc(err.message)+'</div>';});
+  // 계약 목록 — 신청과 맞는 계약 · 잔액 표시용 (읽기만)
+  onSnapshot(collection(db,'contracts'),snap=>{CT=snap.docs.map(d=>Object.assign({__id:d.id},d.data()||{}));if(openId)openSheet(openId);},()=>{});
+}catch(e){$('list').innerHTML='<div class="empty"><b>연결에 실패했습니다</b>'+esc(e.message)+'</div>';}
+</script>
+<script>
+/* ══ 허브(staffapp.html) 안에서 열렸을 때 「화면 살아있음」 신호 — review-admin.html 과 같은 코드 ══ */
+(function(){
+  if(window.top===window.self)return;
+  var ready=false,KEY='hhc_wd:'+location.pathname,n=0;
+  try{n=parseInt(sessionStorage.getItem(KEY)||'0',10)||0;}catch(e){}
+  function post(m){try{window.parent.postMessage(m,'*');}catch(e){}}
+  window.__hhcReady=function(){if(ready)return;ready=true;try{sessionStorage.removeItem(KEY);}catch(e){}post({hhcReady:1});};
+  window.addEventListener('message',function(e){var d=e&&e.data;if(d&&d.hhcPing)post({hhcPong:1,ready:ready});});
+  post({hhcHello:1});
+  setTimeout(function(){
+    if(ready)return;
+    if(navigator.onLine===false||document.visibilityState!=='visible'){post({hhcStuck:1,soft:1});return;}
+    post({hhcStuck:1});
+  },40000);
+})();
+</script>
+</body>
+</html>
