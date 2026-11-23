@@ -101,10 +101,10 @@
       '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="190">' +
       '<g transform="rotate(-24 150 95)" font-family="-apple-system,Segoe UI,Noto Sans KR,sans-serif" text-anchor="middle">' +
       /* 밝은 바탕용 진한 글씨 + 어두운 바탕용 흰 글씨를 겹쳐 어디서나 은은하게 보이게 */
-      '<text x="150" y="92" font-size="15" font-weight="700" fill="rgba(15,37,64,.075)">' + esc(l1) + '</text>' +
-      '<text x="150" y="112" font-size="11" font-weight="600" fill="rgba(15,37,64,.065)">' + esc(l2) + '</text>' +
-      '<text x="151" y="93" font-size="15" font-weight="700" fill="rgba(255,255,255,.06)">' + esc(l1) + '</text>' +
-      '<text x="151" y="113" font-size="11" font-weight="600" fill="rgba(255,255,255,.05)">' + esc(l2) + '</text>' +
+      '<text x="150" y="92" font-size="15" font-weight="700" fill="rgba(15,37,64,.22)">' + esc(l1) + '</text>' +
+      '<text x="150" y="112" font-size="11" font-weight="600" fill="rgba(15,37,64,.19)">' + esc(l2) + '</text>' +
+      '<text x="151" y="93" font-size="15" font-weight="700" fill="rgba(255,255,255,.19)">' + esc(l1) + '</text>' +
+      '<text x="151" y="113" font-size="11" font-weight="600" fill="rgba(255,255,255,.16)">' + esc(l2) + '</text>' +
       '</g></svg>';
     var d = D.createElement('div');
     d.id = 'hhc-wm';
