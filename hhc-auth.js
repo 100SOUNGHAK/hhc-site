@@ -247,6 +247,9 @@ function start(){
     first = false;
     if (allowed(u)) {
       window.HHCAuth.user = u; window.HHCAuth.email = u.email || '';
+      // 🛡 관리자 기기 표시 (2026-11-23) — 고객 마이페이지(my.html)가 이 표시를 보고
+      //    「설치된 마이페이지 앱의 고객」을 다른 고객 링크로 자동 변경하지 않습니다.
+      try { localStorage.setItem('hhc_admin_dev', '1'); } catch (_) {}
       unlock(); chip(u); resolveReady(u);
     } else if (u) {
       A.out().catch(()=>{}); viewDenied(u);

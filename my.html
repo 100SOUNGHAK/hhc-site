@@ -1232,9 +1232,19 @@ let CID=(P0.get('c')||'').trim();
 //    이 기기를 그 고객의 알림 기기로 등록하지도 않습니다.
 let IS_PV=false;try{IS_PV=P0.get('pv')==='1'||window.top!==window.self;}catch(e){IS_PV=true;}
 // 고객번호 기억 : 주소에 c 없이 열려도(설치된 앱 아이콘 등) 마지막 고객 페이지로 다시 엽니다 — 기존 마이페이지와 같은 저장값(hhc_my_last)
+// 🛡 관리자 휴대폰 보호 (2026-11-23) : 관리자 로그인을 한 기기(hhc_admin_dev — hhc-auth.js 가 표시)에서는
+//    이미 정해진 앱 고객을 다른 고객 링크(왓츠앱·카톡에서 확인차 연 링크 등)로 자동으로 바꾸지 않습니다.
+//    바꾸려면 화면 아래 「이 고객으로 앱 바꾸기」를 직접 누릅니다. 실제 고객 휴대폰은 예전과 똑같이 동작합니다.
+let PIN_OTHER='';
+function myPinSave(){try{localStorage.setItem('hhc_my_last',JSON.stringify({c:CID,v:P0.get('v')||'',lang:P0.get('lang')||''}));localStorage.setItem('hhc_myc_last',CID);}catch(e){}}
 try{
   if(CID&&IS_PV){/* 미리보기 — 기억하지 않음 */}
-  else if(CID){localStorage.setItem('hhc_my_last',JSON.stringify({c:CID,v:P0.get('v')||'',lang:P0.get('lang')||''}));localStorage.setItem('hhc_myc_last',CID);}
+  else if(CID){
+    let _adm=false;try{_adm=localStorage.getItem('hhc_admin_dev')==='1';}catch(e){}
+    const _o=JSON.parse(localStorage.getItem('hhc_my_last')||'null'),_oc=(_o&&_o.c)||localStorage.getItem('hhc_myc_last')||'';
+    if(_adm&&_oc&&_oc!==CID)PIN_OTHER=_oc;   // 관리자 휴대폰 — 앱 고객 유지
+    else myPinSave();
+  }
   else{const _s=JSON.parse(localStorage.getItem('hhc_my_last')||'null');const _c=(_s&&_s.c)||localStorage.getItem('hhc_myc_last')||'';
     if(_c){const q=new URLSearchParams(location.search);q.set('c',_c);if(_s&&_s.v&&!q.get('v'))q.set('v',_s.v);if(_s&&_s.lang&&!q.get('lang'))q.set('lang',_s.lang);location.replace(location.pathname+'?'+q.toString()+location.hash);}}
 }catch(e){}
@@ -2280,6 +2290,27 @@ document.addEventListener('click',e=>{
 document.addEventListener('click',e=>{const l=e.target.closest('[data-l]');if(l){LANG=l.dataset.l;render();return;}const a=e.target.closest('[data-a]');if(a){SX.setRet(null);SX.act(a.dataset.a,a);return;}if(e.target.closest('[data-t]'))toast();});
 document.addEventListener('DOMContentLoaded',boot);
 
+</script>
+<script>
+/* 🛡 관리자 휴대폰 안내 줄 (2026-11-23) — PIN_OTHER 가 있을 때(관리자 기기 + 앱 고객이 다른 고객)만 보입니다. 고객 휴대폰에는 뜨지 않음. */
+(function(){
+  if(!PIN_OTHER||IS_PV)return;
+  function show(){
+    if(document.getElementById('pin-bar'))return;
+    const s=document.createElement('style');
+    s.textContent='#pin-bar{position:fixed;left:10px;right:10px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:9600;background:#0B1833;color:#fff;border:1px solid rgba(227,201,138,.55);border-radius:14px;padding:10px 12px;box-shadow:0 10px 28px rgba(11,24,51,.35);font-size:12.5px;line-height:1.5;display:flex;gap:9px;align-items:center}'+
+      '#pin-bar .t{flex:1;min-width:0}#pin-bar b{color:#E3C98A}#pin-bar button{border:0;border-radius:10px;padding:8px 10px;font-weight:800;font-size:12px;cursor:pointer}'+
+      '#pin-bar .go{background:#E3C98A;color:#0B1833}#pin-bar .x{background:rgba(255,255,255,.12);color:#fff;padding:8px 9px}';
+    document.head.appendChild(s);
+    const b=document.createElement('div');b.id='pin-bar';
+    b.innerHTML='<div class="t">🛡 <b>관리자 휴대폰</b> · 설치된 마이페이지 앱은 다른 고객으로 유지됩니다 (이 고객으로 바뀌지 않음)</div>'+
+      '<button type="button" class="go">이 고객으로 앱 바꾸기</button><button type="button" class="x" aria-label="닫기">✕</button>';
+    b.querySelector('.go').onclick=function(){myPinSave();PIN_OTHER='';b.innerHTML='<div class="t">✅ 설치된 마이페이지 앱을 이 고객으로 바꿨습니다</div>';setTimeout(function(){b.remove();},2200);};
+    b.querySelector('.x').onclick=function(){b.remove();};
+    document.body.appendChild(b);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',show);else show();
+})();
 </script>
 </body>
 </html>
