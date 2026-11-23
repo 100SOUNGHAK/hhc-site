@@ -24,6 +24,7 @@
 //      · exempt: 패키지 회원(유효 계약 적립잔액 합계 RM500 초과) · warranty: 마지막 에어컨 서비스 30일 이내
 //      · 잔액 RM500 이하면 회원 면제 제외 (무상점검 제한 규정). 금액·계약 내용은 돌려주지 않음
 //      · 고객 문서 찾는 규칙은 /api/my 와 같음 (ca_links · ca_link · ca_off · 전화/이름)
+//      · loc: 고객관리에 등록된 고객 위치가 있으면 {lat,lng,name,addr,pid,km,minutes,path} (없으면 null) — 2026-11-23
 // ─────────────────────────────────────────────────────────────────────────────
 import { json, fail, rateLimited, originAllowed, getDoc, listAll, batchGet, nn, pn } from './_lib/fs.js';
 
@@ -35,7 +36,7 @@ export async function onRequestGet(context){
   const q = new URL(request.url).searchParams;
   const ready = !!(env.GMAPS_BROWSER_KEY && env.GMAPS_SERVER_KEY && env.HHC_ORIGIN);
 
-  if (q.get('mem')) return memberExempt(request, env, (q.get('c') || '').trim());
+  if (q.get('mem')) return memberExempt(context, ready, (q.get('c') || '').trim());
   if (q.get('eta')) return eta(request, env, q);
 
   if (q.get('cfg')) {
@@ -52,12 +53,20 @@ export async function onRequestGet(context){
   // 말레이시아 범위 밖이면 거절
   if (!isFinite(lat) || !isFinite(lng) || lat < 0.8 || lat > 7.6 || lng < 99.5 || lng > 119.5) return fail('bad-location', 400);
 
-  // 같은 위치(약 11m 격자)는 30일 동안 저장해 둔 결과를 씀 → 구글 호출 절약
+  const out = await routeTo(context, lat, lng);
+  if (out.status) return fail(out.error, out.status);
+  return json(out);
+}
+
+// 출발지 → (lat,lng) 자동차 최단 경로 — 같은 위치(약 11m 격자)는 30일 저장해 둔 결과를 씀 (구글 호출 절약)
+//  · 실패: {status, error} (화면 오류) 또는 {ok:false, error:'no-route'}
+async function routeTo(context, lat, lng){
+  const { env } = context;
   const rl = lat.toFixed(4), rg = lng.toFixed(4);
   const cache = caches.default;
   const ckey = new Request('https://hhc-cache.internal/travel/v1/' + rl + ',' + rg);
   const hit = await cache.match(ckey);
-  if (hit) return json(await hit.json());
+  if (hit) return await hit.json();
 
   const origin = parseOrigin(env.HHC_ORIGIN);
   let r;
@@ -79,11 +88,11 @@ export async function onRequestGet(context){
         units: 'METRIC'
       })
     });
-  } catch (e) { return fail('route-unreachable', 502); }
-  if (!r.ok) return fail('route-error-' + r.status, 502);
+  } catch (e) { return { status: 502, error: 'route-unreachable' }; }
+  if (!r.ok) return { status: 502, error: 'route-error-' + r.status };
   const d = await r.json().catch(() => ({}));
   const routes = (d.routes || []).filter(x => x && x.distanceMeters > 0);
-  if (!routes.length) return json({ ok: false, error: 'no-route' }, 200);
+  if (!routes.length) return { ok: false, error: 'no-route' };
 
   const best = routes.reduce((a, b) => (b.distanceMeters < a.distanceMeters ? b : a));
   const meters = best.distanceMeters;
@@ -94,7 +103,7 @@ export async function onRequestGet(context){
   context.waitUntil(cache.put(ckey, new Response(JSON.stringify(out), {
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=2592000' }
   })));
-  return json(out);
+  return out;
 }
 
 // 🚗 이동중 안내 — 지금 위치 → 방문 위치 소요시간 (교통 반영, 구글맵 내비게이션 기준)
@@ -184,7 +193,8 @@ const CLEAN_RE = /세척|청소|살균|스팀|약품|wash|clean|steam|overhaul|c
 const NOT_CLEAN_RE = /출장점검|점검|수리|repair|inspect|냉매|refrigerant|가스|gas|설치|install|부품|part|진공|vacuum/i;
 const BASIC_RE = /기본\s*세척|basic/i;
 const WARRANTY_DAYS = 30, BASIC_DAYS = 7;
-async function memberExempt(request, env, CID){
+async function memberExempt(context, ready, CID){
+  const { request, env } = context;
   if (!originAllowed(request)) return fail('forbidden', 403);
   if (rateLimited(request, 'travel-mem', 20)) return fail('too many requests', 429);
   const none = { ok: true, exempt: false, warranty: false, last: '' };
@@ -237,7 +247,16 @@ async function memberExempt(request, env, CID){
       const age = Math.round((Date.parse(today) - Date.parse(d)) / 86400e3);
       if (L && age >= 0 && age <= L && d > last) { last = d; lim = L; }
     });
-    return json({ ok: true, exempt, warranty: !!last, last, days: lim });
+    // ③ 등록된 고객 위치(customers.loc)가 있으면 그 위치까지 거리·구역도 함께 (2026-11-23)
+    //    · 마이페이지 수리 요청 팝업 · /visit-fee 발송 링크가 주소 입력 없이 바로 금액을 보여 줌
+    let loc = null;
+    const L0 = m.loc;
+    if (ready && L0 && !L0.off && isFinite(L0.lat) && isFinite(L0.lng) && inMY(+L0.lat, +L0.lng)) {
+      const rt = await routeTo(context, +L0.lat, +L0.lng).catch(() => null);
+      if (rt && rt.ok) loc = { lat: +L0.lat, lng: +L0.lng, name: String(L0.name || ''), addr: String(L0.addr || ''), pid: String(L0.pid || ''),
+                               km: rt.km, minutes: rt.minutes, path: rt.path };
+    }
+    return json({ ok: true, exempt, warranty: !!last, last, days: lim, loc });
   } catch (e) {
     return json({ ok: false, exempt: false, warranty: false, last: '', days: 0 });
   }
