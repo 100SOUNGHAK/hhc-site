@@ -3900,6 +3900,7 @@ function unlinkContract(id){
         await updateDoc(doc(db,'contracts',old.__id),upd);
       }
       await deleteDoc(doc(db,'contracts',c.__id));
+      if(tr)await xfMemberUndo(c,old);
       if(c.transfer_req_id)try{await updateDoc(doc(db,'transfer_reqs',c.transfer_req_id),{['tin_ct.'+(parseInt(c.transfer_req_i)||0)]:null});}catch(_e){}
       if(currentEditId===c.__id)resetForm();
       showLoading(false);
@@ -3962,7 +3963,8 @@ setTimeout(()=>{const a=document.getElementById('f-tr-amt');if(a)a.addEventListe
 // 새 계약 저장 직후 — 기존 계약 정리 (넘겨준 금액만큼 차감, 잔액 0 이면 종료)
 async function rnCloseOld(newId,newData,amt){
   const r=renewFrom;renewFrom=null;rnNote();
-  if(!r)return;
+  if(!r)return null;
+  let _res={tr:r.mode==='transfer',oldId:r.id,ended:false};
   try{
     const old=allContracts.find(x=>x.__id===r.id);if(!old)return;
     const h=typeof old.usage_history==='string'?JSON.parse(old.usage_history||'[]'):(old.usage_history||[]);
@@ -3974,12 +3976,71 @@ async function rnCloseOld(newId,newData,amt){
       desc_en:tr?('Balance offset — '+(rem-give>0.005?'partial ':'')+'transfer to '+(newData.name||'')+' ('+newNo+')'):('Balance offset — carried over to renewal contract ('+newNo+')'),
       amount:give.toFixed(2),carryover:'0',discount:'0',member_amount:'0',link_move:'out',link_to:newId});
     const upd={usage_history:JSON.stringify(h),updated_at:new Date().toISOString()};
-    if(rem-give<=0.005)upd.status='ended';
+    if(rem-give<=0.005){upd.status='ended';_res.ended=true;}
     upd[tr?'transferred_to':'renewed_to']=newId;
     if(give>0.005){const ol=ncOffsets(old);ol.push({date:today(),kind:tr?'transfer':'renewal',partial:rem-give>0.005,amount:give.toFixed(2),before:rem.toFixed(2),after:Math.max(0,rem-give).toFixed(2),
       to_id:newId,to_no:newNo,to_name:newData.name||'',by:(window.HHCAuth&&typeof HHCAuth.email==='string'&&HHCAuth.email)||'',at:new Date().toISOString()});upd.offset_log=JSON.stringify(ol);}
     await updateDoc(doc(db,'contracts',r.id),upd);
-  }catch(e){console.error('기존 계약 정리 실패',e);showModal('기존 계약 정리 실패','새 계약은 저장되었습니다. 기존 계약('+r.no+')의 잔액과 상태는 직접 정리해 주세요. '+(e.message||''),false);}
+  }catch(e){console.error('기존 계약 정리 실패',e);showModal('기존 계약 정리 실패','새 계약은 저장되었습니다. 기존 계약('+r.no+')의 잔액과 상태는 직접 정리해 주세요. '+(e.message||''),false);_res.ended=false;}
+  return _res;
+}
+// ── 👑 양도양수 후 고객관리 「회원 구분」 자동 반영 (2026-11-23) ──
+//  · 양수인 고객 기록(customers) → 「패키지 - ○○회원」 (VVIP 는 그대로 둠) · ca_member_from = 새 계약 id
+//  · 양도자 고객 기록 → 잔액 전액 양도로 계약이 「종료」되고 다른 유효 패키지 계약이 없으면
+//    회원 구분 「(없음)」으로 고정(ca_member_set) + ca_member_xfer 표시 — 종료된 계약서로 다시 등급이 끌려오지 않게
+//    (VVIP 등 패키지가 아닌 등급은 건드리지 않음)
+//  · 나중에 양도자가 새 계약을 하면 ca_member_xfer 를 보고 고정을 풀고 새 등급으로 바꿈
+//  · 「↩️ 양도 취소」 하면 양쪽 모두 되돌림
+function xfMemLabel(pid){
+  const T={silver:'실버',royal:'로얄',gold:'골드',diamond:'다이아',titanium:'티타늄',special:'스페셜해피홈'};
+  pid=String(pid||'');const biz=/-biz$/.test(pid),t=T[pid.replace(/-biz$/,'')];
+  return t?'패키지'+(biz?'(사업)':'')+' - '+t+(t==='스페셜해피홈'?'':'회원'):'';
+}
+function xfFindCust(list,name,phone){const p=hccPN(phone),n=hccNN(name);return (p&&p.length>=6&&list.find(c=>hccPN(c.phone)===p))||(n&&list.find(c=>hccNameHit(c,n)))||null;}
+function xfSameCt(a,b){const pa=hccPN(a.phone),pb=hccPN(b.phone);return (pa&&pa.length>=6&&pa===pb)||(!!a.name&&hccNN(a.name)===hccNN(b.name));}
+function xfIsPkgMem(v){return !v||/^패키지/.test(String(v));}
+async function xfMemberAfterSave(newId,data,info){
+  try{
+    const list=await hccLoad();
+    const label=xfMemLabel(data.package_id);
+    const m=xfFindCust(list,data.name,data.phone);
+    const at=new Date().toISOString();
+    // 새 계약자(양수인 · 또는 예전에 양도로 회원 표시가 지워졌던 고객)
+    if(m&&m._docId&&label&&(info.tr||m.ca_member_xfer)&&hccNN(m.member)!=='vvip'){
+      const up={updated_at:at};
+      if(m.member!==label)up.member=label;
+      if(m.ca_member_xfer){up.ca_member_set=false;up.ca_member_xfer='';}
+      if(info.tr)up.ca_member_from=newId;
+      await hccWrite(m._docId,up);Object.assign(m,up);
+    }
+    // 양도자
+    if(info.tr&&info.ended){
+      const old=allContracts.find(x=>x.__id===info.oldId);if(!old)return;
+      const live=allContracts.some(x=>x.__id!==old.__id&&x.__id!==newId&&x.status!=='ended'&&x.package_id&&xfSameCt(x,old));
+      if(live)return;
+      const mo=xfFindCust(list,old.name,old.phone);
+      if(mo&&mo._docId&&(!m||mo._docId!==m._docId)&&xfIsPkgMem(mo.member)){
+        const up={member:'',ca_member_set:true,ca_member_xfer:at,ca_member_prev:mo.member||'',updated_at:at};
+        await hccWrite(mo._docId,up);Object.assign(mo,up);
+      }
+    }
+  }catch(e){console.warn('회원 구분 자동 반영 실패',e);}
+}
+async function xfMemberUndo(c,old){
+  try{
+    const list=await hccLoad(true),at=new Date().toISOString();
+    const m=xfFindCust(list,c.name,c.phone);
+    if(m&&m._docId&&m.ca_member_from===c.__id){
+      const live=allContracts.some(x=>x.__id!==c.__id&&x.status!=='ended'&&x.package_id&&xfSameCt(x,c));
+      const up={ca_member_from:'',updated_at:at};
+      if(!live&&/^패키지/.test(m.member||''))up.member='';
+      await hccWrite(m._docId,up);
+    }
+    if(old){
+      const mo=xfFindCust(list,old.name,old.phone);
+      if(mo&&mo._docId&&mo.ca_member_xfer)await hccWrite(mo._docId,{member:mo.ca_member_prev||xfMemLabel(old.package_id),ca_member_set:false,ca_member_xfer:'',ca_member_prev:'',updated_at:at});
+    }
+  }catch(e){console.warn('회원 구분 되돌리기 실패',e);}
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4846,6 +4907,7 @@ async function saveContract(){
   }
   if(currentContractKind==='joint'){const _jc=jtCur();if(!(_jc&&_jc.joint_id))data.joint_seq=1;}
   showLoading(true);
+  let _mx=null;   // 새 계약 저장 정보 (회원 구분 자동 반영용)
   try{
     if(currentEditId){
       await updateDoc(doc(db,'contracts',currentEditId),data);
@@ -4857,13 +4919,15 @@ async function saveContract(){
       currentEditId=ref.id;
       updateCustomerLink(currentEditId);
       const _xfr=renewFrom&&renewFrom.ok&&renewFrom.xfer;
-      if(renewFrom&&renewFrom.ok)await rnCloseOld(ref.id,data,renewFrom.amt||0);
+      _mx={id:ref.id,tr:false,oldId:'',ended:false};
+      if(renewFrom&&renewFrom.ok){const _rr=await rnCloseOld(ref.id,data,renewFrom.amt||0);if(_rr)Object.assign(_mx,_rr);}
       if(_xfr){try{await updateDoc(doc(db,'transfer_reqs',_xfr.id),{['tin_ct.'+_xfr.i]:{id:ref.id,no:data.contract_no||'',at:new Date().toISOString()},updated_at:new Date().toISOString()});}
         catch(_e){showModal('신청 기록 실패','계약서는 저장되었습니다. 양도 신청 화면에 「작성됨」 표시만 남기지 못했습니다. '+(_e.message||''),false);}}
       rnBtn();
     }
     await jtAfterSave(currentEditId,data,_jtPrep);
-    if(window.HHCC_upsert)HHCC_upsert(data.name,data.phone);
+    if(window.HHCC_upsert){const _hu=HHCC_upsert(data.name,data.phone);
+      if(_mx){try{await _hu;}catch(_e){}await xfMemberAfterSave(_mx.id,data,_mx);}}   // 👑 회원 구분 자동 반영 (새 계약만)
     showLoading(false);
     const t=document.getElementById('save-toast');
     t.style.display='block';setTimeout(()=>t.style.display='none',2500);
