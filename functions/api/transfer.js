@@ -141,7 +141,8 @@ export async function onRequestGet(context){
     const amount = r.amt_mode === 'part' ? (Number(to.amt) || 0) : remain;
     const my = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
     const ok = (r.tin_ok && r.tin_ok[String(i)]) || '';
-    return json({ ok: true, ref: r.ref || '', lang: r.lang === 'en' ? 'en' : 'ko', status: r.status || 'new', agreed_at: ok,
+    const agreedN = Object.keys((r.tin_ok && typeof r.tin_ok === 'object') ? r.tin_ok : {}).length;
+    return json({ ok: true, ref: r.ref || '', lang: r.lang === 'en' ? 'en' : 'ko', status: r.status || 'new', agreed_at: ok, agreed_n: agreedN,
       from: String(r.name || ''), to: { name: String(to.name || ''), condo: String(to.condo || '') },
       amount, amt_mode: r.amt_mode === 'part' ? 'part' : 'all', as_of: my, people: rc.length,
       contract: { no: String((c && c.contract_no) || r.contract_no || ''), pkg: String((c && c.package_id) || ''),
