@@ -3900,6 +3900,7 @@ function unlinkContract(id){
         await updateDoc(doc(db,'contracts',old.__id),upd);
       }
       await deleteDoc(doc(db,'contracts',c.__id));
+      if(c.transfer_req_id)try{await updateDoc(doc(db,'transfer_reqs',c.transfer_req_id),{['tin_ct.'+(parseInt(c.transfer_req_i)||0)]:null});}catch(_e){}
       if(currentEditId===c.__id)resetForm();
       showLoading(false);
       showModal(word+' 취소 완료',(old?'기존 계약 잔액을 되돌리고 「유효」로 바꿨습니다. ':'')+'새 계약은 삭제했습니다.',false);
@@ -3907,6 +3908,49 @@ function unlinkContract(id){
   });
 }
 window.unlinkContract=unlinkContract;
+// ── 🔁 양도 신청 → 양도양수 계약서 자동 작성 · 저장 (2026-11-23) ──
+//  관리자 앱 「양도·전환」 신청 상세의 받는 분 줄 「📝 계약서 작성」 → admin.html?xfer=신청ID&i=받는 분 번호
+//  양도자 계약 불러오기(startLinked) + 받는 분 이름 · 전화 · 서비스 대상(콘도명 동호수) + 양도금액 · 오늘 날짜를 채우고
+//  바로 저장(saveContract)까지 진행 — 저장 확인창 한 번만 누르면 상계 · 종료 처리까지 끝남.
+//  저장되면 신청 문서 tin_ct[받는 분 번호] = {id,no,at} 기록. 신청 「처리 완료」는 관리자가 직접 바꿈.
+async function xferStart(x){
+  const fail=m=>showModal('양도양수 계약서 자동 작성',m,false);
+  let r;
+  try{const sn=await getDoc(doc(db,'transfer_reqs',x.id));if(!sn.exists())return fail('양도 신청을 찾지 못했습니다. 삭제된 신청일 수 있습니다.');r=Object.assign({__id:sn.id},sn.data()||{});}
+  catch(e){return fail('양도 신청을 불러오지 못했습니다: '+(e.message||e));}
+  if(r.kind!=='transfer')return fail('상품권 전환 신청은 계약서를 자동으로 만들지 않습니다. 상품·할인권 화면에서 발급해 주세요.');
+  if(r.status==='cancel')return fail('취소된 신청입니다.');
+  const RC=(Array.isArray(r.recipients)&&r.recipients.length)?r.recipients:[{name:r.to_name,phone:r.to_phone,amt:r.amt}];
+  const rc=RC[x.i];if(!rc)return fail('받는 분 정보를 찾지 못했습니다.');
+  const made=r.tin_ct&&r.tin_ct[String(x.i)];
+  if(made&&made.id&&allContracts.some(c=>c.__id===made.id))return fail((rc.name||'받는 분')+'님 양도양수 계약서는 이미 작성되었습니다 ('+(made.no||'')+'). 계약 목록에서 확인해 주세요.');
+  // 양도자 계약 — 안내장에서 연결한 계약(ct_id) > 계약번호 > 전화 > 이름, 유효하고 잔액 남은 것만
+  const nn=v=>String(v||'').trim().toLowerCase().replace(/\s+/g,''),pn=v=>{let n=String(v||'').replace(/\D/g,'');if(n.indexOf('60')===0)n=n.slice(2);return n.replace(/^0+/,'');};
+  const ok=c=>c&&c.status!=='ended'&&ncBalance(c).remain>0.005;
+  let ct=r.ct_id&&allContracts.find(c=>c.__id===r.ct_id);
+  if(!ok(ct)){
+    const no=nn(r.contract_no).replace(/-/g,''),p=pn(r.phone),n=nn(r.name);let m=[];
+    if(no)m=allContracts.filter(c=>nn(cxaNo(c,c.__id)).replace(/-/g,'')===no&&ok(c));
+    if(!m.length&&p.length>=7)m=allContracts.filter(c=>pn(c.phone)===p&&ok(c));
+    if(!m.length&&n)m=allContracts.filter(c=>nn(c.name)===n&&ok(c));
+    ct=m.length===1?m[0]:null;
+    if(m.length>1)return fail('신청자('+(r.name||'')+')와 맞는 유효 계약이 '+m.length+'건이라 자동으로 고를 수 없습니다. 계약 화면에서 양도자 계약의 「🔁 양도」로 직접 작성해 주세요.');
+  }
+  if(!ct)return fail('신청자('+(r.name||'')+')의 유효하고 잔액이 남은 계약을 찾지 못했습니다. 이미 양도로 잔액이 0 이 되었거나 계약번호 · 전화번호가 다를 수 있습니다.');
+  const rem=Math.max(0,ncBalance(ct).remain);
+  let amt=r.amt_mode==='part'?(parseFloat(rc.amt)||0):rem,over=false;
+  if(amt>rem+0.005){over=true;amt=rem;}
+  if(amt<=0.005)return fail('양도금액이 0 입니다. 신청 내용을 확인해 주세요.');
+  startLinked(ct.__id,'transfer');
+  ckSet('f-name',rc.name||'');
+  ckSet('f-phone',rc.phone||'+60 ');
+  ckSet('f-residence',rc.condo||[rc.condo_name,rc.unit].filter(Boolean).join(' '));
+  ckSet('f-tr-amt',amt.toFixed(2));ckSet('f-tr-date',today());
+  lkSyncCarry();rnNote();
+  if(renewFrom)renewFrom.xfer={id:r.__id,i:x.i,ref:r.ref||'',to:rc.name||'',agreed:!!(r.tin_ok&&r.tin_ok[String(x.i)]),
+    over:over?('신청 금액 RM '+fmt(parseFloat(rc.amt)||0)+'이 현재 잔액보다 많아 잔액 RM '+fmt(rem)+'으로 맞췄습니다.'):''};
+  setTimeout(saveContract,350);   // 화면이 채워진 뒤 저장 → 확인창
+}
 function startRenewal(id){startLinked(id,'renewal');}
 function startTransfer(id){startLinked(id,'transfer');}
 window.startRenewal=startRenewal;window.startTransfer=startTransfer;
@@ -4747,9 +4791,14 @@ async function saveContract(){
       _tr?('양도자 '+renewFrom.name+'의 계약('+renewFrom.no+')에서 RM '+fmt(_amt)+'을 이 계약으로 넘기고 잔액을 상계 처리합니다.'+(_amt>=_rem-0.005?' 기존 계약은 잔액 0 · 「종료」로 바뀝니다.':' 남은 RM '+fmt(_rem-_amt)+'은 양도자가 계속 사용합니다(「유효」 유지).')+' 상계 내역이 기록되고 양도자 마이페이지에 안내가 표시됩니다. 저장할까요?')
          :('기존 계약('+renewFrom.no+')'+(_rem>0.005?'의 남은 잔액 RM '+fmt(_rem)+'을 이 계약으로 이월하고 상계 처리합니다. ':'은 ')+'기존 계약은 「종료」로 바뀌고 상계 내역이 기록됩니다. 저장할까요?'),
       true,()=>{if(renewFrom){renewFrom.ok=true;renewFrom.amt=lkAmount();saveContract();}});
+    if(_tr&&renewFrom.xfer){const _xf=renewFrom.xfer,_mb=document.getElementById('modal-msg');
+      if(_mb)_mb.innerHTML='<div style="background:#EFF6FF;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:13.5px;line-height:1.55">📝 <b>양도 신청 '+ncEsc(_xf.ref)+'</b>에서 자동 작성 — 양수인 <b>'+ncEsc(_xf.to)+'</b><br>'+
+        (_xf.agreed?'✅ 받는 분이 안내장에서 동의했습니다.':'<b style="color:#B45309">⚠️ 받는 분이 아직 안내장에서 동의하지 않았습니다.</b>')+
+        (_xf.over?'<br><b style="color:#DC2626">⚠️ '+ncEsc(_xf.over)+'</b>':'')+'</div>'+ncEsc(_mb.textContent);}
     return;
   }
-  if(renewFrom&&!currentEditId){data[renewFrom.mode==='transfer'?'transfer_from_id':'renew_from_id']=renewFrom.id;}
+  if(renewFrom&&!currentEditId){data[renewFrom.mode==='transfer'?'transfer_from_id':'renew_from_id']=renewFrom.id;
+    if(renewFrom.xfer){data.transfer_req_id=renewFrom.xfer.id;data.transfer_req_i=renewFrom.xfer.i;}}
   _isSaving=true;
   // 연락처가 비어 있으면 고객 마스터에서 자동으로 가져옵니다
   if(window.HHCC_fill){
@@ -4804,7 +4853,10 @@ async function saveContract(){
       const ref=await addDoc(collection(db,'contracts'),{...data,ben_rev:2,created_at:new Date().toISOString()});
       currentEditId=ref.id;
       updateCustomerLink(currentEditId);
+      const _xfr=renewFrom&&renewFrom.ok&&renewFrom.xfer;
       if(renewFrom&&renewFrom.ok)await rnCloseOld(ref.id,data,renewFrom.amt||0);
+      if(_xfr){try{await updateDoc(doc(db,'transfer_reqs',_xfr.id),{['tin_ct.'+_xfr.i]:{id:ref.id,no:data.contract_no||'',at:new Date().toISOString()},updated_at:new Date().toISOString()});}
+        catch(_e){showModal('신청 기록 실패','계약서는 저장되었습니다. 양도 신청 화면에 「작성됨」 표시만 남기지 못했습니다. '+(_e.message||''),false);}}
       rnBtn();
     }
     await jtAfterSave(currentEditId,data,_jtPrep);
@@ -6389,6 +6441,8 @@ window.setAdminView=setAdminView;
 // ═══ 📎 외부 프로그램(인보이스 · 총괄 고객관리)에서 바로 열기 ═══
 // admin.html?goto=usage&cust=<연락처|이름> → 해당 고객의 계약을 선택하고 서비스 이용내역 화면을 연다
 window._hhcEdit=(function(){try{return new URLSearchParams(location.search).get('edit')||'';}catch(e){return '';}})();
+// 🔁 양도 신청에서 양도양수 계약서 자동 작성 : admin.html?xfer=<신청 문서ID>&i=<받는 분 번호> (2026-11-23)
+window._hhcXfer=(function(){try{const p=new URLSearchParams(location.search),id=p.get('xfer');return id?{id:id,i:Math.max(0,parseInt(p.get('i'))||0)}:null;}catch(e){return null;}})();
 window._hhcGoto=(function(){
   try{
     const p=new URLSearchParams(location.search);
@@ -6710,6 +6764,7 @@ function uaReadTransfer(){
   return d;
 }
 function tryHhcGoto(){
+  if(window._hhcXfer&&allContracts.length&&_hhcInitDone){const _x=window._hhcXfer;window._hhcXfer=null;xferStart(_x);}
   // ✏️ 총괄 고객관리에서 「수정」으로 열기 : admin.html?edit=<계약서 문서ID>
   //    해당 계약서를 편집 화면에 불러와 모든 항목을 수정할 수 있습니다.
   if(window._hhcEdit&&allContracts.length&&_hhcInitDone){
