@@ -327,7 +327,7 @@ function sendMsg(r,i,w,base){
    · 받는 분 기록(tin_sent · tin_ok · tin_ct · tnews_in · tnews_out)은 받는 분 「번호」에 묶여 있음
      → 줄을 지우면 뒤 번호 기록을 앞으로 당겨 맞춤. 기록이 있는 받는 분은 지울 수 없음.
      → 계약서가 이미 작성된 받는 분은 잠금(계약 화면 「↩️ 양도 취소」 후 수정).
-     → 동의한 받는 분의 이름 · 콘도 · 전화 · 금액이 바뀌면 동의 · 안내장 · 카드뉴스 기록을 지움(다시 보내고 동의 받기).
+     → 동의한 받는 분도 수정 후 동의 · 안내장 · 카드뉴스 기록은 그대로 유지 (2026-11-23 대표님 결정).
    · 서버 접수 검사와 같은 필수값: 받는 분 이름 · 콘도명 · 동호수 · 전화(9자리 이상), 금액 > 0 */
 let EDIT=null,W=null;
 const RMAPS=['tin_sent','tin_ok','tin_ct','tnews_in','tnews_out'];
@@ -374,7 +374,7 @@ function paintEdit(){
       (anyCt?'<div class="guide" style="font-size:12.5px">계약서가 작성된 받는 분이 있어 방식은 바꿀 수 없습니다.</div>':'')+
       W.rc.map((x,k)=>{const L=x._o!=null?rLock(r,x._o):null,dis=!!(L&&L.ct);
         return '<div class="erc'+(dis?' lk':'')+'"><div class="erc-h">받는 분 '+(k+1)+
-          (L?(L.ct?'<small class="ok">📝 계약서 작성됨 '+esc(L.ct.no||'')+' — 잠김</small>':L.ok?'<small class="ok">✅ 동의함 — 바꾸면 동의를 다시 받아야 합니다</small>':'<small>📨 안내장 보낸 기록 있음</small>'):'<small></small>')+
+          (L?(L.ct?'<small class="ok">📝 계약서 작성됨 '+esc(L.ct.no||'')+' — 잠김</small>':L.ok?'<small class="ok">✅ 동의함 — 고쳐도 동의 기록은 유지됩니다</small>':'<small>📨 안내장 보낸 기록 있음</small>'):'<small></small>')+
           '<button type="button" data-rdel="'+k+'"'+(L||W.rc.length<2?' disabled':'')+'>삭제</button></div>'+
           '<div class="eg">'+F('이름','name',{ri:k,dis:dis})+F('전화번호','phone',{ri:k,dis:dis,type:'tel'})+F('콘도명','condo_name',{ri:k,dis:dis})+F('동호수','unit',{ri:k,dis:dis})+
           (W.amt_mode==='part'?F('양도 금액 (RM)','amt',{ri:k,dis:dis,num:1,type:'number'}):'')+'</div>'+
@@ -406,7 +406,6 @@ async function saveEdit(){
   if(!W.name.trim())return edErr('계약자 이름을 입력해 주세요.');
   const up={name:W.name.trim(),condo:W.condo.trim(),phone:W.phone.trim(),contract_no:W.contract_no.trim(),reason:W.reason==='abroad'?'abroad':'home',
     leave_date:/^\d{4}-\d{2}-\d{2}$/.test(W.leave_date)?W.leave_date:'',remarks:W.remarks.trim()};
-  const drop=[];   // 동의 기록을 지울 받는 분 이름
   if(t){
     if(W.amt_mode==='all'&&W.rc.length>1)return edErr('「잔액 전부」는 받는 분 1명만 가능합니다. 「금액 정해서」로 바꾸거나 받는 분을 줄여 주세요.');
     const rc=[];
@@ -417,18 +416,12 @@ async function saveEdit(){
       if(dg(o.phone).length<9)return edErr(n+'의 전화번호를 확인해 주세요(9자리 이상).');
       if(W.amt_mode==='part'){o.amt=Math.round((parseFloat(x.amt)||0)*100)/100;if(!(o.amt>0))return edErr(n+'의 양도 금액을 입력해 주세요.');}
       rc.push(o);}
-    // 받는 분 번호에 묶인 기록 다시 맞추기 + 동의한 분 내용이 바뀌었는지
-    const OLD=(Array.isArray(r.recipients)&&r.recipients.length)?r.recipients:[{name:r.to_name,phone:r.to_phone,amt:r.amt}];
-    const maps={};RMAPS.forEach(f=>{if(r[f]&&typeof r[f]==='object')maps[f]={};});
+    // 받는 분 번호에 묶인 기록 다시 맞추기 (동의 기록은 고쳐도 유지)
+        const maps={};RMAPS.forEach(f=>{if(r[f]&&typeof r[f]==='object')maps[f]={};});
     W.rc.forEach((x,k)=>{
       if(x._o==null)return;
       Object.keys(maps).forEach(f=>{const v=r[f][String(x._o)];if(v)maps[f][String(k)]=v;});
-      const a=OLD[x._o]||{},b=rc[k];
-      const changed=nn(a.name)!==nn(b.name)||nn(a.condo||((a.condo_name||'')+' '+(a.unit||'')))!==nn(b.condo)||pn(a.phone)!==pn(b.phone)||
-        (r.amt_mode||'all')!==W.amt_mode||(W.amt_mode==='part'&&Math.abs((parseFloat(a.amt)||0)-b.amt)>0.005);
-      if(changed&&maps.tin_ok&&maps.tin_ok[String(k)]){drop.push(b.name);['tin_ok','tin_sent','tnews_in','tnews_out'].forEach(f=>{if(maps[f])delete maps[f][String(k)];});}
     });
-    if(drop.length&&!confirm(drop.join(', ')+'님은 이미 양도에 동의했습니다.\n이름 · 콘도 · 전화 · 금액이 바뀌어 동의 기록을 지웁니다. 저장 후 안내장을 다시 보내 동의를 받아 주세요.\n\n저장할까요?'))return;
     Object.assign(up,maps,{amt_mode:W.amt_mode,recipients:rc,to_name:rc[0].name+(rc.length>1?' 외 '+(rc.length-1)+'명':''),to_phone:rc[0].phone,
       t_total:W.amt_mode==='part'?Math.round(rc.reduce((a,x)=>a+x.amt,0)*100)/100:null});
   }else{
@@ -449,10 +442,10 @@ async function saveEdit(){
   const m=matchCt(Object.assign({},r,up))[0];if(m)up.ct_id=m.__id;
   const at=new Date().toISOString();
   up.edited_at=at;up.updated_at=at;
-  up.edit_log=(Array.isArray(r.edit_log)?r.edit_log:[]).concat([{at:at,by:(window.HHCAuth&&typeof HHCAuth.email==='string'&&HHCAuth.email)||'',dropped_ok:drop}]).slice(-30);
+  up.edit_log=(Array.isArray(r.edit_log)?r.edit_log:[]).concat([{at:at,by:(window.HHCAuth&&typeof HHCAuth.email==='string'&&HHCAuth.email)||''}]).slice(-30);
   const btn=document.querySelector('[data-esave]');if(btn){btn.disabled=true;btn.textContent='저장 중…';}
   try{await updateDoc(doc(db,'transfer_reqs',EDIT),up);Object.assign(r,up);const id=EDIT;EDIT=null;openSheet(id);$('sheet').scrollTop=0;
-    toast(drop.length?'수정했습니다 — '+drop.join(', ')+'님께 안내장을 다시 보내 주세요':'신청 내용을 수정했습니다');}
+    toast('신청 내용을 수정했습니다');}
   catch(e){if(btn){btn.disabled=false;btn.textContent='💾 수정 저장';}edErr('저장 실패: '+(e.message||e));}
 }
 document.addEventListener('input',e=>{if(EDIT&&e.target.closest('#sheet [data-k]')){edRead();edSum();}});
