@@ -11,7 +11,7 @@
 //  응답: {ok:true, id, ref}   ref = 고객에게 보여 주는 짧은 접수번호 (TR-월일-4자리)
 //  ※ 실제 잔액 차감 · 상품권 발행은 관리자가 계약 화면(admin.html) · 상품권 관리(coupon-admin.html)에서 처리합니다.
 // ─────────────────────────────────────────────────────────────────────────────
-import { createDoc, getDoc, queryEq, patchDoc, json, fail, rateLimited, originAllowed } from './_lib/fs.js';
+import { createDoc, getDoc, batchGet, listAll, queryEq, patchDoc, json, fail, rateLimited, originAllowed, nn, pn } from './_lib/fs.js';
 import { sendAdminPush } from './_lib/push.js';
 
 const MAX = { name: 80, condo: 200, phone: 40, contract_no: 40, remarks: 2000, to_name: 80, to_phone: 40, leave_date: 10, lang: 5 };
@@ -131,6 +131,7 @@ export async function onRequestGet(context){
   const k = String(u.searchParams.get('k') || '').trim();
   const i = Math.max(0, parseInt(u.searchParams.get('i') || '0', 10) || 0);
   if (!/^[A-Za-z0-9]{16,40}$/.test(k)) return fail('bad request', 400);
+  if (u.searchParams.get('v') === 'done') return doneSummary(env, u, k);
   try {
     const r = (await queryEq(env, 'transfer_reqs', 'tk', k, 1))[0];
     if (!r || r.kind !== 'transfer' || r.status === 'cancel') return fail('not-found', 404);
@@ -171,5 +172,57 @@ async function agree(env, b){
     const amt = r.amt_mode === 'part' ? 'RM ' + (Number(to.amt) || 0).toLocaleString('en-MY') : '잔액 전부';
     await sendAdminPush(env, 'transfer', { title: '✅ 양도 동의 — ' + (to.name || ''), body: (r.name || '') + ' → ' + (to.name || '') + ' · ' + amt + ' · 눌러서 확인하세요' }).catch(() => {});
     return json({ ok: true, agreed_at: at });
+  } catch (e) { return fail(e.message === 'env-missing' ? 'server-not-configured' : 'server-error', 500); }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/transfer?v=done&k=TOKEN&s=개별키&w=in&i=번호 | w=out — 계약 정리 완료 안내장(transfer-done.html)용 (2026-11-23)
+//  · 개별키(s)는 관리자 화면이 받는 분마다 · 양도인 따로 만들어 신청 문서 dk{"번호"|"out"} 에 저장합니다.
+//    → 받는 분은 자기 새 계약만, 양도인은 자기 원 계약 정리 결과만 볼 수 있습니다(다른 분 링크로 바꿔 열 수 없음).
+//  · w=in : 받는 분의 새 양도양수 계약(tin_ct[i]) — 계약번호 · 계약일 · 등급 · 부가혜택 키 · 사용 가능 잔액 · 계약서 보기 주소
+//  · w=out: 양도인의 원 계약(ct_id) — 계약번호 · 남은 잔액 · 종료 여부 · 받는 분별 양도 금액 · 작성 여부 · 계약서 보기 주소
+// ─────────────────────────────────────────────────────────────────────────────
+async function doneSummary(env, u, k){
+  const w = u.searchParams.get('w') === 'out' ? 'out' : 'in';
+  const i = Math.max(0, parseInt(u.searchParams.get('i') || '0', 10) || 0);
+  const sk = String(u.searchParams.get('s') || '');
+  if (!/^[A-Za-z0-9]{8,40}$/.test(sk)) return fail('bad request', 400);
+  try {
+    const r = (await queryEq(env, 'transfer_reqs', 'tk', k, 1))[0];
+    if (!r || r.kind !== 'transfer' || r.status === 'cancel') return fail('not-found', 404);
+    const dk = (r.dk && typeof r.dk === 'object') ? r.dk : {};
+    if (dk[w === 'out' ? 'out' : String(i)] !== sk) return fail('not-found', 404);
+    const rc = Array.isArray(r.recipients) && r.recipients.length ? r.recipients : [{ name: r.to_name, phone: r.to_phone, amt: r.amt }];
+    const made = (r.tin_ct && typeof r.tin_ct === 'object') ? r.tin_ct : {};
+    const base = { ok: true, role: w, ref: r.ref || '', lang: r.lang === 'en' ? 'en' : 'ko', status: r.status || '', from: String(r.name || '') };
+    if (w === 'in') {
+      const to = rc[i], m = made[String(i)];
+      if (!to || !m || !m.id) return fail('not-ready', 409);
+      const c = await getDoc(env, 'contracts', m.id); if (!c) return fail('not-ready', 409);
+      // 📱 받는 분의 고객 마이페이지 — 고객관리(customers)에서 전화번호 > 이름(계약자명 · 별칭)으로 찾음. 없으면 링크 없음
+      let mypage = '';
+      try {
+        const cs = await listAll(env, 'customers', 300, ['name', 'phone', 'aliases']);
+        const p0 = pn(c.phone || to.phone), n0 = nn(c.name), n1 = nn(to.name);
+        const hit = cs.find(x => p0.length >= 7 && pn(x.phone) === p0)
+                 || cs.find(x => { const ns = [x.name].concat(Array.isArray(x.aliases) ? x.aliases : []).map(nn); return (n0 && ns.includes(n0)) || (n1 && ns.includes(n1)); });
+        if (hit) mypage = '/my.html?c=' + encodeURIComponent(hit.__id) + '&f=ct';
+      } catch (e) {}
+      return json(Object.assign(base, { mypage, to: { name: String(to.name || ''), condo: String(to.condo || '') },
+        contract: { no: String(c.contract_no || m.no || ''), date: String(c.contract_date || ''), pkg: String(c.package_id || ''), type: String(c.contract_type || ''),
+                    residence: String(c.residence || ''), benefits: benKeys(c.benefits), remain: ctRemain(c), amount: Number(c.transfer_amount) || 0 },
+        view: '/admin.html?view=' + encodeURIComponent(m.id) + '&mode=all' }));
+    }
+    const orig = r.ct_id ? await getDoc(env, 'contracts', r.ct_id) : null;
+    if (!orig) return fail('not-ready', 409);
+    const ids = rc.map((_, j) => made[String(j)] && made[String(j)].id).filter(Boolean);
+    const news = ids.length ? await batchGet(env, 'contracts', ids) : [];
+    const byId = {}; news.forEach(c => { byId[c.__id] = c; });
+    const items = rc.map((x, j) => { const m = made[String(j)], c = m && m.id ? byId[m.id] : null;
+      return { name: String(x.name || ''), done: !!c, no: c ? String(c.contract_no || m.no || '') : '', amt: c ? (Number(c.transfer_amount) || 0) : (Number(x.amt) || 0) }; });
+    if (!items.some(x => x.done)) return fail('not-ready', 409);
+    return json(Object.assign(base, { orig: { no: String(orig.contract_no || r.contract_no || ''), remain: ctRemain(orig), ended: orig.status === 'ended' },
+      items, total: Math.round(items.filter(x => x.done).reduce((a, x) => a + x.amt, 0) * 100) / 100,
+      view: '/admin.html?view=' + encodeURIComponent(r.ct_id) + '&mode=all' }));
   } catch (e) { return fail(e.message === 'env-missing' ? 'server-not-configured' : 'server-error', 500); }
 }

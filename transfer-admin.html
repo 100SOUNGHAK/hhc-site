@@ -269,7 +269,9 @@ function openSheet(id){
     '<div class="ctw"><div class="ctw-h">📝 양도양수 계약서 <small>누르면 계약 화면에서 받는 분 정보 · 양도금액을 채워 바로 저장합니다 (확인창 한 번)</small></div>'+
     RC.map((x,i)=>{const c=ctMade(r,i);
       return '<div class="ctw-r"><b>'+esc(x.name||('받는 분 '+(i+1)))+(c?'<small class="ctw-s ok">✅ 작성됨 · '+esc(c.no||'')+' · '+when(c.at)+'</small>':'<small class="ctw-s">아직 작성 전</small>')+'</b>'+
-        (c?'<button type="button" class="ctw-b done" data-cto="'+esc(c.id)+'">📑 계약서 보기</button>':'<button type="button" class="ctw-b" data-ctw="'+i+'">📝 계약서 작성</button>')+'</div>';}).join('')+
+        (c?'<button type="button" class="ctw-b done" data-cto="'+esc(c.id)+'">📑 계약서 보기</button>':'<button type="button" class="ctw-b" data-ctw="'+i+'">📝 계약서 작성</button>')+'</div>'+
+        (c?doneRow(r,String(i),'🎉 '+esc(x.name||'받는 분')+'님께 계약 완료 안내'):'');}).join('')+
+    (RC.some((_,i)=>ctMade(r,i))?doneRow(r,'out','🎉 '+esc(r.name||'양도인')+'님께 정리 완료 안내'):'')+
     (RC.length>1?'<div class="guide" style="margin-top:8px">여러 분이면 한 분씩 차례로 누르세요 — 앞 분 몫이 빠진 잔액으로 다음 계약서가 만들어집니다.</div>':'')+'</div>':'';
   const ct=ms.length?ms.slice(0,3).map(c=>'<div class="ct"><div>'+esc(c.contract_no||'(번호 없음)')+(c.status==='ended'?' · 종료':'')+'<small>'+esc(c.name||'')+' · '+esc(c.residence||'')+'</small></div><span class="bal num">RM '+fmt(bal(c))+'</span></div>').join('')+
     '<div class="guide" style="margin-top:6px">잔액은 계약 화면과 같은 계산(참고용)입니다.</div>'
@@ -462,6 +464,31 @@ function openCt(q){
   }catch(e){}
   location.href=url;
 }
+/* 🎉 계약 정리 완료 안내장 (/transfer-done) — 받는 분(번호) · 양도인('out') 따로 보내기 (2026-11-23) */
+function doneRow(r,key,label){
+  const sent=r.done_sent&&r.done_sent[key];
+  return '<div class="tin-n" style="border-left-color:#B7E4CF"><span class="tin-lb" style="color:var(--ok)">'+label+(sent?' <small>✓ '+when(sent)+' 보냄</small>':'')+'</span>'+
+    '<button type="button" class="tin-b wa" data-done="'+key+'" data-ch="wa">💬 왓츠앱</button><button type="button" class="tin-b kk" data-done="'+key+'" data-ch="kk">💛 카톡</button>'+
+    '<button type="button" class="tin-b" data-donev="'+key+'" title="안내장 미리 보기">👁</button></div>';
+}
+/* 개별키 — 받는 분마다 · 양도인 따로 (다른 분 안내장으로 바꿔 열 수 없게) */
+async function doneLink(r,key){
+  const base=await tinLink(r,key==='out'?0:+key);if(!base)return '';
+  const dk=Object.assign({},r.dk||{});
+  if(!dk[key]){const a=new Uint8Array(12);crypto.getRandomValues(a);dk[key]=Array.from(a,v=>'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'[v%56]).join('');
+    try{await updateDoc(doc(db,'transfer_reqs',r.__id),{dk});r.dk=dk;}catch(e){toast('안내장 주소를 만들지 못했습니다: '+e.message);return '';}}
+  return 'https://happyhomecare.com.my/transfer-done?k='+r.tk+'&s='+dk[key]+(key==='out'?'&w=out':'&w=in&i='+key)+(r.lang==='en'?'&lang=en':'');
+}
+function doneMsg(r,key,url){
+  const RC=(Array.isArray(r.recipients)&&r.recipients.length)?r.recipients:[{name:r.to_name,phone:r.to_phone}],en=r.lang==='en',SIG='\n\nHappy Home Care 📞 +60 17-247 2774';
+  if(key==='out')return {url,phone:r.phone||'',btn:en?'View details':'정리 내역 보기',msg:en
+    ?('Hello '+r.name+', this is Happy Home Care 😊\n\n🎉 *Your transfer has been settled*\nWe have completed the membership balance transfer you requested.\nPlease check the details and your remaining balance below.\n\n👉 '+url+SIG)
+    :('안녕하세요 '+r.name+'님, 해피홈케어입니다 😊\n\n🎉 *양도 계약 정리가 완료되었습니다*\n요청하신 회원권 잔액 양도를 모두 처리했습니다.\n양도 내역과 남은 잔액을 확인해 주세요.\n\n👉 '+url+SIG)};
+  const x=RC[+key]||{};
+  return {url,phone:x.phone||'',btn:en?'Open guide':'완료 안내 보기',msg:en
+    ?('Hello '+(x.name||'')+', this is Happy Home Care 😊\n\n🎉 *Your transfer contract is complete*\nYou can now use your Happy Membership balance.\nOpen the guide below and tap MY PAGE to see your contract and balance.\n\n👉 '+url+SIG)
+    :('안녕하세요 '+(x.name||'')+'님, 해피홈케어입니다 😊\n\n🎉 *양도양수 계약이 완료되었습니다*\n오늘부터 해피 멤버십 잔액으로 바로 이용하실 수 있습니다.\n안내장의 MY PAGE에서 계약서와 잔액을 확인하실 수 있어요.\n\n👉 '+url+SIG)};
+}
 /* 📨 받는 분별 안내장 상태 — ✅ 동의(tin_ok) > 📨 보냄 · 미확인(tin_sent) > 아직 안 보냄 */
 function tinSt(r,i){
   const ok=r.tin_ok&&r.tin_ok[String(i)],sent=r.tin_sent&&r.tin_sent[String(i)];
@@ -521,6 +548,18 @@ document.addEventListener('click',async e=>{
   if(b.dataset.edit){openEdit(openId);return;}
   if(b.dataset.st){await setStatus(openId,b.dataset.st);return;}
   // 📨 안내장 · 📰 카드뉴스 보내기 — 💬 왓츠앱(받을 분 번호로 문구+링크) / 💛 카톡(고객관리 발송창과 같은 그림 카드 · 문구는 복사)
+  if(b.dataset.done||b.dataset.donev){
+    const key=b.dataset.done||b.dataset.donev,url=await doneLink(r,key);if(!url)return;
+    if(b.dataset.donev){window.open(url,'_blank');return;}
+    const m=doneMsg(r,key,url),en=r.lang==='en';
+    if(b.dataset.ch==='kk'){
+      if(!window.hhcKkCard){toast('카카오톡 도구를 불러오지 못했습니다');return;}
+      const ok=await hhcKkCard({msg:m.msg,url:m.url,img:'og-contract.jpg',btn:m.btn,en});
+      toast(ok?'💛 카카오톡 공유창을 열었습니다 · 문구도 복사되었습니다':'📋 문구를 복사했습니다 · 카카오톡 대화방에 붙여 넣어 주세요');
+    }else window.open(waLink(m.phone,m.msg),'_blank');
+    updateDoc(doc(db,'transfer_reqs',openId),{done_sent:Object.assign({},r.done_sent||{},{[key]:new Date().toISOString()})}).catch(()=>{});
+    return;
+  }
   if(b.dataset.newsv){const i=+b.dataset.newsv,base=await tinLink(r,i);if(base)window.open(base.replace('/transfer-in?','/transfer-news?')+'&w='+(b.dataset.w||'in'),'_blank');return;}
   if(b.dataset.tinv||b.dataset.tinc){
     const i=+(b.dataset.tinv||b.dataset.tinc),url=await tinLink(r,i);if(!url)return;
