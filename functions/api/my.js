@@ -33,8 +33,8 @@ const reqNames = x => {
 // 1차로 가볍게 훑을 때 받는 필드 (매칭에 필요한 것만 — 전체 컬렉션을 통째로 변환하면 무료 플랜 CPU 한도(10ms)를 넘김)
 const LINK = ['ca_link', 'ca_links', 'ca_off'];
 const MASK = {
-  invoices:    ['customer.name', 'customer.phone', ...LINK],
-  inspections: ['client', 'phone', ...LINK],
+  invoices:    ['customer.name', 'customer.phone', 'cust_hidden', ...LINK],
+  inspections: ['client', 'phone', 'cust_hidden', ...LINK],
   contracts:   ['name', 'phone', ...LINK],
   bookings:    ['customer_name', 'customer_phone', 'status', ...LINK],
   quotes:      ['client', 'phone', ...LINK],
@@ -87,8 +87,9 @@ export async function onRequestGet(context){
     const rqFrom = new Date(Date.now() - 30 * 86400000).toISOString();
     const [ps, invs, insps, cts, cps, bks, qts, mms, prs, rqs] = await Promise.all([
       getDoc(env, 'settings', 'points').catch(() => null),
-      want.invoices    ? pick('invoices',    x => { const [n, p] = PICK.invoices(x);    return hit(n, p, x); }) : [],
-      want.inspections ? pick('inspections', x => { const [n, p] = PICK.inspections(x); return hit(n, p, x); }) : [],
+      // 🔒 확정 전(cust_hidden) 인보이스·보고서는 마이페이지에 내보내지 않음 — 관리자 고객 상세에서 「확정」 후 공개 (2026-11-23)
+      want.invoices    ? pick('invoices',    x => { if (x.cust_hidden === true) return false; const [n, p] = PICK.invoices(x);    return hit(n, p, x); }) : [],
+      want.inspections ? pick('inspections', x => { if (x.cust_hidden === true) return false; const [n, p] = PICK.inspections(x); return hit(n, p, x); }) : [],
       want.contracts   ? pick('contracts',   x => { const [n, p] = PICK.contracts(x);   return hit(n, p, x); }) : [],
       pick('coupons',  x => inLinks(x) || (x.ca_link ? linked(x) : (!offMine(x) && (keys.includes(nn(x.name)) || keys.includes(nn(x.receiver)))))),
       pick('bookings', x => { const [n, p] = PICK.bookings(x); return ['waiting', 'booked', 'confirmed'].indexOf(x.status) >= 0 && hit(n, p, x); }),

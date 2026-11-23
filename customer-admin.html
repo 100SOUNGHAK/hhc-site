@@ -99,6 +99,10 @@ body{font-family:'Apple SD Gothic Neo','Noto Sans KR',-apple-system,sans-serif;b
 .cx-tab button.on{background:#0F1C3F;border-color:#0F1C3F;color:#fff}.cx-tab button.on b{color:#C9A24B}
 .drow .id{font-weight:800}
 .drow .m{color:var(--ink3);font-size:11px}
+.drow.unpub{background:#FFFBEB}
+.pill.unp{background:#FEF3C7;color:#92400E;border:1px solid #FCD34D}
+.rb.pub{background:#047857;color:#fff;font-size:11px;padding:4px 11px;border-radius:7px;box-shadow:0 2px 0 #065F46}
+.rb.pub:active{transform:translateY(1px);box-shadow:none}
 .drow .iv-it{flex-basis:100%;font-size:12.5px;font-weight:800;color:#0F1C3F;line-height:1.4;margin:-2px 0 -1px}
 .open-btn{margin-left:auto;font-size:10.5px;font-weight:800;color:var(--pri);background:var(--pri-bg);border-radius:6px;padding:3px 9px;white-space:nowrap;text-decoration:none}
 .dnone{padding:14px;font-size:12px;color:var(--ink3);text-align:center}
@@ -2990,6 +2994,23 @@ window.caCareLog=async function(idx,k,ch){
     await updateDoc(doc(db,'customers',mid),{care_log:e.careLog,updated_at:new Date().toISOString()});
   }catch(err){toast('발송 이력 저장 실패: '+err.message);}
 };
+// ═══ 🔒 고객 공개 확정 (2026-11-23) ═══
+//  새로 저장한 인보이스·점검보고서는 cust_hidden:true (확정 전) → 이 화면에만 보이고 고객 마이페이지에는 안 보임.
+//  「✅ 확정」을 누르면 cust_hidden:false + cust_pub_at 저장 → 그때부터 마이페이지에 보임. 예전 문서(필드 없음)는 그대로 보임.
+window.caPubTag=function(coll,x){
+  if(!x||x.cust_hidden!==true)return '';
+  return '<span class="pill unp">🔒 확정 전 · 고객 미공개</span><button class="rb pub" onclick="caPub(event,\''+coll+'\',\''+x.__id+'\')">✅ 확정</button>';
+};
+window.caPub=async function(ev,coll,id){
+  if(ev){ev.preventDefault();ev.stopPropagation();}
+  const nm=coll==='invoices'?'인보이스':'점검보고서';
+  if(!confirm(nm+'를 확정할까요?\n\n확정하면 고객 마이페이지에서 바로 볼 수 있습니다.'))return;
+  const b=ev&&ev.currentTarget;if(b){b.disabled=true;b.textContent='확정 중…';}
+  try{
+    await updateDoc(doc(db,coll,id),{cust_hidden:false,cust_pub_at:new Date().toISOString()});
+    toast('✓ 확정 — 고객 마이페이지에 공개되었습니다');
+  }catch(err){toast('확정 실패: '+err.message);if(b){b.disabled=false;b.textContent='✅ 확정';}}
+};
 // ═══ 🌿 목록에서 바로 보내기 — 「청소 후 3개월 · 6개월」 구분을 골랐을 때 각 고객 행에 나타납니다 ═══
 //  · 문구 없이 안내장 이미지(○○○님 댁 · 마지막 관리일 · 경과 개월)만 보냅니다 (한국어 안내장)
 //  · 휴대폰 : 공유창(이미지 한 장) → WhatsApp / 카카오톡 선택 → 대화방 선택
@@ -3896,13 +3917,13 @@ window.openDrawer=function(idx){
     // 회원적립잔액(creditUse)으로 차감된 인보이스: 차감 전 금액을 괄호로 표시 (단순 표기 — 합산에 반영 안 함)
     const _cu=parseFloat(x.creditUse)||0;
     const _cuTag=_cu>0.005?' <b style="color:#7c3aed">(차감 전 '+fmtRM(invTotal(x)+_cu)+' · 적립금 −'+fmtRM(_cu)+')</b>':'';
-    return '<div class="drow"><span class="id">'+esc(x.id||x.__id)+'</span><span class="pill '+st[1]+'">'+esc(st[0])+'</span>'+(invItemLine(x)?'<span class="iv-it">🧾 '+esc(invItemLine(x))+'</span>':'')+'<span class="m">'+esc(x.date||'')+' · '+fmtRM(invTotal(x))+_cuTag+(_pt?' <b style="color:var(--ok)">(기결제 −'+fmtRM(_pd)+' · 잔여 '+fmtRM(invDue(x))+')</b>':'')+'</span><a class="open-btn" target="_blank" rel="noopener" data-t="✏️ 인보이스 수정 — '+esc(x.id||x.__id)+'" href="'+window.caEditUrl('invoices',x)+'" onclick="return caView(this.href,this.dataset.t,event)">✏️ 열기·수정</a>'+rowBtns('invoices',x.__id)+'</div>';
+    return '<div class="drow'+(x.cust_hidden===true?' unpub':'')+'"><span class="id">'+esc(x.id||x.__id)+'</span><span class="pill '+st[1]+'">'+esc(st[0])+'</span>'+(invItemLine(x)?'<span class="iv-it">🧾 '+esc(invItemLine(x))+'</span>':'')+'<span class="m">'+esc(x.date||'')+' · '+fmtRM(invTotal(x))+_cuTag+(_pt?' <b style="color:var(--ok)">(기결제 −'+fmtRM(_pd)+' · 잔여 '+fmtRM(invDue(x))+')</b>':'')+'</span>'+caPubTag('invoices',x)+'<a class="open-btn" target="_blank" rel="noopener" data-t="✏️ 인보이스 수정 — '+esc(x.id||x.__id)+'" href="'+window.caEditUrl('invoices',x)+'" onclick="return caView(this.href,this.dataset.t,event)">✏️ 열기·수정</a>'+rowBtns('invoices',x.__id)+'</div>';
   }).join(''):'<div class="dnone">인보이스 없음</div>';
   h+='</div>';
   // 점검보고서
   h+='<div class="dcard'+(caFold('inspections')?' fold':'')+'" data-fold="inspections"><div class="dcard-h dch"><span class="chv">▾</span>🔧 점검보고서<span class="cnt">'+e.docs.inspections.length+'건</span>'+hdrLink('inspections')+'</div>';
   h+=e.docs.inspections.length?e.docs.inspections.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>
-    '<div class="drow"><span class="id">'+inspLabel(x.type,x)+'</span><span class="m">'+esc(x.date||'')+(x.addr?' · '+esc(x.addr):'')+'</span>'+(x.invoice_id?'<span class="pill blue">🧾 '+esc(x.invoice_id)+'</span>':'')+'<a class="open-btn" target="_blank" rel="noopener" data-t="✏️ '+esc(inspLabel(x.type,x))+' 수정 — '+esc(x.date||'')+'" href="'+window.caEditUrl('inspections',x)+'" onclick="return caView(this.href,this.dataset.t,event)">✏️ 열기·수정</a>'+rowBtns('inspections',x.__id)+'</div>').join('')
+    '<div class="drow'+(x.cust_hidden===true?' unpub':'')+'"><span class="id">'+inspLabel(x.type,x)+'</span><span class="m">'+esc(x.date||'')+(x.addr?' · '+esc(x.addr):'')+'</span>'+(x.invoice_id?'<span class="pill blue">🧾 '+esc(x.invoice_id)+'</span>':'')+caPubTag('inspections',x)+'<a class="open-btn" target="_blank" rel="noopener" data-t="✏️ '+esc(inspLabel(x.type,x))+' 수정 — '+esc(x.date||'')+'" href="'+window.caEditUrl('inspections',x)+'" onclick="return caView(this.href,this.dataset.t,event)">✏️ 열기·수정</a>'+rowBtns('inspections',x.__id)+'</div>').join('')
     :'<div class="dnone">점검보고서 없음</div>';
   h+='</div>';
   // 📝 메모장 (수리요청 처리내역) — 등록·수정·삭제 가능

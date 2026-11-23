@@ -6286,6 +6286,10 @@ async function saveInv(){
       var _tk2=invNumTaken(inv.id);
       if(_tk2){hideLoad();showToast('⚠ '+inv.id+' 번호는 이미 '+(((_tk2.customer||{}).name)||'다른 고객')+' 인보이스에 있습니다. 다른 번호로 바꿔 주세요',5000);return null;}
     }
+    // 🔒 고객 공개 확정 (2026-11-23) — 새 인보이스는 「확정 전」으로 저장 → 관리자 고객 상세에서 「✅ 확정」을 눌러야 고객 마이페이지에 보임.
+    //    수정 저장은 지금 상태를 그대로 이어받음 (이미 확정·예전 인보이스는 계속 보임)
+    if(ex){if(ex.cust_hidden===true)inv.cust_hidden=true;else delete inv.cust_hidden;if(ex.cust_pub_at)inv.cust_pub_at=ex.cust_pub_at;}
+    else inv.cust_hidden=true;
     if(ex&&ex._docId){await DB.collection('invoices').doc(ex._docId).set(inv);inv._docId=ex._docId;window._invEditDocId=ex._docId;}
     else{var ref=await DB.collection('invoices').add(inv);inv._docId=ref.id;window._invEditDocId=ref.id;}
     await pkfCommit(inv,ex);   // 🎁 패키지 부가혜택 사용 수량 → 계약서 free_inv
@@ -6293,7 +6297,7 @@ async function saveInv(){
     vpMarkUsed(inv);
     clearInvDraft();
     if(window.refreshInspBox)window.refreshInspBox(inv.id);
-    showToast('✓ 저장 완료');
+    showToast(inv.cust_hidden===true?'✓ 저장 완료 · 🔒 확정 전 (고객 상세에서 「확정」 시 마이페이지 공개)':'✓ 저장 완료',inv.cust_hidden===true?4000:undefined);
     return inv;
   }catch(e){showToast('저장 실패: '+e.message);return null;}
   finally{hideLoad();}

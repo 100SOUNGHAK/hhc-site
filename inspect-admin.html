@@ -6488,6 +6488,13 @@ window.saveReport=async function(){
     if(isWasher)data=await translateWasherData(data);
     toast('Firebase 저장 중...');
     var rid;
+    // 🔒 고객 공개 확정 (2026-11-23) — 새 보고서는 「확정 전」으로 저장 → 관리자 고객 상세에서 「✅ 확정」을 눌러야 고객 마이페이지에 보임.
+    //    수정 저장은 저장된 문서의 지금 상태를 그대로 이어받음 (이미 확정·예전 보고서는 계속 보임)
+    if(currentEditId){
+      var _cur=null;try{var _cs=await getDoc(doc(DB,'inspections',currentEditId));_cur=_cs.exists()?_cs.data():null;}catch(_e){_cur=allReports.find(function(r){return r._id===currentEditId;})||null;}
+      if(_cur&&_cur.cust_hidden===true)data.cust_hidden=true;else delete data.cust_hidden;
+      if(_cur&&_cur.cust_pub_at)data.cust_pub_at=_cur.cust_pub_at;
+    }else data.cust_hidden=true;
     if(currentEditId){rid=currentEditId;}
     else{var dref=await addDoc(collection(DB,'inspections'),data);rid=dref.id;}
     // 사진 업로드
@@ -6640,7 +6647,7 @@ window.saveReport=async function(){
     hideSaveProg();
     if(window.__clearDraft)window.__clearDraft(); // 저장 성공 → 임시저장 삭제
     var rbn=document.querySelector('.restore-banner');if(rbn)rbn.remove();
-    toast(wasEdit?'✓ 수정 저장 완료':'✓ 저장 완료');
+    toast((wasEdit?'✓ 수정 저장 완료':'✓ 저장 완료')+(data.cust_hidden===true?' · 🔒 확정 전 (고객 상세에서 「확정」 시 마이페이지 공개)':''));
     // 저장 후에도 수정 모드 유지 — 같은 폼에서 다시 저장하면 같은 보고서를
     // 덮어쓴다(목록 중복 생성 방지). 새 보고서는 "🆕 신규 작성" 버튼/유형 전환/복제로 시작.
     currentEditId=rid;

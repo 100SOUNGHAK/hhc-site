@@ -209,7 +209,7 @@ async function autoPush(env,dry){
     queryEq(env,'invoices','due',tmr,300).catch(()=>[]),
     queryEq(env,'invoices','due',yst,300).catch(()=>[]),
   ]);
-  const unpaid=x=>x.status==='billing'||x.status==='overdue';
+  const unpaid=x=>x.cust_hidden!==true&&(x.status==='billing'||x.status==='overdue');   // 확정 전(고객 미공개) 인보이스는 결제 알림 안 보냄
   const jobs=[];
   bks.filter(x=>x.status==='confirmed').forEach(x=>owners(x.customer_name,x.customer_phone,x).forEach(c=>
     jobs.push({key:'auto-bk-'+x.__id+'-'+tmr+'-'+c,c,kind:'visit',f:'bk',d:{date:tmr,timeRaw:x.booking_time}})));
