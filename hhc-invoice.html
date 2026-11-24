@@ -577,6 +577,24 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
 .bdc .pkdc-pv b{color:#0E9B63}
 .bdc .pkdc-ap{background:#F2FBF6}.bdc .pkdc-ap b{color:#0E9B63}
 #pkdc-ok:disabled{opacity:.45;cursor:default}
+.sgx{border-radius:15px;background:linear-gradient(160deg,#FFFBEF,#FBF5E6);box-shadow:inset 0 0 0 1px rgba(201,164,76,.35);padding:12px;margin-bottom:14px}
+.sgx-h{display:flex;align-items:center;justify-content:space-between;font-size:13.5px;font-weight:800;color:#6f5512}
+.sgx-h span{font-size:11.5px;color:#8f6f28;font-weight:700}
+.sgx-c{display:flex;align-items:center;gap:10px;background:#fff;border-radius:12px;padding:11px 10px 11px 12px;margin-top:8px;box-shadow:0 1px 2px rgba(11,24,51,.08),0 6px 14px -8px rgba(11,24,51,.25)}
+.sgx-c .tx{flex:1;min-width:0}
+.sgx-c .tx b{display:block;font-size:14px;font-weight:800;color:#14192A;word-break:keep-all}
+.sgx-c .tx small{display:block;font-size:12px;color:#5A6478;margin-top:2px;line-height:1.45;word-break:keep-all}
+.sgx-c .v{font-size:15px;font-weight:800;color:#0E9B63;white-space:nowrap;font-variant-numeric:tabular-nums}
+.sgx-c .go{height:38px;padding:0 13px;border:none;border-radius:10px;background:#0E2350;color:#fff;font-size:13.5px;font-weight:800;cursor:pointer;white-space:nowrap;font-family:inherit;box-shadow:0 3px 0 -1px #081633}
+.sgx-c .go:active{transform:translateY(2px);box-shadow:none}
+.sgx-c.done{background:#F2FBF6}
+.sgx-c.done .go{background:none;color:#0E9B63;box-shadow:none;padding:0 4px;cursor:default;display:flex;align-items:center}
+.sgx-c.near{background:rgba(255,255,255,.6);box-shadow:none;border:1.5px dashed rgba(201,164,76,.5)}
+.sgx-c.near .tx b{color:#5A6478}
+#sk .sk-dcb{position:relative}
+.sk-dcbg{position:absolute;top:-7px;right:-6px;min-width:22px;height:22px;border-radius:11px;padding:0 6px;background:linear-gradient(180deg,#E3C98A,#C9A44C);color:#3a2a05;font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px #fff,0 2px 4px rgba(0,0,0,.2)}
+.sk-tip{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:9px 12px;border-radius:11px;background:#FFFBEF;box-shadow:inset 0 0 0 1px rgba(201,164,76,.35);font-size:12.5px;font-weight:700;color:#6f5512;cursor:pointer;line-height:1.4}
+.sk-tip b{margin-left:auto;color:#0E2350;white-space:nowrap}
 #sk .sk-dcb{height:50px;padding:0 14px;border:none;border-radius:14px;background:#F2FBF6;color:#0E9B63;font-size:15px;font-weight:800;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0;
   box-shadow:inset 0 0 0 1.5px rgba(14,155,99,.45),0 4px 0 -1px #BFE6D2;transition:transform .14s,box-shadow .14s}
 #sk .sk-dcb:active{transform:translateY(3px);box-shadow:inset 0 0 0 1.5px rgba(14,155,99,.45),0 1px 0 0 #BFE6D2}
@@ -1429,6 +1447,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   <div class="ms bdc" onclick="event.stopPropagation()">
     <div class="mh"></div>
     <div class="mt">🏷️ 할인 적용 <span style="font-size:11.5px;color:var(--gray);font-weight:700">· 고른 품목에 한 번에</span></div>
+    <div id="pkdc-sg"></div>
     <div id="pkdc-item"></div>
     <div class="pkdc-h" style="margin-top:14px"><span>② 할인 고르기</span><button type="button" onclick="adjpOpen()">⚙ 관리</button></div>
     <div class="bdc-pre" id="pkdc-pre"></div>
@@ -1531,10 +1550,11 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
     </div>
   </div>
   <div class="sk-f">
+    <div class="sk-tip" id="sk-tip" style="display:none" onclick="pkDcOpen()"></div>
     <div class="qk-tray" id="sk-tray"></div>
     <div class="qk-sum">
       <div class="l"><span id="sk-cnt">담은 품목 0개</span><b id="sk-amt">RM 0.00</b><em id="sk-disc"></em></div>
-      <button type="button" class="sk-dcb" id="sk-dcb" onclick="pkDcOpen()">🏷️ 할인</button>
+      <button type="button" class="sk-dcb" id="sk-dcb" onclick="pkDcOpen()">🏷️ 할인<span class="sk-dcbg" id="sk-dcbg" style="display:none"></span></button>
       <button class="sk-ok" onclick="closeSvcPicker()">완료</button>
     </div>
   </div>
@@ -3416,7 +3436,7 @@ function openSvcPicker(){
   $('sk-bg').classList.remove('hidden');$('sk').classList.remove('hidden');
   var q=$('sk-q');if(q)q.value='';
   pkSub='전체';pkS2='전체';
-  pkRail();pickerRender();pkFoot();pkKoFetch();
+  pkRail();pickerRender();pkFoot();pkKoFetch();pkSgLoad();
   // 품목 선택 시트와 카테고리 레일 스크롤을 최상단으로
   var skList=$('sk-list');if(skList)skList.scrollTop=0;
   var pkRailEl=$('sk-rail');if(pkRailEl)pkRailEl.scrollTop=0;
@@ -3740,7 +3760,7 @@ window.pkDcOpen=function(svcId){
   if(!pkDcLis().length){showToast('먼저 품목을 담아 주세요');return;}
   _pkDc={svc:svcId||'',li:only,sel:{},name:'',unit:'pct',val:'',how:'total',edit:-1,_names:[]};
   pkDcLis().forEach(function(l){_pkDc.sel[l.id]=only?l.id===only:true;});
-  pkDcUndoHide();
+  pkDcUndoHide();pkSgLoad();
   var nm=$('pkdc-name');if(nm)nm.value='';var vv=$('pkdc-val');if(vv)vv.value='';
   pkDcDraw();$('pkdc-modal').classList.remove('hidden');
 };
@@ -3767,6 +3787,7 @@ function pkDcPlan(u,v,how,ids){
 }
 function pkDcDraw(){
   var lis=pkDcLis(),ids=pkDcSel(),rows=_adjNorm(undefined);
+  var sgE=$('pkdc-sg');if(sgE)sgE.innerHTML=pkSgHtml(pkSgList());
   // ① 할인할 품목
   $('pkdc-item').innerHTML='<div class="pkdc-h"><span>① 할인할 품목</span><button type="button" onclick="pkDcAll()">'+(ids.length===lis.length?'전체 해제':'전체 선택')+'</button></div>'+
     '<div class="bdc-its">'+lis.map(function(l){
@@ -3826,9 +3847,12 @@ window.pkDcName=function(v){_pkDc.name=v;pkDcPrev();};
 window.pkDcVal=function(v){_pkDc.val=v;pkDcPrev();};
 function pkDcDo(nm,u,v,how){
   var ids=pkDcSel();if(!ids.length){showToast('할인할 품목을 골라 주세요');return;}
+  pkDcCommit(nm,u,v,pkDcPlan(u,v,how,ids),false);
+}
+function pkDcCommit(nm,u,v,plan,keep){
   _pkDcUndo=JSON.parse(JSON.stringify(adjusts));
   var k=_adjpKey(nm),tot=0;
-  pkDcPlan(u,v,how,ids).forEach(function(x){
+  plan.forEach(function(x){
     var li=(lineItems||[]).find(function(l){return l.id===x.li;});
     var row={name:nm,sign:-1,li:x.li,liName:li?(li.name||''):''};
     if(u==='pct'){row.unit='pct';row.pct=Math.min(v,100);}
@@ -3838,8 +3862,10 @@ function pkDcDo(nm,u,v,how){
     if(ix>=0)adjusts[ix]=row;else adjusts.push(row);
   });
   renderAdjusts();App.upPrev();
-  $('pkdc-modal').classList.add('hidden');pkDcRefresh();
-  pkDcUndoShow('🏷️ '+nm+' · 품목 '+ids.length+'개 −'+fmtAmt(_adjR2(tot)));
+  if(!keep)$('pkdc-modal').classList.add('hidden');
+  pkDcRefresh();
+  var m=$('pkdc-modal');if(m&&!m.classList.contains('hidden'))pkDcDraw();
+  pkDcUndoShow('🏷️ '+nm+' · 품목 '+plan.length+'개 −'+fmtAmt(_adjR2(tot)));
 }
 window.pkDcApply=function(){
   var nm=String(_pkDc.name||'').trim(),v=Math.abs(parseFloat(_pkDc.val)||0);
@@ -3862,6 +3888,124 @@ window.pkDcUndo=function(){
   if(_pkDcUndo){var s=_pkDcUndo;_pkDcUndo=null;adjusts.length=0;s.forEach(function(a){adjusts.push(a);});renderAdjusts();App.upPrev();pkDcRefresh();
     var m=$('pkdc-modal');if(m&&!m.classList.contains('hidden'))pkDcDraw();showToast('↩ 되돌렸습니다');}
   pkDcUndoHide();
+};
+// ── 💡 받을 수 있는 할인 자동 추천 (2026-11-24) — 추천만 하고, 「적용」을 눌러야 들어갑니다
+//    ① 회원 인건비 할인 : 연결된 계약서 혜택(repair 10% · repair20 20%) — 계약서가 없으면 회원구분 등급(골드·다이아 10% / 티타늄·스페셜 20%, 사업용 제외)
+//       대상 = 분류·이름에 「인건비」가 있는 품목
+//    ② 이번 달 프로모션 : promos/{YYYY-MM} 중 공개(live)이고 발행일이 기간 안인 것 · 품목(it)·방식(m)이 맞고 최소수량(q)을 채우면 추천
+//       패키지 회원은 행사 할인의 50% (계약서가 연결돼 있으면 「할인행사 중복(promo)」 체크가 있어야 추천)
+//       수량이 모자라면 「○대 더 담으면」 안내만
+var _pkSg={all:null,loading:false};
+function pkSgLoad(){
+  if(_pkSg.all||_pkSg.loading||!DB)return;
+  _pkSg.loading=true;
+  DB.collection('promos').get().then(function(snap){
+    var a=[];snap.docs.forEach(function(d){if(d.id==='_always')return;var x=d.data()||{};x._id=d.id;a.push(x);});
+    _pkSg.all=a;_pkSg.loading=false;pkSgRefresh();
+  }).catch(function(){_pkSg.loading=false;_pkSg.all=[];});
+}
+function pkSgRefresh(){try{pkFoot();}catch(e){}var m=$('pkdc-modal');if(m&&!m.classList.contains('hidden'))pkDcDraw();}
+function pkSgPromo(){
+  var d=val('inv-date')||new Date().toISOString().slice(0,10);
+  return (_pkSg.all||[]).filter(function(p){return p.status==='live'&&p.from&&p.to&&p.from<=d&&d<=p.to;})
+    .sort(function(a,b){return String(b.from).localeCompare(String(a.from));})[0]||null;
+}
+function pkSgTxt(l){return [l.cat,l.subcat,l.sub2,l.name].map(function(x){return String(x||'');}).join(' ');}
+// 홈페이지 요금표 품목(it) ↔ 인보이스 품목
+function pkSgFam(it,t){
+  it=String(it||'');
+  if(/벽걸이/.test(it))return /벽걸이/.test(t);
+  if(/매립/.test(it))return /매립|덕트/.test(t);
+  if(/천정형/.test(it))return /카세트|천정형/.test(t)&&!/매립|덕트/.test(t);
+  if(/실외기/.test(it))return /실외기/.test(t);
+  if(/통돌이/.test(it))return /통돌이/.test(t);
+  if(/드럼/.test(it))return /드럼/.test(t);
+  if(/건조기/.test(it))return /건조기/.test(t);
+  if(/후드/.test(it))return /후드/.test(t);
+  if(/냉장고/.test(it))return /냉장고/.test(t)&&(/싱글/.test(it)?!/더블|양문/.test(t):/더블/.test(it)?/더블|양문/.test(t):true);
+  if(/공기청정/.test(it))return /공기청정/.test(t);
+  if(/매트리스/.test(it))return /매트리스/.test(t);
+  if(/쇼파|소파/.test(it))return /쇼파|소파/.test(t)&&(/\[I형\]/.test(it)?/I\s*(형|타입)|일자/i.test(t):/\[L형\]/.test(it)?/L\s*(형|타입)/i.test(t):true);
+  if(/커튼/.test(it))return /커튼/.test(t)&&(/현장/.test(it)?/현장/.test(t):/수거/.test(it)?/수거/.test(t):/약식/.test(it)?/약식/.test(t):true);
+  if(/식탁의자/.test(it))return /의자/.test(t);
+  if(/실링팬/.test(it))return /실링팬/.test(t)&&(/간이/.test(it)?/간이/.test(t):/분해/.test(it)?/분해/.test(t):true);
+  if(/전등|콘센트/.test(it))return /전등|콘센트/.test(t);
+  var w=it.replace(/\s*[\(\[][^\)\]]*[\)\]]\s*/g,' ').replace(/에어컨/,'').trim().split(/\s+/)[0];
+  return !!w&&t.indexOf(w)>=0;
+}
+function pkSgMeth(m,t){
+  m=String(m||'');
+  if(!m||m==='기본가'||/sq\s*ft/i.test(m))return true;
+  if(m==='기본세척')return /기본/.test(t);
+  if(m==='전용약품세척')return /약품/.test(t)&&!/분해\s*약품/.test(t);
+  if(m==='분해약품세척')return /분해\s*약품/.test(t);
+  if(m==='스팀살균세척')return /살균/.test(t)&&!/습식/.test(t);
+  if(m==='전체분해세척')return /전체\s*분해/.test(t)||(/분해\s*세척/.test(t)&&!/반\s*분해|분해\s*약품/.test(t));
+  if(m==='스팀그릴세척')return /그릴/.test(t);
+  if(m==='건식진공흡입방식')return /건식/.test(t);
+  if(m==='습식스팀살균방식')return /습식/.test(t);
+  return t.indexOf(m)>=0;
+}
+function pkSgMember(){
+  var m=String(val('c-member')||''),pkg=/^패키지/.test(m),biz=/사업/.test(m);
+  var c=window._pkf&&window._pkf.ct,link=(window._invCtLink&&window._invCtLink.id)||'';
+  var ct=(c&&link&&c.id===link)?c:null;
+  var lab=0;
+  if(ct)lab=ct.bens.repair20?20:(ct.bens.repair?10:0);
+  else if(pkg&&!biz)lab=/티타늄|스페셜/.test(m)?20:(/골드|다이아/.test(m)?10:0);
+  var promoOk=!pkg||(ct?!!ct.bens.promo:!/실버/.test(m));
+  return {pkg:pkg,lab:lab,promoOk:promoOk,ct:!!ct,tier:(m.replace(/^패키지(\(사업\))?\s*-\s*/,'').replace(/회원$/,''))};
+}
+function pkSgList(){
+  var out=[],L=pkDcLis().filter(function(l){return !/^회원제상품/.test(String(l.cat||''));}),M=pkSgMember();
+  // ① 회원 인건비 할인
+  if(M.lab){
+    var lab=L.filter(function(l){return /인건비/.test(pkSgTxt(l));});
+    if(lab.length)out.push({nm:'회원 인건비 할인',u:'pct',v:M.lab,rows:lab.map(function(l){return {li:l.id,amt:_adjR2(pkDcBaseOf(l.id)*M.lab/100)};}),
+      why:(M.ct?'계약서 혜택':'회원구분 「'+M.tier+'」')+' · 수리·설치 인건비 '+M.lab+'%'});
+  }
+  // ② 이번 달 프로모션
+  var P=M.promoOk&&pkSgPromo();
+  if(P){
+    var mon=parseInt(String(P._id||P.from||'').slice(5,7),10)||'',nm=mon+'월 프로모션 할인',half=M.pkg;
+    (P.items||[]).forEach(function(r){
+      var v=parseFloat(r.val)||0,q0=Math.max(1,parseInt(r.q,10)||1);if(!(v>0))return;
+      var hit=L.filter(function(l){var t=pkSgTxt(l);return !/추가/.test(String(l.name||''))&&pkSgFam(r.it,t)&&pkSgMeth(r.m,t);});
+      if(!hit.length)return;
+      var q=hit.reduce(function(s,l){return s+(parseFloat(l.qty)||1);},0),_sv0=hit[0].svcId&&services.find(function(x){return x.id===hit[0].svcId;}),un=String((_sv0&&_sv0.unit)||'');
+      var lbl=String(r.label_ko||'').trim()||(String(r.it||'').replace(/\s*[\(\[][^\)\]]*[\)\]]\s*/g,' ').trim()+(r.m&&r.m!=='기본가'?' '+r.m:''));
+      var k=half?0.5:1,desc=r.kind==='pct'?v+'%':(r.kind==='off'?fmtAmt(v)+' 할인':fmtAmt(v)+' 특가');
+      if(q<q0){out.push({near:true,nm:nm,need:q0-q,why:lbl+' '+(q0-q)+un+' 더 담으면 '+desc+(half?' (회원 50%)':'')});return;}
+      var rows=hit.map(function(l){
+        var b=pkDcBaseOf(l.id),qt=parseFloat(l.qty)||1,a;
+        if(r.kind==='pct')a=b*Math.min(v,100)/100;
+        else if(r.kind==='off')a=v*qt;
+        else a=Math.max(0,((parseFloat(l.price)||0)-v)*qt);
+        return {li:l.id,amt:_adjR2(Math.min(b,a*k))};
+      }).filter(function(x){return x.amt>0.005;});
+      if(!rows.length)return;
+      out.push({nm:nm,u:r.kind==='pct'?'pct':'amt',v:r.kind==='pct'?v*k:0,rows:rows,
+        why:lbl+(q0>1?' '+q0+un+' 이상':'')+' '+desc+(half?' · 회원 중복 적용 50%':'')});
+    });
+  }
+  var R=_adjNorm(undefined);
+  out.forEach(function(g){if(g.near)return;var kk=_adjpKey(g.nm);
+    g.amt=g.rows.reduce(function(s,x){return s+x.amt;},0);
+    g.done=g.rows.every(function(x){return adjusts.some(function(a){return a.li===x.li&&!a.pkgFree&&_adjpKey(a.name)===kk;});});});
+  return out;
+}
+function pkSgHtml(L){
+  if(!L.length)return '';
+  var n=L.filter(function(g){return !g.near&&!g.done;}).length;
+  return '<div class="sgx"><div class="sgx-h">💡 받을 수 있는 할인<span>'+(n?n+'개 · 눌러야 적용':(L.some(function(g){return g.done;})?'모두 적용됨':'조건 확인'))+'</span></div>'+L.map(function(g,i){
+    if(g.near)return '<div class="sgx-c near"><div class="tx"><b>'+ivxEsc(g.nm)+'</b><small>'+ivxEsc(g.why)+'</small></div></div>';
+    return '<div class="sgx-c'+(g.done?' done':'')+'"><div class="tx"><b>'+ivxEsc(g.nm)+(g.u==='pct'?' '+(Math.round(g.v*100)/100)+'%':'')+'</b><small>'+ivxEsc(g.why)+'</small></div><div class="v">−'+fmtAmt(_adjR2(g.amt))+'</div>'+
+      (g.done?'<span class="go">✓ 적용됨</span>':'<button type="button" class="go" onclick="pkSgUse('+i+')">적용</button>')+'</div>';
+  }).join('')+'</div>';
+}
+window.pkSgUse=function(i){
+  var g=pkSgList()[i];if(!g||g.near||g.done)return;
+  pkDcCommit(g.nm,g.u,g.v,g.rows,true);
 };
 window.pkDcSavePreset=function(){
   var nm=String(_pkDc.name||'').trim();if(!nm){showToast('할인명을 먼저 입력해 주세요');return;}
@@ -3891,6 +4035,10 @@ function pkFoot(){
       '<span class="x" onclick="event.stopPropagation();pkTrayDel('+i+')" aria-label="빼기">✕</span></button>';
   }).join('');
   var db=$('sk-dcb');if(db)db.disabled=!lineItems.length;
+  try{var _sg=pkSgList(),_n=_sg.filter(function(g){return !g.near&&!g.done;}).length,_nr=_sg.filter(function(g){return g.near;})[0];
+    var bg=$('sk-dcbg');if(bg){bg.textContent=_n;bg.style.display=_n?'':'none';}
+    var tp=$('sk-tip');if(tp){tp.style.display=(_n||_nr)?'':'none';tp.innerHTML=_n?('💡 받을 수 있는 할인 '+_n+'개<b>확인 ›</b>'):(_nr?'💡 '+ivxEsc(_nr.why)+'<b>보기 ›</b>':'');}
+  }catch(e){}
   if(_pkEd)pkEdDraw();
 }
 window.openSvcPicker=openSvcPicker;window.closeSvcPicker=closeSvcPicker;
