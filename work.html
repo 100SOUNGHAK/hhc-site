@@ -280,6 +280,12 @@ html,body{background:#EEF2F8}
 .sp-btn small{display:block;font-size:11.5px;font-weight:700;color:var(--ink3);margin-top:2px}
 .sp-btn .n{position:absolute;top:-6px;right:-4px;min-width:24px;height:24px;border-radius:12px;padding:0 6px;background:var(--ok);color:#fff;font-size:12.5px;font-weight:800;line-height:24px;font-variant-numeric:tabular-nums;box-shadow:0 2px 6px rgba(14,155,99,.45)}
 .sp-btn.b{color:#9B2C2C}.sp-btn.a{color:#0B6B47}
+.sp-more{display:block;width:100%;margin-top:10px;border:0;border-radius:14px;padding:15px 10px;font:inherit;font-size:16px;font-weight:800;cursor:pointer;color:#fff;
+  background:linear-gradient(180deg,#1d4a8f,var(--n));box-shadow:0 3px 0 #07102a,0 10px 18px -10px rgba(14,35,80,.6);transition:transform .14s}
+.sp-more:active{transform:translateY(2px);box-shadow:0 1px 0 #07102a}
+.sp-alb{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px}
+.sp-alb span{font-size:12.5px;font-weight:700;color:var(--ink3);margin-right:2px}
+.sp-alb button{border:0;border-radius:999px;padding:7px 11px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--ink2);background:#F1F4FA;box-shadow:inset 0 0 0 1px var(--line)}
 .sp-q{margin-top:12px;font-size:13px;font-weight:700;color:var(--n);background:#EEF3FC;border-radius:10px;padding:9px 12px;display:flex;align-items:center;gap:8px}
 .sp-q.off{color:#8A5A00;background:#FFF6E0}
 .sp-q:before{content:'';flex:none;width:12px;height:12px;border:2px solid #C4D2EE;border-top-color:var(--n);border-radius:50%;animation:wkspin .8s linear infinite}
@@ -693,10 +699,10 @@ load();
    · 이 블록만 지우고 위 두 줄(window.__sp)을 남겨 두어도 화면은 그대로 동작. */
 (function(){
   const TX={en:{h:'Site photos',s:'Sent to the office for the report',temp:'Temperature',before:'Before',after:'After',
-      ts:'Meter photos',bs:'Before cleaning',as:'After cleaning',up:n=>'Uploading '+n+' photo'+(n>1?'s':'')+'…',
+      ts:'📷 Camera',bs:'📷 Camera',as:'📷 Camera',alb:'From gallery',more:c=>'📷 One more · '+c,up:n=>'Uploading '+n+' photo'+(n>1?'s':'')+'…',
       off:n=>n+' photo'+(n>1?'s':'')+' waiting — will upload when internet is back',del:'Delete this photo?',fail:'Could not upload: ',chip:'Photos'},
     ko:{h:'현장 사진',s:'보고서용으로 사무실에 전달됩니다',temp:'온도 측정',before:'세척 전',after:'세척 후',
-      ts:'계측기 사진',bs:'청소 전',as:'청소 후',up:n=>n+'장 올리는 중…',off:n=>n+'장 대기 중 — 인터넷이 연결되면 올라갑니다',del:'이 사진을 지울까요?',fail:'올리지 못했습니다: ',chip:'사진'}};
+      ts:'📷 바로 촬영',bs:'📷 바로 촬영',as:'📷 바로 촬영',alb:'앨범에서',more:c=>'📷 한 장 더 · '+c,up:n=>n+'장 올리는 중…',off:n=>n+'장 대기 중 — 인터넷이 연결되면 올라갑니다',del:'이 사진을 지울까요?',fail:'올리지 못했습니다: ',chip:'사진'}};
   const CATS=[['temp','🌡️',''],['before','🧽','b'],['after','✨','a']];
   const tt=()=>TX[L==='ko'?'ko':'en'];
   let Q=[];            // 올릴 대기열 {id,job,date,cat,f,t,w,h,taken,url}
@@ -762,7 +768,9 @@ load();
     const t=tt(),S=j.site||[],P=pend(j.id),tot=S.length+P.length;
     let h=`<div class="sp" data-job="${esc(j.id)}"><div class="sp-h"><i>📷</i><div><b>${t.h}</b><small>${t.s}</small></div>${tot?'<span class="sp-tot">'+tot+'</span>':''}</div><div class="sp-btns">`+
       CATS.map(c=>{const n=S.filter(x=>x.cat===c[0]).length+pend(j.id,c[0]).length;
-        return `<button type="button" class="sp-btn ${c[2]}" data-spc="${c[0]}"><em>${c[1]}</em><b>${t[c[0]]}</b><small>${t[c[0][0]+'s']}</small>${n?'<span class="n">'+n+'</span>':''}</button>`;}).join('')+'</div>';
+        return `<button type="button" class="sp-btn ${c[2]}" data-spcam="${c[0]}"><em>${c[1]}</em><b>${t[c[0]]}</b><small>${t[c[0][0]+'s']}</small>${n?'<span class="n">'+n+'</span>':''}</button>`;}).join('')+'</div>';
+    if(LAST&&LAST.job===j.id){const c=CATS.find(x=>x[0]===LAST.cat);h+=`<button type="button" class="sp-more ${c[2]}" data-spcam="${c[0]}">${t.more(t[c[0]])}</button>`;}
+    h+=`<div class="sp-alb"><span>🖼 ${t.alb}</span>`+CATS.map(c=>`<button type="button" data-spalb="${c[0]}">${c[1]} ${t[c[0]]}</button>`).join('')+'</div>';
     const mine=Q.filter(x=>x.job===j.id).length;
     if(mine)h+=`<div class="sp-q${offline?' off':''}">${offline?t.off(mine):t.up(mine)}</div>`;
     CATS.forEach(c=>{const s=S.filter(x=>x.cat===c[0]),p=pend(j.id,c[0]);if(!s.length&&!p.length)return;
@@ -775,12 +783,15 @@ load();
   window.__sp={card,chip};
 
   // 버튼 · 사진 누르기
-  const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;inp.style.display='none';document.body.appendChild(inp);
-  let TGT=null;
-  inp.addEventListener('change',()=>{const fs=Array.from(inp.files||[]).filter(f=>/^image\//.test(f.type||'image/'));inp.value='';if(TGT&&fs.length)add(TGT.job,TGT.cat,fs);});
+  /* 카메라 바로 열기(capture) · 앨범에서 여러 장 (2026-11-24) */
+  const mk=(cam)=>{const i=document.createElement('input');i.type='file';i.accept='image/*';if(cam)i.setAttribute('capture','environment');else i.multiple=true;i.style.display='none';document.body.appendChild(i);return i;};
+  const camIn=mk(true),albIn=mk(false);
+  let TGT=null,LAST=null;
+  const take=(i,cam)=>{const fs=Array.from(i.files||[]).filter(f=>/^image\//.test(f.type||'image/'));i.value='';if(TGT&&fs.length){if(cam)LAST={job:TGT.job,cat:TGT.cat};add(TGT.job,TGT.cat,fs);}};
+  camIn.addEventListener('change',()=>take(camIn,true));albIn.addEventListener('change',()=>take(albIn,false));
   document.getElementById('wk-sh-bd').addEventListener('click',async e=>{
-    const b=e.target.closest('[data-spc]');
-    if(b){const c=b.closest('.sp');TGT={job:c.dataset.job,cat:b.dataset.spc};inp.click();return;}
+    const b=e.target.closest('[data-spcam],[data-spalb]');
+    if(b){const c=b.closest('.sp');const cam=b.hasAttribute('data-spcam');TGT={job:c.dataset.job,cat:cam?b.dataset.spcam:b.dataset.spalb};(cam?camIn:albIn).click();return;}
     const x=e.target.closest('[data-spx]');
     if(x){e.stopPropagation();if(!confirm(tt().del))return;const id=x.dataset.spx;
       const r=await fetch('/api/work?k='+encodeURIComponent(window.__WK)+'&op=del&id='+encodeURIComponent(id),{method:'POST'}).catch(()=>null);
