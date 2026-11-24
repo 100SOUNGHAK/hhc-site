@@ -1279,7 +1279,9 @@ function itemNorm(n){n=String(n||'');return ITEM_ALIAS[n.trim()]||n;}
 var STATUS_OPTS=['ok','warn','bad'];
 var STATUS_LBL={ok:'✅ 정상',warn:'⚠️ 주의',bad:'❌ 정비필요'};
 var RISK_OPTS=[{v:'',l:'위험도'},{v:'-',l:'없음'},{v:'vh',l:'상'},{v:'h',l:'중'},{v:'m',l:'하'},{v:'l',l:'최하'}];
-var LOC_OPTS=['안방','거실1','거실2','방1','방2','방3','주방','사무실','회의실','복도','현관','베란다'];
+var LOC_OPTS=['안방','거실1','거실2','거실3','방1','방2','방3','방4','주방','사무실','회의실','복도','현관','베란다'];
+// 새 보고서에서 대수를 고를 때 「에어컨별 설치 위치」 기본값 (위치를 아직 하나도 안 고른 첫 설비에만 · 바꿀 수 있음) (2026-11-24)
+var EQ_DEF_LOCS={5:['거실1','거실2','안방','방1','방2']};
 var AC_OPTS=['AC 1','AC 2','AC 3','AC 4','AC 5','AC 6','AC 7','AC 8'];
 var UNIT_OPTS=['1대','2대','3대','4대','5대','6대','7대','8대','9대','10대'];
 var TYPE_OPTS=['벽걸이형','4WAY 카세트형','FCU형 (덕트형)','실외기'];
@@ -1796,6 +1798,8 @@ function addEquip(unit,type,loc,model,cap,acs){
       else if(r.el.isConnected){r.el.remove();r.dup.remove();}
     });
     eqRows.slice(0,n).forEach(function(r){eqa.appendChild(r.el);eqa.appendChild(r.dup);});   // 순서 유지
+    if(start===1&&EQ_DEF_LOCS[n]&&eqRows.slice(0,n).every(function(r){return !r.dd.getDdVal();}))
+      EQ_DEF_LOCS[n].forEach(function(v,i){if(eqRows[i]&&eqRows[i].dd.setDdVal)eqRows[i].dd.setDdVal(v);});
     eqa.style.display=n?'':'none';
     locWrap.style.display=(wrap._eqIsAc()&&n)?'none':'';
     title.textContent='설비'+(n?' · A'+start+(n>1?' ~ A'+(start+n-1):''):'');
@@ -11372,6 +11376,10 @@ body.m38q .m38-drain{display:block}
 .m38-site-b{display:flex;gap:6px;margin-top:10px}
 .m38-site-b button{flex:1;border:0;border-radius:10px;padding:10px 8px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;background:#C9A44C;color:#0E2350;box-shadow:0 2px 0 #8f6f28}
 .m38-site-b button.s{flex:0 0 auto;background:rgba(255,255,255,.12);color:#fff;box-shadow:none}
+.m38-site.none{background:#fff;color:#14192A;padding:10px 12px;box-shadow:0 1px 2px rgba(14,35,80,.08),0 6px 14px -8px rgba(14,35,80,.3)}
+.m38-site.none .m38-site-h b{font-size:13.5px}
+.m38-site.none .m38-site-h small{color:#98A1B4}
+.m38-site-w{flex:none;border:0;border-radius:9px;padding:8px 11px;font:inherit;font-size:12.5px;font-weight:800;cursor:pointer;color:#0E2350;background:#EAF0FB;box-shadow:inset 0 0 0 1px #D3DEF3}
 .m38-site.done{background:#EAF6F0;color:#0B6B47;box-shadow:inset 0 0 0 1px #BFE3D0}
 .m38-site.done small{color:#2F7A5A}
 /* 공용 시트 */
@@ -11710,13 +11718,16 @@ let KEY=null;
 async function adminKey(){if(KEY)return KEY;const s=await getDoc(doc(db(),'settings','work_link'));KEY=s.exists()?(s.data().admin_key||''):'';return KEY;}
 function addD(ds,n){const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 const CACHE={};
-async function siteOf(date){
-  const c=CACHE[date];if(c&&Date.now()-c.t<60000)return c.v;
-  const q=await getDocs(query(collection(db(),'site_photos'),where('date','in',[date,addD(date,-1)])));
+/* days: 찾을 날짜들 — 기본 전날 · 당일 · 다음 날, 「최근 7일 보기」는 7일 전 ~ 다음 날 */
+async function siteOf(date,wide){
+  const ck=date+(wide?'|w':'');const c=CACHE[ck];if(c&&Date.now()-c.t<60000)return c.v;
+  const days=wide?[-6,-5,-4,-3,-2,-1,0,1].map(n=>addD(date,n)):[addD(date,-1),date,addD(date,1)];
+  const q=await getDocs(query(collection(db(),'site_photos'),where('date','in',days)));
   const jobs={};q.forEach(d=>{const p=d.data();if(!p.job||!p.url)return;const k=p.date+'|'+p.job;
     (jobs[k]=jobs[k]||{key:k,date:p.date,job:p.job,cname:p.cname||'',cphone:p.cphone||'',place:p.place||'',unit:p.unit||'',ph:[]}).ph.push(Object.assign({id:d.id},p));});
   const v=Object.values(jobs);v.forEach(j=>j.ph.sort((a,b)=>String(a.taken||a.at).localeCompare(String(b.taken||b.at))));
-  CACHE[date]={t:Date.now(),v};return v;
+  v.sort((a,b)=>b.date.localeCompare(a.date));
+  CACHE[ck]={t:Date.now(),v};return v;
 }
 function match(j,name,phone){
   const p=pn(phone),n=nn(name);
@@ -11728,16 +11739,19 @@ function match(j,name,phone){
 /* 배너 */
 const ban=document.createElement('div');ban.className='m38-site';ban.setAttribute('data-m36','0');
 (()=>{const c=$('f-client')&&$('f-client').closest('.card');if(c&&c.parentNode)c.parentNode.insertBefore(ban,c.nextSibling);})();
-let SHOWN=[],PICK=null,DONE={};
+let SHOWN=[],PICK=null,DONE={};   /* PICK = 「일정 고르기」로 고른 일정(자료 그대로) */
 function cnt(ph){const c={temp:0,before:0,after:0};ph.forEach(p=>{if(c[p.cat]!=null)c[p.cat]++;});return c;}
 function cntTxt(c){return ['temp','before','after'].filter(k=>c[k]).map(k=>CN[k]+' '+c[k]).join(' · ');}
 async function check(){
   if(!(RT()==='inspect'||RT()==='dispatch')||!db()){ban.classList.remove('on');return;}
   const date=($('f-date')&&$('f-date').value)||new Date(Date.now()+(new Date().getTimezoneOffset()+480)*60000).toISOString().slice(0,10);
-  let list=[];try{list=await siteOf(date);}catch(e){ban.classList.remove('on');return;}
-  if(!list.length){ban.classList.remove('on');return;}
+  /* 사진이 없어도 늘 보이게 — 없으면 작은 안내 + 「최근 7일 보기」 (2026-11-24) */
+  const none=(t,s)=>{SHOWN=[];ban.className='m38-site on none';
+    ban.innerHTML=`<div class="m38-site-h"><i>📷</i><div><b>${t}</b><small>${s}</small></div><button type="button" class="m38-site-w" data-pick="w">최근 7일 보기</button></div>`;};
+  let list=[];try{list=await siteOf(date);}catch(e){none('직원 현장 사진','불러오지 못했습니다 — 잠시 후 다시 열어 주세요');return;}
   const name=$('f-client')?$('f-client').value:'',phone=$('f-phone')?$('f-phone').value:'';
-  const hit=PICK?list.filter(j=>j.key===PICK):list.filter(j=>match(j,name,phone));
+  if(!list.length&&!PICK){none('직원 현장 사진 없음','점검일 '+esc(date)+' 전후로 직원이 올린 사진이 없습니다');return;}
+  const hit=PICK?[PICK]:list.filter(j=>match(j,name,phone));
   SHOWN=hit;
   if(hit.length){
     const ph=hit.flatMap(j=>j.ph),c=cnt(ph),done=hit.every(j=>DONE[j.key]);
@@ -11745,7 +11759,6 @@ async function check(){
     ban.innerHTML=`<div class="m38-site-h"><i>📷</i><div><b>${done?'✓ 직원 사진을 가져왔습니다':'직원이 올린 현장 사진 '+ph.length+'장'}</b><small>${esc(hit.map(j=>(j.place||j.cname)+(j.unit?' '+j.unit:'')).join(', '))} · ${cntTxt(c)}</small></div></div>`+
       (done?'':`<div class="m38-site-th">${ph.slice(0,7).map(p=>`<img src="${esc(p.t||p.url)}" alt="" loading="lazy">`).join('')}</div><div class="m38-site-b"><button type="button" data-imp="1">📥 이 보고서에 가져오기</button><button type="button" class="s" data-pick="1">다른 일정</button></div>`);
   }else{
-    if(!name.trim()&&!phone.trim()){ban.classList.remove('on');return;}
     ban.className='m38-site on';
     ban.innerHTML=`<div class="m38-site-h"><i>📷</i><div><b>직원 사진이 있는 일정 ${list.length}건</b><small>이 고객과 맞는 일정을 자동으로 찾지 못했습니다 · 골라서 가져오세요</small></div></div><div class="m38-site-b"><button type="button" data-pick="1">일정 고르기</button></div>`;
   }
@@ -11759,15 +11772,15 @@ const _lf=window.loadIntoForm;if(typeof _lf==='function')window.loadIntoForm=fun
 setTimeout(check,2500);
 
 ban.addEventListener('click',async e=>{
-  if(e.target.closest('[data-pick]')){pickSheet();return;}
+  const pk=e.target.closest('[data-pick]');if(pk){pickSheet(pk.getAttribute('data-pick')==='w');return;}
   if(e.target.closest('[data-imp]')){importNow(SHOWN);}
 });
-async function pickSheet(){
-  const date=($('f-date')&&$('f-date').value)||'';const list=await siteOf(date||new Date().toISOString().slice(0,10)).catch(()=>[]);
+async function pickSheet(wide){
+  const date=($('f-date')&&$('f-date').value)||new Date().toISOString().slice(0,10);const list=await siteOf(date,wide).catch(()=>[]);
   const S=window.__m38sheet;if(!S)return;
-  S.open('📷 직원 사진이 있는 일정','이 보고서 고객의 일정을 고르세요 · '+esc(date),list.map(j=>{const c=cnt(j.ph);
-    return `<button type="button" class="m38-job" data-job="${esc(j.key)}"><img src="${esc(j.ph[0].t||j.ph[0].url)}" alt=""><div><b>${esc(j.place||j.cname)}${j.unit?' '+esc(j.unit):''}</b><small>${esc(j.date)} · ${cntTxt(c)}${j.ph[0].by?' · '+esc([...new Set(j.ph.map(p=>p.by))].join(', ')):''}</small></div><em>${j.ph.length}장 ›</em></button>`;}).join('')||'<p class="m38-p">사진이 있는 일정이 없습니다.</p>');
-  S.body().onclick=ev=>{const b=ev.target.closest('[data-job]');if(!b)return;PICK=b.getAttribute('data-job');S.close();S.body().onclick=null;check();};
+  S.open('📷 직원 사진이 있는 일정','이 보고서 고객의 일정을 고르세요 · '+(wide?'최근 7일':esc(date)+' 전후'),list.map(j=>{const c=cnt(j.ph);
+    return `<button type="button" class="m38-job" data-job="${esc(j.key)}"><img src="${esc(j.ph[0].t||j.ph[0].url)}" alt=""><div><b>${esc(j.place||j.cname)}${j.unit?' '+esc(j.unit):''}</b><small>${esc(j.date)} · ${cntTxt(c)}${j.ph[0].by?' · '+esc([...new Set(j.ph.map(p=>p.by))].join(', ')):''}</small></div><em>${j.ph.length}장 ›</em></button>`;}).join('')||'<p class="m38-p">'+(wide?'최근 7일 동안':'이 날짜 전후로')+' 직원이 올린 사진이 없습니다.<br>직원 일정표의 일정에서 「📷 현장 사진」으로 올리면 여기에 나옵니다.</p>');
+  S.body().onclick=ev=>{const b=ev.target.closest('[data-job]');if(!b)return;PICK=list.find(j=>j.key===b.getAttribute('data-job'))||null;S.close();S.body().onclick=null;check();};
 }
 async function blobUrl(p,k){
   const r=await fetch('/api/work?k='+encodeURIComponent(k)+'&img='+encodeURIComponent(p.id),{cache:'no-store'});
