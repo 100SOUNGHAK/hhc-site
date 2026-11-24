@@ -2950,7 +2950,7 @@ function contractMsgText(o){
     if(o.pdfView)pdf+='\n'+(en?'📄 View PDF':'📄 PDF 보기')+' 👉 '+o.pdfView;
     if(o.pdfDl&&o.pdfDl!==o.pdfView)pdf+='\n'+(en?'📥 Download PDF':'📥 PDF 다운로드')+' 👉 '+o.pdfDl;
   }
-  return (en?'Hello, '+o.name+' 😊':'안녕하세요, '+o.name+' 고객님 😊')+'\n\n'+t[0]+pkL+'\n'+t[1]+'\n\n'+t[2]+'\n\n'+t[3]+' 👉 '+o.url+pdf+'\n📞 +60 17-247 2774 · Happy Home Care';
+  return (en?'Hello, '+o.name+' 😊':'안녕하세요, '+o.name+' 고객님 😊')+'\n\n'+t[0]+pkL+'\n'+t[1]+'\n\n'+t[2]+'\n\n'+t[3]+' 👉 '+o.url+(o.myUrl?'\n'+(en?'🏠 Open MY PAGE':'🏠 MY PAGE 열기')+' 👉 '+o.myUrl:'')+pdf+'\n📞 +60 17-247 2774 · Happy Home Care';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3354,6 +3354,7 @@ async function connectFirebase(cfg){
     unsub=onSnapshot(collection(db,'contracts'),snap=>{
       window.__hhcReady&&window.__hhcReady();
       allContracts=snap.docs.map(d=>({...d.data(),__id:d.id}));
+      try{hccLoad();}catch(_){}   // 📤 공유 메시지의 🏠 MY PAGE 링크용 고객 목록 미리 받기 (2026-11-24)
       setTimeout(()=>{ctBackfillNo();},1500);   // 예전 계약에 계약서번호 한 번 붙이기
       allContracts.sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
       updateSelectLists();
@@ -3607,7 +3608,25 @@ function ncSelfBase(){
 // 💌 패키지 가입 감사 안내장 주소 (/welcome) — 맨 아래 「계약서 보기」가 이 계약서(?view=&mode=all)를 엽니다 (2026-11-24)
 function ncWelcomeUrl(id,lang){
   const b=ncSelfBase().replace(/\/[^\/]*$/,'');
-  return b+'/welcome?k='+encodeURIComponent(id)+'&lang='+(lang==='en'?'en':'ko');
+  return b+'/welcome?k='+encodeURIComponent(id)+'&lang='+(lang==='en'?'en':'ko')+(arguments[2]?'&c='+encodeURIComponent(arguments[2]):'');
+}
+// 🏠 이 계약서 고객의 MY PAGE 고객 번호 (customers 문서ID) — 연결(ca_link 'm:ID') > 전화 > 이름·별칭 (2026-11-24)
+//    고객 목록은 hccLoad() 캐시를 씁니다 (없으면 '' → MY PAGE 줄 없이 보냄)
+function ncMyIdSync(c){
+  if(!c)return '';
+  const lk=[c.ca_link].concat(Array.isArray(c.ca_links)?c.ca_links:[]).map(String).find(v=>/^m:/.test(v));
+  if(lk)return lk.slice(2);
+  const list=HHCC_LIST||[];
+  const pn=hccPN(c.phone);
+  let m=pn?list.find(x=>hccPN(x.phone)===pn):null;
+  const nn=hccNN(String(c.name||'').replace(/\s*[(（][^()（）]*[)）]/g,''));
+  if(!m&&nn)m=list.find(x=>hccNameHit(x,nn));
+  return (m&&m._docId)||'';
+}
+async function ncMyId(c){try{await hccLoad();}catch(e){}return ncMyIdSync(c);}
+function ncMyUrl(cid,lang){
+  const b=ncSelfBase().replace(/\/[^\/]*$/,''),en=lang==='en';
+  return b+(en?'/my-en.html':'/my.html')+'?c='+encodeURIComponent(cid)+'&lang='+(en?'en':'ko');
 }
 window.ncSelfBase=ncSelfBase;
 
@@ -5539,12 +5558,14 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')window.cxaDe
 // 📤 계약서 공유 — 휴대폰은 공유창(왓츠앱·카카오톡 등), 컴퓨터는 메시지 복사
 window.cxaShare=function(btn){
   var d=btn.dataset, en=d.l==='en';
-  var url=location.origin+'/welcome?k='+encodeURIComponent(d.id)+'&lang='+d.l;   // 💌 가입 감사 안내장 → 맨 아래 「계약서 보기」 (2026-11-24)
+  var _c=(allContracts||[]).find(function(x){return x.__id===d.id;}),_cid=ncMyIdSync(_c);   // 🏠 MY PAGE (2026-11-24)
+  var url=location.origin+'/welcome?k='+encodeURIComponent(d.id)+'&lang='+d.l+(_cid?'&c='+encodeURIComponent(_cid):'');
+  var my=_cid?location.origin+(en?'/my-en.html':'/my.html')+'?c='+encodeURIComponent(_cid)+'&lang='+d.l:'';   // 💌 가입 감사 안내장 → 맨 아래 「계약서 보기」 (2026-11-24)
   var dt=String(d.dt||'').replace(/-/g,'.');
   // 2026-11 발송 문구 개편 — 공유창(여러 앱)으로 나가므로 굵은 글씨 별표는 쓰지 않습니다
   var msg=(en?'Hello, '+(d.nm||'Customer')+' 😊\n\n📑 Your service contract':'안녕하세요, '+(d.nm||'')+' 고객님 😊\n\n📑 서비스 계약서')+(dt?'\n🗓 '+dt:'')+
     '\n\n'+(en?'👉 Please check your contract and remaining balance.':'👉 계약서와 남은 금액을 확인해 주세요.')+
-    '\n\n'+(en?'💌 Thank-you note & contract':'💌 감사 안내 · 계약서 보기')+' \u{1F449} '+url+'\n📞 +60 17-247 2774 · Happy Home Care';
+    '\n\n'+(en?'💌 Thank-you note & contract':'💌 감사 안내 · 계약서 보기')+' \u{1F449} '+url+(my?'\n'+(en?'🏠 Open MY PAGE':'🏠 MY PAGE 열기')+' \u{1F449} '+my:'')+'\n📞 +60 17-247 2774 · Happy Home Care';
   var toast=function(t){var x=document.createElement('div');x.className='mpf-toast';x.textContent=t;document.body.appendChild(x);
     setTimeout(function(){x.remove();},2200);};
   var copy=function(){
@@ -6062,14 +6083,16 @@ async function renderSendTab(){
   //  · 계약서 · 「계약서+이용내역」 발송은 가입 감사 안내장(/welcome)으로 — 안내장 맨 아래 「계약서 보기」로 계약서가 열립니다 (2026-11-24)
   //  · 이용내역만 보낼 때와 PDF 첨부 발송은 예전처럼 계약서 화면으로 바로
   const _wl=currentSendMode!=='usage';
-  const customerUrl=_wl?ncWelcomeUrl(c.__id,L):withLang(`${ncSelfBase()}?view=${c.__id}&mode=${currentSendMode}`,L);
+  const _cid=await ncMyId(c);   // 🏠 MY PAGE 고객 번호 (안내장 버튼 · 메시지 줄)
+  const _my=_cid?ncMyUrl(_cid,L):'';
+  const customerUrl=_wl?ncWelcomeUrl(c.__id,L,_cid):withLang(`${ncSelfBase()}?view=${c.__id}&mode=${currentSendMode}`,L);
   const modeLb=hubModeLabel(L);
 
   // ── 메시지 생성 (인사 → 상태 → 구분선 → 정보 → 구분선 → 안내 → 감사 → 링크) ──
   function makeMsg(mode){
     // 문구 원본은 contractMsgText() 한 곳입니다 (2026-11 개편)
     return contractMsgText({name:c.name||(L==='en'?'Customer':'고객'),pkgLabel:pkg?pkg.label:'',paid:paid,bonus:bonus+spec,
-      first:paid+bonus+spec+carryT,remain:remain,mode:mode,lang:L,url:customerUrl,welcome:_wl});
+      first:paid+bonus+spec+carryT,remain:remain,mode:mode,lang:L,url:customerUrl,welcome:_wl,myUrl:_my});
   }
   const msg=makeMsg(currentSendMode);
 
@@ -6122,7 +6145,9 @@ async function renderSendTab(){
     try{
       if(typeof window.shorten!=='function')return msg;
       const s=await window.shorten(customerUrl);
-      return s?msg.replace(customerUrl,s):msg;
+      let m=s?msg.replace(customerUrl,s):msg;
+      if(_my){try{const s2=await window.shorten(_my);if(s2)m=m.replace(_my,s2);}catch(_){}}   // 🏠 MY PAGE 링크도 짧게
+      return m;
     }catch(e){return msg;}
   };
   const flash=id=>{const el=document.getElementById(id);if(!el)return;el.style.display='block';setTimeout(()=>{el.style.display='none';},2600);};
