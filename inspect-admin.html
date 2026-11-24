@@ -9081,7 +9081,7 @@ body .ph-chip.ph-chip-delb.on,#view-form .ph-chip.ph-chip-delb.on{border-color:#
         p:function(){ return '배관이 노후되어 연결부가 약해진 상태였습니다.'; },
         f:function(){ return '배관 노후가 확인됨.'; }, act:'배관 교체'}
     ];
-    var DRAIN=/배수|드레인|구배|기울기|단열/;
+    var DRAIN=/배수|드레인|구배|기울기|단열|보온/;
     function dict(d){ for(var i=0;i<DX.length;i++) if(DX[i].re.test(d)) return DX[i]; return null; }
     function segs(a){ return String(a||'').split(/\s*(?:>|,|;)\s*|\s+\/\s*|\s*\/\s+/).map(clean).filter(Boolean); }
     var REC_END=/\s*(권장|권고|권유|요망|추천|필요)(함|합니다)?$/;
@@ -9109,9 +9109,9 @@ body .ph-chip.ph-chip-delb.on,#view-form .ph-chip.ph-chip-delb.on{border-color:#
 
     g.def.forEach(function(f){
       var d=sp(f.defect), w=whereOf(f), a=String(f.action||''), pa=parseAction(a), x=dict(d+' '+a);
-      if(DRAIN.test(d)&&!/냉매/.test(d)&&!(x&&x.part!=='배관'&&!/배관/.test(x.part))&&(/배수|드레인|구배|단열/.test(d))){
+      if(DRAIN.test(d)&&!/냉매/.test(d)&&!(x&&x.part!=='배관'&&!/배관/.test(x.part))&&(/배수|드레인|구배|단열|보온/.test(d))){
         drain.on=true; if(/구배|기울기|역구배/.test(d+a)||/시공\s*불량/.test(d))drain.slope=true; if(/역구배/.test(d+a))drain.rev=true;
-        if(/단열/.test(d)){ drain.ins=true; if(/미처리/.test(d))drain.uninst=true; if(!allUnits(w)&&w.length)drain.insUnits=w; }
+        if(/단열|보온/.test(d)){ drain.ins=true; if(/미처리/.test(d))drain.uninst=true; if(!allUnits(w)&&w.length)drain.insUnits=w; }
         if(/2차\s*손상/.test(a))drain.second=true; pa.rec.forEach(function(r){ if(r.cond)drain.cond=r.cond; });
         drain.risk=Math.max(drain.risk,RISK[f.risk]||2); return; }
       if(x) topicsCovered.push(x.topic);
@@ -9161,7 +9161,7 @@ body .ph-chip.ph-chip-delb.on,#view-form .ph-chip.ph-chip-delb.on{border-color:#
         if(/세척|청소/.test(b)&&/완료/.test(b))washed.push(part);
         if(a&&!OK.test(a))(/고도|심각|심한|찌든/.test(a)?dirtH:/경미/.test(a)?dirtL:dirtM).push(part); return; }
       if(/막힘/.test(nmr)){ if(a&&!OK.test(a))clog=/심각|심한/.test(a)?'heavy':'mid'; if(/완료/.test(b))clogDone=true; return; }
-      if(/배수|드레인/.test(nmr)){ if(r.st!=='ok'||(a&&!OK.test(a))){ drain.on=true; if(/기울기|구배/.test(a))drain.slope=true; if(/단열/.test(a))drain.ins=true; if(/역구배/.test(a))drain.rev=true; } return; }
+      if(/배수|드레인/.test(nmr)){ if(r.st!=='ok'||(a&&!OK.test(a))){ drain.on=true; if(/기울기|구배|경사/.test(a))drain.slope=true; if(/단열|보온/.test(a))drain.ins=true; if(/(단열|보온).{0,4}(미처리|미시공|없음)/.test(a))drain.uninst=true; if(/역구배/.test(a))drain.rev=true; } return; }
       var covered=topicsCovered.some(function(t){ return t.test(nmr); });
       var loc=(a.match(/^([^()]{1,6})\)\s*/)||[])[1]; if(loc)a=a.replace(/^[^()]{1,6}\)\s*/,''); a=a.replace(/\s*상태$/,'');
       if(covered)return;
@@ -9263,7 +9263,7 @@ body .ph-chip.ph-chip-delb.on,#view-form .ph-chip.ph-chip-delb.on{border-color:#
       dirt.push(lvl===0?T('실외기 응축기는 오염이 경미해 '+(/불필요/.test(cond.b)?'지금은 세척이 필요하지 않습니다.':'현재 운전에 영향은 없습니다.'),'실외기 응축기는 경미한 오염 상태로 '+(/불필요/.test(cond.b)?'현재 세척은 불필요함.':'운전에 영향은 없는 수준임.'))
         :T('실외기 응축기에는 '+(lvl===2?'상당한':'일반적인 수준의')+' 오염이 쌓여 있어 열을 내보내는 효율이 떨어질 수 있습니다.','실외기 응축기는 '+(lvl===2?'상당한':'일반 수준의')+' 오염이 누적되어 열교환 효율 저하가 우려됨.')); }
     if(dirt.length) C.push(T('오염 상태: ','오염 상태: ')+dirt.join(' '));
-    if(okNames.length) C.push(T(okNames.join('·')+' 상태는 이상 없습니다.',okNames.join('·')+' 상태는 이상 없음.'));
+    if(okNames.length) C.push(T('이 외 점검항목은 특이 사항이 발견되지 않았습니다.','이 외 점검항목은 특이 사항이 발견되지 않음.'));
     if(C.length) S2.push({h:COMMON,li:C});
 
     /* ③ 조치 */
@@ -9283,6 +9283,7 @@ body .ph-chip.ph-chip-delb.on,#view-form .ph-chip.ph-chip-delb.on{border-color:#
     if(cond&&/필요/.test(cond.b)&&!/불필요/.test(cond.b)&&!recCond.length) REC.push({t:T('실외기 세척을 권장드립니다. 실외기가 오염되면 열을 잘 내보내지 못해 냉방 효율이 떨어집니다.','열교환 효율 유지를 위해 실외기 세척을 권고함.'),s:2.2});
     if(drain.on){ var da=drain.rev?'배수배관 재시공(구배·단열)':(drain.slope&&drain.ins?'배수배관 구배 조정과 단열 처리':drain.slope?'배수배관 구배 조정':'배수배관 단열 처리');
       if(F) da=da.replace('과 ',' 및 ');
+      if((drain.slope||drain.rev)&&drain.ins) REC.push({t:drain.uninst?'에어컨: 배수배관 기울기(구배) 개선 및 단열 처리 — 원활한 응축수 배출과 결로에 의한 누수 예방을 위해 배수배관의 적정 구배(1m당 약 1cm 이상) 확보 및 단열재 시공 작업을 '+T('권장드립니다.','권고함.'):'에어컨: 배수배관 기울기(구배) 개선 및 단열 보강 — 원활한 응축수 배출과 결로에 의한 누수 예방을 위해 배수배관의 적정 구배(1m당 약 1cm 이상) 확보 및 단열재 보강 작업을 '+T('권장드립니다.','권고함.'),s:drain.risk+(drain.second?0.6:0)}); else
       REC.push({t:drain.cond?recSentence('',da,drain.cond.replace(/누수·벽손상/,'누수·벽 손상'),false):T('물샘과 벽 손상을 막기 위해 '+jo(da,'을','를')+' 권장드립니다.','물샘 및 2차 손상 예방을 위해 '+jo(da,'을','를')+' 권고함.'),s:drain.risk+(drain.second?0.6:0)}); }
     if(g.kind==='dispatch'){ (g.work||[]).slice().reverse().forEach(function(x){ x=sp(x).replace(/\.$/,''); if(!x)return; if(/(다|음|됨|함)$/.test(x)){DONE.unshift(x+'.');return;} var mk=x.match(/^(.*?)\s*확인$/); DONE.unshift(mk?T(jo(mk[1],'을','를')+' 확인했습니다.',jo(mk[1],'을','를')+' 확인함.'):T(jo(x,'을','를')+' 완료했습니다.',jo(x,'을','를')+' 완료함.')); });
       if(g.done===false) REC.unshift({t:T('추가 조치를 위해 다시 방문드릴 예정입니다'+(g.revisit?' ('+g.revisit+')':'')+'.','추가 조치를 위해 재방문 예정'+(g.revisit?' ('+g.revisit+')':'')+'.'),s:9}); }
@@ -9430,6 +9431,13 @@ body .ph-chip.ph-chip-delb.on,#view-form .ph-chip.ph-chip-delb.on{border-color:#
 '- 근거가 약한 내용(예: 권장 정비에만 있고 점검 결과에는 없는 문제)은 고객 문장에 넣지 말고 [확인 사항]에 적으십시오.',
 '- 「정상 — 고도 찌든 오염상태>현장세척 완료」처럼 상태가 정상이고 메모가 「오염>세척 완료」이면, 문제가 아니라 「이번에 완료한 작업」(세척)으로 다룹니다.',
 '',
+kind==='install'?'':'고정 문구 (대표님 지정 — 해당되면 아래 문장을 글자 그대로 씁니다. 다른 말로 바꾸거나 덧붙이지 마십시오):',
+kind==='install'?'':'- 배수(드레인) 배관의 기울기(구배) 불량과 단열 불량이 함께 입력된 경우 — 빠른 보고서·자세히 작성 모두 같습니다. 항목 점검·결함·권장 정비·현장 메모 어디에 적혀 있든, 표현이 달라도(구배 불량·경사 부족·역구배 / 단열 부족·미흡·보온재 부족) 같은 문제로 봅니다. 단, 「단열 미처리」(단열재가 아예 없음·미시공)는 「단열 불량」과 구분해 아래 [미처리] 문구를 씁니다:',
+kind==='install'?'':'  · ①의 「지금 할 일」 문장이 이 문제이면: 「'+(formal?'배수 불량 및 결로에 의한 누수 발생 예방을 위해 배수관 기울기와 단열 보강을 권고함.':'배수 불량 및 결로에 의한 누수 발생을 예방하기 위해 배수관 기울기와 단열 보강을 권장드립니다.')+'」 / [미처리]: 「'+(formal?'배수 불량 및 결로에 의한 누수 발생 예방을 위해 배수관 기울기 개선과 단열 처리를 권고함.':'배수 불량 및 결로에 의한 누수 발생을 예방하기 위해 배수관 기울기 개선과 단열 처리를 권장드립니다.')+'」',
+kind==='install'?'':'  · ② 확인 내용에서 [미처리]는 「배관에 보온재(단열재)가 감겨 있지 않은 것(단열 미처리)이 확인되었습니다.」처럼 「부족」이 아니라 「없음」으로 씁니다.',
+kind==='install'?'':'  · ③ 「권장드리는 사항」의 이 문제 줄: 「- 에어컨: 배수배관 기울기(구배) 개선 및 단열 보강 — 원활한 응축수 배출과 결로에 의한 누수 예방을 위해 배수배관의 적정 구배(1m당 약 1cm 이상) 확보 및 단열재 보강 작업을 '+(formal?'권고함.':'권장드립니다.')+'」 / [미처리]: 「- 에어컨: 배수배관 기울기(구배) 개선 및 단열 처리 — 원활한 응축수 배출과 결로에 의한 누수 예방을 위해 배수배관의 적정 구배(1m당 약 1cm 이상) 확보 및 단열재 시공 작업을 '+(formal?'권고함.':'권장드립니다.')+'」 (에어컨 1대이거나 전체 공통이면 「에어컨:」 그대로, 일부 에어컨만이면 「거실·안방 에어컨:」처럼 그 위치로만 바꿉니다.)',
+kind==='install'?'':'- 「이상 없는 항목」 소제목 아래는 항목 이름을 나열하지 말고 항상 이 한 줄만: 「- '+(formal?'이 외 점검항목은 특이 사항이 발견되지 않음.':'이 외 점검항목은 특이 사항이 발견되지 않았습니다.')+'」',
+'',
 '논리 순서 (보고서 전체를 하나의 이야기로):',
 '- 결론 먼저: ①에서 전체 상태와 해야 할 일을 먼저 말하고, ②에서 그 근거를, ③에서 할 일을 말합니다. ①의 결론과 ②·③의 내용이 반드시 서로 맞아야 합니다.',
 '- 문제는 중요한 순서로: 안전·건강 → 냉방이 안 되거나 약한 문제 → 물이 새거나 샐 수 있는 문제 → 오염·정기 관리. 에어컨 번호 순서가 아니라 이 순서로 씁니다.',
@@ -9466,7 +9474,7 @@ kind!=='washer'&&disp?'- 첫 줄 앞에 「'+(rep?'요청 내용':'출동 사유
 kind==='washer'?'점검 항목':'냉방 성능',
 kind==='washer'?'- 체크리스트 결과를 한두 줄로.':'- 측정한 에어컨의 온도차와 판단을 한두 줄로(위치별 값은 괄호에). 측정값이 없으면 이 소제목을 빼십시오.',
 '이상 없는 항목',
-'- 이상이 없는 점검 항목을 한 줄로 묶어 「…은 모두 이상 없습니다.」',
+'- 위 고정 문구 한 줄(「이 외 점검항목은 특이 사항이 발견되지 않았습니다.」). 이상 없는 항목이 하나도 없으면 이 소제목을 빼십시오.',
 '',
 '③ 조치사항 및 권고사항',
 '이번에 완료한 작업',
@@ -9487,7 +9495,7 @@ kind==='washer'?'- 체크리스트 결과를 한두 줄로.':'- 측정한 에어
 '냉방 성능',
 '- 거실 에어컨은 온도차 14.0°C로 기준을 충족해 냉방이 잘 되고 있습니다.',
 '이상 없는 항목',
-'- 바람 날개 작동, 소음·진동, 리모컨 작동은 모두 이상 없습니다.',
+'- 이 외 점검항목은 특이 사항이 발견되지 않았습니다.',
 '③ 조치사항 및 권고사항',
 '이번에 완료한 작업',
 '- 에어컨 2대 내부 세척을 마쳤습니다.',
@@ -11582,7 +11590,7 @@ body.m38q .m38-drain{display:block}
   var drain=document.createElement('div');drain.className='card m38-drain';drain.setAttribute('data-m38q','1');
   drain.innerHTML='<div class="card-hdr"><div class="card-icon">💧</div><div class="card-title">드레인 배수 상태</div></div><div class="card-body"><div class="m38-warn" id="m38-cw"></div><div id="m38-drs"></div><div class="m38-sum" id="m38-dsum"></div><button type="button" class="m38-detail" data-detail="1">⚠ 다른 문제가 있어요 → 📋 자세히 작성으로</button></div>';
   (function(){var cc=cardOf('cool-units');if(cc&&cc.parentNode)cc.parentNode.insertBefore(drain,cc.nextSibling);else body.appendChild(drain);})();
-  var RS=[['slope','기울기(구배) 불량','배수 배관 기울기 불량'],['ins','단열 불량','배관 단열 불량'],['slow','배수 지연','배수 지연']];
+  var RS=[['slope','기울기(구배) 불량','배수 배관 기울기 불량'],['ins','단열 불량','배관 단열 불량'],['noins','단열 미처리','배관 단열 미처리'],['slow','배수 지연','배수 지연']];
   var DST={};   /* 에어컨 번호 → {on, r:{slope,ins,slow}} */
   function units(){return [].slice.call(document.querySelectorAll('#cool-units .cu-item')).map(function(w){
     return {id:w.id.replace('cu-wrap-',''),lbl:w._cuLbl?w._cuLbl():'',loc:w._cuLoc?w._cuLoc():''};});}
@@ -11606,14 +11614,14 @@ body.m38q .m38-drain{display:block}
     var all=on.length===U.length&&ord.length===1;
     var note=all?ord[0]+' (전체 에어컨)':ord.map(function(k){return k+' ('+groups[k].join(' · ')+')';}).join(' / ');
     var any={};on.forEach(function(u){RS.forEach(function(r){if(st(u).r[r[0]])any[r[0]]=1;});});
-    var title=any.slope&&any.ins?'배수배관 기울기 및 단열 처리 개선':any.slope?'배수배관 기울기 개선':any.ins?'배수배관 단열 처리 개선':'배수 배관 점검 및 세정';
+    var title=any.noins?(any.slope?'배수배관 기울기 개선 및 단열 처리':'배수배관 단열 처리'):any.slope&&any.ins?'배수배관 기울기 및 단열 처리 개선':any.slope?'배수배관 기울기 개선':any.ins?'배수배관 단열 처리 개선':'배수 배관 점검 및 세정';
     var where=all?'전체 에어컨':on.map(uName).join(' · ');
-    var desc=where+' — '+(any.slope?'응축수가 고이지 않도록 배수 배관을 배출 방향으로 기울게(1m당 약 1cm 이상) 다시 잡고':'')+(any.slope&&any.ins?', ':'')+(any.ins?'결로 물 떨어짐을 막도록 배관 단열재를 보강':'')+(!any.slope&&!any.ins?'배수 배관 막힘·기울기를 점검하고 세정':'')+'하는 것을 권합니다.';
+    var desc=where+' — '+(any.slope?'응축수가 고이지 않도록 배수 배관을 배출 방향으로 기울게(1m당 약 1cm 이상) 다시 잡고':'')+(any.slope&&(any.ins||any.noins)?', ':'')+(any.noins?'결로 물 떨어짐을 막도록 단열재가 없는 배관에 단열재를 새로 시공':any.ins?'결로 물 떨어짐을 막도록 배관 단열재를 보강':'')+(!any.slope&&!any.ins&&!any.noins?'배수 배관 막힘·기울기를 점검하고 세정':'')+'하는 것을 권합니다.';
     return {on:true,note:note,title:title,desc:desc};
   }
   function sumDrain(){var p=drainPlan();
     $('m38-dsum').innerHTML=p.on?'저장 시 자동: 항목 「드레인 배수 및 배관 상태」 = <b>⚠️ 주의</b> · '+esc(p.note)+'<br>권장 정비 = <b>'+esc(p.title)+'</b> · 종합 판정 = <b>🟢 정상</b>':'저장 시 자동: 「드레인 배수 및 배관 상태」 = <b>✅ 정상</b> · 종합 판정 = <b>🟢 정상</b>';}
-  var REC_TITLES=['배수배관 기울기 및 단열 처리 개선','배수배관 기울기 개선','배수배관 단열 처리 개선','배수 배관 점검 및 세정'];
+  var REC_TITLES=['배수배관 기울기 및 단열 처리 개선','배수배관 기울기 개선','배수배관 단열 처리 개선','배수 배관 점검 및 세정','배수배관 기울기 개선 및 단열 처리','배수배관 단열 처리'];
   /* 숨은 칸에 반영 (빠른 보고서일 때만) */
   function sync(){
     if(!document.body.classList.contains('m38q'))return;
@@ -11639,7 +11647,7 @@ body.m38q .m38-drain{display:block}
     var o=e.target.closest('[data-oth]');if(o){toDetail(o.getAttribute('data-oth'));return;}
     var row=e.target.closest('.m38-dr');if(!row)return;var s=DST[row.getAttribute('data-u')];if(!s)return;
     if(e.target.closest('[data-tg]')){s.on=!s.on;}
-    else{var r=e.target.closest('[data-r]');if(!r)return;s.r[r.getAttribute('data-r')]=s.r[r.getAttribute('data-r')]?0:1;if(!reasonTxt(s).length)s.on=false;}
+    else{var r=e.target.closest('[data-r]');if(!r)return;var rk=r.getAttribute('data-r');s.r[rk]=s.r[rk]?0:1;if(s.r[rk]&&rk==='ins')s.r.noins=0;if(s.r[rk]&&rk==='noins')s.r.ins=0;if(!reasonTxt(s).length)s.on=false;}
     drawDrain();sync();
   });
   /* 냉방 온도차가 낮으면 → 자세히 작성 권유 */
