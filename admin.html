@@ -2941,7 +2941,9 @@ function contractMsgText(o){
     usage:['🧾 *서비스 이용 내역*','💰 남은 금액 '+f(o.remain),'👉 이용 내역을 확인해 주세요.','🧾 이용 내역 보기'],
     all:['📑 *계약서 · 이용 내역*','💰 남은 금액 '+f(o.remain)+'\n      (처음 '+f(o.first)+')','👉 계약 내용과 이용 내역을 확인해 주세요.','📑 계약서 · 내역 보기']
   };
-  const t=T[mode]||T.contract;
+  const t=(T[mode]||T.contract).slice();
+  // 💌 가입 감사 안내장(/welcome)으로 보낼 때 — 링크 이름만 바꿉니다 (2026-11-24)
+  if(o.welcome)t[3]=en?'💌 Thank-you note & contract':'💌 감사 안내 · 계약서 보기';
   let pdf='';
   if(o.pdfView&&o.pdfDl&&o.pdfView===o.pdfDl)pdf='\n📄 PDF 👉 '+o.pdfView;
   else{
@@ -3601,6 +3603,11 @@ async function loadBenefitsOrder(){
 function ncSelfBase(){
   if(location.protocol==='file:')return 'https://happyhomecare.com.my/admin.html';
   return location.href.split('#')[0].split('?')[0];
+}
+// 💌 패키지 가입 감사 안내장 주소 (/welcome) — 맨 아래 「계약서 보기」가 이 계약서(?view=&mode=all)를 엽니다 (2026-11-24)
+function ncWelcomeUrl(id,lang){
+  const b=ncSelfBase().replace(/\/[^\/]*$/,'');
+  return b+'/welcome?k='+encodeURIComponent(id)+'&lang='+(lang==='en'?'en':'ko');
 }
 window.ncSelfBase=ncSelfBase;
 
@@ -5532,12 +5539,12 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')window.cxaDe
 // 📤 계약서 공유 — 휴대폰은 공유창(왓츠앱·카카오톡 등), 컴퓨터는 메시지 복사
 window.cxaShare=function(btn){
   var d=btn.dataset, en=d.l==='en';
-  var url=location.origin+'/admin.html?view='+encodeURIComponent(d.id)+'&mode=all&lang='+d.l;
+  var url=location.origin+'/welcome?k='+encodeURIComponent(d.id)+'&lang='+d.l;   // 💌 가입 감사 안내장 → 맨 아래 「계약서 보기」 (2026-11-24)
   var dt=String(d.dt||'').replace(/-/g,'.');
   // 2026-11 발송 문구 개편 — 공유창(여러 앱)으로 나가므로 굵은 글씨 별표는 쓰지 않습니다
   var msg=(en?'Hello, '+(d.nm||'Customer')+' 😊\n\n📑 Your service contract':'안녕하세요, '+(d.nm||'')+' 고객님 😊\n\n📑 서비스 계약서')+(dt?'\n🗓 '+dt:'')+
     '\n\n'+(en?'👉 Please check your contract and remaining balance.':'👉 계약서와 남은 금액을 확인해 주세요.')+
-    '\n\n'+(en?'📑 View contract':'📑 계약서 보기')+' \u{1F449} '+url+'\n📞 +60 17-247 2774 · Happy Home Care';
+    '\n\n'+(en?'💌 Thank-you note & contract':'💌 감사 안내 · 계약서 보기')+' \u{1F449} '+url+'\n📞 +60 17-247 2774 · Happy Home Care';
   var toast=function(t){var x=document.createElement('div');x.className='mpf-toast';x.textContent=t;document.body.appendChild(x);
     setTimeout(function(){x.remove();},2200);};
   var copy=function(){
@@ -6052,14 +6059,17 @@ async function renderSendTab(){
   const carryT=h.reduce((s,u)=>s+(parseFloat(u.carryover)||0),0);
   const remain=total-usedT+discT+carryT;
   // 발송 언어로 열리는 고객 링크 (모드/언어가 항상 미리보기와 일치)
-  const customerUrl=withLang(`${ncSelfBase()}?view=${c.__id}&mode=${currentSendMode}`,L);
+  //  · 계약서 · 「계약서+이용내역」 발송은 가입 감사 안내장(/welcome)으로 — 안내장 맨 아래 「계약서 보기」로 계약서가 열립니다 (2026-11-24)
+  //  · 이용내역만 보낼 때와 PDF 첨부 발송은 예전처럼 계약서 화면으로 바로
+  const _wl=currentSendMode!=='usage';
+  const customerUrl=_wl?ncWelcomeUrl(c.__id,L):withLang(`${ncSelfBase()}?view=${c.__id}&mode=${currentSendMode}`,L);
   const modeLb=hubModeLabel(L);
 
   // ── 메시지 생성 (인사 → 상태 → 구분선 → 정보 → 구분선 → 안내 → 감사 → 링크) ──
   function makeMsg(mode){
     // 문구 원본은 contractMsgText() 한 곳입니다 (2026-11 개편)
     return contractMsgText({name:c.name||(L==='en'?'Customer':'고객'),pkgLabel:pkg?pkg.label:'',paid:paid,bonus:bonus+spec,
-      first:paid+bonus+spec+carryT,remain:remain,mode:mode,lang:L,url:customerUrl});
+      first:paid+bonus+spec+carryT,remain:remain,mode:mode,lang:L,url:customerUrl,welcome:_wl});
   }
   const msg=makeMsg(currentSendMode);
 
@@ -6126,7 +6136,7 @@ async function renderSendTab(){
     const m=await shortMsg();
     // 💛 카카오톡 그림 카드(계약서 그림) — 전체 문구도 함께 복사 (2026-11-20)
     const en=/^(Hello|Dear|Hi)\b/.test(String(m).trim());
-    await hhcKkCard({msg:m,img:'og-contract.jpg',btn:/이용|usage/i.test(m)?(en?'View usage':'이용내역 보기'):(en?'View contract':'계약서 보기'),en});
+    await hhcKkCard({msg:m,img:'og-contract.jpg',btn:_wl?(en?'View thank-you note':'감사 안내 보기'):/이용|usage/i.test(m)?(en?'View usage':'이용내역 보기'):(en?'View contract':'계약서 보기'),en});
     flash('kakao-copy-ok');
   });
   document.getElementById('btn-hub-wapdf').addEventListener('click',()=>window.generateContractPDF('wa'));
