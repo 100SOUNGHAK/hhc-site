@@ -11880,5 +11880,120 @@ async function importNow(jobs){
 window.__m38site={check,importNow};
 </script>
 
+
+<!-- m39 · 현장 메모 → 에어컨 카드에 결함 추가 (「(카드추가)」 메모 · 사진 첨부 입력칸) -->
+<style>
+#m39{margin:10px 0 0;padding:12px;border:1.5px solid #c9d8ea;border-radius:14px;background:linear-gradient(180deg,#f7fbff,#eef4fb);box-shadow:0 2px 6px rgba(20,40,80,.06)}
+#m39 .h{font-weight:800;font-size:14px;color:#1B2B4B;margin-bottom:2px}
+#m39 .s{font-size:12px;color:#5b6b82;margin-bottom:8px;line-height:1.45}
+#m39 .r{display:flex;gap:6px;margin-bottom:8px}
+#m39 select{flex:0 0 auto;max-width:42%;padding:10px 8px;border:1px solid #c9d3e0;border-radius:10px;font-size:14px;background:#fff}
+#m39 input[type=text]{flex:1;min-width:0;padding:10px;border:1px solid #c9d3e0;border-radius:10px;font-size:15px}
+#m39 .photo-row{margin-bottom:8px}
+#m39 .go{width:100%;padding:12px;border:0;border-radius:12px;background:linear-gradient(180deg,#1f3a66,#1B2B4B);color:#fff;font-weight:800;font-size:15px;box-shadow:0 3px 0 #0e1a30;cursor:pointer}
+#m39 .go:active{transform:translateY(2px);box-shadow:0 1px 0 #0e1a30}
+#m39 .msg{font-size:12.5px;margin-top:6px;color:#0f7a5c;min-height:1em}
+#m39 .msg.bad{color:#b3261e}
+.m39-new{animation:m39f 2.2s ease-out}
+@keyframes m39f{0%{box-shadow:0 0 0 3px #C9A24A}100%{box-shadow:0 0 0 0 rgba(201,162,74,0)}}
+/* 빠른 보고서: 카드에 결함이 들어 있으면 그 칸만 보이기 (누설검사 칸은 그대로 숨김) */
+body.m38q .cu-item .m30-box:has(.m30-slot-defect>.unit-item){display:flex!important}
+body.m38q .cu-item .m30-box .m30-blk:has(.m30-slot-leak){display:none}
+</style>
+<script>
+(function(){
+  function $(i){return document.getElementById(i);}
+  function cards(){return [].slice.call(document.querySelectorAll('#cool-units .cu-item')).filter(function(w){return w._cuLbl;});}
+  function cName(w){var l=w._cuLoc?w._cuLoc():'';return l||w._cuLbl();}
+  function nz(x){return String(x||'').replace(/\s+/g,'').toLowerCase();}
+  /* 「안방1」「A2」「거실」 → 에어컨 카드 */
+  function findCard(tok){
+    var L=cards();if(!L.length)return null;var t=nz(tok);
+    if(t){
+      var m=L.filter(function(w){return nz(w._cuLoc&&w._cuLoc())===t;});if(m.length===1)return m[0];
+      var ac=t.match(/^(?:ac|a)(\d+)$/);if(ac){m=L.filter(function(w){return nz(w._cuLbl())==='a'+ac[1];});if(m.length)return m[0];}
+      m=L.filter(function(w){return nz(w._cuLbl())===t;});if(m.length)return m[0];
+      var bm=t.match(/^(.*?)(\d*)$/),base=bm[1],k=bm[2]?parseInt(bm[2],10):0;
+      if(base){m=L.filter(function(w){return nz(w._cuLoc&&w._cuLoc()).replace(/\d+$/,'')===base;});
+        if(m.length===1&&k<=1)return m[0];if(m.length>1&&k>=1&&k<=m.length)return m[k-1];}
+    }
+    return L.length===1?L[0]:null;
+  }
+  /* 「안방1- 전면 커버 파손 (카드추가)」 → {tok, text} */
+  function parse(line){
+    var s=String(line||'').replace(/^\s*\[\d{1,2}:\d{2}\]\s*/,'').replace(/\(\s*카드\s*추가[^)]*\)/g,'').trim();
+    var m=s.match(/^([^\-–—:：]{1,12}?)\s*[-–—:：]\s*(.+)$/);
+    return m?{tok:m[1].trim(),text:m[2].trim()}:{tok:'',text:s};
+  }
+  /* 결함 한 줄을 그 에어컨 카드 안에 넣기 */
+  function addToCard(w,text,photos){
+    if(typeof addDefectRow!=='function')return false;
+    var loc=w._cuLoc?w._cuLoc():'';
+    addDefectRow(text,loc,'m','','recommend',[w._cuLbl()],photos||[]);
+    var r=$('defect-rows').lastElementChild;
+    if(window.__m30relocate)window.__m30relocate();
+    if(r){r.classList.add('m39-new');setTimeout(function(){r.classList.remove('m39-new');},2300);}
+    if(window.updatePhotoBadges)try{updatePhotoBadges();}catch(e){}
+    if(window.__scheduleDraft)window.__scheduleDraft();
+    return true;
+  }
+  function say(t,bad){var m=$('m39-msg');if(m){m.textContent=t;m.className='msg'+(bad?' bad':'');}if(typeof toast==='function')toast(t);}
+
+  function build(){
+    var box=$('m31');if(!box||$('m39'))return !!box;
+    var bd=box.querySelector('.bd');if(!bd)return false;
+    var d=document.createElement('div');d.id='m39';
+    d.innerHTML='<div class="h">📌 에어컨 카드에 바로 넣기</div>'+
+      '<div class="s">예) <b>안방1- 전면 커버 파손</b> · 사진은 있으면 함께, 없으면 글자만 들어갑니다.<br>메모 칸에 <b>(카드추가)</b>를 붙여 적어도 같은 방식으로 들어갑니다.</div>'+
+      '<div class="r"><select id="m39-sel"></select><input type="text" id="m39-txt" placeholder="안방1- 전면 커버 파손"></div>'+
+      '<div class="photo-row" id="m39-ph"></div>'+
+      '<button type="button" class="go" id="m39-go">＋ 에어컨 카드에 추가</button><div class="msg" id="m39-msg"></div>';
+    bd.appendChild(d);
+    if(typeof buildPhotoAddGroup==='function')$('m39-ph').appendChild(buildPhotoAddGroup('m39-ph'));
+    var sel=$('m39-sel'),txt=$('m39-txt');
+    function fill(){var cur=sel.value;sel.innerHTML='<option value="">에어컨 자동</option>'+cards().map(function(w){return '<option value="'+w._cuLbl()+'">'+cName(w)+(w._cuLoc&&w._cuLoc()?' ('+w._cuLbl()+')':'')+'</option>';}).join('');sel.value=cur;}
+    sel.addEventListener('focus',fill);sel.addEventListener('mousedown',fill);fill();
+    txt.addEventListener('input',function(){if(sel.value)return;var p=parse(txt.value),w=p.tok&&findCard(p.tok);$('m39-msg').textContent=w?'→ '+cName(w)+' 카드에 들어갑니다':'';$('m39-msg').className='msg';});
+    $('m39-go').addEventListener('click',function(){
+      var p=parse(txt.value),w=null;
+      if(sel.value)w=cards().filter(function(c){return c._cuLbl()===sel.value;})[0];
+      if(!w)w=findCard(p.tok);
+      var text=sel.value&&!p.tok?p.text:p.text;
+      if(!cards().length){say('먼저 「점검 대상 설비」에 에어컨을 넣어 주세요',1);return;}
+      if(!w){fill();say('어느 에어컨인지 못 찾았습니다 — 왼쪽에서 에어컨을 골라 주세요',1);sel.focus();return;}
+      if(!text){say('넣을 내용을 적어 주세요',1);txt.focus();return;}
+      var row=$('m39-ph'),items=[].slice.call(row.querySelectorAll('.ph-item')),photos=[];
+      items.forEach(function(it){var k=it.dataset.key;if(k&&photoData[k]){photos.push(photoData[k]);delete photoData[k];}it.remove();});
+      if(addToCard(w,text,photos)){
+        say('✓ '+cName(w)+' 카드에 「'+text+'」'+(photos.length?' + 사진 '+photos.length+'장':'')+' 추가했습니다');
+        txt.value='';sel.value='';
+      }
+    });
+    hookMemo();
+    return true;
+  }
+  /* 메모 칸 「(카드추가)」 줄 처리 → 처리한 줄은 「(카드추가 ✓)」로 바뀜 */
+  function hookMemo(){
+    var ta=$('m31-memo');if(!ta||ta._m39)return;ta._m39=1;var tm=null;
+    function run(){
+      var lines=ta.value.split('\n'),ch=false,miss=[];
+      lines=lines.map(function(ln){
+        if(!/\(\s*카드\s*추가\s*\)/.test(ln))return ln;
+        var p=parse(ln),w=findCard(p.tok);
+        if(!w||!p.text){miss.push(ln.trim());return ln;}
+        if(!addToCard(w,p.text,[]))return ln;
+        ch=true;say('✓ 메모 → '+cName(w)+' 카드에 「'+p.text+'」 추가했습니다');
+        return ln.replace(/\(\s*카드\s*추가\s*\)/,'(카드추가 ✓)');
+      });
+      if(ch){var pos=ta.selectionStart;ta.value=lines.join('\n');try{ta.setSelectionRange(pos,pos);}catch(e){}ta.dispatchEvent(new Event('input',{bubbles:true}));}
+      if(miss.length){var p0=parse(miss[0]);$('m39-txt').value=(p0.tok?p0.tok+'- ':'')+p0.text;say('어느 에어컨인지 못 찾은 줄이 있습니다 — 아래 칸에서 에어컨을 골라 「추가」를 눌러 주세요',1);}
+    }
+    ta.addEventListener('input',function(e){if(!e.isTrusted)return;clearTimeout(tm);if(/\(\s*카드\s*추가\s*\)/.test(ta.value))tm=setTimeout(run,900);});
+    ta.addEventListener('change',run);
+  }
+  var n=0;(function tryBuild(){if(build()||++n>40)return;setTimeout(tryBuild,250);})();
+})();
+</script>
+
 </body>
 </html>
