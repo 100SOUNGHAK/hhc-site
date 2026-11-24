@@ -10670,7 +10670,16 @@ kind==='washer'?'- 체크리스트 결과를 한두 줄로.':'- 측정한 에어
   /* 사진이 추가·삭제·복원될 때 「정리」 버튼 장수 갱신 */
   var mo=new MutationObserver(function(){PAIRS.forEach(refreshBtn);});
   PAIRS.forEach(function(P){[P.b,P.a].forEach(function(id){var c=$(id);if(c)mo.observe(c,{childList:true});});});
-  window.__m35={open:function(i){openSheet(PAIRS[i||0],[]);}};
+  window.__m35={open:function(i){openSheet(PAIRS[i||0],[]);},
+    /* m38 직원 사진 가져오기: list=[{src,t,h:'b'|'a'}] — 직원이 고른 전·후는 그대로, 🤖 로 같은 부위끼리 줄만 맞춤 */
+    bulkHint:async function(i,list){var P=PAIRS[i||0];if(!P||!list||!list.length)return;
+      var w=document.createElement('div');w.className='m35-wait';w.textContent='🤖 같은 부위끼리 짝 맞추는 중… ('+list.length+'장)';document.body.appendChild(w);
+      var r=await classify(list);w.remove();
+      var n=Math.min(r.B.length,r.A.length),B=[],A=[],rest=[];
+      for(var k=0;k<n;k++){if(r.B[k].h==='b'&&r.A[k].h==='a'){B.push(r.B[k]);A.push(r.A[k]);}else rest.push(r.B[k],r.A[k]);}
+      rest=rest.concat(r.B.slice(n),r.A.slice(n));
+      rest.forEach(function(o){(o.h==='a'?A:B).push(o);});
+      openSheet(P,list,{B:B,A:A,note:'📷 직원이 고른 세척 전 · 후 그대로 · 같은 부위끼리 '+B.length+'줄 정리 — 확인 후 「적용」'});}};
 })();
 </script>
 
@@ -10823,7 +10832,7 @@ body.m36 #m36-next:active,.m36-ft .nx:active,#view-form #btn-save:active{transfo
   function RT(){try{return reportType;}catch(e){return 'inspect';}}
   function toast2(m){if(typeof toast==='function')toast(m);}
   var KEY='hhc_m36';
-  function wanted(){try{return localStorage.getItem(KEY)!=='0';}catch(e){return true;}}
+  function wanted(){if(document.body.classList.contains('m38q'))return false;/* m38 빠른 보고서 중에는 끔 */try{return localStorage.getItem(KEY)!=='0';}catch(e){return true;}}
   function setWanted(v){try{localStorage.setItem(KEY,v?'1':'0');}catch(e){}}
 
   /* 단계 정의 — a: 그 단계에 들어갈 카드 안의 요소 id (카드 = 가장 가까운 .card) */
@@ -11014,6 +11023,7 @@ body.m36 #m36-next:active,.m36-ft .nx:active,#view-form #btn-save:active{transfo
     setClasses();
     if(active){draw();top();}
   }
+  window.__m36apply=apply;   /* m38 빠른 보고서 ↔ 자세히 작성 전환 때 씀 */
 
   /* ── 항목 관리 (항목별 점검 결과) ── */
   var rw=$('result-rows-wrap');
@@ -11300,6 +11310,552 @@ body.m36 #m36-next:active,.m36-ft .nx:active,#view-form #btn-save:active{transfo
   }
   window.__m37open=openEd;
 })();
+</script>
+
+<!-- ════ m38 · 빠른 보고서 · 사진 읽기 · 직원 사진 가져오기 (2026-11-24)
+   ① ⚡ 빠른 보고서 (점검보고서만) — 문제 없는 일반 세척을 한 화면에서: 기본 정보 → 설비 → 냉방(온도 사진) → 💧 드레인 → 사진 → 최종 의견 → 저장
+      · 숨는 칸은 자동: 항목별 결과 = 기본 항목 그대로(드레인 항목만 주의), 권장 정비 = 「배수배관 기울기 및 단열 처리 개선」 자동, 종합 판정 = 🟢 정상
+      · 다른 문제(⚠ 버튼 · 온도차 12° 미만)가 생기면 「📋 자세히 작성」(6단계)으로 — 넣은 내용은 그대로
+      · 고른 방식은 기기마다 기억(localStorage hhc_m38: q/d). 저장된 보고서를 열 때는 자세히 작성으로 열림. 저장 자료 모양은 그대로.
+   ② 🤖 사진으로 숫자 읽기 — 직원 사진 가져오기로 들어온 온도 사진을 Claude 가 읽어 흡입·토출 칸을 채움(키 없음·실패 시 예전 판독기). 직접 넣는 측정 사진은 예전 판독 방식 그대로
+      🤖 사진으로 결함 찾기 — 기타/문제 사진을 보고 결함 후보를 추천 → 「＋ 담기」를 눌러야 결함 칸에 들어감
+   ③ 📷 직원 사진 가져오기 — 직원이 직원 일정표(work.html)에서 올린 온도 · 세척 전 · 후 사진(site_photos)을 이 고객 보고서에 넣음
+      · 고객을 못 찾으면 그날 사진이 있는 일정 목록에서 골라 가져옴. 사진은 보고서 쪽에 새로 저장됨(직원 사진은 30일 뒤 자동 삭제)
+   ※ 되돌리기: 이 블록(m38-css · m38-js · m38-fs) + m35 의 bulkHint 몇 줄 + m36 의 두 줄(m38q · __m36apply)만 지우면 예전 화면 -->
+<style id="m38-css">
+.m38-mode{display:none;gap:6px;margin:0 0 12px;padding:5px;background:#E9EEF6;border-radius:14px}
+body.m38-ins .m38-mode{display:flex}
+.m38-mode button{flex:1;border:0;border-radius:10px;padding:10px 6px 9px;font-family:inherit;cursor:pointer;background:transparent;color:#5A6478;line-height:1.25;transition:transform .14s}
+.m38-mode button b{display:block;font-size:14px;font-weight:800;letter-spacing:-.02em}
+.m38-mode button small{display:block;font-size:11px;font-weight:600;margin-top:2px;opacity:.85}
+.m38-mode button.on{background:#fff;color:#0E2350;box-shadow:0 1px 2px rgba(14,35,80,.12),0 6px 12px -6px rgba(14,35,80,.35)}
+.m38-mode button.on.q{background:linear-gradient(180deg,#14306b,#0E2350);color:#fff;box-shadow:0 2px 0 #07102a,0 6px 12px -6px rgba(14,35,80,.5)}
+.m38-mode button.on.q small{color:#E3C98A}
+.m38-mode button:active{transform:translateY(1px)}
+/* 빠른 보고서: 필요한 카드만 */
+body.m38q #inspect-form-body>.card:not([data-m38q]){display:none!important}
+body.m38q .cu-item .m30-box,body.m38q #insp-progress-box,body.m38q #section-nav,body.m38q .m36-full,body.m38q #m27-ov,body.m38q .cu-item .fixb,body.m38q .cu-item .rsel-row{display:none!important}
+.m38-qhd{display:none;margin:0 2px 12px;font-size:12.5px;line-height:1.6;color:#5A6478}
+.m38-qhd b{color:#0E2350}
+body.m38q .m38-qhd{display:block}
+.m38-drain{display:none}
+body.m38q .m38-drain{display:block}
+.m38-dr{border-radius:12px;background:#F7F9FD;box-shadow:inset 0 0 0 1px #E4E9F2;padding:10px 12px;margin-bottom:8px}
+.m38-dr.off{background:#fff}
+.m38-dr-h{display:flex;align-items:center;gap:8px}
+.m38-dr-h b{flex:1;min-width:0;font-size:14px;font-weight:800;color:#14192A}
+.m38-dr-h b small{font-size:11.5px;font-weight:700;color:#98A1B4;margin-left:4px}
+.m38-tg{flex:none;border:0;border-radius:999px;padding:7px 12px;font:inherit;font-size:12.5px;font-weight:800;cursor:pointer;background:#fff;color:#5A6478;box-shadow:inset 0 0 0 1.5px #D5DCEA}
+.m38-tg.on{background:#FFF3D6;color:#8A5A00;box-shadow:inset 0 0 0 1.5px #F0B429}
+.m38-rs{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.m38-dr.off .m38-rs{display:none}
+.m38-rs button{border:0;border-radius:999px;padding:6px 11px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;background:#fff;color:#5A6478;box-shadow:inset 0 0 0 1px #D5DCEA}
+.m38-rs button.on{background:#0E2350;color:#fff;box-shadow:none}
+.m38-oth{display:block;margin-top:8px;border:0;background:none;padding:0;font:inherit;font-size:12px;font-weight:700;color:#B45309;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.m38-sum{font-size:12px;line-height:1.6;color:#5A6478;background:#fff;border-radius:10px;box-shadow:inset 0 0 0 1px #E4E9F2;padding:9px 11px;margin-top:4px}
+.m38-sum b{color:#14192A}
+.m38-detail{width:100%;margin-top:10px;border:0;border-radius:11px;padding:11px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;color:#B45309;background:#FFF8EC;box-shadow:inset 0 0 0 1px #F3D19C}
+.m38-warn{display:none;margin:0 0 10px;padding:10px 12px;border-radius:11px;background:#FFF4E0;color:#8A4B00;font-size:12.5px;font-weight:700;line-height:1.55}
+.m38-warn.on{display:block}
+.m38-warn button{margin:8px 6px 0 0;border:0;border-radius:9px;padding:7px 11px;font:inherit;font-size:12.5px;font-weight:800;cursor:pointer;background:#B45309;color:#fff}
+.m38-warn button.n{background:#fff;color:#8A4B00;box-shadow:inset 0 0 0 1px #F3D19C}
+/* 직원 사진 */
+.m38-site{display:none;margin:-2px 0 12px;border-radius:14px;padding:12px 14px;background:linear-gradient(180deg,#14306b,#0E2350);color:#fff;box-shadow:0 2px 0 #07102a,0 10px 20px -10px rgba(14,35,80,.55)}
+.m38-site.on{display:block}
+.m38-site-h{display:flex;align-items:center;gap:10px}
+.m38-site-h i{flex:none;font-style:normal;font-size:22px}
+.m38-site-h div{flex:1;min-width:0}
+.m38-site-h b{display:block;font-size:14.5px;font-weight:800}
+.m38-site-h small{display:block;font-size:12px;color:#C9D3EE;font-weight:600;margin-top:2px;line-height:1.45}
+.m38-site-th{display:flex;gap:5px;margin-top:10px;overflow:hidden}
+.m38-site-th img{width:46px;height:46px;border-radius:8px;object-fit:cover;flex:none;background:rgba(255,255,255,.1)}
+.m38-site-b{display:flex;gap:6px;margin-top:10px}
+.m38-site-b button{flex:1;border:0;border-radius:10px;padding:10px 8px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;background:#C9A44C;color:#0E2350;box-shadow:0 2px 0 #8f6f28}
+.m38-site-b button.s{flex:0 0 auto;background:rgba(255,255,255,.12);color:#fff;box-shadow:none}
+.m38-site.done{background:#EAF6F0;color:#0B6B47;box-shadow:inset 0 0 0 1px #BFE3D0}
+.m38-site.done small{color:#2F7A5A}
+/* 공용 시트 */
+.m38-ov{position:fixed;inset:0;z-index:99991;background:rgba(10,18,40,.55);display:none;align-items:flex-end;justify-content:center}
+.m38-ov.on{display:flex}
+.m38-sh{background:#F6F8FC;width:100%;max-width:640px;max-height:92vh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -8px 30px rgba(0,0,0,.3)}
+.m38-sh header{background:#0E2350;color:#fff;padding:14px 16px 12px;display:flex;gap:10px;align-items:flex-start}
+.m38-sh header div{flex:1}
+.m38-sh header b{font-size:16px;font-weight:800}
+.m38-sh header small{display:block;font-size:12px;color:#C9D3EE;margin-top:3px;line-height:1.5}
+.m38-sh header button{border:0;background:rgba(255,255,255,.16);color:#fff;width:34px;height:34px;border-radius:50%;font-size:17px;cursor:pointer;flex:none}
+.m38-bd{overflow-y:auto;padding:12px 14px calc(18px + env(safe-area-inset-bottom))}
+.m38-job{display:flex;gap:10px;align-items:center;width:100%;text-align:left;border:0;border-radius:13px;background:#fff;padding:11px 12px;margin-bottom:8px;font:inherit;cursor:pointer;box-shadow:0 1px 2px rgba(14,35,80,.08),0 6px 12px -8px rgba(14,35,80,.3)}
+.m38-job img{width:52px;height:52px;border-radius:9px;object-fit:cover;flex:none;background:#E4E9F2}
+.m38-job div{flex:1;min-width:0}
+.m38-job b{display:block;font-size:14px;color:#14192A}
+.m38-job small{display:block;font-size:12px;color:#5A6478;margin-top:2px}
+.m38-job em{font-style:normal;font-size:13px;font-weight:800;color:#0E2350}
+.m38-sg{background:#fff;border-radius:13px;padding:11px 12px;margin-bottom:8px;box-shadow:0 1px 2px rgba(14,35,80,.08),0 6px 12px -8px rgba(14,35,80,.3);display:flex;gap:10px}
+.m38-sg img{width:64px;height:64px;border-radius:9px;object-fit:cover;flex:none}
+.m38-sg div{flex:1;min-width:0}
+.m38-sg b{display:block;font-size:14px;color:#14192A}
+.m38-sg p{margin:3px 0 0;font-size:12px;color:#5A6478;line-height:1.5}
+.m38-sg .lv{display:inline-block;font-size:11px;font-weight:800;border-radius:6px;padding:1px 6px;margin-right:4px;background:#FFF3D6;color:#8A5A00}
+.m38-sg .lv.r{background:#FDE8E8;color:#B91C1C}
+.m38-sg button{margin-top:7px;border:0;border-radius:9px;padding:7px 12px;font:inherit;font-size:12.5px;font-weight:800;cursor:pointer;background:#0E2350;color:#fff}
+.m38-sg button[disabled]{background:#E4E9F2;color:#98A1B4}
+.m38-ai{margin:0 0 10px;width:100%;border:0;border-radius:11px;padding:11px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;color:#fff;background:linear-gradient(180deg,#14306b,#0F1C3F);box-shadow:0 2px 0 #07102a}
+.m38-ai b{color:#F0C040;font-weight:700;font-size:11.5px;margin-left:4px}
+.m38-p{font-size:12.5px;color:#5A6478;line-height:1.6;background:#fff;border-radius:11px;padding:10px 12px;margin-bottom:10px}
+.m38-as{display:flex;gap:10px;align-items:center;background:#fff;border-radius:13px;padding:10px 12px;margin-bottom:8px;box-shadow:0 1px 2px rgba(14,35,80,.08),0 6px 12px -8px rgba(14,35,80,.3)}
+.m38-as img{width:72px;height:72px;border-radius:9px;object-fit:cover;flex:none;cursor:zoom-in}
+.m38-as div{flex:1;min-width:0}
+.m38-as b{display:block;font-size:15px;color:#14192A;font-variant-numeric:tabular-nums}
+.m38-as b.x{color:#B45309;font-size:13px}
+.m38-as small{display:block;font-size:11.5px;color:#98A1B4;margin:2px 0 6px}
+.m38-as select{width:100%;font:inherit;font-size:15px;font-weight:700;color:#0E2350;border:0;border-radius:10px;padding:9px 10px;background:#F1F4FA;box-shadow:inset 0 0 0 1.5px #D5DCEA}
+.m38-as.dup select{box-shadow:inset 0 0 0 1.5px #F0B429;background:#FFF8EC}
+.m38-as em{display:block;font-style:normal;font-size:11.5px;font-weight:700;color:#B45309;margin-top:4px}
+.m38-go{position:sticky;bottom:0;display:flex;gap:8px;padding-top:6px;background:#F6F8FC}
+.m38-go button{flex:1;border:0;border-radius:12px;padding:13px;font:inherit;font-size:14px;font-weight:800;cursor:pointer;background:#E4E9F2;color:#5A6478}
+.m38-go button.ok{flex:2;background:#0E2350;color:#fff;box-shadow:0 2px 0 #07102a}
+.m38-big{position:fixed;inset:0;z-index:99995;background:rgba(5,8,15,.92);display:none;align-items:center;justify-content:center;padding:16px}
+.m38-big.on{display:flex}.m38-big img{max-width:100%;max-height:100%;border-radius:8px}
+@media (prefers-reduced-motion:reduce){.m38-mode button,.m38-tg{transition:none}}
+</style>
+<div class="m38-ov" id="m38-ov"><div class="m38-sh"><header><div><b id="m38-st"></b><small id="m38-ss"></small></div><button type="button" id="m38-sx" aria-label="닫기">✕</button></header><div class="m38-bd" id="m38-sb"></div></div></div>
+<script id="m38-js">
+(function(){
+  'use strict';
+  function $(id){return document.getElementById(id);}
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function RT(){try{return reportType;}catch(e){return 'inspect';}}
+  function EDIT(){try{return !!currentEditId;}catch(e){return false;}}
+  function t2(m){if(typeof toast==='function')toast(m);}
+  function draft(){if(typeof window.__scheduleDraft==='function')window.__scheduleDraft();}
+  var body=$('inspect-form-body'),nav=$('section-nav');if(!body||!nav)return;
+
+  /* ── 공용 시트 ── */
+  var ov=$('m38-ov');
+  function sheet(t,sub,h){$('m38-st').textContent=t;$('m38-ss').innerHTML=sub||'';$('m38-sb').innerHTML=h;ov.classList.add('on');}
+  function closeSheet(){ov.classList.remove('on');}
+  $('m38-sx').onclick=closeSheet;ov.addEventListener('click',function(e){if(e.target===ov)closeSheet();});
+  window.__m38sheet={open:sheet,close:closeSheet,body:function(){return $('m38-sb');}};
+
+  /* ── Claude ── */
+  var AI_MODEL='claude-opus-5-5';
+  function aiKey(ask){var k='';try{k=localStorage.getItem('hhc_ak')||'';}catch(e){}
+    if(!k&&ask){k=(prompt('사진 판독에 쓸 Claude API 키를 한 번만 넣어 주세요.\n(보고서 자동 작성과 같은 키 · 이 기기에만 저장 · 비우면 예전 방식으로 읽습니다)')||'').trim();if(k)try{localStorage.setItem('hhc_ak',k);}catch(e){}}
+    return k;}
+  function shrinkUrl(src,max){return new Promise(function(res){var im=new Image();im.onload=function(){var r=Math.min(1,max/Math.max(im.width,im.height)),cv=document.createElement('canvas');
+    cv.width=Math.round(im.width*r);cv.height=Math.round(im.height*r);cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);try{res(cv.toDataURL('image/jpeg',.85));}catch(e){res(null);}};im.onerror=function(){res(null);};im.src=src;});}
+  async function askClaude(sys,content,maxTok){
+    var key=aiKey(true);if(!key)return {err:'키 없음'};
+    var ctrl=(typeof AbortController!=='undefined')?new AbortController():null,timer=setTimeout(function(){try{ctrl&&ctrl.abort();}catch(e){}},90000);
+    try{
+      var res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctrl?ctrl.signal:undefined,
+        headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:AI_MODEL,max_tokens:maxTok||800,system:sys,messages:[{role:'user',content:content}]})});
+      clearTimeout(timer);var data=await res.json();
+      if(res.status===401){try{localStorage.removeItem('hhc_ak');}catch(e){}return {err:'API 키가 맞지 않음'};}
+      if(data.error)return {err:String(data.error.message||'오류').slice(0,40)};
+      var out=(data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+      var m=out.match(/\{[\s\S]*\}/);if(!m)return {err:'답 형식 오류'};
+      return JSON.parse(m[0]);
+    }catch(e){clearTimeout(timer);return {err:e&&e.name==='AbortError'?'응답이 너무 늦음':'연결 오류'};}
+  }
+  function imgPart(u){return {type:'image',source:{type:'base64',media_type:'image/jpeg',data:String(u).split(',')[1]}};}
+
+  /* ════ ② 🤖 측정 사진 → 흡입 · 토출 온도 ════ */
+  async function readTemps(urls){
+    var parts=[{type:'text',text:'에어컨 냉방 점검 계측기 사진 '+urls.length+'장입니다.'}];
+    for(var i=0;i<urls.length;i++){var u=await shrinkUrl(urls[i],1280);if(u)parts.push(imgPart(u));}
+    if(parts.length<2)return {err:'사진 읽기 실패'};
+    var sys='당신은 에어컨 점검 기사입니다. 사진 속 온도계·계측기 화면의 숫자를 정확히 읽습니다.\n'+
+      '흡입 온도(a) = 실내기 흡입구·주변 공기 온도, 토출 온도(b) = 바람이 나오는 취출구 온도. 냉방 중이면 흡입이 토출보다 높습니다.\n'+
+      '계측기 한 화면에 두 값이 함께 보이면 둘 다 읽고(작은 줄·°C 표시 = 보통 흡입, 큰 숫자 = 보통 토출 — 화면의 글자 IN/OUT·흡입/토출 표시가 있으면 그것을 따름),\n'+
+      '사진이 두 장이면 각 사진의 값을 읽어 높은 쪽을 흡입, 낮은 쪽을 토출로 하십시오. 안 보이는 값은 null. 소수점 한 자리까지.\n'+
+      'c = 0~1 확신도(숫자가 흐리거나 반사되면 낮게). 반드시 JSON 하나만: {"a":26.4,"b":12.1,"c":0.9,"why":"짧은 설명"}';
+    var j=await askClaude(sys,parts,300);
+    if(j.err)return j;
+    var a=parseFloat(j.a),b=parseFloat(j.b);
+    if(isNaN(a)&&isNaN(b))return {err:'숫자를 찾지 못함'};
+    return {a:isNaN(a)?null:a,b:isNaN(b)?null:b,c:+j.c||0,why:String(j.why||'').slice(0,60)};
+  }
+  function fillTemps(id,r){
+    var w=$('cu-wrap-'+id);if(!w)return false;
+    var ta=w.querySelector('.cu-ta'),tb=w.querySelector('.cu-tb'),st=$('ocr-status-'+id);
+    var low=r.c<0.7,msgs=[];
+    [[ta,r.a,'흡입'],[tb,r.b,'토출']].forEach(function(x){if(!x[0]||x[1]==null)return;
+      if(x[0].value&&!x[0].classList.contains('ocr-filled'))return;   /* 직접 적은 값은 건드리지 않음 */
+      x[0].value=String(x[1]);x[0].classList.add('ocr-filled');x[0].style.borderColor=low?'#e08600':'';x[0].style.background=low?'#fff8ec':'';msgs.push(x[2]+' '+x[1]+'°C');});
+    var nA=parseFloat(ta&&ta.value),nB=parseFloat(tb&&tb.value),bad=!isNaN(nA)&&!isNaN(nB)&&(nA-nB<3||nA-nB>30);
+    if(typeof calcCuDiff==='function')calcCuDiff(id);
+    if(st){st.className='ocr-status on';st.style.color=(low||bad)?'#b36000':'';
+      st.innerHTML=(msgs.length?((low||bad)?'⚠':'🤖')+' 사진에서 읽음: '+msgs.join(' / ')+(bad?' — 흡입·토출 온도차가 이상합니다. 두 값을 확인해 주세요':low?' — 흐릿해서 확신이 낮습니다. 꼭 확인해 주세요':' — 값을 확인해 주세요'):'⚠ 숫자를 읽지 못했습니다 — 직접 입력해 주세요');}
+    if(msgs.length&&!isNaN(nA)&&!isNaN(nB)){var good=nA-nB>=12,okB=w.querySelector('.rsel-ok-btn'),wnB=w.querySelector('.rsel-warn-btn');
+      if(good&&okB&&!w.querySelector('.rsel-warn-btn.warn'))okB.click();}
+    draft();checkCool();return msgs.length>0;
+  }
+  function placeCuPhoto(id,dataUrl){
+    var c=$('cu-photos-'+id);if(!c)return;
+    c.querySelectorAll('.ph-item:not(.ph-auto)').forEach(function(el){var k=el.dataset.key;if(k)delete photoData[k];el.remove();});
+    var k='cool-'+id;photoData[k]=dataUrl;
+    var item=document.createElement('div');item.className='ph-item';item.dataset.key=k;
+    item.innerHTML='<img class="ph-img" alt="">';item.querySelector('img').src=dataUrl;
+    var d=document.createElement('button');d.className='ph-del';d.textContent='×';d.onclick=function(){delete photoData[k];item.remove();if(window.updatePhotoBadges)updatePhotoBadges();};
+    item.appendChild(d);var add=c.querySelector('.ph-add');c.insertBefore(item,add);
+    if(window.updatePhotoBadges)updatePhotoBadges();draft();
+  }
+  /* 측정 사진 한 장(+같은 에어컨 두 번째 사진) → 칸에 넣고 Claude 로 읽기. 실패 시 예전 판독기(화면 영역 고르기) */
+  var _origCu=window.handleCuPhotos;
+  async function cuPut(id,lbl,file,extra){
+    var key=aiKey(false)||(extra?'':aiKey(true));
+    if(!key){ if(_origCu&&!extra){var inp=document.createElement('input');inp.type='file';try{var dt=new DataTransfer();dt.items.add(file);inp.files=dt.files;}catch(e){} _origCu(inp,id,lbl);} return; }
+    var u=await compressImage(file,1600,0.78);placeCuPhoto(id,u);
+    var st=$('ocr-status-'+id);if(st){st.className='ocr-status on busy';st.style.color='';st.textContent='🤖 사진에서 흡입 · 토출 온도 읽는 중…';}
+    var urls=[u];if(extra)urls.push(await compressImage(extra,1600,0.78));
+    var r=await readTemps(urls);
+    if(r.err){if(st){st.className='ocr-status on';st.style.color='#b36000';st.textContent='⚠ 사진 판독 실패('+r.err+') — 직접 입력해 주세요';}return;}
+    fillTemps(id,r);
+  }
+  /* 직접 넣는 측정 사진은 예전 판독 방식 그대로(화면 영역 고르기) — Claude 판독은 직원 사진 가져오기에서만 씀 */
+  window.__m38cuPut=cuPut;
+  window.__m38t={read:readTemps,place:placeCuPhoto,fill:fillTemps};
+
+  /* ════ ② 🤖 문제 사진 → 결함 후보 ════ */
+  var LOC_ALL=(typeof LOC_OPTS!=='undefined'?LOC_OPTS:[]).concat(['실외기','배관','전기','전체 에어컨']);
+  function probPhotos(){var out=[];
+    document.querySelectorAll('#problem-rows .unit-item').forEach(function(w,i){
+      w.querySelectorAll('.ph-item').forEach(function(it){var k=it.dataset.key,u=k&&photoData[k];var m=w.querySelector('textarea,input[type=text]');if(u)out.push({src:u,memo:m?m.value:'',row:i+1});});});
+    return out;}
+  function ensureDefBtn(){
+    var dr=$('defect-rows');if(!dr)return;var cb=dr.closest('.card-body');if(!cb||cb.querySelector('.m38-ai'))return;
+    var b=document.createElement('button');b.type='button';b.className='m38-ai';b.innerHTML='🤖 문제 사진으로 결함 찾기<b>추천만 · 「＋ 담기」로 넣기</b>';
+    cb.insertBefore(b,cb.firstChild);b.onclick=findDefects;
+  }
+  var SG=[];
+  async function findDefects(){
+    var ps=probPhotos();
+    if(!ps.length){sheet('🤖 문제 사진으로 결함 찾기','','<p class="m38-p">아래 <b>📸 기타/문제 사진</b> 칸에 사진을 먼저 넣어 주세요. 사진마다 메모를 적어 두면 더 정확합니다.</p>');return;}
+    sheet('🤖 문제 사진으로 결함 찾기','문제 사진 '+ps.length+'장 분석 중…','<p class="m38-p">잠시만 기다려 주세요…</p>');
+    var parts=[{type:'text',text:'에어컨 현장 문제 사진 '+ps.length+'장입니다.'}];
+    for(var i=0;i<ps.length;i++){var u=await shrinkUrl(ps[i].src,900);parts.push({type:'text',text:'[사진 '+(i+1)+']'+(ps[i].memo?' 기사 메모: '+ps[i].memo:'')});if(u)parts.push(imgPart(u));}
+    var known=[];try{known=(typeof getPhrases==='function'?getPhrases('defect'):[])||[];}catch(e){}
+    var sys='당신은 말레이시아 가정용 에어컨 점검 전문 기사입니다. 현장 사진을 보고 고객 보고서에 쓸 「발견 결함」 후보를 고릅니다.\n'+
+      '사진에서 실제로 보이는 것만 씁니다(추측 금지). 보이지 않으면 결함으로 넣지 말고 빼십시오. 한 사진에 결함이 여러 개면 나눠 씁니다.\n'+
+      '결함 이름은 짧은 한국어 명사구(예: '+(known.slice(0,8).join(', ')||'드레인 슬라임 누적, 배관 단열 손상, 응축기 핀 오염')+').\n'+
+      'loc 는 다음 중 하나 또는 빈칸: '+LOC_ALL.join(', ')+' (메모에 위치가 있으면 그것). risk: vh 상 · h 중 · m 하 · l 최하.\n'+
+      'action 은 권장 조치 한 문장(고객이 이해하는 쉬운 말). st: recommend(조치 권유) · watch(관찰 요망) · done(현장에서 조치 완료가 메모에 있을 때).\n'+
+      'c = 0~1 확신도. 반드시 JSON 하나만: {"items":[{"i":1,"defect":"드레인 슬라임 누적","loc":"안방","risk":"m","action":"배수 배관 세정을 권합니다","st":"recommend","c":0.8,"see":"사진에서 본 근거 한 줄"}]}';
+    var j=await askClaude(sys,parts,1500);
+    if(j.err){$('m38-ss').textContent='';$('m38-sb').innerHTML='<p class="m38-p">⚠ 분석하지 못했습니다('+esc(j.err)+'). 결함은 직접 입력해 주세요.</p>';return;}
+    SG=(j.items||[]).filter(function(x){return x&&x.defect;}).map(function(x){var p=ps[(x.i|0)-1];return {d:String(x.defect).slice(0,40),loc:LOC_ALL.indexOf(x.loc)>=0?x.loc:'',risk:['vh','h','m','l'].indexOf(x.risk)>=0?x.risk:'m',
+      act:String(x.action||'').slice(0,120),st:['recommend','watch','done'].indexOf(x.st)>=0?x.st:'recommend',c:+x.c||0,see:String(x.see||'').slice(0,80),src:p?p.src:''};});
+    var RK={vh:'상',h:'중',m:'하',l:'최하'},STN={recommend:'조치권유',watch:'관찰요망',done:'조치완료'};
+    $('m38-ss').textContent=SG.length?'추천 '+SG.length+'개 — 맞는 것만 「＋ 담기」':'';
+    $('m38-sb').innerHTML=SG.length?SG.map(function(x,i){return '<div class="m38-sg">'+(x.src?'<img src="'+x.src+'" alt="">':'')+'<div><b>'+esc(x.d)+(x.loc?' · '+esc(x.loc):'')+'</b><p><span class="lv'+(x.risk==='vh'||x.risk==='h'?' r':'')+'">위험도 '+RK[x.risk]+'</span><span class="lv">'+STN[x.st]+'</span>'+(x.c<0.7?'<span class="lv">확인 필요</span>':'')+'</p><p>'+esc(x.act)+'</p>'+(x.see?'<p style="color:#98A1B4">근거: '+esc(x.see)+'</p>':'')+'<button type="button" data-sg="'+i+'">＋ 결함으로 담기</button></div></div>';}).join('')
+      :'<p class="m38-p">사진에서 뚜렷한 결함을 찾지 못했습니다. 필요하면 직접 입력해 주세요.</p>';
+  }
+  $('m38-sb').addEventListener('click',function(e){var b=e.target.closest('[data-sg]');if(!b)return;var x=SG[+b.getAttribute('data-sg')];if(!x)return;
+    if(typeof addDefectRow==='function'){addDefectRow(x.d,x.loc,x.risk,x.act,x.st,[],x.src?[x.src]:[]);b.disabled=true;b.textContent='✓ 담았습니다';draft();t2('⚠️ 결함 칸에 담았습니다');}});
+
+  /* ════ ① ⚡ 빠른 보고서 ════ */
+  var MKEY='hhc_m38';
+  function pref(){try{return localStorage.getItem(MKEY)!=='d';}catch(e){return true;}}
+  function setPref(q){try{localStorage.setItem(MKEY,q?'q':'d');}catch(e){}}
+  var mode=document.createElement('div');mode.className='m38-mode';mode.setAttribute('role','tablist');
+  mode.innerHTML='<button type="button" class="q" data-q="1"><b>⚡ 빠른 보고서</b><small>문제 없음 · 한 화면</small></button><button type="button" class="d" data-q="0"><b>📋 자세히 작성</b><small>6단계 · 문제 있을 때</small></button>';
+  nav.parentNode.insertBefore(mode,nav);
+  var qhd=document.createElement('div');qhd.className='m38-qhd';
+  qhd.innerHTML='⚡ <b>빠른 보고서</b> — 설비 · 온도 사진 · 드레인 · 세척 사진만 넣고 저장하세요. 항목별 결과 · 판정(🟢 정상)은 자동으로 채워집니다. 다른 문제가 있으면 <b>📋 자세히 작성</b>으로.';
+  body.insertBefore(qhd,body.firstChild);
+
+  function cardOf(id){var el=$(id);return el&&el.closest('.card');}
+  var QIDS=['f-client','equip-rows','cool-units','work-photos','clean-before-photos','f-opinion'];
+  function markCards(){QIDS.forEach(function(id){var c=cardOf(id);if(c)c.setAttribute('data-m38q','1');});}
+
+  /* 💧 드레인 카드 */
+  var drain=document.createElement('div');drain.className='card m38-drain';drain.setAttribute('data-m38q','1');
+  drain.innerHTML='<div class="card-hdr"><div class="card-icon">💧</div><div class="card-title">드레인 배수 상태</div></div><div class="card-body"><div class="m38-warn" id="m38-cw"></div><div id="m38-drs"></div><div class="m38-sum" id="m38-dsum"></div><button type="button" class="m38-detail" data-detail="1">⚠ 다른 문제가 있어요 → 📋 자세히 작성으로</button></div>';
+  (function(){var cc=cardOf('cool-units');if(cc&&cc.parentNode)cc.parentNode.insertBefore(drain,cc.nextSibling);else body.appendChild(drain);})();
+  var RS=[['slope','기울기(구배) 불량','배수 배관 기울기 불량'],['ins','단열 불량','배관 단열 불량'],['slow','배수 지연','배수 지연']];
+  var DST={};   /* 에어컨 번호 → {on, r:{slope,ins,slow}} */
+  function units(){return [].slice.call(document.querySelectorAll('#cool-units .cu-item')).map(function(w){
+    return {id:w.id.replace('cu-wrap-',''),lbl:w._cuLbl?w._cuLbl():'',loc:w._cuLoc?w._cuLoc():''};});}
+  function uName(u){return u.loc||u.lbl||'에어컨';}
+  function st(u){if(!DST[u.lbl])DST[u.lbl]={on:true,r:{slope:1,ins:1,slow:0}};return DST[u.lbl];}
+  function drawDrain(){
+    var U=units(),h='';
+    if(!U.length)h='<p class="m38-p" style="margin:0 0 8px">위 <b>점검 대상 설비</b>에 에어컨을 넣으면 여기에 에어컨별로 나옵니다.</p>';
+    U.forEach(function(u){var s=st(u);
+      h+='<div class="m38-dr'+(s.on?'':' off')+'" data-u="'+esc(u.lbl)+'"><div class="m38-dr-h"><b>'+esc(uName(u))+(u.loc&&u.lbl?'<small>'+esc(u.lbl)+'</small>':'')+'</b><button type="button" class="m38-tg'+(s.on?' on':'')+'" data-tg="1">'+(s.on?'💧 주의':'✓ 이상 없음')+'</button></div>'+
+        '<div class="m38-rs">'+RS.map(function(r){return '<button type="button" class="'+(s.r[r[0]]?'on':'')+'" data-r="'+r[0]+'">'+r[1]+'</button>';}).join('')+'</div>'+
+        '<button type="button" class="m38-oth" data-oth="'+esc(uName(u))+'">⚠ 이 에어컨에 다른 문제 있음</button></div>';});
+    $('m38-drs').innerHTML=h;sumDrain();
+  }
+  function reasonTxt(s){return RS.filter(function(r){return s.r[r[0]];}).map(function(r){return r[2];});}
+  function drainPlan(){
+    var U=units(),on=U.filter(function(u){return st(u).on&&reasonTxt(st(u)).length;});
+    if(!on.length)return {on:false,note:'이상 없음'};
+    var groups={},ord=[];
+    on.forEach(function(u){var k=reasonTxt(st(u)).join(' · ');if(!groups[k]){groups[k]=[];ord.push(k);}groups[k].push(uName(u));});
+    var all=on.length===U.length&&ord.length===1;
+    var note=all?ord[0]+' (전체 에어컨)':ord.map(function(k){return k+' ('+groups[k].join(' · ')+')';}).join(' / ');
+    var any={};on.forEach(function(u){RS.forEach(function(r){if(st(u).r[r[0]])any[r[0]]=1;});});
+    var title=any.slope&&any.ins?'배수배관 기울기 및 단열 처리 개선':any.slope?'배수배관 기울기 개선':any.ins?'배수배관 단열 처리 개선':'배수 배관 점검 및 세정';
+    var where=all?'전체 에어컨':on.map(uName).join(' · ');
+    var desc=where+' — '+(any.slope?'응축수가 고이지 않도록 배수 배관을 배출 방향으로 기울게(1m당 약 1cm 이상) 다시 잡고':'')+(any.slope&&any.ins?', ':'')+(any.ins?'결로 물 떨어짐을 막도록 배관 단열재를 보강':'')+(!any.slope&&!any.ins?'배수 배관 막힘·기울기를 점검하고 세정':'')+'하는 것을 권합니다.';
+    return {on:true,note:note,title:title,desc:desc};
+  }
+  function sumDrain(){var p=drainPlan();
+    $('m38-dsum').innerHTML=p.on?'저장 시 자동: 항목 「드레인 배수 및 배관 상태」 = <b>⚠️ 주의</b> · '+esc(p.note)+'<br>권장 정비 = <b>'+esc(p.title)+'</b> · 종합 판정 = <b>🟢 정상</b>':'저장 시 자동: 「드레인 배수 및 배관 상태」 = <b>✅ 정상</b> · 종합 판정 = <b>🟢 정상</b>';}
+  var REC_TITLES=['배수배관 기울기 및 단열 처리 개선','배수배관 기울기 개선','배수배관 단열 처리 개선','배수 배관 점검 및 세정'];
+  /* 숨은 칸에 반영 (빠른 보고서일 때만) */
+  function sync(){
+    if(!document.body.classList.contains('m38q'))return;
+    var ev0=document.querySelector('.ev-btn[data-val="normal"]');if(ev0&&!ev0.classList.contains('sel')&&typeof setEval==='function')setEval(ev0);
+    if(!units().length){sumDrain();return;}   /* 에어컨을 아직 안 넣었으면 드레인 항목은 건드리지 않음 */
+    var p=drainPlan();
+    var c=typeof ipFind==='function'?ipFind('드레인 배수 및 배관 상태'):null;
+    if(!c&&p.on&&typeof addResultRow==='function'){addResultRow('배수','드레인 배수 및 배관 상태','warn','',p.note);c=ipFind('드레인 배수 및 배관 상태');}
+    if(c){var want=p.on?'warn':'ok';if(c._statusSel.value!==want){c._statusSel.value=want;c._statusSel.dispatchEvent(new Event('change',{bubbles:true}));}
+      var ni=c._getNoteInp();if(ni.value!==p.note){ni.value=p.note;ni.dispatchEvent(new Event('input',{bubbles:true}));}}
+    /* 권장 정비 — 빠른 보고서가 넣은 줄만 다시 씀 */
+    var rr=$('rec-rows');
+    if(rr){var mine=[].slice.call(rr.querySelectorAll('.unit-item')).filter(function(w){var d=w._getRecData&&w._getRecData();return w.dataset.m38==='1'||(d&&REC_TITLES.indexOf(d.title)>=0);});
+      var cur=mine.length===1&&mine[0]._getRecData();
+      if(!p.on){mine.forEach(function(w){w.remove();});}
+      else if(!cur||cur.title!==p.title||cur.desc!==p.desc){mine.forEach(function(w){w.remove();});
+        if(typeof addRecRow==='function'){addRecRow('regular',p.title,p.desc);var last=rr.lastElementChild;if(last)last.dataset.m38='1';}}}
+    var ev=document.querySelector('.ev-btn[data-val="normal"]');if(ev&&!ev.classList.contains('sel')&&typeof setEval==='function')setEval(ev);
+    sumDrain();draft();
+  }
+  drain.addEventListener('click',function(e){
+    if(e.target.closest('[data-detail]')){toDetail(null);return;}
+    var o=e.target.closest('[data-oth]');if(o){toDetail(o.getAttribute('data-oth'));return;}
+    var row=e.target.closest('.m38-dr');if(!row)return;var s=DST[row.getAttribute('data-u')];if(!s)return;
+    if(e.target.closest('[data-tg]')){s.on=!s.on;}
+    else{var r=e.target.closest('[data-r]');if(!r)return;s.r[r.getAttribute('data-r')]=s.r[r.getAttribute('data-r')]?0:1;if(!reasonTxt(s).length)s.on=false;}
+    drawDrain();sync();
+  });
+  /* 냉방 온도차가 낮으면 → 자세히 작성 권유 */
+  var coolSkip={};
+  function checkCool(){
+    var cw=$('m38-cw');if(!cw)return;
+    if(!document.body.classList.contains('m38q')){cw.classList.remove('on');return;}
+    var low=[];document.querySelectorAll('#cool-units .cu-item').forEach(function(w){var a=parseFloat((w.querySelector('.cu-ta')||{}).value),b=parseFloat((w.querySelector('.cu-tb')||{}).value);
+      if(!isNaN(a)&&!isNaN(b)&&a-b<12){var n=(w._cuLoc&&w._cuLoc())||(w._cuLbl&&w._cuLbl());if(!coolSkip[n+'|'+a+'|'+b])low.push({n:n,d:(a-b).toFixed(1),k:n+'|'+a+'|'+b});}});
+    if(!low.length){cw.classList.remove('on');return;}
+    cw.innerHTML='⚠ '+low.map(function(x){return esc(x.n)+' 온도차 '+x.d+'°';}).join(' · ')+' — 기준(12°) 미만이라 냉방 저하가 의심됩니다. 자세히 작성으로 넘어가 결함 · 조치를 적을까요?<br><button type="button" data-cw="go">📋 자세히 작성으로</button><button type="button" class="n" data-cw="keep">측정 오류 · 그대로 둠</button>';
+    cw.dataset.k=low.map(function(x){return x.k;}).join(',');cw.classList.add('on');
+    var cc=cardOf('cool-units');if(cc&&!cc.contains(cw)){var cb=cc.querySelector('.card-body');if(cb)cb.insertBefore(cw,cb.firstChild);}
+  }
+  document.addEventListener('click',function(e){var b=e.target.closest('[data-cw]');if(!b)return;var cw=$('m38-cw');
+    if(b.getAttribute('data-cw')==='go'){toDetail(null,'cool');}else{(cw.dataset.k||'').split(',').forEach(function(k){coolSkip[k]=1;});cw.classList.remove('on');}});
+  var ccu=$('cool-units');
+  if(ccu){ccu.addEventListener('input',function(e){if(e.target.matches('.cu-ta,.cu-tb')){clearTimeout(checkCool._t);checkCool._t=setTimeout(checkCool,700);}});
+    new MutationObserver(function(){if(document.body.classList.contains('m38q')){drawDrain();sync();}}).observe(ccu,{childList:true});
+    ccu.addEventListener('change',function(){if(document.body.classList.contains('m38q')){clearTimeout(drawDrain._t);drawDrain._t=setTimeout(function(){drawDrain();sync();},150);}});}
+
+  function setQuick(on,noPref){
+    var can=RT()==='inspect';
+    document.body.classList.toggle('m38-ins',can);
+    on=on&&can;
+    document.body.classList.toggle('m38q',on);
+    mode.querySelectorAll('button').forEach(function(b){b.classList.toggle('on',(b.getAttribute('data-q')==='1')===on);});
+    if(!noPref&&can)setPref(on);
+    if(on){markCards();if(typeof coolMissing==='function'&&typeof coolFillFromEquip==='function'&&coolMissing&&coolMissing())try{coolFillFromEquip();}catch(e){}drawDrain();sync();checkCool();}
+    else{var cw=$('m38-cw');if(cw)cw.classList.remove('on');}
+    if(window.__m36apply)window.__m36apply(true);
+  }
+  function toDetail(locName,what){
+    setQuick(false,true);   /* 이 보고서만 — 기억한 방식은 그대로 */
+    setTimeout(function(){
+      var tgt=what==='cool'?$('defect-rows'):$('defect-rows');
+      if(locName&&typeof addDefectRow==='function'){addDefectRow('',locName,'','','plan');var L=document.querySelectorAll('#defect-rows .unit-item');tgt=L[L.length-1]||tgt;}
+      if(tgt){if(window.__m36reveal)window.__m36reveal(tgt);var y=tgt.getBoundingClientRect().top+window.pageYOffset-140;window.scrollTo({top:Math.max(0,y),behavior:'smooth'});
+        var inp=tgt.querySelector&&tgt.querySelector('input[type=text]');if(inp)setTimeout(function(){try{inp.focus({preventScroll:true});}catch(_){}},500);}
+      t2('📋 자세히 작성으로 바꿨습니다 — 넣은 내용은 그대로입니다');
+    },80);
+  }
+  window.__m38toDetail=toDetail;
+  mode.addEventListener('click',function(e){var b=e.target.closest('[data-q]');if(!b)return;var q=b.getAttribute('data-q')==='1';
+    if(q===document.body.classList.contains('m38q'))return;
+    if(q&&!quickOk())return;
+    setQuick(q);window.scrollTo({top:0,behavior:'smooth'});});
+  /* 이미 결함 · 실외기 측정 등을 넣은 보고서를 빠른 보고서로 바꾸면 숨은 칸에 남는다는 것을 알림 */
+  function quickOk(){
+    var n=(typeof m30Rows==='function'?m30Rows('defect').length:0)+document.querySelectorAll('#problem-rows .unit-item').length;
+    if(!n)return true;
+    return confirm('결함 · 문제 사진이 '+n+'개 들어 있습니다.\n빠른 보고서에서는 이 칸들이 숨지만 내용은 그대로 저장됩니다. 바꿀까요?');
+  }
+
+  /* 새 보고서 · 보고서 종류 바꾸기 · 저장된 보고서 열기 */
+  function follow(fromNew){setTimeout(function(){setQuick(RT()==='inspect'&&!EDIT()&&pref(),true);ensureDefBtn();},fromNew?260:120);}
+  var _nr=window.newReport;if(typeof _nr==='function')window.newReport=function(){var r=_nr.apply(this,arguments);DST={};coolSkip={};follow(true);return r;};
+  var _sw=window.switchReportType;if(typeof _sw==='function')window.switchReportType=function(){var r=_sw.apply(this,arguments);follow(false);return r;};
+  var _lf=window.loadIntoForm;if(typeof _lf==='function')window.loadIntoForm=function(){var r=_lf.apply(this,arguments);DST={};setTimeout(function(){setQuick(false,true);},150);return r;};
+  ensureDefBtn();
+  if(document.readyState==='complete')follow(false);else window.addEventListener('load',function(){follow(false);});
+})();
+</script>
+<script type="module" id="m38-fs">
+/* ③ 📷 직원 사진 가져오기 — site_photos(직원 일정표에서 올린 사진) 조회 · 관리자 열쇠로 사진 받기 */
+import { getApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+let DB=null;function db(){if(!DB){try{DB=getFirestore(getApp());}catch(e){DB=null;}}return DB;}
+const RT=()=>{try{return window.reportType||reportType;}catch(e){return 'inspect';}};
+const pn=p=>{p=String(p||'').replace(/[^0-9]/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');};
+const nn=n=>String(n||'').toLowerCase().replace(/[^0-9a-z가-힣]/g,'');
+const CN={temp:'🌡️ 온도',before:'🧽 전',after:'✨ 후'};
+let KEY=null;
+async function adminKey(){if(KEY)return KEY;const s=await getDoc(doc(db(),'settings','work_link'));KEY=s.exists()?(s.data().admin_key||''):'';return KEY;}
+function addD(ds,n){const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+const CACHE={};
+async function siteOf(date){
+  const c=CACHE[date];if(c&&Date.now()-c.t<60000)return c.v;
+  const q=await getDocs(query(collection(db(),'site_photos'),where('date','in',[date,addD(date,-1)])));
+  const jobs={};q.forEach(d=>{const p=d.data();if(!p.job||!p.url)return;const k=p.date+'|'+p.job;
+    (jobs[k]=jobs[k]||{key:k,date:p.date,job:p.job,cname:p.cname||'',cphone:p.cphone||'',place:p.place||'',unit:p.unit||'',ph:[]}).ph.push(Object.assign({id:d.id},p));});
+  const v=Object.values(jobs);v.forEach(j=>j.ph.sort((a,b)=>String(a.taken||a.at).localeCompare(String(b.taken||b.at))));
+  CACHE[date]={t:Date.now(),v};return v;
+}
+function match(j,name,phone){
+  const p=pn(phone),n=nn(name);
+  if(p.length>=6&&pn(j.cphone)===p)return true;
+  if(!n||n.length<3)return false;
+  const cn=nn(j.cname),pu=nn(j.place+j.unit),u=nn(j.unit);
+  return cn===n||(cn.length>3&&(n.indexOf(cn)>=0||cn.indexOf(n)>=0))||(u.length>=4&&n.indexOf(u)>=0&&n.indexOf(nn(j.place).slice(0,4))>=0)||pu===n;
+}
+/* 배너 */
+const ban=document.createElement('div');ban.className='m38-site';ban.setAttribute('data-m36','0');
+(()=>{const c=$('f-client')&&$('f-client').closest('.card');if(c&&c.parentNode)c.parentNode.insertBefore(ban,c.nextSibling);})();
+let SHOWN=[],PICK=null,DONE={};
+function cnt(ph){const c={temp:0,before:0,after:0};ph.forEach(p=>{if(c[p.cat]!=null)c[p.cat]++;});return c;}
+function cntTxt(c){return ['temp','before','after'].filter(k=>c[k]).map(k=>CN[k]+' '+c[k]).join(' · ');}
+async function check(){
+  if(!(RT()==='inspect'||RT()==='dispatch')||!db()){ban.classList.remove('on');return;}
+  const date=($('f-date')&&$('f-date').value)||new Date(Date.now()+(new Date().getTimezoneOffset()+480)*60000).toISOString().slice(0,10);
+  let list=[];try{list=await siteOf(date);}catch(e){ban.classList.remove('on');return;}
+  if(!list.length){ban.classList.remove('on');return;}
+  const name=$('f-client')?$('f-client').value:'',phone=$('f-phone')?$('f-phone').value:'';
+  const hit=PICK?list.filter(j=>j.key===PICK):list.filter(j=>match(j,name,phone));
+  SHOWN=hit;
+  if(hit.length){
+    const ph=hit.flatMap(j=>j.ph),c=cnt(ph),done=hit.every(j=>DONE[j.key]);
+    ban.className='m38-site on'+(done?' done':'');
+    ban.innerHTML=`<div class="m38-site-h"><i>📷</i><div><b>${done?'✓ 직원 사진을 가져왔습니다':'직원이 올린 현장 사진 '+ph.length+'장'}</b><small>${esc(hit.map(j=>(j.place||j.cname)+(j.unit?' '+j.unit:'')).join(', '))} · ${cntTxt(c)}</small></div></div>`+
+      (done?'':`<div class="m38-site-th">${ph.slice(0,7).map(p=>`<img src="${esc(p.t||p.url)}" alt="" loading="lazy">`).join('')}</div><div class="m38-site-b"><button type="button" data-imp="1">📥 이 보고서에 가져오기</button><button type="button" class="s" data-pick="1">다른 일정</button></div>`);
+  }else{
+    if(!name.trim()&&!phone.trim()){ban.classList.remove('on');return;}
+    ban.className='m38-site on';
+    ban.innerHTML=`<div class="m38-site-h"><i>📷</i><div><b>직원 사진이 있는 일정 ${list.length}건</b><small>이 고객과 맞는 일정을 자동으로 찾지 못했습니다 · 골라서 가져오세요</small></div></div><div class="m38-site-b"><button type="button" data-pick="1">일정 고르기</button></div>`;
+  }
+}
+let _t=null;function later(ms){clearTimeout(_t);_t=setTimeout(check,ms||700);}
+['f-client','f-phone','f-date'].forEach(id=>{const el=$(id);if(el){el.addEventListener('input',()=>{PICK=null;later(900);});el.addEventListener('change',()=>{PICK=null;later(300);});}});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden){for(const k in CACHE)delete CACHE[k];later(400);}});
+const _nr=window.newReport;if(typeof _nr==='function')window.newReport=function(){const r=_nr.apply(this,arguments);PICK=null;DONE={};later(500);return r;};
+const _sw=window.switchReportType;if(typeof _sw==='function')window.switchReportType=function(){const r=_sw.apply(this,arguments);later(300);return r;};
+const _lf=window.loadIntoForm;if(typeof _lf==='function')window.loadIntoForm=function(){const r=_lf.apply(this,arguments);PICK=null;later(600);return r;};
+setTimeout(check,2500);
+
+ban.addEventListener('click',async e=>{
+  if(e.target.closest('[data-pick]')){pickSheet();return;}
+  if(e.target.closest('[data-imp]')){importNow(SHOWN);}
+});
+async function pickSheet(){
+  const date=($('f-date')&&$('f-date').value)||'';const list=await siteOf(date||new Date().toISOString().slice(0,10)).catch(()=>[]);
+  const S=window.__m38sheet;if(!S)return;
+  S.open('📷 직원 사진이 있는 일정','이 보고서 고객의 일정을 고르세요 · '+esc(date),list.map(j=>{const c=cnt(j.ph);
+    return `<button type="button" class="m38-job" data-job="${esc(j.key)}"><img src="${esc(j.ph[0].t||j.ph[0].url)}" alt=""><div><b>${esc(j.place||j.cname)}${j.unit?' '+esc(j.unit):''}</b><small>${esc(j.date)} · ${cntTxt(c)}${j.ph[0].by?' · '+esc([...new Set(j.ph.map(p=>p.by))].join(', ')):''}</small></div><em>${j.ph.length}장 ›</em></button>`;}).join('')||'<p class="m38-p">사진이 있는 일정이 없습니다.</p>');
+  S.body().onclick=ev=>{const b=ev.target.closest('[data-job]');if(!b)return;PICK=b.getAttribute('data-job');S.close();S.body().onclick=null;check();};
+}
+async function blobUrl(p,k){
+  const r=await fetch('/api/work?k='+encodeURIComponent(k)+'&img='+encodeURIComponent(p.id),{cache:'no-store'});
+  if(!r.ok)throw new Error('사진 받기 '+r.status);
+  const b=await r.blob();
+  return new File([b],(p.cat||'p')+'.jpg',{type:b.type||'image/jpeg',lastModified:Date.parse(p.taken||p.at)||Date.now()});
+}
+/* 온도 사진 → 에어컨 정하기 창. 처음엔 찍은 순서대로 정해져 있음. 돌려줌: ['0'|'1'…|'work'|'skip'] 또는 null(취소) */
+function assignSheet(R,U){
+  return new Promise(res=>{
+    const S=window.__m38sheet;if(!S){res(R.map((_,i)=>i<U.length?String(i):'work'));return;}
+    const nm=el=>{const l=el._cuLbl?el._cuLbl():'',c=el._cuLoc?el._cuLoc():'';return c?c+' ('+l+')':'에어컨 '+l;};
+    const plan=R.map((_,i)=>i<U.length?String(i):'work');
+    const opts=v=>U.map((el,k)=>`<option value="${k}"${v===String(k)?' selected':''}>${esc(nm(el))}</option>`).join('')+
+      `<option value="work"${v==='work'?' selected':''}>📷 작업과정 사진으로</option><option value="skip"${v==='skip'?' selected':''}>✕ 넣지 않음</option>`;
+    function draw(){
+      const cnt={};plan.forEach(v=>{if(/^\d+$/.test(v))cnt[v]=(cnt[v]||0)+1;});
+      const miss=U.filter((_,k)=>!cnt[String(k)]).map(nm);
+      S.body().innerHTML='<p class="m38-p">찍은 순서대로 정해 두었습니다. <b>다른 에어컨이면 바꿔 주세요.</b> 사진을 누르면 크게 보입니다.</p>'+
+        R.map((x,i)=>{const r=x.r,d=!r.err&&r.a!=null&&r.b!=null?(r.a-r.b).toFixed(1):null,dup=/^\d+$/.test(plan[i])&&cnt[plan[i]]>1;
+          return `<div class="m38-as${dup?' dup':''}"><img src="${x.u}" alt="" data-big="${i}"><div>`+
+            (r.err?`<b class="x">숫자를 읽지 못함 · 넣은 뒤 직접 입력</b>`:`<b>흡입 ${r.a??'—'}° · 토출 ${r.b??'—'}°${d!=null?' · Δ'+d+'°':''}</b>`)+
+            `<small>${i+1}번째 사진${x.by?' · '+esc(x.by):''}${!r.err&&r.c<0.7?' · 흐릿함 — 확인 필요':''}</small><select data-as="${i}">${opts(plan[i])}</select>`+
+            (dup?'<em>같은 에어컨에 사진이 2장 — 측정 사진 칸에는 아래쪽 사진이 들어갑니다</em>':'')+`</div></div>`;}).join('')+
+        (miss.length?`<p class="m38-p" style="color:#8A5A00;background:#FFF8EC">사진이 없는 에어컨: ${esc(miss.join(', '))}</p>`:'')+
+        '<div class="m38-go"><button type="button" data-as-x="1">취소</button><button type="button" class="ok" data-as-ok="1">넣기 ✓</button></div>';
+    }
+    S.open('🌡️ 온도 사진 → 어느 에어컨?','사진 '+R.length+'장 · 에어컨 '+U.length+'대 — 확인 후 「넣기」',' ');draw();
+    let big=document.querySelector('.m38-big');if(!big){big=document.createElement('div');big.className='m38-big';big.innerHTML='<img alt="">';document.body.appendChild(big);big.onclick=()=>big.classList.remove('on');}
+    const bd=S.body();let done=false;
+    const fin=v=>{if(done)return;done=true;bd.onchange=bd.onclick=null;S.close();res(v);};
+    bd.onchange=e=>{const s2=e.target.closest('[data-as]');if(!s2)return;plan[+s2.dataset.as]=s2.value;draw();};
+    bd.onclick=e=>{if(e.target.closest('[data-as-ok]'))fin(plan.slice());else if(e.target.closest('[data-as-x]'))fin(null);
+      else{const g=e.target.closest('[data-big]');if(g){big.querySelector('img').src=R[+g.dataset.big].u;big.classList.add('on');}}};
+    const x=$('m38-sx'),ov=$('m38-ov');const cancel=()=>fin(null);
+    x.addEventListener('click',cancel,{once:true});
+    ov.addEventListener('click',function oc(e){if(e.target===ov){ov.removeEventListener('click',oc);cancel();}});
+  });
+}
+async function importNow(jobs){
+  if(!jobs||!jobs.length)return;
+  const ph=jobs.flatMap(j=>j.ph);
+  const w=document.createElement('div');w.className='m35-wait';w.textContent='📥 직원 사진 받는 중… (0/'+ph.length+')';document.body.appendChild(w);
+  try{
+    const k=await adminKey();if(!k)throw new Error('직원 일정표 관리자 열쇠가 없습니다 — 관리자 앱 「직원 일정표」를 한 번 열어 주세요');
+    const files=[];let n=0;
+    for(const p of ph){files.push({p,f:await blobUrl(p,k)});w.textContent='📥 직원 사진 받는 중… ('+(++n)+'/'+ph.length+')';}
+    /* 🌡️ 온도 사진 → 사진마다 숫자를 읽고, 어느 에어컨인지 확인 창에서 정한 뒤 넣음 */
+    const T=files.filter(x=>x.p.cat==='temp');
+    if(T.length){
+      if(typeof coolMissing==='function'&&coolMissing()&&typeof coolFillFromEquip==='function')try{coolFillFromEquip();}catch(_){}
+      let U=[...document.querySelectorAll('#cool-units .cu-item')];
+      if(!U.length&&typeof addCoolUnit==='function'){for(let i=0;i<T.length;i++)addCoolUnit();U=[...document.querySelectorAll('#cool-units .cu-item')];}
+      const R=[];
+      for(let i=0;i<T.length;i++){
+        w.textContent='🤖 온도 사진 읽는 중… ('+(i+1)+'/'+T.length+')';
+        const u=await compressImage(T[i].f,1600,0.78);
+        const r=window.__m38t?await window.__m38t.read([u]):{err:'판독 도구 없음'};
+        R.push({u,f:T[i].f,r,by:T[i].p.by||''});
+      }
+      w.remove();
+      const plan=await assignSheet(R,U);
+      if(!plan){if(typeof toast==='function')toast('가져오기를 취소했습니다');return;}
+      const extra=[];
+      plan.forEach((to,i)=>{const x=R[i];
+        if(to==='work'){extra.push(x.f);return;}
+        if(to==='skip')return;
+        const el=U[+to];if(!el)return;const id=el.id.replace('cu-wrap-','');
+        const cb=el.querySelector('.cu-body');if(cb&&cb.style.display==='none'&&el.querySelector('.cu-hdr'))el.querySelector('.cu-hdr').click();
+        window.__m38t.place(id,x.u);
+        if(!x.r.err)window.__m38t.fill(id,x.r);
+        else{const st=$('ocr-status-'+id);if(st){st.className='ocr-status on';st.style.color='#b36000';st.textContent='⚠ 사진에서 숫자를 읽지 못했습니다 — 직접 입력해 주세요';}}
+      });
+      if(extra.length&&window.ingestPhotos)window.ingestPhotos($('work-photos'),extra);
+    }
+    w.remove();
+    /* 🧽 세척 전 · ✨ 후 → 청소 사진 정리 창 (직원이 고른 전·후 그대로) */
+    const BA=files.filter(x=>x.p.cat==='before'||x.p.cat==='after');
+    if(BA.length){
+      const list=[];for(const x of BA){const u=await compressImage(x.f,1600,0.78);list.push({src:u,t:x.f.lastModified,h:x.p.cat==='after'?'a':'b'});}
+      if(window.__m35&&window.__m35.bulkHint)await window.__m35.bulkHint(0,list);
+    }
+    jobs.forEach(j=>{DONE[j.key]=1;j.ph.forEach(p=>{updateDoc(doc(db(),'site_photos',p.id),{imported_at:new Date().toISOString()}).catch(()=>{});});});
+    if(typeof toast==='function')toast('📥 직원 사진 '+ph.length+'장을 넣었습니다'+(BA.length?' — 세척 사진은 정리 창에서 「적용」':''));
+    check();
+  }catch(err){w.remove();alert('가져오지 못했습니다: '+(err.message||err));}
+}
+window.__m38site={check,importNow};
 </script>
 
 </body>

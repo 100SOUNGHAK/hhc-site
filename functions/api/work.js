@@ -21,10 +21,18 @@
 //               ④ settings/work_places.map[콘도명 키] (관리자가 「같은 콘도명이면 다음에도」로 저장한 위치)
 //  · 📎 첨부 사진 (2026-11-17) — work_edits/{날짜}.photos[작업ID] = [{id,url,t,w,h,name,path,tpath}]
 //      워크퍼밋 등. 직원 화면에는 url(원본) · t(작은 그림) · w · h · name 만 보냄. Storage 주소만 허용.
+//  · 📷 직원 현장 사진 (2026-11-24) — 직원이 일정마다 온도측정 · 세척 전 · 세척 후 사진을 올림(여러 직원 가능)
+//      POST /api/work?k={열쇠}&op=up&job={작업ID}&date={날짜}&cat=temp|before|after  (FormData f=사진 · t=작은 그림 · w · h · taken)
+//      POST /api/work?k={열쇠}&op=del&id={사진ID}   → 자기가 올린 사진만(관리자 열쇠는 전부)
+//      GET  /api/work?k={관리자 열쇠}&img={사진ID}   → 사진 받기(관리자 보고서 화면이 가져오기에 씀 · 같은 주소라 막힘 없음)
+//      자료: site_photos/{자동ID} {date,job,cat,url,path,t,tpath,w,h,by,bk,at,taken,del,cname,cphone,place,unit}
+//      Storage: site_photos/{날짜}/{작업ID}/… — 올린 날부터 30일 뒤(del 날짜) 자동으로 지움(요청이 올 때 6시간에 한 번 정리)
+//      직원 화면에는 url · t · cat · mine(내가 올린 것)만. 고객 연락처(cphone)는 관리자 화면에서 고객을 찾을 때만 씀.
 //  · 속도 (2026-11-17): 열쇠 확인과 그날 일정 조회를 동시에, 의뢰 위치·고객 위치 조회도 동시에.
 //      고객 위치 목록은 서버 인스턴스에 10분간 기억(고객 전체를 매번 훑지 않음).
 // ─────────────────────────────────────────────────────────────────────────────
-import { getDoc, queryEq, queryIn, listAll, json, fail, rateLimited, nn, pn } from './_lib/fs.js';
+import { getDoc, queryEq, queryIn, listAll, createDoc, deleteDoc, patchDoc, json, fail, rateLimited, originAllowed, nn, pn } from './_lib/fs.js';
+import { stgPut, stgGet, stgDel } from './_lib/stg.js';
 
 const MY_OFFSET = 8 * 60;   // UTC+8
 
@@ -169,6 +177,107 @@ async function custLocIndex(env){
   try{ return await _cidxP; } finally { _cidxP = null; }
 }
 
+// ── 📷 직원 현장 사진 ──
+const SITE_CATS = ['temp', 'before', 'after'];
+const KEEP_DAYS = 30;
+async function keyHash(k){ const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('hhc-site|' + k)); return Array.from(new Uint8Array(d)).slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join(''); }
+function siteOut(p, bk){ return { id: p.__id, cat: String(p.cat || ''), url: String(p.url || ''), t: String(p.t || p.url || ''), by: String(p.by || ''), at: String(p.at || ''), mine: !!(bk && p.bk === bk) }; }
+function siteByJob(rows, bk){
+  const m = {};
+  for (const p of (rows || [])){ if (!p || !p.job || !PHOTO_OK.test(String(p.url || ''))) continue; (m[p.job] = m[p.job] || []).push(siteOut(p, bk)); }
+  for (const k in m) m[k].sort((a, b) => a.at.localeCompare(b.at));
+  return m;
+}
+// 30일 지난 사진 정리 — 인스턴스마다 6시간에 한 번, 최근 10일치 「지울 날」만 훑음
+let _cleanAt = 0;
+async function cleanup(env){
+  if (Date.now() - _cleanAt < 6 * 3600e3) return; _cleanAt = Date.now();
+  const today = ymd(myNow());
+  for (let i = 0; i <= 10; i++){
+    const rows = await queryEq(env, 'site_photos', 'del', addDays(today, -i), 200).catch(() => []);
+    for (const p of rows){
+      await Promise.all([stgDel(env, p.path), stgDel(env, p.tpath)]).catch(() => {});
+      await deleteDoc(env, 'site_photos', p.__id).catch(() => {});
+    }
+  }
+}
+// 사진을 올린 일정의 고객 · 장소 (관리자 보고서 화면에서 고객을 찾는 데 씀)
+async function jobInfo(env, date, job){
+  if (job.indexOf('bk_') === 0){
+    const b = await getDoc(env, 'bookings', job.slice(3));
+    if (!b || b.status !== 'confirmed' || b.booking_date !== date) return null;
+    const j = fromBooking(job, b);
+    return { cname: String(b.customer_name || ''), cphone: String(b.customer_phone || ''), place: j.place, unit: j.unit };
+  }
+  const s = await getDoc(env, 'schedules', job).catch(() => null);
+  if (s && s.date === date){
+    const j = s.type === 'reserve' ? fromBooking(job, s) : fromSchedule(job, s);
+    return { cname: String(s.customer_name || s.title || '').replace(/^✅\s*/, ''), cphone: String(s.customer_phone || ''), place: j.place, unit: j.unit };
+  }
+  const ed = await getDoc(env, 'work_edits', date);
+  const a = ed && Array.isArray(ed.added) ? ed.added.find(x => x && String(x.id) === job) : null;
+  if (a) return { cname: String(a.place || ''), cphone: '', place: String(a.place || ''), unit: String(a.unit || '') };
+  return null;
+}
+async function staffOf(env, k){
+  const st = await getDoc(env, 'settings', 'work_link');
+  if (!st) return null;
+  if (st.admin_key && st.admin_key === k) return { admin: true, name: '관리자' };
+  const s = (Array.isArray(st.staff) ? st.staff : []).find(x => x && x.key === k && x.off !== true);
+  return s ? { admin: false, name: String(s.name || '') } : null;
+}
+const IMG_OK = /^image\/(jpeg|png|webp)$/;
+
+export async function onRequestPost(context){
+  const { request, env } = context;
+  const q = new URL(request.url).searchParams;
+  const k = String(q.get('k') || '').trim().slice(0, 80), op = q.get('op');
+  if (!originAllowed(request)) return fail('forbidden', 403);
+  if (rateLimited(request, 'work-up', 90)) return fail('too many requests', 429);
+  if (!k) return fail('no-key', 403);
+  try{
+    const who = await staffOf(env, k);
+    if (!who) return fail('bad-key', 403);
+    const bk = await keyHash(k);
+    if (op === 'del'){
+      const id = String(q.get('id') || '').slice(0, 60);
+      const p = await getDoc(env, 'site_photos', id);
+      if (!p) return json({ ok: true, gone: true });
+      if (!who.admin && p.bk !== bk) return fail('not-yours', 403);
+      await Promise.all([stgDel(env, p.path), stgDel(env, p.tpath)]).catch(() => {});
+      await deleteDoc(env, 'site_photos', id);
+      return json({ ok: true });
+    }
+    if (op !== 'up') return fail('bad-op');
+    const job = String(q.get('job') || '').slice(0, 80), date = String(q.get('date') || ''), cat = String(q.get('cat') || '');
+    if (!job || !/^[A-Za-z0-9_-]+$/.test(job) || SITE_CATS.indexOf(cat) < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail('bad-input');
+    // 직원은 지금 화면에 보이는 날 또는 그 전날만 (저녁 7시 이후 · 인터넷이 늦게 잡혀 다음 날 올라가는 경우)
+    const auto = pickDay();
+    if (!who.admin && date !== auto.date && date !== addDays(auto.date, -1) && date !== ymd(myNow())) return fail('bad-date', 403);
+    const fd = await request.formData();
+    const f = fd.get('f'), t = fd.get('t');
+    if (!f || typeof f === 'string' || !IMG_OK.test(f.type || '') || f.size > 6 * 1048576) return fail('bad-photo');
+    const info = await jobInfo(env, date, job);
+    if (!info) return fail('no-job', 404);
+    const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const dir = 'site_photos/' + date + '/' + job + '/' + cat + '-' + stamp;
+    const url = await stgPut(env, dir + '.jpg', await f.arrayBuffer(), f.type);
+    let turl = '', tpath = '';
+    if (t && typeof t !== 'string' && IMG_OK.test(t.type || '') && t.size < 600 * 1024){
+      tpath = dir + '-t.jpg'; turl = await stgPut(env, tpath, await t.arrayBuffer(), t.type).catch(() => { tpath = ''; return ''; });
+    }
+    const taken = parseInt(fd.get('taken'), 10) || 0;
+    const rec = { date, job, cat, url, path: dir + '.jpg', t: turl, tpath, w: Math.max(0, parseInt(fd.get('w'), 10) || 0), h: Math.max(0, parseInt(fd.get('h'), 10) || 0),
+      by: who.name, bk, at: new Date().toISOString(), taken: taken > 0 ? new Date(taken).toISOString() : '', del: addDays(ymd(myNow()), KEEP_DAYS),
+      cname: info.cname.slice(0, 120), cphone: info.cphone.slice(0, 40), place: info.place.slice(0, 120), unit: info.unit.slice(0, 40) };
+    const d = await createDoc(env, 'site_photos', rec);
+    if (context.waitUntil) context.waitUntil(cleanup(env).catch(() => {}));
+    return json({ ok: true, photo: siteOut(Object.assign({}, rec, { __id: d && d.__id }), bk) });
+  }catch(e){
+    return fail(e.message === 'env-missing' ? 'server-not-configured' : 'server-error', 500);
+  }
+}
+
 // 설치용 manifest
 function manifest(k){
   const q = k ? '?k=' + encodeURIComponent(k) : '';
@@ -186,6 +295,16 @@ export async function onRequestGet(context){
   if (q.get('manifest')) return manifest(/^[A-Za-z0-9_-]{8,80}$/.test(k) ? k : '');
   if (rateLimited(request, 'work', 60)) return fail('too many requests', 429);
   if (!k) return fail('no-key', 403);
+  if (q.get('img')){ // 📷 현장 사진 받기 — 관리자 열쇠만
+    try{
+      const who = await staffOf(env, k);
+      if (!who || !who.admin) return fail('bad-key', 403);
+      const p = await getDoc(env, 'site_photos', String(q.get('img')).slice(0, 60));
+      if (!p) return fail('gone', 404);
+      const r = await stgGet(env, q.get('t') && p.tpath ? p.tpath : p.path);
+      return new Response(r.body, { headers: { 'content-type': r.headers.get('content-type') || 'image/jpeg', 'cache-control': 'private, max-age=3600' } });
+    }catch(e){ return fail('server-error', 500); }
+  }
   try{
     // 열쇠 확인(settings/work_link)과 그날 일정 조회를 한꺼번에 시작 — 왕복 한 번을 줄임
     const dq = String(q.get('d') || '');
@@ -195,7 +314,8 @@ export async function onRequestGet(context){
       queryEq(env, 'schedules', 'date', date, 200),
       queryEq(env, 'bookings', 'booking_date', date, 200),
       getDoc(env, 'work_edits', date),
-      getDoc(env, 'settings', 'work_places').catch(() => null)
+      getDoc(env, 'settings', 'work_places').catch(() => null),
+      queryEq(env, 'site_photos', 'date', date, 400).catch(() => [])
     ]);
     const first = pick || auto;
     const dayP = first.mode === 'soon' ? null : fetchDay(first.date);
@@ -210,7 +330,7 @@ export async function onRequestGet(context){
     const day = (isAdmin && pick) ? pick : auto;          // 날짜 지정(&d=)은 관리자 열쇠만
     if (day.mode === 'soon') return json({ ok: true, date: day.date, mode: 'soon', at: Date.now(), staff: who, jobs: [] });
 
-    const [sRows, bRows, ed, wp] = await ((day === first && dayP) ? dayP : fetchDay(day.date));
+    const [sRows, bRows, ed, wp, sp] = await ((day === first && dayP) ? dayP : fetchDay(day.date));
     // 고객이 의뢰신청서에서 확정한 위치 — 이 날 확정 예약으로 전환된 의뢰만
     const bkIds = bRows.filter(b => b && b.status === 'confirmed').map(b => b.__id);
     const reqLoc = {};
@@ -250,9 +370,12 @@ export async function onRequestGet(context){
     const photos = (ed && ed.photos && typeof ed.photos === 'object') ? ed.photos : {};
     const bySort = (x, y) => (x.time_s || '99').localeCompare(y.time_s || '99');
     base.sort(bySort);
+    const bk = await keyHash(k);
+    const site = siteByJob(sp, bk);
+    if (context.waitUntil) context.waitUntil(cleanup(env).catch(() => {}));
     if (isAdmin && q.get('raw')){
       base.forEach(j => { if (reqLoc[j.id]) j.rloc = reqLoc[j.id]; });
-      return json({ ok: true, date: day.date, mode: day.mode, at: Date.now(), base, edits, added, locs, places, photos });
+      return json({ ok: true, date: day.date, mode: day.mode, at: Date.now(), base, edits, added, locs, places, photos, site });
     }
     const locOf = j => {
       const own = locs[j.id];
@@ -266,7 +389,8 @@ export async function onRequestGet(context){
       jobs.push(e ? clean(Object.assign({}, j, e, { id: j.id })) : j);
     }
     for (const x of added) jobs.push(clean(x));
-    jobs.forEach(j => { const l = locOf(j); if (l) j.loc = l; const ph = cleanPhotos(photos[j.id]); if (ph.length) j.photos = ph; });
+    jobs.forEach(j => { const l = locOf(j); if (l) j.loc = l; const ph = cleanPhotos(photos[j.id]); if (ph.length) j.photos = ph;
+      if (site[j.id]) j.site = site[j.id].map(x => ({ id: x.id, cat: x.cat, url: x.url, t: x.t, mine: x.mine })); });
     jobs.sort(bySort);
     return json({ ok: true, date: day.date, mode: day.mode, at: Date.now(), staff: who, jobs });
   }catch(e){
