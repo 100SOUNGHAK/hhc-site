@@ -805,6 +805,7 @@ const css=`
 .ivr .tx b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:14px;font-weight:800;line-height:1.35;word-break:keep-all}
 .ivr .tx small{display:block;font-size:11.5px;color:#98A1B4;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ivr .rt{text-align:right;flex:none}
+.ivr .ivnew{display:inline-block;margin-right:5px;padding:1px 6px;border-radius:999px;background:var(--ok,#0E8F5C);color:#fff;font-size:9.5px;font-weight:850;letter-spacing:.3px;vertical-align:2px}
 .ivr .rt b{display:block;font-size:14px;font-weight:850;font-variant-numeric:tabular-nums}
 .ivr .rt span{display:inline-block;margin-top:2px;font-size:10.5px;font-weight:850;padding:2px 7px;border-radius:999px}
 .ivr .rt .r{background:#FDECEC;color:#D93636}.ivr .rt .a{background:#FDF3E1;color:#C2700B}.ivr .rt .o{background:#E7F6EF;color:#0E8F5C}
@@ -898,7 +899,7 @@ const SX={
     '<div class="ivbx">'+xs.map(x=>{const t=invSt(x),d=pd(x.date),on=IVPICK.includes(x.no),cl=t[0]==='bad'?'r':t[0]==='warn'?'a':'o';
       return '<div class="ivr'+(on?' on':'')+'" data-sx="'+(IVSEL?'ivpick:':'iv:')+x.no+'">'+(IVSEL?'<span class="ck">'+(on?'✓':'')+'</span>':'')+
        '<span class="cal '+(x.st==='paid'?'':cl)+'"><i>'+(en()?MON_EN[d.getMonth()].toUpperCase():(d.getMonth()+1)+'월')+'</i><b>'+d.getDate()+'</b></span>'+
-       '<span class="tx"><b>'+x[LANG]+'</b><small>'+x.no+' · '+d.getFullYear()+'</small></span>'+
+       '<span class="tx"><b>'+(x.isNew?'<span class="ivnew">NEW</span>':'')+x[LANG]+'</b><small>'+x.no+' · '+d.getFullYear()+'</small></span>'+
        '<span class="rt"><b>RM '+f2(x.st==='paid'?x.amt:x.amt-x.paid)+'</b><span class="'+cl+'">'+t[1]+'</span></span>'+
        (IVSEL?'':'<button class="vwb" data-sx="go" data-u="'+ea(ivUrl(x.no))+'" aria-label="view">'+tx('보기','View')+'</button><button class="shb" data-sx="share:'+x.no+'" aria-label="share">'+SH+'</button>')+'</div>';}).join('')+'</div>';
    let foot='';
@@ -906,7 +907,7 @@ const SX={
      foot='<div class="selbar-in"><button class="x" data-sx="ivsel">'+tx('취소','Cancel')+'</button><span class="tx"><small>'+tx(sx.length+'건 선택',sx.length+' selected')+'</small><b>'+(due>0?'RM '+f2(due)+tx(' 미납',' due'):(sx.length?tx('모두 결제 완료','All paid'):tx('인보이스를 눌러 고르세요','Tap invoices')))+'</b></span><button class="go'+(sx.length?'':' dis')+'" data-sx="share:'+IVPICK.join(',')+'">'+tx('선택 공유','Share')+'</button></div>';}
    open(T[LANG].iv,body,{full:true,foot,keep:keep?'ivp':null});
    stack[1]&&(stack[1].dataset.k='ivp');},
- iv(no){const x=D.invoices.find(i=>i.no===no),t=invSt(x),its=x.it||[],cr=x.cu>0;
+ iv(no){ivMarkSeen(no);const x=D.invoices.find(i=>i.no===no),t=invSt(x),its=x.it||[],cr=x.cu>0;
    const sub=its.reduce((a,i)=>a+i[1]*i[2],0);
    open(no,
     '<div class="sx-hero '+(t[0]==='bad'?'red':t[0]==='ok'?'teal':'')+'"><small>'+(x.st==='paid'?t[1]:tx('남은 금액','Balance due'))+'</small><div class="v">RM '+f2(x.st==='paid'?x.amt:x.amt-x.paid)+'</div><div class="s">'+tx('발행 ','Issued ')+dd(x.date)+(x.st!=='paid'?' · '+tx('기한 ','due ')+dd(x.due):'')+'</div></div>'+
@@ -1309,6 +1310,8 @@ function buildFromApi(j,svc){
     return {no,id:x.__id||no,date:String(x.date||'').slice(0,10),due:String(x.due||'').slice(0,10),st,cu,it,
       ko:catLine(x.items,false)||nm+(more>0?' 외 '+more+'건':''),en:catLine(x.items,true)||nm+(more>0?' +'+more:''),
       amt:t>0?t:cu,paid:st==='paid'?(t>0?t:cu):p};});
+  // 🆕 새 인보이스 (2026-11-24) — 보고서처럼 14일 이내 작성 + 이 기기에서 아직 열어 보지 않은 것
+  {const sn=ivSeen();invoices.forEach(v=>{v.isNew=!!(v.date&&days(pd(v.date),TODAY)<=14&&days(pd(v.date),TODAY)>=0&&!sn[v.no]);});}
   // 보고서
   const seen={};
   const reports=(j.inspections||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||((b.opinion?1:0)-(a.opinion?1:0))).map(r=>{
@@ -1402,9 +1405,14 @@ function enOnly(s,fb){s=String(s||'');if(!/[\uAC00-\uD7A3]/.test(s))return s;let
   t=t.replace(/\s*>\s*/g,' → ').replace(/\s{2,}/g,' ').replace(/^[\s·,→-]+|[\s·,→-]+$/g,'').trim();if(/[\uAC00-\uD7A3]/.test(t)||!t)return fb||'';return t.charAt(0).toUpperCase()+t.slice(1);}
 const WA='60172472774';
 const ea=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+function ivSeen(){try{return JSON.parse(localStorage.getItem('hhc_ivseen_'+CID)||'{}')||{};}catch(e){return {};}}
+function ivMarkSeen(no){const x=(D.invoices||[]).find(i=>i.no===no);if(!x||!x.isNew)return;x.isNew=false;
+  if(!IS_PV){try{const m=ivSeen();m[no]=1;localStorage.setItem('hhc_ivseen_'+CID,JSON.stringify(m));}catch(e){}}
+  document.querySelectorAll('[data-a="invoices"] .dot').forEach(e=>{const n=(D.invoices||[]).filter(i=>i.isNew).length;if(n)e.textContent=n;else e.remove();});
+  document.querySelectorAll('.ivr[data-sx="iv:'+no+'"] .ivnew').forEach(e=>e.remove());}
 const ivUrl=no=>{const x=(D.invoices||[]).find(i=>i.no===no);return BASE+'/hhc-invoice.html?view='+encodeURIComponent(x?x.no:no)+'&lang='+LANG;};
 (function(){const act=SX.act;SX.act=function(a,el){const k=String(a).split(':')[0];
-  if(k==='go'&&el){const u=el.dataset.u;if(/request\.html|\/home|\/namecard/.test(u))location.href=u;else window.open(u,'_blank','noopener');return;}
+  if(k==='go'&&el){const u=el.dataset.u;{const r=el.closest&&el.closest('.ivr'),m=r&&/^iv:(.+)$/.exec(r.dataset.sx||'');if(m)ivMarkSeen(m[1]);}if(/request\.html|\/home|\/namecard/.test(u))location.href=u;else window.open(u,'_blank','noopener');return;}
   if(k==='nshare'&&el){const t=el.dataset.t||'';if(navigator.share){navigator.share({text:t}).catch(()=>{});}else{try{navigator.clipboard.writeText(t);}catch(e){}const o=document.getElementById('toast');o.textContent=LANG==='en'?'Message copied — paste it in KakaoTalk':'메시지를 복사했어요 — 카카오톡에 붙여 넣어 주세요';o.classList.add('on');setTimeout(()=>o.classList.remove('on'),1800);}return;}
   return act(a,el);};})();
 function waLink(t){return 'https://wa.me/'+WA+'?text='+encodeURIComponent(t||'');}
@@ -2150,11 +2158,11 @@ function render(){
     '<div class="pb"><div style="justify-content:flex-start;gap:6px">'+L.rate+'</div><span class="up" data-a="member">'+(en?'See membership benefits ›':'멤버십 혜택 보기 ›')+'</span></div><span class="glr"></span><span class="shn"></span><span class="rim"></span></button></div>';
   }
   h+='</section><section class="sheet"><div class="grab"></div>';
-  const newN=D.reports.filter(r=>r.isNew).length;
+  const newN=D.reports.filter(r=>r.isNew).length,newIv=(D.invoices||[]).filter(x=>x.isNew).length;
   const reps=(typeof REP!=='undefined'&&REP[REAL[CUR].id])||[],repOpen=reps.filter(r=>r.st!=='done').length;
   const WR='<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L4 16.8V20h3.2l5.3-5.3a4 4 0 0 0 5.2-5.4l-2.4 2.4-2.6-.6-.6-2.6z"/></svg>';
   h+='<div class="qa"><button data-a="pay"><span class="b'+(s.unpaid.length?' r':'')+'">'+ic('i-card',24)+'</span>'+(s.unpaid.length?'<span class="dot">'+s.unpaid.length+'</span>':'')+(en?'Pay':'결제')+'</button>'+
-     '<button data-a="invoices"><span class="b"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span>'+(en?'Invoices':'인보이스')+'</button>'+
+     '<button data-a="invoices"><span class="b"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span>'+(newIv?'<span class="dot" style="background:var(--ok)">'+newIv+'</span>':'')+(en?'Invoices':'인보이스')+'</button>'+
      '<button data-a="reports"><span class="b">'+ic('i-doc',24)+'</span>'+(newN?'<span class="dot" style="background:var(--ok)">'+newN+'</span>':'')+(en?'Reports':'보고서')+'</button>'+
      '<button data-a="repairs"><span class="b">'+WR+'</span>'+(repOpen?'<span class="dot" style="background:var(--amb)">'+repOpen+'</span>':'')+(en?'Repairs':'수리내역/요청')+'</button>'+
      '<button data-a="contact"><span class="b">'+ic('i-chat',24)+'</span>'+L.nChat+'</button></div>';

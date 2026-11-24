@@ -120,7 +120,7 @@ async function apply({ cust, phone, name, newLoc, src, via, targets, custOn }){
   if (custOn !== false){
     const loc = { ...L, at: now, src, via };
     if (cust) await updateDoc(doc(db(), 'customers', cust.__id), { loc, updated_at: now });
-    else if (name || phone) await addDoc(collection(db(), 'customers'), { id: 'c' + Date.now(), name: name || '', phone: phone || '', member: '', email: '', addr: '', memo: '', aliases: [], loc, created_at: now, updated_at: now });
+    else if (name || phone) await addDoc(collection(db(), 'customers'), { id: 'c' + Date.now(), name: (String(name || '').replace(/\s*[(（][^()（）]*[)）]/g, '').replace(/\s{2,}/g, ' ').trim() || name || ''), phone: phone || '', member: '', email: '', addr: '', memo: '', aliases: [], loc, created_at: now, updated_at: now });
   }
   const from = src === 'customer' ? 'request' : 'customer';
   for (const t of targets || []){
