@@ -113,8 +113,19 @@
     D.body.appendChild(d);
   }
 
+  /* 워터마크는 홈페이지·전자명함에만 (2026-11-24) — 안내 링크로 보내는 안내장 화면
+     (/guides · /membership · /smart 등, 전자명함·관리자 앱 발송 공통)에는 넣지 않는다.
+     복사 방지는 모든 화면 그대로. */
+  var WM_ON = /^\/(home|namecard|nc|nce)?(\.html)?\/?$/.test(location.pathname || '/');
+  /* 관리자가 보낸 링크(관리자 명함 ?r=0 · 관리자 앱 ?wm=0)로 들어온 손님은 워터마크 없음.
+     같은 창에서 홈페이지 ↔ 명함으로 옮겨 다녀도 계속 없음(sessionStorage). */
+  try {
+    if (q.get('r') === '0' || q.get('wm') === '0') sessionStorage.setItem('hhc-nowm', '1');
+    if (sessionStorage.getItem('hhc-nowm') === '1') WM_ON = false;
+  } catch (e) {}
+
   function start() {
-    watermark();
+    if (WM_ON) watermark();
     lockMedia(D);
     try {
       new MutationObserver(function (ms) {
@@ -127,7 +138,7 @@
             else lockMedia(n);
           }
           /* 워터마크가 지워지면 다시 붙인다 */
-          if (!D.getElementById('hhc-wm')) watermark();
+          if (WM_ON && !D.getElementById('hhc-wm')) watermark();
         }
       }).observe(D.body, { childList: true, subtree: true });
     } catch (e) {}
