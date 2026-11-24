@@ -18,6 +18,7 @@ const EN = {
   'visit-fee': ['og-visitfee-en.jpg',  'On-site check fee | Happy Home Care', 'Enter your address to see your on-site check fee'],
   'calc':      ['og-calc-en.jpg',      'Quick price calculator | Happy Home Care', 'Pick your items and see the estimate instantly'],
   'moveout':   ['og-move-en.jpg',   'Moving out — 2 services you need | Happy Home Care', 'Air-con · curtains before you hand over the keys'],
+  'visit-pm':  ['og-pmvisit-en.jpg', 'Visit time — our apologies | Happy Home Care', 'No morning slot available · visit around 3:30 PM'],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
