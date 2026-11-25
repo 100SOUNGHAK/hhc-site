@@ -20,6 +20,7 @@ function safeReq(r){
     items: typeof r.items === 'string' ? r.items.slice(0, 8000) : '[]',
     remarks: typeof r.remarks === 'string' ? r.remarks.slice(0, 1000) : '',
     converted: r.converted_to_booking === true,
+    notes: Array.isArray(r.cust_notes) ? r.cust_notes.slice(-20) : [],   // ✏️ 고객이 남긴 요청 사항 (2026-11-25)
   };
 }
 

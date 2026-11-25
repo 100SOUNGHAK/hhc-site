@@ -596,6 +596,7 @@ html.sa body:has(.app-body.active){padding-left:200px}
 .nx-nm{font-size:15.5px;font-weight:800;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;color:var(--text)}
 .nx-nm small{font-weight:600;color:var(--text2);margin-left:4px;font-size:14px}
 .nx-nm .cai{display:none}
+.cn-box{margin:7px 0 2px;padding:9px 11px;border-radius:11px;background:#FFF7E0;box-shadow:inset 0 0 0 1px #F3D27A}.cn-h{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:#92600A}.cn-h small{font-weight:600;color:#B7862B}.cn-ok{margin-left:auto;border:0;border-radius:8px;padding:4px 10px;background:#92600A;color:#fff;font:inherit;font-size:11.5px;font-weight:800;cursor:pointer}.cn-t{margin-top:4px;font-size:13.5px;line-height:1.5;color:#3B2A05;white-space:pre-line;overflow-wrap:anywhere}
 .nx-lb{flex-shrink:0;font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;background:var(--surface2);color:var(--text3)}
 .nx-lb.en{background:#EAF1FE;color:#2563EB}
 .nx-ago{margin-left:auto;flex-shrink:0;font-size:12px;font-weight:700;color:var(--text3);font-variant-numeric:tabular-nums;background:none;padding:0}
@@ -2989,7 +2990,7 @@ function renderList(){
   const addDay=n=>{const x=new Date(T0+'T00:00:00');x.setDate(x.getDate()+n);return x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0');};
   const tm=v=>{const disp=v?(String(v).indexOf('|')>=0?String(v).split('|')[0]:String(v)):'';const m=bkTimeMin(disp);if(m===99999)return{big:disp?escHtml(disp):'미정',sm:'',na:!disp};const h=Math.floor(m/60),mi=m%60;return{big:String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0'),sm:(h<12?'오전':'오후')+(/전후|around/i.test(disp)?' 전후':''),na:false};};
   const chipsOf=t=>{const a=String(t||'').split(/\s*[,\n]\s*/).filter(Boolean);return a.length?'<div class="nx-its">'+a.map(x=>`<span class="nx-it">${escHtml(x)}</span>`).join('')+'</div>':'';};
-  const nameLine=(b,right)=>`<div class="nx-r1"><span class="nx-nm"><span class="ca-open" onclick="openCustomerAdminById('${b.__id}')" title="총괄 고객관리에서 이 고객 상세 열기">${escHtml(b.customer_name||'—')}</span></span>${gradeBadge(b.customer_name,b.customer_phone)}${(b.customer_lang||'ko')==='en'?'<span class="nx-lb en">EN</span>':''}${right||''}</div>`;
+  const nameLine=(b,right)=>`<div class="nx-r1"><span class="nx-nm"><span class="ca-open" onclick="openCustomerAdminById('${b.__id}')" title="총괄 고객관리에서 이 고객 상세 열기">${escHtml(b.customer_name||'—')}</span></span>${gradeBadge(b.customer_name,b.customer_phone)}${(b.customer_lang||'ko')==='en'?'<span class="nx-lb en">EN</span>':''}${right||''}</div>`+cnBox('bookings',b);
   const tel=b=>b.customer_phone?`<a href="tel:${escAttr(String(b.customer_phone).replace(/[^\d+]/g,''))}">${escHtml(b.customer_phone)}</a>`:'<span style="color:var(--text3)">없음</span>';
   const menu=(b,extra)=>`<details class="rmore"><summary title="더보기 메뉴">⋮</summary>
       <div class="rmenu">
@@ -3079,6 +3080,7 @@ function renderList(){
     const rows=[];
     if(extra)rows.push(extra);
     if(b.booking_items)rows.push(`<span class="k">품목</span>${escHtml(b.booking_items)}`);
+    if(cnList(b).length)rows.push(cnRows(b));
     if(b.booking_memo)rows.push(`<span class="k">요청</span>${escHtml(b.booking_memo)}`);
     if(b.customer_memo)rows.push(`<span class="k">메모</span>${escHtml(b.customer_memo)}`);
     if(b.customer_address)rows.push(`<span class="k">주소</span>${escHtml(b.customer_address)}`);
@@ -4513,6 +4515,15 @@ function bkFirstCand(list){return (Array.isArray(list)?list:[]).map(String).filt
 function bkCandOf(b){let a=[];try{a=JSON.parse(b&&b.schedule_dates||'[]');}catch(_){}return bkFirstCand(a);}
 function bkDateImg(kind,d,en){const md=bkMD(d);return md?'https://happyhomecare.com.my/og-'+kind+'/'+md+(en?'-en':'')+'.jpg':(kind==='dc'?'og-confirmed.jpg':'og-booking.jpg');}
 // 📍 진행 안내장 주소 (go.html) — j=b:예약ID · c=고객 (마이페이지 버튼용)
+// ✏️ 고객이 진행 안내장(/go)에서 남긴 요청 사항 (cust_notes · 2026-11-25)
+//   · 새 요청(cust_note_new)이 있으면 카드 이름 줄 바로 아래 노란 칸으로 보이고 「✓ 확인」으로 닫습니다
+//   · 지난 요청은 카드를 펼치면 「고객요청」 줄에 모두 보입니다
+function cnAgo(s){const t=Date.parse(s||'');if(isNaN(t))return '';const m=Math.max(0,Math.round((Date.now()-t)/6e4));return m<1?'방금':m<60?m+'분 전':m<1440?Math.round(m/60)+'시간 전':Math.floor(m/1440)+'일 전';}
+function cnList(r){return (Array.isArray(r&&r.cust_notes)?r.cust_notes:[]).filter(x=>x&&x.t);}
+function cnBox(cl,r){const n=cnList(r);if(!n.length||r.cust_note_new!==true)return '';const x=n[n.length-1];
+  return `<div class="cn-box"><div class="cn-h">✏️ 고객 요청 <small>${cnAgo(x.at)}${n.length>1?' · 전체 '+n.length+'건':''}</small><button type="button" class="cn-ok" onclick="event.stopPropagation();custNoteOk('${cl}','${r.__id}')">✓ 확인</button></div><div class="cn-t">${escHtml(x.t)}</div></div>`;}
+function cnRows(r){const n=cnList(r);return n.length?`<span class="k">고객요청</span>${n.map(x=>escHtml(x.t)+(cnAgo(x.at)?' <small style="color:var(--text3)">('+cnAgo(x.at)+')</small>':'')).join('<br>')}`:'';}
+window.custNoteOk=function(cl,id){try{hccWriteAny(cl,id,{cust_note_new:false}).catch(e=>alert('저장 실패: '+(e&&e.message||e)));}catch(e){}};
 function bkGoUrl(b,cid){const en=(b.customer_lang||'ko')==='en';return BASE_URL+'go?j=b:'+encodeURIComponent(b.__id)+(cid?'&c='+encodeURIComponent(cid):'')+(en?'&lang=en':'');}
 async function bkMyPageUrl(b){
   const lang=(b.customer_lang||'ko')==='en'?'en':'ko';

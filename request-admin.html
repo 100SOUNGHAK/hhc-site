@@ -410,6 +410,7 @@ html.sa body:has(.app-body.active){padding-left:200px}
 .nx-nm{font-size:15.5px;font-weight:800;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;color:var(--text)}
 .nx-nm small{font-weight:600;color:var(--text2);margin-left:4px;font-size:14px}
 .nx-nm .cai{display:none}
+.cn-box{margin:7px 0 2px;padding:9px 11px;border-radius:11px;background:#FFF7E0;box-shadow:inset 0 0 0 1px #F3D27A}.cn-h{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:#92600A}.cn-h small{font-weight:600;color:#B7862B}.cn-ok{margin-left:auto;border:0;border-radius:8px;padding:4px 10px;background:#92600A;color:#fff;font:inherit;font-size:11.5px;font-weight:800;cursor:pointer}.cn-t{margin-top:4px;font-size:13.5px;line-height:1.5;color:#3B2A05;white-space:pre-line;overflow-wrap:anywhere}
 .nx-lb{flex-shrink:0;font-size:10px;font-weight:800;padding:2px 6px;border-radius:6px;background:var(--surface2);color:var(--text3)}
 .nx-lb.en{background:#EAF1FE;color:#2563EB}
 .nx-ago{margin-left:auto;flex-shrink:0;font-size:12px;font-weight:700;color:var(--text3);font-variant-numeric:tabular-nums;background:none;padding:0}
@@ -1671,6 +1672,15 @@ function nxRefLine(r){
   else pl='<span class="nx-rfp ok">신규 고객</span>';
   return '<div class="nx-ref"><span class="ic">🤝</span><span class="t">추천인 <b>'+escHtml(r.ref_by_name||'—')+'</b></span>'+pl+'</div>';
 }
+// ✏️ 고객이 진행 안내장(/go)에서 남긴 요청 사항 (cust_notes · 2026-11-25)
+//   · 새 요청(cust_note_new)이 있으면 카드 이름 줄 바로 아래 노란 칸으로 보이고 「✓ 확인」으로 닫습니다
+//   · 지난 요청은 카드를 펼치면 「고객요청」 줄에 모두 보입니다
+function cnAgo(s){const t=Date.parse(s||'');if(isNaN(t))return '';const m=Math.max(0,Math.round((Date.now()-t)/6e4));return m<1?'방금':m<60?m+'분 전':m<1440?Math.round(m/60)+'시간 전':Math.floor(m/1440)+'일 전';}
+function cnList(r){return (Array.isArray(r&&r.cust_notes)?r.cust_notes:[]).filter(x=>x&&x.t);}
+function cnBox(cl,r){const n=cnList(r);if(!n.length||r.cust_note_new!==true)return '';const x=n[n.length-1];
+  return `<div class="cn-box"><div class="cn-h">✏️ 고객 요청 <small>${cnAgo(x.at)}${n.length>1?' · 전체 '+n.length+'건':''}</small><button type="button" class="cn-ok" onclick="event.stopPropagation();custNoteOk('${cl}','${r.__id}')">✓ 확인</button></div><div class="cn-t">${escHtml(x.t)}</div></div>`;}
+function cnRows(r){const n=cnList(r);return n.length?`<span class="k">고객요청</span>${n.map(x=>escHtml(x.t)+(cnAgo(x.at)?' <small style="color:var(--text3)">('+cnAgo(x.at)+')</small>':'')).join('<br>')}`:'';}
+window.custNoteOk=function(cl,id){try{hccWriteAny(cl,id,{cust_note_new:false}).catch(e=>alert('저장 실패: '+(e&&e.message||e)));}catch(e){}};
 function isUrgentReq(r){return r.status==='pending'&&r.submitted_at&&(Date.now()-new Date(r.submitted_at).getTime())/36e5>24;}
 // 🗓️ 예약전환 전 = 접수는 완료되었지만 아직 예약으로 전환하지 않은 의뢰
 function isToBookReq(r){return r.status==='completed'&&!r.converted_to_booking;}
@@ -1800,11 +1810,11 @@ function renderList(){
     return `<div class="req-card nx-row" data-id="${r.__id}">
       <div class="nx-ic ${tone}">${icon}</div>
       <div class="nx-bd">
-        <div class="nx-r1"><span class="nx-nm"><span class="ca-open" data-caopen="${r.__id}" title="총괄 고객관리에서 이 고객 상세 열기">${escHtml(r.condo_name||r.condo||'—')}${r.condo_unit&&hhcCN(r.condo_unit)!==hhcCN(r.condo_name||r.condo)?`<small>${escHtml(r.condo_unit)}</small>`:''}</span></span>${gradeBadge(rqCustName(r),r.phone)}${r.lang==='en'?'<span class="nx-lb en">EN</span>':''}<span class="nx-mt${mtCls}">${conv?'🗓️ 전환됨':agoTxt2}</span></div>
+        <div class="nx-r1"><span class="nx-nm"><span class="ca-open" data-caopen="${r.__id}" title="총괄 고객관리에서 이 고객 상세 열기">${escHtml(r.condo_name||r.condo||'—')}${r.condo_unit&&hhcCN(r.condo_unit)!==hhcCN(r.condo_name||r.condo)?`<small>${escHtml(r.condo_unit)}</small>`:''}</span></span>${gradeBadge(rqCustName(r),r.phone)}${r.lang==='en'?'<span class="nx-lb en">EN</span>':''}<span class="nx-mt${mtCls}">${conv?'🗓️ 전환됨':agoTxt2}</span></div>${cnBox('requests',r)}
         <div class="nx-l2 nx-l2f"><span class="nx-sm">${sum}</span>${qa}</div>
         ${nxRefLine(r)}
         <div class="nx-ex">
-          <div class="nx-dl">${r.remarks?`<span class="k">요청</span>${escHtml(r.remarks)}<br>`:''}${r.loc&&isFinite(r.loc.lat)?`<span class="k">위치</span><a href="https://www.google.com/maps/search/?api=1&query=${r.loc.lat},${r.loc.lng}${r.loc.pid?'&query_place_id='+encodeURIComponent(r.loc.pid):''}" target="_blank" rel="noopener">📍 ${escHtml(r.loc.name||'지도 보기')}</a> <span style="color:var(--text3);font-size:11px">고객 확정 · 예약전환하면 직원 길 안내에 자동 사용</span><br>`:''}<span class="k">연락처</span>${r.phone?`<a href="tel:${escAttr(String(r.phone).replace(/[^\d+]/g,''))}">${escHtml(r.phone)}</a>`:'<span style="color:var(--text3)">없음</span>'}<br><span class="k">접수</span>${date}${!isPending&&!conv?' · 접수완료됨':''}</div>
+          <div class="nx-dl">${cnList(r).length?cnRows(r)+'<br>':''}${r.remarks?`<span class="k">요청</span>${escHtml(r.remarks)}<br>`:''}${r.loc&&isFinite(r.loc.lat)?`<span class="k">위치</span><a href="https://www.google.com/maps/search/?api=1&query=${r.loc.lat},${r.loc.lng}${r.loc.pid?'&query_place_id='+encodeURIComponent(r.loc.pid):''}" target="_blank" rel="noopener">📍 ${escHtml(r.loc.name||'지도 보기')}</a> <span style="color:var(--text3);font-size:11px">고객 확정 · 예약전환하면 직원 길 안내에 자동 사용</span><br>`:''}<span class="k">연락처</span>${r.phone?`<a href="tel:${escAttr(String(r.phone).replace(/[^\d+]/g,''))}">${escHtml(r.phone)}</a>`:'<span style="color:var(--text3)">없음</span>'}<br><span class="k">접수</span>${date}${!isPending&&!conv?' · 접수완료됨':''}</div>
           ${ab1}
           <div class="nx-ab">
             <button class="nx-b wa2" data-wa="${r.__id}">${NX_WA} WhatsApp</button>
