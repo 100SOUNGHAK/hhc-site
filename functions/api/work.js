@@ -22,12 +22,15 @@
 //  · 📎 첨부 사진 (2026-11-17) — work_edits/{날짜}.photos[작업ID] = [{id,url,t,w,h,name,path,tpath}]
 //      워크퍼밋 등. 직원 화면에는 url(원본) · t(작은 그림) · w · h · name 만 보냄. Storage 주소만 허용.
 //  · 📷 직원 현장 사진 (2026-11-24) — 직원이 일정마다 온도측정 · 세척 전 · 세척 후 사진을 올림(여러 직원 가능)
-//      POST /api/work?k={열쇠}&op=up&job={작업ID}&date={날짜}&cat=temp|before|after  (FormData f=사진 · t=작은 그림 · w · h · taken)
+//      POST /api/work?k={열쇠}&op=up&job={작업ID}&date={날짜}&cat=temp|before|after|etc  (FormData f=사진 · t=작은 그림 · w · h · taken)
+//      · etc = 🧾 기타 사진 (2026-11-25) — 점검·출장진단/수리·설치·세탁기/건조기·주방후드 보고서의 기타 사진 칸으로 가져감
 //      POST /api/work?k={열쇠}&op=del&id={사진ID}   → 자기가 올린 사진만(관리자 열쇠는 전부)
 //      GET  /api/work?k={관리자 열쇠}&img={사진ID}   → 사진 받기(관리자 보고서 화면이 가져오기에 씀 · 같은 주소라 막힘 없음)
 //      자료: site_photos/{자동ID} {date,job,cat,url,path,t,tpath,w,h,by,bk,at,taken,del,cname,cphone,place,unit}
 //      Storage: site_photos/{날짜}/{작업ID}/… — 올린 날부터 30일 뒤(del 날짜) 자동으로 지움(요청이 올 때 6시간에 한 번 정리)
 //      직원 화면에는 url · t · cat · mine(내가 올린 것)만. 고객 연락처(cphone)는 관리자 화면에서 고객을 찾을 때만 씀.
+//  · 📅 날짜 고르기 (2026-11-25): &day=-1|0|1 → 오늘(말레이시아) 기준 어제 · 오늘 · 내일 (직원 열쇠도 가능)
+//      내일은 18:00~18:59 에만 준비 중(soon). 응답에 today(오늘 날짜) · auto(자동으로 보여 주는 날짜)를 함께 보냄.
 //  · 속도 (2026-11-17): 열쇠 확인과 그날 일정 조회를 동시에, 의뢰 위치·고객 위치 조회도 동시에.
 //      고객 위치 목록은 서버 인스턴스에 10분간 기억(고객 전체를 매번 훑지 않음).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,6 +49,13 @@ function pickDay(){
   if (h >= 19) return { date: addDays(today, 1), mode: 'tomorrow' };
   if (h === 18) return { date: addDays(today, 1), mode: 'soon' };
   return { date: today, mode: 'today' };
+}
+// 📅 어제 · 오늘 · 내일 고르기 (2026-11-25)
+function pickOff(n){
+  const now = myNow(), h = now.getUTCHours(), today = ymd(now);
+  if (n === 1) return { date: addDays(today, 1), mode: h === 18 ? 'soon' : 'tomorrow', sel: 1 };
+  if (n === -1) return { date: addDays(today, -1), mode: 'yesterday', sel: -1 };
+  return { date: today, mode: 'today', sel: 0 };
 }
 
 // 예약 시간 "14:00 전후|Around 14:00" → "14:00"
@@ -178,7 +188,7 @@ async function custLocIndex(env){
 }
 
 // ── 📷 직원 현장 사진 ──
-const SITE_CATS = ['temp', 'before', 'after'];
+const SITE_CATS = ['temp', 'before', 'after', 'etc'];   // etc = 🧾 기타 사진 (2026-11-25)
 const KEEP_DAYS = 30;
 async function keyHash(k){ const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('hhc-site|' + k)); return Array.from(new Uint8Array(d)).slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join(''); }
 function siteOut(p, bk){ return { id: p.__id, cat: String(p.cat || ''), url: String(p.url || ''), t: String(p.t || p.url || ''), by: String(p.by || ''), at: String(p.at || ''), mine: !!(bk && p.bk === bk) }; }
@@ -251,9 +261,9 @@ export async function onRequestPost(context){
     if (op !== 'up') return fail('bad-op');
     const job = String(q.get('job') || '').slice(0, 80), date = String(q.get('date') || ''), cat = String(q.get('cat') || '');
     if (!job || !/^[A-Za-z0-9_-]+$/.test(job) || SITE_CATS.indexOf(cat) < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail('bad-input');
-    // 직원은 지금 화면에 보이는 날 또는 그 전날만 (저녁 7시 이후 · 인터넷이 늦게 잡혀 다음 날 올라가는 경우)
-    const auto = pickDay();
-    if (!who.admin && date !== auto.date && date !== addDays(auto.date, -1) && date !== ymd(myNow())) return fail('bad-date', 403);
+    // 직원은 지금 화면에 보이는 날 또는 그 전날 · 📅 어제~내일 (2026-11-25: 날짜 고르기와 같은 범위)
+    const auto = pickDay(), tdy = ymd(myNow());
+    if (!who.admin && date !== auto.date && date !== addDays(auto.date, -1) && date !== tdy && date !== addDays(tdy, -1) && date !== addDays(tdy, 1)) return fail('bad-date', 403);
     const fd = await request.formData();
     const f = fd.get('f'), t = fd.get('t');
     if (!f || typeof f === 'string' || !IMG_OK.test(f.type || '') || f.size > 6 * 1048576) return fail('bad-photo');
@@ -309,7 +319,10 @@ export async function onRequestGet(context){
     // 열쇠 확인(settings/work_link)과 그날 일정 조회를 한꺼번에 시작 — 왕복 한 번을 줄임
     const dq = String(q.get('d') || '');
     const pick = /^\d{4}-\d{2}-\d{2}$/.test(dq) ? { date: dq, mode: 'pick' } : null;
-    const auto = pickDay();
+    const dn = String(q.get('day') || '');
+    const auto0 = pickDay();
+    const auto = /^(-1|0|1)$/.test(dn) ? pickOff(parseInt(dn, 10)) : auto0;
+    const ext = { today: ymd(myNow()), auto: auto0.date };
     const fetchDay = date => Promise.all([
       queryEq(env, 'schedules', 'date', date, 200),
       queryEq(env, 'bookings', 'booking_date', date, 200),
@@ -328,7 +341,7 @@ export async function onRequestGet(context){
     const who = staff ? String(staff.name || '') : '';
 
     const day = (isAdmin && pick) ? pick : auto;          // 날짜 지정(&d=)은 관리자 열쇠만
-    if (day.mode === 'soon') return json({ ok: true, date: day.date, mode: 'soon', at: Date.now(), staff: who, jobs: [] });
+    if (day.mode === 'soon') return json(Object.assign({ ok: true, date: day.date, mode: 'soon', at: Date.now(), staff: who, jobs: [] }, ext));
 
     const [sRows, bRows, ed, wp, sp] = await ((day === first && dayP) ? dayP : fetchDay(day.date));
     // 고객이 의뢰신청서에서 확정한 위치 — 이 날 확정 예약으로 전환된 의뢰만
@@ -392,7 +405,7 @@ export async function onRequestGet(context){
     jobs.forEach(j => { const l = locOf(j); if (l) j.loc = l; const ph = cleanPhotos(photos[j.id]); if (ph.length) j.photos = ph;
       if (site[j.id]) j.site = site[j.id].map(x => ({ id: x.id, cat: x.cat, url: x.url, t: x.t, mine: x.mine })); });
     jobs.sort(bySort);
-    return json({ ok: true, date: day.date, mode: day.mode, at: Date.now(), staff: who, jobs });
+    return json(Object.assign({ ok: true, date: day.date, mode: day.mode, at: Date.now(), staff: who, jobs }, ext));
   }catch(e){
     return fail(e.message === 'env-missing' ? 'server-not-configured' : 'server-error', 500);
   }

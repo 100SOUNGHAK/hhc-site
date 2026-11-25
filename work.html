@@ -300,6 +300,21 @@ html,body{background:#EEF2F8}
 .sp-x{position:absolute;top:3px;right:3px;width:26px;height:26px;border-radius:8px;border:0;background:rgba(10,20,45,.62);color:#fff;font-size:15px;line-height:26px;cursor:pointer;padding:0}
 .wk-chips .sp-c{background:#EAF0FB;color:var(--n)}
 @media (prefers-reduced-motion:reduce){.sp-q:before,.sp-t.wait:after{animation:none}}
+/* 📅 어제 · 오늘 · 내일 고르기 (2026-11-25) */
+.wk-pk{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 14px 0;padding:5px;border-radius:16px;background:#E6EBF4;box-shadow:inset 0 1px 2px rgba(14,35,80,.12)}
+.wk-pk[hidden]{display:none}
+.wk-pk button{border:0;border-radius:12px;padding:9px 4px 8px;font-family:inherit;cursor:pointer;background:transparent;color:var(--ink2);line-height:1.2;transition:transform .14s}
+.wk-pk button b{display:block;font-size:15px;font-weight:800;letter-spacing:-.01em}
+.wk-pk button small{display:block;font-size:12px;font-weight:700;color:var(--ink3);margin-top:2px;font-variant-numeric:tabular-nums}
+.wk-pk button.on{color:#fff;background:linear-gradient(180deg,#1d4a8f,var(--n));box-shadow:0 2px 0 #07102a,0 8px 14px -8px rgba(14,35,80,.6)}
+.wk-pk button.on small{color:#E3C98A}
+.wk-pk button:active{transform:translateY(1px)}
+.wk-pk button.ld{opacity:.6}
+.sp-btns.c4{grid-template-columns:repeat(4,1fr);gap:6px}
+.sp-btns.c4 .sp-btn{padding:12px 2px 10px}
+.sp-btns.c4 .sp-btn b{font-size:13px}
+.sp-btns.c4 .sp-btn small{font-size:11px}
+.sp-btn.e{color:#6B4E00}
 /* 지난번 받은 일정으로 먼저 보여 줄 때 */
 .wk-foot .upd-ing:before{content:'';display:inline-block;width:9px;height:9px;margin-right:6px;border:2px solid var(--line);border-top-color:var(--n);border-radius:50%;vertical-align:-1px;animation:wkspin .8s linear infinite}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
@@ -321,6 +336,7 @@ html,body{background:#EEF2F8}
     <div class="wk-cnt" id="wk-cnt" hidden><b id="wk-n">0</b><span id="wk-nl"></span></div>
     <div class="wk-stat" id="wk-stat" hidden></div>
   </section>
+  <div class="wk-pk" id="wk-pk" hidden role="tablist"></div>
   <div class="wk-sub" id="wk-sub"></div>
 
   <main id="wk-main"><div class="wk-empty"><div class="wk-load"></div><span id="wk-loading">Loading…</span></div></main>
@@ -344,7 +360,7 @@ html,body{background:#EEF2F8}
 <script>
 // ── 문구 ──
 const T={
-  ko:{title:'해피홈케어 작업일정',loading:'불러오는 중…',today:'오늘 작업',preview:'미리보기',tomorrow:'내일 작업',
+  ko:{title:'해피홈케어 작업일정',loading:'불러오는 중…',today:'오늘 작업',preview:'미리보기',tomorrow:'내일 작업',yday:'어제 작업',pkY:'어제',pkT:'오늘',pkN:'내일',
       jobs:'건',units:'대',sub:'콘도명을 누르면 품목·서비스·수량이 보입니다.',
       svcs:'서비스 내역',total:'합계',work:'작업 내용',close:'목록으로',addr:'주소',map:'지도',
       nav:'길 안내 시작',navS:'앱을 고르면 바로 안내합니다',go:'길안내',last:'최근 사용',
@@ -354,7 +370,7 @@ const T={
       errT:'일정을 불러오지 못했습니다',errS:'인터넷 연결을 확인한 뒤 새로고침을 눌러 주세요.',
       dow:['일요일','월요일','화요일','수요일','목요일','금요일','토요일'],
       phT:'첨부 서류 · 사진',phS:'눌러서 크게 보기',phC:'장',phTip:'두 손가락으로 확대 · 두 번 눌러 확대 · 옆으로 넘기기',upding:'새 일정 확인 중…'},
-  en:{title:'Work Schedule',loading:'Loading…',today:"Today's jobs",preview:'Preview',tomorrow:"Tomorrow's jobs",
+  en:{title:'Work Schedule',loading:'Loading…',today:"Today's jobs",preview:'Preview',tomorrow:"Tomorrow's jobs",yday:"Yesterday's jobs",pkY:'Yesterday',pkT:'Today',pkN:'Tomorrow',
       jobs:'jobs',job:'job',units:'units',sub:'Tap a condo to see items, service and quantity.',
       svcs:'Services',total:'Total',work:'Job details',close:'Back',addr:'Address',map:'Map',
       nav:'Start navigation',navS:'Choose an app to start directions',go:'Go',last:'Last used',
@@ -433,7 +449,8 @@ function render(){
     $('#wk-main').innerHTML=`<div class="wk-empty err"><b>${STATE==='key'?t.keyT:t.errT}</b><span>${STATE==='key'?t.keyS:t.errS}</span></div>`;return;}
   $('#wk-who').textContent='HAPPY HOME CARE'+(DATA.staff?' · '+DATA.staff:'');
   const d=new Date(DATA.date+'T00:00:00');
-  $('#wk-when span').textContent=DATA.mode==='today'?t.today:DATA.mode==='pick'?t.preview:t.tomorrow;
+  $('#wk-when span').textContent=DATA.mode==='today'?t.today:DATA.mode==='pick'?t.preview:DATA.mode==='yesterday'?t.yday:t.tomorrow;
+  drawPk();
   $('#wk-date').textContent=L==='en'?d.getDate()+' '+t.mon[d.getMonth()]:(d.getMonth()+1)+'월 '+d.getDate()+'일';
   $('#wk-dow').textContent=t.dow[d.getDay()];
   if(DATA.mode==='soon'){
@@ -517,6 +534,7 @@ function openSheet(id){
   $('#wk-sh-un').innerHTML=j.unit?'<span class="wk-unit">'+esc(j.unit)+'</span>':'';
   $('#wk-x-t').textContent=t.close;
   let det='';
+  if(window.__sp)det+=window.__sp.card(j);   // 📷 현장 사진 올리기 — 맨 위로 (2026-11-25)
   // 📎 첨부 서류·사진 (워크퍼밋 등) — 경비실에서 바로 보여 줄 수 있게 맨 위에
   const phs=j.photos||[];
   if(phs.length){const n=phs.length,cls=n===1?' one':n===2?' two':'';
@@ -531,7 +549,6 @@ function openSheet(id){
   if(nl)det+=`<div class="wk-nv"><div class="wk-nv-h"><i>${NAV_SVG}</i><div><b>${t.nav}</b><small>${esc(tx(nl.name||t.navS))}</small></div></div>
     <div class="wk-nv-b"><a class="g${NAVSET&&NAVAPP==='google'?' on':''}" data-app="google" data-last="${t.last}" href="${navUrl(nl)}" target="_blank" rel="noopener">${NAV_SVG}Google Maps</a>
     <a class="w${NAVSET&&NAVAPP==='waze'?' on':''}" data-app="waze" data-last="${t.last}" href="${wazeUrl(nl)}" target="_blank" rel="noopener">${WAZE_SVG}Waze</a></div></div>`;
-  if(window.__sp)det+=window.__sp.card(j);   // 📷 현장 사진 올리기 (2026-11-24)
   if(j.items&&j.items.length){
     const tot=j.items.reduce((a,x)=>a+(+x.qty||1),0),n=j.items.length,en=L==='en';
     const u=q=>en?' unit'+(q===1?'':'s'):'대';
@@ -555,6 +572,30 @@ function closeSheet(fromPop){
   if(!fromPop){try{if(history.state&&history.state.wk)history.back();}catch(e){}}
 }
 
+// ══ 📅 어제 · 오늘 · 내일 고르기 (2026-11-25) ══
+//  오늘(말레이시아 날짜) 기준. 처음에는 예전처럼 자동(저녁 7시부터 다음 날). 고른 날은 이 화면을 닫을 때까지 유지.
+//  관리자 미리보기(&d=)에서는 숨김.
+let SEL=null,PKBUSY=null;
+function ymdL(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function myToday(){return ymdL(new Date(Date.now()+(new Date().getTimezoneOffset()+480)*60000));}
+function offDate(n){const d=new Date(myToday()+'T00:00:00');d.setDate(d.getDate()+n);return ymdL(d);}
+function drawPk(){
+  const el=$('#wk-pk');if(!el)return;
+  if(STATE!=='ok'||!DATA||DATA.mode==='pick'||new URLSearchParams(location.search).get('d')){el.hidden=true;return;}
+  const t=T[L],td=DATA.today||myToday();
+  const base=new Date(td+'T00:00:00'),dt=n=>{const d=new Date(base);d.setDate(d.getDate()+n);return d;};
+  el.hidden=false;
+  el.innerHTML=[[-1,t.pkY],[0,t.pkT],[1,t.pkN]].map(([n,lb])=>{const d=dt(n),on=ymdL(d)===DATA.date;
+    const sm=L==='en'?d.getDate()+' '+t.mon[d.getMonth()]+' · '+t.dow[d.getDay()].slice(0,3):(d.getMonth()+1)+'/'+d.getDate()+' ('+t.dow[d.getDay()].slice(0,1)+')';
+    return `<button type="button" role="tab" aria-selected="${on}" class="${on?'on':''}${PKBUSY===n?' ld':''}" data-pk="${n}"><b>${lb}</b><small>${sm}</small></button>`;}).join('');
+}
+$('#wk-pk').addEventListener('click',e=>{const b=e.target.closest('[data-pk]');if(!b)return;
+  const n=+b.dataset.pk,td=(DATA&&DATA.today)||myToday();
+  const d=new Date(td+'T00:00:00');d.setDate(d.getDate()+n);
+  if(DATA&&ymdL(d)===DATA.date&&SEL!==null)return;
+  // 자동으로 보이는 날을 다시 고르면 → 자동으로 돌아감 (저녁 7시에 다음 날로 넘어가는 예전 방식)
+  SEL=(DATA&&DATA.auto===ymdL(d))?null:n;PKBUSY=n;drawPk();closeSheet();load(true);});
+
 // ══ 속도 (2026-11-17) ══
 //  ① 머리말에서 미리 시작한 받기(window.__WP)를 첫 번째로 이어받음
 //  ② 지난번 받은 일정을 이 휴대폰에 기억 → 다시 열면 같은 날짜일 때 즉시 보여 주고, 새 일정은 뒤에서 받아 바꿈
@@ -569,7 +610,7 @@ function fromCache(){
     DATA=c.d;STATE='ok';render();setUpd(true);}catch(e){}
 }
 function toCache(d){
-  if(new URLSearchParams(location.search).get('d'))return;
+  if(new URLSearchParams(location.search).get('d')||SEL!==null)return;   // 📅 고른 날은 기억 안 함
   try{localStorage.setItem(CK,JSON.stringify({k:window.__WK,d,t:Date.now()}));}catch(e){}
 }
 function setUpd(ing){const u=$('#wk-upd');if(!u||!DATA)return;
@@ -577,21 +618,25 @@ function setUpd(ing){const u=$('#wk-upd');if(!u||!DATA)return;
   u.classList.remove('upd-ing');const up=new Date(DATA.at||Date.now());
   u.textContent=T[L].upd+' '+String(up.getHours()).padStart(2,'0')+':'+String(up.getMinutes()).padStart(2,'0');}
 let _loading=null;
-function load(){ if(_loading)return _loading; _loading=load2().finally(()=>{_loading=null;}); return _loading; }
+function load(force){ if(_loading&&!force)return _loading; const p=load2().finally(()=>{if(_loading===p)_loading=null;}); _loading=p; return p; }
 async function load2(){
+  const sel=SEL;
   if(!window.__WK){STATE='key';render();return;}
   if(DATA)setUpd(true);
   for(let i=0;i<3;i++){
     try{
       let r;
-      if(i===0&&window.__WP){r=await window.__WP;window.__WP=null;}
+      if(i===0&&window.__WP&&sel===null){r=await window.__WP;window.__WP=null;}
       else{
+        window.__WP=null;
         const dq=new URLSearchParams(location.search).get('d');   // 관리자 미리보기용 (직원 열쇠에는 무시됨)
-        r=await fetch('/api/work?k='+encodeURIComponent(window.__WK)+(dq?'&d='+encodeURIComponent(dq):''),{cache:'no-store'});
+        r=await fetch('/api/work?k='+encodeURIComponent(window.__WK)+(dq?'&d='+encodeURIComponent(dq):'')+(sel!==null&&!dq?'&day='+sel:''),{cache:'no-store'});
       }
       if(r.status===403||r.status===401){STATE='key';try{localStorage.removeItem(CK);}catch(e){}render();return;}
       if(!r.ok)throw new Error(r.status);
       const d=await r.json();
+      if(sel!==SEL)return;                                   // 그 사이 다른 날을 고름 → 이 응답은 버림
+      PKBUSY=null;
       // 바뀐 것이 없으면 다시 그리지 않음 (보던 화면·사진이 깜빡이지 않게)
       const same=DATA&&STATE==='ok'&&JSON.stringify({...DATA,at:0})===JSON.stringify({...d,at:0});
       if(DATA&&DATA.date!==d.date)closeSheet();
@@ -600,7 +645,8 @@ async function load2(){
       setUpd(false);return;
     }catch(e){window.__WP=null;await new Promise(z=>setTimeout(z,800));}
   }
-  if(!DATA){STATE='err';render();}else setUpd(false);
+  PKBUSY=null;
+  if(!DATA){STATE='err';render();}else{setUpd(false);drawPk();}
 }
 
 $('#wk-main').addEventListener('click',e=>{const row=e.target.closest('.wk-row');if(row)openSheet(row.dataset.id);});
@@ -698,12 +744,12 @@ load();
    · 내가 올린 사진만 ✕ 로 지울 수 있음. 올린 사진은 관리자 점검보고서 작성 화면에서 「가져오기」로 씀. 30일 뒤 자동 삭제.
    · 이 블록만 지우고 위 두 줄(window.__sp)을 남겨 두어도 화면은 그대로 동작. */
 (function(){
-  const TX={en:{h:'Site photos',s:'Sent to the office for the report',temp:'Temperature',before:'Before',after:'After',
-      ts:'📷 Camera',bs:'📷 Camera',as:'📷 Camera',alb:'From gallery',more:c=>'📷 One more · '+c,up:n=>'Uploading '+n+' photo'+(n>1?'s':'')+'…',
+  const TX={en:{h:'Site photos',s:'Sent to the office for the report',temp:'Temp',before:'Before',after:'After',etc:'Other',
+      ts:'📷 Camera',bs:'📷 Camera',as:'📷 Camera',es:'📷 Camera',alb:'From gallery',more:c=>'📷 One more · '+c,up:n=>'Uploading '+n+' photo'+(n>1?'s':'')+'…',
       off:n=>n+' photo'+(n>1?'s':'')+' waiting — will upload when internet is back',del:'Delete this photo?',fail:'Could not upload: ',chip:'Photos'},
-    ko:{h:'현장 사진',s:'보고서용으로 사무실에 전달됩니다',temp:'온도 측정',before:'세척 전',after:'세척 후',
-      ts:'📷 바로 촬영',bs:'📷 바로 촬영',as:'📷 바로 촬영',alb:'앨범에서',more:c=>'📷 한 장 더 · '+c,up:n=>n+'장 올리는 중…',off:n=>n+'장 대기 중 — 인터넷이 연결되면 올라갑니다',del:'이 사진을 지울까요?',fail:'올리지 못했습니다: ',chip:'사진'}};
-  const CATS=[['temp','🌡️',''],['before','🧽','b'],['after','✨','a']];
+    ko:{h:'현장 사진',s:'보고서용으로 사무실에 전달됩니다',temp:'온도 측정',before:'세척 전',after:'세척 후',etc:'기타 사진',
+      ts:'📷 바로 촬영',bs:'📷 바로 촬영',as:'📷 바로 촬영',es:'📷 바로 촬영',alb:'앨범에서',more:c=>'📷 한 장 더 · '+c,up:n=>n+'장 올리는 중…',off:n=>n+'장 대기 중 — 인터넷이 연결되면 올라갑니다',del:'이 사진을 지울까요?',fail:'올리지 못했습니다: ',chip:'사진'}};
+  const CATS=[['temp','🌡️',''],['before','🧽','b'],['after','✨','a'],['etc','🧾','e']];   // etc = 기타 사진 (2026-11-25)
   const tt=()=>TX[L==='ko'?'ko':'en'];
   let Q=[];            // 올릴 대기열 {id,job,date,cat,f,t,w,h,taken,url}
   let busy=false,offline=false;
@@ -766,7 +812,7 @@ load();
   const pend=(job,cat)=>Q.filter(x=>x.job===job&&(!cat||x.cat===cat));
   function card(j){
     const t=tt(),S=j.site||[],P=pend(j.id),tot=S.length+P.length;
-    let h=`<div class="sp" data-job="${esc(j.id)}"><div class="sp-h"><i>📷</i><div><b>${t.h}</b><small>${t.s}</small></div>${tot?'<span class="sp-tot">'+tot+'</span>':''}</div><div class="sp-btns">`+
+    let h=`<div class="sp" data-job="${esc(j.id)}"><div class="sp-h"><i>📷</i><div><b>${t.h}</b><small>${t.s}</small></div>${tot?'<span class="sp-tot">'+tot+'</span>':''}</div><div class="sp-btns c4">`+
       CATS.map(c=>{const n=S.filter(x=>x.cat===c[0]).length+pend(j.id,c[0]).length;
         return `<button type="button" class="sp-btn ${c[2]}" data-spcam="${c[0]}"><em>${c[1]}</em><b>${t[c[0]]}</b><small>${t[c[0][0]+'s']}</small>${n?'<span class="n">'+n+'</span>':''}</button>`;}).join('')+'</div>';
     if(LAST&&LAST.job===j.id){const c=CATS.find(x=>x[0]===LAST.cat);h+=`<button type="button" class="sp-more ${c[2]}" data-spcam="${c[0]}">${t.more(t[c[0]])}</button>`;}
