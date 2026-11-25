@@ -26,36 +26,46 @@ function rateLimited(req){
 export async function onRequestPost(context){
   if(!originAllowed(context.request))return json({ok:false,error:'forbidden'},403);
   if(rateLimited(context.request))return json({ok:false,error:'too many requests'},429);
-  let type='';
+  let type='',slot='';
   try{
     const b=await context.request.json();
     if(b&&b.type==='booking')type=b.edit?'booking_edit':'booking';
     else if(b&&b.type==='request')type='request';
-    else if(b&&b.type==='tomorrow')type='tomorrow';
+    else if(b&&b.type==='visit'){type='visit';slot=b.slot==='pm'?'pm':'am';}
   }catch(e){}
   if(!type)return json({ok:false,error:'bad request'},400);
-  if(type==='tomorrow')return tomorrowPush(context.env);
+  if(type==='visit')return visitPush(context.env,slot);
   const r=await sendAdminPush(context.env,type);
   return json(r,r.ok?200:500);
 }
 
-// ── 매일 밤 11시: 내일 일정 건수를 세어 「단체방 보내기」 알림 (캘린더 Worker 의 cron 이 호출) ──
-//    · 말레이시아 시각 22:00~23:59 에만 받음(엉뚱한 시간의 알림 방지) · 내일 일정이 0건이면 보내지 않음
-//    · 세는 규칙은 sched-send.html 과 같음: 예약 미러 일정·휴일·완료(✅) 할 일 제외, 확정 예약 포함
-async function tomorrowPush(env){
-  const my=new Date(Date.now()+8*3600e3);                     // UTC+8 을 UTC 필드로 읽음
+// ── 🔔 방문 안내 보낼 차례 (2026-11-25) — 캘린더 Worker cron 이 부름 · 「내일 일정 단체방」(밤 11시)은 없앰 ──
+//    am (오전 8시) : 내일 방문 · 오늘 방문     pm (오후 5시) : 방문 7일 전(4~7일 남음) · 3일 전(2~3일 남음)
+//    · 확정(confirmed) 예약만 · 이미 보낸 단계(visit_sent.tmr|today|d7|d3)는 빼고 셈 · 0명이면 보내지 않음
+//    · 누르면 총괄 고객관리 「🔔 방문 안내 보낼 고객」 목록이 그 탭으로 열림 (customer-admin.html?vl=)
+//    · 세는 규칙은 customer-admin.html caVisitDue() 와 같음
+async function visitPush(env,slot){
+  const my=new Date(Date.now()+8*3600e3);
   const h=my.getUTCHours();
-  if(h<22)return json({ok:false,error:'not now'},409);
-  const t=new Date(my.getTime()+86400e3);
-  const ds=t.getUTCFullYear()+'-'+String(t.getUTCMonth()+1).padStart(2,'0')+'-'+String(t.getUTCDate()).padStart(2,'0');
-  const [sch,bk]=await Promise.all([queryEq(env,'schedules','date',ds,300),queryEq(env,'bookings','booking_date',ds,300)]);
-  const n=sch.filter(s=>!s.booking_id&&s.type!=='holiday'&&!/^✅/.test(String(s.title||''))).length
-         +bk.filter(b=>b.status==='confirmed').length;
-  if(!n)return json({ok:true,skipped:'no schedules',date:ds});
-  const D=['일','월','화','수','목','금','토'];
-  const label=(t.getUTCMonth()+1)+'/'+t.getUTCDate()+'('+D[t.getUTCDay()]+')';
-  const r=await sendAdminPush(env,'tomorrow',{body:'내일 '+label+' 일정 '+n+'건 — 눌러서 직원 단체방에 영어로 보내세요',url:'/sched-send.html?d='+ds});
-  return json(Object.assign({date:ds,count:n},r),r.ok?200:500);
+  if(slot==='am'?(h<7||h>10):(h<16||h>19))return json({ok:false,error:'not now'},409);
+  const ds=n=>{const t=new Date(my.getTime()+n*86400e3);return t.getUTCFullYear()+'-'+String(t.getUTCMonth()+1).padStart(2,'0')+'-'+String(t.getUTCDate()).padStart(2,'0');};
+  const cnt=async(days,key,also)=>{
+    const rows=await Promise.all(days.map(n=>queryEq(env,'bookings','booking_date',ds(n),300).catch(()=>[])));
+    return [].concat.apply([],rows).filter(b=>b.status==='confirmed'&&!(b.visit_sent&&(b.visit_sent[key]||(also&&b.visit_sent[also])))).length;
+  };
+  let parts=[],tab='';
+  if(slot==='am'){
+    const [tm,td]=await Promise.all([cnt([1],'tmr'),cnt([0],'today')]);
+    if(tm)parts.push('🌙 내일 방문 '+tm+'명');if(td)parts.push('☀️ 오늘 방문 '+td+'명');
+    tab=tm?'tm':'td';
+  }else{
+    const [d7,d3]=await Promise.all([cnt([4,5,6,7],'d7','d3'),cnt([2,3],'d3')]);
+    if(d7)parts.push('📅 7일 전 '+d7+'명');if(d3)parts.push('📅 3일 전 '+d3+'명');
+    tab=d7?'d7':'d3';
+  }
+  if(!parts.length)return json({ok:true,skipped:'nobody',slot});
+  const r=await sendAdminPush(env,'request',{title:'🔔 방문 안내 보낼 차례',body:parts.join(' · ')+' — 눌러서 차례로 보내세요',url:'/customer-admin.html?vl='+tab,tab:'customers'});
+  return json(Object.assign({slot,parts},r),r.ok?200:500);
 }
 
 // 기기별 상태 — 기기 종류(OS)만 표시하고 주소·키는 보여 주지 않습니다

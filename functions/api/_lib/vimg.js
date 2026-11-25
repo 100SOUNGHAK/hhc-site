@@ -58,6 +58,26 @@ export async function visitImg(env, t){
     if (vi === 'bc' || vi === 'bq'){ const md = mdOf(q.get('vd')); if (md) return dateImg(vi === 'bc' ? 'dc' : 'db', md); }
     if (vi === 'rq') return { img: 'received', w: '1200', h: '630', tk: '의뢰 접수 완료 · Request Received | Happy Home Care', te: 'Request Received | Happy Home Care',
       dk: '의뢰가 접수되었습니다 · 담당 직원이 확인 후 가능 일정을 안내드리겠습니다', de: 'We received your request · we will send available dates shortly' };
+    // 🔔 방문 안내 8종 (2026-11-25) — 마이페이지(f=bk&vi=)와 같은 그림
+    if (vi === 'pd'){ const md = mdOf(q.get('vd'));
+      if (md){ const mm = +md.slice(0, 2), dd = +md.slice(2, 4), de = dd + ' ' + ME[mm - 1];
+        return { img: 'd/' + md, w: '1200', h: '630', tk: mm + '월 ' + dd + '일 방문 예정 · Reminder | Happy Home Care', te: 'Visit on ' + de + ' | Happy Home Care',
+          dk: mm + '월 ' + dd + '일 방문 예정입니다 · 방문 시간을 확인해 주세요', de: 'Your visit on ' + de + ' · please check the time' }; } }
+    if (MIN[vi]){
+      const n = parseInt(q.get('mn') || '', 10);
+      if (n >= 1 && n <= 180){ const [s, tk, te, dk, de] = MIN[vi];
+        return { img: s + '/' + n, ...SET, tk: tk + ' | Happy Home Care', te: te + ' | Happy Home Care', dk: n + dk, de: de + n + ' min' }; }
+    }
+    const GV = { pd: ['remind', '예약 방문 알림 · Reminder', 'Visit Reminder', '예정된 방문을 다시 알려 드려요 · 날짜와 시간을 확인해 주세요', 'A friendly reminder of your visit · please check the date and time'],
+                 tm: ['remind-tmr', '내일 방문 안내 · Tomorrow', 'See You Tomorrow', '내일 방문합니다 · 방문 시간을 확인해 주세요', 'See you tomorrow · please check the visit time'],
+                 td: ['remind-today', '오늘 방문 안내 · Today', 'See You Today', '오늘 방문합니다 · 방문 시간을 확인해 주세요', 'See you today · please check the visit time'],
+                 mv: ['onway', '방문하러 가는 중 · On the way', 'On the Way', '지금 방문하러 가는 중입니다 · 곧 도착합니다', 'We are on our way · arriving soon'],
+                 dt: ['delay', '도착 지연 안내 · Delay', 'Running Late', '교통 체증으로 조금 늦어집니다 · 양해 부탁드립니다', 'Stuck in traffic — running a bit late'],
+                 dw: ['delayw', '도착 지연 안내 · Delay', 'Running Late', '앞 작업이 길어져 조금 늦어집니다 · 양해 부탁드립니다', 'The previous job took longer — running a little late'],
+                 ar: ['arrive', '가드하우스 도착 · Arrived', 'Arrived', '가드하우스에 도착했습니다 · 출입수속 후 곧 방문드리겠습니다', 'We have arrived at the guardhouse · see you shortly'] };
+    GV['1'] = GV.pd;
+    if (GV[vi]){ const [img, tk, te, dk, de] = GV[vi];
+      return { img, w: '1200', h: '630', tk: tk + ' | Happy Home Care', te: te + ' | Happy Home Care', dk, de }; }
     return null;
   }
   if (/^\/workpermit(\.html)?$/i.test(p) && vi === 'bc'){

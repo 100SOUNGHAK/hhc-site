@@ -136,7 +136,7 @@ export async function onRequestPost(context){
     return json({ok:true});
   }
   // ── 자동 알림 (2단계) : 캘린더 Worker 가 매일 오전 9시(MYT)에 부름 ──
-  if(op==='auto') return autoPush(env,b&&b.dry);
+  if(op==='auto') return autoPush(env,b&&b.dry,b&&b.slot);
   return fail('bad request');
 }
 
@@ -167,15 +167,28 @@ const AUTO_MSG={
          en:(x)=>({title:'🗓️ Visit tomorrow',body:'Happy Home Care will visit tomorrow, '+dLabel(x.date,'en')+(x.time?', '+x.time.replace(/^Around/,'around'):'')+'. Please confirm that the work permit (visit registration) has been arranged.'})},
   due:  {ko:(x)=>({title:'🧾 결제 기한 안내',body:'인보이스 '+x.id+'의 결제 기한이 내일 '+dLabel(x.date,'ko')+'입니다. 눌러서 결제 금액과 방법을 확인해 주세요.'}),
          en:(x)=>({title:'🧾 Payment due tomorrow',body:'Invoice '+x.id+' is due tomorrow ('+dLabel(x.date,'en')+'). Tap to see the amount and how to pay.'})},
+  // 🔔 방문 안내 (2026-11-25) — 7일 전 · 3일 전(오후 5시) · 당일(오전 8시) · 내일은 위 visit(오전 8시)
+  vd7:  {ko:(x)=>({title:'📅 방문 예정 안내',body:dLabel(x.date,'ko')+(x.time?' '+x.time:'')+' 해피홈케어가 방문합니다. 작업방문등록(Work Permit)을 미리 부탁드립니다.'}),
+         en:(x)=>({title:'📅 Upcoming visit',body:'Happy Home Care will visit on '+dLabel(x.date,'en')+(x.time?', '+x.time.replace(/^Around/,'around'):'')+'. Please arrange the work permit (visit registration) in advance.'})},
+  vd3:  {ko:(x)=>({title:'📅 방문 예정 안내',body:dLabel(x.date,'ko')+(x.time?' '+x.time:'')+' 방문 예정입니다. 작업방문등록(Work Permit) 확인 부탁드립니다.'}),
+         en:(x)=>({title:'📅 Visit in a few days',body:'We will visit on '+dLabel(x.date,'en')+(x.time?', '+x.time.replace(/^Around/,'around'):'')+'. Please confirm the work permit (visit registration).'})},
+  vtoday:{ko:(x)=>({title:'☀️ 오늘 방문합니다',body:'오늘'+(x.time?' '+x.time:'')+' 해피홈케어가 방문합니다. 작업방문등록이 아직이면 지금 부탁드립니다.'}),
+         en:(x)=>({title:'☀️ We are visiting today',body:'Happy Home Care will visit today'+(x.time?', '+x.time.replace(/^Around/,'around'):'')+'. If the work permit is not arranged yet, please do it now.'})},
   over: {ko:(x)=>({title:'🧾 결제 기한이 지났습니다',body:'인보이스 '+x.id+'의 결제 기한 '+dLabel(x.date,'ko')+'이 지났습니다. 이미 결제하셨다면 이 알림은 무시해 주세요.'}),
          en:(x)=>({title:'🧾 Payment overdue',body:'Invoice '+x.id+' was due on '+dLabel(x.date,'en')+'. If you have already paid, please ignore this message.'})},
 };
-async function autoPush(env,dry){
+// slot (2026-11-25) — Worker 가 시간마다 다른 slot 으로 부릅니다
+//   am8 : 오전 8시 — 내일 방문(visit) · 오늘 방문(vtoday)
+//   am9 : 오전 9시 — 결제 기한 하루 전(due) · 기한 지남(over)   (slot 없이 부르면 am9 — 예전 호출 호환)
+//   pm5 : 오후 5시 — 방문 7일 전(vd7: 4~7일 남음) · 3일 전(vd3: 2~3일 남음)
+const SLOT_H={am8:[7,10],am9:[8,11],pm5:[16,19]};
+async function autoPush(env,dry,slot){
   const priv=env.VAPID_PRIVATE_KEY;
   if(!priv) return fail('VAPID_PRIVATE_KEY 미설정',500);
+  slot=SLOT_H[slot]?slot:'am9';
   const my=new Date(Date.now()+8*3600e3);                           // 말레이시아 시각을 UTC 필드로 읽음
   const h=my.getUTCHours();
-  if(!dry&&(h<8||h>11)) return fail('not now',409);
+  if(!dry&&(h<SLOT_H[slot][0]||h>SLOT_H[slot][1])) return fail('not now',409);
   const today=ymd(my), tmr=ymd(new Date(my.getTime()+86400e3)), yst=ymd(new Date(my.getTime()-86400e3));
 
   // 알림을 켠 고객과 그 기기
@@ -204,15 +217,24 @@ async function autoPush(env,dry){
   });
   const owners=(name,phone,x)=>M.filter(m=>m.hit(name,phone,x)).map(m=>m.c);
 
-  const [bks,ivT,ivY]=await Promise.all([
-    queryEq(env,'bookings','booking_date',tmr,300).catch(()=>[]),
-    queryEq(env,'invoices','due',tmr,300).catch(()=>[]),
-    queryEq(env,'invoices','due',yst,300).catch(()=>[]),
+  const dOff=n=>ymd(new Date(my.getTime()+n*86400e3));
+  const bkOn=(ds)=>queryEq(env,'bookings','booking_date',ds,300).catch(()=>[]);
+  const none=Promise.resolve([]);
+  const [bks,ivT,ivY,bkT,bkFar]=await Promise.all([
+    slot==='am8'?bkOn(tmr):none,
+    slot==='am9'?queryEq(env,'invoices','due',tmr,300).catch(()=>[]):none,
+    slot==='am9'?queryEq(env,'invoices','due',yst,300).catch(()=>[]):none,
+    slot==='am8'?bkOn(today):none,
+    slot==='pm5'?Promise.all([2,3,4,5,6,7].map(n=>bkOn(dOff(n)).then(a=>a.map(x=>Object.assign(x,{_dl:n}))))).then(a=>[].concat.apply([],a)):none,
   ]);
   const unpaid=x=>x.cust_hidden!==true&&(x.status==='billing'||x.status==='overdue');   // 확정 전(고객 미공개) 인보이스는 결제 알림 안 보냄
   const jobs=[];
   bks.filter(x=>x.status==='confirmed').forEach(x=>owners(x.customer_name,x.customer_phone,x).forEach(c=>
-    jobs.push({key:'auto-bk-'+x.__id+'-'+tmr+'-'+c,c,kind:'visit',f:'bk',d:{date:tmr,timeRaw:x.booking_time}})));
+    jobs.push({key:'auto-bk-'+x.__id+'-'+tmr+'-'+c,c,kind:'visit',f:'bk',bk:x,vk:'tmr',d:{date:tmr,timeRaw:x.booking_time}})));
+  bkT.filter(x=>x.status==='confirmed').forEach(x=>owners(x.customer_name,x.customer_phone,x).forEach(c=>
+    jobs.push({key:'auto-vtd-'+x.__id+'-'+today+'-'+c,c,kind:'vtoday',f:'bk',bk:x,vk:'today',d:{date:today,timeRaw:x.booking_time}})));
+  bkFar.filter(x=>x.status==='confirmed').forEach(x=>{const k=x._dl>=4?'vd7':'vd3';owners(x.customer_name,x.customer_phone,x).forEach(c=>
+    jobs.push({key:'auto-'+k+'-'+x.__id+'-'+x.booking_date+'-'+c,c,kind:k,f:'bk',bk:x,vk:k==='vd7'?'d7':'d3',d:{date:x.booking_date,timeRaw:x.booking_time}}));});
   ivT.filter(unpaid).forEach(x=>owners(x.customer&&x.customer.name,x.customer&&x.customer.phone,x).forEach(c=>
     jobs.push({key:'auto-due-'+x.__id+'-'+c,c,kind:'due',f:'py',d:{date:tmr,id:x.id||x.__id}})));
   ivY.filter(unpaid).forEach(x=>owners(x.customer&&x.customer.name,x.customer&&x.customer.phone,x).forEach(c=>
@@ -223,7 +245,8 @@ async function autoPush(env,dry){
     const key=j.key.replace(/[^A-Za-z0-9_-]/g,'_').slice(0,140);
     if(await getDoc(env,'cust_push_out',key)){ out.push({kind:j.kind,skip:'already'}); continue; }
     const devs=byC[j.c]||[];
-    const url='/my?c='+encodeURIComponent(j.c)+'&f='+j.f;
+    // 방문 안내는 진행 안내장(/go)으로 · 결제는 마이페이지 (2026-11-25)
+    const url=j.bk?('/go?j=b:'+encodeURIComponent(j.bk.__id)+'&c='+encodeURIComponent(j.c)):('/my?c='+encodeURIComponent(j.c)+'&f='+j.f);
     if(dry){ out.push({kind:j.kind,devices:devs.length}); continue; }   // 확인용 — 고객·문서 ID 는 돌려주지 않음
     const res=await Promise.all(devs.map(s=>{
       const lang=s.lang==='en'?'en':'ko';
@@ -234,7 +257,10 @@ async function autoPush(env,dry){
     const m0=AUTO_MSG[j.kind].ko(Object.assign({time:timeOf(j.d.timeRaw,'ko')},j.d));
     await patchDoc(env,'cust_push_out',key,{auto:true,kind:j.kind,c:j.c,title:m0.title,body:m0.body,url,
       created_at:new Date().toISOString(),sent_at:new Date().toISOString(),sent,removed,failed,total:devs.length,devs:res}).catch(()=>{});
+    // 🔔 관리자 「보낼 고객」 목록 · 진행 현황에 「앱 알림 자동 보냄」 표시 — 예약 문서 visit_auto (2026-11-25)
+    if(j.bk&&sent>0){ const va=Object.assign({},j.bk.visit_auto||{}); va[j.vk]=new Date().toISOString(); j.bk.visit_auto=va;
+      await patchDoc(env,'bookings',j.bk.__id,{visit_auto:va}).catch(()=>{}); }
     out.push({kind:j.kind,sent,removed,failed});   // 응답에 문서·고객 ID 를 싣지 않음 (누구나 부를 수 있는 창구)
   }
-  return json({ok:true,today,tomorrow:tmr,dry:!!dry,jobs:jobs.length,result:out});
+  return json({ok:true,slot,today,tomorrow:tmr,dry:!!dry,jobs:jobs.length,result:out});
 }

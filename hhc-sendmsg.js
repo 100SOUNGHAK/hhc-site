@@ -242,11 +242,110 @@ function bkcKk(b,en){
 // 📅 예약 신청(날짜 고르기) 카카오 카드 전용 본문 (2026-11-23) — 품목 목록 대신
 function bkqKk(en){return en?'Please tap the link below to confirm your date.':'아래 링크 클릭 후 일정 확정 부탁드립니다.';}
 function rqKk(en){return en?'Our staff will check and get back to you.':'담당자가 확인 후 안내드리겠습니다.';}
+// ══ 🔔 방문 안내 8종 (2026-11-25) — 문구 원본은 여기 한 곳 ══════════════════════════
+//   날짜 안내 : pre(사전) · tomorrow(내일) · today(당일)   → visitMsg(k,name,lang,dateStr,timeS)
+//   현장 안내 : move(이동 중) · early(이른 방문) · arrive(가드하우스 도착) · delayT(지연·교통) · delayW(지연·작업)
+//               → visitMsg(k,name,lang,null,null,{area,mins})
+//   쓰는 곳 : schedule.html 방문 안내 창 · customer-admin.html 「🔔 방문 안내 보낼 고객」 · msg-center.html
+//   (예전 schedule.html getVisitReminderMsg · getMovingMsg · getEarlyMsg · getDelayMsg · getArrivedMsg 와 글자 하나까지 같음)
+function vDT(dateStr,timeS){
+  var dKo='',dEn='';
+  if(dateStr){
+    var p=String(dateStr).split('-');
+    if(p.length===3){
+      var mn=parseInt(p[1],10),dy=parseInt(p[2],10);
+      var monEn=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][mn-1]||'';
+      var d=new Date(dateStr+'T00:00:00');
+      var wk='',wkEn='';
+      if(!isNaN(d)){
+        wk=['일','월','화','수','목','금','토'][d.getDay()];
+        wkEn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+      }
+      dKo=mn+'월 '+dy+'일'+(wk?'('+wk+')':'');
+      dEn=monEn+' '+dy+(wkEn?' ('+wkEn+')':'');
+    }
+  }
+  var tKo='',tEn='';
+  if(timeS){
+    var tm=String(timeS).match(/^(\d{1,2}):(\d{2})/);
+    if(tm){
+      var h=parseInt(tm[1],10),mi=parseInt(tm[2],10);
+      var h12=h%12;if(h12===0)h12=12;
+      tKo=(h<12?'오전 ':'오후 ')+h12+'시'+(mi?' '+mi+'분':'')+' 전후';
+      tEn='around '+h12+(mi?':'+String(mi).padStart(2,'0'):'')+(h<12?' AM':' PM');
+    }
+  }
+  return {dKo:dKo,dEn:dEn,tKo:tKo,tEn:tEn};
+}
+function visitMsg(k,name,lang,dateStr,timeS,x){
+  var en=(lang==='en');x=x||{};
+  var M=(x.mins!=null&&x.mins!=='')?x.mins:'00';
+  if(k==='move'){
+    var A=x.area||'000';
+    if(en)return 'Hello, '+name+' 😊\n\n🚗 *We\'re on our way*\n📍 Departed from '+A+'.\n⏱ Expected to arrive in about '+M+' min.\n\n👉 See you very soon!';
+    return '안녕하세요, '+name+' 고객님 😊\n\n🚗 *이동 중입니다*\n📍 '+A+'에서 출발.\n⏱ '+M+'분 후 도착 예상입니다.\n\n👉 곧 방문드릴게요.';
+  }
+  if(k==='delayW'){
+    if(en)return 'Hello, '+name+' 😊\n\n🛠 *Visit delay notice*\nOur current job is running late, so we will arrive later than the scheduled visit time.\n⏱ We expect to arrive in about '+M+' min.\n\n🙏 We sincerely apologize.';
+    return '안녕하세요, '+name+' 고객님 😊\n\n🛠 *방문 지연 안내*\n현재 작업이 지연되고 있어 약속드린 방문 시간보다 늦어질 것 같습니다.\n⏱ 약 '+M+'분 후 도착 예상됩니다.\n\n🙏 죄송합니다.';
+  }
+  if(k==='delayT'){
+    if(en)return 'Hello, '+name+' 😊\n\n🚗 *Arrival delay notice*\nWe are on our way, but heavy traffic is delaying our arrival.\n⏱ We expect to arrive in about '+M+' min.\n\n🙏 We sincerely apologize.';
+    return '안녕하세요, '+name+' 고객님 😊\n\n🚗 *도착 지연 안내*\n현재 이동 중이나 교통체증으로 도착이 지연되고 있습니다.\n⏱ 약 '+M+'분 후 도착 예정입니다.\n\n🙏 죄송합니다.';
+  }
+  if(k==='early'){
+    if(en)return 'Hello, '+name+' 😊\n\n⏰ *Early visit request*\nWould it be okay if we visit a little earlier than your scheduled time?\n⏱ We can arrive in about '+M+' min.\n\n🙏 Please let us know.';
+    return '안녕하세요, '+name+' 고객님 😊\n\n⏰ *이른 방문 문의*\n혹시 예약된 방문 시간보다 조금 일찍 방문드려도 괜찮으실까요?\n⏱ 현재 약 '+M+'분 후 도착 가능합니다.\n\n🙏 편하실 때 답장 부탁드립니다.';
+  }
+  if(k==='arrive'){
+    if(en)return 'Hello, '+name+' 😊\n\n🏢 *We\'ve arrived at the guardhouse*\n📝 We\'ll come up right after the entry check-in.\n\n🙏 Thank you for waiting a moment.';
+    return '안녕하세요, '+name+' 고객님 😊\n\n🏢 *가드하우스에 도착했습니다*\n📝 출입 수속 후 곧 방문드리겠습니다.\n\n🙏 잠시만 기다려 주세요.';
+  }
+  // 날짜 안내 (pre · tomorrow · today)
+  var tpl=k||'pre';
+  var D=vDT(dateStr,timeS);
+  var when=(tpl==='today')?(en?D.tEn:D.tKo):[en?D.dEn:D.dKo,en?D.tEn:D.tKo].filter(Boolean).join(' ');
+  if(en){
+    var tEN={tomorrow:'🔔 *We\'re visiting tomorrow*',today:'🔔 *We\'re visiting today*'}[tpl]||'📅 *Your scheduled visit*';
+    var aEN={tomorrow:'👉 If you haven\'t registered our visit (Work Permit) yet,\n      please do it with your management office today.',
+             today:'👉 If you haven\'t registered our visit (Work Permit) yet,\n      please do it right away. See you shortly!'}[tpl]
+             ||'👉 If you haven\'t registered our visit (Work Permit) yet,\n      please do it with your management office before we arrive.';
+    return 'Hello, '+name+' 😊\n\n'+tEN+(when?'\n'+(tpl==='today'?'⏰ ':'📅 ')+when:'')+'\n\n'+aEN;
+  }
+  var tKO={tomorrow:'🔔 *내일 방문합니다*',today:'🔔 *오늘 방문합니다*'}[tpl]||'📅 *예약 방문 안내*';
+  var aKO={tomorrow:'👉 작업방문등록(Work Permit)을 아직 안 하셨다면\n      오늘 중으로 매니지먼트에 등록 부탁드립니다.',
+           today:'👉 작업방문등록(Work Permit)을 아직 안 하셨다면\n      지금 바로 부탁드립니다. 잠시 후 뵙겠습니다.'}[tpl]
+           ||'👉 작업방문등록(Work Permit)을 아직 안 하셨다면\n      방문 전까지 매니지먼트에 등록 부탁드립니다.';
+  return '안녕하세요, '+name+' 고객님 😊\n\n'+tKO+(when?'\n'+(tpl==='today'?'⏰ ':'📅 ')+when:'')+'\n\n'+aKO;
+}
+// 방문 안내 링크 줄 — 진행 안내장(/go)이면 「📍 진행 안내」, 그 밖(예전 마이페이지 · 수리)은 넘겨받은 이름
+function visitTail(url,en,lb){
+  if(!url||/\/home(\?|$)/.test(url))return '\n\n'+SIG;
+  return '\n\n'+(lb||(en?'📍 Progress':'📍 진행 안내'))+' 👉 '+url+'\n'+SIG;
+}
+// 진행 안내장 주소 — 예약 ID 가 열쇠 · vi= 는 링크 미리보기 그림 (functions/api/_lib/vimg.js)
+//   k → vi : pre=pd(+vd) · tomorrow=tm · today=td · move/early=mv(+mn) · delayT=dt(+mn) · delayW=dw(+mn) · arrive=ar
+var VISIT_VI={pre:'pd',tomorrow:'tm',today:'td',move:'mv',early:'mv',delayT:'dt',delayW:'dw',arrive:'ar'};
+function visitGoUrl(bkId,cid,en,k,dateStr,mins){
+  var vi=VISIT_VI[k]||'1',u=BASE+'/go?j=b:'+encodeURIComponent(bkId)+(cid?'&c='+encodeURIComponent(cid):'')+(en?'&lang=en':'')+'&vi='+vi;
+  var md=(/^\d{4}-(\d{2})-(\d{2})/.exec(String(dateStr||''))||[]).slice(1).join('');
+  if(vi==='pd'&&md)u+='&vd='+md;
+  var n=parseInt(mins,10);if((vi==='mv'||vi==='dt'||vi==='dw')&&n>=1&&n<=180)u+='&mn='+n;
+  return u;
+}
+// 카톡 카드 · 앱 알림용 짧은 제목/본문 (날짜 안내)
+function visitKk(k,en,dateStr,timeS){
+  var D=vDT(dateStr,timeS),w=[en?D.dEn:D.dKo,en?D.tEn:D.tKo].filter(Boolean).join(' ');
+  if(k==='tomorrow')return {t:en?'We\'re visiting tomorrow':'내일 방문합니다',d:(w?w+'\n':'')+(en?'Please register our visit (Work Permit) today.':'작업방문등록 오늘 중 부탁드립니다.')};
+  if(k==='today')return {t:en?'We\'re visiting today':'오늘 방문합니다',d:((en?D.tEn:D.tKo)?(en?D.tEn:D.tKo)+'\n':'')+(en?'See you shortly!':'잠시 후 뵙겠습니다.')};
+  return {t:en?'Your scheduled visit':'예약 방문 안내',d:(w?w+'\n':'')+(en?'Please register our visit (Work Permit) in advance.':'작업방문등록 미리 부탁드립니다.')};
+}
 window.HHCMsg={
   BASE:BASE,SIG:SIG,ITEM_EN:ITEM_EN,
   toEn:toEn,trItemsEn:trItemsEn,sEnIt:sEnIt,rqIcon:rqIcon,rqItemLines2:rqItemLines2,
   bkcWhen:bkcWhen,sHi:sHi,wpLink:wpLink,myLink:myLink,
   noBold:noBold,whenOf:whenOf,lk:lk,
-  rq:rq,rqKk:rqKk,bkqKk:bkqKk,bkc:bkc,bkcKk:bkcKk
+  rq:rq,rqKk:rqKk,bkqKk:bkqKk,bkc:bkc,bkcKk:bkcKk,
+  vDT:vDT,visitMsg:visitMsg,visitTail:visitTail,visitGoUrl:visitGoUrl,visitKk:visitKk,VISIT_VI:VISIT_VI
 };
 })();

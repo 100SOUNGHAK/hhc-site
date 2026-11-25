@@ -28,12 +28,12 @@ self.addEventListener('notificationclick', function (e) {
     }));
     return;
   }
-  // 주소가 정해진 알림(예: 내일 일정 보내기 → /sched-send.html)은 그 화면을 바로 엽니다
+  // 주소가 정해진 알림(예: 🔔 방문 안내 보낼 차례 → /customer-admin.html?vl=…)은 그 화면을 바로 엽니다
   if (url) {
     e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
       for (var i = 0; i < list.length; i++) {
         var c = list[i];
-        if (c.url && c.url.indexOf('sched-send') >= 0 && c.navigate) { if (c.focus) c.focus(); return c.navigate(url); }
+        if (c.url && /customer-admin\.html\?vl=/.test(c.url) && c.navigate) { if (c.focus) c.focus(); return c.navigate(url); }
       }
       if (self.clients.openWindow) return self.clients.openWindow(url);
     }));

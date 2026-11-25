@@ -925,7 +925,7 @@ html.sa body:has(.app-body.active){padding-left:200px}
 </head>
 <body>
 <script>if(self===top)document.documentElement.classList.add('sa');</script>
-<script src="/hhc-sendmsg.js?v=20261125a"></script><!-- hhc-sendmsg.js 를 고치면 v= 숫자도 바꿉니다 (예전 파일이 남아 있지 않게) -->
+<script src="/hhc-sendmsg.js?v=20261125b"></script><!-- hhc-sendmsg.js 를 고치면 v= 숫자도 바꿉니다 (예전 파일이 남아 있지 않게) -->
 <script src="/hhc-loc.js" defer></script>
 <script type="module" src="/hhc-locsync.js?v=20261117d"></script><!-- 📍 고객 위치 연동 · 변경 승인 (2026-11-17) -->
 <!-- ══ 좌측 고정 메뉴 (독립 실행 + 로그인 후에만 표시 — 관리자 허브 안에서는 자동 숨김) ══ -->
@@ -4182,7 +4182,8 @@ function vrWaUrl(phone,text){
   return wa+'?text='+encodeURIComponent(text);
 }
 // 카카오톡 카드 발송 (마이페이지 발송과 동일)
-async function vrKkSend(msg,url,en){
+async function vrKkSend(msg,url,en,o){   // o = {btn,img} — 진행 안내장 방문 안내 (2026-11-25) · 없으면 예전과 같음
+  o=o||{};
   var key=await vrKkKey(false);
   if(!key){alert('카카오 JavaScript 키가 등록되지 않았습니다.');return false;}
   var K;
@@ -4192,7 +4193,7 @@ async function vrKkSend(msg,url,en){
   var share=K.Share||K.Link;
   if(!share||!share.sendDefault){alert('이 브라우저에서는 카카오톡 공유를 지원하지 않습니다 · 메시지 복사를 이용해 주세요');return false;}
   // 🖼 예약 방문 안내는 예약 확정 그림 카드로 (2026-11-20) — 도우미가 없으면 예전 글 카드
-  if(window.hhcKkCard){return await hhcKkCard({msg,url,img:'og-confirmed.jpg',btn:en?'Open MY PAGE':'마이페이지 열기',en});}
+  if(window.hhcKkCard){return await hhcKkCard({msg,url,img:o.img||'og-confirmed.jpg',btn:o.btn||(en?'Open MY PAGE':'마이페이지 열기'),en});}
   try{
     share.sendDefault({
       objectType:'text',
@@ -4270,6 +4271,10 @@ window.sendVisitReminder=function(scheduleItemId){
   if(!cphone&&schItem)cphone=schItem.customer_phone||'';
   // 📱 마이페이지 주소 — 왓츠앱 본문과 카카오 카드 버튼이 함께 사용합니다
   let VR_URL=vrMyLink(name,cphone,lang==='en');
+  // 📍 예약이 연결된 일정은 진행 안내장(/go?j=b:예약ID)으로 + 보낸 기록(visit_sent) (2026-11-25)
+  const VR_BK=(schItem&&schItem.booking_id&&allBookings.some(x=>x.__id===schItem.booking_id))?schItem.booking_id:'';
+  const VR_CID=(/[?&]c=([^&]+)/.exec(VR_URL)||[])[1]||'',VR_SH={};
+  const vrGo=tpl=>HHCMsg.visitGoUrl(VR_BK,decodeURIComponent(VR_CID),lang==='en',tpl,dateStr);
   const title=lang==='en'?'💬 Visit Reminder Message':'💬 방문 안내 메시지';
   const subtitle=lang==='en'?`Choose a template and send to ${name}`:`템플릿 선택 후 ${name}님께 전송해 주세요`;
   const closeLabel=lang==='en'?'Close':'닫기';
@@ -4320,9 +4325,22 @@ window.sendVisitReminder=function(scheduleItemId){
       b.style.color=on?'#fff':'var(--text3)';
       b.style.borderColor=on?'#0BB5A4':'var(--border)';
     });
+    curTpl=tpl;
+    if(VR_BK){const L=vrGo(tpl),u=VR_SH[L]||L;
+      document.getElementById('visit-msg-box').value=HHCMsg.visitMsg(tpl,name,lang,dateStr,timeS)+HHCMsg.visitTail(u,lang==='en');
+      if(!VR_SH[L])hhcShortUrl(L).then(sv=>{if(sv&&sv!==L){VR_SH[L]=sv;const box=document.getElementById('visit-msg-box');if(box)box.value=box.value.split(L).join(sv);}}).catch(()=>{});
+      return;}
     document.getElementById('visit-msg-box').value=
       getVisitReminderMsg(name,dateStr,lang,tpl,timeS)+vrTail(VR_URL,lang==='en');
   }
+  let curTpl='pre';
+  const vrRecord=ch=>{
+    if(!VR_BK)return;
+    let k=curTpl;
+    if(k==='pre'){let dl=9;try{const t0=new Date(Date.now()+8*36e5);const td=t0.toISOString().slice(0,10);dl=Math.round((new Date(dateStr+'T00:00:00Z')-new Date(td+'T00:00:00Z'))/864e5);}catch(_){}k=dl>=4?'d7':dl>=2?'d3':'pre';}
+    else if(k==='tomorrow')k='tmr';
+    updateDoc(doc(db,'bookings',VR_BK),{['visit_sent.'+k]:{at:new Date().toISOString(),ch,by:'bk'}}).catch(e=>console.warn('visit_sent',e&&e.message));
+  };
   document.querySelectorAll('#visit-tpl-row button').forEach(b=>{
     b.addEventListener('click',()=>setTpl(b.dataset.tpl));
   });
@@ -4338,18 +4356,19 @@ window.sendVisitReminder=function(scheduleItemId){
   const getMsg=()=>document.getElementById('visit-msg-box').value;
   // 💬 왓츠앱 — 마이페이지 발송과 같은 형식(주소 포함) + 고객 번호로 바로 열립니다
   document.getElementById('visit-wa-btn').addEventListener('click',()=>{
-    window.open(vrWaUrl(cphone,vrWaText(getMsg())),'_blank');
+    window.open(vrWaUrl(cphone,vrWaText(getMsg())),'_blank');vrRecord('wa');
   });
   // 💛 카카오톡 카드 발송 — 「마이페이지 열기」 버튼이 붙은 카드로 나갑니다
   document.getElementById('confirm-kakao-btn').addEventListener('click',async()=>{
     const m=getMsg();
     try{await navigator.clipboard.writeText(HHCMsg.noBold(vrWaText(m)));}catch(_){}
+    if(VR_BK){const L=vrGo(curTpl);await vrKkSend(m,VR_SH[L]||L,lang==='en',{btn:lang==='en'?'Check progress':'진행 안내 보기',img:{pre:'og-remind.jpg',tomorrow:'og-remind-tmr.jpg',today:'og-remind-today.jpg'}[curTpl]});vrRecord('kk');return;}
     await vrKkSend(m,VR_URL,lang==='en');
   });
   document.getElementById('visit-copy-btn').addEventListener('click',()=>{
     navigator.clipboard.writeText(vrWaText(getMsg())).then(()=>{
       const ok=document.getElementById('confirm-kakao-ok');
-      ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);
+      ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);vrRecord('copy');
     }).catch(()=>prompt('복사 후 붙여넣기:',getMsg()));
   });
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});

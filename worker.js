@@ -6,7 +6,8 @@
 const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks.readonly';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SITE = 'https://happyhomecare.com.my';
-const TOMORROW_CRON = '0 15 * * *';   // UTC 15:00 = 말레이시아 23:00 (wrangler.toml crons 와 같은 글자여야 함)
+const AM8_CRON = '0 0 * * *';         // UTC 00:00 = 말레이시아 08:00 — 🔔 방문 안내(내일 · 오늘) 관리자 알림 + 고객 자동 앱 알림 (2026-11-25)
+const PM5_CRON = '0 9 * * *';         // UTC 09:00 = 말레이시아 17:00 — 🔔 방문 안내(7일 전 · 3일 전) 관리자 알림 + 고객 자동 앱 알림
 const CUST_CRON = '0 1 * * *';        // UTC 01:00 = 말레이시아 09:00 — 고객 자동 앱 알림 (wrangler.toml crons 와 같은 글자여야 함)
 
 function b64url(bytes) {
@@ -297,17 +298,17 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    // 매일 밤 11시(말레이시아) = UTC 15:00 → 관리자 기기에 「내일 일정 단체방 보내기」 알림 (2026-11-09)
-    //   알림 발송·건수 계산은 홈페이지 서버(/api/notify, type:tomorrow)가 한다. 동기화를 먼저 한 번 돌려 최신 일정으로 센다.
-    if (event.cron === TOMORROW_CRON) {
+    // 🔔 방문 안내 (2026-11-25) — 오전 8시: 내일 · 오늘 / 오후 5시: 7일 전 · 3일 전
+    //   ① 고객 자동 앱 알림(/api/cpush op:auto slot) ② 관리자 「보낼 차례」 알림(/api/notify type:visit)
+    //   (예전 밤 11시 「내일 일정 단체방」 알림은 2026-11-25 대표님 요청으로 없앰)
+    if (event.cron === AM8_CRON || event.cron === PM5_CRON) {
+      const am = event.cron === AM8_CRON;
       ctx.waitUntil((async () => {
-        try { await runSync(env, { pastDays: 1, futureDays: 3 }); } catch (e) { console.log('pre-sync 오류: ' + e.message); }
-        const r = await fetch(SITE + '/api/notify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Origin': SITE },
-          body: JSON.stringify({ type: 'tomorrow' })
-        });
-        console.log('내일 일정 알림: ' + r.status + ' ' + (await r.text()));
+        try { await runSync(env, { pastDays: 1, futureDays: 8 }); } catch (e) { console.log('pre-sync 오류: ' + e.message); }
+        const post = (path, body) => fetch(SITE + path, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Origin': SITE }, body: JSON.stringify(body) })
+          .then(async r => r.status + ' ' + (await r.text())).catch(e => 'ERR ' + e.message);
+        console.log('고객 자동 알림(' + (am ? 'am8' : 'pm5') + '): ' + await post('/api/cpush', { op: 'auto', slot: am ? 'am8' : 'pm5' }));
+        console.log('방문 안내 관리자 알림: ' + await post('/api/notify', { type: 'visit', slot: am ? 'am' : 'pm' }));
       })());
       return;
     }
@@ -318,7 +319,7 @@ export default {
         const r = await fetch(SITE + '/api/cpush', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Origin': SITE },
-          body: JSON.stringify({ op: 'auto' })
+          body: JSON.stringify({ op: 'auto', slot: 'am9' })   // 오전 9시 = 결제 기한 알림 (방문 알림은 오전 8시로 옮김)
         });
         console.log('고객 자동 알림: ' + r.status + ' ' + (await r.text()));
       })());

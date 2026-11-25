@@ -109,17 +109,18 @@ button,input,select{font:inherit;color:inherit}button{cursor:pointer;border:0;ba
   function W(){try{return $('ca').contentWindow;}catch(e){return null;}}
   // 다른 화면에서 보내는 안내 — 다음 단계에서 미리보기를 붙입니다 (지금은 어디서 보내는지만)
   var OTHER=[
-    ['🗓️','방문 안내 (사전 · 내일 · 당일)','예약관리 › 방문 카드 › 💬 방문 안내'],
-    ['🚐','이동 중 · 지연 · 도착','스케줄 › 일정 › 고객 안내'],
     ['🧾','인보이스 발송','예약관리 › 🧾 인보이스'],
     ['📨','의뢰서 보내기','의뢰관리 › 📨 의뢰서 보내기'],
     ['🔧','점검보고서 발송','점검보고서 화면 › 발송'],
     ['🎫','상품권 · 할인권 발송','상품·할인권 화면 › 발송'],
     ['🔁','양도 · 전환 처리 안내','양도·전환 화면 › 발송'],
     ['📝','수리 결과 · 메모 안내','메모장 › 발송'],
-    ['📑','계약서 · 이용내역 발송','계약 화면 › 발송'],
-    ['📤','내일 일정 단체방','스케줄 › 📤 단체방 보내기']
+    ['📑','계약서 · 이용내역 발송','계약 화면 › 발송']
   ];
+  // 🔔 방문 안내 8종 (2026-11-25) — 문구는 공통 파일(HHCMsg.visitMsg) · 숨긴 고객관리의 caVisitPreview 로 그 고객 최근 확정 예약 기준
+  var VIS=[['pre','📅','사전 안내 (7일 전 · 3일 전)','d'],['tomorrow','🌙','내일 방문','d'],['today','☀️','당일 안내','d'],
+    ['move','🚗','이동 중','f'],['early','⏰','이른 방문','f'],['arrive','🏢','가드하우스 도착','f'],['delayT','⏳','지연 (교통)','f'],['delayW','🛠','지연 (작업)','f']];
+  var VIS_IMG={tomorrow:'remind-tmr',today:'remind-today',move:'onway',early:'onway',arrive:'arrive',delayT:'delay',delayW:'delayw'};
   function lb(t){var x=C&&C.tpls.find(function(o){return o.t===t;});return x?x.lb:t;}
   function list(){
     var q=($('q').value||'').trim(),h='';if(!C){$('list').innerHTML='';return;}
@@ -131,6 +132,8 @@ button,input,select{font:inherit;color:inherit}button{cursor:pointer;border:0;ba
     (C.groups||[]).slice().sort(function(a,b){var x=_ord.indexOf(Array.from(a.g)[0]),y=_ord.indexOf(Array.from(b.g)[0]);return (x<0?9:x)-(y<0?9:y);}).forEach(function(g){var r=g.ts.map(row).join('');if(r)h+='<div class="grp"><span>'+esc(g.g)+'</span><span>'+g.ts.length+'</span></div>'+r;});
     var rest=C.tpls.filter(function(o){return !seen[o.t];}).map(function(o){return row(o.t);}).join('');
     if(rest)h+='<div class="grp"><span>🧩 그 밖에 (발송 창 목록에 안 보이는 것)</span></div>'+rest;
+    var vv=VIS.filter(function(v){return !q||v[2].indexOf(q)>=0;});
+    if(vv.length)h+='<div class="grp"><span>🔔 방문 안내</span><span>'+VIS.length+'</span></div>'+vv.map(function(v){return '<button class="it'+(CUR==='v:'+v[0]?' on':'')+'" data-v="'+v[0]+'">'+v[1]+' '+esc(v[2])+'<span class="k"><i>'+(v[3]==='d'?'진행 현황':'스케줄')+'</i></span></button>';}).join('');
     var oth=OTHER.filter(function(o){return !q||o[1].indexOf(q)>=0;});
     if(oth.length)h+='<div class="grp"><span>🧰 다른 화면에서 보내는 안내</span><span>'+OTHER.length+'</span></div>'+oth.map(function(o,i){return '<button class="it dim" data-o="'+OTHER.indexOf(o)+'">'+o[0]+' '+esc(o[1])+'</button>';}).join('');
     $('list').innerHTML=h;
@@ -147,7 +150,14 @@ button,input,select{font:inherit;color:inherit}button{cursor:pointer;border:0;ba
       (no?'<span class="no">이 고객은 자료가 없어 실제로는 보낼 수 없어요 · 다른 고객을 골라 보세요</span>':(o.n?'<span>📂 이 고객 자료 '+o.n+'건 중 최근 것</span>':''))+
       (r&&r.special?'<span class="sp">'+esc(r.special)+'</span>':'')+'</div></div>';
     if(err){h+='<div class="oth">⚠️ 이 고객 자료로는 미리보기를 만들 수 없어요. 다른 고객을 골라 보세요.<br><small style="color:var(--ink3)">'+esc(err)+'</small></div>';$('main').innerHTML=h;return;}
-    var k=r.kk||{},lp=k.img;
+    $('main').innerHTML=h+cols(r,nm);RES=r;after(r);
+  }
+  function render3(title,from,note,r){
+    var h='<div class="hd"><h2>'+esc(title)+'</h2><div class="meta"><span>📍 <b>'+esc(from)+'</b></span>'+(note?'<span class="sp">'+esc(note)+'</span>':'')+'</div></div>';
+    $('main').innerHTML=h+cols(r,C?C.name:'');RES=r;after(r);
+  }
+  function cols(r,nm){
+    var k=r.kk||{},lp=k.img,h='';
     h+='<div class="cols">';
     h+='<div class="col"><h3>💬 왓츠앱으로 받는 모습</h3><div class="phone"><div class="scr"><div class="wa"><div class="bar"><i></i>'+esc(nm)+'</div><div class="bd"><div class="bub">'+
        (lp?'<div class="lp"><img src="'+esc(lp)+'" alt="" loading="lazy"><div><b>'+esc(k.t||'')+'</b><small>happyhomecare.com.my</small></div></div>':'')+
@@ -160,16 +170,31 @@ button,input,select{font:inherit;color:inherit}button{cursor:pointer;border:0;ba
        '<div class="lnk"><span>🔗</span><span style="flex:1">'+esc(r.link)+'</span><a href="'+esc(r.link)+'" target="_blank" rel="noopener">새 창 ↗</a></div></div>';
     h+='</div><div class="tool"><button type="button" id="cp">📋 왓츠앱 문구 복사</button><button class="dis" disabled>✏️ 문구 수정 (2단계)</button><button class="dis" disabled>🙈 숨기기 (3단계)</button><button class="dis" disabled>➕ 새 안내 추가 (3단계)</button></div>'+
       '<p class="tip">이 화면은 보기 전용이에요. 발송 · 저장을 하지 않습니다. 문구는 실제 발송 창에서 그대로 읽어 오므로, 발송 창 문구를 고치면 여기도 저절로 같아집니다.<br>링크 주소는 실제 발송 때 짧은 주소(happyhomecare.com.my/r?k=…)로 바뀌어 나갑니다.</p>';
-    $('main').innerHTML=h;RES=r;
+    return h;
+  }
+  function after(r){
     var f=$('pgf');f.onload=function(){var p=f.previousElementSibling;if(p)p.remove();};f.src=r.link;
     $('cp').onclick=function(){var t=String(r.wa).replace(/\*/g,'');(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){$('cp').textContent='✓ 복사됨';},function(){prompt('복사해서 쓰세요',t);});};
+  }
+  function showVisit(k){
+    var v=VIS.find(function(x){return x[0]===k;}),en=LANG==='en',w=W(),r=null;
+    try{r=w.caVisitPreview(C&&C.mid||CI,k,en);}catch(e){}
+    if(!r){$('main').innerHTML='<div class="oth">⚠️ 미리보기를 만들 수 없어요. 새로고침해 주세요.</div>';return;}
+    var M=w.HHCMsg,kk,img,md=(/^\d{4}-(\d{2})-(\d{2})/.exec(r.date||'')||[]).slice(1).join('');
+    if(v[3]==='d'){kk=M.visitKk(k,en,r.date,r.time);img=k==='pre'?(md?'d/'+md:'remind'):VIS_IMG[k];}
+    else{var m=/\*([^*\n]+)\*/.exec(r.wa)||[];var ls=r.wa.split('\n').filter(function(x){return x&&!/^(안녕하세요|Hello)/.test(x)&&!/\*/.test(x)&&!/👉 https?:/.test(x)&&!/📞/.test(x);});kk={t:m[1]||v[2],d:ls.slice(0,2).join('\n')};img=VIS_IMG[k];}
+    var imgU='https://happyhomecare.com.my/og-'+img+(en?'-en':'')+'.jpg';
+    var R0={wa:r.wa,link:r.link,kk:{kind:'img',img:imgU,t:kk.t,d:kk.d,btns:[en?'Check progress':'진행 안내 보기']},special:''};
+    var from=v[3]==='d'?'진행 현황 · 🔔 방문 안내 보낼 고객 · 스케줄 · 예약관리 방문 안내':'스케줄 › 일정 › 💬 방문 안내 (휴대폰 위치 · 구글맵 시간)';
+    var note=(r.booking?'':'이 고객은 확정 예약이 없어 예시 날짜로 보여 줍니다 · ')+(v[3]==='f'?'분 · 지역은 예시 (실제는 보낼 때 계산)':(k==='pre'?'7일 전 · 3일 전 모두 이 문구':''));
+    render3(v[1]+' '+v[2],from,note,R0);
   }
   function showOther(i){var o=OTHER[i];CUR='';list();
     $('main').innerHTML='<div class="hd"><h2>'+o[0]+' '+esc(o[1])+'</h2><div class="meta"><span>📍 <b>'+esc(o[2])+'</b></span></div></div>'+
       '<div class="oth">이 안내는 <b>'+esc(o[2].split(' › ')[0])+'</b> 화면에서 따로 보냅니다.<br>미리보기(왓츠앱 · 카카오톡 · 안내장)는 <b>다음 단계</b>에서 이 화면에 붙입니다.</div>';}
   function pickCust(i){
     if(C)try{C.close();}catch(_){}
-    C=null;CI=i;var e=ENT[i];$('cname').textContent=e?e.name:'—';
+    C=null;CI=i;var e=ENT.find(function(x){return x.i===i;})||{name:'',mid:''};$('cname').textContent=e?e.name:'—';
     try{localStorage.setItem('hhc_mc_cust',e&&e.mid||'');}catch(_){}
     $('main').innerHTML='<div class="load"><div><div class="spin"></div>'+esc(e.name)+' 고객 자료로 준비하는 중…</div></div>';
     Promise.resolve(W().caSendModal(i,{snap:true})).then(function(c){
@@ -193,8 +218,8 @@ button,input,select{font:inherit;color:inherit}button{cursor:pointer;border:0;ba
     custList();pickCust(pick.i);return true;
   }
   var tries=0;(function wait(){if(boot())return;if(++tries>120){$('main').innerHTML='<div class="oth">⚠️ 총괄 고객관리 자료를 불러오지 못했어요. 로그인 상태를 확인하고 새로고침해 주세요.</div>';return;}setTimeout(wait,500);})();
-  $('list').addEventListener('click',function(e){var b=e.target.closest('.it');if(!b)return;if(b.dataset.o!=null){showOther(+b.dataset.o);return;}CUR=b.dataset.t;list();show();if(innerWidth<760)window.scrollTo({top:0,behavior:'smooth'});});
-  $('lang').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;LANG=b.dataset.l;[].forEach.call(this.children,function(x){x.classList.toggle('on',x===b);});show();});
+  $('list').addEventListener('click',function(e){var b=e.target.closest('.it');if(!b)return;if(b.dataset.o!=null){showOther(+b.dataset.o);return;}if(b.dataset.v){CUR='v:'+b.dataset.v;list();showVisit(b.dataset.v);if(innerWidth<760)window.scrollTo({top:0,behavior:'smooth'});return;}CUR=b.dataset.t;list();show();if(innerWidth<760)window.scrollTo({top:0,behavior:'smooth'});});
+  $('lang').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;LANG=b.dataset.l;[].forEach.call(this.children,function(x){x.classList.toggle('on',x===b);});if(/^v:/.test(CUR))showVisit(CUR.slice(2));else show();});
   $('q').addEventListener('input',list);
   $('cbtn').addEventListener('click',function(e){e.stopPropagation();$('cdrop').classList.toggle('on');if($('cdrop').classList.contains('on'))$('cq').focus();});
   $('cq').addEventListener('input',custList);
