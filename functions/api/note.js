@@ -34,7 +34,7 @@ export async function onRequestPost(context){
     await patchDoc(env, coll, id, { cust_notes: notes, cust_note_at: at, cust_note_new: true });
     const nm = String(d.customer_name || d.condo || '').slice(0, 40);
     await sendAdminPush(env, coll === 'bookings' ? 'booking' : 'request', {
-      title: '✏️ 고객 요청 사항 도착',
+      title: '✏️ 고객 요청 사항 도착', od: id,
       body: (nm ? nm + ' — ' : '') + t.slice(0, 90),
     }).catch(() => null);
     return json({ ok: true, notes });

@@ -104,7 +104,7 @@ export async function onRequestPost(context){
     if (isEdit) { payload.edited_at = payload.booked_at; payload.edit_count = (parseInt(cur.edit_count, 10) || 0) + 1; }
     const saved = await patchDoc(env, 'bookings', id, payload);
     // 관리자 푸시 — 실패해도 예약 저장에는 영향 없음
-    const push = await sendAdminPush(env, isEdit ? 'booking_edit' : 'booking').catch(() => ({ ok: false }));
+    const push = await sendAdminPush(env, isEdit ? 'booking_edit' : 'booking', { od: id }).catch(() => ({ ok: false }));   // od = 누르면 그 예약 카드가 열림 (2026-11-25)
     return json({ ok: true, doc: saved, push });
   } catch (e) { return fail(e.message === 'env-missing' ? 'server-not-configured' : 'server-error', 500); }
 }

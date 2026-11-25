@@ -127,7 +127,7 @@ export async function onRequestPost(context){
   }
   try {
     const d = await createDoc(env, 'requests', data);
-    const push = await sendAdminPush(env, 'request', data.loc ? { title: '📥 새 의뢰 · 📍 위치 승인 필요', body: '새 의뢰가 접수되었고 고객이 방문 위치를 등록했습니다 — 눌러서 확인·승인하세요' } : undefined).catch(() => ({ ok: false }));
+    const push = await sendAdminPush(env, 'request', Object.assign({ od: d.__id }, data.loc ? { title: '📥 새 의뢰 · 📍 위치 승인 필요', body: '새 의뢰가 접수되었고 고객이 방문 위치를 등록했습니다 — 눌러서 확인·승인하세요' } : {})).catch(() => ({ ok: false }));
     return json({ ok: true, id: d.__id, push });
   } catch (e) { return fail(e.message === 'env-missing' ? 'server-not-configured' : 'server-error', 500); }
 }

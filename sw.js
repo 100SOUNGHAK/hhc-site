@@ -11,6 +11,7 @@ self.addEventListener('notificationclick', function (e) {
   try { if (navigator.clearAppBadge) navigator.clearAppBadge(); } catch (err) {}
   var tab = (e.notification.data && e.notification.data.tab) || '';
   var url = (e.notification.data && e.notification.data.url) || '';
+  var od = (e.notification.data && e.notification.data.od) || '';   // 열 문서(의뢰 · 예약) ID (2026-11-25)
   // 🔔 고객 앱 알림 : 열려 있는 마이페이지 창이 있으면 그 창에서 열고, 없으면 새로 엽니다
   if (url && e.notification.data.cust) {
     // 📋 열람 기록 (2026-11-19) — 고객관리 「알림 이력」에 「열어 봄」으로 표시됩니다. 실패해도 화면 열기는 그대로.
@@ -60,11 +61,11 @@ self.addEventListener('notificationclick', function (e) {
       var c = list[i];
       if (c.url && (c.url.indexOf('staff-app') >= 0 || c.url.indexOf('staffapp') >= 0)) {
         if (c.focus) c.focus();
-        if (tab && c.postMessage) c.postMessage({ hhcOpenTab: tab });
+        if (tab && c.postMessage) c.postMessage({ hhcOpenTab: tab, hhcOpenDoc: od });
         return;
       }
     }
-    if (self.clients.openWindow) return self.clients.openWindow('/staff-app.html' + (tab ? '#' + tab : ''));
+    if (self.clients.openWindow) return self.clients.openWindow('/staff-app.html' + (od ? '?od=' + od : '') + (tab ? '#' + tab : ''));
   }));
 });
 
@@ -102,7 +103,7 @@ self.addEventListener('push', function (e) {
       body: d.body || '눌러서 바로 확인하세요',
       icon: 'icon-admin-192.png', badge: 'icon-admin-192.png',
       tag: tag, renotify: !focused, requireInteraction: !focused, timestamp: Date.now(),
-      data: { tab: tab, url: url }
+      data: { tab: tab, url: url, od: (typeof d.od === 'string' && /^[A-Za-z0-9_-]{4,80}$/.test(d.od)) ? d.od : '' }   // od = 열 문서 ID (2026-11-25)
     };
     if (focused) opt.silent = true; else opt.vibrate = [300, 120, 300, 120, 300];   // silent 와 vibrate 는 함께 쓸 수 없음
     return self.registration.showNotification(d.title || 'HHC 알림', opt).then(function () {
