@@ -2036,6 +2036,17 @@ function kkExtraBtn(message,url,en){
   }
   return null;
 }
+// 📨 메시지 관리실 미리보기용 — 카카오 공유창에 실제로 들어갈 카드 모양을 계산만 합니다 (발송 · 복사 없음, 2026-11-25)
+//    규칙은 아래 kkShareMsg → kkSend 와 같습니다. 그쪽을 고치면 여기도 함께 고칩니다.
+function kkCardSpec(name,message,url,en,title,img){
+  const desc=kkText(message,!!img),b2=kkExtraBtn(message,url,en);
+  const btns=[(title&&title.btn)||(en?'Open MY PAGE':'마이페이지 열기')];
+  if(b2&&b2.u)btns.unshift(b2.t);
+  const ttl0=(title&&title.t)||(en?('[Happy Home Care] Notice for '+(name||'Customer')):('[Happy Home Care] '+(name||'고객')+'님 안내'));
+  if(img){const _ls=String(desc||'').split('\n');
+    return {kind:'img',img:img.u,t:img.t||_ls[0]||ttl0,d:img.d||(img.t?desc:_ls.slice(1).join('\n').replace(/^\n+/,'')),btns};}
+  return {kind:'text',img:'',t:'',d:desc,btns};
+}
 async function kkShareMsg(name,message,url,en,title,img){
   // 클립보드에는 왓츠앱과 같은 간략한 내용(주소 포함)을 넣어, 손으로 붙여 보낼 때도 동일하게 나갑니다
   //  · 카카오 200자를 넘는 경우엔 품목 목록을 「첫 품목 외 N건」으로 줄인 문구를 복사합니다
@@ -5479,7 +5490,9 @@ function trItemsEn(s){return HHCMsg.trItemsEn(s);}
 // ═══ 고객 마이페이지 발송 ═══
 window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 포인트 적립 추가 직후 적립 안내 (2026-11-17)
   const e=entries[idx];if(!e)return;
+  const SNAP=!!(opt&&opt.snap);   // 📨 메시지 관리실(msg-center.html) 미리보기 — 보기만 합니다 (2026-11-25)
   let mid=e.master&&e.master.__id;
+  if(SNAP&&!mid)return null;
   // 마스터 미등록 고객이면 자동 등록 후 발송
   if(!mid){
     try{
@@ -6827,7 +6840,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     //    만들어지는 대로 다시 그립니다 (실패하면 원래 주소 그대로)
     let raw=waText(msg());   // 「이대로 발송됩니다」 — 실제로 나가는 내용을 그대로 보여 줍니다
     const _isRev=state.tpl==='rev';   // ⭐ 리뷰 이벤트는 주소를 줄이지 않습니다
-    const _pend=_isRev?[]:(raw.match(/https:\/\/(?:www\.)?happyhomecare\.com\.my\/[^\s'"<>)\]]+/g)||[])
+    const _pend=(_isRev||SNAP)?[]:(raw.match(/https:\/\/(?:www\.)?happyhomecare\.com\.my\/[^\s'"<>)\]]+/g)||[])
       .filter((u,i,a)=>a.indexOf(u)===i&&u.length>40&&!/\/r(\.html)?\?k=/.test(u)&&!_hhcShortCache[u]);
     if(_pend.length)Promise.all(_pend.map(hhcShortUrl)).then(()=>{try{paint();}catch(_){}});
     if(!_isRev)raw=hhcShortSync(raw);
@@ -7107,6 +7120,11 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
       if(await careSend('kk'))return;           // 🌿 휴대폰 : 공유창에서 카카오톡 선택
       if(careCur())setTimeout(()=>toast('🖼 안내장 이미지를 내려받았습니다 · 카카오톡 대화방에 첨부해 주세요'),2600);
     }
+    const {kkT,kkImg}=kkSpec();
+    await kkShareMsg(e.name,msg(),link(),!!state.en,kkT,kkImg);
+    careMark('kk');
+  };
+  function kkSpec(){
     const en=!!state.en;
     const kkT=(state.tpl==='wp')
       ?{t:(en?'[Happy Home Care] Work Permit Guide':'[Happy Home Care] 작업방문등록 안내'),
@@ -7175,9 +7193,8 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     if(kkImg&&state.tpl==='bk'&&HHCMsg.bkqKk)kkImg.d=HHCMsg.bkqKk(en);
     if(kkImg&&state.tpl==='rq'&&HHCMsg.rqKk){kkImg.t=en?'Your request has been received':'의뢰가 접수되었습니다';kkImg.d=HHCMsg.rqKk(en);}
     if(kkImg&&state.tpl==='bkc'&&HHCMsg.bkcKk){const _b=BKCU[0]||BKC[0];if(_b){const _k=HHCMsg.bkcKk(_b,en);kkImg.t=_k.t;kkImg.d=_k.d;}}
-    await kkShareMsg(e.name,msg(),link(),en,kkT,kkImg);
-    careMark('kk');
-  };
+    return {kkT,kkImg};
+  }
   mk.querySelector('#cs-kkset').addEventListener('click',()=>{kkResetKey();});
   mk.querySelector('#cs-pv').addEventListener('click',()=>{window.caView(link(),'👁 고객 발송 화면 미리보기 — '+(e.name||''));});
   mk.querySelector('#cs-copylink').addEventListener('click',async()=>{
@@ -7212,6 +7229,18 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   });
 
   paint();
+  if(SNAP){
+    // 📨 메시지 관리실 — 종류 · 언어를 바꿔 가며 「실제로 나가는 내용」을 읽습니다 (발송 · 저장 없음)
+    const _sp=t=>t==='rev'?'⭐ 리뷰 이벤트는 배너 사진 카드로 나갑니다':GDS[t]?'📘 안내장 그림 + 링크 카드로 나갑니다':(t==='pti'||t==='mvo')?'🖼 휴대폰에서는 안내장 그림을 공유창으로 함께 보냅니다':(t==='care3'||t==='care6')?'🌿 휴대폰에서는 안내장 그림을 공유창으로 함께 보냅니다':'';
+    return {
+      name:e.name||'',mid,auto:_auto?_auto.tpl:'',why:_auto?_auto.why:'',
+      tpls:TPLS.map(o=>({t:o.t,lb:o.lb,n:o.n,need:!!o.need})),groups:TGRP,
+      set(t,en){state.tpl=t;state.en=!!en;paint();},
+      read(){const m=msg(),u=link(),en=!!state.en,k=kkSpec();
+        return {tpl:state.tpl,en,wa:hhcShortSync(waText(m)),link:u,kk:kkCardSpec(e.name,m,u,en,k.kkT,k.kkImg),special:_sp(state.tpl)};},
+      close(){try{mk.remove();}catch(_){}}
+    };
+  }
 };
 
 // ═══ 홈페이지 섹션 안내 발송 ═══
