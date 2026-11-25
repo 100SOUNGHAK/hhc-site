@@ -562,6 +562,7 @@ button:active{transform:scale(.97)}
 .alert.nv{box-shadow:inset 0 0 0 1px rgba(14,35,80,.16),0 12px 24px -16px rgba(14,35,80,.5)}.alert.nv .ic{background:#E9EEF8;color:var(--n)}.alert.nv small{color:var(--n)}
 .alert.bl{box-shadow:inset 0 0 0 1px rgba(37,99,235,.18),0 12px 24px -16px rgba(37,99,235,.45)}.alert.bl .ic{background:#EAF1FE;color:#2563EB}.alert.bl small{color:#2563EB}
 .alert.gd{background:linear-gradient(150deg,#FFFDF6,#FBF3DF);box-shadow:inset 0 0 0 1px rgba(201,164,76,.45),0 12px 24px -16px rgba(143,111,40,.55)}.alert.gd .ic{background:linear-gradient(160deg,#F6E3A8,#C9A44C);color:#3B2A06}.alert.gd small{color:#8F6F28}
+.alert .jst{display:inline-flex;gap:4px;margin-top:6px}.alert .jst i{font-style:normal;font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:99px;background:#EEF1F6;color:#98A1B4}.alert .jst i.d{background:#E7F6EF;color:#0E9B63}.alert .jst i.c{background:#0E2350;color:#fff}
 .alert.nv b,.alert.bl b,.alert.gd b{font-size:16px}
 .alert.nv b{white-space:normal;line-height:1.3}.alert .s .wp{white-space:nowrap}
 .alert .ic.em{font-size:21px}
@@ -1412,7 +1413,7 @@ function ivMarkSeen(no){const x=(D.invoices||[]).find(i=>i.no===no);if(!x||!x.is
   document.querySelectorAll('.ivr[data-sx="iv:'+no+'"] .ivnew').forEach(e=>e.remove());}
 const ivUrl=no=>{const x=(D.invoices||[]).find(i=>i.no===no);return BASE+'/hhc-invoice.html?view='+encodeURIComponent(x?x.no:no)+'&lang='+LANG;};
 (function(){const act=SX.act;SX.act=function(a,el){const k=String(a).split(':')[0];
-  if(k==='go'&&el){const u=el.dataset.u;{const r=el.closest&&el.closest('.ivr'),m=r&&/^iv:(.+)$/.exec(r.dataset.sx||'');if(m)ivMarkSeen(m[1]);}if(/request\.html|\/home|\/namecard/.test(u))location.href=u;else window.open(u,'_blank','noopener');return;}
+  if(k==='go'&&el){const u=el.dataset.u;{const r=el.closest&&el.closest('.ivr'),m=r&&/^iv:(.+)$/.exec(r.dataset.sx||'');if(m)ivMarkSeen(m[1]);}if(/request\.html|\/home|\/namecard|\/go\?/.test(u))location.href=u;else window.open(u,'_blank','noopener');return;}
   if(k==='nshare'&&el){const t=el.dataset.t||'';if(navigator.share){navigator.share({text:t}).catch(()=>{});}else{try{navigator.clipboard.writeText(t);}catch(e){}const o=document.getElementById('toast');o.textContent=LANG==='en'?'Message copied — paste it in KakaoTalk':'메시지를 복사했어요 — 카카오톡에 붙여 넣어 주세요';o.classList.add('on');setTimeout(()=>o.classList.remove('on'),1800);}return;}
   return act(a,el);};})();
 function waLink(t){return 'https://wa.me/'+WA+'?text='+encodeURIComponent(t||'');}
@@ -1598,8 +1599,8 @@ function focusGo(){
     case 'ct':el=q('.mcard:not(.pc)');if(!el)open=()=>SX.act('member');break;
     case 'cp':el=q('.alert[data-k="coupon"]')||q('#s-vq');break;
     case 'qt':el=q('.alert[data-k="quote"]')||q('#s-vq');break;
-    case 'bk':el=q('.alert[data-k="bkw"]')||q('.alert[data-k="bkp"]')||q('.alert[data-k="visit"]');break;
-    case 'rq':case 'td':el=q('.alert[data-k="rq"]')||q('.alert[data-k="bkw"]')||q('.alert[data-k="bkp"]')||q('.alert[data-k="visit"]');break;
+    case 'bk':el=q('.alert[data-k="job"]')||q('.alert[data-k="visit"]');break;
+    case 'rq':case 'td':el=q('.alert[data-k="job"]')||q('.alert[data-k="visit"]');break;
     case 'mm':el=q('.alert[data-k="mm"]');if(!el)open=()=>SX.act('repairs');break;
     case 'pt':case 'rw':el=q('.mcard.pc')||q('.pts');break;
     case 'sv':el=q('.alert[data-k="svreq"]');break;
@@ -2188,19 +2189,20 @@ function render(){
    if(cb){const v={d:String(cb.booking_date).slice(0,10),t:bkTimeLb(cb.booking_time||''),it:trIt(cb.booking_items||'')},dn=days(TODAY,pd(v.d));
      al.push(AL('visit','nv','🗓️',dn===0?(en?'Visit today':'오늘 방문'):(dn===1?(en?'Visit tomorrow':'내일 방문'):(en?'Upcoming visit · D-'+dn:'방문 예정 · D-'+dn)),
        esc(dLong(v.d))+(v.t?' · '+esc(v.t):''),(v.it?esc(v.it)+'<br>':'')+'<span class="wp">'+(en?'Pre-register your WORK PERMIT':'WORK PERMIT 사전등록 필수')+'</span>',en?'Work permit':'작업방문등록','','data-a="go" data-u="'+ea(wpUrl(v))+'" data-src="bk"'));}}
-  // ②-0 서비스 의뢰 접수 완료 (접수 후 14일 안, 그 뒤로 만들어진 예약이 없을 때)
-  {const _t=v=>{const x=Date.parse(String(v||''));return isNaN(x)?0:x;};
-   const rq=(RAW.requests||[]).filter(x=>{const at=_t(x.submitted_at);if(!at||Date.now()-at>14*864e5)return false;if(x.status&&x.status!=='pending'&&x.status!=='completed')return false;return !(RAW.bookings||[]).some(b=>_t(b.created_at)>at);})[0];
-   if(rq){let its=[];try{its=JSON.parse(String(rq.items||'[]'));}catch(e){}if(!Array.isArray(its))its=[];
+  // ②-0 진행 안내 — 의뢰 접수 · 예약 신청 · 확인 중을 한 장으로 (자세한 단계·날짜 선택은 /go 안내장에서)
+  {const _t=v=>{const x=Date.parse(String(v||''));return isNaN(x)?0:x;},BK=RAW.bookings||[],_new=(x,y)=>_t(y.created_at)-_t(x.created_at);
+   const wt=BK.filter(x=>x.status==='waiting').sort(_new)[0],pb=BK.filter(x=>x.status==='booked').sort(_new)[0];
+   const rq=(RAW.requests||[]).filter(x=>{const at=_t(x.submitted_at);if(!at||Date.now()-at>14*864e5)return false;if(x.status&&x.status!=='pending'&&x.status!=='completed')return false;return !BK.some(b=>_t(b.created_at)>at);})[0];
+   const rqNm=r=>{let its=[];try{its=JSON.parse(String(r.items||'[]'));}catch(e){}if(!Array.isArray(its))its=[];
      const nm=its.map(it=>{const c=String((it&&it.cat)||'').trim(),v=String((it&&it.svc)||'').trim();const t=(c&&v.indexOf(c)<0)?(c+' · '+v):(v||c);return t?trIt(t)+((it&&it.qty&&it.qty!=='0')?' × '+it.qty:''):'';}).filter(Boolean);
-     const sd=new Date(_t(rq.submitted_at)),ok=rq.status==='completed';
-     al.push(AL('rq','tl','📥',en?'Request received':'의뢰 접수 완료',ok?(en?'Confirmed · we’ll contact you':'확인 완료 · 곧 연락드려요'):(en?'We’re reviewing your request':'담당자가 확인하고 있어요'),
-       esc(nm.length?nm[0]+(nm.length>1?(en?' + '+(nm.length-1)+' more':' 외 '+(nm.length-1)+'건'):'')+' · ':'')+(en?'Received '+MON_EN[sd.getMonth()]+' '+sd.getDate():(sd.getMonth()+1)+'월 '+sd.getDate()+'일 접수'),L.tView,'ln','data-a="contact"'));}}
-  // ②-1 예약 신청서 작성 대기 · 확인 중
-  {const wt=(RAW.bookings||[]).filter(x=>x.status==='waiting')[0];
-   if(wt){const it=trIt(wt.booking_items||'');al.push(AL('bkw','bl','📅',en?'Booking form':'예약 신청서 작성',en?'Pick your preferred date':'희망 날짜를 골라 주세요',(it?esc(it)+' · ':'')+(en?'It takes about a minute':'1분이면 신청할 수 있어요'),en?'Book':'신청하기','','data-a="go" data-u="'+ea(BASE+'/booking.html?id='+encodeURIComponent(wt.__id)+'&lang='+LANG)+'"'));}
-   const pb=(RAW.bookings||[]).filter(x=>x.status==='booked')[0];
-   if(pb){al.push(AL('bkp','bl','⏳',en?'Confirming your booking':'예약 확인 중',pb.booking_date?esc(dLong(String(pb.booking_date).slice(0,10)))+(pb.booking_time?' · '+esc(bkTimeLb(pb.booking_time)):''):(en?'Request received':'신청이 접수되었어요'),en?'We’ll confirm shortly · you can still edit it':'확정되면 알려 드려요 · 확정 전까지 수정할 수 있어요',L.tView,'ln','data-a="go" data-u="'+ea(BASE+'/booking.html?id='+encodeURIComponent(pb.__id)+'&lang='+LANG)+'"'));}}
+     return nm.length?nm[0]+(nm.length>1?(en?' + '+(nm.length-1)+' more':' 외 '+(nm.length-1)+'건'):''):'';};
+   const goU=j=>BASE+'/go?j='+j+(CID?'&c='+encodeURIComponent(CID):'')+(en?'&lang=en':'');
+   const st=(n)=>'<span class="jst">'+[en?'Request':'의뢰',en?'Booking':'예약',en?'Confirmed':'확정'].map((x,i)=>'<i class="'+(i<n?'d':i===n?'c':'')+'">'+x+'</i>').join('')+'</span>';
+   let J=null;
+   if(wt){const it=trIt(wt.booking_items||'');J={j:'b:'+wt.__id,cls:'bl',ic:'📅',sm:en?'In progress · action needed':'진행 중 · 날짜 선택',b:wt.resched_from?(en?'Pick a new date':'새 날짜를 골라 주세요'):(en?'Pick your preferred date':'희망 날짜를 골라 주세요'),sub:(it?esc(it):''),n:1,go:en?'Pick':'고르기',gc:''};}
+   else if(pb){J={j:'b:'+pb.__id,cls:'bl',ic:'⏳',sm:en?'In progress':'진행 중',b:pb.booking_date?esc(dLong(String(pb.booking_date).slice(0,10)))+(pb.booking_time?' · '+esc(bkTimeLb(pb.booking_time)):''):(en?'Booking received':'예약 신청 접수'),sub:(en?'Waiting for confirmation':'확정을 기다리고 있어요'),n:1,go:L.tView,gc:'ln'};}
+   else if(rq){const nm=rqNm(rq),sd=new Date(_t(rq.submitted_at));J={j:'r:'+rq.__id,cls:'tl',ic:'📥',sm:en?'In progress':'진행 중',b:rq.status==='completed'?(en?'Reviewed · we’ll contact you':'확인 완료 · 곧 연락드려요'):(en?'Request received':'의뢰 접수 완료'),sub:esc(nm?nm+' · ':'')+(en?'Received '+MON_EN[sd.getMonth()]+' '+sd.getDate():(sd.getMonth()+1)+'월 '+sd.getDate()+'일 접수'),n:0,go:L.tView,gc:'ln'};}
+   if(J)al.push(AL('job',J.cls,J.ic,J.sm,J.b,(J.sub?J.sub+'<br>':'')+st(J.n),J.go,J.gc,'data-a="go" data-u="'+ea(goU(J.j))+'"'));}
   // ③ 견적서 — 유효기간 안이고 아직 결정하지 않은 것
   {const q=(RAW.quotes||[]).filter(x=>!(x.validUntil&&String(x.validUntil)<td0)&&!(x.customerChoice&&x.customerChoice.at))[0];
    if(q){const dl=q.validUntil?days(TODAY,pd(String(q.validUntil).slice(0,10))):null;

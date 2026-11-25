@@ -2793,7 +2793,7 @@ document.getElementById('btn-save').addEventListener('click',async()=>{
     }
 
     showLoading(false);
-    const url=`${BASE_URL}booking.html?id=${docId}&lang=${lang==='en'?'en':'ko'}`;
+    const url=`${BASE_URL}go?j=b:${docId}${lang==='en'?'&lang=en':''}`;   // 📍 진행 안내장 (2026-11-25)
     document.getElementById('link-url').textContent=url;
     document.getElementById('link-box').style.display='block';
     document.getElementById('link-empty').style.display='none';
@@ -2896,7 +2896,8 @@ document.getElementById('btn-wa-link').addEventListener('click',async()=>{
   const name=document.getElementById('c-name').value||'고객';
   const phone=document.getElementById('c-phone').value||'';
   const lang=document.querySelector('input[name="c-lang"]:checked')?.value||'ko';
-  url=await hhcShortUrl(_linkWithLang(url,lang));   // 🔗 예약 링크도 짧은 주소로
+  {const _md=bkMD(bkFirstCand(selectedDates));url=_linkWithLang(url,lang)+(_md&&/\/go\?/.test(url)?'&vi=bq&vd='+_md:'');}   // 📅 미리보기 첫 후보일 그림
+  url=await hhcShortUrl(url);   // 🔗 예약 링크도 짧은 주소로
   const msg=getMsg(name,phone,url,selectedDates,scheduleMap,lang);
   window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`,'_blank');
 });
@@ -2906,7 +2907,8 @@ document.getElementById('btn-kakao-link').addEventListener('click',async()=>{
   const name=document.getElementById('c-name').value||'고객';
   const phone=document.getElementById('c-phone').value||'';
   const lang=document.querySelector('input[name="c-lang"]:checked')?.value||'ko';
-  url=await hhcShortUrl(_linkWithLang(url,lang));   // 🔗 짧은 주소로
+  {const _md=bkMD(bkFirstCand(selectedDates));url=_linkWithLang(url,lang)+(_md&&/\/go\?/.test(url)?'&vi=bq&vd='+_md:'');}
+  url=await hhcShortUrl(url);   // 🔗 짧은 주소로
   // 💛 카카오톡 그림 카드(예약서 그림 + 「날짜 고르기」) — 전체 문구도 함께 복사됩니다 (2026-11-20)
   const msg=getMsg(name,phone,url,selectedDates,scheduleMap,lang);
   // 📅 카톡 카드 본문만 「아래 링크 클릭 후 일정 확정 부탁드립니다.」 (품목 목록 대신 · 2026-11-23)
@@ -3867,7 +3869,7 @@ window.editBooking=function(id){
   currentDateForTime='';
   renderCalendar();renderSelDates();updateDateForTimeSelect();renderTimeChips();
 
-  const url=`${BASE_URL}booking.html?id=${id}&lang=${lang==='en'?'en':'ko'}`;
+  const url=`${BASE_URL}go?j=b:${id}${lang==='en'?'&lang=en':''}`;   // 📍 진행 안내장 (2026-11-25)
   document.getElementById('link-url').textContent=url;
   document.getElementById('link-box').style.display='block';
   document.getElementById('link-empty').style.display='none';
@@ -4510,6 +4512,8 @@ function bkMD(d){const m=/^\d{4}-(\d{2})-(\d{2})/.exec(String(d||''));return m?m
 function bkFirstCand(list){return (Array.isArray(list)?list:[]).map(String).filter(x=>/^\d{4}-\d{2}-\d{2}/.test(x)).sort()[0]||'';}
 function bkCandOf(b){let a=[];try{a=JSON.parse(b&&b.schedule_dates||'[]');}catch(_){}return bkFirstCand(a);}
 function bkDateImg(kind,d,en){const md=bkMD(d);return md?'https://happyhomecare.com.my/og-'+kind+'/'+md+(en?'-en':'')+'.jpg':(kind==='dc'?'og-confirmed.jpg':'og-booking.jpg');}
+// 📍 진행 안내장 주소 (go.html) — j=b:예약ID · c=고객 (마이페이지 버튼용)
+function bkGoUrl(b,cid){const en=(b.customer_lang||'ko')==='en';return BASE_URL+'go?j=b:'+encodeURIComponent(b.__id)+(cid?'&c='+encodeURIComponent(cid):'')+(en?'&lang=en':'');}
 async function bkMyPageUrl(b){
   const lang=(b.customer_lang||'ko')==='en'?'en':'ko';
   try{
@@ -4518,9 +4522,10 @@ async function bkMyPageUrl(b){
     let m=null;
     if(pn)m=list.find(c=>hccPN(c.phone)===pn)||null;
     if(!m&&nn)m=list.find(c=>hccNameHit(c,nn))||null;
-    if(m&&m._docId)return BASE_URL+(lang==='en'?'my-en.html?c=':'my.html?c=')+encodeURIComponent(m._docId)+'&lang='+lang+'&f=bk';
+    // 📍 진행 안내장 (2026-11-25) — 날짜 고르기 · 확정 대기 · 확정을 링크 하나로
+    if(m&&m._docId)return bkGoUrl(b,m._docId);
   }catch(e){}
-  return `${BASE_URL}booking.html?id=${b.__id}&lang=${lang}`;
+  return bkGoUrl(b,'');
 }
 // ✅ 예약 확정 발송 문구 — 총괄 고객관리 「📱 마이페이지 발송 → 예약 확정 안내」와 같은 문구입니다.
 //    문구 원본은 /hhc-sendmsg.js 한 곳 (거기서 고치면 여기도 함께 바뀝니다).
@@ -4541,10 +4546,10 @@ async function bkConfirmMsg(b){
     m=await find();
     if(!m&&window.HHCC_upsert){await window.HHCC_upsert(b.customer_name,b.customer_phone,{addr:b.customer_address||''});m=await find();}
   }catch(e){}
-  let link=(m&&m._docId)?HHCMsg.myLink(m._docId,en,'bk')
-    :(b.__id?`${BASE_URL}booking.html?id=${b.__id}&lang=${en?'en':'ko'}`:HHCMsg.BASE+'/home'+(en?'?lang=en':''));
+  let link=b.__id?bkGoUrl(b,(m&&m._docId)||''):HHCMsg.BASE+'/home'+(en?'?lang=en':'');   // 📍 진행 안내장 (2026-11-25)
+  {const _md=bkMD(b.booking_date);if(b.__id&&_md)link+='&vi=bc&vd='+_md;}
   try{link=await hhcShortUrl(link);}catch(e){}
-  const txt=HHCMsg.bkc({name:(m&&m.name)||nm0,en:en,booking:b,link:link});
+  const txt=HHCMsg.bkc({name:(m&&m.name)||nm0,en:en,booking:b,link:link,lb:en?'📍 Progress & details':'📍 진행 안내 · 예약 상세'});
   // 🔗 작업방문등록 안내장 주소 등 문구 속 남은 긴 주소도 모두 짧은 주소로 (실패하면 원래 주소 그대로)
   try{return await hhcShortLinks(txt);}catch(e){return txt;}
 }
@@ -4552,7 +4557,7 @@ async function bkResendMsg(b){
   const en=(b.customer_lang||'ko')==='en';
   const nm=b.customer_name||(en?'Customer':'고객');
   let _u=await bkMyPageUrl(b);const _md=bkMD(bkCandOf(b));
-  if(_md&&/\/my(-en)?\.html\?/.test(_u))_u+='&vi=bq&vd='+_md;   // 📅 미리보기에 첫 후보일 그림
+  if(_md&&/\/(my(-en)?\.html|go)\?/.test(_u))_u+='&vi=bq&vd='+_md;   // 📅 미리보기에 첫 후보일 그림
   const url=await hhcShortUrl(_u);
   const il=bkItemLinesMsg(b.booking_items,en);
   const SIG='📞 +60 17-247 2774 · Happy Home Care';
