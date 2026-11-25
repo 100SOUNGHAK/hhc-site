@@ -6162,6 +6162,20 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   // 결제 기한이 지난 인보이스 — 감사 인사 대신 정중한 결제 확인 요청으로 (2026-11-25)
   function tkOd(x){if(!x)return false;const paid=(x.status==='paid')||invDue(x)<=0.005;
     return !paid&&(x.status==='overdue'||(/^\d{4}-\d{2}-\d{2}$/.test(String(x.due||''))&&String(x.due)<_tdy));}
+  // 💛 카카오톡 카드 본문 (2026-11-25 대표님 지정 문구) — 카드 제목은 메시지의 굵은 첫 줄
+  function tkKkDesc(en){
+    const x=curCoupon();if(!x)return '';
+    const due=invDue(x),tot=invTotal(x),paid=(x.status==='paid')||due<=0.005,cr=tkCr(x),od=tkOd(x);
+    const rp=(D.inspections||[]).some(r=>r&&r.invoice_id&&(String(r.invoice_id)===String(x.id||'')||String(r.invoice_id)===String(x.__id||''))&&r.cust_hidden!==true);
+    const my=en?'📱 Check them anytime on MY PAGE':'📱 마이페이지에서 언제든 확인하세요';
+    if(cr>0.005&&tot<=0.005){const c=tkCt(x),rem=c?ctBal(c).remain:null;
+      return (rem!=null?(en?'💰 Remaining credit ':'💰 남은 적립금 ')+sRM(rem)+'\n':'')+
+        (en?'📑 Invoice'+(rp?' · Report':'')+' · Usage statement':'📑 인보이스'+(rp?' · 작업 보고서':'')+' · 이용내역서')+'\n'+my;}
+    if(od)return (en?'💳 Amount due ':'💳 결제하실 금액 ')+sRM(due)+'\n'+
+      (en?'🙏 Already paid? Just send us the receipt':'🙏 이미 이체하셨다면 영수증만 보내 주세요');
+    if(paid)return (en?'✅ Paid · ':'✅ 결제 완료 · ')+sRM(tot)+'\n'+my;
+    return (en?'💳 Amount due ':'💳 결제하실 금액 ')+sRM(due)+'\n'+my;
+  }
   function tkMsg(en){
     const x=curCoupon();
     if(!x)return en?'No invoice available to send.':'발송 가능한 인보이스가 없습니다.';
@@ -7080,6 +7094,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
         d:(en?'From the card · request a service · see services & prices · save contact'
              :'명함에서 바로 · 의뢰(예약) 신청 · 서비스·가격 확인 · 연락처 저장')}
       :caKkImg(state.tpl,msg(),en,state.cmpMemo);
+    if(state.tpl==='tk'&&kkImg){const _d=tkKkDesc(en);if(_d)kkImg.d=_d;}   // 🙏 작업완료 감사 — 카드 본문은 지정 문구로
     // 📅 예약 신청·확정 카드는 날짜 그림으로 (2026-11-21)
     {const _bd=caBkDate(state.tpl);if(kkImg&&_bd&&(state.tpl==='bk'||state.tpl==='bkc')){kkImg.u='https://happyhomecare.com.my/og-'+(state.tpl==='bkc'?'dc':'db')+'/'+_bd+(en?'-en':'')+'.jpg';}}   // 적립 안내는 적립 이름도 함께 보고 그림을 고릅니다   // 🖼 그 밖의 종류도 그림 카드 (2026-11-20) · 영어는 영어 그림
     // 💛 예약 확정은 카톡 카드 문구만 짧게 — 「날짜·시간 + 작업방문등록 필수 요망.」 (위치 확인 문구 제외 · 2026-11-23)
