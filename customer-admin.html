@@ -745,7 +745,9 @@ textarea.fi{resize:vertical;min-height:60px;line-height:1.6}
 @media(max-width:380px){
   .sm2-btns{grid-template-columns:1fr 1fr 46px 46px;gap:6px}
 }
-@media(prefers-reduced-motion:reduce){.sendm .sm-tpl span,.sm2-btns .btn{transition:none}}
+@keyframes sm2fl{0%,100%{box-shadow:0 0 0 0 rgba(37,99,235,0)}30%,70%{box-shadow:0 0 0 4px rgba(37,99,235,.45)}}
+.sendm .sm-tpl span.sm2-flash{animation:sm2fl .8s ease 2}
+@media(prefers-reduced-motion:reduce){.sendm .sm-tpl span,.sm2-btns .btn{transition:none}.sendm .sm-tpl span.sm2-flash{animation:none;outline:3px solid rgba(37,99,235,.5)}}
 /* ══════════════════════════════════════════════════════════
    📤 발송 창 — 휴대폰 두 단계 (2026-11-17)
    ① 고르기: 묶음 6칸(3×2) 한눈에 → 안내 목록(아이콘 · 이름 · 한 줄 설명 · 건수)
@@ -7112,7 +7114,16 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     const tb=ev.target.closest('[data-g]');if(!tb)return;
     mk.querySelector('#cs-tpl').dataset.g=tb.dataset.g;
     _tabs.querySelectorAll('[data-g]').forEach(x=>x.classList.toggle('on',x===tb));
-    try{tb.scrollIntoView({inline:'nearest',block:'nearest'});}catch(_e){}
+    // 어느 묶음을 눌러도 똑같이 — 묶음 칸을 화면 위로 올려 아래 목록이 바로 보이게 하고,
+    // 이미 고른 안내가 이 묶음에 있으면 그 칸을, 없으면 보낼 수 있는 첫 칸을 잠깐 반짝여 알려 줍니다 (2026-11-26)
+    const _rm=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+    try{_tabs.scrollIntoView({block:'start',behavior:_rm?'auto':'smooth'});}catch(_e){}
+    const _g=mk.querySelector('#cs-tpl .sm2-g[data-g="'+tb.dataset.g+'"]');
+    if(_g){
+      const _t=_g.querySelector('[data-t].on')||_g.querySelector('[data-t]:not([data-off])')||_g.querySelector('[data-t]');
+      _g.querySelectorAll('.sm2-flash').forEach(x=>x.classList.remove('sm2-flash'));
+      if(_t){void _t.offsetWidth;_t.classList.add('sm2-flash');setTimeout(()=>_t.classList.remove('sm2-flash'),1600);}
+    }
   });
   mk.querySelector('#cs-opts').addEventListener('click',ev=>{
     const el=ev.target.closest('[data-k]');if(!el)return;
