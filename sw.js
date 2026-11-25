@@ -98,7 +98,8 @@ self.addEventListener('push', function (e) {
     }
     if (url) focused = false;   // 주소가 정해진 알림은 앱 안에서 따로 알려 주지 않으므로 항상 소리
     if (!focused) { try { if (navigator.setAppBadge) navigator.setAppBadge(1); } catch (err) {} }   // 앱 아이콘 배지 (지원 기기)
-    var tag = 'hhc-push-' + tab;
+    // 알림마다 다른 tag (2026-11-25) — 같은 tag 면 앞 알림을 조용히 바꿔치기만 해서(갤럭시) 두 번째부터 안 울리는 것처럼 보였음
+    var tag = 'hhc-push-' + tab + '-' + Date.now().toString(36);
     var opt = {
       body: d.body || '눌러서 바로 확인하세요',
       icon: 'icon-admin-192.png', badge: 'icon-admin-192.png',
