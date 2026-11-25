@@ -28,7 +28,23 @@ self.addEventListener('notificationclick', function (e) {
     }));
     return;
   }
-  // 주소가 정해진 알림(예: 🔔 방문 안내 보낼 차례 → /customer-admin.html?vl=…)은 그 화면을 바로 엽니다
+  // 🔔 방문 안내 보낼 차례(/customer-admin.html?vl=…) → 관리자 앱(고객 탭) 안에서 목록을 바로 엽니다 (2026-11-25)
+  var vlm = /customer-admin\.html\?vl=(d7|d3|tm|td)/.exec(url || '');
+  if (vlm) {
+    e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
+      for (var i = 0; i < list.length; i++) {
+        var c = list[i];
+        if (c.url && (c.url.indexOf('staff-app') >= 0 || c.url.indexOf('staffapp') >= 0)) {
+          if (c.focus) c.focus();
+          if (c.postMessage) c.postMessage({ hhcOpenTab: 'customers', hhcVl: vlm[1] });
+          return;
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow('/staff-app.html?vl=' + vlm[1] + '#customers');
+    }));
+    return;
+  }
+  // 주소가 정해진 알림은 그 화면을 바로 엽니다
   if (url) {
     e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
       for (var i = 0; i < list.length; i++) {

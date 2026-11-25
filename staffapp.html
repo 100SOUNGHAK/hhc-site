@@ -486,7 +486,21 @@ if(!validTab(start)){
   try{start=localStorage.getItem(LS_KEY)||'';}catch(e){start='';}
 }
 if(!validTab(start))start='schedule';
+// 🔔 방문 안내 알림으로 열면(?vl=d7|d3|tm|td) 고객 탭 + 「방문 안내 보낼 고객」 목록 (2026-11-25)
+var _vl0=(/[?&]vl=(d7|d3|tm|td)\b/.exec(location.search)||[])[1]||'';
+if(_vl0)start='customers';
 activate(start,true);
+window.hhcOpenVl=function(vl){
+  if(!/^(d7|d3|tm|td)$/.test(vl))return;
+  activate('customers');
+  var n=0;(function go(){
+    var p=document.querySelector('.pane[data-pane="customers"]'),f=p&&p.querySelector('iframe'),w=null;
+    try{w=f&&f.contentWindow;}catch(e){w=null;}
+    if(w&&typeof w.caVisitOpen==='function'){try{w.caVisitOpen(vl);}catch(e){}return;}
+    if(++n<80)setTimeout(go,250);
+  })();
+};
+if(_vl0){window.hhcOpenVl(_vl0);try{history.replaceState(null,'',location.pathname+location.hash);}catch(e){}}
 
 window.addEventListener('hashchange',function(){
   var h=(location.hash||'').replace('#','');
@@ -572,6 +586,7 @@ if('serviceWorker' in navigator&&location.protocol==='https:'){
   navigator.serviceWorker.register('sw.js').then(r=>{SWREG=r;setupPush();clearSysNotifs();}).catch(()=>{});
   navigator.serviceWorker.addEventListener('message',e=>{
     if(e.data&&e.data.hhcOpenTab&&window.activate)window.activate(e.data.hhcOpenTab);
+    if(e.data&&e.data.hhcVl&&window.hhcOpenVl)window.hhcOpenVl(e.data.hhcVl);
   });
 }
 // ── 알림 권한: 화면 대부분이 내부 프레임이라 터치가 앱 본체에 닿지 않을 수 있어
