@@ -2030,7 +2030,7 @@ const CA_KK_IMG={basic:'og-my.jpg',bill:'og-invoice.jpg',rebill:'og-invoice.jpg'
   bk:'og-booking.jpg',bkc:'og-confirmed.jpg',revisit:'og-booking.jpg',rq:'og-received.jpg',mmv:'og-confirmed.jpg',install:'og-app.jpg',
   rqf:'og-reqform.jpg',care3:'og-care.jpg',care6:'og-care.jpg',wp:'og-permit.jpg',evi:'og-voucher.jpg',pti:'og-points.jpg',
   pacc:'og-pay.jpg',vfee:'og-visitfee.jpg',ipr:'og-received-repair.jpg',ipv:'og-confirmed.jpg',fee:'og-fees.jpg',   // 점검 접수·점검 방문·추가비용 (2026-11-21)
-  mvo:'og-move.jpg',mem:'og-mem.jpg',jnt:'og-joint.jpg',trf:'og-contract.jpg'};
+  mvo:'og-move.jpg',mem:'og-mem.jpg',jnt:'og-joint.jpg',trf:'og-contract.jpg',tk:'og-invoice.jpg'};   // 🙏 작업 완료 감사 · 청구 (2026-11-25)
 // 카드 제목 = 문구의 첫 *굵은 글씨* 줄(없으면 인사 다음 첫 줄) · 설명 = 그 아래 안내 줄(주소·서명 제외)
 function caKkAuto(m){
   const lead=x=>String(x||'').replace(/\*([^*\n]+)\*/g,'$1').replace(/^[\s -⯿☀-➿️‍\u{1F000}-\u{1FAFF}·•:\-–—]+/u,'').replace(/\s+/g,' ').trim();
@@ -5528,6 +5528,8 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   const CPD=_cpSort(_cpLive.filter(x=>x.type==='discount'));   // 할인권
   // 점검보고서 · 계약서 발송용 — 최근 순
   const IPS=(D.inspections||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  // 🙏 작업 완료 감사 · 청구 안내용 — 인보이스 최근 순 (2026-11-25)
+  const IVS=(D.invoices||[]).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||String(b.id||'').localeCompare(String(a.id||'')));
   const CTS=(D.contracts||[]).slice().sort((a,b)=>String(b.contract_date||'').localeCompare(String(a.contract_date||'')));
   // 견적서 발송용 — 최근 작성 순 (기한이 지난 견적서도 다시 보낼 수 있도록 모두 포함)
   const QTS=(D.quotes||[]).slice().sort((a,b)=>String(b.issueDate||'').localeCompare(String(a.issueDate||'')));
@@ -5538,7 +5540,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   // 인보이스·점검보고서는 기록이 아직 없어도 기본 노출 — 고객 화면에서 「내역 없음」 안내 카드로
   // 자리를 지켜 주므로 한쪽만 남아 빈 자리가 생기지 않습니다. (필요하면 아래에서 해제 가능)
   const state={iv:true,ip:true,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:BKP.length?'bk':(BKCU.length?'bkc':(careDue(e)?(careDue(e).k===6?'care6':'care3'):'basic')),
-    cpi:{cpg:0,cpd:0,ins:0,ct:0,qt:0,mmv:0,ipv:0},
+    cpi:{cpg:0,cpd:0,ins:0,ct:0,qt:0,mmv:0,ipv:0,tk:0},
     payDate:_td.getFullYear()+'-'+_p2(_td.getMonth()+1)+'-'+_p2(_td.getDate()),
     careDate:careLastAc(e),
     cmpAmt:(opt&&opt.amt)||'',cmpMemo:(opt&&opt.memo)||''};   // 💎 적립 안내 — 포인트 「적립 추가」에서 넘어온 금액 · 이름
@@ -5563,6 +5565,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     {t:'qt',      lb:'🧾 견적서 발송',  n:QTS.length,  need:true},
     {t:'basic',   lb:'📄 기본 안내',    n:0, need:false},
     {t:'revisit', lb:'🔄 재방문 · 예약', n:0, need:false},
+    {t:'tk',      lb:'🙏 작업완료 감사·청구', n:IVS.length, need:true},   // 감사 인사 + 청구 + 인보이스·보고서·MY PAGE 안내장(/thanks) (2026-11-25)
     {t:'bill',    lb:'🧾 청구 안내',    n:0, need:false},
     {t:'rebill',  lb:'🔔 청구 재요청',  n:0, need:false},
     {t:'pay',     lb:'💳 결제 확인',    n:0, need:false},
@@ -5596,7 +5599,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   // 발송 종류를 성격별로 묶어 한눈에 찾을 수 있게 합니다.
   const TGRP=[
     {g:'📄 문서 보내기', ts:['ins','ct','qt','cpg','cpd']},
-    {g:'💰 청구 · 결제',  ts:['bill','rebill','pay','pacc']},
+    {g:'💰 청구 · 결제',  ts:['tk','bill','rebill','pay','pacc']},
     {g:'📅 예약 · 의뢰',  ts:['bk','bkc','rq','ipr','ipv','mmv','rqf','revisit']},
     {g:'🌿 정기관리 알림', ts:['care3','care6']},
     {g:'📢 안내 · 소개',  ts:['nc','rev','basic','aw','mem','jnt','trf','evi','pti','fee','vfee','mvo','wp','install']},
@@ -5609,7 +5612,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   //  · 「지금 보낼 수 있는 것」 = 이 고객에게 자료가 있는 안내만 먼저
   //  · 휴대폰에서는 종류 묶음을 탭으로 나눠 한 묶음씩 보여 줍니다 (컴퓨터는 전부 펼침)
   //  · 발송 버튼과 「지금 고른 안내 · 언어」는 창 아래에 늘 고정
-  const REC_ORDER=['bk','bkc','rq','ipv','mmv','ins','ct','qt','cpg','cpd'];
+  const REC_ORDER=['bk','bkc','rq','ipv','mmv','tk','ins','ct','qt','cpg','cpd'];
   const REC=REC_ORDER.map(function(t){return TPLS.find(function(o){return o.t===t;});})
     .filter(function(o){return o&&o.n>0;});
   if(state.tpl&&!REC.some(function(o){return o.t===state.tpl;})){
@@ -5618,7 +5621,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   }
   const REC6=REC.slice(0,6);
   // 📱 휴대폰 목록에서 이름 아래 한 줄로 보여 주는 설명 (2026-11-17) — 컴퓨터 화면에서는 숨김
-  const TDESC={ins:'점검보고서 링크 보내기',ct:'계약서 · 잔액 확인 링크',aw:'작업 후 이용내역 안내',qt:'견적서 보내고 선택 받기',
+  const TDESC={tk:'감사 인사 · 청구 · 인보이스/보고서 링크',ins:'점검보고서 링크 보내기',ct:'계약서 · 잔액 확인 링크',aw:'작업 후 이용내역 안내',qt:'견적서 보내고 선택 받기',
     cpg:'전자상품권 보내기',cpd:'할인권 보내기',bill:'미결제 금액 결제 요청',rebill:'입금 안 된 건 다시 요청',pay:'입금 확인 · 감사 인사',
     pacc:'계좌번호 + 복사 안내장',bk:'방문 날짜 골라 달라는 요청',bkc:'확정된 방문 일시 안내',rq:'의뢰 잘 받았다는 안내',
     ipr:'출장점검 접수 완료 안내',ipv:'점검 방문 일정 안내',mmv:'수리요청 출장방문 안내',rqf:'의뢰서 작성 요청',revisit:'다시 방문 · 예약 권유',
@@ -5772,7 +5775,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   //    (페이지는 이 값을 쓰지 않습니다 · 마이페이지/짧은 링크(/r)는 해당 없음)
   function link(){
     const u=link0();
-    if(!/\/(pay|points|workpermit|evoucher|fees|visit-fee|moveout|membership|joint|smart|transfer)(\.html|-en\.html)?(\?|$)/.test(u)||/[?&]pv=/.test(u))return u;
+    if(!/\/(pay|points|workpermit|evoucher|fees|visit-fee|moveout|membership|joint|smart|transfer|thanks)(\.html|-en\.html)?(\?|$)/.test(u)||/[?&]pv=/.test(u))return u;
     const i=u.indexOf('#'),h=i>=0?u.slice(i):'',b=i>=0?u.slice(0,i):u;
     return b+(b.indexOf('?')>=0?'&':'?')+'pv=2'+h;
   }
@@ -5810,6 +5813,18 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     if(state.en)q.set('lang','en');
     return BASE+'/transfer'+(q.toString()?'?'+q.toString():'');
   }
+  // 🙏 작업 완료 감사 · 청구 안내장 (/thanks) — 인보이스 + 연결된 「확정」 보고서 + MY PAGE (2026-11-25)
+  //  · r= 종류:보고서ID — 이 인보이스에 연결된 보고서 중 고객에게 공개(확정)된 것만. 연결은 있는데 모두 확정 전이면 r=- (보고서 칸 없음)
+  function tkLink(){
+    const x=curCoupon();if(!x)return BASE+'/my.html?c='+encodeURIComponent(mid);
+    const iid=String(x.id||x.__id||''),keys=[iid,String(x.__id||'')].filter(Boolean);
+    const lk=(D.inspections||[]).filter(r=>r&&r.invoice_id&&keys.indexOf(String(r.invoice_id))>=0);
+    const pub=lk.filter(r=>r.cust_hidden!==true);
+    const q=new URLSearchParams();q.set('i',String(x.__id||iid));if(mid)q.set('c',mid);
+    if(lk.length)q.set('r',pub.length?pub.map(r=>(r.type||'inspect')+':'+r.__id).join(','):'-');
+    if(state.en)q.set('lang','en');
+    return BASE+'/thanks?'+q.toString().replace(/%3A/g,':').replace(/%2C/g,',');
+  }
   function link0(){
     // 🪪 작업방문등록 — 고객 마이페이지가 아니라 작업방문등록 안내장을 보냅니다.
     if(state.tpl==='wp')return wpLink(!!state.en);
@@ -5819,6 +5834,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     // 👥 공동계약 안내 — 공동계약 패키지 안내장. 영문 발송은 미리보기 카드까지 영어로 나오도록 joint-en.html 을 거칩니다 (2026-11-20)
     if(state.tpl==='jnt')return BASE+(state.en?'/joint-en.html?lang=en':'/joint');
     if(state.tpl==='trf')return trfLink();
+    if(state.tpl==='tk')return tkLink();
     // 📑 계약서 발송 → 💌 패키지 가입 감사 안내장(/welcome) — 안내장 맨 아래 「계약서 보기」가 계약서 · 이용내역을 엽니다 (2026-11-24)
     if(state.tpl==='ct'){const _x=curCoupon();if(_x&&_x.__id)return BASE+'/welcome?k='+encodeURIComponent(_x.__id)+'&lang='+(state.en?'en':'ko')+(mid?'&c='+encodeURIComponent(mid):'');}   // c= 안내장의 🏠 MY PAGE 버튼
     if(state.tpl==='mem'){const nq=e.name?'name='+wpEnc(e.name):'';return BASE+(state.en?'/membership-en.html?lang=en'+(nq?'&'+nq:''):'/membership'+(nq?'?'+nq:''));}
@@ -5984,9 +6000,10 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   // 청구금액 = 「청구중」+「연체」 인보이스의 **잔여 결제금액** 합계
   //            (기결제/일부 결제가 있으면 그만큼 차감된다 · 마이페이지와 동일 규칙)
   // ── 쿠폰(상품권 · 할인권) 발송 ──────────────────────
-  const PICK_TPLS=['cpg','cpd','ins','ct','qt','aw','mmv','ipv'];
+  const PICK_TPLS=['cpg','cpd','ins','ct','qt','aw','mmv','ipv','tk'];
   function curCPList(){
     if(state.tpl==='mmv'||state.tpl==='ipv')return MMV;
+    if(state.tpl==='tk')return IVS;
     if(state.tpl==='cpd')return CPD;
     if(state.tpl==='ins')return IPS;
     if(state.tpl==='ct'||state.tpl==='aw')return CTS;
@@ -5998,6 +6015,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   function pickLb(x){
     if(state.tpl==='mmv'||state.tpl==='ipv')return (x.visit_date||'')+(x.visit_time?' '+x.visit_time:'')+' · '+(String(x.symptom||'').split('\n')[0]||'점검 방문').slice(0,28);
     if(state.tpl==='ins')return inspLabel(x.type,x)+' · '+(x.date||'')+(x.addr?' · '+x.addr:'');
+    if(state.tpl==='tk')return (x.id||x.__id)+' · '+(x.date||'')+' · '+fmtRM(invTotal(x))+(invItemLine(x)?' · '+invItemLine(x):'')+(x.cust_hidden===true?' · 🔒 확정 전':'');
     if(state.tpl==='ct'||state.tpl==='aw')return (pkgLabel(x.package_id)||'패키지')+' · '+(x.contract_date||'')+' · 납입 '+fmtRM(x.amount_paid);
     if(state.tpl==='qt')return (x.qno||'견적')+' · '+(x.issueDate||'')+' · '+fmtRM(qtTotal(x))+(x.subject?' · '+x.subject:'');
     return (x.code||'')+' · '+(x.value||'')+(x.expiry?' · ~'+x.expiry:'');
@@ -6005,6 +6023,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   function pickLbTitle(){
     if(state.tpl==='mmv'||state.tpl==='ipv')return '방문 안내할 메모';
     if(state.tpl==='ins')return '발송할 보고서';
+    if(state.tpl==='tk')return '안내할 인보이스';
     if(state.tpl==='ct'||state.tpl==='aw')return '발송할 계약서';
     if(state.tpl==='qt')return '발송할 견적서';
     return '발송할 쿠폰';
@@ -6131,6 +6150,21 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
         '\n\n👉 Please check your contract and remaining balance.'+ctLk('💌 Thank-you note & contract',true))
       :(sHi(en,nm)+'\n\n📑 *멤버십 계약서를 보내드립니다 — 감사합니다!*'+(pk?'\n👑 '+pk:'')+'\n💰 사용 가능 금액 '+sRM(r)+
         '\n\n👉 계약 내용과 남은 금액을 확인해 주세요.'+ctLk('💌 감사 안내 · 계약서 보기',false));
+  }
+  // 🙏 작업 완료 감사 · 청구 — 감사 인사 → 청구 금액(또는 결제 완료) → 안내장 링크 + 🏠 MY PAGE 줄 (2026-11-25)
+  function tkMsg(en){
+    const x=curCoupon();
+    if(!x)return en?'No invoice available to send.':'발송 가능한 인보이스가 없습니다.';
+    const nm=e.name||'',due=invDue(x),tot=invTotal(x),paid=(x.status==='paid')||due<=0.005;
+    const dd=/^\d{4}-\d{2}-\d{2}$/.test(String(x.due||''))?sDay(x.due,en):'';
+    const rp=(D.inspections||[]).some(r=>r&&r.invoice_id&&(String(r.invoice_id)===String(x.id||'')||String(r.invoice_id)===String(x.__id||''))&&r.cust_hidden!==true);
+    return en
+      ?(sHi(en,nm)+'\n\n🙏 *Thank you for choosing us today!*'+
+        (paid?'\n✅ Payment complete'+(tot>0.005?' · '+sRM(tot):''):'\n💳 Amount due '+sRM(due)+(dd?'\n🗓 Please pay by '+dd:''))+
+        '\n\n👉 Your invoice'+(rp?' and work report are':' is')+' ready.'+(paid?'':'\n      Bank details are in the link below.')+ctLk('🧾 Bill · invoice'+(rp?' · report':''),true))
+      :(sHi(en,nm)+'\n\n🙏 *오늘 서비스를 이용해 주셔서 감사합니다!*'+
+        (paid?'\n✅ 결제 완료'+(tot>0.005?' · '+sRM(tot):''):'\n💳 결제하실 금액 '+sRM(due)+(dd?'\n🗓 '+dd+'까지 결제 부탁드립니다':''))+
+        '\n\n👉 인보이스'+(rp?'와 작업 보고서를':'를')+' 보내드립니다.'+(paid?'':'\n      결제 계좌는 아래 링크에 있습니다.')+ctLk('🧾 청구 · 인보이스'+(rp?' · 보고서':''),false));
   }
   function awMsg(en){
     const x=curCoupon();
@@ -6394,6 +6428,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     if(state.tpl==='ins')return insMsg(en);
     if(state.tpl==='ct')return ctMsg(en);
     if(state.tpl==='aw')return awMsg(en);
+    if(state.tpl==='tk')return tkMsg(en);
     if(state.tpl==='qt')return qtMsg(en);
     if(state.tpl==='bill'){
       // 청구금액 = 청구중 + 연체 인보이스의 잔여 결제금액 합계
@@ -6984,6 +7019,9 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
       :(state.tpl==='jnt')
       ?{t:(en?'[Happy Home Care] Joint Membership Package':'[Happy Home Care] 공동계약 패키지 안내'),
         btn:(en?'View joint membership':'공동계약 안내 보기')}
+      :(state.tpl==='tk')
+      ?{t:(en?'[Happy Home Care] Thank you — your bill & documents':'[Happy Home Care] 작업 완료 감사 · 청구 안내'),
+        btn:(en?'View bill & invoice':'청구 · 인보이스 보기')}
       :(state.tpl==='ct')
       ?{t:(en?'[Happy Home Care] Thank you for joining Happy Membership':'[Happy Home Care] 해피 멤버십 가입 감사 안내'),
         btn:(en?'View thank-you note':'감사 안내 보기')}
