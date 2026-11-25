@@ -85,6 +85,18 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
 .pill.due{background:rgba(240,180,41,.18);color:#ffd77a;border:1px solid rgba(240,180,41,.45)}
 .pill.od{background:rgba(220,38,38,.2);color:#ffb4b4;border:1px solid rgba(248,113,113,.5)}
 .pill.ok{background:rgba(14,155,99,.2);color:#8ff0c4;border:1px solid rgba(52,211,153,.45)}
+/* 🎁 받은 혜택 — 금색 띠 (빛이 한 번 지나감) */
+.tk-sv{position:relative;overflow:hidden;margin-top:12px;display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:14px;color:var(--navy-950);
+  background:linear-gradient(135deg,#f8ebc0,var(--gold-500) 70%,#b8913d);box-shadow:inset 0 1px 0 rgba(255,255,255,.65),0 8px 18px -10px rgba(201,164,76,.9)}
+.tk-sv::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.55) 50%,transparent 65%);transform:translateX(-120%)}
+.tk-sv .ic{flex:none;width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:19px;background:rgba(255,255,255,.45)}
+.tk-sv b{display:block;font-size:16px;font-weight:900;letter-spacing:-.03em;line-height:1.3}
+.tk-sv b em{font-style:normal;white-space:nowrap}
+.tk-sv small{display:block;font-size:12.5px;font-weight:700;opacity:.78;line-height:1.35;overflow-wrap:anywhere}
+.tk-was{margin-left:8px;font-family:inherit;font-size:14px;font-weight:700;color:rgba(255,255,255,.5);text-decoration:line-through;text-decoration-color:rgba(255,255,255,.55);vertical-align:6px;white-space:nowrap}
+@media (prefers-reduced-motion:no-preference){.tk-sv{animation:tkSv .6s .5s var(--ease) both}.tk-sv::after{animation:tkShn 1.4s 1.1s ease-out both}}
+@keyframes tkSv{from{opacity:0;transform:translateY(8px) scale(.96)}}
+@keyframes tkShn{to{transform:translateX(120%)}}
 @media (prefers-reduced-motion:no-preference){.tk-bill{animation:tkIn .7s var(--ease) both}}
 @keyframes tkIn{from{opacity:0;transform:translateY(18px)}}
 /* 본문 */
@@ -242,6 +254,7 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
      crLn:'회원 적립금에서 차감되어 따로 결제하실 금액이 없습니다',
      docH:'바로 확인하기',docP:'지금 바로 열어 보시고, 나중에도 마이페이지에서 언제든 확인하세요.',
      dInv:'인보이스',dRep:'작업 보고서',dMy:'마이페이지',dMyS:'모든 문서 · 예약 · 적립금을 한곳에서',open:'열기',
+     svT:function(a){return '<em>'+a+'</em> 할인 혜택을 받으셨어요';},svD:'할인',svP:'해피포인트',svW:'정상가',
      payH:'결제 계좌',payP:'계좌번호를 복사해 은행 앱에서 이체해 주세요.',bankT:'계좌이체',kAcc:'계좌번호',kAmt:'이체하실 금액',cp:'복사',cpOk:'복사됨 ✓',
      tAcc:'계좌번호를 복사했습니다',tAmt:'금액을 복사했습니다',
      payNote:'이체하신 뒤 <b>영수증 사진을 왓츠앱(카톡)으로</b> 보내 주시면 확인 후 결제 완료 안내를 드립니다.',
@@ -267,6 +280,7 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
      crLn:'Deducted from your member credit — nothing else to pay',
      docH:'Open your documents',docP:'Open them now — and find them on MY PAGE anytime.',
      dInv:'Invoice',dRep:'Work report',dMy:'MY PAGE',dMyS:'All documents, bookings & points in one place',open:'Open',
+     svT:function(a){return 'You saved <em>'+a+'</em> today';},svD:'Discount',svP:'Happy Points',svW:'Regular price',
      payH:'Bank transfer',payP:'Copy the account number and transfer in your banking app.',bankT:'Bank transfer',kAcc:'Account number',kAmt:'Amount to transfer',cp:'Copy',cpOk:'Copied ✓',
      tAcc:'Account number copied',tAmt:'Amount copied',
      payNote:'After the transfer, please <b>send us the receipt on WhatsApp</b> and we will confirm your payment.',
@@ -311,7 +325,9 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
     var key=byCredit?'cr':(isPaid?'ok':(paid>0.005?'pt':(dd!==null&&dd<0?'od':(st==='overdue'?'od':'due'))));
     var gross=grand+disc+credit+voucher+pts;
     var pays=v.payments||[];var pdate=v.paidDate||(pays.length?(pays[pays.length-1].date||''):'');
-    return {grand:grand,paid:paid,due:due,credit:credit,voucher:voucher,pts:pts,disc:disc,gross:gross,key:key,dd:dd,pdate:pdate};
+    var save=Math.round((n(t.discTotal)+pts)*100)/100;   // 🎁 받은 혜택 = 할인 전체(품목 할인 포함) + 해피포인트
+    var dn=[];(v.adjusts||[]).forEach(function(a){if(a&&(a.sign===-1||a.sign==='-1')&&a.name&&a.name!=='할인'&&dn.indexOf(a.name)<0)dn.push(String(a.name));});
+    return {save:save,before:Math.round((grand+save)*100)/100,dn:dn,grand:grand,paid:paid,due:due,credit:credit,voucher:voucher,pts:pts,disc:disc,gross:gross,key:key,dd:dd,pdate:pdate};
   }
   var BANK0={bankName:'MAYBANK',accName:'HAPPY WORKS SERVICES SDN.BHD.',accNum:'562179535697'};   // pay.html 기본값과 같음
   function digits(v){return String(v||'').replace(/[^0-9A-Za-z]/g,'');}
@@ -352,6 +368,12 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
     var heroLb=M.key==='cr'?l.crLb:(M.key==='ok'?l.paidLb:l.toPay);
     var heroLn=M.key==='cr'?l.crLn:(M.key==='ok'?l.paidLn(M.pdate?fmtD(M.pdate):''):(M.dd!==null?l.dueLn(fmtD(v.due),M.dd):''));
     var amtTxt=rm(heroAmt).replace(/^RM\s/,'');
+    /* 🎁 받은 혜택 — 할인 · 해피포인트가 있을 때만 */
+    var svH='';
+    if(M.save>0.005){var dd=n(M.save)-M.pts,parts=[];
+      if(dd>0.005)parts.push((!en()&&M.dn.length?M.dn.slice(0,2).join(' · '):l.svD)+' '+rm(dd));
+      if(M.pts>0.005)parts.push(l.svP+' '+rm(M.pts));
+      svH='<div class="tk-sv"><span class="ic">🎁</span><div><b>'+l.svT(rm(M.save))+'</b><small>'+esc(parts.join(' · '))+'</small></div></div>';}
     /* 보고서 */
     var reps=S.rp;
     var docs='<a class="tk-doc inv" href="'+invUrl()+'"><div class="ic">🧾</div><div><b>'+l.dInv+'</b><small class="num">'+esc(v.id||'')+(v.id?' · ':'')+'<span style="white-space:nowrap">'+rm(M.grand)+'</span></small></div><span class="go">'+l.open+'</span></a>'+
@@ -387,7 +409,7 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
      '<header class="tk-hero">'+top()+
        '<div class="tk-kick">'+l.kick+'</div><h1 class="tk-h1">'+l.h1(nm)+'</h1><p class="tk-sub">'+l.sub+'</p>'+
        '<div class="tk-bill"><div class="r1"><span class="lb">'+heroLb+'</span><span class="pill '+stCls+'">'+(settled?'✓ ':'')+stTxt+'</span></div>'+
-         '<div class="am num"><small>RM</small>'+amtTxt+'</div>'+(heroLn?'<div class="ln">'+heroLn+'</div>':'')+'</div>'+
+         '<div class="am num"><small>RM</small>'+amtTxt+(M.save>0.005&&Math.abs(heroAmt-M.grand)<0.01?'<span class="tk-was" title="'+l.svW+'">'+rm(M.before)+'</span>':'')+'</div>'+svH+(heroLn?'<div class="ln">'+heroLn+'</div>':'')+'</div>'+
      '</header>'+
      '<section class="tk-sec"><div class="tk-sh"><h2>'+l.docH+'</h2><p>'+l.docP+'</p></div><div class="tk-docs">'+docs+'</div></section>'+
      payH+myH+
