@@ -53,6 +53,13 @@ export async function visitImg(env, t){
       dk: '점검(수리) 의뢰가 접수되었습니다 · 담당 직원이 확인 후 가능 일정을 안내드리겠습니다', de: 'Your repair request is received · we will let you know the available dates' };
     return null;
   }
+  // 📍 진행 안내장(/go) — 예약 확정 · 날짜 고르기는 날짜 그림, 의뢰 접수는 접수 그림 (2026-11-25)
+  if (/^\/go(\.html)?$/i.test(p)){
+    if (vi === 'bc' || vi === 'bq'){ const md = mdOf(q.get('vd')); if (md) return dateImg(vi === 'bc' ? 'dc' : 'db', md); }
+    if (vi === 'rq') return { img: 'received', w: '1200', h: '630', tk: '의뢰 접수 완료 · Request Received | Happy Home Care', te: 'Request Received | Happy Home Care',
+      dk: '의뢰가 접수되었습니다 · 담당 직원이 확인 후 가능 일정을 안내드리겠습니다', de: 'We received your request · we will send available dates shortly' };
+    return null;
+  }
   if (/^\/workpermit(\.html)?$/i.test(p) && vi === 'bc'){
     const md = mdOf(q.get('d')); return md ? dateImg('dc', md) : null;
   }

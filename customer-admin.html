@@ -1155,6 +1155,37 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
 }
 @media(prefers-reduced-motion:reduce){.dmb,.dsm{transition:none}.dmb:active,.dtb:active,.dts:active,.dcall a:active{transform:none}}
 
+/* 📍 진행 현황 카드 (2026-11-25) */
+.jb{margin:0 0 12px;background:#fff;border:2px solid var(--pri);border-radius:16px;overflow:hidden;box-shadow:0 10px 22px -14px rgba(37,99,235,.6)}
+.jb-h{display:flex;align-items:center;gap:8px;padding:11px 14px;background:var(--pri-bg)}
+.jb-h b{font-size:15px;font-weight:900}.jb-h .pill{margin-left:auto}
+.jb-bar{display:grid;grid-template-columns:repeat(4,1fr);padding:12px 8px 4px;position:relative}
+.jb-bar::before{content:'';position:absolute;left:12.5%;right:12.5%;top:25px;height:3px;background:#e3e8f0;border-radius:3px}
+.jb-bar>i{position:absolute;left:12.5%;top:25px;height:3px;background:var(--pri);border-radius:3px}
+.jb-bar>div{position:relative;text-align:center}
+.jb-bar span{width:28px;height:28px;margin:0 auto;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:900;background:#fff;border:2px solid #d5dbe6;color:var(--ink3)}
+.jb-bar .done span{background:var(--pri);border-color:var(--pri);color:#fff}
+.jb-bar .cur span{border-color:var(--pri);color:var(--pri);box-shadow:0 0 0 4px rgba(37,99,235,.18)}
+.jb-bar em{display:block;margin-top:4px;font-style:normal;font-size:11px;font-weight:800;color:var(--ink3)}
+.jb-bar .cur em,.jb-bar .done em{color:var(--ink)}
+.jb-now{margin:4px 12px 8px;padding:10px 12px;border-radius:12px;background:#fff7e6;border:1.5px solid #f6d58b}
+.jb-now b{display:block;font-size:12.5px;color:var(--warn)}
+.jb-now span{display:block;font-size:13.5px;font-weight:800;margin-top:1px}
+.jb-now small{display:block;font-size:12px;color:#8a6a2a;margin-top:2px}
+.jb-rs{padding:0 12px}
+.jb-r{display:grid;grid-template-columns:20px 1fr;gap:8px;padding:9px 0;border-top:1px solid #eef1f6}
+.jb-r:first-child{border-top:0}
+.jb-r .ic{font-size:14px;line-height:20px;text-align:center}
+.jb-r b{display:block;font-size:13.5px;font-weight:800}
+.jb-r small{display:block;font-size:12px;color:var(--ink3)}
+.jb-r.dim{opacity:.45}
+.jb-a{margin-top:7px;display:flex;flex-wrap:wrap;gap:6px}
+.jb-a .btn,.jb-lk .btn{font-size:12px;padding:7px 11px;text-decoration:none;display:inline-flex;align-items:center}
+.jb-a .btn.ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.jb .pill.blue{background:var(--pri-bg);color:var(--pri)}.jb .pill.gold{background:#fbf5e6;color:#8f6f28}
+.jb-send{margin:8px 12px 8px;display:flex;align-items:center;justify-content:center;width:calc(100% - 24px);min-height:46px;border:0;border-radius:12px;font:inherit;font-size:14.5px;font-weight:900;color:#fff;background:linear-gradient(135deg,#2563eb,#1e40af);cursor:pointer}
+.jb-lk{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:0 12px 12px;font-size:12px;color:var(--ink3)}
+.jb-lk span{margin-right:auto}
 </style>
 <script type="module" src="/hhc-auth.js"></script>
 <style>
@@ -3746,6 +3777,7 @@ window.openDrawer=function(idx){
       caLocRow(e,idx)+caPnRow(e,idx)+
       '<button type="button" class="dz-send" onclick="caSendModal('+idx+')"><span>📤</span>고객에게 발송하기<small>문서 · 결제 · 예약 · 안내</small></button>'+
     '</div>'+
+    caJourney(e,idx)+   // 📍 진행 현황 (2026-11-25)
     caGlance(e)+
     '<div class="dz-mk"><div class="dz-mk-t">새로 만들기</div><div class="dz-mk-g">'+
       '<button type="button" onclick="caMakeInvoice('+idx+')"><i>🧾</i>인보이스</button>'+
@@ -5839,6 +5871,16 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   }
   // 🙏 작업 완료 감사 · 청구 안내장 (/thanks) — 인보이스 + 연결된 「확정」 보고서 + MY PAGE (2026-11-25)
   //  · r= 종류:보고서ID — 이 인보이스에 연결된 보고서 중 고객에게 공개(확정)된 것만. 연결은 있는데 모두 확정 전이면 r=- (보고서 칸 없음)
+  // 📍 진행 안내장 주소 — j=r:의뢰ID | b:예약ID · c=고객 · vi/vd = 링크 미리보기 그림(접수 그림 · 날짜 그림)
+  function goLink(t){
+    let j='';
+    if(t==='rq'){const r=RQP[0];if(r&&r.__id)j='r:'+r.__id;}
+    else if(t==='bk'){const b=BKP[0];if(b&&b.__id)j='b:'+b.__id;}
+    else if(t==='bkc'){const b=BKCU[0]||BKC[0];if(b&&b.__id)j='b:'+b.__id;}
+    if(!j)return '';
+    const vd=caBkDate(t),vi=t==='rq'?'&vi=rq':(vd?'&vi='+(t==='bkc'?'bc':'bq')+'&vd='+vd:'');
+    return BASE+'/go?j='+j+(mid?'&c='+encodeURIComponent(mid):'')+(state.en?'&lang=en':'')+vi;
+  }
   function tkLink(){
     const x=curCoupon();if(!x)return BASE+'/my.html?c='+encodeURIComponent(mid);
     const iid=String(x.id||x.__id||''),keys=[iid,String(x.__id||'')].filter(Boolean);
@@ -5861,6 +5903,8 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     if(state.tpl==='jnt')return BASE+(state.en?'/joint-en.html?lang=en':'/joint');
     if(state.tpl==='trf')return trfLink();
     if(state.tpl==='tk')return tkLink();
+    // 📍 의뢰 접수 · 예약 신청 · 예약 확정 → 고객 진행 안내장(/go) 하나로 (2026-11-25)
+    if(state.tpl==='rq'||state.tpl==='bk'||state.tpl==='bkc'){const g=goLink(state.tpl);if(g)return g;}
     // 📑 계약서 발송 → 💌 패키지 가입 감사 안내장(/welcome) — 안내장 맨 아래 「계약서 보기」가 계약서 · 이용내역을 엽니다 (2026-11-24)
     if(state.tpl==='ct'){const _x=curCoupon();if(_x&&_x.__id)return BASE+'/welcome?k='+encodeURIComponent(_x.__id)+'&lang='+(state.en?'en':'ko')+(mid?'&c='+encodeURIComponent(mid):'');}   // c= 안내장의 🏠 MY PAGE 버튼
     if(state.tpl==='mem'){const nq=e.name?'name='+wpEnc(e.name):'';return BASE+(state.en?'/membership-en.html?lang=en'+(nq?'&'+nq:''):'/membership'+(nq?'?'+nq:''));}
@@ -6623,11 +6667,11 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     }
     if(state.tpl==='bkc'){
       // ✅ 예약 확정 안내 — 문구 원본은 /hhc-sendmsg.js (예약관리 확정 발송과 같은 문구)
-      return HHCMsg.bkc({name:nm,en:en,booking:BKCU[0]||BKC[0],wpBooking:BKCU[0]||null,link:dLink()});
+      return HHCMsg.bkc({name:nm,en:en,booking:BKCU[0]||BKC[0],wpBooking:BKCU[0]||null,link:dLink(),lb:en?'📍 Progress & details':'📍 진행 안내 · 예약 상세'});
     }
     if(state.tpl==='rq'){
       // 📥 의뢰 접수 안내 — 문구 원본은 /hhc-sendmsg.js (의뢰관리 접수완료 발송과 같은 문구)
-      return HHCMsg.rq({name:nm,en:en,req:RQP[0]||{},link:dLink()});
+      return HHCMsg.rq({name:nm,en:en,req:RQP[0]||{},link:dLink(),lb:en?'📍 Check progress':'📍 진행 안내 보기'});
     }
     if(state.tpl==='revisit'){
       return en
@@ -8229,6 +8273,82 @@ window.caMakeInspect=function(idx){
 };
 // 🗓️ 예약 등록(수기) — 예약관리 「새 예약 등록」을 고객정보가 채워지고 「바로 확정 등록」이 켜진 상태로 연다 (2026-11-23)
 //    예약일·시간·품목만 넣고 등록하면 예약목록·캘린더에 확정으로 들어갑니다. 위치는 고객관리 고객 위치를 자동 사용.
+// ══ 📍 진행 현황 카드 (2026-11-25) — 의뢰 → 예약 신청 → 예약 확정 → 작업 완료 · 지금 할 일 · 진행 안내 보내기 ══
+//  · 이 고객의 「지금 진행 중인 일」 하나 = 가장 최근 의뢰서와 가장 최근 예약 중 늦은 것 (의뢰에서 만든 예약이면 둘을 묶음)
+//  · 의뢰만 있고 14일 지남 · 작업 완료 후 14일 지남 · 대기 신청서 30일 지남 → 카드를 보이지 않음
+//  · 고객이 보는 화면 = /go?j=r:의뢰ID | b:예약ID (go.html) — 발송 창의 의뢰 접수 · 예약 신청 · 예약 확정 안내가 이 주소를 보냅니다
+function caJbMs(v){if(!v)return 0;if(typeof v.toMillis==='function')return v.toMillis();if(typeof v==='object'&&v.seconds!=null)return v.seconds*1000;const t=Date.parse(String(v));return isNaN(t)?0:t;}
+function caJbTm(v){const t=caJbMs(v);if(!t)return '';const d=new Date(t),p=n=>String(n).padStart(2,'0');return (d.getMonth()+1)+'/'+d.getDate()+' '+p(d.getHours())+':'+p(d.getMinutes());}
+function caJbBmin(v){const s=String(v==null?'':v).split('|')[0].trim();if(!s)return null;const pm=/오후|저녁|p\.?m\.?/i.test(s),am=/오전|아침|a\.?m\.?/i.test(s);
+  let m=s.match(/(\d{1,2})\s*[:시]\s*(\d{1,2})?/);if(!m){const d=s.match(/(\d{1,2})/);if(!d)return null;m=[null,d[1],null];}
+  let h=parseInt(m[1],10)||0;const mi=parseInt(m[2]||'0',10)||0;if(pm&&h<12)h+=12;if(am&&h===12)h=0;return h*60+mi;}
+function caJob(e){
+  const D=e.docs||{},now=Date.now(),DAY=864e5,td=caToday();
+  const rqs=(D.requests||[]).slice().sort((a,b)=>caJbMs(b.submitted_at||b.created_at)-caJbMs(a.submitted_at||a.created_at));
+  const bks=(D.bookings||[]).filter(b=>['waiting','booked','confirmed'].indexOf(String(b.status||''))>=0)
+    .sort((a,b)=>caJbMs(b.created_at||b.updated_at)-caJbMs(a.created_at||a.updated_at));
+  const R=rqs[0]||null,B=bks[0]||null;
+  let req=null,bk=null;
+  if(B&&(!R||caJbMs(B.created_at||B.updated_at)>=caJbMs(R.submitted_at||R.created_at)||R.converted_booking_id===B.__id)){bk=B;req=rqs.find(r=>r.converted_booking_id===B.__id)||null;}
+  else if(R){req=R;bk=R.converted_booking_id?(bks.find(b=>b.__id===R.converted_booking_id)||null):null;}
+  if(!req&&!bk)return null;
+  let st='rq',when=caJbMs(req&&(req.submitted_at||req.created_at));
+  if(bk){const s=String(bk.status||'');
+    if(s==='confirmed'){const d=String(bk.booking_date||''),nm=new Date(),mn=nm.getHours()*60+nm.getMinutes(),bm=caJbBmin(bk.booking_time);
+      st=(d&&(d<td||(d===td&&bm!=null&&bm+180<=mn)))?'done':'bkc';when=caJbMs(bk.confirmed_at||bk.updated_at||bk.created_at);}
+    else if(s==='booked'){st='bkd';when=caJbMs(bk.booked_at||bk.updated_at||bk.created_at);}
+    else{st='bk';when=caJbMs(bk.unconfirmed_at||bk.created_at);}}
+  // 오래된 일은 카드에서 뺌
+  if(st==='rq'&&when&&now-when>14*DAY)return null;
+  if(st==='bk'&&when&&now-when>30*DAY)return null;
+  if(st==='done'){const d=Date.parse(String(bk.booking_date||'')+'T12:00:00');if(d&&now-d>14*DAY)return null;}
+  // 작업 완료 → 방문일 이후 인보이스
+  let inv=null;
+  if(st==='done'){const bd=String(bk.booking_date||'');inv=(D.invoices||[]).filter(x=>String(x.date||'')>=bd).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))[0]||null;}
+  const j=bk?('b:'+bk.__id):('r:'+req.__id);
+  return {st,req,bk,inv,j};
+}
+window.caJobUrl=function(idx){const e=entries[idx],J=e&&caJob(e);if(!J)return '';const mid=e.master&&e.master.__id;
+  const en=((J.bk&&J.bk.customer_lang)||(J.req&&J.req.lang))==='en';
+  return BASE+'/go?j='+J.j+(mid?'&c='+encodeURIComponent(mid):'')+(en?'&lang=en':'');};
+window.caJobCopy=async function(idx){const u=caJobUrl(idx);if(!u)return;let s=u;try{s=await hhcShortUrl(u);}catch(_){}
+  try{await navigator.clipboard.writeText(s);toast('🔗 진행 안내 주소를 복사했습니다');}catch(_){prompt('진행 안내 주소',s);}};
+// 📅 예약 신청서 만들기 — 의뢰관리 「예약전환」과 같은 방식(의뢰 품목 · 위치 · 언어를 담아 예약관리 새 예약으로)
+window.caJobToBooking=function(idx){const e=entries[idx],J=e&&caJob(e),r=J&&J.req;if(!r){caMakeBooking(idx);return;}
+  const d={condo:r.condo||'',condo_name:r.condo_name||'',condo_unit:r.condo_unit||'',phone:r.phone||'',lang:r.lang||'ko',remarks:r.remarks||'',items:r.items||'[]',items_struct:r.items_struct||'',fromRequest:r.__id,loc:(r.loc&&isFinite(r.loc.lat))?r.loc:null};
+  try{localStorage.setItem('hhc_transfer_booking',JSON.stringify(d));}catch(_){}
+  window.open('booking-admin.html?from=request','_blank');
+  toast('📅 예약관리 새 예약으로 이동 · 의뢰 품목 반영 — 후보 날짜를 정해 저장해 주세요');};
+function caJourney(e,idx){
+  const J=caJob(e);if(!J)return '';
+  const st=J.st,I={rq:0,bk:1,bkd:1,bkc:2,done:3}[st],r=J.req,b=J.bk||{};
+  const lab={rq:['warn','새 의뢰'],bk:['blue','고객 선택 대기'],bkd:['warn','확정 필요'],bkc:['ok','방문 예정'],done:['gold','작업 완료']}[st];
+  const wd=x=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(x||''));if(!m)return String(x||'');const w='일월화수목금토'[new Date(+m[1],+m[2]-1,+m[3]).getDay()];return (+m[2])+'/'+(+m[3])+'('+w+')';};
+  const tt=t=>{t=String(t||'');return t.indexOf('|')>=0?t.split('|')[0]:t;};
+  const when=b.booking_date?wd(b.booking_date)+' '+tt(b.booking_time):'';
+  let ds=[];try{ds=JSON.parse(b.schedule_dates||'[]');}catch(_){}
+  const todo={rq:['의뢰 확인 후 예약 신청서 만들기','후보 날짜를 정해 저장하면 ②단계로 넘어갑니다'],
+    bk:['고객 날짜 선택 기다리는 중','고객이 고르면 관리자 앱 알림이 오고, 이 카드가 「확정하기」로 바뀝니다'],
+    bkd:['고객이 '+when+' 신청 — 확정해 주세요','확정하면 발송 창에 「예약 확정」 안내가 자동으로 골라집니다'],
+    bkc:[when+' 방문 — 작업 후 인보이스 작성','인보이스를 확정하면 「작업완료 감사·청구」를 보낼 수 있습니다'],
+    done:[J.inv?'감사 · 청구 안내 보내기':'방문 끝 — 인보이스 작성',J.inv?'결제가 확인되면 인보이스를 「결제완료」로 바꿔 주세요':'인보이스를 작성 · 확정하면 감사·청구 안내를 보낼 수 있습니다']}[st];
+  const lk=(coll,x,t,lb,cls)=>x?'<a class="btn'+(cls?' '+cls:'')+'" target="_blank" rel="noopener" data-t="'+esc(t)+'" href="'+window.caEditUrl(coll,x)+'" onclick="return caView(this.href,this.dataset.t,event)">'+lb+'</a>':'';
+  const row=(ic,ti,sub,on,acts)=>'<div class="jb-r'+(on?'':' dim')+'"><span class="ic">'+ic+'</span><div><b>'+ti+'</b><small>'+sub+'</small>'+(acts?'<div class="jb-a">'+acts+'</div>':'')+'</div></div>';
+  let h='<div class="jb"><div class="jb-h"><b>📍 진행 현황</b><span class="pill '+lab[0]+'">'+lab[1]+'</span></div>'+
+    '<div class="jb-bar"><i style="width:'+(Math.min(I,3)/3*75)+'%"></i>'+['의뢰','예약 신청','예약 확정','작업 완료'].map((t,k)=>{const dn=k<I||(st==='done'&&k===3);return '<div class="'+(dn?'done':k===I?'cur':'')+'"><span>'+(dn?'✓':k+1)+'</span><em>'+t+'</em></div>';}).join('')+'</div>'+
+    '<div class="jb-now"><b>👉 지금 할 일</b><span>'+esc(todo[0])+'</span><small>'+esc(todo[1])+'</small></div><div class="jb-rs">';
+  h+=row('📥',r?'의뢰 접수':'전화 · 메시지 접수',r?esc(caJbTm(r.submitted_at||r.created_at)+' · '+String(r.condo||'')):'의뢰서 없이 예약으로 시작',true,
+    (r?lk('requests',r,'📥 의뢰서','의뢰서 보기'):'')+(st==='rq'?'<button type="button" class="btn p" onclick="caJobToBooking('+idx+')">📅 예약 신청서 만들기</button>':''));
+  h+=row('📅','예약 신청',st==='rq'?'아직 만들지 않음':st==='bk'?esc(caJbTm(b.created_at)+' 만듦 · 후보 '+ds.length+'일 · 고객 선택 대기'):esc('고객 신청 · '+when),I>=1,
+    (st==='bk'?lk('bookings',J.bk,'🛎️ 예약','예약관리에서 보기'):'')+(st==='bkd'?lk('bookings',J.bk,'🛎️ 예약 확정','✅ 예약관리에서 확정하기','ok'):''));
+  h+=row('✅','예약 확정',I>=2?esc(when+(b.confirmed_at?' · '+caJbTm(b.confirmed_at)+' 확정':'')):'아직',I>=2,
+    st==='bkc'?'<button type="button" class="btn p" onclick="caMakeInvoice('+idx+')">🧾 인보이스 작성</button>':'');
+  h+=row('🧾','작업 완료',st==='done'?(J.inv?esc((J.inv.id||'')+' · '+fmtRM(invTotal(J.inv))+(J.inv.cust_hidden===true?' · 🔒 확정 전':'')):'인보이스 아직 없음'):'아직',st==='done',
+    st==='done'?(J.inv?lk('invoices',J.inv,'🧾 인보이스','인보이스 열기'):'<button type="button" class="btn p" onclick="caMakeInvoice('+idx+')">🧾 인보이스 작성</button>'):'');
+  h+='</div><button type="button" class="jb-send" onclick="caSendModal('+idx+')">📤 진행 안내 보내기</button>'+
+    '<div class="jb-lk"><span>🔗 고객 진행 안내장</span><button type="button" class="btn" onclick="caJobCopy('+idx+')">주소 복사</button><a class="btn" href="'+esc(caJobUrl(idx))+'" target="_blank" rel="noopener" data-t="📍 진행 안내장 (고객 화면)" onclick="return caView(this.href,this.dataset.t,event)">고객 화면 보기</a></div></div>';
+  return h;
+}
 window.caMakeBooking=function(idx){
   const e=entries[idx];if(!e)return;
   const last=(e.docs.bookings||[]).concat(e.docs.requests||[])

@@ -197,7 +197,7 @@ function whenOf(d,t,en){return bkcWhen({booking_date:d,booking_time:t},en);}
 function lk(label,url){return label+' 👉 '+url;}
 
 // 📥 의뢰 접수 안내
-//   o.name : 고객명 · o.req : requests 문서({items,...}) · o.en : 영문 여부 · o.link : 마이페이지 주소(짧은 주소)
+//   o.name : 고객명 · o.req : requests 문서({items,...}) · o.en : 영문 여부 · o.link : 마이페이지 주소(짧은 주소) · o.lb : 링크 이름(없으면 「📱 마이페이지」, 2026-11-25 진행 안내)
 function rq(o){
   var en=!!o.en,nm=o.name||'',r=o.req||{};
   var ri=rqItemLines2(r,en);                  // 품목 한 줄에 하나 (앞에 품목 아이콘)
@@ -205,9 +205,9 @@ function rq(o){
   var il=items.length?(items.join('\n')+'\n'):'';
   return en
     ?(sHi(en,nm)+'\n\n📥 *Your request has been received*\n'+il+
-      '\n👉 Our staff will check and let you know the available dates.\n      (Nothing else needed from you)\n\n'+lk('📱 My Page',o.link)+'\n'+SIG)
+      '\n👉 Our staff will check and let you know the available dates.\n      (Nothing else needed from you)\n\n'+lk(o.lb||'📱 My Page',o.link)+'\n'+SIG)
     :(sHi(en,nm)+'\n\n📥 *의뢰가 접수되었습니다*\n'+il+
-      '\n👉 담당 직원이 확인 후 가능 일정을 안내드리겠습니다.\n      (따로 하실 일은 없습니다)\n\n'+lk('📱 마이페이지',o.link)+'\n'+SIG);
+      '\n👉 담당 직원이 확인 후 가능 일정을 안내드리겠습니다.\n      (따로 하실 일은 없습니다)\n\n'+lk(o.lb||'📱 마이페이지',o.link)+'\n'+SIG);
 }
 // ✅ 예약 확정 안내 — 방문일시를 본문에 넣고, 상세는 마이페이지에서 확인하도록 짧게 유지
 //   o.name · o.en · o.link(마이페이지 주소)
@@ -225,10 +225,10 @@ function bkc(o){
   return en
     ?(sHi(en,nm)+'\n\n✅ *Booking confirmed*\n'+(bkcW?'📅 '+bkcW+'\n':'')+bkcL+
       '\n📌 *Work Permit registration required*\nPlease register our visit with management before we arrive.\n'+
-      lk('🪪 Registration details',bcMark(wpLink(wb,nm,true)))+'\n\n'+lk('📱 Booking details',o.link)+'\n'+SIG)
+      lk('🪪 Registration details',bcMark(wpLink(wb,nm,true)))+'\n\n'+lk(o.lb||'📱 Booking details',o.link)+'\n'+SIG)
     :(sHi(en,nm)+'\n\n✅ *예약이 확정되었습니다*\n'+(bkcW?'📅 '+bkcW+'\n':'')+bkcL+
       '\n📌 *작업방문등록 필수 요망*\n방문 전 매니지먼트에 작업방문등록(Work Permit)을 꼭 완료해 주세요.\n'+
-      lk('🪪 등록에 필요한 정보',bcMark(wpLink(wb,nm,false)))+'\n\n'+lk('📱 예약 상세',o.link)+'\n'+SIG);
+      lk('🪪 등록에 필요한 정보',bcMark(wpLink(wb,nm,false)))+'\n\n'+lk(o.lb||'📱 예약 상세',o.link)+'\n'+SIG);
 }
 
 // 💛 예약 확정 카카오 카드 전용 짧은 문구 (2026-11-23) — 왓츠앱·복사 문구는 그대로, 카톡 카드만

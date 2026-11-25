@@ -35,6 +35,7 @@ const DOC = {
   'coupon': ['voucher', '상품권 · 할인권', 'Gift voucher'], 'quote': ['quote', '견적서', 'Quotation'],
   'admin': ['contract', '계약서 · 이용내역', 'Contract & usage'], 'customer': ['contract', '계약서 · 이용내역', 'Contract & usage'],
   'booking': ['booking', '예약서', 'Booking'], 'hhc-invoice': ['invoice', '인보이스', 'Invoice'], 'inv': ['invoice', '인보이스', 'Invoice'],
+  'go': ['received', '진행 안내', 'Progress'],   // 📍 진행 안내장 (2026-11-25)
   'thanks': ['thanks', '작업 완료 감사 안내', 'Thank you for your service'],   // 🙏 작업 완료 감사 · 청구 안내장 (2026-11-25)
   'repair': ['repair', '방문 결과 보고서', 'Service visit report'],
   'my': ['my', 'MY PAGE', 'MY PAGE'], 'my-en': ['my', 'MY PAGE', 'MY PAGE'], 'mypage': ['my', 'MY PAGE', 'MY PAGE'],
@@ -54,7 +55,7 @@ async function docPreview(context, url, key){
   if (base === 'my'){ const f = q.get('f') || ''; img = MY_F[f] || 'my'; if (f === 'rw' && PK[q.get('pk')]) img = PK[q.get('pk')]; const VI = { '1':'remind', tm:'remind-tmr', td:'remind-today', mv:'onway', dt:'delay', dw:'delayw', ar:'arrive' }; if ((f === 'bk' || f === 'mm') && VI[q.get('vi')]) img = VI[q.get('vi')]; if (f === 'ct' && q.get('vi') === 'aw') img = 'aftwork'; if ((f === 'bk' || f === 'mm') && q.get('vi') === 'pd') img = /^(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(q.get('vd') || '') ? 'd/' + q.get('vd') : 'remind'; }
   // 📅 예약 확정·신청 날짜 / ⏱ 00분 후 도착 / ⚡ 지금 방문 / 🔧 점검 접수 — 예약서(id) 조회는 미리보기 로봇일 때만 (고객 화면은 느려지지 않게)
   let W = '1200', H = '630';
-  if (base === 'my' || key === 'workpermit' || key === 'booking'){
+  if (base === 'my' || key === 'workpermit' || key === 'booking' || key === 'go'){
     const bot = /whatsapp|facebookexternalhit|facebot|kakaotalk-scrap|kakao|telegram|twitterbot|slackbot|discordbot|linkedinbot|line-poker|skypeuri|googlebot|bingbot/i.test(context.request.headers.get('user-agent') || '');
     if (key !== 'booking' || bot){ let vx = null; try { vx = await visitImg(key === 'booking' ? context.env : null, url); } catch (_) {}
       if (vx){ img = vx.img; W = vx.w; H = vx.h; } }
