@@ -3245,6 +3245,13 @@ window.caVisitOpen=function(tab){
   VL.open=true;VL.tab=VL_K[tab]?tab:(VL_ORD.find(k=>all.some(x=>x.k===k))||'tm');VL.off=new Set();
   vlPaint();
 };
+// 🧪 관리자 「보낼 차례」 알림 시험 — 지금 숫자로 오전(내일·오늘) · 오후(7일·3일 전) 알림을 한 번씩 보냄 (2026-11-25)
+window.caVisitTestPush=async function(){
+  if(!confirm('관리자 휴대폰으로 시험 알림 2개(오전 8시용 · 오후 5시용)를 지금 보낼까요?'))return;
+  const go=slot=>fetch('/api/notify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'visit',slot,test:true})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  const a=await go('am'),b=await go('pm');
+  toast((a.ok&&b.ok)?'🧪 시험 알림 2개를 보냈습니다 · 관리자 기기 '+(a.sent!=null?a.sent+'대':'')+' 확인해 주세요':'시험 알림 실패: '+(a.error||b.error||''));
+};
 window.caVisitClose=function(){VL.open=false;const o=document.getElementById('vlp');if(o)o.remove();};
 window.caVisitTab=function(k){VL.tab=k;vlPaint();};
 window.caVisitChSet=function(c){VL.ch=c;vlPaint();};
@@ -3271,7 +3278,7 @@ function vlPaint(){
         '<span class="t"><b>'+esc(x.e.name||b.customer_name||'')+'</b><small>'+esc(vlWd(b.booking_date)+' '+vlTime(b.booking_time))+(b.booking_items?'<br>'+esc(String(b.booking_items).split(/\n/)[0].slice(0,60)):'')+'</small></span>'+
         '<span class="g"><i class="d">'+D.ic+' '+(VL.tab==='td'?'당일':VL.tab==='tm'?'내일':'사전')+'</i>'+(au?'<i class="ap">🔔 자동 보냄</i>':'')+'<i class="en">'+(vlEn(b)?'EN':'한글')+'</i>'+(pn(x.e.phone||b.customer_phone)||K?'':'<i class="np">연락처 없음</i>')+'</span></label>';}).join('');
   }
-  h+='</div><div class="vlp-ft"><button type="button" class="'+(K?'kk':'')+'" '+(on.length?'':'disabled ')+'onclick="caVisitRun(\'sel\')">'+(K?'💛 카카오톡 차례로 보내기 · ':'💬 WhatsApp 차례로 보내기 · ')+on.length+'명</button><small>한 명씩 차례로 · 보내면 진행 현황에 기록되고 목록에서 빠집니다</small></div></div>';
+  h+='</div><div class="vlp-ft"><button type="button" class="'+(K?'kk':'')+'" '+(on.length?'':'disabled ')+'onclick="caVisitRun(\'sel\')">'+(K?'💛 카카오톡 차례로 보내기 · ':'💬 WhatsApp 차례로 보내기 · ')+on.length+'명</button><small>한 명씩 차례로 · 보내면 진행 현황에 기록되고 목록에서 빠집니다 · <a href="#" onclick="caVisitTestPush();return false" style="color:#2563EB;font-weight:800">🧪 관리자 알림 시험</a></small></div></div>';
   o.innerHTML=h;
 }
 // ── 차례로 보내기 (「청소 후 3개월」 발송 창과 같은 모양 · ccq 스타일) ──

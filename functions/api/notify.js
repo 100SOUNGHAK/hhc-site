@@ -26,15 +26,15 @@ function rateLimited(req){
 export async function onRequestPost(context){
   if(!originAllowed(context.request))return json({ok:false,error:'forbidden'},403);
   if(rateLimited(context.request))return json({ok:false,error:'too many requests'},429);
-  let type='',slot='';
+  let type='',slot='',test=false;
   try{
     const b=await context.request.json();
     if(b&&b.type==='booking')type=b.edit?'booking_edit':'booking';
     else if(b&&b.type==='request')type='request';
-    else if(b&&b.type==='visit'){type='visit';slot=b.slot==='pm'?'pm':'am';}
+    else if(b&&b.type==='visit'){type='visit';slot=b.slot==='pm'?'pm':'am';test=b.test===true;}
   }catch(e){}
   if(!type)return json({ok:false,error:'bad request'},400);
-  if(type==='visit')return visitPush(context.env,slot);
+  if(type==='visit')return visitPush(context.env,slot,test);
   const r=await sendAdminPush(context.env,type);
   return json(r,r.ok?200:500);
 }
@@ -44,10 +44,11 @@ export async function onRequestPost(context){
 //    · 확정(confirmed) 예약만 · 이미 보낸 단계(visit_sent.tmr|today|d7|d3)는 빼고 셈 · 0명이면 보내지 않음
 //    · 누르면 총괄 고객관리 「🔔 방문 안내 보낼 고객」 목록이 그 탭으로 열림 (customer-admin.html?vl=)
 //    · 세는 규칙은 customer-admin.html caVisitDue() 와 같음
-async function visitPush(env,slot){
+//    test:true = 🧪 시험 알림 (2026-11-25) — 시간 제한 없이 지금 숫자로 보내고, 0명이어도 보냄 · 제목에 [시험]
+async function visitPush(env,slot,test){
   const my=new Date(Date.now()+8*3600e3);
   const h=my.getUTCHours();
-  if(slot==='am'?(h<7||h>10):(h<16||h>19))return json({ok:false,error:'not now'},409);
+  if(!test&&(slot==='am'?(h<7||h>10):(h<16||h>19)))return json({ok:false,error:'not now'},409);
   const ds=n=>{const t=new Date(my.getTime()+n*86400e3);return t.getUTCFullYear()+'-'+String(t.getUTCMonth()+1).padStart(2,'0')+'-'+String(t.getUTCDate()).padStart(2,'0');};
   const cnt=async(days,key,also)=>{
     const rows=await Promise.all(days.map(n=>queryEq(env,'bookings','booking_date',ds(n),300).catch(()=>[])));
@@ -63,8 +64,9 @@ async function visitPush(env,slot){
     if(d7)parts.push('📅 7일 전 '+d7+'명');if(d3)parts.push('📅 3일 전 '+d3+'명');
     tab=d7?'d7':'d3';
   }
-  if(!parts.length)return json({ok:true,skipped:'nobody',slot});
-  const r=await sendAdminPush(env,'request',{title:'🔔 방문 안내 보낼 차례',body:parts.join(' · ')+' — 눌러서 차례로 보내세요',url:'/customer-admin.html?vl='+tab,tab:'customers'});
+  if(!parts.length&&!test)return json({ok:true,skipped:'nobody',slot});
+  if(!parts.length)parts.push(slot==='am'?'내일 · 오늘 보낼 고객 0명':'7일 전 · 3일 전 보낼 고객 0명');
+  const r=await sendAdminPush(env,'request',{title:(test?'🧪 [시험] ':'')+'🔔 방문 안내 보낼 차례',body:parts.join(' · ')+' — 눌러서 차례로 보내세요',url:'/customer-admin.html?vl='+tab,tab:'customers'});
   return json(Object.assign({slot,parts},r),r.ok?200:500);
 }
 
