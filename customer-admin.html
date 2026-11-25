@@ -2030,7 +2030,7 @@ const CA_KK_IMG={basic:'og-my.jpg',bill:'og-invoice.jpg',rebill:'og-invoice.jpg'
   bk:'og-booking.jpg',bkc:'og-confirmed.jpg',revisit:'og-booking.jpg',rq:'og-received.jpg',mmv:'og-confirmed.jpg',install:'og-app.jpg',
   rqf:'og-reqform.jpg',care3:'og-care.jpg',care6:'og-care.jpg',wp:'og-permit.jpg',evi:'og-voucher.jpg',pti:'og-points.jpg',
   pacc:'og-pay.jpg',vfee:'og-visitfee.jpg',ipr:'og-received-repair.jpg',ipv:'og-confirmed.jpg',fee:'og-fees.jpg',   // 점검 접수·점검 방문·추가비용 (2026-11-21)
-  mvo:'og-move.jpg',mem:'og-mem.jpg',jnt:'og-joint.jpg',trf:'og-contract.jpg',tk:'og-invoice.jpg'};   // 🙏 작업 완료 감사 · 청구 (2026-11-25)
+  mvo:'og-move.jpg',mem:'og-mem.jpg',jnt:'og-joint.jpg',trf:'og-contract.jpg',tk:'og-thanks.jpg'};   // 🙏 작업 완료 감사 · 청구 (2026-11-25)
 // 카드 제목 = 문구의 첫 *굵은 글씨* 줄(없으면 인사 다음 첫 줄) · 설명 = 그 아래 안내 줄(주소·서명 제외)
 function caKkAuto(m){
   const lead=x=>String(x||'').replace(/\*([^*\n]+)\*/g,'$1').replace(/^[\s -⯿☀-➿️‍\u{1F000}-\u{1FAFF}·•:\-–—]+/u,'').replace(/\s+/g,' ').trim();
@@ -2047,7 +2047,7 @@ function caKkAuto(m){
 // 영어 발송은 영어 그림 — og-*-en.jpg (안내장 그림 멤버십·공동계약·이사 안내도 영어판 있음) (2026-11-21)
 // 💎 적립 안내는 적립 이름(문구)에 따라 — 불편 보상 · 지인 추천 보상 · 리뷰 감사 (2026-11-21)
 function caPtKind(m){const s=String(m||'');return /사과|불편|apolog/i.test(s)?'sorry':/추천|referr/i.test(s)?'referral':/리뷰|review/i.test(s)?'review':'';}
-const CA_KK_EN=/^og-(pt-sorry|pt-referral|pt-review|quote|invoice|contract|booking|my|voucher|pay|permit|visitfee|points|svcreport|received|paid|care|app|repair|reqform|confirmed|moveout|joint|membership|mem|move|fees|aftwork|received-repair)\.(jpg|png)$/;
+const CA_KK_EN=/^og-(pt-sorry|pt-referral|pt-review|quote|invoice|contract|booking|my|voucher|pay|permit|visitfee|points|svcreport|received|paid|care|app|repair|reqform|confirmed|moveout|joint|membership|mem|move|fees|aftwork|received-repair|thanks)\.(jpg|png)$/;
 function caKkImg(tpl,m,en,hint){   // hint = 적립 안내의 적립 이름 (그림 고르기에만 씀)
   let f=CA_KK_IMG[tpl]||((typeof GDS!=='undefined'&&GDS[tpl])?'og-ac-guides.jpg':'');
   const pk=tpl==='cmp'?caPtKind(m+' '+String(hint||'')):'';
@@ -6152,30 +6152,6 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
         '\n\n👉 계약 내용과 남은 금액을 확인해 주세요.'+ctLk('💌 감사 안내 · 계약서 보기',false));
   }
   // 🙏 작업 완료 감사 · 청구 — 감사 인사 → 청구 금액(또는 결제 완료) → 안내장 링크 + 🏠 MY PAGE 줄 (2026-11-25)
-  // 한국어 발송은 「🏠 마이페이지 열기」(카톡 카드 두 번째 버튼도 한글) — 계약서 발송(ctLk)은 그대로
-  function tkLk(lb,en){if(!mid)return sLk(lb);const my=BASE+(en?'/my-en.html?c=':'/my.html?c=')+encodeURIComponent(mid)+'&lang='+(en?'en':'ko');
-    return '\n\n'+lb+' 👉 '+dLink()+'\n'+(en?'🏠 Open MY PAGE':'🏠 마이페이지 열기')+' 👉 '+(_hhcShortCache[my]||my)+'\n'+SIG;}
-  // 💰 적립금 차감 금액 · 연결 계약서 (인보이스의 contract_id → 없으면 이용 중인 계약 1건)
-  function tkCr(x){if(!x)return 0;const t=x._t||{};return parseFloat(t.credit!=null?t.credit:x.creditUse)||0;}
-  function tkCt(x){const cs=D.contracts||[];const id=String((x&&x.contract_id)||'');
-    return (id&&cs.find(c=>c.__id===id))||cs.find(c=>c.status!=='ended')||null;}
-  // 결제 기한이 지난 인보이스 — 감사 인사 대신 정중한 결제 확인 요청으로 (2026-11-25)
-  function tkOd(x){if(!x)return false;const paid=(x.status==='paid')||invDue(x)<=0.005;
-    return !paid&&(x.status==='overdue'||(/^\d{4}-\d{2}-\d{2}$/.test(String(x.due||''))&&String(x.due)<_tdy));}
-  // 💛 카카오톡 카드 본문 (2026-11-25 대표님 지정 문구) — 카드 제목은 메시지의 굵은 첫 줄
-  function tkKkDesc(en){
-    const x=curCoupon();if(!x)return '';
-    const due=invDue(x),tot=invTotal(x),paid=(x.status==='paid')||due<=0.005,cr=tkCr(x),od=tkOd(x);
-    const rp=(D.inspections||[]).some(r=>r&&r.invoice_id&&(String(r.invoice_id)===String(x.id||'')||String(r.invoice_id)===String(x.__id||''))&&r.cust_hidden!==true);
-    const my=en?'📱 Check them anytime on MY PAGE':'📱 마이페이지에서 언제든 확인하세요';
-    if(cr>0.005&&tot<=0.005){const c=tkCt(x),rem=c?ctBal(c).remain:null;
-      return (rem!=null?(en?'💰 Remaining credit ':'💰 남은 적립금 ')+sRM(rem)+'\n':'')+
-        (en?'📑 Invoice'+(rp?' · Report':'')+' · Usage statement':'📑 인보이스'+(rp?' · 작업 보고서':'')+' · 이용내역서')+'\n'+my;}
-    if(od)return (en?'💳 Amount due ':'💳 결제하실 금액 ')+sRM(due)+'\n'+
-      (en?'🙏 Already paid? Just send us the receipt':'🙏 이미 이체하셨다면 영수증만 보내 주세요');
-    if(paid)return (en?'✅ Paid · ':'✅ 결제 완료 · ')+sRM(tot)+'\n'+my;
-    return (en?'💳 Amount due ':'💳 결제하실 금액 ')+sRM(due)+'\n'+my;
-  }
   function tkMsg(en){
     const x=curCoupon();
     if(!x)return en?'No invoice available to send.':'발송 가능한 인보이스가 없습니다.';
@@ -6209,7 +6185,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     // 링크 이름 — 안내장에 실제로 있는 것만
     const lb=en?('📑 Invoice'+(paid?'':' · Bank details')+(rp?' · Report':'')+(cr>0.005?' · Usage':''))
                :('📑 인보이스'+(paid?'':' · 결제 계좌')+(rp?' · 작업 보고서':'')+(cr>0.005?' · 이용내역서':''));
-    return sHi(en,nm)+'\n\n'+L.join('\n')+tkLk(lb,en);
+    return sHi(en,nm)+'\n\n'+L.join('\n')+sLk(lb);   // 링크는 안내장 하나만 — 마이페이지는 안내장 안에서 열도록 (2026-11-25)
   }
   function awMsg(en){
     const x=curCoupon();

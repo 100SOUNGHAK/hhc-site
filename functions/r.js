@@ -47,9 +47,9 @@ const TYPES = [
   [/^\/visit-fee(\.html)?$/i, 'visitfee',
     '출장점검 비용 확인 | Happy Home Care', 'On-site Check Fee | Happy Home Care',
     '우리 집 출장점검 비용, 주소로 바로 확인', 'Enter your address to see your on-site check fee'],
-  [/^\/thanks(\.html)?$/i, 'invoice',   // 🙏 작업 완료 감사 · 청구 안내장 (2026-11-25)
+  [/^\/thanks(\.html)?$/i, 'thanks',   // 🙏 작업 완료 감사 · 청구 안내장 (2026-11-25)
     '작업 완료 감사 안내 | Happy Home Care', 'Thank You | Happy Home Care',
-    '오늘 서비스 감사합니다 · 청구 금액 · 인보이스 · 보고서 확인', 'Thank you for today · your bill, invoice & report'],
+    '서비스 이용 감사합니다 · 청구 금액 · 인보이스 · 보고서 확인', 'Thank you · your bill, invoice & report'],
   [/^\/points(\.html)?$/i, 'points',
     '해피포인트 · Happy Point | Happy Home Care', 'Happy Point | Happy Home Care',
     '이용할수록 쌓이는 해피포인트', 'Earn points every time you use our service'],

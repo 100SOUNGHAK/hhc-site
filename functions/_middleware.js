@@ -35,7 +35,7 @@ const DOC = {
   'coupon': ['voucher', '상품권 · 할인권', 'Gift voucher'], 'quote': ['quote', '견적서', 'Quotation'],
   'admin': ['contract', '계약서 · 이용내역', 'Contract & usage'], 'customer': ['contract', '계약서 · 이용내역', 'Contract & usage'],
   'booking': ['booking', '예약서', 'Booking'], 'hhc-invoice': ['invoice', '인보이스', 'Invoice'], 'inv': ['invoice', '인보이스', 'Invoice'],
-  'thanks': ['invoice', '작업 완료 감사 안내', 'Thank you for your service'],   // 🙏 작업 완료 감사 · 청구 안내장 (2026-11-25)
+  'thanks': ['thanks', '작업 완료 감사 안내', 'Thank you for your service'],   // 🙏 작업 완료 감사 · 청구 안내장 (2026-11-25)
   'repair': ['repair', '방문 결과 보고서', 'Service visit report'],
   'my': ['my', 'MY PAGE', 'MY PAGE'], 'my-en': ['my', 'MY PAGE', 'MY PAGE'], 'mypage': ['my', 'MY PAGE', 'MY PAGE'],
 };
