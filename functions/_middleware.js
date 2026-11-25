@@ -61,12 +61,14 @@ async function docPreview(context, url, key){
   }
   const src = `${SITE}/og-${img}${en ? '-en' : ''}.jpg`, title = (en ? te : tk) + ' | Happy Home Care';
   let hasTitle = false, hasSite = false;
+  // 🙏 감사 안내장(/thanks) — 발송 창이 붙인 카드 문구(pt · pd)를 미리보기 제목 · 설명으로 (2026-11-25)
+  const pt = key === 'thanks' ? String(q.get('pt') || '').slice(0, 80) : '', pd = pt ? String(q.get('pd') || '').slice(0, 160) : '';
   const drop = { element(el){ el.remove(); } };
   return new HTMLRewriter()
     .on('meta[property="og:image"], meta[property="og:image:width"], meta[property="og:image:height"], meta[property="og:image:type"], meta[name="twitter:image"], meta[name="twitter:card"]', drop)
     // 영어 링크는 페이지의 한국어 제목·설명 대신 영어 제목
-    .on('meta[property="og:title"], meta[name="twitter:title"]', { element(el){ if (en) el.setAttribute('content', title); if (el.getAttribute('property') === 'og:title') hasTitle = true; } })
-    .on('meta[property="og:description"], meta[name="twitter:description"]', { element(el){ if (en) el.setAttribute('content', te + ' · Happy Home Care'); } })
+    .on('meta[property="og:title"], meta[name="twitter:title"]', { element(el){ if (pt) el.setAttribute('content', pt); else if (en) el.setAttribute('content', title); if (el.getAttribute('property') === 'og:title') hasTitle = true; } })
+    .on('meta[property="og:description"], meta[name="twitter:description"]', { element(el){ if (pt) el.setAttribute('content', pd); else if (en) el.setAttribute('content', te + ' · Happy Home Care'); } })
     .on('meta[property="og:site_name"]', { element(){ hasSite = true; } })
     .on('head', { element(el){ el.onEndTag(function(end){
         end.before((hasTitle ? '' : `<meta property="og:title" content="${title}">`) +

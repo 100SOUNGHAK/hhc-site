@@ -133,6 +133,12 @@ async function metaFor(env, origin, target){
     }
     return { title: en ? te : tk, desc: en ? de : dk, image: `${SITE}/og-${img}${en ? '-en' : ''}.jpg`, w: '1200', h: '630' };
   }
+  // 🙏 작업 완료 감사 안내장 — 발송 창이 붙인 카드 문구(pt= 제목 · pd= 설명)로, 카카오톡 카드와 같은 모양 (2026-11-25)
+  if (/^\/thanks(\.html)?$/i.test(t.pathname) && t.searchParams.get('pt')) {
+    const cut = (v, n) => String(v || '').replace(/[\r\n]+/g, ' · ').slice(0, n);
+    return { title: cut(t.searchParams.get('pt'), 80), desc: cut(t.searchParams.get('pd'), 160),
+      image: `${SITE}/og-thanks${en ? '-en' : ''}.jpg`, w: '1200', h: '630' };
+  }
   for (const [re, img, tk, te, dk, de] of TYPES) {
     if (re.test(t.pathname)) return { title: en ? te : tk, desc: en ? de : dk,
       image: `${SITE}/og-${img}${en ? '-en' : ''}.jpg`, w: '1200', h: '630' };   // 영어 발송은 영어 그림(og-*-en.jpg)

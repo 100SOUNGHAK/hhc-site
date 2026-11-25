@@ -5822,6 +5822,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     const q=new URLSearchParams();q.set('i',String(x.__id||iid));if(mid)q.set('c',mid);
     {const _c=tkCr(x)>0.005?tkCt(x):null;if(_c&&_c.__id)q.set('k',_c.__id);}   // 💰 남은 적립금 표시용 계약서
     if(lk.length)q.set('r',pub.length?pub.map(r=>(r.type||'inspect')+':'+r.__id).join(','):'-');
+    {const _t=tkKkTitle(!!state.en),_d=tkKkDesc(!!state.en);if(_t){q.set('pt',_t);q.set('pd',_d.replace(/\n/g,' · '));}}   // 왓츠앱 링크 미리보기 = 카카오톡 카드와 같은 제목·설명
     if(state.en)q.set('lang','en');
     return BASE+'/thanks?'+q.toString().replace(/%3A/g,':').replace(/%2C/g,',');
   }
@@ -6152,6 +6153,30 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
         '\n\n👉 계약 내용과 남은 금액을 확인해 주세요.'+ctLk('💌 감사 안내 · 계약서 보기',false));
   }
   // 🙏 작업 완료 감사 · 청구 — 감사 인사 → 청구 금액(또는 결제 완료) → 안내장 링크 + 🏠 MY PAGE 줄 (2026-11-25)
+  // 💰 적립금 차감 금액 · 연결 계약서 (인보이스의 contract_id → 없으면 이용 중인 계약 1건)
+  function tkCr(x){if(!x)return 0;const t=x._t||{};return parseFloat(t.credit!=null?t.credit:x.creditUse)||0;}
+  function tkCt(x){const cs=D.contracts||[];const id=String((x&&x.contract_id)||'');
+    return (id&&cs.find(c=>c.__id===id))||cs.find(c=>c.status!=='ended')||null;}
+  // 결제 기한이 지난 인보이스 — 감사 인사 대신 정중한 결제 확인 요청으로 (2026-11-25)
+  function tkOd(x){if(!x)return false;const paid=(x.status==='paid')||invDue(x)<=0.005;
+    return !paid&&(x.status==='overdue'||(/^\d{4}-\d{2}-\d{2}$/.test(String(x.due||''))&&String(x.due)<_tdy));}
+  // 💛 카드 문구 (카카오톡 카드 · 왓츠앱 링크 미리보기 · 앱 알림 공통) — 2026-11-25 대표님 지정 문구를 다듬음
+  function tkKkTitle(en){const x=curCoupon();if(!x)return '';const td=String(x.date||'').slice(0,10)===_tdy;
+    return tkOd(x)?(en?'A gentle payment reminder':'결제 확인을 부탁드립니다'):(en?'Thank you for choosing us'+(td?' today':'')+'!':(td?'오늘 ':'')+'서비스를 이용해 주셔서 감사합니다!');}
+  function tkKkDesc(en){
+    const x=curCoupon();if(!x)return '';
+    const due=invDue(x),tot=invTotal(x),paid=(x.status==='paid')||due<=0.005,cr=tkCr(x),od=tkOd(x);
+    const rp=(D.inspections||[]).some(r=>r&&r.invoice_id&&(String(r.invoice_id)===String(x.id||'')||String(r.invoice_id)===String(x.__id||''))&&r.cust_hidden!==true);
+    const my=en?'📱 Check them anytime on MY PAGE':'📱 마이페이지에서 언제든 확인하세요';
+    if(cr>0.005&&tot<=0.005){const c=tkCt(x),rem=c?ctBal(c).remain:null;
+      return (rem!=null?(en?'💰 Remaining credit ':'💰 남은 적립금 ')+sRM(rem)+'\n':'')+
+        (en?'📑 Invoice'+(rp?' · Report':'')+' · Usage statement':'📑 인보이스'+(rp?' · 작업 보고서':'')+' · 이용내역서')+'\n'+my;}
+    const _t2=x._t||{},sv=Math.round(((parseFloat(_t2.discTotal)||0)+(parseFloat(_t2.pts!=null?_t2.pts:x.pointUse)||0))*100)/100;
+    const svl=sv>0.005?(en?'🎁 You saved '+sRM(sv):'🎁 '+sRM(sv)+' 할인 혜택 적용')+'\n':'';   // 🎁 받은 혜택 (할인 · 포인트)
+    if(od)return (en?'💳 Amount due ':'💳 결제하실 금액 ')+sRM(due)+'\n'+svl+(en?'🙏 Already paid? Just send us the receipt':'🙏 이미 이체하셨다면 영수증만 보내 주세요');
+    if(paid)return (en?'✅ Paid · ':'✅ 결제 완료 · ')+sRM(tot)+'\n'+svl+my;
+    return (en?'💳 Amount due ':'💳 결제하실 금액 ')+sRM(due)+'\n'+svl+my;
+  }
   function tkMsg(en){
     const x=curCoupon();
     if(!x)return en?'No invoice available to send.':'발송 가능한 인보이스가 없습니다.';
@@ -6161,31 +6186,11 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     const td=String(x.date||'').slice(0,10)===_tdy,od=tkOd(x);   // 오늘 작업 · 기한 지남
     const wd=/^\d{4}-\d{2}-\d{2}$/.test(String(x.date||'').slice(0,10))?sDay(String(x.date).slice(0,10),en):'';
     const rp=(D.inspections||[]).some(r=>r&&r.invoice_id&&(String(r.invoice_id)===String(x.id||'')||String(r.invoice_id)===String(x.__id||''))&&r.cust_hidden!==true);
-    // ✨ 2026-11-25 왓츠앱 문구 정리 — 카카오톡 카드와 같은 말투 · 제목 → 핵심 2~3줄 → 마이페이지 한 줄 → 링크
-    const L=[];
-    if(en){
-      L.push(od?'🔔 *A gentle payment reminder*':'🙏 *Thank you for choosing us'+(td?' today':'')+'!*');
-      if(od&&wd)L.push('Thank you for our service on '+wd+'.');
-      if(cr>0.005)L.push('💳 Paid from your credit '+sRM(cr));
-      if(byCr&&rem!=null)L.push('💰 Remaining credit '+sRM(rem));
-      if(!byCr)L.push(paid?'✅ Paid · '+sRM(tot):'💳 Amount due *'+sRM(due)+'*');
-      if(sv>0.005)L.push('🎁 You saved '+sRM(sv));
-      if(od)L.push('🙏 Already paid? Just send us the receipt');
-      else if(mid)L.push('📱 Check them anytime on MY PAGE');
-    }else{
-      L.push(od?'🔔 *결제 확인을 부탁드립니다*':'🙏 *'+(td?'오늘 ':'')+'서비스를 이용해 주셔서 감사합니다!*');
-      if(od&&wd)L.push(wd+' 서비스 이용 감사드립니다.');
-      if(cr>0.005)L.push('💳 적립금 차감 '+sRM(cr));
-      if(byCr&&rem!=null)L.push('💰 남은 적립금 '+sRM(rem));
-      if(!byCr)L.push(paid?'✅ 결제 완료 · '+sRM(tot):'💳 결제하실 금액 *'+sRM(due)+'*');
-      if(sv>0.005)L.push('🎁 '+sRM(sv)+' 할인 혜택 적용');
-      if(od)L.push('🙏 이미 이체하셨다면 영수증만 보내 주세요');
-      else if(mid)L.push('📱 마이페이지에서 언제든 확인하세요');
-    }
-    // 링크 이름 — 안내장에 실제로 있는 것만
+    // 💬 2026-11-25 카드형 — 왓츠앱은 링크 위에 그림 · 제목 · 설명(카카오톡 카드와 같은 문구)을 붙여 보여 줍니다.
+    //    본문은 인사 + 링크 한 줄만 (같은 문구가 두 번 보이지 않게). 그림을 누르면 안내장이 열립니다.
     const lb=en?('📑 Invoice'+(paid?'':' · Bank details')+(rp?' · Report':'')+(cr>0.005?' · Usage':''))
                :('📑 인보이스'+(paid?'':' · 결제 계좌')+(rp?' · 작업 보고서':'')+(cr>0.005?' · 이용내역서':''));
-    return sHi(en,nm)+'\n\n'+L.join('\n')+sLk(lb);   // 링크는 안내장 하나만 — 마이페이지는 안내장 안에서 열도록 (2026-11-25)
+    return sHi(en,nm)+sLk(lb);
   }
   function awMsg(en){
     const x=curCoupon();
@@ -6958,6 +6963,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     }).catch(()=>{pb.title='앱 알림 기기를 확인하지 못했습니다';});
     // 문구 → 알림 내용: 인사·주소·연락처 줄을 빼고 핵심 두 줄
     const pnBody=()=>{
+      if(state.tpl==='tk'){const _t=tkKkTitle(!!state.en),_d=tkKkDesc(!!state.en);return Array.from((_t+' '+_d.split('\n')[0]).replace(/\*/g,'')).slice(0,170).join('');}   // 🙏 카드형 안내 — 알림은 카드 제목 + 첫 줄
       const ls=String(waText(msg())||'').split('\n').map(s=>s.trim()).filter(Boolean)
         .filter(s=>!/https?:\/\//.test(s)&&!/^(👉|📞|☎)/.test(s));
       if(ls.length>1)ls.shift();   // 첫 줄 인사 제외
@@ -7087,7 +7093,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
         d:(en?'From the card · request a service · see services & prices · save contact'
              :'명함에서 바로 · 의뢰(예약) 신청 · 서비스·가격 확인 · 연락처 저장')}
       :caKkImg(state.tpl,msg(),en,state.cmpMemo);
-    if(state.tpl==='tk'&&kkImg){const _d=tkKkDesc(en);if(_d)kkImg.d=_d;}   // 🙏 작업완료 감사 — 카드 본문은 지정 문구로
+    if(state.tpl==='tk'&&kkImg){const _d=tkKkDesc(en);if(_d){kkImg.d=_d;kkImg.t=tkKkTitle(en);}}   // 🙏 작업완료 감사 — 카드 본문은 지정 문구로
     // 📅 예약 신청·확정 카드는 날짜 그림으로 (2026-11-21)
     {const _bd=caBkDate(state.tpl);if(kkImg&&_bd&&(state.tpl==='bk'||state.tpl==='bkc')){kkImg.u='https://happyhomecare.com.my/og-'+(state.tpl==='bkc'?'dc':'db')+'/'+_bd+(en?'-en':'')+'.jpg';}}   // 적립 안내는 적립 이름도 함께 보고 그림을 고릅니다   // 🖼 그 밖의 종류도 그림 카드 (2026-11-20) · 영어는 영어 그림
     // 💛 예약 확정은 카톡 카드 문구만 짧게 — 「날짜·시간 + 작업방문등록 필수 요망.」 (위치 확인 문구 제외 · 2026-11-23)
