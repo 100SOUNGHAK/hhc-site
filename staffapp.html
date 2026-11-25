@@ -560,10 +560,24 @@ let SWREG=null;
 const VAPID_PUB='BE5OUy5k4wwsty8t7vBJ1IH-9LMpqzKI66QAV78Z39lGhYRBImjekMHVyJMhqUDsHJvvwIIVbb-YT-gRtwL5O74';
 function b64ToU8(s){s=(s+'='.repeat((4-s.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/');var b=atob(s),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u;}
 // ── 앱을 열면 알림창에 쌓인 알림과 아이콘 배지를 자동으로 지움 ──
-function clearSysNotifs(){
+// route=true : 알림을 누르지 않고 앱 아이콘으로 열었을 때도 — 남아 있는 가장 최근 관리자 알림의 화면으로 바로 이동 (2026-11-25)
+//   (방문 안내 → 고객 탭 「보낼 고객」 목록 · 새 의뢰/예약/고객 요청 → 그 카드 펼침 · 그 밖 → 그 탭) · 12시간 지난 알림은 이동하지 않음
+function routeFromNotifs(list){
+  var best=null;
+  (list||[]).forEach(function(n){var d=n.data||{};if(d.cust)return;if(!best||(n.timestamp||0)>(best.timestamp||0))best=n;});
+  if(!best||!best.data||(best.timestamp&&Date.now()-best.timestamp>12*36e5))return;
+  var d=best.data,vl=/customer-admin\.html\?vl=(d7|d3|tm|td)/.exec(d.url||'');
+  try{
+    if(vl&&window.hhcOpenVl){window.hhcOpenVl(vl[1]);return;}
+    if(d.od&&window.hhcOpenDoc&&(d.tab==='request'||d.tab==='booking')){window.hhcOpenDoc(d.tab,d.od);return;}
+    if(d.tab&&validTab(d.tab))activate(d.tab);
+  }catch(e){}
+}
+function clearSysNotifs(route){
   try{
     if(navigator.clearAppBadge)navigator.clearAppBadge().catch(function(){});
     if(SWREG&&SWREG.getNotifications)SWREG.getNotifications().then(function(list){
+      if(route===true)routeFromNotifs(list);
       // 고객 앱 알림(마이페이지용 · data.cust)은 지우지 않습니다 — 같은 휴대폰에 마이페이지 앱도 설치한 경우,
       // 관리자 앱을 여는 순간 고객 알림까지 사라져 「숫자와 소리만 나고 내용이 없는」 문제가 있었습니다 (2026-11-19)
       list.forEach(function(n){try{if(n.data&&n.data.cust)return;n.close();}catch(e){}});
@@ -571,7 +585,7 @@ function clearSysNotifs(){
   }catch(e){}
 }
 document.addEventListener('visibilitychange',function(){
-  if(document.visibilityState==='visible'){clearSysNotifs();try{setupPush();}catch(e){}}   // 다시 볼 때마다 기기 등록을 새로 고침
+  if(document.visibilityState==='visible'){clearSysNotifs(true);try{setupPush();}catch(e){}}   // 다시 볼 때마다 기기 등록을 새로 고침
 });
 function setupPush(){
   try{
@@ -593,7 +607,7 @@ function setupPush(){
   }catch(e){}
 }
 if('serviceWorker' in navigator&&location.protocol==='https:'){
-  navigator.serviceWorker.register('sw.js').then(r=>{SWREG=r;setupPush();clearSysNotifs();}).catch(()=>{});
+  navigator.serviceWorker.register('sw.js').then(r=>{SWREG=r;setupPush();clearSysNotifs(true);}).catch(()=>{});
   navigator.serviceWorker.addEventListener('message',e=>{
     if(e.data&&e.data.hhcOpenTab&&window.activate)window.activate(e.data.hhcOpenTab);
     if(e.data&&e.data.hhcVl&&window.hhcOpenVl)window.hhcOpenVl(e.data.hhcVl);
