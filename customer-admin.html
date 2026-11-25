@@ -5462,7 +5462,9 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   const CNT={iv:(D.invoices||[]).length,ip:(D.inspections||[]).length,ct:(D.contracts||[]).length,cp:(D.coupons||[]).length};
   // 작성 대기중인 예약 신청서 (예약등록에서 고객 링크만 만들고 고객이 아직 작성 전인 건)
   // → 마이페이지 상단에 예약 신청 화면이 표시되므로, 발송 템플릿도 자동으로 「예약 신청 안내」를 고른다
-  const BKP=(D.bookings||[]).filter(x=>x.status==='waiting');
+  const _msT=v=>{if(!v)return 0;if(typeof v.toMillis==='function')return v.toMillis();if(typeof v==='object'&&v.seconds!=null)return v.seconds*1000;const t=Date.parse(String(v));return isNaN(t)?0:t;};
+  //  (2026-11-25) 가장 최근에 만든 신청서가 [0] — 예전에는 저장 순서 그대로라 오래된 대기 신청서가 먼저 잡혔습니다
+  const BKP=(D.bookings||[]).filter(x=>x.status==='waiting').sort((a,b)=>_msT(b.unconfirmed_at||b.created_at)-_msT(a.unconfirmed_at||a.created_at));
   // 🆕 고객이 신청서를 작성해 확정을 기다리는 예약 (중복 생성 방지 안내용)
   const BKB=(D.bookings||[]).filter(x=>x.status==='booked');
   const _td=new Date();
@@ -5494,7 +5496,8 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     if(d>_tdy)return true;
     if(d<_tdy)return false;
     return _bkMin(x.booking_time)>_nowMin;
-  });
+  }).sort((a,b)=>(_msT(b.confirmed_at||b.updated_at||b.created_at)-_msT(a.confirmed_at||a.updated_at||a.created_at))||String(a.booking_date||'').localeCompare(String(b.booking_date||'')));
+  //  (2026-11-25) 방문 전 확정 예약이 여러 건이면 「가장 최근에 확정한 예약」이 [0] — 예약 확정 안내가 방금 확정한 건을 보냅니다
   // 접수된 서비스 의뢰 (「의뢰 접수 안내」 발송용) — 최근 접수 순
   // 접수 「이후에 만들어진」 확정 예약이 있는 의뢰는 이미 처리된 건이므로 목록에서 제외합니다
   //  (2026-11-09 수정) 예전에는 날짜만 비교해서, 오늘·미래 날짜로 확정된 예약이 하나라도 있으면
@@ -5539,11 +5542,33 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     .sort((a,b)=>String(a.visit_date||'').localeCompare(String(b.visit_date||'')));
   // 인보이스·점검보고서는 기록이 아직 없어도 기본 노출 — 고객 화면에서 「내역 없음」 안내 카드로
   // 자리를 지켜 주므로 한쪽만 남아 빈 자리가 생기지 않습니다. (필요하면 아래에서 해제 가능)
-  // 💰 패키지 회원 적립금 차감 — 최근 3일 안에 적립금으로 차감한 인보이스가 있으면 「🙏 작업완료 감사·청구」를 먼저 골라 둡니다 (2026-11-25)
-  const _d3=(()=>{const t=new Date(_td);t.setDate(t.getDate()-3);return t.getFullYear()+'-'+_p2(t.getMonth()+1)+'-'+_p2(t.getDate());})();
-  const _tkAuto=IVS.findIndex(x=>tkCr(x)>0.005&&String(x.date||'').slice(0,10)>=_d3&&String(x.date||'').slice(0,10)<=_tdy);
-  const state={iv:true,ip:true,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:_tkAuto>=0?'tk':BKP.length?'bk':(BKCU.length?'bkc':(careDue(e)?(careDue(e).k===6?'care6':'care3'):'basic')),
-    cpi:{cpg:0,cpd:0,ins:0,ct:0,qt:0,mmv:0,ipv:0,tk:Math.max(0,_tkAuto)},
+  // 🎯 발송 창을 열 때 처음 골라 둘 안내 — 「이 고객에게 가장 최근에 일어난 일」 하나 (2026-11-25 전면 재작성)
+  //   후보(각각 그 일이 일어난 시각) 중 가장 늦은 것을 고릅니다. 오래된 일은 후보에서 뺍니다.
+  //    📥 의뢰 접수   : 예약으로 넘기지 않은 의뢰 · 접수 7일 이내            — 시각 = 접수 시각
+  //    📅 예약 신청   : 고객 작성 대기 신청서 · 만든 지 14일 이내             — 시각 = 신청서 만든(대기로 돌린) 시각
+  //    ✅ 예약 확정   : 아직 방문 전인 확정 예약                              — 시각 = 확정한 시각
+  //    🙏 작업완료 감사: 고객에게 공개(확정)된 인보이스 · 작업일 3일 이내     — 시각 = 인보이스 공개(없으면 작성) 시각
+  //   후보가 없으면 청소 후 3·6개월 경과 → 그것도 없으면 기본 안내.
+  const _DAY=864e5,_now=_td.getTime();
+  const _auto=(()=>{
+    const c=[];
+    RQP.forEach(x=>{if(x.converted_to_booking===true)return;const t=_msT(x.submitted_at||x.created_at);if(t&&_now-t<=7*_DAY)c.push({tpl:'rq',t,i:0,why:'의뢰 접수',at:t});});
+    BKP.forEach((x,i)=>{const t=_msT(x.unconfirmed_at||x.created_at);if(t&&_now-t<=14*_DAY)c.push({tpl:'bk',t,i,why:'예약 신청서 발송 대기',at:t});});
+    BKCU.forEach((x,i)=>{const t=_msT(x.confirmed_at||x.updated_at||x.created_at);c.push({tpl:'bkc',t:t||1,i,why:'예약 확정 '+(x.booking_date||''),at:t});});
+    const _d3=new Date(_now-3*_DAY),_d3s=_d3.getFullYear()+'-'+_p2(_d3.getMonth()+1)+'-'+_p2(_d3.getDate());
+    IVS.forEach((x,i)=>{const d=String(x.date||'').slice(0,10);if(x.cust_hidden===true||x.status==='draft'||!d||d<_d3s||d>_tdy)return;
+      const t=_msT(x.cust_pub_at||x.updatedAt||x.createdAt)||Date.parse(d+'T12:00:00');c.push({tpl:'tk',t,i,why:'인보이스 '+(x.id||'')+(tkCr(x)>0.005?' (적립금 차감)':''),at:t});});
+    c.sort((a,b)=>b.t-a.t);
+    return c[0]||null;
+  })();
+  const _careK=careDue(e);
+  function _autoTxt(){
+    if(!_auto||state.tpl!==_auto.tpl)return '';
+    let w='';if(_auto.at){const d=new Date(_auto.at);w=' '+(d.getMonth()+1)+'/'+d.getDate()+' '+_p2(d.getHours())+':'+_p2(d.getMinutes());}
+    return '🎯 자동 선택 · 최근: '+_auto.why+w;
+  }
+  const state={iv:true,ip:true,ct:CNT.ct>0,cp:CNT.cp>0,en:false,tpl:_auto?_auto.tpl:(_careK?(_careK.k===6?'care6':'care3'):'basic'),
+    cpi:{cpg:0,cpd:0,ins:0,ct:0,qt:0,mmv:0,ipv:0,tk:(_auto&&_auto.tpl==='tk')?_auto.i:0},
     payDate:_td.getFullYear()+'-'+_p2(_td.getMonth()+1)+'-'+_p2(_td.getDate()),
     careDate:careLastAc(e),
     cmpAmt:(opt&&opt.amt)||'',cmpMemo:(opt&&opt.memo)||''};   // 💎 적립 안내 — 포인트 「적립 추가」에서 넘어온 금액 · 이름
@@ -5708,7 +5733,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     '</div></div>'+
     // ══ 발송 바 (아래 고정) ══
     '<div class="sm2-bar">'+
-      '<div class="sm2-cur"><span class="k">보낼 안내</span><b id="cs-curlb"></b><span id="cs-len"></span>'+
+      '<div class="sm2-cur"><span class="k">보낼 안내</span><b id="cs-curlb"></b><span id="cs-why" style="display:none;font-size:11px;font-weight:700;color:#0E9B63;background:#E9F7F0;border-radius:999px;padding:2px 8px;white-space:nowrap"></span><span id="cs-len"></span>'+
         '<span class="sm-lang" id="cs-lang"><span data-l="ko">한국어</span><span data-l="en">EN</span></span></div>'+
       '<div class="sm2-btns">'+
         '<button id="cs-wa" class="btn" style="background:#22c55e;border-color:#22c55e;color:#fff">💬 WhatsApp</button>'+
@@ -6661,7 +6686,9 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     const _cl=mk.querySelector('#cs-curlb');
     if(_cl){const _o=TPLS.find(o=>o.t===state.tpl);_cl.textContent=_o?_o.lb:'';
       const _sc=mk.querySelector('#cs-sel'),_sp=tSplit(_o?_o.lb:'');
-      if(_sc){_sc.querySelector('.ic').textContent=_sp[0];_sc.querySelector('.nm').textContent=_sp[1];_sc.querySelector('.ds').textContent=tDesc(state.tpl);}}
+      if(_sc){_sc.querySelector('.ic').textContent=_sp[0];_sc.querySelector('.nm').textContent=_sp[1];_sc.querySelector('.ds').textContent=tDesc(state.tpl)+(_autoTxt()?' · '+_autoTxt():'');}}
+    // 🎯 자동으로 고른 안내라면 왜 골랐는지 (가장 최근 일 · 시각) 함께 보여 줍니다 — 다른 안내를 고르면 숨김
+    {const _w=mk.querySelector('#cs-why');if(_w){const _t=_autoTxt();_w.textContent=_t;_w.style.display=_t?'':'none';}}
     const v=['iv','ip','ct','cp'].filter(k=>state[k]);
     // 👑 멤버십 안내만 안내장 주소를 보내므로 마이페이지 노출 항목과 무관합니다.
     // 👑 멤버십 · 🎁 전자상품권 · 💎 적립포인트 안내는 안내장 주소를 보내므로 마이페이지 노출 항목과 무관합니다.
