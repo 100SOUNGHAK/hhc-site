@@ -85,6 +85,16 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
 .pill.due{background:rgba(240,180,41,.18);color:#ffd77a;border:1px solid rgba(240,180,41,.45)}
 .pill.od{background:rgba(220,38,38,.2);color:#ffb4b4;border:1px solid rgba(248,113,113,.5)}
 .pill.ok{background:rgba(14,155,99,.2);color:#8ff0c4;border:1px solid rgba(52,211,153,.45)}
+/* 💰 남은 적립금 (패키지 회원 · 적립금 차감) */
+.tk-bal{margin-top:12px;padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.08);border:1px solid rgba(227,201,138,.35)}
+.tk-bal .r{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.tk-bal span{font-size:13px;font-weight:750;color:rgba(255,255,255,.72)}
+.tk-bal b{font-size:21px;font-weight:850;letter-spacing:-.02em;color:var(--gold-300);white-space:nowrap}
+.tk-bal .bar{margin-top:8px;height:7px;border-radius:999px;background:rgba(255,255,255,.12);overflow:hidden}
+.tk-bal .bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--gold-300),var(--gold-500))}
+.tk-bal small{display:block;margin-top:6px;font-size:12.5px;color:rgba(255,255,255,.6)}
+@media (prefers-reduced-motion:no-preference){.tk-bal .bar i{animation:tkBar 1s .6s var(--ease) both}}
+@keyframes tkBar{from{width:0}}
 /* 🎁 받은 혜택 — 금색 띠 (빛이 한 번 지나감) */
 .tk-sv{position:relative;overflow:hidden;margin-top:12px;display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:14px;color:var(--navy-950);
   background:linear-gradient(135deg,#f8ebc0,var(--gold-500) 70%,#b8913d);box-shadow:inset 0 1px 0 rgba(255,255,255,.65),0 8px 18px -10px rgba(201,164,76,.9)}
@@ -236,6 +246,7 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
   var q=new URLSearchParams(location.search);
   var S={lang:(q.get('lang')||'').toLowerCase()==='en'?'en':'ko',inv:null,svc:[],rp:[],err:''};
   var ID=(q.get('i')||q.get('id')||'').trim(),DEMO=q.get('demo')==='1';
+  var CTID=(q.get('k')||'').trim();if(!/^[A-Za-z0-9_-]{4,80}$/.test(CTID))CTID='';   // 📑 적립금 계약서 (적립금 차감 인보이스)
   var CID=(q.get('c')||'').trim();if(!/^[A-Za-z0-9_-]{4,60}$/.test(CID))CID='';
   /* r= 종류:보고서ID,… — 관리자가 확정된 보고서만 골라 붙인 목록 (없으면 인보이스에 연결된 보고서 전부) */
   var RQ=(q.get('r')||'').split(',').map(function(s){var m=/^([a-z]{2,10}):([A-Za-z0-9_-]{4,80})$/.exec(s.trim());return m?{type:m[1],_id:m[2],date:''}:null;}).filter(Boolean);
@@ -257,6 +268,7 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
      crLn:'회원 적립금에서 차감되어 따로 결제하실 금액이 없습니다',
      docH:'바로 확인하기',docP:'지금 바로 열어 보시고, 나중에도 마이페이지에서 언제든 확인하세요.',
      dInv:'인보이스',dRep:'작업 보고서',dMy:'마이페이지',dMyS:'모든 문서 · 예약 · 적립금을 한곳에서',open:'열기',
+     balLb:'남은 적립금',balOf:function(t,p){return '총 '+t+' 중 '+p+'% 남음';},dCt:'계약서 · 이용내역',dCtS:'적립금 사용 내역 전체',
      svT:function(a){return '<em>'+a+'</em> 할인 혜택을 받으셨어요';},svD:'할인',svP:'해피포인트',svW:'정상가',
      payH:'결제 계좌',payP:'계좌번호를 복사해 은행 앱에서 이체해 주세요.',bankT:'계좌이체',kAcc:'계좌번호',kAmt:'이체하실 금액',cp:'복사',cpOk:'복사됨 ✓',
      tAcc:'계좌번호를 복사했습니다',tAmt:'금액을 복사했습니다',
@@ -285,6 +297,7 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
      crLn:'Deducted from your member credit — nothing else to pay',
      docH:'Open your documents',docP:'Open them now — and find them on MY PAGE anytime.',
      dInv:'Invoice',dRep:'Work report',dMy:'MY PAGE',dMyS:'All documents, bookings & points in one place',open:'Open',
+     balLb:'Remaining credit',balOf:function(t,p){return p+'% left of '+t;},dCt:'Contract & usage',dCtS:'Full credit usage history',
      svT:function(a){return 'You saved <em>'+a+'</em> today';},svD:'Discount',svP:'Happy Points',svW:'Regular price',
      payH:'Bank transfer',payP:'Copy the account number and transfer in your banking app.',bankT:'Bank transfer',kAcc:'Account number',kAmt:'Amount to transfer',cp:'Copy',cpOk:'Copied ✓',
      tAcc:'Account number copied',tAmt:'Amount copied',
@@ -349,6 +362,11 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
   document.addEventListener('click',function(e){var b=e.target.closest('.tk-cp');if(!b)return;
     copyTxt(b.dataset.cp).then(function(){var l=L();b.textContent=l.cpOk;b.classList.add('ok');toast(b.dataset.t==='amt'?l.tAmt:l.tAcc);
       setTimeout(function(){b.textContent=l.cp;b.classList.remove('ok');},1600);});});
+  /* 계약 잔액 — 계약서 화면(admin.html ncBalance) · welcome.html 과 같은 계산 */
+  function ctBal(c){var h=c.usage_history;if(typeof h==='string'){try{h=JSON.parse(h||'[]');}catch(e){h=[];}}h=h||[];
+    var paid=n(c.amount_paid),bonus=n(c.bonus_credit)+n(c.special_bonus_credit),used=0,disc=0,carry=0;
+    h.forEach(function(u){used+=n(u&&u.amount);disc+=n(u&&u.discount);carry+=n(u&&u.carryover);});
+    return {total:paid+bonus,remain:Math.round((paid+bonus-used+disc+carry)*100)/100};}
   var LOGO='<svg viewBox="0 0 100 100" aria-hidden="true"><g fill="#e3c98a"><rect x="15" y="14" width="19" height="74" rx="3.5"/><rect x="66" y="14" width="19" height="74" rx="3.5"/><path d="M8 50 L50 22 L92 50 L84 58 L50 36 L16 58Z"/></g></svg>';
   function top(od){return '<div class="tk-top"><div class="tk-logo">'+LOGO+'</div><div class="tk-brand"><b>'+L().co+'</b><small>'+(od?L().odKick:L().brand)+'</small></div>'+
     '<div class="tk-lang" role="group" aria-label="Language"><button type="button" data-l="ko" class="'+(en()?'':'on')+'">한국어</button><button type="button" data-l="en" class="'+(en()?'on':'')+'">EN</button></div></div>';}
@@ -374,6 +392,11 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
     var heroLn=M.key==='cr'?l.crLn:(M.key==='ok'?l.paidLn(M.pdate?fmtD(M.pdate):''):(M.dd!==null?l.dueLn(fmtD(v.due),M.dd):''));
     var isTd=daysTo(v.date)===0;   // 작업일(인보이스 날짜)이 오늘일 때만 「오늘」
     var amtTxt=rm(heroAmt).replace(/^RM\s/,'');
+    /* 💰 남은 적립금 — 적립금으로 차감한 인보이스 + 계약서를 찾았을 때 */
+    var balH='';
+    if(M.credit>0.005&&S.ct){var pc=S.ct.total>0?Math.max(0,Math.min(100,Math.round(S.ct.remain/S.ct.total*100))):0;
+      balH='<div class="tk-bal"><div class="r"><span>💰 '+l.balLb+'</span><b class="num">'+rm(S.ct.remain)+'</b></div>'+
+        (S.ct.total>0?'<div class="bar"><i style="width:'+pc+'%"></i></div><small class="num">'+l.balOf(rm(S.ct.total),pc)+'</small>':'')+'</div>';}
     /* 🎁 받은 혜택 — 할인 · 해피포인트가 있을 때만 */
     var svH='';
     if(M.save>0.005){var dd=n(M.save)-M.pts,parts=[];
@@ -382,9 +405,10 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
       svH='<div class="tk-sv"><span class="ic">🎁</span><div><b>'+l.svT(rm(M.save))+'</b><small>'+esc(parts.join(' · '))+'</small></div></div>';}
     /* 보고서 */
     var reps=S.rp;
-    var docs='<a class="tk-doc inv" href="'+invUrl()+'"><div class="ic">🧾</div><div><b>'+l.dInv+'</b><small class="num">'+esc(v.id||'')+(v.id?' · ':'')+'<span style="white-space:nowrap">'+rm(M.grand)+'</span></small></div><span class="go">'+l.open+'</span></a>'+
+    var ctRow=(M.credit>0.005&&CTID)?'<a class="tk-doc" href="/admin.html?view='+encodeURIComponent(CTID)+'&mode=all&lang='+S.lang+'"><div class="ic">📑</div><div><b>'+l.dCt+'</b><small>'+l.dCtS+'</small></div><span class="go">'+l.open+'</span></a>':'';
+    var docs='<a class="tk-doc inv" href="'+invUrl()+'"><div class="ic">🧾</div><div><b>'+l.dInv+'</b><small class="num">'+esc(v.id||'')+(v.id?' · ':'')+'<span style="white-space:nowrap">'+rm(M.grand+M.credit)+'</span></small></div><span class="go">'+l.open+'</span></a>'+
       reps.map(function(r){var ty=RTY[r.type]||RTY.inspect;
-        return '<a class="tk-doc" href="'+repUrl(r)+'"><div class="ic">'+ty[0]+'</div><div><b>'+esc(en()?ty[2]:ty[1])+'</b><small class="num">'+(r.date?fmtD(r.date):l.dRep)+'</small></div><span class="go">'+l.open+'</span></a>';}).join('');
+        return '<a class="tk-doc" href="'+repUrl(r)+'"><div class="ic">'+ty[0]+'</div><div><b>'+esc(en()?ty[2]:ty[1])+'</b><small class="num">'+(r.date?fmtD(r.date):l.dRep)+'</small></div><span class="go">'+l.open+'</span></a>';}).join('')+ctRow;
     /* 결제 계좌 — 인보이스에 고른 계좌(bankInfo) → 회사 입금 계좌(/api/pay) → 기본값 */
     var bk=bankOf(v),payH='';
     if(!settled&&M.due>0.005&&bk){
@@ -417,7 +441,7 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
          ?'<div class="tk-kick">'+l.odKick+'</div><h1 class="tk-h1">'+l.odH1(nm)+'</h1><p class="tk-sub">'+l.odSub(v.date?fmtD(v.date):'')+'</p>'
          :'<div class="tk-kick">'+l.kick+'</div><h1 class="tk-h1">'+l.h1(nm,isTd)+'</h1><p class="tk-sub">'+l.sub(v.date?fmtD(v.date):'',isTd,reps.length>0)+'</p>')+
        '<div class="tk-bill"><div class="r1"><span class="lb">'+heroLb+'</span><span class="pill '+stCls+'">'+(settled?'✓ ':'')+stTxt+'</span></div>'+
-         '<div class="am num"><small>RM</small>'+amtTxt+(M.save>0.005&&Math.abs(heroAmt-M.grand)<0.01?'<span class="tk-was" title="'+l.svW+'">'+rm(M.before)+'</span>':'')+'</div>'+svH+(heroLn?'<div class="ln">'+heroLn+'</div>':'')+'</div>'+
+         '<div class="am num"><small>RM</small>'+amtTxt+(M.save>0.005&&Math.abs(heroAmt-M.grand)<0.01?'<span class="tk-was" title="'+l.svW+'">'+rm(M.before)+'</span>':'')+'</div>'+svH+balH+(heroLn?'<div class="ln">'+heroLn+'</div>':'')+'</div>'+
      '</header>'+
      '<section class="tk-sec"><div class="tk-sh"><h2>'+l.docH+'</h2><p>'+l.docP+'</p></div><div class="tk-docs">'+docs+'</div></section>'+
      payH+myH+
@@ -449,6 +473,10 @@ button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
       .then(function(r){if(r.status>=500)throw new Error('5xx');return r.json();})
       .then(function(j){if(!j||!j.ok||!j.doc)throw new Error('nf');
         S.inv=j.doc;S.svc=j.services||[];
+        if(!CTID&&/^[A-Za-z0-9_-]{4,80}$/.test(String(j.doc.contract_id||'')))CTID=String(j.doc.contract_id);
+        var _t=j.doc._t||{},_cr=parseFloat(_t.credit!=null?_t.credit:j.doc.creditUse)||0;
+        if(_cr>0.005&&CTID)fetch('/api/doc?t=contract&id='+encodeURIComponent(CTID),{cache:'no-store'}).then(function(r){return r.ok?r.json():null;})
+          .then(function(c){if(c&&c.ok&&c.doc){S.ct=ctBal(c.doc);render();}}).catch(function(){});
         var api=(j.insp||[]).map(function(x){return {type:x.type||'inspect',_id:x._id,date:x.date||''};});
         if(q.get('r')==='-')S.rp=[];   // 연결 보고서가 아직 확정 전 — 보고서 칸 없이
         else if(RQ.length){S.rp=RQ.map(function(r){var a=api.filter(function(x){return x._id===r._id;})[0];return a||r;});}
