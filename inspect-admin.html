@@ -11766,6 +11766,9 @@ function match(j,name,phone){
 const ban=document.createElement('div');ban.className='m38-site';ban.setAttribute('data-m36','0');
 (()=>{const c=$('f-client')&&$('f-client').closest('.card');if(c&&c.parentNode)c.parentNode.insertBefore(ban,c.nextSibling);})();
 let SHOWN=[],PICK=null,DONE={};   /* PICK = 「일정 고르기」로 고른 일정(자료 그대로) */
+/* 2026-11-26 중복 방지: 한 번 가져온 사진(imported_at 또는 이 화면에서 가져온 것)은 다시 넣지 않음 — 새로 올린 사진만 */
+const IMP=new Set();
+const isNew=p=>!p.imported_at&&!IMP.has(p.id);
 function cnt(ph){const c={temp:0,before:0,after:0,etc:0};ph.forEach(p=>{if(c[p.cat]!=null)c[p.cat]++;});return c;}
 function cntTxt(c){return ['temp','before','after','etc'].filter(k=>c[k]).map(k=>CN[k]+' '+c[k]).join(' · ');}
 async function check(){
@@ -11782,10 +11785,11 @@ async function check(){
   const hit=PICK?[PICK]:list.filter(j=>match(j,name,phone));
   SHOWN=hit;
   if(hit.length){
-    const ph=hit.flatMap(j=>j.ph),c=cnt(ph),done=hit.every(j=>DONE[j.key]);
+    const all=hit.flatMap(j=>j.ph),ph=all.filter(isNew),old=all.length-ph.length,c=cnt(ph.length?ph:all),done=!ph.length;
     ban.className='m38-site on'+(done?' done':'');
-    ban.innerHTML=`<div class="m38-site-h"><i>📷</i><div><b>${done?'✓ 직원 사진을 가져왔습니다':'직원이 올린 현장 사진 '+ph.length+'장'}</b><small>${esc(hit.map(j=>(j.place||j.cname)+(j.unit?' '+j.unit:'')).join(', '))} · ${cntTxt(c)}</small></div></div>`+
-      (done?'':`<div class="m38-site-th">${ph.slice(0,7).map(p=>`<img src="${esc(p.t||p.url)}" alt="" loading="lazy">`).join('')}</div><div class="m38-site-b"><button type="button" data-imp="1">📥 이 보고서에 가져오기</button><button type="button" class="s" data-pick="1">다른 일정</button></div>`);
+    ban.innerHTML=`<div class="m38-site-h"><i>📷</i><div><b>${done?'✓ 직원 사진을 모두 가져왔습니다':(old?'새로 올린 현장 사진 '+ph.length+'장':'직원이 올린 현장 사진 '+ph.length+'장')}</b><small>${esc(hit.map(j=>(j.place||j.cname)+(j.unit?' '+j.unit:'')).join(', '))} · ${cntTxt(c)}${old?' · 이미 가져온 '+old+'장 제외':''}</small></div>`+
+      (old?`<button type="button" class="m38-site-w" data-reimp="1">가져온 사진 다시 고르기</button>`:'')+`</div>`+
+      (done?'':`<div class="m38-site-th">${ph.slice(0,7).map(p=>`<img src="${esc(p.t||p.url)}" alt="" loading="lazy">`).join('')}</div><div class="m38-site-b"><button type="button" data-imp="1">📥 ${old?'새 사진만 ':'이 보고서에 '}가져오기</button><button type="button" class="s" data-pick="1">다른 일정</button></div>`);
   }else{
     ban.className='m38-site on';
     ban.innerHTML=`<div class="m38-site-h"><i>📷</i><div><b>직원 사진이 있는 일정 ${list.length}건</b><small>이 고객과 맞는 일정을 자동으로 찾지 못했습니다 · 골라서 가져오세요</small></div></div><div class="m38-site-b"><button type="button" data-pick="1">일정 고르기</button></div>`;
@@ -11802,7 +11806,32 @@ setTimeout(check,2500);
 ban.addEventListener('click',async e=>{
   const pk=e.target.closest('[data-pick]');if(pk){pickSheet(pk.getAttribute('data-pick')==='w');return;}
   if(e.target.closest('[data-imp]')){importNow(SHOWN);}
+  if(e.target.closest('[data-reimp]'))reSheet();
 });
+/* 2026-11-26 이미 가져온 사진 중 골라서 다시 가져오기 (지운 사진 되살리기용) */
+function reSheet(){
+  const S=window.__m38sheet;if(!S)return;
+  const old=SHOWN.flatMap(j=>j.ph).filter(p=>okCat(p)&&!isNew(p));
+  if(!old.length){if(typeof toast==='function')toast('이미 가져온 사진이 없습니다');return;}
+  const sel=new Set();
+  function draw(){
+    S.body().innerHTML='<p class="m38-p">이미 가져온 사진입니다. <b>다시 쓸 사진만 눌러 고르세요.</b><br>보고서에 아직 있는 사진을 고르면 두 장이 됩니다.</p>'+
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:4px 0 12px">'+
+      old.map((p,i)=>{const on=sel.has(i);return `<button type="button" data-ri="${i}" style="position:relative;border:0;padding:0;border-radius:12px;overflow:hidden;cursor:pointer;aspect-ratio:1;background:#E9EEF6;box-shadow:${on?'0 0 0 3px #0E2350,0 6px 12px -6px rgba(14,35,80,.5)':'inset 0 0 0 1px #D5DCEA'}">`+
+        `<img src="${esc(p.t||p.url)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block;opacity:${on?1:.8}">`+
+        `<span style="position:absolute;left:5px;top:5px;font-size:11px;font-weight:800;background:rgba(255,255,255,.92);color:#0E2350;border-radius:999px;padding:2px 7px">${CN[p.cat]||''}</span>`+
+        `<span style="position:absolute;right:5px;top:5px;width:22px;height:22px;border-radius:50%;font-size:13px;font-weight:900;line-height:22px;text-align:center;background:${on?'#0E2350':'rgba(255,255,255,.85)'};color:#fff;box-shadow:inset 0 0 0 1.5px ${on?'#0E2350':'#98A1B4'}">${on?'✓':''}</span></button>`;}).join('')+'</div>'+
+      `<div class="m38-go"><button type="button" data-rx="1">취소</button><button type="button" class="ok" data-rok="1"${sel.size?'':' disabled style="opacity:.45"'}>${sel.size?sel.size+'장 ':''}다시 가져오기 ✓</button></div>`;
+  }
+  S.open('↩ 가져온 사진 다시 고르기','사진 '+old.length+'장 · 지운 사진을 골라 다시 넣을 수 있습니다',' ');draw();
+  const bd=S.body();
+  bd.onclick=ev=>{
+    const b=ev.target.closest('[data-ri]');if(b){const i=+b.dataset.ri;sel.has(i)?sel.delete(i):sel.add(i);draw();return;}
+    if(ev.target.closest('[data-rx]')){bd.onclick=null;S.close();return;}
+    if(ev.target.closest('[data-rok]')&&sel.size){const ids=new Set([...sel].map(i=>old[i].id));bd.onclick=null;S.close();
+      importNow(SHOWN.map(j=>Object.assign({},j,{ph:j.ph.filter(p=>ids.has(p.id))})),true);}
+  };
+}
 async function pickSheet(wide){
   const date=fv(2)||myToday();const list=useJobs(await siteOf(date,wide).catch(()=>[]));
   const S=window.__m38sheet;if(!S)return;
@@ -11863,9 +11892,10 @@ function etcWhere(n){
     if(ov)ov.addEventListener('click',function oc(e){if(e.target===ov){ov.removeEventListener('click',oc);fin('skip');}});
   });
 }
-async function importNow(jobs){
+async function importNow(jobs,again){
   if(!jobs||!jobs.length)return;
-  jobs=jobs.map(j=>Object.assign({},j,{ph:j.ph.filter(okCat)})).filter(j=>j.ph.length);if(!jobs.length)return;
+  jobs=jobs.map(j=>Object.assign({},j,{ph:j.ph.filter(p=>okCat(p)&&(again||isNew(p)))})).filter(j=>j.ph.length);
+  if(!jobs.length){if(typeof toast==='function')toast('새로 올린 직원 사진이 없습니다 — 이미 모두 가져왔습니다');check();return;}
   const ph=jobs.flatMap(j=>j.ph);
   const w=document.createElement('div');w.className='m35-wait';w.textContent='📥 직원 사진 받는 중… (0/'+ph.length+')';document.body.appendChild(w);
   try{
@@ -11920,7 +11950,8 @@ async function importNow(jobs){
       }
       if(box)window.ingestPhotos(box,E.map(x=>x.f));
     }
-    jobs.forEach(j=>{DONE[j.key]=1;j.ph.forEach(p=>{updateDoc(doc(db(),'site_photos',p.id),{imported_at:new Date().toISOString()}).catch(()=>{});});});
+    const now=new Date().toISOString();
+    jobs.forEach(j=>{DONE[j.key]=1;j.ph.forEach(p=>{IMP.add(p.id);p.imported_at=p.imported_at||now;updateDoc(doc(db(),'site_photos',p.id),{imported_at:now}).catch(()=>{});});});
     if(typeof toast==='function')toast('📥 직원 사진 '+ph.length+'장을 넣었습니다'+(BA.length?' — 세척 사진은 정리 창에서 「적용」':''));
     check();
   }catch(err){w.remove();alert('가져오지 못했습니다: '+(err.message||err));}
