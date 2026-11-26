@@ -3294,7 +3294,7 @@ function renderLI(){
     var da0=li.discType==='pct'?la0*((li.discVal||0)/100):(li.discVal||li.disc||0);
     var _dl0=pkDcSum(li.id);
     var lineAmt0=fmtAmt(la0-da0)+(_dl0>0.005?' <small style="color:var(--red);font-weight:800">🏷️−'+fmtAmt(_dl0)+'</small>':'');
-    var displayName=li.name||'(항목명 없음)';
+    var _dn=liDispName(li),displayName=_dn.ko?ivxEsc(_dn.ko):'(항목명 없음)';
     var summaryHtml='<div class="li-summary" onclick="toggleLI(\''+li.id+'\')" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:2px 0">'+
       '<div style="display:flex;flex-direction:column;gap:2px" onclick="event.stopPropagation()">'+
         '<button class="ld" onclick="moveLI(\''+li.id+'\',-1)" style="font-size:10px;padding:1px 5px" title="위로">▲</button>'+
@@ -3302,6 +3302,7 @@ function renderLI(){
       '</div>'+
       '<div style="flex:1;min-width:0">'+
         '<div style="font-size:13px;font-weight:600;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+displayName+'</div>'+
+        liTagsHtml(_dn.tags)+
         '<div style="font-size:11px;color:var(--gray)">'+fmtAmt(li.price)+' × '+li.qty+'</div>'+
       '</div>'+
       '<div style="font-size:13px;font-weight:600;color:var(--txt);flex-shrink:0" id="lit-'+li.id+'">'+lineAmt0+'</div>'+
@@ -3593,7 +3594,71 @@ function pkKoFetch(){
     _pkKoBusy=false;
     try{localStorage.setItem(PK_KO_KEY,JSON.stringify(c));}catch(e){}
     var sk=$('sk');if(sk&&!sk.classList.contains('hidden')){pickerRender();pkFoot();}
+    try{if($('li-wrap')&&lineItems.length)renderLI();}catch(e){}
   });
+}
+// 서비스항목 탭 담은 품목 줄 이름 (2026-11-26) — 한글 작업명만 크게, 아래에 품목 꼬리표
+//  예) 「HHC10102 CHEMICAL CLEANING」 → 전용약품세척 / [벽걸이에어컨]
+//      「[쇼파-I형] …」 → 작업명 / [쇼파][I형][습식] · 추가비용 품목은 주황 [추가비용] 꼬리표
+//  ※ 화면 표시만 바꿉니다 — 인보이스·고객 문서에 저장되는 이름은 그대로입니다
+//  직접 고친 이름(항목설정 이름과 다름)은 그 이름을 기준으로 바꿉니다
+var LI_PROD_KO={'벽걸이형 에어컨':'벽걸이에어컨','카세트형 에어컨':'카세트에어컨','실외기 에어컨':'실외기','FCU 덕트형 에어컨':'덕트형에어컨',
+  '주방 후드':'주방후드','의류 건조기':'의류건조기','벽걸이형':'벽걸이에어컨','카세트형':'카세트에어컨','매립형':'매립형에어컨','실외기':'실외기'};
+function liProdKo(x){x=String(x||'').replace(/\s{2,}/g,' ').trim();return LI_PROD_KO[x]||x;}
+function liDispName(li){
+  var n=String((li&&li.name)||'').trim();if(!n)return {ko:'',tags:[]};
+  var sv=li.svcId&&services.find(function(x){return x.id===li.svcId;});
+  if(!sv)sv=services.find(function(x){return x.name===n||x.name_ko===n;});
+  var same=sv&&(sv.name===n||sv.name_ko===n);
+  var ko=same?pkKo(sv):pkKo({name:n});
+  ko=ivStripCode(String(ko||n)).replace(/\s{2,}/g,' ').trim();
+  var prod='',grey=[],extra=false,body=ko,m;
+  function addG(t){t=String(t||'').trim();if(!t)return;
+    if(/추가\s*비용|^extra cost/i.test(t)){extra=true;return;}
+    if(/^I\s*형$|^일자/i.test(t))t='I형';else if(/^L\s*형$/i.test(t))t='L형';
+    if(grey.indexOf(t)<0)grey.push(t);}
+  // 앞 꼬리표 [쇼파-I형] [습식] … 를 모두 떼어 꼬리표로
+  while((m=body.match(/^\[([^\]]{1,40})\]\s*(.*)$/))){
+    var parts=m[1].split(/\s*[-·]\s*/);
+    var p0=parts.shift();
+    if(/추가\s*비용|^extra cost/i.test(p0))extra=true;
+    else if(/^(건식|습식|I\s*형|L\s*형)$/i.test(p0))addG(p0);
+    else if(!prod)prod=liProdKo(p0);else addG(p0);
+    parts.forEach(addG);
+    body=m[2];
+  }
+  body=body.trim();
+  // 꼬리표가 없으면 항목설정 분류(중분류·소분류)에서 품목을 찾습니다
+  var cat=(sv&&sv.cat)||li.cat||'',sub=(sv&&sv.subcat)||li.subcat||'',s2=(sv&&sv.sub2!==undefined?sv.sub2:li.sub2)||'';
+  if(/추가\s*비용/.test(sub+' '+s2))extra=true;
+  if(!prod){
+    if(/에어컨/.test(sub)&&s2&&!/추가\s*비용/.test(s2))prod=liProdKo(s2);
+    else if(sub&&!/^기타/.test(sub)&&!/추가\s*비용/.test(sub)&&sub.indexOf('회원제')<0)prod=/에어컨/.test(sub)?'에어컨':sub;
+    if(prod&&(cat==='수리'||cat==='설치')&&prod.indexOf(cat)<0)prod=cat+' '+prod;
+  }
+  if(/매장용/.test(sub)&&prod&&prod.indexOf('매장')<0)addG('매장용');
+  // 작업명 안의 모양·방식 낱말도 꼬리표로 (쇼파 등)
+  if(/쇼파|소파/.test(prod+sub)){
+    if(/(^|[^A-Za-z])I\s*형|일자형/i.test(ko))addG('I형');
+    if(/(^|[^A-Za-z])L\s*형/i.test(ko))addG('L형');
+    if(/건식/.test(ko))addG('건식');
+    if(/습식/.test(ko))addG('습식');
+    var _b=body.replace(/(^|\s)(건식|습식|[IL]\s*형)(?=\s|$)/gi,' ').replace(/\s{2,}/g,' ').trim();if(_b)body=_b;   // 꼬리표와 겹치는 낱말은 작업명에서 뺌
+  }
+  if(/추가\s*비용/.test(body))extra=true;
+  if(!body)body=extra?'추가비용':(prod||ko);
+  if(!ivHasKo(body)&&!prod&&!grey.length&&!extra)return {ko:ivStripCode(n),tags:[]};
+  var tags=[];
+  if(prod&&prod!==body)tags.push({t:prod,k:'p'});
+  grey.forEach(function(g){if(g!==body&&g!==prod)tags.push({t:g,k:'g'});});
+  if(extra&&body!=='추가비용')tags.push({t:'추가비용',k:'x'});
+  return {ko:body,tags:tags};
+}
+var LI_TAG_CL={p:'color:#0f766e;background:#e6f6f4',g:'color:#475569;background:#eef1f5',x:'color:#b45309;background:#fdf0dc'};
+function liTagsHtml(tags){
+  if(!tags||!tags.length)return '';
+  return '<div style="display:flex;flex-wrap:wrap;gap:3px;margin:2px 0">'+tags.map(function(g){
+    return '<span style="font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 6px;line-height:1.5;'+LI_TAG_CL[g.k]+'">'+ivxEsc(g.t)+'</span>';}).join('')+'</div>';
 }
 function pkLiKo(li){var sv=li&&li.svcId&&services.find(function(x){return x.id===li.svcId;});return ivStripCode(sv?pkKo(sv):((li&&li.name)||''));}
 function pkLiNet(li){
