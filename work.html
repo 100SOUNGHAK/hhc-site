@@ -311,6 +311,8 @@ html,body{background:#EEF2F8}
 .wk-pk button:active{transform:translateY(1px)}
 .wk-pk button.ld{opacity:.6}
 .sp-btns.c4{grid-template-columns:repeat(4,1fr);gap:6px}
+.sp-tip{display:flex;gap:8px;align-items:flex-start;margin:10px 0 0;padding:9px 11px;border-radius:12px;background:#FFF8EC;box-shadow:inset 0 0 0 1px #F3DDAE;font-size:12.5px;line-height:1.45;font-weight:600;color:#6B4A00}
+.sp-tip i{flex:none;font-style:normal}.sp-tip b{font-weight:800;color:#4A3300}
 .sp-btns.c4 .sp-btn{padding:12px 2px 10px}
 .sp-btns.c4 .sp-btn b{font-size:13px}
 .sp-btns.c4 .sp-btn small{font-size:11px}
@@ -745,10 +747,10 @@ load();
    · 이 블록만 지우고 위 두 줄(window.__sp)을 남겨 두어도 화면은 그대로 동작. */
 (function(){
   const TX={en:{h:'Site photos',s:'Sent to the office for the report',temp:'Temp',before:'Before',after:'After',etc:'Other',
-      ts:'📷 Camera',bs:'📷 Camera',as:'📷 Camera',es:'📷 Camera',alb:'From gallery',more:c=>'📷 One more · '+c,up:n=>'Uploading '+n+' photo'+(n>1?'s':'')+'…',
+      ts:'📷 Camera',bs:'📷 Camera',as:'📷 Camera',es:'📷 Camera',alb:'From gallery',tip:'<b>Temp photo:</b> get close — the meter screen should fill more than half the photo. Shoot straight on, no light reflection.',more:c=>'📷 One more · '+c,up:n=>'Uploading '+n+' photo'+(n>1?'s':'')+'…',
       off:n=>n+' photo'+(n>1?'s':'')+' waiting — will upload when internet is back',del:'Delete this photo?',fail:'Could not upload: ',chip:'Photos'},
     ko:{h:'현장 사진',s:'보고서용으로 사무실에 전달됩니다',temp:'온도 측정',before:'세척 전',after:'세척 후',etc:'기타 사진',
-      ts:'📷 바로 촬영',bs:'📷 바로 촬영',as:'📷 바로 촬영',es:'📷 바로 촬영',alb:'앨범에서',more:c=>'📷 한 장 더 · '+c,up:n=>n+'장 올리는 중…',off:n=>n+'장 대기 중 — 인터넷이 연결되면 올라갑니다',del:'이 사진을 지울까요?',fail:'올리지 못했습니다: ',chip:'사진'}};
+      ts:'📷 바로 촬영',bs:'📷 바로 촬영',as:'📷 바로 촬영',es:'📷 바로 촬영',alb:'앨범에서',tip:'<b>온도 사진:</b> 가까이에서 — 계측기 화면이 사진의 절반 이상 차게, 정면에서, 빛 반사 없이 찍어 주세요.',more:c=>'📷 한 장 더 · '+c,up:n=>n+'장 올리는 중…',off:n=>n+'장 대기 중 — 인터넷이 연결되면 올라갑니다',del:'이 사진을 지울까요?',fail:'올리지 못했습니다: ',chip:'사진'}};
   const CATS=[['temp','🌡️',''],['before','🧽','b'],['after','✨','a'],['etc','🧾','e']];   // etc = 기타 사진 (2026-11-25)
   const tt=()=>TX[L==='ko'?'ko':'en'];
   let Q=[];            // 올릴 대기열 {id,job,date,cat,f,t,w,h,taken,url}
@@ -773,7 +775,7 @@ load();
   async function add(job,cat,files){
     const date=DATA&&DATA.date;if(!date)return;
     for(const f of files){
-      try{const a=await shrink(f,1600,.82),b=await shrink(f,360,.7);
+      try{const a=cat==='temp'?await shrink(f,2400,.9):await shrink(f,1600,.82),b=await shrink(f,360,.7);   // 온도 사진은 숫자 판독용이라 크게(2026-11-26)
         const x={id:'u'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),job,date,cat,f:a.blob,t:b.blob,w:a.w,h:a.h,taken:f.lastModified||Date.now()};
         x.url=URL.createObjectURL(b.blob);Q.push(x);await dbPut(x);refresh();
       }catch(e){}
@@ -814,7 +816,7 @@ load();
     const t=tt(),S=j.site||[],P=pend(j.id),tot=S.length+P.length;
     let h=`<div class="sp" data-job="${esc(j.id)}"><div class="sp-h"><i>📷</i><div><b>${t.h}</b><small>${t.s}</small></div>${tot?'<span class="sp-tot">'+tot+'</span>':''}</div><div class="sp-btns c4">`+
       CATS.map(c=>{const n=S.filter(x=>x.cat===c[0]).length+pend(j.id,c[0]).length;
-        return `<button type="button" class="sp-btn ${c[2]}" data-spcam="${c[0]}"><em>${c[1]}</em><b>${t[c[0]]}</b><small>${t[c[0][0]+'s']}</small>${n?'<span class="n">'+n+'</span>':''}</button>`;}).join('')+'</div>';
+        return `<button type="button" class="sp-btn ${c[2]}" data-spcam="${c[0]}"><em>${c[1]}</em><b>${t[c[0]]}</b><small>${t[c[0][0]+'s']}</small>${n?'<span class="n">'+n+'</span>':''}</button>`;}).join('')+'</div>'+`<p class="sp-tip"><i>🌡️</i><span>${t.tip}</span></p>`;
     if(LAST&&LAST.job===j.id){const c=CATS.find(x=>x[0]===LAST.cat);h+=`<button type="button" class="sp-more ${c[2]}" data-spcam="${c[0]}">${t.more(t[c[0]])}</button>`;}
     h+=`<div class="sp-alb"><span>🖼 ${t.alb}</span>`+CATS.map(c=>`<button type="button" data-spalb="${c[0]}">${c[1]} ${t[c[0]]}</button>`).join('')+'</div>';
     const mine=Q.filter(x=>x.job===j.id).length;

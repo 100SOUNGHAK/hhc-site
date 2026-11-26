@@ -10584,35 +10584,83 @@ kind==='washer'?'- 체크리스트 결과를 한두 줄로.':'- 측정한 에어
     if(!k){k=(prompt('사진 자동 분류에 쓸 Claude API 키를 한 번만 넣어 주세요.\n(일정표·보고서 자동 작성과 같은 키 · 이 기기에만 저장 · 비우면 기기 안 판정만 합니다)')||'').trim();if(k)try{localStorage.setItem('hhc_ak',k);}catch(e){}}
     return k;}
   function loadImg(src){return new Promise(function(res){var im=new Image();if(!/^data:/.test(src))im.crossOrigin='anonymous';im.onload=function(){res(im);};im.onerror=function(){res(null);};im.src=src;});}
-  async function thumb(o,max){var im=await loadImg(o.src);if(!im)return null;var r=Math.min(1,max/Math.max(im.width,im.height)),cv=document.createElement('canvas');cv.width=Math.round(im.width*r);cv.height=Math.round(im.height*r);
-    var x=cv.getContext('2d');x.drawImage(im,0,0,cv.width,cv.height);try{return {cv:cv,url:cv.toDataURL('image/jpeg',.72)};}catch(e){return {cv:null,url:null};}}
-  async function aiSort(list){
-    var key=aiKey();if(!key)return null;
-    var content=[{type:'text',text:'사진 '+list.length+'장입니다. 번호 순서대로 붙어 있습니다.'}];
-    for(var i=0;i<list.length;i++){var o=list[i],tb=await thumb(o,480);
-      content.push({type:'text',text:'[사진 '+(i+1)+']'});
-      if(tb&&tb.url)content.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:tb.url.split(',')[1]}});
-      else if(/^https?:/.test(o.src))content.push({type:'image',source:{type:'url',url:o.src}});
-      else content.push({type:'text',text:'(사진 불러오기 실패)'});}
-    var sys='당신은 에어컨·세탁기·주방후드·커튼·쇼파 청소 업체의 현장 사진 분류 담당입니다.\n'+
-      '각 사진이 청소 전(오염: 먼지·곰팡이·검은 점/얼룩·기름때·물때·녹·이물질이 보임)인지 청소 후(같은 부위가 깨끗함)인지 판정하세요.\n'+
-      '그리고 같은 부위·같은 각도로 찍은 사진끼리 「청소 전 ↔ 청소 후」 짝을 지으세요(한 사진은 한 짝에만). 짝이 없는 사진은 짝에 넣지 마세요.\n'+
-      '판정이 애매하면 c(확신도)를 낮게 주세요. what 은 찍힌 부위를 한국어 2~8자로(예: 송풍팬, 열교환기, 필터, 드레인팬, 세탁조, 후드 필터).\n'+
-      'cat 은 사진 종류 번호: 1 = 분해한 부품들을 한곳에 모아 놓은 전체 사진(여러 부품이 함께 보임), 2 = 에바포레이터(열교환기·냉각핀 코일), 3 = 블로워팬(송풍팬·시로코팬), 4 = 그 외 모든 사진(필터·드레인팬·커버·세탁조·후드 등).\n'+
-      '반드시 JSON 하나만 출력: {"photos":[{"i":1,"s":"before","c":0.95,"what":"송풍팬","cat":3}],"pairs":[[1,5]]}  (s 는 before 또는 after, pairs 는 [전 번호, 후 번호])';
-    var ctrl=(typeof AbortController!=='undefined')?new AbortController():null,timer=setTimeout(function(){try{ctrl&&ctrl.abort();}catch(e){}},90000);
+  async function thumb(o,max,q){var im=await loadImg(o.src);if(!im)return null;var r=Math.min(1,max/Math.max(im.width,im.height)),cv=document.createElement('canvas');cv.width=Math.round(im.width*r);cv.height=Math.round(im.height*r);
+    var x=cv.getContext('2d');x.drawImage(im,0,0,cv.width,cv.height);try{return {cv:cv,url:cv.toDataURL('image/jpeg',q||.72)};}catch(e){return {cv:null,url:null};}}
+  /* v2 (2026-11-26) 오염 인식 · 전·후 짝 정확도 개선
+     · 사진을 더 크게 보냄(480 → 768) · 사진마다 오염 점수 d(0~100) · 촬영 시각과 직원이 고른 전·후를 함께 알려 줌
+     · 판정이 불확실하거나 짝을 못 찾은 사진만 더 큰 사진(1100)으로 한 번 더 봄 · 짝 안에서 전이 후보다 깨끗하면 바로잡음
+     · 배치는 부위 순서(①②③④) + 같은 부위 안에서 오염이 심한 줄부터(정리 창에서 「오염 심한 순으로만」 전환 가능). 되돌리기: 2229374 의 aiSort · classify 로. */
+  var S_SIZE=768,S_RE=1100,S_REMAX=10;
+  function hms(t){if(!t)return '';var d=new Date(t);if(isNaN(d))return '';var z=function(n){return (n<10?'0':'')+n;};return z(d.getHours())+':'+z(d.getMinutes())+':'+z(d.getSeconds());}
+  var SORT_SYS='당신은 에어컨·세탁기·주방후드·커튼·쇼파 청소 업체의 현장 사진 분류 담당입니다. 사진을 꼼꼼히 보고 세 가지를 합니다.\n'+
+    '[1] 오염 점수 d (0~100) — 사진에 찍힌 부위가 얼마나 더러운지.\n'+
+    '  0~10 새것처럼 깨끗함 / 11~30 거의 깨끗함(옅은 먼지·물 자국 정도) / 31~50 먼지·얼룩이 눈에 띔 / 51~70 먼지층이 두껍거나 곰팡이 점·기름때가 여러 곳 / 71~90 넓은 면이 곰팡이·검은 때·슬러지·기름때로 덮임 / 91~100 부위 대부분이 심하게 덮임.\n'+
+    '  오염으로 보는 것: 먼지 뭉침, 곰팡이(검은 점·얼룩), 검은 때, 누런 변색, 기름때, 물때·석회, 녹, 슬러지, 이물질, 냉각핀 사이가 막힌 것, 날개에 낀 때.\n'+
+    '  오염이 아닌 것: 그림자, 원래 어두운 색 부품, 금속의 반사광, 물방울·젖은 광택, 긁힌 자국, 부품 자체의 무늬. 젖어서 번들거리고 때가 없으면 청소 후입니다. 세제 거품이 덮여 있으면 청소 중이므로 c 를 낮게 주십시오.\n'+
+    '  사진이 어둡거나 흐려도 부위 자체를 보고 판단하고, 잘 안 보이면 c 를 낮게 주십시오.\n'+
+    '[2] 청소 전(before) / 청소 후(after) — 오염이 보이면 before, 같은 부위가 깨끗하면 after.\n'+
+    '  촬영 시각이 적혀 있으면 참고합니다: 같은 부위는 청소 전을 먼저, 청소 후를 나중에 찍습니다. 「직원 구분」이 적혀 있으면 직원이 현장에서 고른 것이므로 사진이 명백히 반대가 아닌 한 그대로 따릅니다.\n'+
+    '[3] 짝(pairs) — 같은 부위를 찍은 청소 전 ↔ 청소 후 사진을 [전 번호, 후 번호] 로 묶습니다(한 사진은 한 짝에만).\n'+
+    '  색·밝기가 아니라 모양으로 맞춥니다: 부품 종류, 찍은 각도와 거리, 나사·걸쇠·라벨·모서리 같은 고유한 생김새, 배경(바닥·벽·주변 물건). 청소하면 색이 완전히 달라지므로 색이 다른 것은 정상입니다.\n'+
+    '  같은 종류 부품 사진이 여러 장이면 각도·배경·고유한 생김새가 가장 닮은 것끼리, 그래도 비슷하면 촬영 순서가 같은 것끼리(첫 번째 전 ↔ 첫 번째 후) 묶습니다.\n'+
+    '  짝 안에서는 반드시 전의 d 가 후의 d 보다 높아야 합니다. 맞는 상대가 없으면 억지로 묶지 말고 짝에서 빼십시오.\n'+
+    'what = 찍힌 부위 한국어 2~8자(예: 송풍팬, 열교환기, 필터, 드레인팬, 세탁조, 후드 필터). c = 전·후 판정 확신도 0~1(애매하면 낮게).\n'+
+    'cat = 사진 종류 번호: 1 = 분해한 부품들을 한곳에 모아 놓은 전체 사진(여러 부품이 함께 보임), 2 = 에바포레이터(열교환기·냉각핀 코일), 3 = 블로워팬(송풍팬·시로코팬), 4 = 그 외 모든 사진(필터·드레인팬·커버·세탁조·후드 등).\n'+
+    '[답 형식] 먼저 사진마다 「번호: 부위 · 보이는 오염 · 전/후」를 한 줄씩 짧게 적고, 맨 마지막에 JSON 하나만 적습니다:\n'+
+    '{"photos":[{"i":1,"s":"before","d":85,"c":0.95,"what":"송풍팬","cat":3}],"pairs":[[1,5]]}';
+  async function sortCall(key,content,maxTok){
+    var ctrl=(typeof AbortController!=='undefined')?new AbortController():null,timer=setTimeout(function(){try{ctrl&&ctrl.abort();}catch(e){}},120000);
     try{
       var res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',signal:ctrl?ctrl.signal:undefined,
         headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-        body:JSON.stringify({model:AI_MODEL,max_tokens:3000,system:sys,messages:[{role:'user',content:content}]})});
+        body:JSON.stringify({model:AI_MODEL,max_tokens:maxTok,system:SORT_SYS,messages:[{role:'user',content:content}]})});
       clearTimeout(timer);var data=await res.json();
       if(res.status===401){try{localStorage.removeItem('hhc_ak');}catch(e){}return {err:'API 키가 맞지 않음'};}
       if(data.error)return {err:String(data.error.message||'오류').slice(0,40)};
       var out=(data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
-      var m=out.match(/\{[\s\S]*\}/);if(!m)return {err:'답 형식 오류'};
-      var j=JSON.parse(m[0]);if(!j.photos||!j.photos.length)return {err:'답 형식 오류'};
+      var k=out.search(/\{\s*"photos"/),e2=out.lastIndexOf('}');if(k<0||e2<k)return {err:'답 형식 오류'};
+      var j;try{j=JSON.parse(out.slice(k,e2+1));}catch(_){return {err:'답 형식 오류'};}
+      if(!j.photos||!j.photos.length)return {err:'답 형식 오류'};
       return j;
     }catch(e){clearTimeout(timer);return {err:e&&e.name==='AbortError'?'응답이 너무 늦음':'연결 오류'};}
+  }
+  async function sortParts(list,idx,size){
+    var content=[];
+    for(var n=0;n<idx.length;n++){var i=idx[n],o=list[i],tb=await thumb(o,size,.85),tm=hms(o.t);
+      content.push({type:'text',text:'[사진 '+(i+1)+']'+(tm?' 촬영 '+tm:'')+(o.h?' · 직원 구분: '+(o.h==='a'?'청소 후':'청소 전'):'')});
+      if(tb&&tb.url)content.push({type:'image',source:{type:'base64',media_type:'image/jpeg',data:tb.url.split(',')[1]}});
+      else if(/^https?:/.test(o.src))content.push({type:'image',source:{type:'url',url:o.src}});
+      else content.push({type:'text',text:'(사진 불러오기 실패)'});}
+    return content;
+  }
+  async function aiSort(list){
+    var key=aiKey();if(!key)return null;
+    var all=list.map(function(_,i){return i;});
+    var content=[{type:'text',text:'사진 '+list.length+'장입니다. 번호 순서대로 붙어 있습니다.'}].concat(await sortParts(list,all,S_SIZE));
+    var j=await sortCall(key,content,Math.min(8000,1200+list.length*170));
+    if(j.err)return j;
+    /* 불확실한 사진만 더 크게 다시 보기: 확신도 낮음 · 짝을 못 찾았는데 반대쪽에도 짝 없는 사진이 있음 */
+    try{
+      var by={},paired={};j.photos.forEach(function(p){by[p.i|0]=p;});(j.pairs||[]).forEach(function(pr){paired[pr[0]|0]=paired[pr[1]|0]=1;});
+      var ub=[],ua=[],lowc=[];
+      all.forEach(function(i){var p=by[i+1];if(!p){lowc.push(i);return;}if((+p.c||0)<0.75)lowc.push(i);if(!paired[i+1])(p.s==='after'?ua:ub).push(i);});
+      var re=lowc.slice();if(ub.length&&ua.length)ub.concat(ua).forEach(function(i){if(re.indexOf(i)<0)re.push(i);});
+      /* 확신도 낮은 사진의 지금 짝도 함께 보여 줘야 다시 맞출 수 있음 */
+      lowc.forEach(function(i){(j.pairs||[]).forEach(function(pr){var x=(pr[0]|0)-1,y=(pr[1]|0)-1,o=x===i?y:y===i?x:-1;if(o>=0&&re.indexOf(o)<0)re.push(o);});});
+      re.sort(function(x,y){return x-y;});
+      if(re.length>=1&&re.length<=S_REMAX){
+        var c2=[{type:'text',text:'처음 판정에서 불확실했던 사진 '+re.length+'장을 더 크게 다시 보여 드립니다. 번호는 처음 번호 그대로입니다. 이 사진들만 다시 판정하고, 짝도 이 사진들 안에서만 다시 묶어 주십시오.'}].concat(await sortParts(list,re,S_RE));
+        var j2=await sortCall(key,c2,Math.min(4000,900+re.length*170));
+        if(j2&&!j2.err){
+          var inre={};re.forEach(function(i){inre[i+1]=1;});
+          j2.photos.forEach(function(p){if(inre[p.i|0]){p.re=1;by[p.i|0]=p;}});
+          var keep=(j.pairs||[]).filter(function(pr){return !inre[pr[0]|0]&&!inre[pr[1]|0];});
+          (j2.pairs||[]).forEach(function(pr){if(inre[pr[0]|0]&&inre[pr[1]|0])keep.push(pr);});
+          j={photos:Object.keys(by).map(function(k2){return by[k2];}),pairs:keep,re:re.length};
+        }
+      }
+    }catch(e){}
+    return j;
   }
   /* 기기 안 모양 비교: 24×24 흑백 + 윤곽 → 상관도 (색·오염보다 구도에 민감) */
   async function feat(o){if(o.fv!==undefined)return o.fv;var tb=await thumb(o,96);o.fv=null;if(!tb||!tb.cv)return null;
@@ -10638,25 +10686,36 @@ kind==='washer'?'- 체크리스트 결과를 한두 줄로.':'- 측정한 에어
     B.forEach(function(b,i){if(row[i]){nb.push(b);na.push(row[i]);}else lb.push(b);});
     return {B:nb.concat(lb),A:na.concat(A.filter(function(a,ai){return !ua[ai];})),n:n};
   }
+  /* 배치(2026-11-26 대표님 결정: 두 기준 병행) — 기본 'cat' = 부위 ①②③④ 순, 같은 부위 안에서는 오염이 심한 줄부터(같으면 촬영 순)
+     · 'dirt' = 부위와 상관없이 오염이 심한 줄부터(정리 창 버튼으로 전환) */
+  function dK(o){return o&&o.ai&&typeof o.ai.d==='number'?o.ai.d:(o&&typeof o.dirt==='number'?o.dirt-1000:-2000);}   /* AI 점수 없는 사진은 뒤로(기기 안 점수 순) */
+  function cK(o){return (o&&o.ai&&o.ai.cat)||4;}
+  function order(list,PB,PA,lb,la,mode){
+    var ix=function(o){return list.indexOf(o);},cmp=function(x,y){return ((x.t||0)-(y.t||0))||(ix(x)-ix(y));};
+    var prs=PB.map(function(b,i){return [b,PA[i]];});
+    var pc=function(q){return Math.min(cK(q[0]),cK(q[1]));};
+    if(mode==='cat'){prs.sort(function(p1,p2){return (pc(p1)-pc(p2))||(dK(p2[0])-dK(p1[0]))||cmp(p1[0],p2[0]);});
+      lb=lb.slice().sort(function(x,y){return (cK(x)-cK(y))||(dK(y)-dK(x))||cmp(x,y);});la=la.slice().sort(function(x,y){return (cK(x)-cK(y))||cmp(x,y);});}
+    else{prs.sort(function(p1,p2){return (dK(p2[0])-dK(p1[0]))||(pc(p1)-pc(p2))||cmp(p1[0],p2[0]);});
+      lb=lb.slice().sort(function(x,y){return (dK(y)-dK(x))||(cK(x)-cK(y))||cmp(x,y);});la=la.slice().sort(function(x,y){return (cK(x)-cK(y))||cmp(x,y);});}
+    return {B:prs.map(function(q){return q[0];}).concat(lb),A:prs.map(function(q){return q[1];}).concat(la)};
+  }
   async function classify(list){
     var j=await aiSort(list),why='';
     if(j&&!j.err){
-      var info={};j.photos.forEach(function(p){var o=list[(p.i|0)-1];if(o){var ct=p.cat|0;o.ai={s:p.s==='after'?'a':'b',c:+p.c||0,what:String(p.what||'').slice(0,12),cat:ct>=1&&ct<=4?ct:4};}});
-      list.forEach(function(o){if(!o.ai)o.ai={s:'b',c:0,what:''};});
-      var B=[],A=[],used={};
-      (j.pairs||[]).forEach(function(pr){var b=list[(pr[0]|0)-1],a=list[(pr[1]|0)-1];if(!b||!a||used[pr[0]]||used[pr[1]]||b===a)return;used[pr[0]]=used[pr[1]]=1;b.ai.s='b';a.ai.s='a';B.push(b);A.push(a);});
+      j.photos.forEach(function(p){var o=list[(p.i|0)-1];if(o){var ct=p.cat|0,d=parseFloat(p.d);o.ai={s:p.s==='after'?'a':'b',c:+p.c||0,what:String(p.what||'').slice(0,12),cat:ct>=1&&ct<=4?ct:4,d:isNaN(d)?null:Math.max(0,Math.min(100,Math.round(d)))};}});
+      list.forEach(function(o){if(!o.ai)o.ai={s:'b',c:0,what:'',cat:4,d:null};});
+      var B=[],A=[],used={},fixed=0;
+      (j.pairs||[]).forEach(function(pr){var b=list[(pr[0]|0)-1],a=list[(pr[1]|0)-1];if(!b||!a||used[pr[0]]||used[pr[1]]||b===a)return;used[pr[0]]=used[pr[1]]=1;
+        /* 짝 안에서는 더 더러운 쪽이 「전」 — 직원이 전·후를 골라 준 사진은 그대로 둠 */
+        if(!(b.h||a.h)&&b.ai.d!=null&&a.ai.d!=null&&a.ai.d-b.ai.d>=10){var t=b;b=a;a=t;b.ai.c=Math.min(b.ai.c,.6);a.ai.c=Math.min(a.ai.c,.6);fixed++;}
+        b.ai.s='b';a.ai.s='a';B.push(b);A.push(a);});
       var np=B.length;
-      /* 고정 배치 순서: ① 분해 부품 전체 → ② 에바포레이터 → ③ 블로워팬 → ④ 그 외. 같은 종류 안에서는 촬영 시간·원래 순서 */
-      var ix=function(o){return list.indexOf(o);},cmp=function(x,y){return ((x.t||0)-(y.t||0))||(ix(x)-ix(y));};
-      var prs=B.map(function(b,i){return [b,A[i]];});
-      prs.sort(function(p1,p2){return (Math.min(p1[0].ai.cat,p1[1].ai.cat)-Math.min(p2[0].ai.cat,p2[1].ai.cat))||cmp(p1[0],p2[0]);});
-      B=prs.map(function(q){return q[0];});A=prs.map(function(q){return q[1];});
       var lb=[],la=[];
       list.forEach(function(o,i){if(used[i+1])return;(o.ai.s==='a'?la:lb).push(o);});
-      var bycat=function(x,y){return (x.ai.cat-y.ai.cat)||cmp(x,y);};
-      B=B.concat(lb.sort(bycat));A=A.concat(la.sort(bycat));
+      var od=order(list,B,A,lb,la,'cat');
       var low=list.filter(function(o){return o.ai.c<0.7;}).length;
-      return {B:B,A:A,note:'🤖 사진을 보고 오염 여부로 나누고, 같은 부위끼리 '+np+'쌍 짝지었습니다'+(low?' · 노란 표시 '+low+'장은 확인해 주세요':'')};
+      return {B:od.B,A:od.A,ord:'cat',note:'🤖 사진을 보고 오염 정도로 나누고, 같은 부위끼리 '+np+'쌍 짝지었습니다 · 부위 순서(①②③④), 같은 부위는 오염이 심한 줄부터'+(j.re?' · 불확실한 '+j.re+'장은 크게 다시 확인':'')+(fixed?' · 전·후가 뒤바뀐 '+fixed+'쌍 바로잡음':'')+(low?' · 노란 표시 '+low+'장은 확인해 주세요':'')};
     }
     if(j&&j.err)why=' (AI '+j.err+')';else why=' (AI 키 없음)';
     return await localClassify(list,why);
@@ -10670,9 +10729,10 @@ kind==='washer'?'- 체크리스트 결과를 한두 줄로.':'- 측정한 에어
     cand.forEach(function(c){if(c[0]<0.2||used[c[1]]||used[c[2]])return;used[c[1]]=used[c[2]]=1;
       var x=list[c[1]],y=list[c[2]];pairs.push((x.dirt||0)>=(y.dirt||0)?[x,y]:[y,x]);});
     var ds=list.map(function(o){return o.dirt||0;}).sort(function(a,b){return a-b;}),med=ds[Math.floor(ds.length/2)]||0;
-    pairs.sort(function(p1,p2){return (p1[0].t||0)-(p2[0].t||0);});
-    var B=pairs.map(function(q){return q[0];}),A=pairs.map(function(q){return q[1];});
-    list.forEach(function(o,i){if(used[i])return;((o.dirt||0)>=med?B:A).push(o);});
+    pairs.sort(function(p1,p2){return ((p2[0].dirt||0)-(p1[0].dirt||0))||((p1[0].t||0)-(p2[0].t||0));});   /* 더 지저분한 줄부터 */
+    var B=pairs.map(function(q){return q[0];}),A=pairs.map(function(q){return q[1];}),rb=[],ra=[];
+    list.forEach(function(o,i){if(used[i])return;((o.dirt||0)>=med?rb:ra).push(o);});
+    rb.sort(function(x,y){return (y.dirt||0)-(x.dirt||0);});B=B.concat(rb);A=A.concat(ra);
     return {B:B,A:A,note:'기기 안 판정: 비슷한 모양끼리 '+pairs.length+'쌍 짝짓고 더 어둡고 얼룩진 쪽을 「전」으로 했습니다 — 꼭 확인해 주세요'+why};
   }
 
@@ -10683,16 +10743,19 @@ kind==='washer'?'- 체크리스트 결과를 한두 줄로.':'- 측정한 에어
     var startB=B.slice(),startA=A.slice(),flashObj=null;
     var ov=document.createElement('div');ov.className='m35-ov';
     var lb=lbl(P,'b'),la=lbl(P,'a');
-    ov.innerHTML='<div class="m35-sh"><div class="m35-hd"><h3>'+P.name+' 사진 전·후 정리</h3><p>🤖 사진을 보고 오염 여부로 자동 분류 · 같은 부위끼리 같은 줄<br>위에서부터 ① 분해 부품 전체 ② 에바포레이터 ③ 블로워팬 ④ 그 외 순서<br>⇄ 로 '+lb+'↔'+la+' 옮기기 · ▲▼ 로 위/아래 순서 바꾸기<br>같은 줄 사진이 고객 보고서에서 전·후 짝으로 보입니다</p></div>'+
-      '<div class="m35-tools"><button type="button" data-t="ai">🤖 AI로 다시 분류</button><button type="button" data-t="pair">🔗 비슷한 모양끼리 짝 맞추기</button><button type="button" data-t="time">🕒 시간순 나누기</button><button type="button" data-t="swapall">⇄ 전·후 통째로 바꾸기</button></div>'+
+    ov.innerHTML='<div class="m35-sh"><div class="m35-hd"><h3>'+P.name+' 사진 전·후 정리</h3><p>🤖 사진을 보고 오염 여부로 자동 분류 · 같은 부위끼리 같은 줄<br>위에서부터 ① 분해 부품 전체 ② 에바포레이터 ③ 블로워팬 ④ 그 외 순서 · 같은 부위 안에서는 오염이 심한 줄부터<br>⇄ 로 '+lb+'↔'+la+' 옮기기 · ▲▼ 로 위/아래 순서 바꾸기<br>같은 줄 사진이 고객 보고서에서 전·후 짝으로 보입니다</p></div>'+
+      '<div class="m35-tools"><button type="button" data-t="ai">🤖 AI로 다시 분류</button><button type="button" data-t="ord">↕ 오염 심한 순으로만</button><button type="button" data-t="pair">🔗 비슷한 모양끼리 짝 맞추기</button><button type="button" data-t="time">🕒 시간순 나누기</button><button type="button" data-t="swapall">⇄ 전·후 통째로 바꾸기</button></div>'+
       '<div class="m35-sum"></div>'+
       '<div class="m35-body"><div class="m35-colh"><i></i><span class="cb">'+lb+'</span><span class="ca">'+la+'</span></div><div class="m35-rows"></div></div>'+
       '<div class="m35-ft"><button type="button" class="cc">취소</button><button type="button" class="ok">적용 <b>✓</b></button></div></div>';
     document.body.appendChild(ov);
-    var rows=ov.querySelector('.m35-rows'),sum=ov.querySelector('.m35-sum');
+    var rows=ov.querySelector('.m35-rows'),sum=ov.querySelector('.m35-sum'),ordBtn=ov.querySelector('[data-t="ord"]'),ordMode='cat';
+    function ordLabel(){if(ordBtn)ordBtn.textContent=ordMode==='dirt'?'↕ 부위 순서로':'↕ 오염 심한 순으로만';}
+    /* 지금 줄(같은 줄 = 짝)을 그대로 두고 줄 순서만 바꿈 */
+    function reorder(mode){var n=Math.min(B.length,A.length),l=B.concat(A),r=order(l,B.slice(0,n),A.slice(0,n),B.slice(n),A.slice(n),mode);B=r.B;A=r.A;ordMode=mode;ordLabel();}
     function cell(o,side,i,len){
       if(!o)return '<div class="m35-empty">빈 칸</div>';
-      return '<div class="m35-cell '+side+(o===flashObj?' flash':'')+'"><img src="'+o.src+'" alt="">'+(o.ai&&(o.ai.what||o.ai.c)?'<div class="tm'+(o.ai.c<0.7||o.ai.s!==side?' warn':'')+'">🤖 '+(['','①','②','③','④'][o.ai.cat]||'')+' '+(o.ai.what||'')+(o.ai.c<0.7||o.ai.s!==side?' · 확인 필요':' · '+Math.round(o.ai.c*100)+'%')+'</div>':(o.t?'<div class="tm">🕒 '+fmt(o.t)+'</div>':''))+
+      return '<div class="m35-cell '+side+(o===flashObj?' flash':'')+'"><img src="'+o.src+'" alt="">'+(o.ai&&(o.ai.what||o.ai.c)?'<div class="tm'+(o.ai.c<0.7||o.ai.s!==side?' warn':'')+'">🤖 '+(['','①','②','③','④'][o.ai.cat]||'')+' '+(o.ai.what||'')+(typeof o.ai.d==='number'?' · 오염 '+o.ai.d:'')+(o.ai.c<0.7||o.ai.s!==side?' · 확인 필요':(typeof o.ai.d==='number'?'':' · '+Math.round(o.ai.c*100)+'%'))+'</div>':(o.t?'<div class="tm">🕒 '+fmt(o.t)+'</div>':''))+
         '<div class="ctl"><button type="button" data-a="up" data-s="'+side+'" data-i="'+i+'"'+(i===0?' disabled':'')+'>▲</button>'+
         '<button type="button" data-a="dn" data-s="'+side+'" data-i="'+i+'"'+(i===len-1?' disabled':'')+'>▼</button>'+
         '<button type="button" class="sw" data-a="sw" data-s="'+side+'" data-i="'+i+'">'+(side==='b'?'후로 ▶':'◀ 전으로')+'</button>'+
@@ -10717,11 +10780,12 @@ kind==='washer'?'- 체크리스트 결과를 한두 줄로.':'- 측정한 에어
         else if(t.dataset.a==='x'){L.splice(i,1);}
         splitNote='';render();return;
       }
+      if(t.dataset.t==='ord'){reorder(ordMode==='dirt'?'cat':'dirt');splitNote=ordMode==='dirt'?'부위와 상관없이 오염이 심한 줄부터 다시 놓았습니다':'부위 순서(① 분해 부품 전체 ② 에바포레이터 ③ 블로워팬 ④ 그 외) · 같은 부위는 오염이 심한 줄부터 다시 놓았습니다';render();return;}
       if(t.dataset.t==='time'){var l=all(),k=autoSplit(l);B=l.slice(0,k);A=l.slice(k);splitNote=l.some(function(x){return x.t;})?'시간순으로 다시 나눴습니다':'시간 정보가 없어 반반으로 나눴습니다';render();return;}
       if(t.dataset.t==='ai'||t.dataset.t==='pair'){
         var busy=t.dataset.t==='ai'?'🤖 사진 분석 중…':'🔗 모양 비교 중…',w=document.createElement('div');w.className='m35-wait';w.textContent=busy;document.body.appendChild(w);
         (async function(){
-          if(t.dataset.t==='ai'){var l3=B.concat(A);l3.forEach(function(o){delete o.ai;});var r=await classify(l3);B=r.B;A=r.A;splitNote=r.note;}
+          if(t.dataset.t==='ai'){var l3=B.concat(A);l3.forEach(function(o){delete o.ai;});var r=await classify(l3);B=r.B;A=r.A;splitNote=r.note;ordMode='cat';ordLabel();}
           else{var lp=await localPair(B,A);B=lp.B;A=lp.A;splitNote='🔗 청소 전 순서에 맞춰 비슷한 모양끼리 '+lp.n+'쌍 짝지었습니다';}
           w.remove();render();})();
         return;}
@@ -11503,6 +11567,8 @@ body.m38q .m38-drain{display:block}
 .m38-as div{flex:1;min-width:0}
 .m38-as b{display:block;font-size:15px;color:#14192A;font-variant-numeric:tabular-nums}
 .m38-as b.x{color:#B45309;font-size:13px}
+.m38-as img.z{display:block;width:auto;max-width:100%;height:46px;object-fit:contain;border-radius:6px;margin:5px 0 2px;box-shadow:0 0 0 1px #D5DCEA}
+.m38-as small i.w{font-style:normal;font-weight:700;color:#B45309}
 .m38-as small{display:block;font-size:11.5px;color:#98A1B4;margin:2px 0 6px}
 .m38-as select{width:100%;font:inherit;font-size:15px;font-weight:700;color:#0E2350;border:0;border-radius:10px;padding:9px 10px;background:#F1F4FA;box-shadow:inset 0 0 0 1.5px #D5DCEA}
 .m38-as.dup select{box-shadow:inset 0 0 0 1.5px #F0B429;background:#FFF8EC}
@@ -11540,7 +11606,7 @@ body.m38q .m38-drain{display:block}
     return k;}
   function shrinkUrl(src,max){return new Promise(function(res){var im=new Image();im.onload=function(){var r=Math.min(1,max/Math.max(im.width,im.height)),cv=document.createElement('canvas');
     cv.width=Math.round(im.width*r);cv.height=Math.round(im.height*r);cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);try{res(cv.toDataURL('image/jpeg',.85));}catch(e){res(null);}};im.onerror=function(){res(null);};im.src=src;});}
-  async function askClaude(sys,content,maxTok){
+  async function askClaude(sys,content,maxTok,last){
     var key=aiKey(true);if(!key)return {err:'키 없음'};
     var ctrl=(typeof AbortController!=='undefined')?new AbortController():null,timer=setTimeout(function(){try{ctrl&&ctrl.abort();}catch(e){}},90000);
     try{
@@ -11551,27 +11617,110 @@ body.m38q .m38-drain{display:block}
       if(res.status===401){try{localStorage.removeItem('hhc_ak');}catch(e){}return {err:'API 키가 맞지 않음'};}
       if(data.error)return {err:String(data.error.message||'오류').slice(0,40)};
       var out=(data.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+      if(last){var e2=out.lastIndexOf('}'),s2=e2<0?-1:out.lastIndexOf('{',e2);if(s2<0)return {err:'답 형식 오류'};
+        try{return JSON.parse(out.slice(s2,e2+1));}catch(_){return {err:'답 형식 오류'};}}
       var m=out.match(/\{[\s\S]*\}/);if(!m)return {err:'답 형식 오류'};
       return JSON.parse(m[0]);
     }catch(e){clearTimeout(timer);return {err:e&&e.name==='AbortError'?'응답이 너무 늦음':'연결 오류'};}
   }
-  function imgPart(u){return {type:'image',source:{type:'base64',media_type:'image/jpeg',data:String(u).split(',')[1]}};}
+  function imgPart(u){var mt=(String(u).match(/^data:(image\/[a-z]+);/)||[])[1]||'image/jpeg';return {type:'image',source:{type:'base64',media_type:mt,data:String(u).split(',')[1]}};}
 
-  /* ════ ② 🤖 측정 사진 → 흡입 · 토출 온도 ════ */
+  /* ════ ② 🤖 측정 사진 → 흡입 · 토출 온도 ════
+     v2 (2026-11-26) 인식률 개선 — 사진을 덜 줄여 보내고, ① 사진 전체에서 값 + 계측기 화면 위치를 받고
+     ② 그 화면만 잘라 크게 키운 사진(원본 + 대비 높인 흑백)으로 한 번 더 읽어 ③ 두 값을 비교합니다.
+     같으면 확신 높음, 다르면 확대해서 읽은 값을 넣고 「확인 필요」(주황)로 표시. 되돌리기: 이 구역을 예전 readTemps 로. */
+  var T_FULL=1568,T_ZOOM=1400;
+  function loadIm(src){return new Promise(function(res){var im=new Image();im.onload=function(){res(im);};im.onerror=function(){res(null);};im.src=src;});}
+  function drawTo(im,sx,sy,sw,sh,dw,dh){var cv=document.createElement('canvas');cv.width=Math.max(1,Math.round(dw));cv.height=Math.max(1,Math.round(dh));
+    var c=cv.getContext('2d');c.imageSmoothingEnabled=true;try{c.imageSmoothingQuality='high';}catch(e){}c.drawImage(im,sx,sy,sw,sh,0,0,cv.width,cv.height);return cv;}
+  function cvJpg(cv,q){try{return cv.toDataURL('image/jpeg',q||.92);}catch(e){return null;}}
+  /* 대비 높인 흑백: 밝기 2%~98% 구간을 0~255 로 펴서 흐린 숫자·반사 낀 화면을 또렷하게 */
+  function enhance(cv){try{var w=cv.width,h=cv.height,o=document.createElement('canvas');o.width=w;o.height=h;var c=o.getContext('2d');c.drawImage(cv,0,0);
+    var id=c.getImageData(0,0,w,h),d=id.data,n=w*h,hist=new Uint32Array(256),g=new Uint8Array(n),i,v;
+    for(i=0;i<n;i++){v=(d[i*4]*77+d[i*4+1]*150+d[i*4+2]*29)>>8;g[i]=v;hist[v]++;}
+    var lo=0,hi=255,acc=0;for(i=0;i<256;i++){acc+=hist[i];if(acc>=n*.02){lo=i;break;}}
+    acc=0;for(i=255;i>=0;i--){acc+=hist[i];if(acc>=n*.02){hi=i;break;}}
+    if(hi-lo<24)return null;var k=255/(hi-lo);
+    for(i=0;i<n;i++){v=(g[i]-lo)*k;v=v<0?0:v>255?255:v;d[i*4]=d[i*4+1]=d[i*4+2]=v;}
+    c.putImageData(id,0,0);return cvJpg(o,.92);}catch(e){return null;}}
+  var TEMP_SYS='당신은 에어컨 점검 기사입니다. 사진 속 디지털 온도계·계측기 화면(LCD, 7세그먼트 숫자)을 정확히 읽습니다.\n'+
+    '[계측기] 보통 한 화면에 두 값이 함께 나옵니다. 위쪽 작은 줄(°C 표시) = 흡입 온도(a, 실내기 흡입구·주변 공기), 아래쪽 큰 숫자 = 토출 온도(b, 바람이 나오는 취출구).\n'+
+    '화면에 IN/OUT·T1/T2·흡입/토출 같은 글자가 있으면 그 표시를 따르고 lab 을 true 로 하십시오. 값이 하나만 보이면 보이는 값만 적고 나머지는 null.\n'+
+    '[읽는 법]\n'+
+    '1. 숫자 줄마다 왼쪽부터 한 자리씩, 켜진 획(위·왼쪽 위·오른쪽 위·가운데·왼쪽 아래·오른쪽 아래·아래)을 하나하나 보고 정합니다.\n'+
+    '2. 헷갈리기 쉬운 숫자를 꼭 구분하십시오: 1↔7(위 가로 획), 3↔8↔9(왼쪽 세로 획), 5↔6(왼쪽 아래 획), 0↔8(가운데 획), 2↔7, 4↔9, 6↔8(오른쪽 위 획).\n'+
+    '3. 소수점은 숫자 사이 아래쪽의 작은 점입니다. 보이는 그대로 적고, 소수점이 없으면 만들어 붙이지 마십시오. 음수 부호(-)도 확인합니다.\n'+
+    '4. 빛 반사·그림자·화면에 비친 모습을 획으로 착각하지 마십시오. 꺼진 획의 흐린 자국은 켜진 획이 아닙니다.\n'+
+    '5. 습도(%)·시각·배터리·MAX/MIN/HOLD 표시는 온도가 아닙니다. 단위가 °F 이면 unit 을 "F" 로 하고 값은 화면 그대로 적습니다.\n'+
+    '6. 그럴듯한 값을 짐작해서 만들지 마십시오. 한 자리라도 확실하지 않으면 그 값의 확신도를 낮추고, 전혀 못 읽으면 null.\n'+
+    '[답 형식] 먼저 줄마다 읽은 과정을 한두 줄로 짧게 적고, 맨 마지막 줄에 JSON 하나만 적습니다:\n'+
+    '{"a":26.4,"b":12.1,"ca":0.9,"cb":0.9,"lab":false,"unit":"C","cut":false,"box":[0.31,0.22,0.68,0.47],"why":"짧은 설명"}\n'+
+    'ca·cb = 값별 확신도 0~1(흐리거나 반사되면 낮게). cut = 숫자가 사진 가장자리에서 잘려 있으면 true.\n'+
+    'box = 계측기 화면(숫자가 나오는 LCD 유리 부분 전체)의 위치 [왼쪽,위,오른쪽,아래] — 사진의 가로·세로를 0~1 로 본 비율. 화면을 못 찾으면 null.';
+  function tnum(v){var n=(v==null||v==='')?NaN:parseFloat(v);return isNaN(n)?null:n;}
+  function tpass(j){
+    if(!j||j.err)return null;
+    var f=String(j.unit||'').toUpperCase()==='F',cv=function(v){v=tnum(v);if(v==null)return null;if(f)v=(v-32)/1.8;return Math.round(v*10)/10;};
+    var c=tnum(j.c),ca=tnum(j.ca),cb=tnum(j.cb);
+    return {a:cv(j.a),b:cv(j.b),ca:ca!=null?ca:(c!=null?c:.6),cb:cb!=null?cb:(c!=null?c:.6),lab:!!j.lab,cut:!!j.cut,box:Array.isArray(j.box)?j.box.map(Number):null,why:String(j.why||'')};
+  }
+  /* 두 번 읽은 값 맞춰 보기 → [값, 확신도, 서로 달랐는지] */
+  function tmerge(v1,c1,v2,c2,second){
+    if(!second)return [v1,c1,false];
+    if(v1!=null&&v2!=null){if(Math.abs(v1-v2)<0.051)return [v2,Math.min(1,Math.max(c1,c2)+.1),false];return [v2,Math.min(c2,.5),true];}
+    if(v2!=null)return [v2,c2*.85,false];
+    if(v1!=null)return [v1,c1*.7,false];
+    return [null,0,false];
+  }
+  async function readOne(src){
+    var im=await loadIm(src);if(!im)return {err:'사진 읽기 실패'};
+    var W=im.naturalWidth||im.width,H=im.naturalHeight||im.height,r=Math.min(1,T_FULL/Math.max(W,H));
+    var full=cvJpg(drawTo(im,0,0,W,H,W*r,H*r),.9);if(!full)return {err:'사진 읽기 실패'};
+    var q1=[{type:'text',text:'에어컨 냉방 점검 계측기 사진입니다. 화면의 온도를 읽고 화면 위치(box)도 알려 주십시오.'},imgPart(full)];
+    var j1=await askClaude(TEMP_SYS,q1,700,true);
+    if(j1&&j1.err&&!/키/.test(j1.err))j1=await askClaude(TEMP_SYS,q1,700,true);   /* 연결·형식 오류는 한 번 더 */
+    if(!j1||j1.err)return j1||{err:'답 형식 오류'};
+    var p1=tpass(j1);
+    /* ② 화면만 잘라 크게 */
+    var z=null,p2=null,bx=p1.box;
+    if(bx&&bx.length===4&&bx.every(function(v){return isFinite(v);})){
+      var mxb=Math.max.apply(null,bx);   /* 비율(0~1) 대신 백분율이나 점(px)으로 답한 경우 */
+      if(mxb>100)bx=[bx[0]/(W*r),bx[1]/(H*r),bx[2]/(W*r),bx[3]/(H*r)];else if(mxb>1.5)bx=bx.map(function(v){return v/100;});
+      var x0=Math.max(0,Math.min(bx[0],bx[2])),y0=Math.max(0,Math.min(bx[1],bx[3])),x1=Math.min(1,Math.max(bx[0],bx[2])),y1=Math.min(1,Math.max(bx[1],bx[3]));
+      var bw=x1-x0,bh=y1-y0;
+      if(bw>.03&&bh>.02&&bw*bh>.004){
+        var mx=bw*.22,my=bh*.22;x0=Math.max(0,x0-mx);x1=Math.min(1,x1+mx);y0=Math.max(0,y0-my);y1=Math.min(1,y1+my);
+        var sx=x0*W,sy=y0*H,sw=(x1-x0)*W,sh=(y1-y0)*H,k=Math.min(4,T_ZOOM/Math.max(sw,sh));
+        if(sw>=24&&sh>=16){
+          var zc=drawTo(im,sx,sy,sw,sh,sw*k,sh*k);z=cvJpg(zc,.95);
+          if(z){var en=enhance(zc),parts=[{type:'text',text:'같은 계측기 화면만 크게 확대한 사진입니다'+(en?' (첫 장 = 확대한 원본, 둘째 장 = 밝기 대비를 높인 흑백). 두 장을 함께 보고':'.')+' 온도를 읽으십시오. 숫자가 가장자리에서 잘려 보이면 cut 을 true 로. box 는 null.'},imgPart(z)];
+            if(en)parts.push(imgPart(en));
+            p2=tpass(await askClaude(TEMP_SYS,parts,600,true));
+            if(p2&&(p2.cut||(p2.a==null&&p2.b==null&&(p1.a!=null||p1.b!=null))))p2=null;   /* 잘못 잘렸으면 첫 번째 값만 씀 */
+          }
+        }
+      }
+    }
+    var A=tmerge(p1.a,p1.ca,p2&&p2.a,p2?p2.ca:0,!!p2),B=tmerge(p1.b,p1.cb,p2&&p2.b,p2?p2.cb:0,!!p2);
+    var a=A[0],b=B[0],dif=A[2]||B[2],notes=[];
+    if(a==null&&b==null)return {err:'숫자를 찾지 못함'};
+    var c=Math.min(a!=null?A[1]:1,b!=null?B[1]:1);
+    if(!p2)c=Math.min(c,.85);
+    if(dif)notes.push('두 번 읽은 값이 다름('+[A[2]?'흡입 '+p1.a+'/'+p2.a:'',B[2]?'토출 '+p1.b+'/'+p2.b:''].filter(Boolean).join(', ')+')');
+    if(a!=null&&b!=null&&a<b&&!(p1.lab||(p2&&p2.lab))){var t=a;a=b;b=t;c=Math.min(c,.6);notes.push('흡입이 토출보다 낮아 바꿔 넣음');}
+    [a,b].forEach(function(v){if(v!=null&&(v<-10||v>50)){c=Math.min(c,.4);notes.push('온도 범위를 벗어남');}});
+    return {a:a,b:b,c:Math.round(c*100)/100,dif:dif,twice:!!p2&&!dif,z:z,why:(notes.join(' · ')||(p2&&p2.why)||p1.why).slice(0,80)};
+  }
   async function readTemps(urls){
-    var parts=[{type:'text',text:'에어컨 냉방 점검 계측기 사진 '+urls.length+'장입니다.'}];
-    for(var i=0;i<urls.length;i++){var u=await shrinkUrl(urls[i],1280);if(u)parts.push(imgPart(u));}
-    if(parts.length<2)return {err:'사진 읽기 실패'};
-    var sys='당신은 에어컨 점검 기사입니다. 사진 속 온도계·계측기 화면의 숫자를 정확히 읽습니다.\n'+
-      '흡입 온도(a) = 실내기 흡입구·주변 공기 온도, 토출 온도(b) = 바람이 나오는 취출구 온도. 냉방 중이면 흡입이 토출보다 높습니다.\n'+
-      '계측기 한 화면에 두 값이 함께 보이면 둘 다 읽고(작은 줄·°C 표시 = 보통 흡입, 큰 숫자 = 보통 토출 — 화면의 글자 IN/OUT·흡입/토출 표시가 있으면 그것을 따름),\n'+
-      '사진이 두 장이면 각 사진의 값을 읽어 높은 쪽을 흡입, 낮은 쪽을 토출로 하십시오. 안 보이는 값은 null. 소수점 한 자리까지.\n'+
-      'c = 0~1 확신도(숫자가 흐리거나 반사되면 낮게). 반드시 JSON 하나만: {"a":26.4,"b":12.1,"c":0.9,"why":"짧은 설명"}';
-    var j=await askClaude(sys,parts,300);
-    if(j.err)return j;
-    var a=parseFloat(j.a),b=parseFloat(j.b);
-    if(isNaN(a)&&isNaN(b))return {err:'숫자를 찾지 못함'};
-    return {a:isNaN(a)?null:a,b:isNaN(b)?null:b,c:+j.c||0,why:String(j.why||'').slice(0,60)};
+    var rs=[];for(var i=0;i<urls.length;i++)rs.push(await readOne(urls[i]));
+    var ok=rs.filter(function(x){return !x.err;});
+    if(!ok.length)return rs[0]||{err:'사진 읽기 실패'};
+    if(ok.length===1)return ok[0];
+    var both=ok.filter(function(x){return x.a!=null&&x.b!=null;}).sort(function(x,y){return y.c-x.c;})[0];
+    if(both)return both;
+    /* 사진마다 값이 하나씩 — 높은 쪽 = 흡입, 낮은 쪽 = 토출 */
+    var vs=[];ok.forEach(function(x){[x.a,x.b].forEach(function(v){if(v!=null)vs.push(v);});});
+    var o=ok[0];return {a:Math.max.apply(null,vs),b:vs.length>1?Math.min.apply(null,vs):null,c:Math.min.apply(null,ok.map(function(x){return x.c;})),dif:ok.some(function(x){return x.dif;}),twice:ok.every(function(x){return x.twice;}),z:o.z,why:o.why};
   }
   function fillTemps(id,r){
     var w=$('cu-wrap-'+id);if(!w)return false;
@@ -11583,7 +11732,8 @@ body.m38q .m38-drain{display:block}
     var nA=parseFloat(ta&&ta.value),nB=parseFloat(tb&&tb.value),bad=!isNaN(nA)&&!isNaN(nB)&&(nA-nB<3||nA-nB>30);
     if(typeof calcCuDiff==='function')calcCuDiff(id);
     if(st){st.className='ocr-status on';st.style.color=(low||bad)?'#b36000':'';
-      st.innerHTML=(msgs.length?((low||bad)?'⚠':'🤖')+' 사진에서 읽음: '+msgs.join(' / ')+(bad?' — 흡입·토출 온도차가 이상합니다. 두 값을 확인해 주세요':low?' — 흐릿해서 확신이 낮습니다. 꼭 확인해 주세요':' — 값을 확인해 주세요'):'⚠ 숫자를 읽지 못했습니다 — 직접 입력해 주세요');}
+      st.innerHTML=(msgs.length?((low||bad)?'⚠':'🤖')+' 사진에서 읽음: '+msgs.join(' / ')+(bad?' — 흡입·토출 온도차가 이상합니다. 두 값을 확인해 주세요':r.dif?' — 두 번 읽은 값이 서로 달랐습니다. 사진과 꼭 비교해 주세요':low?' — 흐릿해서 확신이 낮습니다. 꼭 확인해 주세요':r.twice?' — 두 번 읽어 같은 값 · 확인해 주세요':' — 값을 확인해 주세요'):'⚠ 숫자를 읽지 못했습니다 — 직접 입력해 주세요')+
+        (r.z?'<img src="'+r.z+'" alt="" style="height:26px;border:1px solid #d0d0da;border-radius:4px;margin-left:6px;vertical-align:middle">':'');}
     if(msgs.length&&!isNaN(nA)&&!isNaN(nB)){var good=nA-nB>=12,okB=w.querySelector('.rsel-ok-btn'),wnB=w.querySelector('.rsel-warn-btn');
       if(good&&okB&&!w.querySelector('.rsel-warn-btn.warn'))okB.click();}
     draft();checkCool();return msgs.length>0;
@@ -11598,19 +11748,29 @@ body.m38q .m38-drain{display:block}
     item.appendChild(d);var add=c.querySelector('.ph-add');c.insertBefore(item,add);
     if(window.updatePhotoBadges)updatePhotoBadges();draft();
   }
-  /* 측정 사진 한 장(+같은 에어컨 두 번째 사진) → 칸에 넣고 Claude 로 읽기. 실패 시 예전 판독기(화면 영역 고르기) */
+  /* 측정 사진 한 장(+같은 에어컨 두 번째 사진) → 칸에 넣고 Claude 로 읽기(줄이기 전 사진으로).
+     키가 없거나 · 온도가 이미 적혀 있거나 · 판독에 실패하면 예전 방식(화면 영역 고르기)으로. */
   var _origCu=window.handleCuPhotos;
+  function cuOld(id,lbl,file){if(!_origCu)return;var inp=document.createElement('input');inp.type='file';
+    try{var dt=new DataTransfer();dt.items.add(file);inp.files=dt.files;}catch(e){return;}_origCu(inp,id,lbl);}
   async function cuPut(id,lbl,file,extra){
-    var key=aiKey(false)||(extra?'':aiKey(true));
-    if(!key){ if(_origCu&&!extra){var inp=document.createElement('input');inp.type='file';try{var dt=new DataTransfer();dt.items.add(file);inp.files=dt.files;}catch(e){} _origCu(inp,id,lbl);} return; }
+    var w0=$('cu-wrap-'+id),ia=w0&&w0.querySelector('.cu-ta'),ib=w0&&w0.querySelector('.cu-tb');
+    if(!aiKey(false)||!ia||!ib||ia.value||ib.value){cuOld(id,lbl,file);return;}
     var u=await compressImage(file,1600,0.78);placeCuPhoto(id,u);
-    var st=$('ocr-status-'+id);if(st){st.className='ocr-status on busy';st.style.color='';st.textContent='🤖 사진에서 흡입 · 토출 온도 읽는 중…';}
-    var urls=[u];if(extra)urls.push(await compressImage(extra,1600,0.78));
-    var r=await readTemps(urls);
-    if(r.err){if(st){st.className='ocr-status on';st.style.color='#b36000';st.textContent='⚠ 사진 판독 실패('+r.err+') — 직접 입력해 주세요';}return;}
+    var st=$('ocr-status-'+id);if(st){st.className='ocr-status on busy';st.style.color='';st.textContent='🤖 사진에서 흡입 · 토출 온도 읽는 중… (화면을 확대해 두 번 읽습니다)';}
+    var srcs=[URL.createObjectURL(file)];if(extra)srcs.push(URL.createObjectURL(extra));
+    var r;try{r=await readTemps(srcs);}catch(e){r={err:'판독 오류'};}
+    srcs.forEach(function(x){try{URL.revokeObjectURL(x);}catch(e){}});
+    if(r.err){if(typeof toast==='function')toast('⚠ 자동 판독 실패('+r.err+') — 화면 영역을 골라 주세요');
+      if(ia.value||ib.value){if(st){st.className='ocr-status on';st.style.color='#b36000';st.textContent='⚠ 사진 판독 실패('+r.err+')';}return;}
+      cuOld(id,lbl,file);return;}
     fillTemps(id,r);
   }
-  /* 직접 넣는 측정 사진은 예전 판독 방식 그대로(화면 영역 고르기) — Claude 판독은 직원 사진 가져오기에서만 씀 */
+  /* 직접 넣는 측정 사진도 자동 판독(2026-11-26 대표님 결정으로 변경 — 예전: 화면 영역 고르기만).
+     되돌리기: 아래 window.handleCuPhotos=… 한 줄을 지우면 예전처럼 화면 영역 고르기. */
+  if(_origCu)window.handleCuPhotos=function(input,id,lbl){var f=input&&input.files&&input.files[0];if(!f)return;
+    if(!aiKey(false))return _origCu(input,id,lbl);
+    try{input.value='';}catch(e){}cuPut(id,lbl,f);};
   window.__m38cuPut=cuPut;
   window.__m38t={read:readTemps,place:placeCuPhoto,fill:fillTemps};
 
@@ -11964,7 +12124,8 @@ function assignSheet(R,U){
         R.map((x,i)=>{const r=x.r,d=!r.err&&r.a!=null&&r.b!=null?(r.a-r.b).toFixed(1):null,dup=/^\d+$/.test(plan[i])&&cnt[plan[i]]>1;
           return `<div class="m38-as${dup?' dup':''}"><img src="${x.u}" alt="" data-big="${i}"><div>`+
             (r.err?`<b class="x">숫자를 읽지 못함 · 넣은 뒤 직접 입력</b>`:`<b>흡입 ${r.a??'—'}° · 토출 ${r.b??'—'}°${d!=null?' · Δ'+d+'°':''}</b>`)+
-            `<small>${i+1}번째 사진${x.by?' · '+esc(x.by):''}${!r.err&&r.c<0.7?' · 흐릿함 — 확인 필요':''}</small><select data-as="${i}">${opts(plan[i])}</select>`+
+            (!r.err&&r.z?`<img class="z" src="${r.z}" alt="" data-bigz="${i}">`:'')+
+            `<small>${i+1}번째 사진${x.by?' · '+esc(x.by):''}${r.err?'':r.dif?' · <i class="w">두 번 읽은 값이 다름 — 꼭 확인</i>':r.c<0.7?' · <i class="w">흐릿함 — 확인 필요</i>':r.twice?' · 두 번 읽어 같은 값':''}</small><select data-as="${i}">${opts(plan[i])}</select>`+
             (dup?'<em>같은 에어컨에 사진이 2장 — 측정 사진 칸에는 아래쪽 사진이 들어갑니다</em>':'')+`</div></div>`;}).join('')+
         (miss.length?`<p class="m38-p" style="color:#8A5A00;background:#FFF8EC">사진이 없는 에어컨: ${esc(miss.join(', '))}</p>`:'')+
         '<div class="m38-go"><button type="button" data-as-x="1">취소</button><button type="button" class="ok" data-as-ok="1">넣기 ✓</button></div>';
@@ -11975,7 +12136,7 @@ function assignSheet(R,U){
     const fin=v=>{if(done)return;done=true;bd.onchange=bd.onclick=null;S.close();res(v);};
     bd.onchange=e=>{const s2=e.target.closest('[data-as]');if(!s2)return;plan[+s2.dataset.as]=s2.value;draw();};
     bd.onclick=e=>{if(e.target.closest('[data-as-ok]'))fin(plan.slice());else if(e.target.closest('[data-as-x]'))fin(null);
-      else{const g=e.target.closest('[data-big]');if(g){big.querySelector('img').src=R[+g.dataset.big].u;big.classList.add('on');}}};
+      else{const gz=e.target.closest('[data-bigz]'),g=gz||e.target.closest('[data-big]');if(g){big.querySelector('img').src=gz?R[+gz.dataset.bigz].r.z:R[+g.dataset.big].u;big.classList.add('on');}}};
     const x=$('m38-sx'),ov=$('m38-ov');const cancel=()=>fin(null);
     x.addEventListener('click',cancel,{once:true});
     ov.addEventListener('click',function oc(e){if(e.target===ov){ov.removeEventListener('click',oc);cancel();}});
@@ -12013,12 +12174,15 @@ async function importNow(jobs,again){
       let U=[...document.querySelectorAll('#cool-units .cu-item')];
       if(!U.length&&typeof addCoolUnit==='function'){for(let i=0;i<T.length;i++)addCoolUnit();U=[...document.querySelectorAll('#cool-units .cu-item')];}
       const R=[];
-      for(let i=0;i<T.length;i++){
-        w.textContent='🤖 온도 사진 읽는 중… ('+(i+1)+'/'+T.length+')';
-        const u=await compressImage(T[i].f,1600,0.78);
-        const r=window.__m38t?await window.__m38t.read([u]):{err:'판독 도구 없음'};
-        R.push({u,f:T[i].f,r,by:T[i].p.by||''});
-      }
+      /* 판독은 줄이기 전 사진으로(숫자가 더 또렷함) · 3장씩 함께 읽음. 보고서에 넣는 사진은 예전처럼 1600px */
+      let nDone=0,nx=0;w.textContent='🤖 온도 사진 읽는 중… (0/'+T.length+')';
+      const one=async i=>{
+        const u=await compressImage(T[i].f,1600,0.78);let r={err:'판독 도구 없음'};
+        if(window.__m38t){const src=URL.createObjectURL(T[i].f);try{r=await window.__m38t.read([src]);}catch(_){r={err:'판독 오류'};}try{URL.revokeObjectURL(src);}catch(_){}}
+        R[i]={u,f:T[i].f,r,by:T[i].p.by||''};
+        w.textContent='🤖 온도 사진 읽는 중… ('+(++nDone)+'/'+T.length+')';
+      };
+      await Promise.all([0,1,2].map(async()=>{while(nx<T.length){const i=nx++;await one(i);}}));
       w.remove();
       const plan=await assignSheet(R,U);
       if(!plan){if(typeof toast==='function')toast('가져오기를 취소했습니다');return;}
