@@ -946,6 +946,18 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
 .sg:active{transform:scale(.96)}
 .sg.on{background:var(--nv);color:#fff}
 .sg.on i{color:var(--gd)}
+/* 📞 연락 경로별 모아 보기 (2026-11-26) */
+.chseg{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px dashed #E3E8F0}
+.chseg .cl{font-size:12px;font-weight:800;color:var(--ink3);margin-right:2px;white-space:nowrap}
+.chs{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:999px;border:1.5px solid #E3E8F0;
+  background:#fff;color:var(--ink2);font-family:inherit;font-size:12.5px;font-weight:800;cursor:pointer;white-space:nowrap;flex:none}
+.chs i{font-style:normal;font-size:11.5px;color:var(--ink3);font-variant-numeric:tabular-nums}
+.chs .d{width:16px;height:16px;border-radius:5px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;font-style:normal}
+.chs .d.w{background:#22c55e;color:#fff}.chs .d.k{background:#FEE500;color:#3C1E1E}.chs .d.o{background:#64748b;color:#fff}.chs .d.n{border:1.5px dashed #cbd5e1;color:#94a3b8}
+.chs:active{transform:scale(.96)}
+.chs.on{border-color:var(--nv);background:var(--nv);color:#fff}.chs.on i{color:var(--gd)}
+.chs.zero{opacity:.45}
+@media(max-width:600px){.chseg{flex-wrap:nowrap;overflow-x:auto;margin:8px -10px 0;padding:8px 10px 0;scrollbar-width:none}}
 
 /* ── 결과 안내 줄 ── */
 .rh{display:flex;align-items:center;gap:8px;padding:2px 4px 10px;font-size:13px;color:var(--ink2)}
@@ -1616,6 +1628,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
       </select>
     </div>
     <div class="seg" id="ca-seg"></div>
+    <div class="chseg" id="ca-chseg"></div><!-- 📞 연락 경로별 모아 보기 (2026-11-26) -->
   </div>
   <div id="locsync-host"></div><!-- 📍 고객이 의뢰신청서에서 등록한 위치 — 승인 대기 (/hhc-locsync.js) -->
   <div id="merge-host"></div>
@@ -2751,7 +2764,7 @@ window.dismissMerge=function(i){
 };
 // ═══ 📞 연락 경로 표시 (W · K · O) ═══
 // 고객이 어느 경로로 연락해 왔는지 관리자가 눈으로 구분하기 위한 표시입니다.
-// · 아무 기능도 하지 않으며 (필터·발송·계산에 전혀 관여하지 않습니다)
+// · 목록의 「📞 연락 경로」 줄에서 경로별로 모아 볼 수 있습니다 (2026-11-26) · 계산에는 관여하지 않습니다
 // · 관리 화면(총괄 고객관리 · 일정 캘린더)에만 보이고
 //   인보이스·점검보고서·계약서·마이페이지 등 고객용 화면/자료에는 나타나지 않습니다.
 const CH_LB={W:['W','💬 WhatsApp'],K:['K','💛 카카오톡'],O:['O','🌐 기타']};
@@ -3676,6 +3689,20 @@ function memberBadge0(e){
   if(e.docs.contracts.length)return '<span class="pill blue mpk">📦 패키지(계약)</span>';
   return '';
 }
+// ═══ 📞 연락 경로별 모아 보기 (2026-11-26) ═══
+//  · 검색 칸 아래 줄 — 전체 · W 왓츠앱 · K 카카오톡 · O 기타 · 미지정
+//  · 위쪽 구분(전체·VVIP·패키지 …)과 검색어와 함께 겹쳐서 걸림 (예: 패키지 + 카카오톡)
+//  · 숫자 = 지금 구분 · 검색어에 맞는 고객 중 경로별 인원
+let caChF='';                                        // '' 전체 · W · K · O · N(미지정)
+window.caChFSet=function(v){caChF=(caChF===v?'':v);renderList();};
+function caChGrp(e){return CH_OK(e&&e.ch)||'N';}
+function caChSegPaint(base){
+  const el=document.getElementById('ca-chseg');if(!el)return;
+  const c={W:0,K:0,O:0,N:0};base.forEach(e=>c[caChGrp(e)]++);
+  const b=(v,d,lb,n)=>'<button type="button" class="chs'+(caChF===v?' on':'')+(v&&!n?' zero':'')+'" onclick="caChFSet(\''+v+'\')">'+
+    (d?'<em class="d '+d.toLowerCase()+'">'+(d==='N'?'?':d)+'</em>':'')+lb+'<i>'+n+'</i></button>';
+  el.innerHTML='<span class="cl">📞 연락 경로</span>'+b('','','전체',base.length)+b('W','W','왓츠앱',c.W)+b('K','K','카카오톡',c.K)+b('O','O','기타',c.O)+b('N','N','미지정',c.N);
+}
 function renderList(){
   caSortOpts();
   sortEntries();
@@ -3696,6 +3723,8 @@ function renderList(){
     if(qNum.length>=4&&String(e.phone||'').replace(/[^0-9]/g,'').includes(qNum))return true;
     return false;
   });
+  caChSegPaint(list);                                // 📞 경로별 숫자는 경로를 고르기 전 목록 기준
+  if(caChF)list=list.filter(e=>caChGrp(e)===caChF);
   // 👥 공동계약 구분에서는 같은 계약끼리 붙여서(계약서번호 → 순번)
   if(curFilter==='joint'){const K=e=>{const c=caJtOf(e);return c?String(c.contract_no||c.joint_id)+'|'+('00'+(parseInt(c.joint_seq)||0)).slice(-3):'~';};list=list.slice().sort((a,b)=>K(a).localeCompare(K(b)));}
   // 🌿 청소 후 3개월 경과 — 위 칸(앱 알림 · 전체 WhatsApp · 연락 경로 탭) + 선택한 탭 고객만 (2026-11-23)
@@ -3704,13 +3733,14 @@ function renderList(){
   const host=document.getElementById('list');
   // ── 지금 보고 있는 구분 · 검색 결과 안내 줄 ──
   const _flb=(FILTERS.find(f=>f[0]===curFilter)||['','전체'])[1].replace(/^[^\w가-힣]+\s*/,'');
-  const _rh=(curFilter!=='all'||qRaw)?'<div class="rh"><span><b>'+esc(curFilter==='all'?'검색 결과':_flb)+'</b> '+(_care?_careAll.length:list.length)+'명'+
-    (qRaw?' · 「'+esc(qRaw)+'」':'')+'</span><button type="button" onclick="caResetView()">전체 보기 ✕</button></div>':'';
+  const _chLb=caChF?({W:'💬 왓츠앱',K:'💛 카카오톡',O:'🌐 기타',N:'연락 경로 미지정'}[caChF]):'';
+  const _rh=(curFilter!=='all'||qRaw||caChF)?'<div class="rh"><span><b>'+esc(curFilter==='all'?(qRaw?'검색 결과':_chLb):_flb)+'</b> '+(curFilter!=='all'&&caChF?'· '+esc(_chLb)+' ':'')+(_care?_careAll.length:list.length)+'명'+
+    (qRaw?' · 「'+esc(qRaw)+'」':'')+(qRaw&&curFilter==='all'&&caChF?' · '+esc(_chLb):'')+'</span><button type="button" onclick="caResetView()">전체 보기 ✕</button></div>':'';
   if(!list.length&&_care&&_careAll.length){host.innerHTML=_rh+caCarePanel(_careAll)+'<div class="empty"><b>이 탭에는 고객이 없습니다</b>다른 연락 경로 탭을 눌러 보세요</div>';return;}
   if(!list.length){host.innerHTML=_rh+'<div class="empty"><b>해당하는 고객이 없습니다</b>'+
-    (qRaw?'검색어를 줄이거나 연락처 끝 4자리로 찾아 보세요':(curFilter!=='all'?'처리할 고객이 없습니다 — 좋은 상태예요':'＋ 신규 고객으로 첫 고객을 등록하세요'))+'</div>';return;}
+    (qRaw?'검색어를 줄이거나 연락처 끝 4자리로 찾아 보세요':caChF?'이 연락 경로로 등록된 고객이 없습니다 — 위 「📞 연락 경로」 줄에서 「전체」를 눌러 보세요':(curFilter!=='all'?'처리할 고객이 없습니다 — 좋은 상태예요':'＋ 신규 고객으로 첫 고객을 등록하세요'))+'</div>';return;}
   // ── 페이지 나누기 (표시만 나눔 — 데이터·필터·정렬 로직은 기존 그대로) ──
-  const sig=curFilter+'|'+q+'|'+qNum;
+  const sig=curFilter+'|'+q+'|'+qNum+'|'+caChF;
   if(sig!==caPageSig){caPageSig=sig;caPage=1;}
   const per=caPageSize>0?caPageSize:list.length;
   const pages=Math.max(1,Math.ceil(list.length/per));
@@ -3756,7 +3786,7 @@ window.caRowOpen=function(ev,idx){
 };
 window.caResetView=function(){
   const q=document.getElementById('q');if(q)q.value='';caQx();
-  curFilter='all';renderChips();renderStats();renderList();
+  curFilter='all';caChF='';renderChips();renderStats();renderList();
 };
 window.caQx=function(){const q=document.getElementById('q'),x=document.getElementById('qx');if(x)x.classList.toggle('on',!!(q&&q.value));};
 window.caQclear=function(){const q=document.getElementById('q');if(q){q.value='';q.focus();}caQx();renderList();};
