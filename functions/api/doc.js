@@ -20,7 +20,7 @@ const TYPES = {
   quote:      { coll: 'quotes' },
   coupon:     { coll: 'coupons' },
   memo:       { coll: 'memos', strip: ['memo', 'sent_log'] },
-  booking:    { coll: 'bookings' },
+  booking:    { coll: 'bookings', strip: ['admin_memo'] },   // 🔒 관리자 전용 메모 제외 (2026-11-26)
 };
 
 export async function loadDoc(env, t, id){

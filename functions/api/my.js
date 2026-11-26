@@ -130,7 +130,7 @@ export async function onRequestGet(context){
       inspections: insps.sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))),
       contracts:   cts,
       coupons:     cps,
-      bookings:    bks.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))),
+      bookings:    bks.map(x => { delete x.admin_memo; return x; }).sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || ''))),
       quotes:      qts.sort((a, b) => String(b.issueDate || '').localeCompare(String(a.issueDate || ''))),
       // 수리요청: 내부 메모(memo)·발송이력(sent_log)은 고객에게 보내지 않음
       memos:       mms.map(x => { const y = { ...x }; delete y.memo; delete y.sent_log; return y; })

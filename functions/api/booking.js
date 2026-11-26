@@ -54,6 +54,7 @@ export async function onRequestGet(context){
   try {
     const d = await getDoc(env, 'bookings', id);
     if (!d) return fail('not-found', 404);
+    delete d.admin_memo;   // 🔒 관리자 전용 메모는 고객에게 보내지 않음 (2026-11-26)
     // 이 예약서의 후보 시간 중 마감된 것 — 실패해도 예약서는 그대로 보여 준다
     let taken = {};
     try {
