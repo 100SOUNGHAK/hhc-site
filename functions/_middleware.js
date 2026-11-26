@@ -52,6 +52,8 @@ async function docPreview(context, url, key){
   const q = url.searchParams, [base, tk, te] = DOC[key];
   const en = (key === 'hhc-invoice' || key === 'inv') ? q.get('ml') === 'en' : (q.get('lang') === 'en' || key === 'my-en');
   let img = base;
+  // 🙏 감사·청구 안내장 — 발송 내용(ts=)에 따라 그림: 청구 · 결제 확인 부탁 · 결제 완료 · 적립금 차감 (2026-11-26)
+  if (key === 'thanks' && /^(bill|due|paid|cr)$/.test(q.get('ts') || '')) img = 'tk-' + q.get('ts');
   if (base === 'my'){ const f = q.get('f') || ''; img = MY_F[f] || 'my'; if (f === 'rw' && PK[q.get('pk')]) img = PK[q.get('pk')]; const VI = { '1':'remind', tm:'remind-tmr', td:'remind-today', mv:'onway', dt:'delay', dw:'delayw', ar:'arrive' }; if ((f === 'bk' || f === 'mm') && VI[q.get('vi')]) img = VI[q.get('vi')]; if (f === 'ct' && q.get('vi') === 'aw') img = 'aftwork'; if ((f === 'bk' || f === 'mm') && q.get('vi') === 'pd') img = /^(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(q.get('vd') || '') ? 'd/' + q.get('vd') : 'remind'; }
   // 📅 예약 확정·신청 날짜 / ⏱ 00분 후 도착 / ⚡ 지금 방문 / 🔧 점검 접수 — 예약서(id) 조회는 미리보기 로봇일 때만 (고객 화면은 느려지지 않게)
   let W = '1200', H = '630';

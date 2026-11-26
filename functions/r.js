@@ -137,7 +137,7 @@ async function metaFor(env, origin, target){
   if (/^\/thanks(\.html)?$/i.test(t.pathname) && t.searchParams.get('pt')) {
     const cut = (v, n) => String(v || '').replace(/[\r\n]+/g, ' · ').slice(0, n);
     return { title: cut(t.searchParams.get('pt'), 80), desc: cut(t.searchParams.get('pd'), 160),
-      image: `${SITE}/og-thanks${en ? '-en' : ''}.jpg`, w: '1200', h: '630' };
+      image: `${SITE}/og-${/^(bill|due|paid|cr)$/.test(t.searchParams.get('ts') || '') ? 'tk-' + t.searchParams.get('ts') : 'thanks'}${en ? '-en' : ''}.jpg`, w: '1200', h: '630' };   // 발송 내용별 그림 (2026-11-26)
   }
   for (const [re, img, tk, te, dk, de] of TYPES) {
     if (re.test(t.pathname)) return { title: en ? te : tk, desc: en ? de : dk,
