@@ -10445,6 +10445,20 @@ kind==='washer'?'- 체크리스트 결과를 한두 줄로.':'- 측정한 에어
   '.m35-up b{display:block;color:#f0c040;font-size:10.5px;font-weight:600;margin-top:2px}'+
   '.m35-org{background:#eef7f6;color:#0b6b63;box-shadow:inset 0 0 0 1px #bfe3df}'+
   '.m35-org[disabled]{opacity:.4}'+
+  '.m35-bar .m35-del{flex:.62;background:#fdecea;color:#c0392b;box-shadow:inset 0 0 0 1px #f3c1bb}'+
+  '.m35-bar .m35-del[disabled]{opacity:.4}'+
+  '.m35-dg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:4px 12px 10px}'+
+  '.m35-dh{display:flex;align-items:center;gap:8px;padding:12px 12px 6px;font-size:13px;font-weight:800;color:#0F1C3F}'+
+  '.m35-dh span{flex:1}.m35-dh button{border:1px solid #d5dae6;background:#fff;border-radius:8px;padding:5px 9px;font-size:11.5px;font-weight:700;color:#334;cursor:pointer;font-family:inherit}'+
+  '.m35-dc{position:relative;border:0;padding:0;border-radius:12px;overflow:hidden;cursor:pointer;aspect-ratio:1;background:#e9eef6;box-shadow:inset 0 0 0 1px #d5dae6;font-family:inherit}'+
+  '.m35-dc img{width:100%;height:100%;object-fit:cover;display:block}'+
+  '.m35-dc i{position:absolute;left:5px;top:5px;font-style:normal;font-size:10.5px;font-weight:800;background:rgba(255,255,255,.92);color:#0F1C3F;border-radius:999px;padding:2px 7px}'+
+  '.m35-dc em{position:absolute;right:5px;top:5px;width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:inset 0 0 0 1.5px #98a1b4;font-style:normal;font-size:13px;font-weight:900;line-height:22px;text-align:center;color:#fff}'+
+  '.m35-dc.on{box-shadow:0 0 0 3px #c0392b,0 6px 12px -6px rgba(192,57,43,.5)}'+
+  '.m35-dc.on img{opacity:.55}.m35-dc.on em{background:#c0392b;box-shadow:none}'+
+  '.m35-ft .del{background:#c0392b;color:#fff}.m35-ft .del[disabled]{opacity:.4}'+
+  '.m35-undo{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:99992;display:flex;align-items:center;gap:12px;background:#0F1C3F;color:#fff;border-radius:12px;padding:11px 14px;font-size:13px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.3);white-space:nowrap}'+
+  '.m35-undo button{border:0;background:#f0c040;color:#0F1C3F;border-radius:8px;padding:6px 11px;font-size:12.5px;font-weight:800;cursor:pointer;font-family:inherit}'+
   '.m35-ov{position:fixed;inset:0;z-index:99990;background:rgba(10,18,40,.55);display:flex;align-items:flex-end;justify-content:center}'+
   '.m35-sh{background:#f6f7fb;width:100%;max-width:640px;height:94vh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -8px 30px rgba(0,0,0,.3)}'+
   '.m35-hd{background:#0F1C3F;color:#fff;padding:14px 16px 12px}'+
@@ -10495,15 +10509,61 @@ kind==='washer'?'- 체크리스트 결과를 한두 줄로.':'- 측정한 에어
     var b=$(P.b);if(!b)return;var card=b.closest('.card');if(!card||card.querySelector('.m35-bar'))return;
     var body=card.querySelector('.card-body');if(!body)return;
     var bar=document.createElement('div');bar.className='m35-bar';
-    bar.innerHTML='<button type="button" class="m35-up">📥 한 번에 올리기<b>🤖 오염 인식 · 짝 자동</b></button><button type="button" class="m35-org">↕ 전·후 정리</button>';
+    bar.innerHTML='<button type="button" class="m35-up">📥 한 번에 올리기<b>🤖 오염 인식 · 짝 자동</b></button><button type="button" class="m35-org">↕ 전·후 정리</button><button type="button" class="m35-del">🗑 일괄 삭제</button>';
     var inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;inp.style.display='none';
     bar.appendChild(inp);body.insertBefore(bar,body.firstChild);
     bar.querySelector('.m35-up').onclick=function(){inp.click();};
     bar.querySelector('.m35-org').onclick=function(){openSheet(P,[]);};
     inp.onchange=function(){var fs=Array.from(inp.files||[]).filter(function(f){return f&&f.type&&f.type.indexOf('image')===0;});inp.value='';if(fs.length)bulk(P,fs);};
-    P.orgBtn=bar.querySelector('.m35-org');refreshBtn(P);
+    bar.querySelector('.m35-del').onclick=function(){delSheet(P);};
+    P.orgBtn=bar.querySelector('.m35-org');P.delBtn=bar.querySelector('.m35-del');refreshBtn(P);
   }
-  function refreshBtn(P){if(!P.orgBtn)return;var n=current(P.b).length+current(P.a).length;P.orgBtn.disabled=!n;P.orgBtn.textContent=n?('↕ 전·후 정리 ('+n+')'):'↕ 전·후 정리';}
+  function refreshBtn(P){if(!P.orgBtn)return;var n=current(P.b).length+current(P.a).length;P.orgBtn.disabled=!n;P.orgBtn.textContent=n?('↕ 전·후 정리 ('+n+')'):'↕ 전·후 정리';if(P.delBtn)P.delBtn.disabled=!n;}
+
+  /* 2026-11-26 🗑 일괄 삭제 — 사진을 눌러 고르고(전체·전만·후만 선택 가능) 한 번에 삭제, 삭제 뒤 「되돌리기」 */
+  function delSheet(P){
+    var S={b:Array.from(($(P.b)||document).querySelectorAll('.ph-item')),a:Array.from(($(P.a)||document).querySelectorAll('.ph-item'))};
+    if(!S.b.length&&!S.a.length)return;
+    var sel=new Set(),lb=lbl(P,'b'),la=lbl(P,'a');
+    var src=function(it){var k=it.dataset.key;return photoData[k]!==undefined?photoData[k]:(it.querySelector('img')||{}).src;};
+    var ov=document.createElement('div');ov.className='m35-ov';
+    ov.innerHTML='<div class="m35-sh"><div class="m35-hd"><h3>🗑 '+P.name+' 사진 일괄 삭제</h3><p>지울 사진을 눌러 고르세요 · 다시 누르면 선택 해제<br>삭제 뒤 잠깐 「되돌리기」를 누르면 다시 살아납니다</p></div>'+
+      '<div class="m35-tools"><button type="button" data-d="all">전체 선택</button><button type="button" data-d="b">'+lb+'만</button><button type="button" data-d="a">'+la+'만</button><button type="button" data-d="none">선택 해제</button></div>'+
+      '<div class="m35-body"></div><div class="m35-ft"><button type="button" class="cc">취소</button><button type="button" class="del" disabled>삭제</button></div></div>';
+    document.body.appendChild(ov);
+    var body=ov.querySelector('.m35-body'),btn=ov.querySelector('.del');
+    function grid(side,name){var L=S[side];if(!L.length)return '';
+      return '<div class="m35-dh"><span>'+name+' '+L.length+'장</span><button type="button" data-d="'+side+'">모두 고르기</button></div><div class="m35-dg">'+
+        L.map(function(it,i){var id=side+i,on=sel.has(id);return '<button type="button" class="m35-dc'+(on?' on':'')+'" data-c="'+id+'"><img src="'+src(it)+'" alt="" loading="lazy"><i>'+(i+1)+'</i><em>'+(on?'✓':'')+'</em></button>';}).join('')+'</div>';}
+    function draw(){var y=body.scrollTop;body.innerHTML=grid('b',lb)+grid('a',la);body.scrollTop=y;btn.disabled=!sel.size;btn.textContent=sel.size?('🗑 '+sel.size+'장 삭제'):'삭제';}
+    function pick(side){S[side].forEach(function(_,i){sel.add(side+i);});}
+    ov.addEventListener('click',function(e){
+      if(e.target===ov){ov.remove();return;}
+      var c=e.target.closest('[data-c]');if(c){var id=c.dataset.c;sel.has(id)?sel.delete(id):sel.add(id);draw();return;}
+      var d=e.target.closest('[data-d]');if(d){var v=d.dataset.d;if(v==='none')sel.clear();else if(v==='all'){pick('b');pick('a');}else{sel.clear();pick(v);}draw();return;}
+      if(e.target.closest('.cc')){ov.remove();return;}
+      if(e.target.closest('.del')&&sel.size){
+        var gone=[];
+        ['b','a'].forEach(function(side){S[side].forEach(function(it,i){if(!sel.has(side+i))return;
+          var c=it.parentElement,k=it.dataset.key;gone.push({c:c,k:k,v:photoData[k],it:it,next:it.nextSibling});delete photoData[k];it.remove();});});
+        ov.remove();done(P,gone);
+      }
+    });
+    draw();
+  }
+  function done(P,gone){
+    var cs=[$(P.b),$(P.a)].filter(Boolean);
+    function fix(){cs.forEach(function(c){if(window.syncPhotoOrder)try{syncPhotoOrder(c);}catch(_){}if(window.renumberPhotos)try{renumberPhotos(c);}catch(_){}});
+      if(window.updatePhotoBadges)updatePhotoBadges();if(window.__scheduleDraft)window.__scheduleDraft();refreshBtn(P);}
+    fix();
+    var old=document.querySelector('.m35-undo');if(old)old.remove();
+    var u=document.createElement('div');u.className='m35-undo';u.innerHTML='<span>🗑 사진 '+gone.length+'장 삭제</span><button type="button">되돌리기</button>';
+    document.body.appendChild(u);var tm=setTimeout(function(){u.remove();},8000);
+    u.querySelector('button').onclick=function(){clearTimeout(tm);u.remove();
+      gone.slice().reverse().forEach(function(g){if(g.v!==undefined)photoData[g.k]=g.v;
+        var ref=g.next&&g.next.parentElement===g.c?g.next:g.c.querySelector('.photo-add-group');g.c.insertBefore(g.it,ref||null);});
+      fix();};
+  }
 
   function bulk(P,files){
     var w=document.createElement('div');w.className='m35-wait';w.textContent='사진 '+files.length+'장 준비 중…';document.body.appendChild(w);
