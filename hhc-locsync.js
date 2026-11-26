@@ -245,7 +245,19 @@ let PEND = [], CUSTS = null, CUSTS_AT = 0;
 const hosts = new Set();
 let unsub = null, folded = false;
 async function custs(){ if (!CUSTS || Date.now() - CUSTS_AT > 30000){ CUSTS = await loadCustomers(); CUSTS_AT = Date.now(); } return CUSTS; }
-function reqNames(r){ return [r.condo, r.condo_name, r.customer_name].filter(Boolean); }
+// 👤 (2026-11-26) 의뢰 고객 이름 = 「콘도명 + 동호수」 (의뢰관리 rqCustName·접수완료와 같은 이름)
+//   예전에는 r.condo 「I-ZEN KIARA1 (31-6)」에서 괄호를 빼고 새 고객을 만들어 동호수가 사라졌습니다.
+//   콘도명만으로 찾으면 같은 콘도의 다른 호수 고객과 섞일 수 있어 이름 비교에서도 뺍니다.
+function reqCustName(r){
+  let n = String((r && r.condo_name) || '').trim(), u = String((r && r.condo_unit) || '').trim();
+  if (!n && r && r.condo){
+    const m = /^(.*?)\s*\(([^)]*)\)\s*$/.exec(String(r.condo));
+    if (m){ n = m[1].trim(); if (!u) u = m[2].trim(); } else n = String(r.condo).trim();
+  }
+  if (u && nn(n) === nn(u)) u = '';
+  return (n + ' ' + u).trim();
+}
+function reqNames(r){ return [reqCustName(r), r.condo, r.customer_name].filter(Boolean); }
 // 🩹 (2026-11-17) 승인 기능 이전(11/16 15시~11/17 17시)에 접수된 의뢰는 위치는 있지만 loc_sync 칸이 없어
 //   승인 대기에 나타나지 않고 고객관리에도 반영되지 않았습니다 → 그 의뢰도 함께 봅니다
 let LEG = [];
@@ -274,7 +286,7 @@ async function renderNow(){
           c.loc = { ...clean(r.loc), at: now, src: 'customer', via: 'request' };   // 같은 고객의 더 오래된 요청은 다음 줄에서 비교됨
           dropLeg(r.id);
           await updateDoc(doc(db(), 'requests', r.id), { loc_sync: 'auto', loc_sync_at: now });
-          autoDone.push(c.name || r.condo || '고객');
+          autoDone.push(c.name || reqCustName(r) || '고객');
         }catch(e){ console.warn('[HHCLS] auto', e); }
         continue;
       }
@@ -298,7 +310,7 @@ async function renderNow(){
         // ① 최신 등록 우선 — 고객 위치가 이 요청보다 나중에 바뀌었으면 거절 추천
         const newerOld = x.old && ts(x.old.at) > t;
         const rec = latest && !newerOld;
-        const nm = (x.c && x.c.name) || x.r.condo || x.r.condo_name || '고객';
+        const nm = (x.c && x.c.name) || reqCustName(x.r) || '고객';
         return `<div class="hls-it"><span class="who">${esc(nm)}</span><span class="hls-tag">의뢰신청서 · 고객 직접</span><span class="tm">${esc(klTime(x.r.submitted_at))}</span>
           <div class="hls-row"><div class="hls-box hls-old"><small>지금 고객 위치${x.old ? ' (' + esc(srcLabel(x.old)) + ')' : ''}</small>${x.old ? esc(x.old.name || x.old.addr || '지도에서 고른 위치') + '<br><a href="' + mapUrl(x.old) + '" target="_blank" rel="noopener">지도 보기</a>' : '(없음)'}</div>
           <div class="hls-box hls-new"><small>새 위치${rec ? '<span class="hls-bd">추천</span>' : ''}</small>${esc(x.r.loc.name || x.r.loc.addr || '지도에서 고른 위치')}<br><a href="${mapUrl(x.r.loc)}" target="_blank" rel="noopener">지도 보기</a></div></div>
@@ -325,12 +337,12 @@ async function onClick(e){
     }
     const names = reqNames(x.r);
     const targets = await collectTargets({ phone: x.r.phone, names, cust: x.c, oldLoc: x.old, newLoc: x.r.loc, skip: {} });
-    const nm = (x.c && x.c.name) || x.r.condo || '고객';
+    const nm = (x.c && x.c.name) || reqCustName(x.r) || '고객';
     const r = await modal({ title: '고객 위치를 바꿀까요?', intro: '<b>' + esc(nm) + '</b> 고객이 의뢰신청서에서 직접 등록한 위치입니다.',
       oldLoc: x.old, oldLb: x.old ? '지금 고객 위치 (' + srcLabel(x.old) + ')' : '지금 고객 위치', newLoc: x.r.loc, newLb: '고객이 등록한 위치', newBd: '고객 직접',
       targets, custLine: '고객관리 고객 위치' + (x.c ? '' : ' (고객 마스터 새로 등록)'), okLb: '승인 · 변경', noLb: '취소' });
     if (!r) return;
-    await apply({ cust: x.c, phone: x.r.phone, name: x.c ? x.c.name : (x.r.condo || x.r.condo_name || ''), newLoc: x.r.loc, src: 'customer', via: 'request', targets: r });
+    await apply({ cust: x.c, phone: x.r.phone, name: x.c ? x.c.name : reqCustName(x.r), newLoc: x.r.loc, src: 'customer', via: 'request', targets: r });
     await updateDoc(doc(db(), 'requests', x.r.id), { loc_sync: 'approved', loc_sync_at: now });
     dropLeg(x.r.id);
     // 같은 고객의 다른 대기 요청은 이 승인으로 정리
