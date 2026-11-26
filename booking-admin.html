@@ -4236,7 +4236,7 @@ function vrMyLink(name,phone,en){
   return b+'/my.html?c='+encodeURIComponent(id)+'&v=iv,ip,ct,cp&lang='+(en?'en':'ko')+'&f=bk&vi=1';   // vi=1 방문 안내 → 미리보기 「방문 일정 확정」 그림 (2026-11-21)
 }
 
-window.sendVisitReminder=function(scheduleItemId){
+window.sendVisitReminder=function(scheduleItemId,langOv,tplOv){   // langOv·tplOv = 창 안 「한글 / EN」 전환으로 다시 열 때 (2026-11-26)
   // 스케줄 항목 찾기
   let schItem=null;
   for(const dt in schedules){
@@ -4261,6 +4261,7 @@ window.sendVisitReminder=function(scheduleItemId){
     }
   }
   if(!dateStr){showToast('예약 정보를 찾을 수 없습니다');return;}
+  if(langOv==='en'||langOv==='ko')lang=langOv;   // 🌐 한글 / EN 전환
   // 방문시간 · 연락처 (예약 정보에서)
   let timeS='',cphone='';
   if(schItem&&schItem.booking_id){
@@ -4293,6 +4294,7 @@ window.sendVisitReminder=function(scheduleItemId){
     const diff=Math.round((bd-t0)/86400000);
     if(diff===0)defTpl='today';else if(diff===1)defTpl='tomorrow';
   }catch(e){}
+  if(tplOv&&tplLabels.some(t=>t.k===tplOv))defTpl=tplOv;   // 🌐 언어만 바꿔 다시 열면 고르던 문구 그대로
 
   const existing=document.getElementById('confirm-msg-modal');
   if(existing)existing.remove();
@@ -4301,7 +4303,10 @@ window.sendVisitReminder=function(scheduleItemId){
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
   modal.innerHTML=`
     <div style="background:#fff;border-radius:20px;padding:24px;max-width:420px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.14)">
-      <div style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:4px">${title}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <div style="flex:1;min-width:0;font-size:15px;font-weight:700;color:var(--text)">${title}</div>
+        <div id="visit-lang" title="메시지 언어" style="display:inline-flex;flex-shrink:0;gap:2px;padding:2px;border:1.5px solid #D9DEE7;border-radius:999px;background:#F3F5F9">${[['ko','한글'],['en','EN']].map(([k,l])=>`<button type="button" data-lg="${k}" style="border:none;border-radius:999px;padding:5px 11px;font-size:11.5px;font-weight:800;cursor:pointer;font-family:inherit;${lang===k?'background:#16346E;color:#fff;box-shadow:0 1px 3px rgba(22,52,110,.35)':'background:transparent;color:#7A8294'}">${l}</button>`).join('')}</div>
+      </div>
       <div style="font-size:12px;color:var(--text3);margin-bottom:11px">${subtitle}</div>
       <div style="display:flex;gap:6px;margin-bottom:10px" id="visit-tpl-row">
         ${tplLabels.map(t=>`<button data-tpl="${t.k}" style="flex:1;padding:9px 4px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--text3);font-family:inherit;white-space:nowrap">${t.l}</button>`).join('')}
@@ -4372,6 +4377,11 @@ window.sendVisitReminder=function(scheduleItemId){
     }).catch(()=>prompt('복사 후 붙여넣기:',getMsg()));
   });
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+  // 🌐 한글 / EN 전환 — 같은 예약·같은 문구 종류로 창을 그 언어로 다시 엽니다 (2026-11-26)
+  document.querySelectorAll('#visit-lang button[data-lg]').forEach(b=>b.addEventListener('click',()=>{
+    if(b.dataset.lg===lang)return;
+    modal.remove();window.sendVisitReminder(scheduleItemId,b.dataset.lg,curTpl);
+  }));
 };
 
 // ── 📍 방문 위치 (2026-11-16) — 등록 창은 /hhc-loc.js (직원 일정표·의뢰서와 같은 구글맵 창) ──

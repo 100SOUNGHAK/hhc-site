@@ -2388,14 +2388,20 @@ function mvErrText(e,en){
 function vrTailNoMy(){return '\n\n📞 +60 17-247 2774 · Happy Home Care';}
 // 🖼 예약 방문 안내(사전·내일·당일)는 예약 확인 링크 한 줄 — 왓츠앱은 링크가 있어야 미리보기 그림을 붙입니다 (2026-11-21)
 //    고객을 찾지 못해 마이페이지 주소가 없으면 예전처럼 연락처만
-var VR_GO_ON=false;   // 📍 지금 창이 진행 안내장(/go) 링크를 쓰는지 (2026-11-25)
+var VR_GO_ON=false;
+var VR_MV_KEEP=null;   // 🌐 언어 전환으로 창을 다시 열 때 이동중 위치·시간 재사용 (5분)
+// 🌐 방문 안내 창 「한글 / EN」 전환 단추 (2026-11-26)
+function vrLangSw(lang){
+  const b=(k,l)=>`<button type="button" data-lg="${k}" style="border:none;border-radius:999px;padding:5px 11px;font-size:11.5px;font-weight:800;cursor:pointer;font-family:inherit;${lang===k?'background:#16346E;color:#fff;box-shadow:0 1px 3px rgba(22,52,110,.35)':'background:transparent;color:#7A8294'}">${l}</button>`;
+  return `<div id="visit-lang" title="메시지 언어" style="display:inline-flex;flex-shrink:0;gap:2px;padding:2px;border:1.5px solid #D9DEE7;border-radius:999px;background:#F3F5F9">${b('ko','한글')}${b('en','EN')}</div>`;
+}   // 📍 지금 창이 진행 안내장(/go) 링크를 쓰는지 (2026-11-25)
 function vrTailVisit(url,en,repair,live){
   if(!url||/\/home(\?|$)/.test(url))return vrTailNoMy();   // 짧은 주소(/r)로 바뀐 뒤에도 그대로 씀
   if(VR_GO_ON)return '\n\n'+(en?'📍 Progress':'📍 진행 안내')+' 👉 '+url+'\n📞 +60 17-247 2774 · Happy Home Care';
   const lb=live?(en?'📍 Visit info':'📍 방문 안내'):repair?(en?'🔧 Visit details':'🔧 방문 안내 확인'):(en?'📅 View booking':'📅 예약 확인');
   return '\n\n'+lb+' 👉 '+url+'\n📞 +60 17-247 2774 · Happy Home Care';
 }
-window.sendVisitReminder=function(itemId){
+window.sendVisitReminder=function(itemId,langOv,tplOv){   // langOv·tplOv = 창 안 「한글 / EN」 전환으로 다시 열 때 (2026-11-26)
   // bookings/schedules 양쪽에서 해당 항목 찾기
   let item=null;
   for(const dt in bookings){const f=(bookings[dt]||[]).find(s=>s._id===itemId);if(f){item=f;break;}}
@@ -2404,7 +2410,7 @@ window.sendVisitReminder=function(itemId){
 
   let name=item.customer_name||'고객';
   let dateStr=item.booking_date||item.date||'';
-  let lang=curLang==='en'?'en':'ko';
+  let lang=(langOv==='en'||langOv==='ko')?langOv:(curLang==='en'?'en':'ko');
   if(!item.customer_name&&item.title){
     // 예약 제목 「고객명 — 품목」 · 수리 제목 「🛠 콘도(고객명)」 에서 호칭만 뽑습니다
     const parts=String(item.title).replace(/^🛠\s*/,'').split(' — ');
@@ -2474,6 +2480,7 @@ window.sendVisitReminder=function(itemId){
     if(diff===0)defTpl='today';else if(diff===1)defTpl='tomorrow';
   }catch(e){}
   if(isRepair&&!dateStr)defTpl='now';   // 방문 예정일이 없는 수리요청 → 「지금 방문」 문구
+  if(tplOv&&tplLabels.some(t=>t.k===tplOv))defTpl=tplOv;   // 🌐 언어만 바꿔 다시 열면 고르던 문구 그대로
 
   const existing=document.getElementById('visit-msg-modal');
   if(existing)existing.remove();
@@ -2483,7 +2490,10 @@ window.sendVisitReminder=function(itemId){
   const chipBase='flex:1;padding:9px 4px;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;border:1.5px solid #e5e7eb;background:#fff;color:#6b7280;font-family:inherit;white-space:nowrap';
   modal.innerHTML=`
     <div style="background:#fff;border-radius:20px;padding:22px;max-width:440px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.14)">
-      <div style="font-size:15px;font-weight:700;color:var(--navy);margin-bottom:4px">${title}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <div style="flex:1;min-width:0;font-size:15px;font-weight:700;color:var(--navy)">${title}</div>
+        ${vrLangSw(lang)}
+      </div>
       <div style="font-size:12px;color:#8a8f9a;margin-bottom:11px">${subtitle}</div>
       <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap" id="visit-tpl-row">
         ${tplLabels.map(t=>`<button data-tpl="${t.k}" style="${chipBase}${(t.k==='move'||t.k==='arrive')?';flex:1 1 calc(50% - 3px);border-color:#C9A24A;color:#8A6A1F':''}${t.k==='early'?';flex:1 1 100%;border-color:#C9A24A;color:#8A6A1F':''}${(t.k==='delayT'||t.k==='delayW')?';flex:1 1 calc(50% - 3px);border-color:#E8A0A0;color:#B42318':''}">${t.l}</button>`).join('')}
@@ -2557,11 +2567,12 @@ window.sendVisitReminder=function(itemId){
     st.innerHTML=h;
   }
   async function mvShow(force){
+    if(!mv&&!force&&VR_MV_KEEP&&VR_MV_KEEP.id===itemId&&Date.now()-VR_MV_KEEP.t<5*6e4)mv=VR_MV_KEEP.mv;   // 🌐 언어만 바꿔 다시 연 창 — 방금 계산한 위치·시간 그대로
     if(mv&&!force){mvFill();return;}
     if(mvBusy)return;
     mvBusy=true;mvFill();
     try{mv=await mvInfo(item);}catch(e){mv={area:'',gmin:null,total:null,err:(e&&e.message)||'eta'};}
-    mvBusy=false;mvFill();
+    mvBusy=false;if(mv&&mv.gmin!=null)VR_MV_KEEP={id:itemId,mv,t:Date.now()};mvFill();
   }
   document.getElementById('visit-mv-re').addEventListener('click',()=>mvShow(true));
   // ➕ 더하는 시간(분) — 이동중·지연(교통)은 여유 시간, 지연(작업)은 작업 남은 시간.
@@ -2649,6 +2660,11 @@ window.sendVisitReminder=function(itemId){
   });
   document.getElementById('visit-close-btn').addEventListener('click',()=>modal.remove());
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
+  // 🌐 한글 / EN 전환 — 같은 고객·같은 문구 종류로 창을 그 언어로 다시 엽니다 (2026-11-26)
+  document.querySelectorAll('#visit-lang button[data-lg]').forEach(b=>b.addEventListener('click',()=>{
+    if(b.dataset.lg===lang)return;
+    modal.remove();window.sendVisitReminder(itemId,b.dataset.lg,curTpl);
+  }));
 };
 
 // ── 일정표 이미지 생성 (2026-11 개편: 타임라인 · 오전/오후 · 장소 강조 · 여유/겹침 표시) ──
