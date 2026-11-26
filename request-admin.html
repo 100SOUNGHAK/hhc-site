@@ -915,6 +915,7 @@ function hhcgWatch(onChange){
   try{
     onSnapshot(collection(db,'customers'),function(snap){
       var ph={},nm={};
+      try{HHCC_LIST=snap.docs.map(function(d){var x=d.data()||{};x._docId=d.id;return x;});HHCC_TS=Date.now();}catch(_e){}   // 🔎 기존 고객 확인용
       snap.docs.forEach(function(d){
         var c=d.data()||{},g=String(c.member||'').trim();
         if(!g)return;
@@ -1023,6 +1024,145 @@ function rqCustName(r){
   if(u&&hhcCN(n)===hhcCN(u))u='';   // 두 칸이 똑같으면 한 번만
   return (n+' '+u).trim();
 }
+
+// ═══════════════════════════════════════════════════════════
+// 🔎 기존 고객 확인 (RQC · 2026-11-26)
+//  · 의뢰마다 고객관리(customers)와 비교 → ✓ 기존 고객 / ⚠ 확인 필요 / 🆕 신규 고객
+//  · 「확인 필요」는 비슷한 고객 목록 → 고르면 의뢰 콘도명·동호수를 그 고객 것으로 고침
+//  · 연락처: 의뢰에 적힌 번호를 기존 고객정보의 연락처로 등록 (예전 번호는 phone_prev 에 보관)
+//  · 확인 안 된 의뢰에서 접수완료·예약전환을 누르면 먼저 이 창을 띄움
+//  · 결과는 requests.cust_match (고객 문서 ID 또는 'new') 에 기록
+// ═══════════════════════════════════════════════════════════
+var RQC_BYPASS=false;
+function rqcUK(u){return String(u||'').toUpperCase().split(/[^0-9A-Z]+/).filter(Boolean).map(function(x){return x.replace(/^0+(?=\d)/,'');}).join('-');}
+function rqcLev(a,b){if(Math.abs(a.length-b.length)>3)return 9;var d=[],i,j;for(i=0;i<=a.length;i++)d[i]=[i];for(j=1;j<=b.length;j++)d[0][j]=j;for(i=1;i<=a.length;i++)for(j=1;j<=b.length;j++)d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));return d[a.length][b.length];}
+function rqcCondoLike(a,b){a=hccKey(a);b=hccKey(b);if(!a||!b)return false;if(a===b)return true;if(Math.min(a.length,b.length)>=4&&(a.indexOf(b)===0||b.indexOf(a)===0))return true;return a.length>=5&&rqcLev(a,b)<=2;}
+// 고객명(콘도명 + 동호수) → {condo, unit}
+function rqcSplit(c){var n=String(c.name||'').trim(),t=hhcSplitTail(n);return t?{condo:t.name,unit:t.unit}:{condo:n,unit:''};}
+function rqcNeeds(r){return r&&!r.converted_to_booking&&(r.status==='pending'||r.status==='completed');}
+function rqcJudge(r){
+  if(!rqcNeeds(r)||!HHCC_LIST.length)return {st:''};
+  if(r.cust_match==='new')return {st:'new'};
+  if(r.cust_match){var mm=HHCC_LIST.find(function(c){return c._docId===r.cust_match;});if(mm)return {st:'ok',cust:mm};}
+  var full=hccKey(rqCustName(r)),pn=hccPhoneOk(r.phone)?hccPN(r.phone):'';
+  var rc=String(r.condo_name||r.condo||'').trim(),ru=String(r.condo_unit||'').trim();
+  var ex=HHCC_LIST.find(function(c){return full&&(hccKey(c.name)===full||(c.aliases||[]).some(function(a){return hccKey(a)===full;}));});
+  if(ex&&(!pn||!hccPhoneOk(ex.phone)||hccPN(ex.phone)===pn))return {st:'ok',cust:ex};
+  var out=[];
+  HHCC_LIST.forEach(function(c){
+    var s=rqcSplit(c),why=[],score=0,samePh=pn&&hccPhoneOk(c.phone)&&hccPN(c.phone)===pn;
+    if(ex&&c===ex){out.push({c:c,s:s,score:95,why:[['이름 같음',1],['연락처 다름',0]]});return;}
+    if(samePh){why.push(['연락처 같음',1]);score+=60;}
+    if(s.unit&&ru&&rqcCondoLike(rc,s.condo)){
+      why.push([hccKey(rc)===hccKey(s.condo)?'콘도 같음':'콘도명 비슷',hccKey(rc)===hccKey(s.condo)?1:0]);score+=25;
+      var a=rqcUK(ru),b=rqcUK(s.unit);
+      if(a===b){why.push(['호수 같음 (표기만 다름)',1]);score+=30;}
+      else if(a.replace(/^[A-Z]+-?/,'')===b.replace(/^[A-Z]+-?/,'')&&/^[A-Z]/.test(a+b)){why.push(['블록만 다름',0]);score+=20;}
+      else if(rqcLev(a,b)<=2){why.push(['호수 비슷',0]);score+=15;}
+      else if(!samePh)return;
+    }
+    if(score>=35)out.push({c:c,s:s,why:why,score:score});
+  });
+  out.sort(function(x,y){return y.score-x.score;});
+  out=out.slice(0,5);
+  return out.length?{st:'chk',list:out}:{st:'new'};
+}
+function rqcBadge(r){
+  var j=rqcJudge(r);
+  if(j.st==='ok')return '<span class="rqc-b ok" title="고객관리에 등록된 고객입니다">✓ 기존 고객</span>';
+  if(j.st==='chk')return '<button type="button" class="rqc-b chk" data-rqc="'+r.__id+'" title="고객관리에 비슷한 고객 '+j.list.length+'명 — 눌러서 확인">⚠ 확인 필요 '+j.list.length+'</button>';
+  if(j.st==='new')return '<span class="rqc-b new">🆕 신규 고객</span>';
+  return '';
+}
+var RQC_CSSON=false;
+function rqcCSS(){
+  if(RQC_CSSON)return;RQC_CSSON=true;
+  var st=document.createElement('style');
+  st.textContent='.rqc-b{display:inline-flex;align-items:center;gap:3px;flex-shrink:0;border:0;font-family:inherit;font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px;white-space:nowrap;line-height:1.3}.rqc-b.ok{background:var(--green-bg);color:var(--green)}.rqc-b.new{background:#EAF1FE;color:#2563EB}.rqc-b.chk{background:var(--amber);color:#fff;cursor:pointer;animation:rqcp 1.8s infinite}@keyframes rqcp{0%{box-shadow:0 0 0 0 rgba(224,134,0,.45)}70%{box-shadow:0 0 0 7px rgba(224,134,0,0)}100%{box-shadow:0 0 0 0 rgba(224,134,0,0)}}@media(prefers-reduced-motion:reduce){.rqc-b.chk{animation:none}}'+
+  '#rqc-mask{position:fixed;inset:0;background:rgba(11,22,51,.5);z-index:99980;display:flex;align-items:flex-end;justify-content:center}@media(min-width:600px){#rqc-mask{align-items:center}}#rqc-sh{background:#fff;width:100%;max-width:480px;border-radius:20px 20px 0 0;max-height:88vh;overflow:auto;box-shadow:0 -10px 40px rgba(0,0,0,.25);font-family:inherit}@media(min-width:600px){#rqc-sh{border-radius:18px}}'+
+  '.rqc-h{position:sticky;top:0;background:#fff;padding:15px 16px 10px;border-bottom:1px solid #EEF2F8;display:flex;align-items:center;gap:8px;z-index:1}.rqc-h b{font-size:15.5px;font-weight:800;letter-spacing:-.02em;color:var(--text)}.rqc-h button{margin-left:auto;border:0;background:var(--surface);width:34px;height:34px;border-radius:10px;font-size:15px;cursor:pointer}.rqc-bd{padding:12px 16px 18px}'+
+  '.rqc-mine{background:var(--surface);border-radius:12px;padding:10px 12px;margin-bottom:12px}.rqc-mine small{display:block;font-size:10.5px;font-weight:800;color:var(--text3);margin-bottom:3px}.rqc-mine div{font-size:14.5px;font-weight:800;color:var(--text)}.rqc-mine span{font-size:12px;color:var(--text2);font-weight:600}.rqc-lh{font-size:11.5px;font-weight:800;color:var(--text3);margin:2px 2px 7px}'+
+  '.rqc-c{display:block;width:100%;text-align:left;font-family:inherit;background:#fff;border:1.5px solid var(--border);border-radius:13px;padding:11px 12px;margin-bottom:8px;cursor:pointer}.rqc-c:hover{border-color:#2563EB}.rqc-c.sel{border-color:#2563EB;background:#F5F9FF;box-shadow:0 0 0 3px rgba(37,99,235,.12)}.rqc-c .t{display:flex;align-items:center;gap:6px}.rqc-c .t b{font-size:14.5px;font-weight:800;color:var(--text)}.rqc-c .t i{margin-left:auto;font-style:normal;font-size:11px;font-weight:800;color:var(--text3);white-space:nowrap}.rqc-c .w{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}.rqc-c .w span{font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--surface2);color:var(--text2)}.rqc-c .w span.s{background:var(--green-bg);color:var(--green)}.rqc-c .m{font-size:11.5px;color:var(--text3);margin-top:5px}'+
+  '.rqc-chg{border:1.5px solid #2563EB;border-radius:13px;padding:11px 12px;margin:4px 0 12px;background:#F8FBFF}.rqc-chg h4{font-size:12.5px;font-weight:800;color:#2563EB;margin:0 0 7px}.rqc-l{display:grid;grid-template-columns:56px 1fr;gap:4px 8px;font-size:13px;align-items:baseline;padding:3px 0;color:var(--text)}.rqc-l .k{color:var(--text3);font-weight:700;font-size:11.5px}.rqc-l s{color:var(--text3);margin-right:4px}.rqc-l b{color:#2563EB}.rqc-l .g{color:var(--text2)}.rqc-go{width:100%;height:44px;border:0;border-radius:12px;background:#2563EB;color:#fff;font-family:inherit;font-size:14.5px;font-weight:800;cursor:pointer;margin-top:10px}.rqc-new{width:100%;height:40px;border:1.5px dashed var(--border);border-radius:12px;background:#fff;font-family:inherit;font-size:13px;font-weight:700;color:var(--text2);cursor:pointer}.rqc-nt{font-size:11.5px;color:var(--text3);line-height:1.6;margin-top:10px}';
+  document.head.appendChild(st);
+}
+function rqcOpen(id,thenFn){
+  var r=allRequests.find(function(x){return x.__id===id;});if(!r)return;
+  var j=rqcJudge(r);if(j.st!=='chk'){if(thenFn)thenFn();return;}
+  rqcCSS();
+  var old=document.getElementById('rqc-mask');if(old)old.remove();
+  var mk=document.createElement('div');mk.id='rqc-mask';
+  var rc=String(r.condo_name||r.condo||'').trim(),ru=String(r.condo_unit||'').trim();
+  mk.innerHTML='<div id="rqc-sh"><div class="rqc-h"><b>'+(thenFn?'접수 전에 확인해 주세요':'이 고객이 맞나요?')+'</b><button type="button" data-rqx>✕</button></div><div class="rqc-bd">'+
+    '<div class="rqc-mine"><small>고객이 의뢰서에 적은 정보</small><div>'+hccEsc(rc)+' <span>'+hccEsc(ru)+'</span></div><span>📞 '+hccEsc(r.phone||'없음')+'</span></div>'+
+    '<div class="rqc-lh">고객관리에 등록된 비슷한 고객 · 맞는 고객을 누르세요</div>'+
+    j.list.map(function(o,i){return '<button type="button" class="rqc-c" data-rqi="'+i+'"><div class="t"><b>'+hccEsc(o.c.name)+'</b><i>'+(o.score>=80?'거의 확실':o.score>=50?'가능성 높음':'참고')+'</i></div><div class="w">'+o.why.map(function(w){return '<span class="'+(w[1]?'s':'')+'">'+w[0]+'</span>';}).join('')+'</div><div class="m">📞 '+hccEsc(o.c.phone||'없음')+'</div></button>';}).join('')+
+    '<div id="rqc-chg"></div>'+
+    '<button type="button" class="rqc-new" data-rqnew>해당 없음 — 신규 고객이 맞습니다</button>'+
+    '<div class="rqc-nt">고른 고객의 콘도명·동호수로 이 의뢰가 바로 고쳐지고, 의뢰에 적힌 연락처는 그 고객의 연락처로 등록됩니다. 새 고객이 중복으로 만들어지지 않습니다.</div></div></div>';
+  document.body.appendChild(mk);
+  var pick=null;
+  mk.addEventListener('click',async function(ev){
+    var t=ev.target;
+    if(t===mk||t.closest('[data-rqx]')){mk.remove();return;}
+    var c=t.closest('[data-rqi]');
+    if(c){
+      pick=j.list[+c.getAttribute('data-rqi')];
+      mk.querySelectorAll('.rqc-c').forEach(function(b){b.classList.toggle('sel',b===c);});
+      var ln=function(k,a,b){return hccKey(a)===hccKey(b)?'<div class="rqc-l"><span class="k">'+k+'</span><span class="g">'+hccEsc(b||'—')+' · 그대로</span></div>':'<div class="rqc-l"><span class="k">'+k+'</span><span><s>'+hccEsc(a||'—')+'</s> → <b>'+hccEsc(b||'—')+'</b></span></div>';};
+      var phNew=hccPhoneOk(r.phone)&&hccPN(r.phone)!==hccPN(pick.c.phone);
+      var box=mk.querySelector('#rqc-chg');
+      box.className='rqc-chg';
+      box.innerHTML='<h4>이렇게 고쳐집니다</h4>'+ln('콘도명',rc,pick.s.condo)+ln('동호수',ru,pick.s.unit)+
+        (phNew?'<div class="rqc-l"><span class="k">고객 연락처</span><span><s>'+hccEsc(pick.c.phone||'없음')+'</s> → <b>'+hccEsc(r.phone)+'</b><br><small style="color:var(--text3)">고객관리 연락처를 의뢰 번호로 등록합니다'+(hccPhoneOk(pick.c.phone)?' · 예전 번호는 기록으로 남깁니다':'')+'</small></span></div>':ln('연락처',r.phone,r.phone))+
+        '<button type="button" class="rqc-go" data-rqgo>✓ '+hccEsc(pick.c.name)+' 고객으로 고치기'+(thenFn?' + 계속':'')+'</button>';
+      box.scrollIntoView({behavior:'smooth',block:'nearest'});
+      return;
+    }
+    if(t.closest('[data-rqgo]')&&pick){
+      mk.remove();showLoading(true);
+      try{
+        var upd={condo_name:pick.s.condo,condo:pick.s.condo,condo_unit:pick.s.unit,cust_match:pick.c._docId,cust_match_at:new Date().toISOString()};
+        await updateDoc(doc(db,'requests',r.__id),upd);
+        Object.assign(r,upd);
+        if(hccPhoneOk(r.phone)&&hccPN(r.phone)!==hccPN(pick.c.phone)){
+          var cu={phone:String(r.phone).trim(),updated_at:new Date().toISOString()};
+          if(hccPhoneOk(pick.c.phone))cu.phone_prev=(pick.c.phone_prev||[]).filter(function(p){return hccPN(p)!==hccPN(pick.c.phone);}).concat([String(pick.c.phone).trim()]);
+          await hccWrite(pick.c._docId,cu);
+          Object.assign(pick.c,cu);
+        }
+        showToast('✓ '+pick.c.name+' 고객으로 고쳤습니다');
+      }catch(e){console.error(e);showLoading(false);showToast('저장 실패 — 다시 시도해 주세요');return;}
+      showLoading(false);renderList();
+      if(thenFn)setTimeout(thenFn,120);
+      return;
+    }
+    if(t.closest('[data-rqnew]')){
+      mk.remove();
+      try{await updateDoc(doc(db,'requests',r.__id),{cust_match:'new',cust_match_at:new Date().toISOString()});r.cust_match='new';}catch(e){console.error(e);}
+      renderList();
+      if(thenFn)setTimeout(thenFn,120);
+    }
+  });
+}
+// 카드의 「확인 필요」 누르기 · 확인 안 된 의뢰의 접수완료/예약전환은 먼저 확인 창 (캡처 단계에서 가로챔)
+document.addEventListener('click',function(e){
+  var b=e.target.closest&&e.target.closest('[data-rqc]');
+  if(b){e.preventDefault();e.stopPropagation();rqcOpen(b.getAttribute('data-rqc'));return;}
+  if(RQC_BYPASS)return;
+  var a=e.target.closest&&e.target.closest('#req-list [data-complete],#req-list [data-tobooking]');
+  if(!a)return;
+  var id=a.getAttribute('data-complete')||a.getAttribute('data-tobooking');
+  var r=allRequests.find(function(x){return x.__id===id;});
+  if(!r||rqcJudge(r).st!=='chk')return;
+  e.preventDefault();e.stopPropagation();
+  var attr=a.hasAttribute('data-complete')?'data-complete':'data-tobooking';
+  rqcOpen(id,function(){
+    var again=document.querySelector('#req-list ['+attr+'="'+id+'"]');
+    if(!again)return;
+    RQC_BYPASS=true;try{again.click();}finally{RQC_BYPASS=false;}
+  });
+},true);
 
 var HHCC_LIST=[],HHCC_TS=0;
 function hccPN(p){p=String(p||'').replace(/[^0-9]/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');}
@@ -1622,7 +1762,7 @@ async function connectFirebase(){
     // 📍 위치 연동 · 승인 대기 칸 (2026-11-17)
     {const _ls=()=>{HHCLS.setDb(db);HHCLS.watchPending(document.getElementById('locsync-host'));};
      if(window.HHCLS)_ls();else window.addEventListener('hhcls-ready',_ls,{once:true});}
-    hhcgWatch(renderList);   // 회원등급표 실시간 구독
+    rqcCSS();hhcgWatch(renderList);   // 회원등급표 실시간 구독 (+ 🔎 기존 고객 확인)
     unsub=onSnapshot(collection(db,'requests'),snap=>{
       window.__hhcReady&&window.__hhcReady();
       // 콘도명에 동호수가 겹쳐 들어간 예전 접수도 화면·발송·고객 연결에는 한 번만 쓰이도록 정리 (저장된 원본은 그대로)
@@ -1810,7 +1950,7 @@ function renderList(){
     return `<div class="req-card nx-row" data-id="${r.__id}">
       <div class="nx-ic ${tone}">${icon}</div>
       <div class="nx-bd">
-        <div class="nx-r1"><span class="nx-nm"><span class="ca-open" data-caopen="${r.__id}" title="총괄 고객관리에서 이 고객 상세 열기">${escHtml(r.condo_name||r.condo||'—')}${r.condo_unit&&hhcCN(r.condo_unit)!==hhcCN(r.condo_name||r.condo)?`<small>${escHtml(r.condo_unit)}</small>`:''}</span></span>${gradeBadge(rqCustName(r),r.phone)}${r.lang==='en'?'<span class="nx-lb en">EN</span>':''}<span class="nx-mt${mtCls}">${conv?'🗓️ 전환됨':agoTxt2}</span></div>${cnBox('requests',r)}
+        <div class="nx-r1"><span class="nx-nm"><span class="ca-open" data-caopen="${r.__id}" title="총괄 고객관리에서 이 고객 상세 열기">${escHtml(r.condo_name||r.condo||'—')}${r.condo_unit&&hhcCN(r.condo_unit)!==hhcCN(r.condo_name||r.condo)?`<small>${escHtml(r.condo_unit)}</small>`:''}</span></span>${gradeBadge(rqCustName(r),r.phone)}${rqcBadge(r)}${r.lang==='en'?'<span class="nx-lb en">EN</span>':''}<span class="nx-mt${mtCls}">${conv?'🗓️ 전환됨':agoTxt2}</span></div>${cnBox('requests',r)}
         <div class="nx-l2 nx-l2f"><span class="nx-sm">${sum}</span>${qa}</div>
         ${nxRefLine(r)}
         <div class="nx-ex">
