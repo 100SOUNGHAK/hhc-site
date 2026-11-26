@@ -414,6 +414,10 @@ let db=null,ST=null;
 let MEMOS=[],SNIPS=[],CUSTS=[],PN_CUSTS=[];
 
 var HHCC_LIST=[],HHCC_TS=0;
+/* 💬 왓츠앱 번호 만들기 (2026-11-26) — 말레이시아 외 번호도 그대로 보냄
+   · +국가번호·00국가번호 → 그대로 · 60으로 시작 → 그대로 · 010으로 시작하는 11자리 → 한국(+82)
+   · 그 외(0으로 시작 등) → 말레이시아(+60) · 같은 함수가 customer-admin·schedule·booking-admin·memo-admin·rplan-admin·hhc-invoice 에 있음 — 고칠 땐 함께 */
+function hhcWaNum(raw){var s=String(raw==null?'':raw).trim(),d=s.replace(/[^0-9]/g,'');if(!d)return '';if(/^\+/.test(s))return d.length>=8?d:'';if(/^00/.test(d)){d=d.replace(/^00/,'');return d.length>=8?d:'';}if(/^010\d{8}$/.test(d))return '82'+d.slice(1);if(/^8210\d{8}$/.test(d))return d;if(d.indexOf('60')===0)return d.length>=8?d:'';d=d.replace(/^0+/,'');return d.length>=6?'60'+d:'';}
 function hccPN(p){p=String(p||'').replace(/[^0-9]/g,'');if(p.indexOf('60')===0)p=p.slice(2);return p.replace(/^0+/,'');}
 function hccNN(n){return String(n||'').toLowerCase().replace(/\s+/g,'');}
 function hccWrite(id,upd){return updateDoc(doc(db,'customers',id),upd);}
@@ -1955,7 +1959,7 @@ document.getElementById('sd-body').addEventListener('click',async ev=>{
   const m=MEMOS.find(x=>x.__id===sendId);if(!m)return;
   const txt=await hhcShortLinks(msgText(m,sendTpl));   // 🔗 안내장 주소는 짧은 주소로
   if(b.dataset.send==='wa'){
-    let wa='https://wa.me/';const ph=pn(m.phone);if(ph)wa+='60'+ph;
+    let wa='https://wa.me/';const ph=pn(m.phone);if(ph)wa+=hhcWaNum(m.phone);
     window.open(wa+'?text='+encodeURIComponent(txt),'_blank');
   }else{
     const ktxt=txt.replace(/\*([^*\n]+)\*/g,'$1');   // 복사(카카오 등)는 굵은 글씨 별표를 뗍니다

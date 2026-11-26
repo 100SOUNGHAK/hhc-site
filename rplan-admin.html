@@ -191,6 +191,10 @@ textarea.fi{resize:vertical;min-height:70px;line-height:1.55}
 <script src="/hhc-kkcard.js"></script>
 
 <script type="module">
+/* 💬 왓츠앱 번호 만들기 (2026-11-26) — 말레이시아 외 번호도 그대로 보냄
+   · +국가번호·00국가번호 → 그대로 · 60으로 시작 → 그대로 · 010으로 시작하는 11자리 → 한국(+82)
+   · 그 외(0으로 시작 등) → 말레이시아(+60) · 같은 함수가 customer-admin·schedule·booking-admin·memo-admin·rplan-admin·hhc-invoice 에 있음 — 고칠 땐 함께 */
+function hhcWaNum(raw){var s=String(raw==null?'':raw).trim(),d=s.replace(/[^0-9]/g,'');if(!d)return '';if(/^\+/.test(s))return d.length>=8?d:'';if(/^00/.test(d)){d=d.replace(/^00/,'');return d.length>=8?d:'';}if(/^010\d{8}$/.test(d))return '82'+d.slice(1);if(/^8210\d{8}$/.test(d))return d;if(d.indexOf('60')===0)return d.length>=8?d:'';d=d.replace(/^0+/,'');return d.length>=6?'60'+d:'';}
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getFirestore, collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDocs, onSnapshot, query, where, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 function hhcFastDb(app){
@@ -551,7 +555,7 @@ async function openSend(){
 }
 async function doSend(kind){
   const r=ED,txt=$('s-msg').value;
-  if(kind==='wa'){const p=String(r.cust.phone||'').replace(/\D/g,'');const to=p.indexOf('60')===0?p:p.indexOf('0')===0?'6'+p:'60'+p;
+  if(kind==='wa'){const to=hhcWaNum(r.cust.phone);
     window.open('https://wa.me/'+to+'?text='+encodeURIComponent(txt),'_blank');await markSent('whatsapp');return;}
   if(kind==='cp'){try{await navigator.clipboard.writeText(txt.replace(/\*/g,''));toast('문구를 복사했습니다');}catch(e){toast('복사하지 못했습니다');}await markSent('copy');return;}
   if(kind==='kk'){const en=r.lang==='en';
@@ -626,7 +630,7 @@ $('ed').addEventListener('click',async e=>{
     try{await updateDoc(doc(db,'repair_plans',EDID),{status:'sent',reply:null,replied_at:'',snap:null,pay_ok_at:'',admin_note:memo});Object.assign(ED,{status:'sent',reply:null,pay_ok_at:'',admin_note:memo});edPaint();toast('다시 회신을 받을 수 있습니다');}catch(er){toast('실패: '+er.message);}return;}
   if(act==='payok'){const on=!ED.pay_ok_at;if(!confirm(on?'선입금 입금을 확인했나요? 고객 화면에 「입금 확인」이 표시됩니다.':'입금 확인을 취소할까요?'))return;
     const v=on?nowIso():'';try{await updateDoc(doc(db,'repair_plans',EDID),{pay_ok_at:v});ED.pay_ok_at=v;edPaint();toast(on?'입금 확인으로 기록했습니다':'취소했습니다');}catch(er){toast('실패: '+er.message);}return;}
-  if(act==='call'){const p=String(ED.cust.phone||'').replace(/\D/g,'');window.open('https://wa.me/'+(p.indexOf('60')===0?p:p.indexOf('0')===0?'6'+p:'60'+p),'_blank');return;}
+  if(act==='call'){window.open('https://wa.me/'+hhcWaNum(ED.cust.phone),'_blank');return;}
 });
 $('dim').addEventListener('click',async e=>{
   if(e.target.id==='dim'){closeSheet();return;}
