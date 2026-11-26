@@ -11434,6 +11434,14 @@ body.m38q .m38-drain{display:block}
 .m38-oth{display:block;margin-top:8px;border:0;background:none;padding:0;font:inherit;font-size:12px;font-weight:700;color:#B45309;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .m38-sum{font-size:12px;line-height:1.6;color:#5A6478;background:#fff;border-radius:10px;box-shadow:inset 0 0 0 1px #E4E9F2;padding:9px 11px;margin-top:4px}
 .m38-sum b{color:#14192A}
+.m38-dph{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:9px}
+.m38-dr.off .m38-dph{display:none}
+.m38-dph button.a{border:0;border-radius:10px;padding:8px 11px;font:inherit;font-size:12.5px;font-weight:800;cursor:pointer;color:#0E2350;background:#EAF0FB;box-shadow:inset 0 0 0 1px #D3DEF3}
+.m38-dph button.a.g{background:#fff;color:#5A6478;box-shadow:inset 0 0 0 1px #D5DCEA}
+.m38-dph .t{position:relative;width:44px;height:44px;flex:none}
+.m38-dph .t img{width:44px;height:44px;border-radius:8px;object-fit:cover;display:block;box-shadow:0 1px 3px rgba(14,35,80,.25)}
+.m38-dph .t button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border:0;border-radius:50%;padding:0;font:inherit;font-size:12px;line-height:20px;font-weight:800;cursor:pointer;background:#B42318;color:#fff}
+.m38-dph small{flex-basis:100%;font-size:11.5px;color:#98A1B4;font-weight:600}
 .m38-detail{width:100%;margin-top:10px;border:0;border-radius:11px;padding:11px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;color:#B45309;background:#FFF8EC;box-shadow:inset 0 0 0 1px #F3D19C}
 .m38-warn{display:none;margin:0 0 10px;padding:10px 12px;border-radius:11px;background:#FFF4E0;color:#8A4B00;font-size:12.5px;font-weight:700;line-height:1.55}
 .m38-warn.on{display:block}
@@ -11670,9 +11678,35 @@ body.m38q .m38-drain{display:block}
     U.forEach(function(u){var s=st(u);
       h+='<div class="m38-dr'+(s.on?'':' off')+'" data-u="'+esc(u.lbl)+'"><div class="m38-dr-h"><b>'+esc(uName(u))+(u.loc&&u.lbl?'<small>'+esc(u.lbl)+'</small>':'')+'</b><button type="button" class="m38-tg'+(s.on?' on':'')+'" data-tg="1">'+(s.on?'💧 주의':'✓ 이상 없음')+'</button></div>'+
         '<div class="m38-rs">'+RS.map(function(r){return '<button type="button" class="'+(s.r[r[0]]?'on':'')+'" data-r="'+r[0]+'">'+r[1]+'</button>';}).join('')+'</div>'+
+        phHtml(u)+
         '<button type="button" class="m38-oth" data-oth="'+esc(uName(u))+'">⚠ 이 에어컨에 다른 문제 있음</button></div>';});
     $('m38-drs').innerHTML=h;sumDrain();
   }
+  /* 📷 드레인 불량 사진 (2026-11-26) — 에어컨마다 「기타/문제 사진」 한 줄(해당 에어컨 지정)에 담김 → 고객 보고서 그 에어컨 카드의 「문제 사진」
+     사진을 안 넣으면 아무것도 만들지 않음(예전과 같음). 그 줄 표시: dataset.m38d = 에어컨 번호 */
+  function dRow(lbl){return [].slice.call(document.querySelectorAll('#problem-rows .unit-item')).filter(function(w){return w.dataset.m38d===lbl;})[0]||null;}
+  function dPhotos(lbl){var w=dRow(lbl);if(!w)return [];return [].slice.call(w.querySelectorAll('.ph-item')).map(function(it){return {k:it.dataset.key,src:photoData[it.dataset.key]};}).filter(function(x){return x.src;});}
+  function dMemo(u){return reasonTxt(st(u)).join(' · ')||'배수 배관 상태';}
+  function phHtml(u){if(!u.lbl)return '';var L=dPhotos(u.lbl);
+    return '<div class="m38-dph">'+L.map(function(x){return '<span class="t"><img src="'+x.src+'" alt=""><button type="button" data-dpdel="'+esc(x.k)+'" aria-label="사진 빼기">×</button></span>';}).join('')+
+      '<button type="button" class="a" data-dph="cam">📷 불량 사진'+(L.length?' 더':'')+'</button><button type="button" class="a g" data-dph="alb">🖼 앨범</button>'+
+      (L.length?'<small>사진 '+L.length+'장 → 고객 보고서 이 에어컨 카드 「문제 사진」에 나옵니다</small>':'')+'</div>';}
+  function dEnsure(u){var w=dRow(u.lbl);if(w)return w;if(typeof addProblemRow!=='function')return null;
+    var m=dMemo(u);addProblemRow(m,null,undefined,[u.lbl]);var L=document.querySelectorAll('#problem-rows .unit-item');w=L[L.length-1];
+    if(w){w.dataset.m38d=u.lbl;w.dataset.m38memo=m;}return w;}
+  function dMemoSync(){units().forEach(function(u){var w=u.lbl&&dRow(u.lbl);if(!w)return;var ta=w.querySelector('textarea');if(!ta)return;var m=dMemo(u);
+    if(ta.value===w.dataset.m38memo&&ta.value!==m){ta.value=m;w.dataset.m38memo=m;}});}
+  function dPick(lbl,cam){var u=units().filter(function(x){return x.lbl===lbl;})[0];if(!u)return;
+    var inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.multiple=true;if(cam)inp.capture='environment';inp.style.display='none';
+    inp.onchange=async function(){var F=[].slice.call(inp.files||[]).filter(function(f){return f.type&&f.type.indexOf('image')===0;});inp.remove();if(!F.length)return;
+      var w=dEnsure(u),box=w&&w.querySelector('.photo-row');if(!box){alert('사진 칸을 찾지 못했습니다');return;}
+      for(var i=0;i<F.length;i++){try{var url=await compressImage(F[i],1600,0.78);var key=box.id+'-'+Date.now()+'-'+Math.random().toString(36).slice(2,5);photoData[key]=url;addPhotoThumb(box,key,url);}catch(e){}}
+      if(typeof updatePhotoBadges==='function')updatePhotoBadges();drawDrain();draft();t2('📷 '+uName(u)+' 배수 불량 사진 '+F.length+'장을 넣었습니다');};
+    document.body.appendChild(inp);inp.click();}
+  function dDel(key){var it=document.querySelector('#problem-rows .ph-item[data-key="'+(window.CSS&&CSS.escape?CSS.escape(key):key)+'"]');if(!it)return;var w=it.closest('.unit-item');
+    delete photoData[key];it.remove();
+    if(w&&w.dataset.m38d&&!w.querySelector('.ph-item')){w.remove();if(window.renumberUnits)renumberUnits();}
+    if(typeof updatePhotoBadges==='function')updatePhotoBadges();drawDrain();draft();}
   function reasonTxt(s){return RS.filter(function(r){return s.r[r[0]];}).map(function(r){return r[2];});}
   function drainPlan(){
     var U=units(),on=U.filter(function(u){return st(u).on&&reasonTxt(st(u)).length;});
@@ -11708,13 +11742,17 @@ body.m38q .m38-drain{display:block}
       else if(!cur||cur.title!==p.title||cur.desc!==p.desc){mine.forEach(function(w){w.remove();});
         if(typeof addRecRow==='function'){addRecRow('regular',p.title,p.desc);var last=rr.lastElementChild;if(last)last.dataset.m38='1';}}}
     var ev=document.querySelector('.ev-btn[data-val="normal"]');if(ev&&!ev.classList.contains('sel')&&typeof setEval==='function')setEval(ev);
-    sumDrain();draft();
+    dMemoSync();sumDrain();draft();
   }
   drain.addEventListener('click',function(e){
     if(e.target.closest('[data-detail]')){toDetail(null);return;}
     var o=e.target.closest('[data-oth]');if(o){toDetail(o.getAttribute('data-oth'));return;}
     var row=e.target.closest('.m38-dr');if(!row)return;var s=DST[row.getAttribute('data-u')];if(!s)return;
-    if(e.target.closest('[data-tg]')){s.on=!s.on;}
+    var pd=e.target.closest('[data-dpdel]');if(pd){dDel(pd.getAttribute('data-dpdel'));return;}
+    var pa=e.target.closest('[data-dph]');if(pa){dPick(row.getAttribute('data-u'),pa.getAttribute('data-dph')==='cam');return;}
+    if(e.target.closest('[data-tg]')){s.on=!s.on;
+      var n0=dPhotos(row.getAttribute('data-u'));
+      if(!s.on&&n0.length&&confirm('이 에어컨에 넣은 배수 불량 사진 '+n0.length+'장도 함께 뺄까요?\n(취소 = 사진은 그대로 둠)'))n0.forEach(function(x){dDel(x.k);});}
     else{var r=e.target.closest('[data-r]');if(!r)return;var rk=r.getAttribute('data-r');s.r[rk]=s.r[rk]?0:1;if(s.r[rk]&&rk==='ins')s.r.noins=0;if(s.r[rk]&&rk==='noins')s.r.ins=0;if(!reasonTxt(s).length)s.on=false;}
     drawDrain();sync();
   });
