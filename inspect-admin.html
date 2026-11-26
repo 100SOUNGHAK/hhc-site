@@ -10705,17 +10705,19 @@ kind==='washer'?'- 체크리스트 결과를 한두 줄로.':'- 측정한 에어
     if(j&&!j.err){
       j.photos.forEach(function(p){var o=list[(p.i|0)-1];if(o){var ct=p.cat|0,d=parseFloat(p.d);o.ai={s:p.s==='after'?'a':'b',c:+p.c||0,what:String(p.what||'').slice(0,12),cat:ct>=1&&ct<=4?ct:4,d:isNaN(d)?null:Math.max(0,Math.min(100,Math.round(d)))};}});
       list.forEach(function(o){if(!o.ai)o.ai={s:'b',c:0,what:'',cat:4,d:null};});
-      var B=[],A=[],used={},fixed=0;
+      var B=[],A=[],used={},fixed=0,rev=0;
       (j.pairs||[]).forEach(function(pr){var b=list[(pr[0]|0)-1],a=list[(pr[1]|0)-1];if(!b||!a||used[pr[0]]||used[pr[1]]||b===a)return;used[pr[0]]=used[pr[1]]=1;
         /* 짝 안에서는 더 더러운 쪽이 「전」 — 직원이 전·후를 골라 준 사진은 그대로 둠 */
         if(!(b.h||a.h)&&b.ai.d!=null&&a.ai.d!=null&&a.ai.d-b.ai.d>=10){var t=b;b=a;a=t;b.ai.c=Math.min(b.ai.c,.6);a.ai.c=Math.min(a.ai.c,.6);fixed++;}
+        /* 직원이 고른 전·후가 반대로 보이면 바꾸지 않고 ⚠ 표시만 (2026-11-26) */
+        else if((b.h||a.h)&&b.ai.d!=null&&a.ai.d!=null&&a.ai.d-b.ai.d>=10){b.ai.rev=a.ai.rev=1;rev++;}
         b.ai.s='b';a.ai.s='a';B.push(b);A.push(a);});
       var np=B.length;
       var lb=[],la=[];
       list.forEach(function(o,i){if(used[i+1])return;(o.ai.s==='a'?la:lb).push(o);});
       var od=order(list,B,A,lb,la,'cat');
       var low=list.filter(function(o){return o.ai.c<0.7;}).length;
-      return {B:od.B,A:od.A,ord:'cat',note:'🤖 사진을 보고 오염 정도로 나누고, 같은 부위끼리 '+np+'쌍 짝지었습니다 · 부위 순서(①②③④), 같은 부위는 오염이 심한 줄부터'+(j.re?' · 불확실한 '+j.re+'장은 크게 다시 확인':'')+(fixed?' · 전·후가 뒤바뀐 '+fixed+'쌍 바로잡음':'')+(low?' · 노란 표시 '+low+'장은 확인해 주세요':'')};
+      return {B:od.B,A:od.A,ord:'cat',note:'🤖 사진을 보고 오염 정도로 나누고, 같은 부위끼리 '+np+'쌍 짝지었습니다 · 부위 순서(①②③④), 같은 부위는 오염이 심한 줄부터'+(j.re?' · 불확실한 '+j.re+'장은 크게 다시 확인':'')+(fixed?' · 전·후가 뒤바뀐 '+fixed+'쌍 바로잡음':'')+(rev?' · ⚠ 직원 구분이 전·후 반대로 보이는 '+rev+'쌍 — 노란 테두리 줄을 확인하고 필요하면 ⇄':'')+(low?' · 노란 표시 '+low+'장은 확인해 주세요':'')};
     }
     if(j&&j.err)why=' (AI '+j.err+')';else why=' (AI 키 없음)';
     return await localClassify(list,why);
@@ -10743,7 +10745,7 @@ kind==='washer'?'- 체크리스트 결과를 한두 줄로.':'- 측정한 에어
     var startB=B.slice(),startA=A.slice(),flashObj=null;
     var ov=document.createElement('div');ov.className='m35-ov';
     var lb=lbl(P,'b'),la=lbl(P,'a');
-    ov.innerHTML='<div class="m35-sh"><div class="m35-hd"><h3>'+P.name+' 사진 전·후 정리</h3><p>🤖 사진을 보고 오염 여부로 자동 분류 · 같은 부위끼리 같은 줄<br>위에서부터 ① 분해 부품 전체 ② 에바포레이터 ③ 블로워팬 ④ 그 외 순서 · 같은 부위 안에서는 오염이 심한 줄부터<br>⇄ 로 '+lb+'↔'+la+' 옮기기 · ▲▼ 로 위/아래 순서 바꾸기<br>같은 줄 사진이 고객 보고서에서 전·후 짝으로 보입니다</p></div>'+
+    ov.innerHTML='<div class="m35-sh">'+(window.__m38stepHTML||'')+'<div class="m35-hd"><h3>'+P.name+' 사진 전·후 정리</h3><p>🤖 사진을 보고 오염 여부로 자동 분류 · 같은 부위끼리 같은 줄<br>위에서부터 ① 분해 부품 전체 ② 에바포레이터 ③ 블로워팬 ④ 그 외 순서 · 같은 부위 안에서는 오염이 심한 줄부터<br>⇄ 로 '+lb+'↔'+la+' 옮기기 · ▲▼ 로 위/아래 순서 바꾸기<br>같은 줄 사진이 고객 보고서에서 전·후 짝으로 보입니다</p></div>'+
       '<div class="m35-tools"><button type="button" data-t="ai">🤖 AI로 다시 분류</button><button type="button" data-t="ord">↕ 오염 심한 순으로만</button><button type="button" data-t="pair">🔗 비슷한 모양끼리 짝 맞추기</button><button type="button" data-t="time">🕒 시간순 나누기</button><button type="button" data-t="swapall">⇄ 전·후 통째로 바꾸기</button></div>'+
       '<div class="m35-sum"></div>'+
       '<div class="m35-body"><div class="m35-colh"><i></i><span class="cb">'+lb+'</span><span class="ca">'+la+'</span></div><div class="m35-rows"></div></div>'+
@@ -10755,7 +10757,7 @@ kind==='washer'?'- 체크리스트 결과를 한두 줄로.':'- 측정한 에어
     function reorder(mode){var n=Math.min(B.length,A.length),l=B.concat(A),r=order(l,B.slice(0,n),A.slice(0,n),B.slice(n),A.slice(n),mode);B=r.B;A=r.A;ordMode=mode;ordLabel();}
     function cell(o,side,i,len){
       if(!o)return '<div class="m35-empty">빈 칸</div>';
-      return '<div class="m35-cell '+side+(o===flashObj?' flash':'')+'"><img src="'+o.src+'" alt="">'+(o.ai&&(o.ai.what||o.ai.c)?'<div class="tm'+(o.ai.c<0.7||o.ai.s!==side?' warn':'')+'">🤖 '+(['','①','②','③','④'][o.ai.cat]||'')+' '+(o.ai.what||'')+(typeof o.ai.d==='number'?' · 오염 '+o.ai.d:'')+(o.ai.c<0.7||o.ai.s!==side?' · 확인 필요':(typeof o.ai.d==='number'?'':' · '+Math.round(o.ai.c*100)+'%'))+'</div>':(o.t?'<div class="tm">🕒 '+fmt(o.t)+'</div>':''))+
+      return '<div class="m35-cell '+side+(o===flashObj?' flash':'')+(o.ai&&o.ai.rev?' rev':'')+'"><img src="'+o.src+'" alt="">'+(o.ai&&typeof o.ai.d==='number'?'<i class="dz"><b style="width:'+o.ai.d+'%"></b></i>':'')+(o.ai&&o.ai.rev?'<div class="tm warn">⚠ 전·후 반대 의심</div>':'')+(o.ai&&(o.ai.what||o.ai.c)?'<div class="tm'+(o.ai.c<0.7||o.ai.s!==side?' warn':'')+'">🤖 '+(['','①','②','③','④'][o.ai.cat]||'')+' '+(o.ai.what||'')+(typeof o.ai.d==='number'?' · 오염 '+o.ai.d:'')+(o.ai.c<0.7||o.ai.s!==side?' · 확인 필요':(typeof o.ai.d==='number'?'':' · '+Math.round(o.ai.c*100)+'%'))+'</div>':(o.t?'<div class="tm">🕒 '+fmt(o.t)+'</div>':''))+
         '<div class="ctl"><button type="button" data-a="up" data-s="'+side+'" data-i="'+i+'"'+(i===0?' disabled':'')+'>▲</button>'+
         '<button type="button" data-a="dn" data-s="'+side+'" data-i="'+i+'"'+(i===len-1?' disabled':'')+'>▼</button>'+
         '<button type="button" class="sw" data-a="sw" data-s="'+side+'" data-i="'+i+'">'+(side==='b'?'후로 ▶':'◀ 전으로')+'</button>'+
@@ -11578,6 +11580,54 @@ body.m38q .m38-drain{display:block}
 .m38-go button.ok{flex:2;background:#0E2350;color:#fff;box-shadow:0 2px 0 #07102a}
 .m38-big{position:fixed;inset:0;z-index:99995;background:rgba(5,8,15,.92);display:none;align-items:center;justify-content:center;padding:16px}
 .m38-big.on{display:flex}.m38-big img{max-width:100%;max-height:100%;border-radius:8px}
+/* 📥 직원 사진 가져오기 — 단계 · 확인 화면 (2026-11-26) */
+.m38-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin:-12px -14px 12px;padding:8px 12px 10px;background:#0A1A3D;position:sticky;top:-12px;z-index:2}
+.m35-sh>.m38-steps{margin:0;position:static}
+.m38-steps span{text-align:center;font-size:11.5px;font-weight:800;color:#7F8DB2}
+.m38-steps span i{display:block;height:4px;border-radius:2px;background:rgba(255,255,255,.16);margin-bottom:5px}
+.m38-steps span.dn{color:#C9D3EE}.m38-steps span.dn i{background:#7F8DB2}
+.m38-steps span.on{color:#fff}.m38-steps span.on i{background:#C9A44C}
+.m38-sum2{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.m38-sum2 span{font-size:13px;font-weight:800;border-radius:999px;padding:5px 10px;background:#fff;color:var(--bc);box-shadow:inset 0 0 0 1.5px var(--bc)}
+.m38-sum2 span.w{--bc:#B45309;background:#FFF4E0}
+.m38-c-t{--bc:#2563EB}.m38-c-b{--bc:#9B2C2C}.m38-c-a{--bc:#0B6B47}.m38-c-e{--bc:#8891A0}.m38-c-x{--bc:#B42318}
+.m38-chk{border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:13px;font-weight:700;line-height:1.6;background:#EAF6F0;color:#0B6B47;box-shadow:inset 0 0 0 1px #BFE3D0}
+.m38-chk.w{background:#FFF8EC;color:#8A5A00;box-shadow:inset 0 0 0 1px #F3DDAE}
+.m38-wn{background:#FFFBF0;border-radius:13px;padding:11px;margin-bottom:8px;box-shadow:inset 0 0 0 1.5px #F0B429}
+.m38-wn p{margin:0 0 8px;font-size:13.5px;font-weight:800;color:#8A4B00;line-height:1.45}
+.m38-wn p small{display:block;font-weight:600;color:#8A6A30;font-size:12px}
+.m38-wn img{display:block;width:150px;max-width:60%;aspect-ratio:4/3;object-fit:cover;border-radius:9px;box-shadow:inset 0 0 0 2px #2563EB;cursor:zoom-in}
+.m38-wn .ac{display:flex;gap:6px;margin-top:9px}
+.m38-wn .ac button{flex:1;border:0;border-radius:10px;padding:10px 6px;font:inherit;font-size:13px;font-weight:800;cursor:pointer;background:#B45309;color:#fff;min-height:42px}
+.m38-wn .ac button.n{background:#fff;color:#8A4B00;box-shadow:inset 0 0 0 1px #F3D19C}
+.m38-grp{margin:12px 0 5px;font-size:13px;font-weight:800;color:var(--bc);display:flex;justify-content:space-between;gap:8px}
+.m38-grp small{color:#98A1B4;font-weight:700}
+.m38-pg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.m38-pg button{position:relative;border:0;padding:3px;border-radius:10px;aspect-ratio:1;cursor:pointer;background:#E9EDF5;box-shadow:inset 0 0 0 3px var(--bc)}
+.m38-pg button.wv{box-shadow:inset 0 0 0 3px #F0B429}
+.m38-pg img{width:100%;height:100%;object-fit:cover;display:block;border-radius:8px}
+.m38-pg b{position:absolute;right:6px;top:6px;font-size:10.5px;background:var(--bc);color:#fff;border-radius:6px;padding:1px 5px}
+.m38-seg{display:flex;gap:6px;flex-wrap:wrap}
+.m38-seg button{flex:1 1 30%;border:0;border-radius:10px;padding:10px 6px;font:inherit;font-size:12.5px;font-weight:800;cursor:pointer;background:#fff;color:#5A6478;box-shadow:inset 0 0 0 1px #D5DCEA;min-height:42px}
+.m38-seg button.on{background:#0E2350;color:#fff;box-shadow:none}
+.m38-big4{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+.m38-big4 button{border:0;border-radius:14px;padding:14px 8px;font:inherit;font-size:15px;font-weight:800;cursor:pointer;background:#fff;color:var(--bc);box-shadow:inset 0 0 0 2px var(--bc);min-height:62px}
+.m38-big4 button.on{background:var(--bc);color:#fff}
+.m38-big4 button em{display:block;font-style:normal;font-size:22px}
+.m38-pv{display:block;width:100%;max-height:36vh;object-fit:contain;border-radius:12px;background:#0b1222}
+.m38-acs{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
+.m38-acs button{border:0;border-radius:9px;padding:8px 10px;font:inherit;font-size:12.5px;font-weight:800;cursor:pointer;background:#F1F4FA;color:#5A6478;box-shadow:inset 0 0 0 1px #D5DCEA;min-height:38px}
+.m38-acs button.on{background:#2563EB;color:#fff;box-shadow:none}
+.m38-acs button.on.dup{background:#F0B429;color:#4A3300}
+.m38-undo{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));z-index:99996;width:min(460px,calc(100% - 24px));transform:translateX(-50%);background:#14192A;color:#fff;border-radius:14px;padding:11px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 10px 26px rgba(0,0,0,.35);overflow:hidden}
+.m38-undo span{flex:1;font-size:14px;font-weight:700;line-height:1.4}
+.m38-undo button{flex:none;border:0;border-radius:10px;padding:9px 14px;font:inherit;font-size:14px;font-weight:800;cursor:pointer;background:#C9A44C;color:#0E2350;min-height:42px}
+.m38-undo i{position:absolute;left:0;bottom:0;height:3px;background:#C9A44C;width:100%;animation:m38u 8s linear forwards}
+@keyframes m38u{to{width:0}}
+.m35-cell .dz{display:block;height:5px;border-radius:3px;background:#E4E9F2;margin:4px 0 0;overflow:hidden}
+.m35-cell .dz b{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,#C9A44C,#9B2C2C)}
+.m35-cell.rev{box-shadow:0 0 0 2px #F0B429}
+@media (prefers-reduced-motion:reduce){.m38-undo i{animation:none}}
 @media (prefers-reduced-motion:reduce){.m38-mode button,.m38-tg{transition:none}}
 </style>
 <div class="m38-ov" id="m38-ov"><div class="m38-sh"><header><div><b id="m38-st"></b><small id="m38-ss"></small></div><button type="button" id="m38-sx" aria-label="닫기">✕</button></header><div class="m38-bd" id="m38-sb"></div></div></div>
@@ -12110,32 +12160,116 @@ async function blobUrl(p,k){
   return new File([b],(p.cat||'p')+'.jpg',{type:b.type||'image/jpeg',lastModified:Date.parse(p.taken||p.at)||Date.now()});
 }
 /* 온도 사진 → 에어컨 정하기 창. 처음엔 찍은 순서대로 정해져 있음. 돌려줌: ['0'|'1'…|'work'|'skip'] 또는 null(취소) */
+/* ══ 📥 가져오기 단계 화면 (2026-11-26) — ① 확인 ② 온도 → 에어컨 ③ 전·후 정리 ④ 넣기
+   직원이 고른 구분 그대로 · 이미 하는 판독 결과만 써서 ⚠ 표시(추가 비용 없음).
+   되돌리기: 이 블록(stepBar · checkSheet · snapUndo)과 importNow 안 「2026-11-26」 줄들을 지우면 예전 흐름 */
+const STEPS=['① 확인','② 온도','③ 전·후','④ 넣기'];
+const stepBar=n=>'<div class="m38-steps">'+STEPS.map((t,i)=>`<span class="${i===n?'on':i<n?'dn':''}"><i></i>${t}</span>`).join('')+'</div>';
+const CK={temp:['🌡️','온도 측정','t'],before:['🧽','세척 전','b'],after:['✨','세척 후','a'],etc:['🧾','기타','e']};
+/* F=[{p,f,u,R?,c}] — c=지금 구분(temp|before|after|etc|skip). 돌려주는 값: {etcTo} 또는 null(취소) */
+function checkSheet(F,nU,etcAsk){
+  return new Promise(res=>{
+    const S=window.__m38sheet;if(!S){res({etcTo:'work'});return;}
+    let etcTo='work',view=null;const okd=new Set();
+    const big=()=>{let b=document.querySelector('.m38-big');if(!b){b=document.createElement('div');b.className='m38-big';b.innerHTML='<img alt="">';document.body.appendChild(b);b.onclick=()=>b.classList.remove('on');}return b;};
+    function draw(){
+      const bd=S.body();
+      if(view!=null){const x=F[view];
+        bd.innerHTML=stepBar(0)+`<img class="m38-pv" src="${x.u}" alt=""><div class="m38-big4">`+
+          Object.keys(CK).map(k=>`<button type="button" class="m38-c-${CK[k][2]}${x.c===k?' on':''}" data-ck="${k}"><em>${CK[k][0]}</em>${CK[k][1]}</button>`).join('')+
+          `</div><div class="m38-go" style="margin-top:10px"><button type="button" data-ck="skip">✕ 넣지 않음</button><button type="button" class="ok" data-ckb="1">‹ 돌아가기</button></div>`;
+        return;}
+      const by=k=>F.map((x,i)=>({x,i})).filter(o=>o.x.c===k);
+      const nT=by('temp').length,nB=by('before').length,nA=by('after').length,nE=by('etc').length,nX=by('skip').length;
+      const W=by('temp').filter(o=>o.x.R&&o.x.R.r&&o.x.R.r.err&&!okd.has(o.i));
+      let h=stepBar(0)+`<div class="m38-sum2"><span class="m38-c-t">🌡️ 온도 ${nT}</span><span class="m38-c-b">🧽 전 ${nB}</span><span class="m38-c-a">✨ 후 ${nA}</span><span class="m38-c-e">🧾 기타 ${nE}</span>${nX?`<span class="m38-c-x">✕ ${nX}</span>`:''}${W.length?`<span class="w">⚠ 확인 ${W.length}</span>`:''}</div>`;
+      const ln=[];let warn=false;
+      if(nU){if(nT===nU)ln.push(`✓ 에어컨 ${nU}대 · 온도 사진 ${nT}/${nU}`);else{warn=true;ln.push(`에어컨 ${nU}대 · 온도 사진 <b>${nT}/${nU}</b>`+(nT<nU?' — 빠진 에어컨은 다음 단계에서 알려 드립니다':' — 남는 사진은 다음 단계에서 정해 주세요'));}}
+      if(nB||nA){if(nB===nA)ln.push(`✓ 세척 전 ${nB}장 · 세척 후 ${nA}장`);else{warn=true;ln.push(`세척 전 ${nB}장 · 세척 후 ${nA}장 — <b>짝 없는 사진 ${Math.abs(nB-nA)}장</b> (③에서 확인)`);}}
+      if(ln.length)h+=`<div class="m38-chk${warn?' w':''}">${ln.join('<br>')}</div>`;
+      if(W.length){h+=`<div class="m38-grp" style="--bc:#B45309">⚠ 확인 필요 ${W.length}<small>이것만 보시면 됩니다</small></div>`;
+        W.forEach(o=>{h+=`<div class="m38-wn"><p>온도 사진에서 계측기 숫자를 읽지 못했습니다<small>직원이 「온도 측정」으로 올린 사진${o.x.p.by?' · '+esc(o.x.p.by):''} — 계측기 사진이 아니면 기타로 옮기세요</small></p><img src="${o.x.u}" alt="" data-ckz="${o.i}"><div class="ac"><button type="button" data-ckm="${o.i}">🧾 기타로 옮기기</button><button type="button" class="n" data-ckok="${o.i}">그대로 두기</button></div></div>`;});}
+      const grid=(k,lab)=>{const L=by(k);if(!L.length)return '';return `<div class="m38-grp m38-c-${k==='skip'?'x':CK[k][2]}">${lab} · ${L.length}<small>눌러서 구분 바꾸기</small></div><div class="m38-pg">`+
+        L.map((o,n)=>`<button type="button" class="m38-c-${k==='skip'?'x':CK[k][2]}${W.some(w=>w.i===o.i)?' wv':''}" data-ckp="${o.i}"><img src="${o.x.u}" alt=""><b>${n+1}</b></button>`).join('')+'</div>';};
+      h+=grid('temp','🌡️ 온도 측정')+grid('before','🧽 세척 전')+grid('after','✨ 세척 후')+grid('etc','🧾 기타')+grid('skip','✕ 넣지 않음');
+      if(etcAsk&&nE)h+=`<div class="m38-grp" style="--bc:#0E2350">🧾 기타 사진 넣을 곳</div><div class="m38-seg">`+[['work','📸 작업과정'],['prob','📸 기타/문제'],['skip','✕ 넣지 않음']].map(o=>`<button type="button" data-cke="${o[0]}" class="${etcTo===o[0]?'on':''}">${o[1]}</button>`).join('')+'</div>';
+      h+=`<div class="m38-go" style="margin-top:12px"><button type="button" data-ckx="1">취소</button><button type="button" class="ok" data-ckn="1">다음 ›</button></div>`;
+      bd.innerHTML=h;
+    }
+    S.open('📥 직원 사진 가져오기','직원 구분 그대로 · 확인할 것만 표시 · 사진을 누르면 구분을 바꿀 수 있습니다',' ');draw();
+    const bd=S.body();let done=false;
+    const fin=v=>{if(done)return;done=true;bd.onclick=null;S.close();res(v);};
+    bd.onclick=e=>{const g=q=>e.target.closest(q);let b;
+      if(b=g('[data-ckz]')){const B=big();B.querySelector('img').src=F[+b.dataset.ckz].u;B.classList.add('on');return;}
+      if(b=g('[data-ck]')){F[view].c=b.dataset.ck;view=null;draw();return;}
+      if(g('[data-ckb]')){view=null;draw();return;}
+      if(b=g('[data-ckp]')){view=+b.dataset.ckp;draw();return;}
+      if(b=g('[data-ckm]')){F[+b.dataset.ckm].c='etc';draw();return;}
+      if(b=g('[data-ckok]')){okd.add(+b.dataset.ckok);draw();return;}
+      if(b=g('[data-cke]')){etcTo=b.dataset.cke;draw();return;}
+      if(g('[data-ckx]')){fin(null);return;}
+      if(g('[data-ckn]')){fin({etcTo});return;}};
+    const x=$('m38-sx'),ov=$('m38-ov');
+    x.addEventListener('click',()=>fin(null),{once:true});
+    ov.addEventListener('click',function oc(e){if(e.target===ov){ov.removeEventListener('click',oc);fin(null);}});
+  });
+}
+/* ↩ 넣은 뒤 8초 되돌리기 — 넣기 전 사진 칸 · 온도 칸 · 기타/문제 줄을 그대로 되살림 */
+function snapUndo(){
+  const PD=()=>{try{return photoData;}catch(e){return window.photoData||{};}};
+  const pd=PD(),box=new Map();
+  document.querySelectorAll('.ph-item').forEach(it=>{const c=it.parentElement;if(!c)return;if(!box.has(c))box.set(c,[]);box.get(c).push({k:it.dataset.key,src:pd[it.dataset.key],auto:it.classList.contains('ph-auto')});});
+  const inp=[...document.querySelectorAll('#cool-units input, #cool-units textarea')].map(el=>({el,v:el.value,f:el.classList.contains('ocr-filled'),bc:el.style.borderColor,bg:el.style.background}));
+  const prob=new Set(document.querySelectorAll('#problem-rows .unit-item'));
+  return function undo(){
+    const pd2=PD();
+    const all=new Set(box.keys());document.querySelectorAll('.ph-item').forEach(it=>{if(it.parentElement)all.add(it.parentElement);});
+    all.forEach(c=>{const was=box.get(c)||[],wasK=new Set(was.map(o=>o.k));
+      c.querySelectorAll('.ph-item:not(.ph-auto)').forEach(it=>{const k=it.dataset.key;if(!wasK.has(k)&&k)delete pd2[k];it.remove();});
+      was.forEach(o=>{if(o.auto||!o.src)return;pd2[o.k]=o.src;
+        const m=/^cu-photos-(.+)$/.exec(c.id||'');
+        if(m&&/^cool-/.test(o.k)&&window.__m38t)window.__m38t.place(m[1],o.src);else if(typeof addPhotoThumb==='function')addPhotoThumb(c,o.k,o.src);});});
+    inp.forEach(o=>{if(!o.el.isConnected)return;o.el.value=o.v;o.el.classList.toggle('ocr-filled',o.f);o.el.style.borderColor=o.bc;o.el.style.background=o.bg;});
+    document.querySelectorAll('#cool-units .cu-item').forEach(w=>{const id=w.id.replace('cu-wrap-','');if(typeof calcCuDiff==='function')try{calcCuDiff(id);}catch(_){}});
+    document.querySelectorAll('#problem-rows .unit-item').forEach(r=>{if(!prob.has(r))r.remove();});
+    if(typeof updatePhotoBadges==='function')try{updatePhotoBadges();}catch(_){}
+    if(typeof window.__scheduleDraft==='function')window.__scheduleDraft();
+  };
+}
+function undoBar(msg,fn){
+  document.querySelectorAll('.m38-undo').forEach(x=>x.remove());
+  const b=document.createElement('div');b.className='m38-undo';b.innerHTML=`<span>${esc(msg)}</span><button type="button">↩ 되돌리기</button><i></i>`;document.body.appendChild(b);
+  const tm=setTimeout(()=>b.remove(),8000);
+  b.querySelector('button').onclick=()=>{clearTimeout(tm);b.remove();fn();};
+}
 function assignSheet(R,U){
   return new Promise(res=>{
     const S=window.__m38sheet;if(!S){res(R.map((_,i)=>i<U.length?String(i):'work'));return;}
     const nm=el=>{const l=el._cuLbl?el._cuLbl():'',c=el._cuLoc?el._cuLoc():'';return c?c+' ('+l+')':'에어컨 '+l;};
     const plan=R.map((_,i)=>i<U.length?String(i):'work');
-    const opts=v=>U.map((el,k)=>`<option value="${k}"${v===String(k)?' selected':''}>${esc(nm(el))}</option>`).join('')+
-      `<option value="work"${v==='work'?' selected':''}>📷 작업과정 사진으로</option><option value="skip"${v==='skip'?' selected':''}>✕ 넣지 않음</option>`;
+    /* 선택칸 대신 큰 버튼 (2026-11-26) — 같은 에어컨에 2장이면 주황 */
+    const opts=(v,i,cnt)=>U.map((el,k)=>`<button type="button" data-asb="${i}:${k}" class="${v===String(k)?'on'+(cnt[k]>1?' dup':''):''}">${esc(nm(el))}</button>`).join('')+
+      `<button type="button" data-asb="${i}:work" class="${v==='work'?'on':''}">📷 작업과정</button><button type="button" data-asb="${i}:skip" class="${v==='skip'?'on':''}">✕ 넣지 않음</button>`;
     function draw(){
       const cnt={};plan.forEach(v=>{if(/^\d+$/.test(v))cnt[v]=(cnt[v]||0)+1;});
       const miss=U.filter((_,k)=>!cnt[String(k)]).map(nm);
-      S.body().innerHTML='<p class="m38-p">찍은 순서대로 정해 두었습니다. <b>다른 에어컨이면 바꿔 주세요.</b> 사진을 누르면 크게 보입니다.</p>'+
+      S.body().innerHTML=stepBar(1)+'<p class="m38-p">찍은 순서대로 정해 두었습니다. <b>다른 에어컨이면 바꿔 주세요.</b> 사진을 누르면 크게 보입니다.</p>'+
         R.map((x,i)=>{const r=x.r,d=!r.err&&r.a!=null&&r.b!=null?(r.a-r.b).toFixed(1):null,dup=/^\d+$/.test(plan[i])&&cnt[plan[i]]>1;
           return `<div class="m38-as${dup?' dup':''}"><img src="${x.u}" alt="" data-big="${i}"><div>`+
             (r.err?`<b class="x">숫자를 읽지 못함 · 넣은 뒤 직접 입력</b>`:`<b>흡입 ${r.a??'—'}° · 토출 ${r.b??'—'}°${d!=null?' · Δ'+d+'°':''}</b>`)+
             (!r.err&&r.z?`<img class="z" src="${r.z}" alt="" data-bigz="${i}">`:'')+
-            `<small>${i+1}번째 사진${x.by?' · '+esc(x.by):''}${r.err?'':r.dif?' · <i class="w">두 번 읽은 값이 다름 — 꼭 확인</i>':r.c<0.7?' · <i class="w">흐릿함 — 확인 필요</i>':r.twice?' · 두 번 읽어 같은 값':''}</small><select data-as="${i}">${opts(plan[i])}</select>`+
+            `<small>${i+1}번째 사진${x.by?' · '+esc(x.by):''}${r.err?'':r.dif?' · <i class="w">두 번 읽은 값이 다름 — 꼭 확인</i>':r.c<0.7?' · <i class="w">흐릿함 — 확인 필요</i>':r.twice?' · 두 번 읽어 같은 값':''}</small><div class="m38-acs">${opts(plan[i],i,cnt)}</div>`+
             (dup?'<em>같은 에어컨에 사진이 2장 — 측정 사진 칸에는 아래쪽 사진이 들어갑니다</em>':'')+`</div></div>`;}).join('')+
         (miss.length?`<p class="m38-p" style="color:#8A5A00;background:#FFF8EC">사진이 없는 에어컨: ${esc(miss.join(', '))}</p>`:'')+
-        '<div class="m38-go"><button type="button" data-as-x="1">취소</button><button type="button" class="ok" data-as-ok="1">넣기 ✓</button></div>';
+        '<div class="m38-go"><button type="button" data-as-x="1">취소</button><button type="button" class="ok" data-as-ok="1">넣고 다음 ›</button></div>';
     }
     S.open('🌡️ 온도 사진 → 어느 에어컨?','사진 '+R.length+'장 · 에어컨 '+U.length+'대 — 확인 후 「넣기」',' ');draw();
     let big=document.querySelector('.m38-big');if(!big){big=document.createElement('div');big.className='m38-big';big.innerHTML='<img alt="">';document.body.appendChild(big);big.onclick=()=>big.classList.remove('on');}
     const bd=S.body();let done=false;
     const fin=v=>{if(done)return;done=true;bd.onchange=bd.onclick=null;S.close();res(v);};
     bd.onchange=e=>{const s2=e.target.closest('[data-as]');if(!s2)return;plan[+s2.dataset.as]=s2.value;draw();};
-    bd.onclick=e=>{if(e.target.closest('[data-as-ok]'))fin(plan.slice());else if(e.target.closest('[data-as-x]'))fin(null);
+    bd.onclick=e=>{const ab=e.target.closest('[data-asb]');if(ab){const [i,v]=ab.dataset.asb.split(':');plan[+i]=v;draw();return;}
+      if(e.target.closest('[data-as-ok]'))fin(plan.slice());else if(e.target.closest('[data-as-x]'))fin(null);
       else{const gz=e.target.closest('[data-bigz]'),g=gz||e.target.closest('[data-big]');if(g){big.querySelector('img').src=gz?R[+gz.dataset.bigz].r.z:R[+g.dataset.big].u;big.classList.add('on');}}};
     const x=$('m38-sx'),ov=$('m38-ov');const cancel=()=>fin(null);
     x.addEventListener('click',cancel,{once:true});
@@ -12166,23 +12300,35 @@ async function importNow(jobs,again){
   try{
     const k=await adminKey();if(!k)throw new Error('직원 일정표 관리자 열쇠가 없습니다 — 관리자 앱 「직원 일정표」를 한 번 열어 주세요');
     const files=[];let n=0;
-    for(const p of ph){files.push({p,f:await blobUrl(p,k)});w.textContent='📥 직원 사진 받는 중… ('+(++n)+'/'+ph.length+')';}
-    /* 🌡️ 온도 사진 → 사진마다 숫자를 읽고, 어느 에어컨인지 확인 창에서 정한 뒤 넣음 */
-    const T=files.filter(x=>x.p.cat==='temp');
+    for(const p of ph){files.push({p,f:await blobUrl(p,k),c:p.cat});w.textContent='📥 직원 사진 받는 중… ('+(++n)+'/'+ph.length+')';}
+    /* 2026-11-26 단계 화면: ① 확인(구분 · 대수 · ⚠) → ② 온도 → 에어컨 → ③ 전·후 정리 → 넣은 뒤 8초 되돌리기 */
+    const rt=RT(),acRep=isAC()&&rt!=='install'&&rt!=='washer'&&rt!=='hood';
+    let U=[];
+    const prepU=nT=>{if(typeof coolMissing==='function'&&coolMissing()&&typeof coolFillFromEquip==='function')try{coolFillFromEquip();}catch(_){}
+      U=[...document.querySelectorAll('#cool-units .cu-item')];
+      if(!U.length&&typeof addCoolUnit==='function'){for(let i=0;i<nT;i++)addCoolUnit();U=[...document.querySelectorAll('#cool-units .cu-item')];}};
+    /* 🌡️ 온도 사진 → 사진마다 숫자를 읽음 (판독은 줄이기 전 사진으로 · 3장씩 함께). 보고서에 넣는 사진은 1600px */
+    const readAll=async L=>{if(!L.length)return;let nDone=0,nx=0;w.textContent='🤖 온도 사진 읽는 중… (0/'+L.length+')';
+      const one=async x=>{const u=x.u||await compressImage(x.f,1600,0.78);let r={err:'판독 도구 없음'};
+        if(window.__m38t){const src=URL.createObjectURL(x.f);try{r=await window.__m38t.read([src]);}catch(_){r={err:'판독 오류'};}try{URL.revokeObjectURL(src);}catch(_){}}
+        x.u=u;x.R={u,f:x.f,r,by:x.p.by||''};w.textContent='🤖 온도 사진 읽는 중… ('+(++nDone)+'/'+L.length+')';};
+      await Promise.all([0,1,2].map(async()=>{while(nx<L.length){const x=L[nx++];await one(x);}}));};
+    if(acRep){
+      const T0=files.filter(x=>x.c==='temp');if(T0.length)prepU(T0.length);
+      document.body.appendChild(w);
+      let m=0;for(const x of files){if(!x.u)x.u=await compressImage(x.f,1600,0.78);w.textContent='🖼 사진 준비 중… ('+(++m)+'/'+files.length+')';}
+      await readAll(T0);w.remove();
+      const ck=await checkSheet(files,U.length,rt==='inspect'||!['install','washer','hood'].includes(rt));
+      if(!ck){if(typeof toast==='function')toast('가져오기를 취소했습니다');return;}
+      files.etcTo=ck.etcTo;
+      const T1=files.filter(x=>x.c==='temp'&&!x.R);
+      if(T1.length){if(!U.length)prepU(T1.length);document.body.appendChild(w);await readAll(T1);w.remove();}
+    }
+    const undo=snapUndo();
+    const T=files.filter(x=>x.c==='temp');
     if(T.length){
-      if(typeof coolMissing==='function'&&coolMissing()&&typeof coolFillFromEquip==='function')try{coolFillFromEquip();}catch(_){}
-      let U=[...document.querySelectorAll('#cool-units .cu-item')];
-      if(!U.length&&typeof addCoolUnit==='function'){for(let i=0;i<T.length;i++)addCoolUnit();U=[...document.querySelectorAll('#cool-units .cu-item')];}
-      const R=[];
-      /* 판독은 줄이기 전 사진으로(숫자가 더 또렷함) · 3장씩 함께 읽음. 보고서에 넣는 사진은 예전처럼 1600px */
-      let nDone=0,nx=0;w.textContent='🤖 온도 사진 읽는 중… (0/'+T.length+')';
-      const one=async i=>{
-        const u=await compressImage(T[i].f,1600,0.78);let r={err:'판독 도구 없음'};
-        if(window.__m38t){const src=URL.createObjectURL(T[i].f);try{r=await window.__m38t.read([src]);}catch(_){r={err:'판독 오류'};}try{URL.revokeObjectURL(src);}catch(_){}}
-        R[i]={u,f:T[i].f,r,by:T[i].p.by||''};
-        w.textContent='🤖 온도 사진 읽는 중… ('+(++nDone)+'/'+T.length+')';
-      };
-      await Promise.all([0,1,2].map(async()=>{while(nx<T.length){const i=nx++;await one(i);}}));
+      if(!U.length)prepU(T.length);
+      const R=T.map(x=>x.R);
       w.remove();
       const plan=await assignSheet(R,U);
       if(!plan){if(typeof toast==='function')toast('가져오기를 취소했습니다');return;}
@@ -12199,20 +12345,21 @@ async function importNow(jobs,again){
       if(extra.length&&window.ingestPhotos)window.ingestPhotos($('work-photos'),extra);
     }
     w.remove();
-    /* 🧽 세척 전 · ✨ 후 → 청소 사진 정리 창 (직원이 고른 전·후 그대로) */
-    const BA=files.filter(x=>x.p.cat==='before'||x.p.cat==='after');
+    /* 🧽 세척 전 · ✨ 후 → 청소 사진 정리 창 (직원이 고른 전·후 그대로 · 반대로 보이면 ⚠ 만) */
+    const BA=files.filter(x=>x.c==='before'||x.c==='after');
     if(BA.length){
-      const list=[];for(const x of BA){const u=await compressImage(x.f,1600,0.78);list.push({src:u,t:x.f.lastModified,h:x.p.cat==='after'?'a':'b'});}
+      const list=[];for(const x of BA){const u=x.u||await compressImage(x.f,1600,0.78);list.push({src:u,t:x.f.lastModified,h:x.c==='after'?'a':'b'});}
+      window.__m38stepHTML=stepBar(2);
       if(window.__m35&&window.__m35.bulkHint)await window.__m35.bulkHint(0,list);
     }
     /* 🧾 기타 사진 (2026-11-25) → 보고서 종류별 기타 사진 칸 */
-    const E=files.filter(x=>x.p.cat==='etc');
+    const E=files.filter(x=>x.c==='etc');
     if(E.length&&window.ingestPhotos){
-      const rt=RT();let box=null;
+      let box=null;
       if(rt==='install')box=$('etc-photos');
       else if(rt==='washer'||rt==='hood')box=$('w-etc-photos');
       else{
-        const to=await etcWhere(E.length);
+        const to=files.etcTo||await etcWhere(E.length);
         if(to==='prob'&&typeof addProblemRow==='function'){addProblemRow('',null);const rows=document.querySelectorAll('#problem-rows .unit-item');const last=rows[rows.length-1];box=last&&last.querySelector('.photo-row');}
         else if(to==='work')box=$('work-photos');
       }
@@ -12220,7 +12367,13 @@ async function importNow(jobs,again){
     }
     const now=new Date().toISOString();
     jobs.forEach(j=>{DONE[j.key]=1;j.ph.forEach(p=>{IMP.add(p.id);p.imported_at=p.imported_at||now;updateDoc(doc(db(),'site_photos',p.id),{imported_at:now}).catch(()=>{});});});
-    if(typeof toast==='function')toast('📥 직원 사진 '+ph.length+'장을 넣었습니다'+(BA.length?' — 세척 사진은 정리 창에서 「적용」':''));
+    /* 넣은 뒤 8초 「되돌리기」 — 세척 사진 정리 창이 열려 있으면 닫힌 뒤에 */
+    const showUndo=()=>{delete window.__m38stepHTML;
+      undoBar('📥 직원 사진 '+ph.length+'장을 넣었습니다',()=>{undo();
+        jobs.forEach(j=>{delete DONE[j.key];j.ph.forEach(p=>{IMP.delete(p.id);p.imported_at=null;updateDoc(doc(db(),'site_photos',p.id),{imported_at:null}).catch(()=>{});});});
+        if(typeof toast==='function')toast('되돌렸습니다 — 가져오기 전 상태입니다');check();});};
+    if(document.querySelector('.m35-ov')){const mo=new MutationObserver(()=>{if(!document.querySelector('.m35-ov')){mo.disconnect();showUndo();}});mo.observe(document.body,{childList:true});}
+    else showUndo();
     check();
   }catch(err){w.remove();alert('가져오지 못했습니다: '+(err.message||err));}
 }

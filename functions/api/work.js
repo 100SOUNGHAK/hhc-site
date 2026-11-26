@@ -23,6 +23,7 @@
 //      워크퍼밋 등. 직원 화면에는 url(원본) · t(작은 그림) · w · h · name 만 보냄. Storage 주소만 허용.
 //  · 📷 직원 현장 사진 (2026-11-24) — 직원이 일정마다 온도측정 · 세척 전 · 세척 후 사진을 올림(여러 직원 가능)
 //      POST /api/work?k={열쇠}&op=up&job={작업ID}&date={날짜}&cat=temp|before|after|etc  (FormData f=사진 · t=작은 그림 · w · h · taken)
+//      POST /api/work?k={열쇠}&op=cat&id={사진ID}&cat=…  — 본인 사진 구분 바꾸기 (가져가기 전만, 2026-11-26)
 //      · etc = 🧾 기타 사진 (2026-11-25) — 점검·출장진단/수리·설치·세탁기/건조기·주방후드 보고서의 기타 사진 칸으로 가져감
 //      POST /api/work?k={열쇠}&op=del&id={사진ID}   → 자기가 올린 사진만(관리자 열쇠는 전부)
 //      GET  /api/work?k={관리자 열쇠}&img={사진ID}   → 사진 받기(관리자 보고서 화면이 가져오기에 씀 · 같은 주소라 막힘 없음)
@@ -257,6 +258,16 @@ export async function onRequestPost(context){
       await Promise.all([stgDel(env, p.path), stgDel(env, p.tpath)]).catch(() => {});
       await deleteDoc(env, 'site_photos', id);
       return json({ ok: true });
+    }
+    if (op === 'cat'){                                   // 📷 구분 바꾸기 — 본인 사진만 (2026-11-26)
+      const id = String(q.get('id') || '').slice(0, 60), cat = String(q.get('cat') || '');
+      if (SITE_CATS.indexOf(cat) < 0) return fail('bad-input');
+      const p = await getDoc(env, 'site_photos', id);
+      if (!p) return fail('gone', 404);
+      if (!who.admin && p.bk !== bk) return fail('not-yours', 403);
+      if (p.imported_at) return fail('imported', 409);   // 이미 보고서에 가져간 사진은 그대로
+      await patchDoc(env, 'site_photos', id, { cat });
+      return json({ ok: true, cat });
     }
     if (op !== 'up') return fail('bad-op');
     const job = String(q.get('job') || '').slice(0, 80), date = String(q.get('date') || ''), cat = String(q.get('cat') || '');
