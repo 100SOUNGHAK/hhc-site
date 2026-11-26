@@ -301,6 +301,8 @@ html.pdfdoc .ac3d .ac-f{box-shadow:inset 0 2px 0 #fff,inset 0 -3px 5px rgba(14,3
 .todo-when{font-size:11.5px;font-weight:800;letter-spacing:.02em}
 .todo-when.urgent{color:var(--red)}.todo-when.regular{color:var(--n2)}.todo-when.review{color:var(--gold-d)}
 .todo-b h4{font-size:16px;font-weight:700;letter-spacing:-.02em;line-height:1.4;margin-top:1px;word-break:keep-all}
+.todo-b .pg.todo-pg{grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+.todo-b .pg.todo-pg .ph .cap{font-size:10.5px}
 .todo-b p{font-size:14px;color:var(--ink2);margin-top:3px;line-height:1.55;word-break:keep-all}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
 .chip{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:999px;background:var(--soft);border:1px solid var(--line);font-size:12.5px;font-weight:700;color:var(--n);transition:transform .14s,background .15s}
@@ -1238,7 +1240,7 @@ function buildUnits(d,ac){
     arr(d.defects).forEach(function(f){if(has_(f)){(f.status==='done'?u.done:u.iss).push(f);u.lv=Math.max(u.lv,(f.status==='done'||f.status==='watch')?1:((f.risk==='h'||f.risk==='vh')?2:1));}});
     ac.lk.forEach(function(l){if(l.label===c.label&&l.status==='bad')u.lv=2;});
     ac.ms.forEach(function(m){if(has_(m))u.msr.push(m);});
-    arr(d.problemPhotos).forEach(function(p){if(has_(p))u.ph.push(p);});
+    arr(d.problemPhotos).forEach(function(p){if(has_(p)&&!p._inRec)u.ph.push(p);});
     u.leak=ac.lk.filter(function(l){return l.label===c.label;});
     u.pc=u.c.photos.length+((fx&&arr(fx.aPhotos).length)||0)+u.leak.reduce(function(n,l){return n+arr(l.photos).length;},0)+u.msr.reduce(function(n,m){return n+m.photos.length+arr(m.fix&&m.fix.aPhotos).length;},0)+u.ph.reduce(function(n,p){return n+arr(p.photos).length;},0)+u.iss.concat(u.done).reduce(function(n,f){return n+arr(f.photos).length;},0);
     u.l=LVN[u.lv];return u;
@@ -1318,12 +1320,22 @@ function leakList(ac){
   return '<div class="rp-card sh-li lkl" style="margin-top:10px"><div class="row" style="border:0;padding-bottom:4px"><b style="font-size:15px">'+t('lkT')+'</b></div>'+lk.map(function(l){var ok=l.status!=='bad',u=U.find(function(x){return x.label===l.label;});
     return '<div class="row"><span class="ic '+(ok?'ok':'bad')+'">'+(ok?'✓':'✕')+'</span><div style="flex:1;min-width:0"><b>'+esc(u?unitName(u):(l.label||'—'))+(l.loc?' · '+esc(locName(l.loc,l.loc_en)):'')+'</b><p>'+(ok?t('lkOk'):t('lkBad'))+'</p>'+(arr(l.photos).length?'<div class="pg pg3" style="margin-top:8px">'+arr(l.photos).map(function(p){return ph(p);}).join('')+'</div>':'')+'</div></div>';}).join('')+'</div>';
 }
+/* 권장 정비 카드 사진 (2026-11-26) — 빠른 보고서 드레인 불량 사진(problemPhotos rec:'drain')을 배수배관 권장 정비 카드에 보여 줌
+   맞는 권장 정비가 없으면 예전처럼 에어컨 카드 「문제 사진」에 남음 */
+function linkRecPh(d){
+  var recs=arr(d.recommendations);recs.forEach(function(r){r._ph=[];});
+  arr(d.problemPhotos).forEach(function(p){p._inRec=false;if(p.rec!=='drain'||!arr(p.photos).length)return;
+    var r=recs.filter(function(x){return /배수/.test(x.title||'');})[0];if(!r)return;
+    arr(p.photos).forEach(function(x){r._ph.push({src:x,units:arr(p.units)});});p._inRec=true;});
+}
+function recPhHTML(r){var L=arr(r._ph);if(!L.length)return '';
+  return '<div class="pg todo-pg">'+L.map(function(x){var n=x.units.map(function(l){var u=U.filter(function(u){return u.label===l;})[0];return u?unitName(u):l;}).join(' · ');return ph(x.src,n||(LANG==='en'?'All units':'공통'));}).join('')+'</div>';}
 function todoSection(recs){
   recs=arr(recs);if(!recs.length)return '';
   var tabs=['urgent','regular','review'];recs.forEach(function(r){if(tabs.indexOf(r.type)<0)r.type='regular';});
   var cnt={};tabs.forEach(function(k){cnt[k]=recs.filter(function(r){return r.type===k;}).length;});
   if(!ST.tab||!cnt[ST.tab])ST.tab=tabs.filter(function(k){return cnt[k];})[0];
-  function item(r,i){return '<div class="rp-card todo"><span class="todo-n '+r.type+'">'+(i+1)+'</span><div class="todo-b">'+(r.grp?'<span class="prod-tag">'+esc(tr(r.grp,r.grp_en))+'</span>':'')+'<div class="todo-when '+r.type+'">'+esc(r.when?v(r,'when'):t('when')[r.type])+'</div><h4'+(r.desc?'':' style="font-weight:600"')+'>'+esc(v(r,'title'))+'</h4>'+(r.desc?'<p>'+esc(v(r,'desc'))+'</p>':'')+unitChips(r.units)+'</div></div>';}
+  function item(r,i){return '<div class="rp-card todo"><span class="todo-n '+r.type+'">'+(i+1)+'</span><div class="todo-b">'+(r.grp?'<span class="prod-tag">'+esc(tr(r.grp,r.grp_en))+'</span>':'')+'<div class="todo-when '+r.type+'">'+esc(r.when?v(r,'when'):t('when')[r.type])+'</div><h4'+(r.desc?'':' style="font-weight:600"')+'>'+esc(v(r,'title'))+'</h4>'+(r.desc?'<p>'+esc(v(r,'desc'))+'</p>':'')+unitChips(r.units)+recPhHTML(r)+'</div></div>';}
   var body;
   if(ST.pdf){body=tabs.filter(function(k){return cnt[k];}).map(function(k){return '<div class="psub">'+t('tabs')[k]+'</div><div class="todo-list" style="margin-top:0">'+recs.filter(function(r){return r.type===k;}).map(item).join('')+'</div>';}).join('');}
   else{var list=recs.filter(function(r){return r.type===ST.tab;});
@@ -1335,7 +1347,7 @@ function photoSection(d,extraFirst){
   var h=extraFirst||'',lvT=t('lv');
   var pp=arr(d.problemPhotos).filter(function(p){return (p.memo&&String(p.memo).trim())||arr(p.photos).length;});
   /* 특정 에어컨이 선택된 문제 사진은 그 에어컨 카드(상세)에 나오므로 현장 사진에서는 뺌 */
-  pp=pp.filter(function(p){return !arr(p.units).some(function(l){return U.some(function(u){return u.label===l;});});});
+  pp=pp.filter(function(p){return !p._inRec&&!arr(p.units).some(function(l){return U.some(function(u){return u.label===l;});});});
   if(pp.length&&!ST.skipProb){h+='<div class="psub"'+(h?'':' style="margin-top:0"')+'>'+t('pProb')+' <small>'+pp.length+'</small></div>'+pp.map(function(p,i){return '<div class="rp-card prob"><div class="prob-h"><span class="prob-n">'+(i+1)+'</span><div>'+(p.memo?'<p>'+esc(v(p,'memo'))+'</p>':'')+unitChips(p.units)+'</div></div>'+(arr(p.photos).length?'<div class="pg" style="margin-top:0">'+arr(p.photos).map(function(x){return ph(x);}).join('')+'</div>':'')+'</div>';}).join('');}
   if(arr(d.workPhotos).length)h+='<div class="psub"'+(h?'':' style="margin-top:0"')+'>'+t('work')+' <small>'+arr(d.workPhotos).length+'</small></div>'+grid('wk',d.workPhotos,6,'pg3');
   var cb=arr(d.cleanBefore).length?d.cleanBefore:d.cleanPhotos,pb=pairs('cl',cb,d.cleanAfter,t('cBefore'),t('cAfter'),3);
@@ -1367,7 +1379,7 @@ function unitPdfSection(){
 }
 
 function rInspect(d){
-  var ac=buildAC(d);U=buildUnits(d,ac);SCORE=calcScore(d);
+  linkRecPh(d);var ac=buildAC(d);U=buildUnits(d,ac);SCORE=calcScore(d);
   var ek=evalOf(d),cls={repaired:'ok',normal:'ok',preventive:'wn',repair:'bad',urgent:'bad'}[ek];
   var cnt=[0,0,0];U.forEach(function(u){cnt[u.lv]++;});
   var sub=d.verdict?v(d,'verdict'):t('evS')[ek];
