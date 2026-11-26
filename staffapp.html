@@ -173,6 +173,7 @@ body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-ri
   <div class="pane" data-pane="coupon"><div class="pane-empty"><div class="spinner"></div></div></div>
   <div class="pane" data-pane="transfer"><div class="pane-empty"><div class="spinner"></div></div></div>
   <div class="pane" data-pane="expense"><div class="pane-empty"><div class="spinner"></div></div></div>
+  <div class="pane" data-pane="rplan"><div class="pane-empty"><div class="spinner"></div></div></div>
   <div class="pane" data-pane="quote"><div class="pane-empty"><div class="spinner"></div></div></div>
   <div class="pane" data-pane="homepage"><div class="pane-empty"><div class="spinner"></div></div></div>
   <div class="pane" data-pane="reviews"><div class="pane-empty"><div class="spinner"></div></div></div>
@@ -206,7 +207,8 @@ var MENU=[
     {id:'contract', name:'계약',       icon:'📑', src:'admin'},
     {id:'coupon',   name:'상품·할인권', icon:'🎫', src:'coupon-admin'},
     {id:'transfer', name:'양도·전환',  icon:'🔁', src:'transfer-admin'},   // 회원권 잔액 양도 · 상품권 전환 신청 (2026-11-23)
-    {id:'quote',    name:'견적서',     icon:'🧾', src:'quote-admin'}
+    {id:'quote',    name:'견적서',     icon:'🧾', src:'quote-admin'},
+    {id:'rplan',    name:'수리의향서', icon:'🛠', src:'rplan-admin'}   // 수리 의향서 작성·발송·고객 회신 (2026-11-26)
   ]},
   {gid:'etc',  gname:'기타', gicon:'📂', items:[
     {id:'expense',  name:'비용청구',   icon:'💰', src:'expense-admin'},
@@ -504,7 +506,7 @@ if(_vl0){window.hhcOpenVl(_vl0);try{history.replaceState(null,'',location.pathna
 // 🔔 알림을 누르면 그 의뢰 · 예약 카드를 바로 펼침 (?od=문서ID#request|booking · 2026-11-25)
 //    의뢰관리 · 예약관리는 ?open=ID 로 열면 그 카드로 이동해 펼쳐 줍니다 (rqTryOpen · bkTryOpen)
 window.hhcOpenDoc=function(tab,od){
-  if(!/^[A-Za-z0-9_-]{4,80}$/.test(String(od||''))||(tab!=='request'&&tab!=='booking'))return;
+  if(!/^[A-Za-z0-9_-]{4,80}$/.test(String(od||''))||(tab!=='request'&&tab!=='booking'&&tab!=='rplan'))return;
   activate(tab);
   var m=FLAT.find(function(x){return x.id===tab;}),p=document.querySelector('.pane[data-pane="'+tab+'"]'),f=p&&p.querySelector('iframe');
   if(m&&f)f.src=m.src+'.html?open='+encodeURIComponent(od);
@@ -541,12 +543,12 @@ try{db=hhcFastDb(initializeApp(CFG));}catch(e){}
 // ── 이미 본 문서 기억 (새로고침해도 같은 건으로 다시 울리지 않음) ──
 function loadSeen(k){try{return new Set(JSON.parse(localStorage.getItem(k)||'[]'));}catch(e){return new Set();}}
 function saveSeen(k,set){try{localStorage.setItem(k,JSON.stringify([...set].slice(-600)));}catch(e){}}
-const SEEN={requests:loadSeen('hhc_alert_rq'),bookings:loadSeen('hhc_alert_bk2'),transfer_reqs:loadSeen('hhc_alert_tr')};
-const PEND={request:0,booking:0,transfer:0};
-function pendAll(){return PEND.request+PEND.booking+PEND.transfer;}
+const SEEN={requests:loadSeen('hhc_alert_rq'),bookings:loadSeen('hhc_alert_bk2'),transfer_reqs:loadSeen('hhc_alert_tr'),repair_plans:loadSeen('hhc_alert_rp')};
+const PEND={request:0,booking:0,transfer:0,rplan:0};
+function pendAll(){return PEND.request+PEND.booking+PEND.transfer+PEND.rplan;}
 // 이전 실행 이력이 있는지 (있으면 앱이 닫혀 있던 사이 도착한 건도 알림)
 const INIT=(function(){try{var v=localStorage.getItem('hhc_alert_init')==='1';localStorage.setItem('hhc_alert_init','1');return v;}catch(e){return false;}})();
-function recentDoc(d){var t=Date.parse(d.booked_at||d.submitted_at||'')||0;return t>0&&(Date.now()-t)<72*3600*1000;}
+function recentDoc(d){var t=Date.parse(d.replied_at||d.booked_at||d.submitted_at||'')||0;return t>0&&(Date.now()-t)<72*3600*1000;}
 
 // ── 알림음 (파일 없이 웹오디오 2음 차임) — 브라우저 정책상 첫 터치 이후부터 소리가 납니다 ──
 let AC=null;
@@ -569,7 +571,7 @@ function routeFromNotifs(list){
   var d=best.data,vl=/customer-admin\.html\?vl=(d7|d3|tm|td)/.exec(d.url||'');
   try{
     if(vl&&window.hhcOpenVl){window.hhcOpenVl(vl[1]);return;}
-    if(d.od&&window.hhcOpenDoc&&(d.tab==='request'||d.tab==='booking')){window.hhcOpenDoc(d.tab,d.od);return;}
+    if(d.od&&window.hhcOpenDoc&&(d.tab==='request'||d.tab==='booking'||d.tab==='rplan')){window.hhcOpenDoc(d.tab,d.od);return;}
     if(d.tab&&validTab(d.tab))activate(d.tab);
   }catch(e){}
 }
@@ -759,8 +761,9 @@ function refreshUI(){
   setBadge(document.getElementById('gb-book'),PEND.request+PEND.booking);
   setBadge(document.querySelector('.tab[data-tab="request"]'),PEND.request);
   setBadge(document.querySelector('.tab[data-tab="booking"]'),PEND.booking);
-  setBadge(document.getElementById('gb-bill'),PEND.transfer);                     // 「청구」 갈래 — 양도·전환 신청
+  setBadge(document.getElementById('gb-bill'),PEND.transfer+PEND.rplan);          // 「청구」 갈래 — 양도·전환 신청 + 수리 의향서 회신
   setBadge(document.querySelector('.tab[data-tab="transfer"]'),PEND.transfer);
+  setBadge(document.querySelector('.tab[data-tab="rplan"]'),PEND.rplan);
   const tot=pendAll();
   const base=document.title.replace(/^\(\d+\+?\) /,'');
   document.title=(tot>0?'('+tot+') ':'')+base;
@@ -773,7 +776,7 @@ function showToast(tab,kind,n){
   const old=document.querySelector('.ntoast');if(old)old.remove();
   clearTimeout(toastTimer);
   const d=document.createElement('div');d.className='ntoast';
-  d.innerHTML='<span class="ic">'+(tab==='request'?'📥':tab==='transfer'?'🔁':'🛎️')+'</span>'+
+  d.innerHTML='<span class="ic">'+(tab==='request'?'📥':tab==='transfer'?'🔁':tab==='rplan'?'🛠':'🛎️')+'</span>'+
     '<div><b>'+kind+' '+n+'건 도착</b><span>눌러서 바로 확인하세요</span></div>'+
     '<button class="x" aria-label="닫기">✕</button>';
   d.addEventListener('click',function(e){
@@ -800,7 +803,7 @@ function alertHit(tab,kind,n){
 function watch(collName,tab,kind,pred){
   if(!db)return;
   let ready=false;
-  const key=collName==='requests'?'hhc_alert_rq':collName==='transfer_reqs'?'hhc_alert_tr':'hhc_alert_bk2';
+  const key=collName==='requests'?'hhc_alert_rq':collName==='transfer_reqs'?'hhc_alert_tr':collName==='repair_plans'?'hhc_alert_rp':'hhc_alert_bk2';
   try{
     onSnapshot(collection(db,collName),snap=>{
       if(!ready){
@@ -849,11 +852,13 @@ watch('requests','request','📥 새 의뢰요청',()=>true);
 watch('bookings','booking','🛎️ 새 예약신청',d=>String(d.status||'')==='booked');
 // 양도·전환: 고객이 /transfer 신청서로 접수한 건 (2026-11-23)
 watch('transfer_reqs','transfer','🔁 새 양도·전환 신청',()=>true);
+// 수리 의향서: 고객이 /rplan 에서 진행 · 안 함을 회신한 건 (2026-11-26)
+watch('repair_plans','rplan','🛠 수리 의향서 회신',d=>d.status==='agreed'||d.status==='declined');
 
 // 해당 탭을 열면 배지 해제
 window.__hhcAlertClear=function(tab){
   clearSysNotifs();
-  if(tab==='request'||tab==='booking'||tab==='transfer'){PEND[tab]=0;}
+  if(tab==='request'||tab==='booking'||tab==='transfer'||tab==='rplan'){PEND[tab]=0;}
   refreshUI();
   appBadge(pendAll());
   primeAudio();   // 탭 전환도 사용자 제스처 — 알림음 재생 준비

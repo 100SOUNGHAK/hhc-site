@@ -1284,9 +1284,20 @@ function mvCard(m,td){
       '<button class="ma" data-act="edit" data-id="'+m.__id+'">'+L('lbEdit')+'</button>'+
       (done?'<button class="ma" data-act="undone" data-id="'+m.__id+'">'+L('lbUndo')+'</button>'
            :'<button class="ma ok" data-act="done" data-id="'+m.__id+'">'+L('lbDone')+'</button>')+
+      (!ct&&!done?'<button class="ma ic" data-act="rplan" data-id="'+m.__id+'" title="수리 의향서" aria-label="수리 의향서">🛠</button>':'')+   // 수리 의향서 작성 (2026-11-26)
       '<button class="ma ic" data-act="cust" data-id="'+m.__id+'" title="'+L('lbCust')+'" aria-label="'+L('lbCust')+'">👤</button>'+
       '<button class="ma ic del" data-act="del" data-id="'+m.__id+'" title="'+L('lbDel')+'" aria-label="'+L('lbDel')+'">🗑</button>'+
     '</div></div>';
+}
+// 🛠 수리 의향서 (2026-11-26) — 이 수리요청의 고객 · 증상 · 방문 결과로 의향서 작성 화면을 엶
+//    (이미 이 건으로 만든 의향서가 있으면 그것을 엶 — rplan-admin.html 이 판단)
+function openRplan(id){
+  const m=MEMOS.find(x=>x.__id===id);if(!m)return;
+  let cid='';try{cid=pnCid(m)||'';}catch(e){}
+  const qs='new=1&memo='+encodeURIComponent(id)+'&name='+encodeURIComponent(m.name||'')+'&phone='+encodeURIComponent(m.phone||'')+
+    '&condo='+encodeURIComponent(m.condo||'')+'&sym='+encodeURIComponent(m.symptom||'')+'&diag='+encodeURIComponent(m.result||'')+(cid?'&cid='+encodeURIComponent(cid):'');
+  try{const P=window.parent;if(P&&P!==window&&P.activate){P.activate('rplan');const f=P.document.querySelector('.pane[data-pane="rplan"] iframe');if(f){f.src='rplan-admin.html?'+qs;return;}}}catch(e){}
+  window.open('rplan-admin.html?'+qs,'_blank');
 }
 window.renderList=function(){
   const q=sn(document.getElementById('q').value||'');
@@ -1347,6 +1358,7 @@ document.getElementById('list').addEventListener('click',ev=>{
   if(b.dataset.act==='edit')openMemo(id);
   else if(b.dataset.act==='send')openSend(id);
   else if(b.dataset.act==='report')openSend(id,5);
+  else if(b.dataset.act==='rplan')openRplan(id);
   else if(b.dataset.act==='done')setStatus(id,'done');
   else if(b.dataset.act==='undone')setStatus(id,'pending');
   else if(b.dataset.act==='del')delMemo(id);

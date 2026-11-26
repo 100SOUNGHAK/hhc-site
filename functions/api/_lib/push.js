@@ -13,6 +13,7 @@ export const MSG={
   booking:{title:'🗓️ 새 예약신청 도착',body:'고객이 예약 신청을 완료했습니다 — 눌러서 확인하세요',tab:'booking'},
   booking_edit:{title:'🗓️ 예약 변경',body:'고객이 예약 내용을 수정했습니다 — 눌러서 확인하세요',tab:'booking'},
   tomorrow:{title:'📤 내일 일정 단체방 보내기',body:'눌러서 영문 일정을 직원 단체방에 보내세요',tab:'sched'},   // 매일 밤 11시 (캘린더 Worker)
+  rplan:{title:'🛠 수리 의향서 회신',body:'고객이 수리 진행 여부를 회신했습니다 — 눌러서 확인하세요',tab:'rplan'},   // /api/rplan (2026-11-26)
   transfer:{title:'🔁 새 양도·전환 신청',body:'회원권 잔액 양도 · 상품권 전환 신청이 접수되었습니다 — 눌러서 확인하세요',tab:'transfer'},   // /api/transfer (2026-11-23)
 };
 
