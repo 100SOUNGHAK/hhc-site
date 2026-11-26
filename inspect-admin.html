@@ -11739,12 +11739,15 @@ const fv=i=>{const F=FLD[RT()]||FLD.inspect,el=$(F[i]);return el?el.value:'';};
 function useJobs(v){return v.map(j=>Object.assign({},j,{ph:j.ph.filter(okCat)})).filter(j=>j.ph.length);}
 let KEY=null;
 async function adminKey(){if(KEY)return KEY;const s=await getDoc(doc(db(),'settings','work_link'));KEY=s.exists()?(s.data().admin_key||''):'';return KEY;}
+const myToday=()=>new Date(Date.now()+(new Date().getTimezoneOffset()+480)*60000).toISOString().slice(0,10);
 function addD(ds,n){const d=new Date(ds+'T00:00:00');d.setDate(d.getDate()+n);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 const CACHE={};
 /* days: 찾을 날짜들 — 기본 전날 · 당일 · 다음 날, 「최근 7일 보기」는 7일 전 ~ 다음 날 */
 async function siteOf(date,wide){
   const ck=date+(wide?'|w':'');const c=CACHE[ck];if(c&&Date.now()-c.t<60000)return c.v;
-  const days=wide?[-6,-5,-4,-3,-2,-1,0,1].map(n=>addD(date,n)):[addD(date,-1),date,addD(date,1)];
+  /* 2026-11-26: 점검일이 예전 날짜(기존 보고서 수정)여도 오늘(말레이시아) 전후 사진도 함께 찾음 */
+  const span=base=>wide?[-6,-5,-4,-3,-2,-1,0,1].map(n=>addD(base,n)):[addD(base,-1),base,addD(base,1)];
+  const days=[...new Set(span(date).concat(span(myToday())))];
   const q=await getDocs(query(collection(db(),'site_photos'),where('date','in',days)));
   const jobs={};q.forEach(d=>{const p=d.data();if(!p.job||!p.url)return;const k=p.date+'|'+p.job;
     (jobs[k]=jobs[k]||{key:k,date:p.date,job:p.job,cname:p.cname||'',cphone:p.cphone||'',place:p.place||'',unit:p.unit||'',ph:[]}).ph.push(Object.assign({id:d.id},p));});
@@ -11775,7 +11778,7 @@ async function check(){
     ban.innerHTML=`<div class="m38-site-h"><i>📷</i><div><b>${t}</b><small>${s}</small></div><button type="button" class="m38-site-w" data-pick="w">최근 7일 보기</button></div>`;};
   let list=[];try{list=useJobs(await siteOf(date));}catch(e){none('직원 현장 사진','불러오지 못했습니다 — 잠시 후 다시 열어 주세요');return;}
   const name=fv(0),phone=fv(1);
-  if(!list.length&&!PICK){none(isAC()?'직원 현장 사진 없음':'직원 기타 사진 없음',esc(date)+' 전후로 직원이 올린 '+(isAC()?'':'기타 ')+'사진이 없습니다');return;}
+  if(!list.length&&!PICK){none(isAC()?'직원 현장 사진 없음':'직원 기타 사진 없음',esc(date)+(date!==myToday()?' · 오늘':'')+' 전후로 직원이 올린 '+(isAC()?'':'기타 ')+'사진이 없습니다');return;}
   const hit=PICK?[PICK]:list.filter(j=>match(j,name,phone));
   SHOWN=hit;
   if(hit.length){
@@ -11801,7 +11804,7 @@ ban.addEventListener('click',async e=>{
   if(e.target.closest('[data-imp]')){importNow(SHOWN);}
 });
 async function pickSheet(wide){
-  const date=fv(2)||new Date().toISOString().slice(0,10);const list=useJobs(await siteOf(date,wide).catch(()=>[]));
+  const date=fv(2)||myToday();const list=useJobs(await siteOf(date,wide).catch(()=>[]));
   const S=window.__m38sheet;if(!S)return;
   S.open('📷 직원 사진이 있는 일정','이 보고서 고객의 일정을 고르세요 · '+(wide?'최근 7일':esc(date)+' 전후'),list.map(j=>{const c=cnt(j.ph);
     return `<button type="button" class="m38-job" data-job="${esc(j.key)}"><img src="${esc(j.ph[0].t||j.ph[0].url)}" alt=""><div><b>${esc(j.place||j.cname)}${j.unit?' '+esc(j.unit):''}</b><small>${esc(j.date)} · ${cntTxt(c)}${j.ph[0].by?' · '+esc([...new Set(j.ph.map(p=>p.by))].join(', ')):''}</small></div><em>${j.ph.length}장 ›</em></button>`;}).join('')||'<p class="m38-p">'+(wide?'최근 7일 동안':'이 날짜 전후로')+' 직원이 올린 사진이 없습니다.<br>직원 일정표의 일정에서 「📷 현장 사진」'+(isAC()?'':'의 「🧾 기타 사진」')+'으로 올리면 여기에 나옵니다.</p>');
