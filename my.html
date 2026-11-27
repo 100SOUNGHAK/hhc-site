@@ -145,6 +145,15 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;letter
 .pts b{display:block;font-size:22px;font-weight:850}
 .pts .s{font-size:11.5px;color:rgba(255,255,255,.75)}
 .coin{width:46px;height:46px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#FFF1C6,#E3C98A 30%,#B08D3A 72%);box-shadow:inset 0 0 0 4px rgba(255,255,255,.3)}
+/* ⭐ 이번 서비스 후기 카드 (2026-11-27) */
+.rvc{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;padding:15px 16px;border:0;border-radius:22px;text-align:left;color:#1b1503;cursor:pointer;
+  background:linear-gradient(145deg,#f6e8bc,#e3c98a 45%,#c9a44c);box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 3px 0 #8f6f28,0 16px 26px -16px rgba(143,111,40,.9);transition:transform .14s}
+.rvc:active{transform:translateY(2px)}
+.rvc-ic{flex:none;width:46px;height:46px;border-radius:15px;display:grid;place-items:center;font-size:23px;background:rgba(255,255,255,.6)}
+.rvc-tx{flex:1;min-width:0}.rvc-tx small{display:block;font-size:11px;font-weight:850;letter-spacing:.04em;color:#7a5a10}
+.rvc-tx b{display:block;margin-top:3px;font-size:16.5px;font-weight:900;letter-spacing:-.03em;line-height:1.3}
+.rvc-tx span{display:block;margin-top:2px;font-size:12px;font-weight:650;color:rgba(27,21,3,.7)}
+.rvc-go{font-size:24px;font-weight:900;color:#0E2350}
 .ref{margin-top:12px;padding:18px;border-radius:22px;background:#fff;box-shadow:inset 0 0 0 1px rgba(201,164,76,.35);text-align:left;width:100%}
 .ref small{font-size:11px;font-weight:850;letter-spacing:.16em;color:#9A7420}
 .ref h3{font-size:18px;font-weight:850;line-height:1.35;margin-top:6px}
@@ -1378,10 +1387,15 @@ function buildFromApi(j,svc){
     PROMO.en.sub=enOnly(PROMO.en.sub,'');PROMO.en.cats=PROMO.en.cats.map(c=>enOnly(c,'Selected services'));PROMO.en.notes=PROMO.en.notes.map(n=>[n[0],enOnly(n[1],'Note'),enOnly(n[2],'Please ask us for details.')]);}
   // 화면 자료
   const dates=[...invoices.map(x=>x.date),...reports.map(r=>r.date)].filter(d=>d&&d<=todayISO()).sort();
+  // ⭐ 이번 서비스 후기 카드 (2026-11-27) — 마지막 서비스가 마지막 리뷰 보상(pt_adj rv) 뒤이고 90일 이내일 때만
+  const _lastSvc=String(dates[dates.length-1]||'').slice(0,10);
+  const _lastRv=(m.pt_adj||[]).filter(u=>u&&u.rv).map(u=>String(u.date||u.at||'').slice(0,10)).sort().pop()||'';
+  const _d90=new Date(Date.now()-90*864e5).toISOString().slice(0,10);
+  const rvTodo=(_lastSvc&&_lastSvc>=_d90&&(!_lastRv||_lastSvc>_lastRv))?_lastSvc:'';
   Object.keys(D).forEach(k=>delete D[k]);
   Object.assign(D,{name:{ko:m.name||'',en:m.name||''},tier,tierKo,member,points:{bal:rows.reduce((a,r)=>a+r[5],0)},invoices,reports,care,
     ref:{pts:(j.ref&&j.ref.pts)||10,newPts:(j.ref&&j.ref.newPts)||5,count:((j.ref&&j.ref.list)||[]).length,code:(j.ref&&j.ref.code)||'',on:!!(j.ref&&j.ref.on)},
-    lastVisit:dates.pop()||todayISO(),
+    lastVisit:dates.pop()||todayISO(),rvTodo,
     bookings:(j.bookings||[]).map(b=>({id:b.__id,d:String(b.booking_date||'').slice(0,10),t:String(b.booking_time||''),st:b.status,it:String(b.booking_items||'')})),
     quotes:(j.quotes||[]).map(q=>({id:q.__id,no:q.qno||'',s:q.subject||'',se:q.subjectEn||'',d:q.issueDate||'',v:q.validUntil||'',t:(parseFloat(q.baseTotal)||0)+((q.customerChoice&&parseFloat(q.customerChoice.price))||0)})),
     coupons:(j.coupons||[]).filter(c=>c.status==='active').map(c=>({id:c.__id,v:c.value||'',ex:c.expiry||'',ty:c.type,bal:cpBal(c)})),
@@ -2147,6 +2161,9 @@ function pnSheet(){
 function pnInit(){if(!CID||IS_INAPP||IS_PV)return;pnPaint();}
 </script>
 <script>
+/* ⭐ 리뷰 이벤트 금액 · 켜기 (2026-11-27) — 고객관리 「⭐ 리뷰 보상 → 금액 설정」. 저장해 둔 값으로 먼저 그리고, 새 값은 다음 화면부터 */
+function rvCfg(){try{var c=JSON.parse(localStorage.getItem('hhc_revcfg')||'null');if(c&&typeof c.pts==='number')return c;}catch(e){}return {on:true,pts:10};}
+try{fetch('/api/refcfg',{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(d){if(d&&d.ok&&typeof d.revPts==='number'){try{localStorage.setItem('hhc_revcfg',JSON.stringify({on:d.revOn!==false,pts:d.revPts}));}catch(e){}}}).catch(function(){});}catch(e){}
 
 
 function render(){
@@ -2259,6 +2276,8 @@ function render(){
   h+=promoCard();   // 이달의 혜택(행사 있음) · 상시 혜택(행사 없음) 모두 같은 자리 — 서비스 이력·상품권 아래, 지인 추천 위 (2026-11-23)
   // 포인트(회원) · 추천
   if(M)h+='<button class="pts" data-a="points"><span class="tx"><small>'+L.ptL+'<span class="cash">'+(en?'Use like cash':'현금처럼 사용')+'</span></small><b class="num">RM '+f2(D.points.bal)+'</b><span class="s">'+L.rate+'</span></span>'+ic('i-chev',18)+'</button>';
+  // ⭐ 이번 서비스 후기 남기고 RM 10 (2026-11-27) — 리뷰 적립을 끄면 숨김 (금액 · 켜기 = /api/refcfg revOn · revPts)
+  {const RV=rvCfg();if(D.rvTodo&&RV.on&&RV.pts>0)h+='<button class="rvc" data-a="go" data-u="'+ea(BASE+'/review'+(en?'?lang=en':''))+'"><span class="rvc-ic" aria-hidden="true">⭐</span><span class="rvc-tx"><small>'+(en?'REVIEW EVENT':'리뷰 이벤트')+' · '+esc(dd(D.rvTodo))+(en?' service':' 서비스')+'</small><b>'+(en?'Review this service, get RM '+RV.pts:'이번 서비스 후기 남기고 RM '+RV.pts)+'</b><span>'+(en?'Stars + one line · added once checked':'별점 + 한 줄 · 확인 후 해피포인트 적립')+'</span></span><span class="rvc-go" aria-hidden="true">›</span></button>';}
   h+='<button class="ref" data-a="ref"><small>REFER &amp; EARN · '+D.ref.code+'</small><h3>'+fill(L.refH,{p:D.ref.pts})+'</h3><p>'+L.refL2+' · '+fill(L.refL1,{p:D.ref.newPts})+'</p></button>';
   // 🎬 사진 · 영상으로 보는 서비스 과정 (2026-11-23) — 지인 추천 다음, /guides 로 이동
   h+='<button class="gdc" data-a="go" data-u="'+ea(BASE+'/guides'+(en?'?lang=en':''))+'"><span class="gdc-ph" aria-hidden="true"><img src="vid-ac-chem.jpg?v=20261123" alt="" loading="lazy" decoding="async"><img src="vid-ac-full.jpg?v=20261123" alt="" loading="lazy" decoding="async"><img src="vid-ac-steam.jpg?v=20261123" alt="" loading="lazy" decoding="async"><i class="gdc-pl"></i></span><span class="gdc-tx"><small>'+(en?'SERVICE GUIDE · ON-SITE VIDEO':'SERVICE GUIDE · 현장 영상')+'</small><b>'+(en?'Our service process <em>in photos &amp; video</em>':'사진 · 영상으로 보는 <em>서비스 과정</em>')+'</b><span class="gdc-d">'+(en?'Aircon on-site videos · 3D · washer · sofa · mattress · curtain':'에어컨 현장 영상 · 3D · 세탁기 · 쇼파 · 매트리스 · 커튼')+'</span><span class="gdc-c">'+(en?'Watch now →':'영상 · 사진으로 보기 →')+'</span></span></button>';

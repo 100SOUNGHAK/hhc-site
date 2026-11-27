@@ -94,6 +94,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans
 .pill{font-size:10px;font-weight:900;border-radius:99px;padding:3px 8px}
 .pill.h{background:#FFF1D6;color:#9A5B00}
 .pill.e{background:#EEF1F7;color:var(--ink2)}
+/* ⭐ 리뷰 보상 상태 (2026-11-27) — 지급은 고객관리 「⭐ 리뷰 보상」에서 */
+.pill.rw{background:#FBEFD0;color:#8F6F28}.pill.rw.ok{background:#E3F5EC;color:#0E7A4F}.pill.rw.x{background:#EEF1F7;color:#7A8499}
+.rwi{margin-top:8px;font-size:11.5px;font-weight:700;color:var(--ink2);background:#FBF7EC;border:1px dashed #E3C98A;border-radius:9px;padding:7px 10px;line-height:1.5}
 /* 사장님 답글 */
 .rrep{margin-top:9px;background:var(--pri-bg);border:1px solid #D6E4FD;border-radius:10px;padding:9px 11px}
 .rrep .h{font-size:10.5px;font-weight:900;color:#1D4ED8;margin-bottom:3px}
@@ -180,6 +183,7 @@ textarea.fi{min-height:110px;resize:vertical;line-height:1.65}
     <button class="chip" data-f="photo" onclick="setF('photo')">📷 사진 리뷰</button>
     <button class="chip" data-f="norep" onclick="setF('norep')">💬 답글 없음</button>
     <button class="chip" data-f="hidden" onclick="setF('hidden')">🙈 숨김</button>
+    <button class="chip" data-f="claim" onclick="setF('claim')">🎁 적립 신청</button>
   </div>
   <div id="list"><div class="empty">리뷰를 불러오는 중입니다…</div></div>
 </div>
@@ -220,6 +224,7 @@ const FIREBASE_CFG={
 let db=null,storage=null;
 let ALL=[];            // 전체 리뷰
 let curF='all';        // 별점 필터
+let CLM={};            // ⭐ 리뷰 적립 신청 (review_claims · 문서 ID = 리뷰 ID, 2026-11-27)
 let showN=20;          // 더보기 단위
 
 const $=id=>document.getElementById(id);
@@ -243,9 +248,11 @@ function renderStats(){
     '<div class="st green"><span class="ic">📅</span><div><b>'+mon+'</b><span>이번 달</span></div></div>'+
     '<div class="st warn"><span class="ic">📷</span><div><b>'+ph+'</b><span>사진 리뷰</span></div></div>';
   const nr=ALL.filter(x=>!x.hidden&&!String(x.admin_reply||'').trim()).length,hd=ALL.filter(x=>x.hidden).length;
+  const cw=ALL.filter(x=>CLM[x.__id]&&CLM[x.__id].status!=='paid'&&CLM[x.__id].status!=='excluded').length;
   $('stats').insertAdjacentHTML('beforeend',
     '<div class="st blue" style="cursor:pointer" onclick="setF(\'norep\')"><span class="ic">💬</span><div><b>'+nr+'</b><span>답글 대기</span></div></div>'+
-    '<div class="st warn" style="cursor:pointer" onclick="setF(\'hidden\')"><span class="ic">🙈</span><div><b>'+hd+'</b><span>숨긴 리뷰</span></div></div>');
+    '<div class="st warn" style="cursor:pointer" onclick="setF(\'hidden\')"><span class="ic">🙈</span><div><b>'+hd+'</b><span>숨긴 리뷰</span></div></div>'+
+    '<div class="st gold" style="cursor:pointer" onclick="setF(\'claim\')"><span class="ic">🎁</span><div><b>'+cw+'</b><span>적립 확인 대기</span></div></div>');
   // 별점 분포
   const d=$('dist');
   if(!n){d.style.display='none';return;}
@@ -273,6 +280,7 @@ window.paint=function(){
   else if(curF==='photo')list=list.filter(x=>(x.photos||[]).length>0);
   else if(curF==='norep')list=list.filter(x=>!String(x.admin_reply||'').trim());
   else if(curF==='hidden')list=list.filter(x=>!!x.hidden);
+  else if(curF==='claim')list=list.filter(x=>!!CLM[x.__id]);
   if(q)list=list.filter(x=>(String(x.name||'')+' '+String(x.text||'')).toLowerCase().includes(q));
   const host=$('list');
   if(!list.length){
@@ -288,9 +296,10 @@ window.paint=function(){
       '<span class="dt">'+dfmt(x.created_at)+'</span>'+
       ((x.likes|0)>0?'<span class="lk">👍 '+(x.likes|0)+'</span>':'')+
       (x.hidden?'<span class="pill h">🙈 홈페이지 숨김</span>':'')+
-      (x.edited_at?'<span class="pill e">✏️ 수정됨</span>':'')+'</div>'+
+      (x.edited_at?'<span class="pill e">✏️ 수정됨</span>':'')+rwPill(x.__id)+'</div>'+
       (x.text?'<div class="rtx">'+esc(x.text)+'</div>':'')+
       (phs?'<div class="rph">'+phs+'</div>':'')+
+      rwInfo(x.__id)+
       (rep?'<div class="rrep"><div class="h">🏠 사장님 답글'+(x.admin_reply_at?' · '+dfmt(x.admin_reply_at):'')+'</div><div class="t">'+esc(rep)+'</div></div>':'')+
       '<div class="racts">'+
         '<button class="ra rep" onclick="repOpen(\''+id+'\')">💬 '+(rep?'답글 수정':'답글 달기')+'</button>'+
@@ -306,6 +315,16 @@ window.showN=showN;
 Object.defineProperty(window,'showN',{get:()=>showN,set:v=>{showN=v;}});
 window.lbOpen=function(src){$('lb-img').src=src;$('lb').classList.add('on');};
 
+/* ── ⭐ 리뷰 보상 상태 (2026-11-27) ── 고객 연락처는 관리자 화면에서만 보입니다 */
+function rwPill(id){const c=CLM[id];if(!c)return '';
+  if(c.status==='paid')return '<span class="pill rw ok">✅ 적립 RM '+(c.paid_pts||0)+' 지급</span>';
+  if(c.status==='excluded')return '<span class="pill rw x">🎁 적립 제외</span>';
+  return '<span class="pill rw">🎁 적립 신청 · 확인 대기</span>';}
+function rwInfo(id){const c=CLM[id];if(!c)return '';
+  const who=esc((c.condo||'')+' '+(c.unit||''))+(c.phone?' · '+esc(c.phone):'');
+  if(c.status==='paid')return '<div class="rwi">✅ '+dfmt(c.paid_at)+' '+esc(c.cust_name||'')+' 님께 해피포인트 RM '+(c.paid_pts||0)+' 지급 · 입력: '+who+'</div>';
+  if(c.status==='excluded')return '<div class="rwi">🎁 적립 제외'+(c.why?' — '+esc(c.why):'')+' · 입력: '+who+'</div>';
+  return '<div class="rwi">🎁 적립 신청 · 입력: '+who+'<br>지급은 고객관리 「⭐ 리뷰 보상」에서 고객 정보와 맞춰 본 뒤 합니다.</div>';}
 /* ── 삭제 (사진도 함께 정리) ─────────────────── */
 window.delRv=async function(id){
   const x=ALL.find(r=>r.__id===id);if(!x)return;
@@ -421,6 +440,8 @@ try{
     console.warn(err);
     $('list').innerHTML='<div class="empty">리뷰를 불러오지 못했습니다.<br>'+esc(err.message)+'</div>';
   });
+  // ⭐ 리뷰 적립 신청 상태 (관리자 전용 review_claims)
+  onSnapshot(collection(db,'review_claims'),snap=>{CLM={};snap.docs.forEach(d=>{CLM[d.id]=d.data()||{};});if(ALL.length){renderStats();paint();}},err=>console.warn('review_claims',err.message));
 }catch(e){
   $('list').innerHTML='<div class="empty">Firebase 연결에 실패했습니다.<br>'+esc(e.message)+'</div>';
 }
