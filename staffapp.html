@@ -523,7 +523,7 @@ window.addEventListener('hashchange',function(){
 <!-- ══ 새 의뢰·예약신청 실시간 알림 : 배지 표시 + 알림음 ══ -->
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getFirestore, collection, onSnapshot, doc, setDoc, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getFirestore, collection, onSnapshot, doc, setDoc, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getDocs, query, where, addDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 // ⚡ 빠른 열기 : 데이터베이스 내용을 이 기기 안에 저장해 둡니다(IndexedDB).
 //    다음부터는 저장된 내용으로 화면을 먼저 그리고, 서버에서는 바뀐 부분만 받아 옵니다.
 //    (관리자 앱의 여러 화면이 같은 저장소를 함께 쓰므로 multi-tab 모드 · 저장소를 못 쓰는 환경에서는 예전 방식으로 동작)
@@ -539,6 +539,29 @@ const CFG={apiKey:"AIzaSyAxAaB-CtySH2_ZHJKidwjbhn8ava6rM00",authDomain:"happywor
 
 let db=null;
 try{db=hhcFastDb(initializeApp(CFG));}catch(e){}
+
+// ── 🔗 홈페이지 「예상 견적서 → 고객에게 보내기」의 짧은 주소 (2026-11-27) ──
+//    홈페이지 탭(iframe)이 긴 견적서 주소(/home?open=est&e=…)를 보내면, 고객관리와 같은 단축 저장소(shorts · /r?k=키)에
+//    등록해 짧은 주소를 돌려줍니다. 견적서 주소만 받습니다. 실패하면 긴 주소를 그대로 돌려줍니다.
+window.addEventListener('message',async function(e){
+  const d=e&&e.data; if(!d||!d.hhcShortReq||e.origin!==location.origin)return;
+  const url=String(d.hhcShortReq.url||''), id=d.hhcShortReq.id;
+  let out=url;
+  try{
+    if(db&&url.length<4000&&/^https:\/\/happyhomecare\.com\.my\/home\?open=est&e=[A-Za-z0-9_-]+(&lang=en)?$/.test(url)){
+      const col=collection(db,'shorts');
+      const ex=await getDocs(query(col,where('url','==',url)));
+      let key=ex.empty?'':ex.docs[0].data().key;
+      for(let n=5;n<=8&&!key;n++){
+        const k=Math.random().toString(36).slice(2,2+n); if(k.length<n)continue;
+        const dup=await getDocs(query(col,where('key','==',k)));
+        if(dup.empty){await addDoc(col,{key:k,url:url,created:new Date().toISOString(),kind:'estimate'});key=k;}
+      }
+      if(key)out='https://happyhomecare.com.my/r?k='+key;
+    }
+  }catch(err){console.warn('short link failed',err);}
+  try{e.source.postMessage({hhcShortRes:{id:id,url:out}},e.origin);}catch(_){}
+});
 
 // ── 이미 본 문서 기억 (새로고침해도 같은 건으로 다시 울리지 않음) ──
 function loadSeen(k){try{return new Set(JSON.parse(localStorage.getItem(k)||'[]'));}catch(e){return new Set();}}
