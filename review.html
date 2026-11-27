@@ -287,7 +287,7 @@ function render(){
   document.getElementById('bar').innerHTML='<a href="'+go()+'" style="background:linear-gradient(140deg,var(--navy-800),var(--navy-950));box-shadow:0 1px 2px rgba(8,23,43,.2),0 12px 22px -10px rgba(8,23,43,.8)">'+esc(L.bar)+'</a>';
   document.querySelectorAll('[data-l]').forEach(function(b){b.addEventListener('click',function(){if(LANG===b.dataset.l)return;LANG=b.dataset.l;
     try{var u=new URL(location.href);if(LANG==='en')u.searchParams.set('lang','en');else u.searchParams.delete('lang');history.replaceState(null,'',u);}catch(e){}
-    render();var bk=document.querySelector('#hhcBackToCard span');if(bk)bk.textContent=LANG==='en'?'Back to card':'명함으로';});});
+    render();if(window.hhcBkLabel)window.hhcBkLabel(LANG==='en');});});
 }
 render();
 try{fetch('/api/refcfg',{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(d){
@@ -319,13 +319,23 @@ try{fetch('/api/refcfg',{cache:'no-store'}).then(function(r){return r.ok?r.json(
   try{
     var q = new URLSearchParams(location.search);
     var en = String(q.get('lang') || '').toLowerCase() === 'en';
-    var fromCard = q.get('from') === 'card' || (document.referrer || '').indexOf('/namecard') > -1;
-    if(!fromCard) return;
+    /* ← 돌아가기 (2026-11-27) — 우리 화면(홈페이지 · 이벤트 · 전자명함 · 마이페이지 · 다른 안내장)에서 넘어왔으면 표시.
+       왓츠앱 등 바깥 링크로 바로 연 경우(이전 화면 없음)는 숨김. */
+    var rf = '', rfp = '';
+    try{ var ru = new URL(document.referrer || ''); if(ru.origin === location.origin){ rf = document.referrer; rfp = ru.pathname.toLowerCase(); } }catch(_e){}
+    var fromCard = q.get('from') === 'card' || rfp.indexOf('/namecard') > -1 || rfp === '/nc' || rfp === '/nce';
+    var fromEv = q.get('from') === 'event' || rfp.indexOf('/event') === 0;
+    if(!fromCard && !rf && !fromEv) return;
+    var LB = fromCard ? ['명함으로','Back to card','전자명함으로 돌아가기','Back to the digital name card']
+      : fromEv ? ['이벤트로','Back to offers','이벤트 안내로 돌아가기','Back to the offers page']
+      : (rfp === '/' || rfp.indexOf('/home') === 0) ? ['홈페이지로','Back to home','홈페이지로 돌아가기','Back to the home page']
+      : rfp.indexOf('/my') === 0 ? ['마이페이지로','Back to My Page','마이페이지로 돌아가기','Back to My Page']
+      : ['돌아가기','Back','이전 화면으로 돌아가기','Back to the previous page'];
 
     var b = document.getElementById('hhcBackToCard');
     if(!b) return;
-    b.querySelector('span').textContent = en ? 'Back to card' : '명함으로';
-    b.setAttribute('aria-label', en ? 'Back to the digital name card' : '전자명함으로 돌아가기');
+    window.hhcBkLabel = function(isEn){ b.querySelector('span').textContent = isEn ? LB[1] : LB[0]; b.setAttribute('aria-label', isEn ? LB[3] : LB[2]); };
+    window.hhcBkLabel(en);
     b.classList.add('on');
 
     /* 화면 아래에 고정된 바(예약 제출 바 등)가 있으면 그만큼 위로 띄운다 */
@@ -349,8 +359,9 @@ try{fetch('/api/refcfg',{cache:'no-store'}).then(function(r){return r.ok?r.json(
     window.addEventListener('resize', lift);
 
     b.addEventListener('click', function(){
-      if(history.length > 1){ history.back(); }
-      else { location.href = '/namecard' + (en ? '?lang=en' : ''); }
+      if(rf && history.length > 1){ history.back(); }
+      else if(rf){ location.href = rf; }
+      else { location.href = (fromEv ? '/event' : '/namecard') + (en ? '?lang=en' : ''); }
     });
   }catch(e){}
 })();
