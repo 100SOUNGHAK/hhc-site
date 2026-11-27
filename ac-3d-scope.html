@@ -166,7 +166,7 @@
   body.mob .rcard{left:8px;right:8px;top:auto;bottom:104px;width:auto}
   body.mob .rcard .rb{padding:8px 12px 2px}
   body.mob .rcard .ring{flex-basis:70px;height:70px} body.mob .rcard .ring svg{width:70px;height:70px}
-  body.mob .rcard .ring .num b{font-size:20px}
+  body.mob .rcard .ring .num b{font-size:18px;letter-spacing:-.04em}
   body.mob .rcard .rd{font-size:11.5px}
   body.mob .rcard ul{display:none}
   body.mob .spot span{font-size:11px;padding:3px 7px;white-space:normal;max-width:170px;line-height:1.3}
@@ -181,7 +181,7 @@
   .sum{position:fixed;inset:0;display:grid;place-items:center;padding:10px 12px 130px;background:rgba(233,237,241,.72);backdrop-filter:blur(3px);
        opacity:0;pointer-events:none;transition:opacity .45s}
   .sum.on{opacity:1;pointer-events:auto}
-  .sum .card{max-height:100%;overflow:auto;background:#fff;border-radius:16px;box-shadow:0 18px 50px rgba(18,40,74,.25);width:min(860px,calc(100% - 24px));overflow:hidden}
+  .sum .card{max-height:100%;background:#fff;border-radius:16px;box-shadow:0 18px 50px rgba(18,40,74,.25);width:min(860px,calc(100% - 24px));overflow:hidden auto}
   .sum .hd{background:var(--navy);color:#fff;padding:14px 18px}
   .sum .hd b{font-size:19px}
   .sum .hd span{display:block;font-size:12px;opacity:.75}
@@ -212,6 +212,32 @@
   .tab .ks{display:none}
   .smx{display:none}
   .tab .pg{position:absolute;left:0;bottom:0;height:3px;background:var(--teal);width:0}
+  /* B. 탭마다 오염 제거율 — 항상 보임 (2026-11-27) */
+  .tab .rp{display:flex;align-items:center;gap:6px;margin-top:4px}
+  .tab .rp b{font:800 12px "Noto Sans KR";color:var(--rc);min-width:34px}
+  .tab .rp i{flex:1;height:5px;border-radius:3px;background:#dfe4ea;position:relative;overflow:hidden}
+  .tab .rp i:after{content:"";position:absolute;inset:0 auto 0 0;width:var(--rw);background:var(--rc);border-radius:3px}
+  .tab .rp small{font-size:9.5px;color:var(--mute);white-space:nowrap}
+  body.mob .tab .rp{justify-content:center;margin-top:2px} body.mob .tab .rp i,body.mob .tab .rp small{display:none}
+  body.mob .tab .rp b{min-width:0;font-size:11px}
+  /* D. 결과만 보기 */
+  .ctl button#resOnly.on{background:var(--gold);color:var(--navy);font-weight:700}
+  .ctl button{white-space:nowrap} body.mob .ctl button#resOnly{padding:0 7px}
+  @media (max-width:380px){ body.mob .ctl button#speed{display:none} body.mob .ctl input[type=range]{min-width:0} }
+  /* C. 요약 — 부위별 남는 오염 색 지도 */
+  .sum .hm td:not(:first-child){padding:3px 4px}
+  .hmc{display:block;border-radius:6px;padding:4px 2px;font-size:11.5px;font-weight:800;color:#fff;line-height:1.15;text-align:center}
+  .hmc.many{background:#d93a40} .hmc.some{background:#e07a1f} .hmc.trace{background:#d2ab2a} .hmc.ok{background:#14958a} .hmc.na{background:#e4e8ed;color:#8891a0;font-weight:600}
+  .sum tr.pcr td{padding-top:6px;padding-bottom:6px}
+  .pcb{display:block;height:7px;border-radius:4px;background:#e4e8ed;overflow:hidden;margin-top:3px}
+  .pcb i{display:block;height:100%;border-radius:4px}
+  body.mob .hmc{font-size:9.5px;padding:3px 1px}
+  .sum .hmlg{display:flex;gap:10px;flex-wrap:wrap;padding:8px 16px 6px;font-size:11.5px;color:var(--mute)}
+  .sum .hmlg span{display:inline-flex;align-items:center;gap:4px} .sum .hmlg i{width:11px;height:11px;border-radius:3px;display:inline-block}
+  body.mob .sum .hmlg{padding:6px 10px 0;font-size:10px;gap:6px}
+  /* 전체분해 결과 — 앞면/뒷면 표시 */
+  .rface{display:flex;gap:6px;margin-top:6px} .rface span{flex:1;text-align:center;font-size:11.5px;font-weight:700;border-radius:999px;padding:3px 0;background:rgba(255,255,255,.7);color:#5b6b7c;transition:background .3s,color .3s}
+  .rface span.on{background:#14958a;color:#fff}
   .tab.on{background:#fff;border-color:var(--gold)}
   .tab.on .n{color:var(--gold)}
   .ctl{display:flex;align-items:center;gap:8px}
@@ -312,6 +338,7 @@
     <button id="restart" class="alt">↺</button>
     <input id="scrub" type="range" min="0" max="1000" value="0">
     <span class="t" id="tlabel">0s</span>
+    <button id="resOnly" class="alt"><span class="lgx" id="roL"></span><span class="smx" id="roS"></span></button>
     <button id="speed" class="alt">1×</button>
     <button id="cam" class="alt on"><span class="lgx" id="camL"></span><span class="smx" id="camS"></span></button>
   </div>
@@ -1118,6 +1145,15 @@ function setWarn(id, g){
   (DIRT[id]||[]).forEach(d=>{ if(d.m.emissive && g > 0){ d.m.emissive.setRGB(1, 0.16, 0.10); d.m.emissiveIntensity = g; } });
 }
 const SPOT_PART = {evapFront:'evap', evapLow:'evap', evapBack:'evap', drainSurf:'drain', blowerC:'blower'};
+// A. 엑스레이 집중 보기 — 결과 점검 때 깨끗해진 부품은 반투명 회색으로 (2026-11-27)
+const ghostMat = new THREE.MeshStandardMaterial({color:0xc7d0da, roughness:0.55, metalness:0, transparent:true, opacity:1, depthWrite:false});
+const ghosted = [];
+function ghostPart(id){
+  P[id].part.inner.traverse(o=>{ if(!o.isMesh || o.userData.isPatch || o.userData.m0) return;
+    o.userData.m0 = o.material; o.userData.cs0 = o.castShadow; o.material = ghostMat; o.castShadow = false; ghosted.push(o); });
+}
+function unghostAll(){ ghosted.forEach(o=>{ o.material = o.userData.m0; o.castShadow = o.userData.cs0; delete o.userData.m0; }); ghosted.length = 0; }
+const SPOT_PID = {evapFront:'evap', evapLow:'evap', evapBack:'evap', drainSurf:'drain', chassisTop:'back', blowerC:'blower'};
 function setDirt(id, v){
   (DIRT[id]||[]).forEach(d=>{
     d.m.color.copy(d.clean).lerp(d.dirtyC, v);
@@ -1151,7 +1187,7 @@ const PATCH = {};
 { // 에바와 겹치는 뒷케이스 상단부 (뒷벽 윗부분)
   const m = new THREE.Mesh(new THREE.PlaneGeometry(0.68,0.068), patchMat(3,0.6)); m.position.set(-0.06,0.104,0.0272); back.inner.add(m); PATCH.chassisTop = m;
 }
-Object.values(PATCH).forEach(m=>{ m.renderOrder = 2; m.visible = false; });
+Object.values(PATCH).forEach(m=>{ m.renderOrder = 2; m.visible = false; m.userData.isPatch = true; });
 function setPatch(id, a){ const m = PATCH[id]; m.material.opacity = a; m.visible = a > 0.01; m.material.emissiveIntensity = 0; }
 Object.values(PATCH).forEach(m=>m.material.emissive.setRGB(1, 0.14, 0.08));
 // 결과 표시 핀이 붙는 위치 (부품과 함께 움직임)
@@ -1339,7 +1375,8 @@ function applyTime(t){
   Object.values(P).forEach(d=>{ d.part.outer.position.copy(d.part.home); d.part.outer.rotation.set(0,0,0); });
   Object.keys(DIRT).forEach(id=>{ setDirt(id, state.sum?0.0:1); setGlow(id, 0); }); state.sparkle = [];
   sprayState.on = false; gun.visible = false; brush.visible = false; state.cur = null; state.cleanIdx = -1;
-  setPatch('evapBack',0); setPatch('chassisTop',0); state.resU = -1; state.resW = 0;
+  setPatch('evapBack',0); setPatch('chassisTop',0); state.resU = -1; state.resW = 0; state.face = -1; state.fullGlow = 0;
+  unghostAll();
   let flap = 0.75, led = 1;
   if(state.sum){ flap = 0.75; led = 1;
     Object.keys(DIRT).forEach(id=>setDirt(id,0));
@@ -1383,6 +1420,25 @@ function applyTime(t){
       const fo = MOBILE ? new THREE.Vector3(0, 0.50, -0.02) : new THREE.Vector3(-0.55, 0.10, -0.02);
       P.front.part.outer.position.addScaledVector(fo, w);
     }
+    // A. 엑스레이 — 오염이 남는 부품만 진하게, 나머지는 반투명 회색
+    if(!s.full && w > 0.02){
+      const keep = new Set(s.res.spots.filter(sp=>sp[1]!=='ok').map(sp=>SPOT_PID[sp[0]]));
+      const washed = new Set(s.clean.filter(c=>c.lvl>=0.8).map(c=>c.p));          // 이번 서비스에서 세척한 부품만 흐리게 (안 닦은 부품은 그대로 진하게)
+      ['front','drain','blower','evap','back'].forEach(id=>{ if(!keep.has(id) && washed.has(id)) ghostPart(id); });
+      ['pcb','motor'].forEach(id=>ghostPart(id));
+      ghostMat.opacity = 1 - 0.78*w;
+    }
+    // 전체분해 — 부품마다 앞면 → 뒷면 → 앞면으로 뒤집어 보여 주며 반짝임 (2026-11-27)
+    if(s.full && w > 0){
+      const fl = ease(clamp01((ru-0.34)/0.16)) * (1 - ease(clamp01((ru-0.72)/0.16)));
+      state.face = fl > 0.5 ? 1 : 0;
+      ['front','drain','blower','pcb','motor','evap','back'].forEach((id,j)=>{
+        const lag = clamp01(fl*1.25 - j*0.035);
+        P[id].part.outer.rotation.x += Math.PI * ease(lag);
+      });
+      if(Math.abs(fl-0.5) < 0.45 || ru < 0.3) Object.keys(DIRT).forEach(id=>state.sparkle.push(id));
+      state.fullGlow = w;
+    }
   }
 
   // dirt
@@ -1404,6 +1460,7 @@ function applyTime(t){
     if(since < 1.5 && fade > 0.5) state.sparkle.push(id);
   });
 
+  if(state.fullGlow > 0){ ['front','drain','blower','evap','back'].forEach((id,j)=>setGlow(id, (0.18 + 0.10*Math.sin(lt*3 + j)) * state.fullGlow)); }
   // ⚠ 잔류 부위 강조 — 결과 점검 구간에서만, 잔류 핀이 보이는 동안
   if(state.resW > 0 && state.resU >= 0){
     const pulse = 0.5 + 0.5*Math.sin(lt*Math.PI*2*0.85), ru = state.resU;
@@ -1514,11 +1571,13 @@ function applyStatic(){
 }
 applyStatic();
 const $ = id=>document.getElementById(id);
+const pctCol = p => p>=100 ? '#0fa3a3' : p>=95 ? '#22a383' : p>=85 ? '#c9a24a' : p>=60 ? '#e07a1f' : '#d93a40';
+let resOnly = false;
 const tabsEl = $('tabs');
 SVC.forEach((s,i)=>{
   const el = document.createElement('div'); el.className='tab';
-  el.innerHTML = `<div class="n">SERVICE ${i+1}</div><div class="k">${L(s.k,s.e)}</div><div class="e">${L(s.sk,s.se)}</div><div class="ks">${i+1}. ${L(s.short,s.shEn)}</div><div class="pg"></div>`;
-  el.onclick = ()=>{ time = s.t0 + 0.01; playing = true; $('play').textContent='❚❚'; };
+  el.innerHTML = `<div class="n">SERVICE ${i+1}</div><div class="k">${L(s.k,s.e)}</div><div class="e">${L(s.sk,s.se)}</div><div class="ks">${i+1}. ${L(s.short,s.shEn)}</div><div class="rp" style="--rc:${pctCol(s.res.pct)};--rw:${s.res.pct}%"><b>${s.res.pct}%</b><i></i><small>${L('제거','removed')}</small></div><div class="pg"></div>`;
+  el.onclick = ()=>{ time = resOnly ? s.t0 + s.rsA - 0.3 : s.t0 + 0.01; playing = true; $('play').textContent='❚❚'; };
   tabsEl.appendChild(el); s.tab = el;
 });
 // summary table
@@ -1536,13 +1595,23 @@ SVC.forEach((s,i)=>{
     ['약품 분사','Chemical spray',             ['x','f','f','f','f']],
     ['고압물 세척','Pressure water rinse',     ['f','f','f','f','f']],
     ['고압 스팀 살균','High-pressure steam',   ['x','x','f','f','f']],
-    ['세척 결과','Result'],
-    ['오염 제거율','Contamination removed',     SVC.map(s=>s.res.pct+'%')],
   ];
   const sym = {f:'<b class="f">●</b>', p:'<b class="p">◐</b>', x:'<b class="x">–</b>', d:`<b class="d">○</b><small>${L('브러쉬','Brush')}</small>`};
-  $('sumTable').innerHTML = `<tr><th>${L('부품','Part')}</th>${cols}</tr>` + rows.map(r=> !r[2]
+  $('sumTable').innerHTML = `<tr><th>${L('부품','Part')}</th>${cols}</tr>` + heatRows() + `<tr class="sep"><td colspan="6">${L('분해 · 세척 범위','Scope')}</td></tr>` + rows.map(r=> !r[2]
     ? `<tr class="sep"><td colspan="6">${L(r[0],r[1])}</td></tr>`
     : `<tr><td>${L(r[0],r[1])}</td>${r[2].map(v=>`<td>${sym[v] || '<b class="pc">'+v+'</b>'}</td>`).join('')}</tr>`).join('');
+  $('sumTable').insertAdjacentHTML('beforebegin', `<div class="hmlg">${[['many','대부분 잔류','Mostly remains'],['some','일부 잔류','Some remains'],['trace','미량 잔류','Trace'],['ok','제거','Clean'],['na','범위 외 (세척 안 함)','Not cleaned']].map(x=>`<span><i class="hmc ${x[0]}"></i>${L(x[1],x[2])}</span>`).join('')}</div>`);
+}
+// C. 세척 결과 — 부위별 남는 오염 색 지도 (RES 표에서 읽음; 기본세척의 뒷케이스는 분해 범위 밖이라 「범위 외」)
+function heatRows(){
+  const PARTS = [['evapFront','에바 앞면','Coil front'],['evapLow','에바 아랫부분 (드레인판 겹침)','Coil bottom (over pan)'],['evapBack','에바 뒷면','Coil back'],
+                 ['drainSurf','드레인판 표면','Drain pan surface'],['chassisTop','뒷케이스 상단부','Upper chassis']];
+  const NA = {chassisTop:[0]};
+  const short = {many:['대부분','Most'], some:['일부','Some'], trace:['미량','Trace'], ok:['제거','Clean'], na:['범위 외','N/A']};
+  const lv = (si, id)=>{ if((NA[id]||[]).includes(si)) return 'na'; const sp = SVC[si].res.spots.find(x=>x[0]===id); return sp ? sp[1] : 'ok'; };
+  return `<tr class="sep"><td colspan="6">${L('세척 결과 — 부위별 남는 오염','Result — dirt left by part')}</td></tr>`
+    + PARTS.map(([id,k,e])=>`<tr class="hm"><td>${L(k,e)}</td>${SVC.map((x,i)=>{ const l = lv(i,id); return `<td><span class="hmc ${l}">${L(short[l][0],short[l][1])}</span></td>`; }).join('')}</tr>`).join('')
+    + `<tr class="pcr"><td><b>${L('오염 제거율','Removed')}</b></td>${SVC.map(x=>`<td><b class="pc" style="color:${pctCol(x.res.pct)}">${x.res.pct}%</b><span class="pcb"><i style="width:${x.res.pct}%;background:${pctCol(x.res.pct)}"></i></span></td>`).join('')}</tr>`;
 }
 
 let shownSvc = -1;
@@ -1577,7 +1646,7 @@ function updateResult(s){
     rb.innerHTML = bad.length
       ? `<div class="bh">⚠ ${L('이 세척으로 남는 오염','Dirt this service leaves behind')}</div>` +
         bad.map(sp=>`<div class="bi"><span class="lvb ${sp[1]}">${L(LVTXT[sp[1]][0],LVTXT[sp[1]][1])}</span><b>${nm(sp)}</b></div>`).join('')
-      : `<div class="bh">✓ ${L('남는 오염 없음 — 모든 부품 완벽 제거','No dirt left — every part spotless')}</div>`;
+      : `<div class="bh">✓ ${L('남는 오염 없음 — 모든 부품 앞·뒤 완벽 제거','No dirt left — every part, front & back')}</div><div class="rface"><span id="rfF">${L('앞면','Front')}</span><span id="rfB">${L('뒷면','Back')}</span></div>`;
     $('rOk').innerHTML = good.length && bad.length ? `<b>✓ ${L('제거','Clean')}</b>${good.map(nm).join(' · ')}` : '';
     spotEls.forEach(e=>e.remove()); spotEls.length = 0;
     R.spots.forEach(sp=>{ const e = document.createElement('div'); const isBad = sp[1]!=='ok';
@@ -1589,6 +1658,7 @@ function updateResult(s){
       $('spots').appendChild(e); spotEls.push(e); });
     $('rArc').setAttribute('stroke', R.pct>=100 ? '#0fa3a3' : R.pct>=85 ? '#22a383' : R.pct>=60 ? '#c9a24a' : '#e07a3f');
   }
+  if(s.full && $('rfF')){ $('rfF').classList.toggle('on', state.face!==1); $('rfB').classList.toggle('on', state.face===1); }
   const k = ease(clamp01((ru-0.08)/0.4)), pct = Math.round(R.pct*k), C = 2*Math.PI*36;
   $('rP').textContent = pct+'%'; $('rArc').setAttribute('stroke-dasharray', `${C*pct/100} 999`);
   R.spots.forEach((sp,i)=>{
@@ -1648,6 +1718,7 @@ function updateUI(t){
     if(state.phase==='clean' && state.cleanIdx>=0){ const c = s.clean[state.cleanIdx]; const f = FXNAME[c.fx];
       txt = [`${P[c.p].k} · ${f[0]}`, `${P[c.p].e} · ${f[1]}`]; ico = FXICO[c.fx] || ico; cls = c.fx;
       cnt = `${state.cleanIdx+1} / ${s.clean.length}`; }
+    else if(state.phase==='res' && s.full){ txt = state.face===1 ? ['뒷면까지 완벽 제거 확인','Back side — spotless too'] : ['앞면 완벽 제거 확인','Front side — spotless']; }
     else if(state.phase==='dis' && state.cur){ txt = [`${state.cur.k} 분리`, `Removing ${state.cur.e}`];
       const k = s.slots.findIndex(sl=>P[sl.id]===state.cur); if(k>=0) cnt = `${k+1} / ${s.slots.length}`; }
     const tag = L(`${st.n}단계 · ${st.k}`, `STEP ${st.n} · ${st.e}`), main = L(txt[0], txt[1]);
@@ -1673,6 +1744,17 @@ function updateUI(t){
 let time = 0, playing = true, speed = 1, auto = true;
 $('play').onclick = ()=>{ playing=!playing; $('play').textContent = playing?'❚❚':'▶'; };
 $('restart').onclick = $('again').onclick = ()=>{ time = 0; playing = true; $('play').textContent='❚❚'; };
+// D. 결과만 보기 — 서비스별 결과 점검 장면 → 마지막 요약만 이어서 재생
+const RES_WIN = ()=>SVC.map(s=>[s.t0 + s.rsA - 0.3, s.t0 + s.rsB + 0.2]);
+function setResOnly(on){ resOnly = on; $('resOnly').classList.toggle('on', on);
+  if(on){ const w = RES_WIN(); const cur = w.find(x=>time>=x[0] && time<x[1]); if(!cur){ const nx = w.find(x=>x[0] > time); time = nx ? nx[0] : w[0][0]; } playing = true; $('play').textContent='❚❚'; } }
+function resOnlyStep(){
+  if(!resOnly || time >= SUM_A) return;
+  const w = RES_WIN(); if(w.some(x=>time>=x[0] && time<x[1])) return;
+  const nx = w.find(x=>x[0] > time); time = nx ? nx[0] : SUM_A;
+}
+$('resOnly').onclick = ()=>setResOnly(!resOnly);
+$('roL').textContent = L('🔎 결과만 보기','🔎 Results only'); $('roS').textContent = L('결과만','Results');
 $('speed').onclick = ()=>{ speed = speed===1?2:speed===2?0.5:1; $('speed').textContent = speed+'×'; };
 $('cam').onclick = ()=>{ auto = !auto; $('cam').classList.toggle('on',auto); };
 controls.addEventListener('start', ()=>{ auto=false; $('cam').classList.remove('on'); });
@@ -1698,7 +1780,7 @@ addEventListener('resize', resize); resize();
 let last = performance.now(), last0 = performance.now(), lastSvc = null;
 function frame(now){
   const dt = Math.min((now-last)/1000, 0.05); last = now;
-  if(playing){ time += dt*speed; if(time > T) time = 0; }
+  if(playing){ time += dt*speed; if(time > T) time = 0; resOnlyStep(); }
   applyTime(time);
   if(auto) autoCamera(time); else controls.update();
   if(state.svc !== lastSvc){ clearFX(); lastSvc = state.svc; }
