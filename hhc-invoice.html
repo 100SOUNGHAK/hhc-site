@@ -2317,6 +2317,10 @@ window.cpTxt=cpTxt;
 
 function loadInvToForm(inv){
   if(!inv)return;
+  _ivLoading=true;try{_loadInvToForm(inv);}finally{_ivLoading=false;}
+  renderLI();App.upPrev();
+}
+function _loadInvToForm(inv){
   setVal('inv-num',inv.id||'');setVal('inv-date',inv.date||'');setVal('inv-due',inv.due||'');
   setVal('inv-status',inv.status||'billing');setVal('inv-currency',inv.currency||'MYR');
   setVal('c-name',inv.customer&&inv.customer.name||'');
@@ -2362,7 +2366,7 @@ function loadInvToForm(inv){
   invAttRender();
   cardSlips=(inv.cardSlips||[]).filter(function(a){return a&&(a.thumb||a.url);}).map(function(a){return{thumb:a.thumb||'',url:a.url||'',w:a.w||0,h:a.h||0,_up:false};});
   cslipRender();
-  showLinkBox(inv.id);renderLI();App.upPrev();Nav('new');Tab('info');
+  showLinkBox(inv.id);Nav('new');Tab('info');
   if(window.refreshInspBox)window.refreshInspBox(inv.id);
   if(window.loadCtLinkFromInv)loadCtLinkFromInv(inv);
 }
@@ -4120,9 +4124,11 @@ function ivDiscParts(t,ko,fa){
   if(t.adjDisc>0.005)p.push((ko?'조정 차감 ':'Adjustment ')+fa(t.adjDisc));
   return p.length>1?p.join(' · '):'';
 }
+// 인보이스를 불러오는 도중(품목이 아직 이전 화면 것일 때)에는 할인 줄을 지우거나 옮기지 않습니다 (2026-11-27)
+var _ivLoading=false;
 function calcTotals(inv){
-  if(!inv){try{pkfSync();}catch(e){console.warn('pkfSync',e);}}
-  if(!inv){   // 품목 할인 칸은 없어졌으므로, 품목에 남아 있는 할인(예전 인보이스 · 견적 · 예약 넘김)은 「할인」 줄로 옮깁니다
+  if(!inv&&!_ivLoading){try{pkfSync();}catch(e){console.warn('pkfSync',e);}}
+  if(!inv&&!_ivLoading){   // 품목 할인 칸은 없어졌으므로, 품목에 남아 있는 할인(예전 인보이스 · 견적 · 예약 넘김)은 「할인」 줄로 옮깁니다
     var _mv=false;
     (lineItems||[]).forEach(function(l){
       var dv=Math.abs(parseFloat(l.discVal||l.disc)||0);if(!(dv>0.005))return;
@@ -4147,7 +4153,7 @@ function calcTotals(inv){
   var park=parseFloat(inv?inv.parkingFee:val('parking-fee'))||0;
   var minC=parseFloat(inv?inv.minCharge:val('min-charge'))||0;
   var extra=parseFloat(inv?inv.extraFee:val('extra-fee'))||0;
-  if(!inv){var _na=adjusts.filter(function(a){return !a.li||(lineItems||[]).some(function(l){return l.id===a.li;});});
+  if(!inv&&!_ivLoading){var _na=adjusts.filter(function(a){return !a.li||(lineItems||[]).some(function(l){return l.id===a.li;});});
     if(_na.length!==adjusts.length){adjusts=_na;try{renderAdjusts();}catch(e){}}}
   var adjRows=_adjShow(inv?(inv.adjusts||[]):undefined,sub);      // 직접입력 조정 (+ · −) · % 줄은 소계 기준
   if(!inv){try{adjCalcRefresh();}catch(e){}}
@@ -9286,6 +9292,10 @@ function saveInvDraft(){
 function scheduleInvDraft(){_invDraftDirty=true;clearTimeout(_invDraftTimer);_invDraftTimer=setTimeout(saveInvDraft,1500);}
 function clearInvDraft(){_invDraftDirty=false;try{localStorage.removeItem(INV_DRAFT);}catch(e){}var ind=$('inv-autosave-ind');if(ind)ind.textContent='';var b=$('inv-draft-banner');if(b)b.remove();}
 function loadInvDraft(d){
+  _ivLoading=true;try{_loadInvDraft(d);}finally{_ivLoading=false;}
+  renderLI();App.upPrev();
+}
+function _loadInvDraft(d){
   window._invEditDocId='';
   // 임시저장 번호가 그사이 다른 인보이스에 쓰였으면 새 번호로 바꿉니다 (덮어쓰기 방지)
   var _dn=d.id;if(invNumTaken(_dn)||!_dn)_dn=genId(d.date||today());
@@ -9301,7 +9311,7 @@ function loadInvDraft(d){
   setVal('inv-notes',d.notes);setVal('inv-notes-en',d.notes_en||'');setVal('inv-terms',d.terms);setVal('bank-select',d.bankId||'');
   lineItems=(d.items||[]).map(function(x){return Object.assign({},x);});
   window._creditAuto=false;updateCreditHint(); // 임시저장 복원: 저장된 차감액 유지
-  renderLI();App.upPrev();Nav('new');Tab('info');
+  Nav('new');Tab('info');
 }
 function showInvDraftBanner(){
   var raw;try{raw=localStorage.getItem(INV_DRAFT);}catch(e){return;}
