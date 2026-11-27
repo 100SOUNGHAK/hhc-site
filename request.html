@@ -608,6 +608,11 @@ body{background:var(--rq-soft)}
 .calc-teaser .ct-bn{display:block;width:100%;height:auto;aspect-ratio:1200/630;object-fit:cover}
 .calc-teaser .ct-bar{position:absolute;right:10px;bottom:10px;width:30px;height:30px;background:rgba(10,26,48,.75);backdrop-filter:blur(4px)}
 .calc-box.open .calc-teaser{border-bottom:1px solid rgba(201,164,76,.35);margin-bottom:14px}
+/* 🧮 2026-11-27 계산기 통일 — 예전 계산기 본문은 보이지 않게 · 배너는 홈페이지 계산기를 엽니다 */
+#calcBox .calc-body{display:none!important}
+#calcBox .calc-teaser{cursor:pointer}
+#calcBox .ct-bar{font-size:0}
+#calcBox .ct-bar::before{content:'›';font-size:20px;color:#E3C98A;font-weight:900;line-height:1}
 /* 📍 방문 위치 확인 (선택) */
 .rql{margin-top:2px;padding-top:14px;border-top:1px dashed var(--rq-line)}
 .rql-h{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:var(--rq-ink3);letter-spacing:.04em;margin-bottom:8px}
@@ -1509,7 +1514,7 @@ function applyLang(){
   $('submit-text').textContent=l.submitText;
   $('nx-lbl').textContent=l.nxLbl;
   if($('home-text'))$('home-text').textContent=l.homeText||'가격 · 서비스';
-  if($('hv-title'))$('hv-title').textContent=l.homeTitle||'가격 · 서비스 안내';
+  if($('hv-title')&&!($('hv-wrap')&&$('hv-wrap').classList.contains('on')))$('hv-title').textContent=l.homeTitle||'가격 · 서비스 안내';
   if($('hv-close-t'))$('hv-close-t').textContent=l.homeClose||'닫기';
   $('err-items').textContent=l.errItems;
   $('pk-title').textContent=l.pkTitle;
@@ -1670,11 +1675,10 @@ let calcSelT=null;   // 선택된 품목
 let calcSelC=null;   // 선택된 세척 방식
 
 // ── 접기/펼치기 (제목 박스 클릭)
-$('calcTeaser').addEventListener('click',()=>{
-  const box=$('calcBox');
-  const open=box.classList.toggle('open');
-  $('calcTeaser').setAttribute('aria-expanded',open?'true':'false');
-});
+/* 🧮 2026-11-27 견적 계산기 통일 — 이 요청서 안의 예전 계산기는 쓰지 않고, 홈페이지 간편 견적 계산기(home.html · 단 하나)를
+   화면 위 창으로 엽니다. 계산기에서 「이 견적으로 의뢰 신청」을 누르면 품목이 아래 「의뢰 품목」에 바로 담기고 창이 닫힙니다.
+   요금 · 할인 · 최소 청구금액 · 견적서 모양을 바꿀 때는 home.html 한 곳만 고치면 됩니다. */
+$('calcTeaser').addEventListener('click',()=>{ if(window.__hvShowCalc) window.__hvShowCalc(); });
 
 // ── 1단계: 품목 선택 (카테고리 탭 + 칩)
 const CALC_CATS=[
@@ -2631,21 +2635,28 @@ function buildMsg(condoName,condoUnit,phone,remarks){
     try{ if(fr.contentWindow){fr.contentWindow.location.replace(u);return;} }catch(e){}
     fr.src=u;
   }
-  function show(){
+  var hvT=null;
+  function show(u,title){
     if(open)return; open=true;
+    var t=$('hv-title'); if(t){ if(hvT===null) hvT=t.textContent; t.textContent=title||hvT; }
     wrap.classList.add('on');
     document.body.style.overflow='hidden';
     try{history.pushState({hv:1},'','');}catch(e){}
-    nav(homeUrl());
+    nav(typeof u==='string'?u:homeUrl());
   }
+  /* 🧮 홈페이지 간편 견적 계산기를 바로 엽니다 (2026-11-27 계산기 통일) */
+  window.__hvShowCalc=function(){
+    show('https://happyhomecare.com.my/home?open=calc'+(isEn()?'&lang=en':''), isEn()?'Quick estimate':'간편 견적 계산기');
+  };
   function hide(fromPop){
     if(!open)return; open=false;
     wrap.classList.remove('on');
+    var t=$('hv-title'); if(t&&hvT!==null){ t.textContent=hvT; hvT=null; }
     document.body.style.overflow='';
     setTimeout(function(){nav('about:blank');},250);   // 소리·영상이 남지 않게 비웁니다
     if(!fromPop){try{if(history.state&&history.state.hv)history.back();}catch(e){}}
   }
-  var hb=$('btn-home'); if(hb)hb.addEventListener('click',show);
+  var hb=$('btn-home'); if(hb)hb.addEventListener('click',function(){show();});
   var hc=$('hv-close'); if(hc)hc.addEventListener('click',function(){hide(false);});
   window.__hvHide=function(){hide(false);};   // 홈페이지 견적 계산기에서 품목을 담으면 창을 닫고 요청서로 (2026-11-20)
   var hbk=$('hv-back'); if(hbk)hbk.addEventListener('click',function(){
