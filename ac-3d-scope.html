@@ -29,6 +29,7 @@
   .htitle{margin-top:10px}
   .hbtn{display:flex;gap:6px;align-items:center;margin-bottom:8px;pointer-events:auto}
   .pill{display:inline-flex;align-items:center;height:28px;padding:0 11px;border-radius:999px;background:#fff;color:var(--navy);font-size:12px;font-weight:700;text-decoration:none;box-shadow:0 2px 8px rgba(18,40,74,.15)}
+  .pill[hidden]{display:none}
   .lng{display:inline-flex;background:rgba(18,40,74,.9);border-radius:999px;padding:2px}
   .lng button{border:0;background:none;color:rgba(255,255,255,.7);font:700 11px "Noto Sans KR";padding:5px 10px;border-radius:999px;cursor:pointer}
   .lng button.on{background:var(--gold);color:var(--navy)}
@@ -106,6 +107,19 @@
   .callout .e{font-size:11px;color:var(--mute)}
   .callout .stem{width:1.5px;height:22px;background:var(--gold);margin:0 auto}
 
+  /* 🌡️ 작동 확인 온도 카드 — 흡입 → 토출 · 온도차 (2026-11-27 실사 3차) */
+  .tmp{position:fixed;left:0;top:0;pointer-events:none;opacity:0;transition:opacity .3s;background:rgba(18,40,74,.95);color:#fff;border-radius:16px;padding:9px 18px 10px 16px;white-space:nowrap;
+       box-shadow:inset 0 1px 0 rgba(255,255,255,.14),0 2px 4px rgba(4,12,26,.25),0 16px 30px -12px rgba(4,12,26,.55)}
+  .tmp .tmh{font-size:11.5px;font-weight:700;letter-spacing:.04em;color:var(--gold);margin-bottom:3px}
+  .tmp .tmb{display:flex;align-items:flex-end;gap:12px}
+  .tmp .tmc small{display:block;font-size:11px;font-weight:500;color:rgba(255,255,255,.66);line-height:1.3}
+  .tmp .tmc b{display:block;font-size:19px;font-weight:700;line-height:1.15;font-variant-numeric:tabular-nums;letter-spacing:-.02em;color:rgba(255,255,255,.86)}
+  .tmp .tmc.out b{font-size:31px;font-weight:800;color:#bfe9e9}
+  .tmp .tmb i{font-style:normal;font-size:16px;color:rgba(255,255,255,.5);padding-bottom:5px}
+  .tmp .tmd{margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,.16);font-size:12.5px;font-weight:600;color:rgba(255,255,255,.8)}
+  .tmp .tmd b{font-size:14px;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums;margin-left:2px}
+  body.mob .tmp{padding:7px 14px 8px 13px;border-radius:14px}
+  body.mob .tmp .tmc b{font-size:16px} body.mob .tmp .tmc.out b{font-size:26px}
   /* 🔎 세척 결과 카드 · 잔류 핀 (2026-11-24) */
   .rcard{position:fixed;left:18px;top:128px;width:290px;pointer-events:none;opacity:0;transform:translateY(8px);transition:opacity .35s,transform .35s;
          background:rgba(255,255,255,.95);border-radius:14px;box-shadow:0 14px 40px rgba(18,40,74,.22);overflow:hidden}
@@ -317,6 +331,9 @@
 <div class="phase" id="phase" style="opacity:0"><span class="pi" id="phI"></span><span class="pt"><small id="phTag"></small><b id="phTx"></b></span></div>
 <div class="callout" id="callout" style="opacity:0"><div class="box"><div class="k" id="coK"></div><div class="e" id="coE"></div></div><div class="stem"></div></div>
 
+<div class="tmp" id="tchip"><div class="tmh" id="tmT"></div>
+  <div class="tmb"><div class="tmc"><small id="tmInL"></small><b id="tmIn"></b></div><i>→</i><div class="tmc out"><small id="tmOutL"></small><b id="tmOut"></b></div></div>
+  <div class="tmd"><span id="tmDL"></span> <b id="tmD"></b></div></div>
 <div class="rcard" id="rcard"><div class="rh"><b>CLEANING RESULT</b><span id="rK"></span></div>
   <div class="rb"><div class="ring"><svg viewBox="0 0 86 86"><circle cx="43" cy="43" r="36" fill="none" stroke="#e8edf1" stroke-width="9"/><circle id="rArc" cx="43" cy="43" r="36" fill="none" stroke="#0fa3a3" stroke-width="9" stroke-linecap="round" stroke-dasharray="0 999"/></svg>
   <div class="num"><div><b id="rP">0%</b><small id="rPl"></small></div></div></div><div class="rd" id="rD"></div></div>
@@ -370,10 +387,57 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 0.9;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+/* 🎬 실사 3차 (2026-11-27) ① 부드러운 그림자 — 창으로 들어온 빛처럼, 벽에 가까우면 또렷하고 멀어질수록 번지는 그림자
+   (부품이 벽에서 떨어져 나올수록 그림자가 흐려져 「떠 있는 거리」가 눈에 보임). 주소에 ?soft=0 을 붙이면 예전 그림자. */
+const QS0 = new URLSearchParams(location.search);
+const REAL3 = QS0.get('real') !== '0';                        // ?real=0 → 3차 실사 효과 전부 끔 (비교·점검용)
+if(REAL3) renderer.toneMappingExposure = 1.02;
+const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+if(REAL3 && QS0.get('soft') !== '0'){
+  const PC = `
+	#define PCSS_N 16
+	float pcssIGN( vec2 p ){ return fract( 52.9829189 * fract( dot( p, vec2( 0.06711056, 0.00583715 ) ) ) ); }
+	vec2 pcssDisk( int i, float rot ){ float r = sqrt( ( float( i ) + 0.5 ) / float( PCSS_N ) ); float a = float( i ) * 2.39996323 + rot; return r * vec2( cos( a ), sin( a ) ); }
+	float PCSS( sampler2D sm, vec4 sc ){
+		float rot = pcssIGN( gl_FragCoord.xy ) * 6.2831853, zr = sc.z, sum = 0.0, cnt = 0.0;
+		vec3 gx = dFdx( sc.xyz ), gy = dFdy( sc.xyz ); float det = gx.x * gy.y - gx.y * gy.x;          // 받는 면의 기울기 — 비스듬한 면이 스스로를 가리는 얼룩 방지
+		vec2 gz = abs( det ) > 1e-12 ? clamp( vec2( gy.y * gx.z - gx.y * gy.z, gx.x * gy.z - gy.x * gx.z ) / det, -2.5, 2.5 ) : vec2( 0.0 );
+		for( int i = 0; i < PCSS_N; i ++ ){ vec2 o = pcssDisk( i, rot ) * 0.009; float d = unpackRGBAToDepth( texture2D( sm, sc.xy + o ) ); if( d < zr + dot( gz, o ) - 0.0004 ){ sum += d; cnt += 1.0; } }
+		if( cnt < 0.5 ) return 1.0;
+		float pr = clamp( ( zr - sum / cnt ) * 0.09, 0.0005, 0.0075 ), lit = 0.0;
+		for( int i = 0; i < PCSS_N; i ++ ){ vec2 o = pcssDisk( i, rot + 1.3 ) * pr; lit += step( zr + dot( gz, o ), unpackRGBAToDepth( texture2D( sm, sc.xy + o ) ) ); }
+		return lit / float( PCSS_N );
+	}
+	float getShadow(`;
+  let ch = THREE.ShaderChunk.shadowmap_pars_fragment;
+  const a = ch.indexOf('float getShadow('), b = ch.indexOf('#if defined( SHADOWMAP_TYPE_PCF )');
+  if(a > 0 && b > a){
+    ch = ch.replace('float getShadow(', PC).replace('#if defined( SHADOWMAP_TYPE_PCF )', 'return PCSS( shadowMap, shadowCoord );\n#if defined( SHADOWMAP_TYPE_PCF )');
+    THREE.ShaderChunk.shadowmap_pars_fragment = ch; renderer.shadowMap.type = THREE.PCFShadowMap;
+  }
+}
 
 const scene = new THREE.Scene();
 const pmrem = new THREE.PMREMGenerator(renderer);
-scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+/* 🎬 실사 3차 ② 실제 거실 같은 반사 — 왼쪽 큰 창(낮빛) · 천장등(따뜻한 빛) · 마루 바닥이 광택 판넬과 젖은 부품에 비침 */
+function homeRoom(){
+  const sc = new THREE.Scene();
+  const pl = (w,h,col,k,p,r)=>{ const m = new THREE.Mesh(new THREE.PlaneGeometry(w,h), new THREE.MeshBasicMaterial({color:new THREE.Color(col).multiplyScalar(k), side:THREE.DoubleSide}));
+    m.position.set(p[0],p[1],p[2]); m.rotation.set(r[0],r[1],r[2]); sc.add(m); };
+  const H = Math.PI/2;
+  pl(7,7,0xf6f4f0,0.80,[0,1.5,0],[H,0,0]);        // 천장
+  pl(7,7,0x9c8e7e,0.36,[0,-1.5,0],[H,0,0]);       // 마루 바닥
+  pl(7,3,0xeeeeec,0.62,[0,0,-3.5],[0,0,0]);       // 에어컨이 달린 벽
+  pl(7,3,0xececea,0.58,[0,0,3.5],[0,0,0]);        // 맞은편 벽
+  pl(7,3,0xebebe9,0.56,[3.5,0,0],[0,H,0]);        // 오른쪽 벽
+  pl(7,3,0xebebe9,0.50,[-3.5,0,0],[0,H,0]);       // 왼쪽 벽
+  pl(2.6,1.7,0xe4eeff,11,[-3.45,0.15,1.3],[0,H,0]);   // 왼쪽 큰 창 — 낮빛
+  pl(0.06,1.7,0x30343a,1,[-3.44,0.15,1.3],[0,H,0]);   // 창살
+  pl(1.3,0.3,0xfff4e2,7,[0.5,1.49,1.6],[H,0,0]);      // 천장등
+  pl(1.6,1.0,0x4a4f58,0.5,[1.2,-0.1,3.45],[0,0,0]);   // 맞은편 가구(어두운 면) — 반사에 깊이감
+  return sc;
+}
+scene.environment = pmrem.fromScene(REAL3 ? homeRoom() : new RoomEnvironment(renderer), 0.035).texture;
 
 const camera = new THREE.PerspectiveCamera(32, 1, 0.01, 50);
 const controls = new OrbitControls(camera, canvas);
@@ -392,16 +456,40 @@ gtao.updateGtaoMaterial({radius:0.09, distanceExponent:1.6, thickness:1.2, scale
 gtao.updatePdMaterial({lumaPhi:10, depthPhi:2, normalPhi:3, radius:6, rings:2, samples:12});
 gtao.blendIntensity = 0.9;
 composer.addPass(gtao);
+/* 🎬 실사 3차 ③ 카메라 초점 — 지금 작업 중인 부품에 초점, 앞(분사기)·뒤는 살짝 흐림 + 밝은 반사는 번짐 (틈새 그늘이 쓰는 깊이 자료를 그대로 씀) */
+const NO_AO = [];                                              // 틈새 그늘·초점 계산에서 빼는 것 (물줄기 등 반투명)
+{ const ov = gtao.overrideVisibility.bind(gtao);
+  gtao.overrideVisibility = ()=>{ ov(); NO_AO.forEach(o=>{ o.visible = false; }); }; }
+const dof = new ShaderPass({
+  uniforms:{tDiffuse:{value:null}, tDepth:{value:gtao.depthTexture}, uNear:{value:0.01}, uFar:{value:50}, uFocus:{value:2}, uAmt:{value:0}, uPx:{value:new THREE.Vector2(1/1366,1/768)}},
+  vertexShader:'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader:`#include <packing>
+    uniform sampler2D tDiffuse; uniform sampler2D tDepth; uniform float uNear; uniform float uFar; uniform float uFocus; uniform float uAmt; uniform vec2 uPx; varying vec2 vUv;
+    float coc(vec2 uv){ float z = -perspectiveDepthToViewZ(texture2D(tDepth, uv).x, uNear, uFar); return clamp((abs(z-uFocus)/uFocus - 0.035)*uAmt, 0.0, 1.0); }
+    void main(){ vec4 c0 = texture2D(tDiffuse, vUv); float c = coc(vUv);
+      if(uAmt < 0.01){ gl_FragColor = c0; return; }
+      vec3 acc = c0.rgb; float ws = 1.0; float rad = max(c, 0.12);            // 가까운 흐린 물체가 또렷한 곳 위로 번지도록 작은 반경은 늘 살핌
+      for(int i=0;i<18;i++){ float r = sqrt((float(i)+0.5)/18.0), a = float(i)*2.39996323;
+        vec2 u = vUv + vec2(cos(a), sin(a))*r*rad*7.0*uPx; float cs = coc(u); vec3 sm = texture2D(tDiffuse, u).rgb;
+        float w = clamp(cs*1.6 - r*rad + (c > 0.05 ? 0.25 : 0.0), 0.0, 1.0); w *= 1.0 + 0.6*max(0.0, dot(sm, vec3(0.33)) - 0.9);
+        acc += sm*w; ws += w; }
+      gl_FragColor = vec4(acc/ws, c0.a); }`});
+dof.enabled = REAL3 && QS0.get('dof') !== '0';
+composer.addPass(dof);
 composer.addPass(new OutputPass());
 const lens = new ShaderPass({
-  uniforms:{tDiffuse:{value:null}, uTime:{value:0}, uAsp:{value:1}},
+  uniforms:{tDiffuse:{value:null}, uTime:{value:0}, uAsp:{value:1}, uReal:{value:REAL3 ? 1 : 0}},
   vertexShader:'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
-  fragmentShader:`uniform sampler2D tDiffuse; uniform float uTime; uniform float uAsp; varying vec2 vUv;
+  fragmentShader:`uniform sampler2D tDiffuse; uniform float uTime; uniform float uAsp; uniform float uReal; varying vec2 vUv;
     float h(vec2 p){ return fract(sin(dot(p, vec2(12.9898,78.233)))*43758.5453); }
     void main(){ vec4 c = texture2D(tDiffuse, vUv);
       vec2 d = (vUv-0.5)*vec2(uAsp,1.0); float v = smoothstep(1.05, 0.25, length(d)*1.05);
+      if(uReal > 0.5){ vec2 ca = (vUv-0.5)*dot(d,d)*0.0022;                       // 렌즈 가장자리 색 번짐 (아주 약하게)
+        c.r = texture2D(tDiffuse, vUv+ca).r; c.b = texture2D(tDiffuse, vUv-ca).b; }
       c.rgb *= mix(0.80, 1.0, v);                                   // 렌즈 비네팅
       c.rgb = mix(c.rgb, c.rgb*c.rgb*(3.0-2.0*c.rgb), 0.12);       // 은은한 대비
+      if(uReal > 0.5){ float l = dot(c.rgb, vec3(0.299,0.587,0.114));
+        c.rgb *= mix(vec3(0.985,1.0,1.025), vec3(1.012,1.0,0.985), smoothstep(0.15,0.85,l)); }   // 밝은 곳은 따뜻하게 · 그늘은 살짝 푸르게 (실내 촬영 색감)
       c.rgb += (h(vUv*1000.0+uTime)-0.5)*0.018;                     // 미세 필름 입자
       gl_FragColor = c; }`});
 composer.addPass(lens);
@@ -416,12 +504,12 @@ function adaptQuality(ms){
   QS_FT.push(ms); if(QS_FT.length < 75) return;
   const a = QS_FT.slice(15).sort((x,y)=>x-y)[30];   // 중간값
   QS_FT.length = 0;
-  if(a > 30 && FXQ === 2){ FXQ = 1; gtao.enabled = false; }
+  if(a > 30 && FXQ === 2){ FXQ = 1; gtao.enabled = false; dof.enabled = false; }   // 초점 효과는 틈새 그늘의 깊이 자료를 쓰므로 함께 끔
   else if(a > 30 && FXQ === 1){ FXQ = 0; qsDone = true; }
   else qsDone = true;
 }
 
-const key = new THREE.DirectionalLight(0xfff6ea, 2.6);
+const key = new THREE.DirectionalLight(REAL3 ? 0xfff3e4 : 0xfff6ea, REAL3 ? 2.7 : 2.6);   // 3차: 창으로 드는 따뜻한 낮빛
 key.position.set(-1.4, 2.2, 2.4);
 key.castShadow = true;
 key.shadow.mapSize.set(innerWidth/innerHeight < 0.9 ? 2048 : 4096, innerWidth/innerHeight < 0.9 ? 2048 : 4096);
@@ -431,7 +519,7 @@ key.shadow.camera.near = 0.5; key.shadow.camera.far = 8;
 key.shadow.bias = -0.0004; key.shadow.normalBias = 0.01;
 key.shadow.radius = 6;
 scene.add(key);
-scene.add(new THREE.HemisphereLight(0xffffff, 0xb8c2cc, 0.35));
+scene.add(REAL3 ? new THREE.HemisphereLight(0xeef3ff, 0xcfc8bd, 0.32) : new THREE.HemisphereLight(0xffffff, 0xb8c2cc, 0.35));   // 3차: 위는 푸른 하늘빛 · 아래는 마루에서 되비친 따뜻한 빛
 
 /* 📸 실사 벽면 (2026-11-24) — 그림자만 있던 투명 벽 → 실제 페인트 도장 벽 (미세 요철 · 자연 그림자 · 틈새 그늘) */
 scene.background = new THREE.Color(0xd9dee3);
@@ -445,6 +533,21 @@ const wall = new THREE.Mesh(new THREE.PlaneGeometry(40, 24),
   new THREE.MeshStandardMaterial({color:0xeceef0, roughness:0.93, metalness:0, envMapIntensity:0.5, bumpMap:WALL_TX, bumpScale:0.35, roughnessMap:WALL_TX}));
 wall.position.z = 0; wall.receiveShadow = true;
 scene.add(wall);
+/* 🎬 실사 3차 ④ 벽 — 따뜻한 흰색 도장 + 창에서 멀어질수록 서서히 어두워지는 빛 · 롤러 자국처럼 미세한 얼룩 */
+if(REAL3){
+  wall.material.color.set(0xeff0f1);
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 640; const x = c.getContext('2d');
+  x.fillStyle = '#dadada'; x.fillRect(0,0,1024,640);
+  const g = x.createRadialGradient(476,286,0,476,286,210);                      // 에어컨 왼쪽 위(창 쪽)가 가장 밝음
+  g.addColorStop(0,'#ffffff'); g.addColorStop(.3,'#f6f6f6'); g.addColorStop(.65,'#e8e8e8'); g.addColorStop(1,'#dadada'); x.fillStyle = g; x.fillRect(0,0,1024,640);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; wall.material.map = t;
+  const lm = (()=>{ const c2 = document.createElement('canvas'); c2.width = c2.height = 256; const y = c2.getContext('2d'); y.fillStyle = '#fff'; y.fillRect(0,0,256,256);
+    for(let i=0;i<70;i++){ const cx=Math.random()*256, cy=Math.random()*256, r=18+Math.random()*50, v=Math.random()<.5?235:255;
+      const gg=y.createRadialGradient(cx,cy,0,cx,cy,r); gg.addColorStop(0,`rgba(${v},${v},${v-3},.5)`); gg.addColorStop(1,`rgba(${v},${v},${v},0)`); y.fillStyle=gg; y.fillRect(cx-r,cy-r,r*2,r*2); }
+    const tt = new THREE.CanvasTexture(c2); tt.wrapS = tt.wrapT = THREE.RepeatWrapping; tt.repeat.set(9,5.4); tt.channel = 0; return tt; })();
+  wall.material.aoMap = lm; wall.material.aoMapIntensity = 0.55;                 // 도장 얼룩 (그늘에서만 은은히 보임)
+  wall.material.needsUpdate = true;
+}
 
 /* ---------------- procedural textures (실사 질감) ---------------- */
 function cvTex(w, h, draw, {srgb=false, rep=[1,1]}={}){
@@ -1050,7 +1153,7 @@ SVC.forEach((s,i)=>{ s.res = RES[i];
   s.items.splice(s.items.length-1, 0, it); });
 
 /* =============== timeline =============== */
-const TITLE = 2.4, PART = 1.75, UNITP = 2.2, REASM = 2.6, RUN = 1.6, GAP = 0.3, SUMMARY = 9, RESL = 6.4;
+const TITLE = 2.4, PART = 1.75, UNITP = 2.2, REASM = 2.6, RUN = REAL3 ? 3.4 : 1.6, GAP = 0.3, SUMMARY = 9, RESL = 6.4;   // 3차: 작동 확인 장면을 온도 숫자를 읽을 수 있게 1.6초 → 3.4초
 let acc = 0.6;
 SVC.forEach((s,i)=>{
   s.i = i; s.t0 = acc;
@@ -1119,7 +1222,37 @@ function addGrime(mat, tex, k=1){
   };
   mat.needsUpdate = true;
 }
-const G = { mold:grimeTex('mold',7), slime:grimeTex('slime',6), dust:grimeTex('dust',9), case:grimeTex('case',3) };
+/* 🎬 실사 3차 ⑨ 오염 무늬 — 큰 얼룩 · 중간 얼룩 · 곰팡이 점이 크기별로 섞이고 이음매 없이 이어짐 (같은 무늬가 줄지어 보이지 않게) */
+function grimeReal(kind, rep){
+  const S = 1024, c = document.createElement('canvas'); c.width = c.height = S; const x = c.getContext('2d'), R = Math.random;
+  x.fillStyle = '#fff'; x.fillRect(0,0,S,S);
+  const wrap = (cx, cy, r, fn)=>{ for(const ox of [-S,0,S]) for(const oy of [-S,0,S]){ const px = cx+ox, py = cy+oy; if(px > -r && px < S+r && py > -r && py < S+r) fn(px, py); } };
+  const blot = (cx, cy, r, col, a, sq=1)=>wrap(cx, cy, r, (px,py)=>{ const g = x.createRadialGradient(px,py,0,px,py,r); g.addColorStop(0,`rgba(${col},${a})`); g.addColorStop(.5,`rgba(${col},${a*.7})`); g.addColorStop(1,`rgba(${col},0)`);
+    x.save(); x.translate(px,py); x.scale(1,sq); x.translate(-px,-py); x.fillStyle = g; x.beginPath(); x.arc(px,py,r,0,7); x.fill(); x.restore(); });
+  const gs = ()=> (R()+R()+R()-1.5)/1.5;
+  const colony = (cx, cy, sp, n, col)=>{ for(let k=0;k<n;k++){ const px = cx+gs()*sp*1.7, py = cy+gs()*sp*1.7, r = .5+R()*R()*3.2;
+    wrap(px, py, r, (qx,qy)=>{ x.fillStyle = `rgba(${col[0]+R()*18|0},${col[1]+R()*18|0},${col[2]+R()*12|0},${.5+R()*.45})`; x.beginPath(); x.arc(qx,qy,r,0,7); x.fill(); }); } };
+  if(kind === 'slime'){                    // 드레인판 — 누런 물때 막 + 갈색 슬라임 띠 + 검은 곰팡이
+    x.fillStyle = 'rgba(190,172,136,.26)'; x.fillRect(0,0,S,S);
+    for(let i=0;i<40;i++) blot(R()*S, R()*S, 60+R()*150, R()<.5?'120,100,64':'140,122,84', .14+R()*.2, .8+R()*.5);
+    for(let i=0;i<320;i++) blot(R()*S, R()*S, 6+R()*R()*54, R()<.55?'84,72,46':'58,58,42', .2+R()*.36, .75+R()*.6);
+    for(let i=0;i<190;i++){ const sp = 3+R()*R()*50; colony(R()*S, R()*S, sp, 16+sp*6|0, [20,24,18]); }
+    for(let i=0;i<18000;i++){ x.fillStyle = `rgba(62,54,36,${.06+R()*.22})`; x.fillRect(R()*S, R()*S, 1+R()*2, 1+R()*2); }
+  } else if(kind === 'dust'){              // 에바포레이터 — 핀 사이에 낀 회색 먼지 뭉침 + 젖었다 마른 얼룩 + 곰팡이 점
+    for(let i=0;i<70;i++) blot(R()*S, R()*S, 50+R()*150, R()<.5?'112,104,90':'92,86,76', .30+R()*.3, .5+R()*.6);
+    for(let i=0;i<300;i++) blot(R()*S, R()*S, 6+R()*R()*44, R()<.35?'176,170,158':'70,66,58', .22+R()*.4, .6+R()*.8);   // 밝은 것 = 보풀처럼 뭉친 먼지
+    for(let i=0;i<22000;i++){ const v = 96+R()*90|0; x.fillStyle = `rgba(${v},${v-5},${v-14},${.12+R()*.3})`; x.fillRect(R()*S, R()*S, 1, 2+R()*7); }
+    for(let i=0;i<70;i++){ const sp = 4+R()*R()*34; colony(R()*S, R()*S, sp, 10+sp*4|0, [26,30,24]); }
+  } else if(kind === 'mold'){              // 블로워 · 송풍통로 · 루버 — 회색 먼지막 위 검은 곰팡이 군락
+    for(let i=0;i<50;i++) blot(R()*S, R()*S, 80+R()*170, '146,144,134', .16+R()*.16);
+    for(let i=0;i<150;i++) blot(R()*S, R()*S, 8+R()*R()*50, '58,62,54', .10+R()*.22, .6+R()*.7);
+    for(let i=0;i<170;i++){ const sp = 3+R()*R()*52; colony(R()*S, R()*S, sp, 16+sp*5|0, [18,22,20]); }
+    for(let i=0;i<20000;i++){ x.fillStyle = `rgba(40,44,40,${.12+R()*.3})`; x.fillRect(R()*S, R()*S, 1, 1); }
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep, rep); t.anisotropy = 8; return t;
+}
+const G = REAL3 ? { mold:grimeReal('mold',3.3), slime:grimeReal('slime',2.7), dust:grimeReal('dust',4.1), case:grimeTex('case',3) }
+                : { mold:grimeTex('mold',7), slime:grimeTex('slime',6), dust:grimeTex('dust',9), case:grimeTex('case',3) };
 addGrime(M.blower, G.mold); addGrime(M.vane, G.mold); addGrime(M.chassis, G.mold, 0.7);
 addGrime(M.drain, G.slime); addGrime(M.foam, G.slime);
 addGrime(M.fin, G.dust);
@@ -1135,7 +1268,11 @@ const DIRT = {
 Object.values(DIRT).flat().forEach(d=>{
   d.clean = d.cleanTo !== undefined ? new THREE.Color(d.cleanTo) : d.m.color.clone(); d.dirtyC = new THREE.Color(d.dirty);
   d.r0 = d.m.roughness; d.m0 = d.m.metalness ?? 0;
+  d.e0 = d.m.envMapIntensity ?? 1; d.cc0 = d.m.clearcoat ?? 0; d.ccr0 = d.m.clearcoatRoughness ?? 0;
 });
+/* 🎬 실사 3차 ⑤ 젖은 표면 — 약품·물·스팀이 닿은 부품은 물기로 번들거리고 살짝 어두워졌다가 서서히 마름 (0 = 마름 ~ 1 = 흠뻑) */
+const WET = {front:0, drain:0, blower:0, evap:0, back:0};
+if(REAL3){ DIRT.drain[0].dirtyC.set(0x82735a); DIRT.drain[2].dirtyC.set(0x8e8468); }   // 드레인판 오염 — 밝기는 그대로, 주황빛만 줄여 물때·슬라임 색으로 (나무처럼 보이지 않게)
 // ✨ 세척이 끝난 부품은 은은하게 빛남 (끝나는 순간 한 번 더 밝게)
 function setGlow(id, g){
   (DIRT[id]||[]).forEach(d=>{ if(d.m.emissive){ d.m.emissive.setRGB(1, 0.98, 0.93); d.m.emissiveIntensity = g; } });
@@ -1160,6 +1297,11 @@ function setDirt(id, v){
     if(d.m.userData.dirt) d.m.userData.dirt.value = v;
     if(d.rough!==undefined) d.m.roughness = lerp(d.r0, d.rough, v);
     if(d.metal!==undefined) d.m.metalness = lerp(d.m0, d.metal, v);
+    if(REAL3){ const w = WET[id] || 0, base = d.rough!==undefined ? lerp(d.r0, d.rough, v) : d.r0;
+      d.m.roughness = lerp(base, Math.min(base, 0.14), w*0.9);
+      d.m.envMapIntensity = d.e0*(1 + (d.m0 > 0.5 ? 0.1 : 0.55)*w);
+      if(w > 0) d.m.color.multiplyScalar(1 - 0.13*w);
+      if(d.m.isMeshPhysicalMaterial){ d.m.clearcoat = lerp(d.cc0, 1, w); d.m.clearcoatRoughness = lerp(d.ccr0, Math.min(d.ccr0, 0.06), w); } }
   });
 }
 
@@ -1208,6 +1350,18 @@ const gun = new THREE.Group();
   // steam hose (shown only for steam)
   gun.hose = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0,-0.06,-0.08),new THREE.Vector3(0,-0.14,-0.12),new THREE.Vector3(0.02,-0.25,-0.1)]),20,0.006,8), new THREE.MeshStandardMaterial({color:0x2b2f33,roughness:0.6}));
   gun.add(gun.hose);
+  /* 🎬 실사 3차 ⑥ 분사기 — 실제 고압 건 크기로 키우고, 방아쇠 · 긴 노즐 · 아래로 늘어진 고압 호스(물·약품·스팀 모두) */
+  if(REAL3){
+    gun.remove(gun.hose);
+    gun.hose = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0,-0.064,-0.078),new THREE.Vector3(0,-0.12,-0.105),new THREE.Vector3(0.006,-0.22,-0.17),new THREE.Vector3(0.012,-0.36,-0.34),new THREE.Vector3(0.015,-0.52,-0.70),new THREE.Vector3(0.015,-0.62,-1.25)]),48,0.0058,10),
+      new THREE.MeshStandardMaterial({color:0x202327, roughness:0.55, bumpMap:RIB_TX, bumpScale:0.5}));
+    gun.add(gun.hose);
+    const lance = new THREE.Mesh(new THREE.CylinderGeometry(0.0034,0.0034,0.05,14), M.steel); lance.rotation.x = Math.PI/2; lance.position.z = 0.072; gun.add(lance);
+    const noz = new THREE.Mesh(new THREE.CylinderGeometry(0.006,0.0045,0.014,14), M.brass); noz.rotation.x = Math.PI/2; noz.position.z = 0.102; gun.add(noz);
+    const trig = new THREE.Mesh(new THREE.BoxGeometry(0.005,0.03,0.006), M.black); trig.position.set(0,-0.03,-0.048); trig.rotation.x = 0.5; gun.add(trig);
+    const coup = new THREE.Mesh(new THREE.CylinderGeometry(0.0075,0.0075,0.014,12), M.brass); coup.position.set(0,-0.068,-0.079); coup.rotation.x = 0.3; gun.add(coup);
+    gun.scale.setScalar(1.45);
+  }
   gun.traverse(o=>{ if(o.isMesh) o.castShadow = true; });
 }
 gun.visible = false; scene.add(gun);
@@ -1227,6 +1381,36 @@ const brush = new THREE.Group();
   brush.traverse(o=>{ if(o.isMesh) o.castShadow = true; });
 }
 brush.scale.setScalar(1.7); brush.visible = false; scene.add(brush);
+
+/* 🎬 실사 3차 ⑩ 작동 확인 — 토출구에 온도계 탐침을 대고 흡입·토출 온도를 재는 장면 (계측기 화면: 위 작은 줄 = 흡입, 아래 큰 숫자 = 토출)
+   온도 값은 대표님 지정(2026-11-27): 서비스 순서대로 [흡입, 토출] — 바꾸려면 이 표만 고침 */
+const TEMP_SVC = [[29.0,11.6],[29.0,9.6],[29.0,9.6],[29.0,8.6],[29.0,8.6]];   // 기본 · 약품 · 스팀살균 · 반분해 · 전체분해
+const meter = new THREE.Group(); const METER = {key:'', cv:document.createElement('canvas'), tex:null, anchor:new THREE.Object3D()};
+{
+  const body = new THREE.Mesh(rbox(0.056,0.092,0.017), new THREE.MeshPhysicalMaterial({color:0x1b2a44, roughness:0.45, clearcoat:0.4, clearcoatRoughness:0.3})); meter.add(body);
+  const boot = new THREE.Mesh(rbox(0.060,0.015,0.020), new THREE.MeshStandardMaterial({color:0xc9a24a, roughness:0.55})); boot.position.y = -0.041; meter.add(boot);
+  METER.cv.width = 256; METER.cv.height = 200;
+  METER.tex = new THREE.CanvasTexture(METER.cv); METER.tex.colorSpace = THREE.SRGBColorSpace; METER.tex.anisotropy = 8;
+  const lcd = new THREE.Mesh(new THREE.PlaneGeometry(0.046,0.036), new THREE.MeshPhysicalMaterial({map:METER.tex, roughness:0.25, clearcoat:1, clearcoatRoughness:0.08, emissive:0xffffff, emissiveMap:METER.tex, emissiveIntensity:0.22}));
+  lcd.position.set(0,0.019,0.0088); meter.add(lcd);
+  for(let i=0;i<3;i++){ const bt = new THREE.Mesh(new THREE.CylinderGeometry(0.0042,0.0042,0.002,16), new THREE.MeshStandardMaterial({color:i===1 ? 0x0fa3a3 : 0x6b7785, roughness:0.6}));
+    bt.rotation.x = Math.PI/2; bt.position.set(-0.015+i*0.015,-0.019,0.009); meter.add(bt); }
+  const lead = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0.012,0.046,0),new THREE.Vector3(0.020,0.060,-0.018),new THREE.Vector3(0.030,0.066,-0.055),new THREE.Vector3(0.034,0.068,-0.085)]),24,0.0015,8), M.black); meter.add(lead);
+  const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.0017,0.0017,0.034,10), M.steel); tip.rotation.x = Math.PI/2; tip.position.set(0.034,0.068,-0.100); meter.add(tip);
+  meter.add(METER.anchor);
+  meter.traverse(o=>{ if(o.isMesh){ o.castShadow = true; o.receiveShadow = true; } });
+}
+meter.visible = false; scene.add(meter);
+function drawMeter(tin, tout){
+  const key = tin.toFixed(1)+'/'+tout.toFixed(1); if(METER.key === key) return; METER.key = key;
+  const x = METER.cv.getContext('2d'); x.fillStyle = '#b9c8b3'; x.fillRect(0,0,256,200);
+  x.fillStyle = '#1b271f'; x.textBaseline = 'alphabetic';
+  x.textAlign = 'left'; x.font = 'bold 30px Arial'; x.fillText('IN', 14, 44); x.textAlign = 'right'; x.fillText(tin.toFixed(1)+'°C', 244, 44);
+  x.fillRect(14, 58, 228, 3);
+  x.font = 'bold 94px Arial'; x.fillText(tout.toFixed(1), 206, 150); x.font = 'bold 28px Arial'; x.fillText('°C', 248, 100);
+  x.textAlign = 'left'; x.font = 'bold 26px Arial'; x.fillText('OUT', 14, 188);
+  METER.tex.needsUpdate = true;
+}
 
 function canvasTex(draw){ const c=document.createElement('canvas'); c.width=c.height=64; draw(c.getContext('2d')); return new THREE.CanvasTexture(c); }
 const dotTex = canvasTex(x=>{ const g=x.createRadialGradient(32,32,0,32,32,32); g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(.45,'rgba(255,255,255,.6)'); g.addColorStop(1,'rgba(255,255,255,0)'); x.fillStyle=g; x.fillRect(0,0,64,64); });
@@ -1288,8 +1472,37 @@ const starTex = canvasTex(x=>{ x.translate(32,32);
   const g=x.createRadialGradient(0,0,0,0,0,30); g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(.25,'rgba(255,250,225,.55)'); g.addColorStop(1,'rgba(255,240,200,0)');
   x.fillStyle=g; x.beginPath(); x.arc(0,0,30,0,7); x.fill();
   x.fillStyle='#fff'; for(let r=0;r<2;r++){ x.rotate(Math.PI/4*r); x.beginPath(); x.moveTo(0,-30); x.lineTo(3,-3); x.lineTo(30,0); x.lineTo(3,3); x.lineTo(0,30); x.lineTo(-3,3); x.lineTo(-30,0); x.lineTo(-3,-3); x.closePath(); x.fill(); } });
+/* 🎬 실사 3차 ⑦ 구정물 — 씻겨 내려가는 물이 처음엔 갈색, 깨끗해질수록 맑아짐 / 부채꼴 물줄기 */
+FX.run  = makeFX({color:0x6b5330, size:0.0062, op:0.7, max:4200, fin:0.02, fout:0.8, grav:-2.4});
+FX.runC = makeFX({color:0xa9c6d8, size:0.0066, op:0.5, max:4200, fin:0.02, fout:0.8, grav:-2.4, map:dropTex});
+const coneTex = (()=>{ const c = document.createElement('canvas'); c.width = 128; c.height = 256; const x = c.getContext('2d');
+  for(let i=0;i<150;i++){ const px = Math.random()*128, w = 0.6+Math.random()*2.2, y0 = Math.random()*256, len = 50+Math.random()*190;
+    const g = x.createLinearGradient(0,y0,0,y0+len); g.addColorStop(0,'rgba(255,255,255,0)'); g.addColorStop(.3,`rgba(255,255,255,${.25+Math.random()*.6})`); g.addColorStop(1,'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(px,y0,w,len); x.fillRect(px,y0-256,w,len); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; })();
+const coneFade = (()=>{ const c = document.createElement('canvas'); c.width = 4; c.height = 128; const x = c.getContext('2d');
+  const g = x.createLinearGradient(0,0,0,128); g.addColorStop(0,'#fff'); g.addColorStop(.5,'#9a9a9a'); g.addColorStop(.92,'#3c3c3c'); g.addColorStop(1,'#000'); x.fillStyle = g; x.fillRect(0,0,4,128);
+  return new THREE.CanvasTexture(c); })();                                   // 노즐 쪽 진하고 닿는 곳으로 갈수록 옅게
+const sprayCone = (()=>{ const g = new THREE.ConeGeometry(1,1,36,1,true); g.translate(0,-0.5,0); g.rotateX(-Math.PI/2);
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({map:coneTex, alphaMap:coneFade, color:0xd3e6f1, transparent:true, opacity:0.5, depthWrite:false, side:THREE.DoubleSide}));
+  m.renderOrder = 9; m.visible = false; m.frustumCulled = false; scene.add(m); NO_AO.push(m); return m; })();
+// 부품 아래로 쏟아지는 물줄기 막 — 오염이 많을수록 갈색, 깨끗해지면 맑은 물
+const sheetTex = coneTex.clone(); sheetTex.needsUpdate = true; sheetTex.repeat.set(1.6, 0.8);
+const sheetFade = (()=>{ const c = document.createElement('canvas'); c.width = 64; c.height = 128; const x = c.getContext('2d');
+  const g = x.createLinearGradient(0,0,0,128); g.addColorStop(0,'#fff'); g.addColorStop(.35,'#b0b0b0'); g.addColorStop(1,'#000'); x.fillStyle = g; x.fillRect(0,0,64,128);
+  const h = x.createLinearGradient(0,0,64,0); h.addColorStop(0,'rgba(0,0,0,1)'); h.addColorStop(.3,'rgba(0,0,0,0)'); h.addColorStop(.7,'rgba(0,0,0,0)'); h.addColorStop(1,'rgba(0,0,0,1)'); x.fillStyle = h; x.fillRect(0,0,64,128);
+  return new THREE.CanvasTexture(c); })();
+const runSheet = (()=>{ const g = new THREE.PlaneGeometry(1,1); g.translate(0,-0.5,0);
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({map:sheetTex, alphaMap:sheetFade, color:0x6b5330, transparent:true, opacity:0.7, depthWrite:false, side:THREE.DoubleSide}));
+  m.renderOrder = 9; m.visible = false; m.frustumCulled = false; scene.add(m); NO_AO.push(m); return m; })();
+const RUN_DIRTY = new THREE.Color(0x66502e), RUN_CLEAR = new THREE.Color(0xb4cfdf);
+if(REAL3){ FX.water.pts.material.uniforms.uSize.value = 0.0058; FX.water.pts.material.uniforms.uOp.value = 0.7;      // 물방울은 잘게 · 물안개는 옅게
+  FX.mist.pts.material.uniforms.uOp.value = 0.26; }
+const CONE = {water:{c:0xcfe2ee, o:0.62, rx:0.045, ry:0.30, sp:2.6}, chem:{c:0xe7f3e8, o:0.34, rx:0.075, ry:0.34, sp:1.2}, steam:{c:0xffffff, o:0.60, rx:0.030, ry:0.10, sp:3.4}};
+FX.cold = makeFX({color:0xcfe5f8, size:0.075, op:0.30, max:1600, grow:2.4, fin:0.18, fout:0.35, map:steamTex, drag:0.8, order:12});   // 토출구에서 내려오는 찬바람(옅은 김)
 FX.star = makeFX({color:0xfff6d8, size:0.05, op:1, max:900, grow:-0.6, fin:0.25, fout:0.55, map:starTex, drag:1.2, rise:0.02, order:13});
 FX.star.pts.material.blending = THREE.AdditiveBlending;
+if(REAL3) FX.star.pts.material.uniforms.uSize.value = 0.03;        // 실사 3차 — 반짝임은 작고 드물게 (카메라에 맺히는 반사 빛처럼)
 const TAG = {front:1,drain:2,blower:3,evap:4,back:5,pcb:6,motor:7};
 function spawn(f, p, v, life, tag=0){
   if(f.n >= f.max) return;
@@ -1318,12 +1531,16 @@ function emitStars(dt){
   (state.sparkle||[]).forEach(id=>{
     const def = P[id]; if(!def) return;
     tmpB.setFromObject(def.part.outer); const mn = tmpB.min, mx = tmpB.max;
-    const n = Math.round(34*dt*(0.5+Math.random()));
+    const n = Math.round((REAL3 ? 16 : 34)*dt*(0.5+Math.random()));
     for(let i=0;i<n;i++) spawn(FX.star, new THREE.Vector3(lerp(mn.x,mx.x,Math.random()), lerp(mn.y,mx.y,Math.random()), mx.z - Math.random()*0.02), [R()*0.04, 0.02+Math.random()*0.05, 0.02], 0.7+Math.random()*0.5);
   });
 }
 function emit(dt){
   emitStars(dt);
+  if(REAL3 && state.temp && state.temp.u > 0.05 && state.temp.u < 0.94){     // ❄️ 찬바람 — 날개가 열린 토출구에서 앞·아래로
+    const n = Math.round(80*dt*(0.6+Math.random()*0.8));
+    for(let i=0;i<n;i++) spawn(FX.cold, new THREE.Vector3(R()*0.74, -0.130, 0.125+Math.random()*0.04), [R()*0.05, -0.30-Math.random()*0.16, 0.24+Math.random()*0.16], 0.9+Math.random()*0.6);
+  }
   const s = sprayState;
   if(!s.on) return;
   const b = s.box, sz = b.getSize(tmpV).clone(), tag = TAG[s.part]||0;
@@ -1335,6 +1552,11 @@ function emit(dt){
   // water rinse washes foam away behind the nozzle
   if(s.fx==='water') rinseFoam(tag, s.w < 0.5 ? s.aim.x + 0.02 : 99);
   if(s.fx==='steam' || (s.fx==='water' && s.w>=0.96)) rinseFoam(tag, 99);
+  if(REAL3 && (s.fx==='water' || s.fx==='steam')){   // 💦 구정물 — 물이 닿은 자리에서 부품 면을 타고 흘러 아래로 떨어짐
+    const dv = clamp01(((state.dirtNow && state.dirtNow[s.part]) ?? 0)*1.25), nR = Math.round((s.fx==='water' ? 950 : 200)*dt*(0.6+Math.random()*0.8));
+    for(let i=0;i<nR;i++){ const f = Math.random() < dv ? FX.run : FX.runC, top = Math.random() < 0.55;
+      const p = new THREE.Vector3(s.aim.x + R()*0.13, top ? lerp(b.min.y, b.max.y, Math.random()*0.8) : b.min.y + Math.random()*0.01, b.max.z + 0.003 - (top ? 0 : Math.random()*Math.min(sz.z,0.06)));
+      spawn(f, p, [R()*0.03, top ? -0.12-Math.random()*0.2 : -0.3-Math.random()*0.3, top ? 0.004 : R()*0.02], top ? 0.22+Math.random()*0.25 : 0.45+Math.random()*0.4); } }
   const rate = {water:1400, chem:950, steam:380}[s.fx];
   const n = Math.round(rate*dt*(0.6+Math.random()*0.8));
   for(let i=0;i<n;i++){
@@ -1374,8 +1596,9 @@ function applyTime(t){
   // reset all parts home
   Object.values(P).forEach(d=>{ d.part.outer.position.copy(d.part.home); d.part.outer.rotation.set(0,0,0); });
   Object.keys(DIRT).forEach(id=>{ setDirt(id, state.sum?0.0:1); setGlow(id, 0); }); state.sparkle = [];
-  sprayState.on = false; gun.visible = false; brush.visible = false; state.cur = null; state.cleanIdx = -1;
+  sprayState.on = false; gun.visible = false; brush.visible = false; state.cur = null; state.cleanIdx = -1; sprayCone.visible = false; runSheet.visible = false;
   setPatch('evapBack',0); setPatch('chassisTop',0); state.resU = -1; state.resW = 0; state.face = -1; state.fullGlow = 0;
+  for(const k in WET) WET[k] = 0; state.dirtNow = null; meter.visible = false; state.temp = null;
   unghostAll();
   let flap = 0.75, led = 1;
   if(state.sum){ flap = 0.75; led = 1;
@@ -1448,6 +1671,13 @@ function applyTime(t){
     if(dirt[c.p]!==undefined) dirt[c.p] = Math.min(dirt[c.p], 1 - c.lvl*ease(pr));
     if(lt >= c.a && lt < c.b){ state.cleanIdx = j; }
   });
+  // 💦 물기 — 약품·물·스팀이 닿는 동안 젖고, 끝나면 서서히 마름 (재조립 전에는 다 마름)
+  if(REAL3){ const dry = 1 - ease(clamp01((lt - s.rsA - RESL*0.35)/(RESL*0.5)));
+    s.clean.forEach(c=>{ if(c.fx==='air' || WET[c.p]===undefined) return;
+      const pr = (lt - c.a)/(c.b - c.a); if(pr <= 0) return;
+      const k = pr < 1 ? clamp01(pr/0.22) : Math.exp(-(lt - c.b)/(c.fx==='steam' ? 3.0 : 5.5));
+      WET[c.p] = Math.max(WET[c.p], k*(c.fx==='steam' ? 0.75 : 1)*dry); }); }
+  state.dirtNow = dirt;
   Object.entries(dirt).forEach(([id,v])=>setDirt(id,v));
 
   // ✨ glow + sparkle once a part's cleaning is finished
@@ -1476,6 +1706,13 @@ function applyTime(t){
     });
   }
 
+  // 🌡️ 작동 확인 — 온도계가 토출구 아래로 올라오고, 켠 직후 흡입 온도에서 토출 온도까지 내려가는 숫자
+  if(REAL3 && lt >= s.reB){
+    const u = clamp01((lt - s.reB)/RUN), a = ease(clamp01(u/0.10)) * (1 - ease(clamp01((u-0.93)/0.07))), k = ease(clamp01((u-0.16)/0.5));
+    const tin = TEMP_SVC[s.i][0], tout = lerp(tin, TEMP_SVC[s.i][1], k);
+    meter.visible = a > 0.01; meter.position.set(-0.16, -0.214 - (1-a)*0.10, 0.224 + (1-a)*0.08); meter.rotation.set(-0.22, 0.10, 0);
+    drawMeter(tin, tout); state.temp = {a, u, tin, tout, done:k >= 0.999};
+  }
   // phase name
   state.phase = lt < TITLE ? 'title' : lt < s.exEnd ? 'dis' : lt < s.clB ? 'clean' : lt < s.rsB ? 'res' : lt < s.reB ? 'reasm' : 'run';
 
@@ -1499,9 +1736,27 @@ function applyTime(t){
       brush.visible = true; brush.position.copy(sprayState.tip);
       brush.rotation.set(-0.55, 0.25 + Math.sin(lt*21)*0.12, 0);
     } else {
-      gun.visible = true; gun.hose.visible = c.fx==='steam';
+      gun.visible = true; gun.hose.visible = REAL3 || c.fx==='steam';
       gun.position.copy(sprayState.nozzle);
       gun.lookAt(sprayState.aim);
+      if(REAL3){                                             // 아래에서 올려 쏘는 실제 작업 자세 — 물줄기가 옆에서 보이고 분사기가 닿는 곳을 가리지 않음
+        sprayState.nozzle.set(x + 0.10, cy - 0.13, tmpB.max.z + 0.19);
+        gun.position.copy(sprayState.nozzle); gun.lookAt(sprayState.aim);
+        tmpV.copy(sprayState.nozzle).sub(sprayState.aim).normalize();
+        gun.position.addScaledVector(tmpV, 0.11);
+        const cf = CONE[c.fx], on = sprayState.on;
+        sprayCone.visible = on;
+        if(on){ sprayCone.material.color.setHex(cf.c); sprayCone.material.opacity = cf.o*(0.85+0.15*Math.sin(lt*37));
+          sprayCone.position.copy(sprayState.nozzle).addScaledVector(tmpV, -0.045); sprayCone.lookAt(sprayState.aim);
+          const sy = Math.min((tmpB.max.y - tmpB.min.y)*cf.ry, 0.11), L = sprayCone.position.distanceTo(sprayState.aim);
+          sprayCone.scale.set(cf.rx, c.fx==='steam' ? cf.rx : Math.max(sy, 0.03), L);
+          coneTex.offset.y = (lt*cf.sp) % 1; coneTex.offset.x = (lt*0.37) % 1; }
+        const sheetOn = on && c.fx !== 'chem';
+        runSheet.visible = sheetOn;
+        if(sheetOn){ const dv = clamp01(((state.dirtNow && state.dirtNow[c.p]) ?? 0)*1.3);
+          runSheet.material.color.copy(RUN_CLEAR).lerp(RUN_DIRTY, dv); runSheet.material.opacity = (c.fx==='steam' ? 0.3 : 0.5 + 0.3*dv)*clamp01(Math.min(w-0.04, 0.96-w)/0.08);
+          runSheet.position.set(x, tmpB.min.y + 0.004, tmpB.max.z - Math.min(tmpB.max.z - tmpB.min.z, 0.07)*0.5);
+          runSheet.scale.set(0.26, c.fx==='steam' ? 0.22 : 0.46, 1); sheetTex.offset.y = (lt*1.9) % 1; } }
     }
   }
 }
@@ -1525,6 +1780,8 @@ function autoCamera(t){
                         : (MOBILE ? {tx:0,ty:0.16,tz:0.18,az:-0.18,el:0.24,d:3.0} : {tx:-0.02,ty:0.17,tz:0.18,az:0.30,el:0.26,d:2.45});
       c = mixCam(c, rc, state.resW);
     }
+    if(state.temp && state.temp.a > 0){                    // 🌡️ 온도 측정 — 토출구 쪽으로 살짝 다가감(아래에 온도계·온도 카드 자리 확보)
+      c = mixCam(c, {...A0, tx:-0.05, ty:MOBILE ? -0.02 : -0.085, tz:0.14, az:A0.az*0.8, d:A0.d*(MOBILE ? 0.84 : 0.9)}, state.temp.a); }
     if(state.cleanIdx>=0){
       const cl = s.clean[state.cleanIdx];
       const w = clamp01((lt-cl.a)/(cl.b-cl.a)), bump = Math.sin(w*Math.PI)*0.3;
@@ -1532,10 +1789,26 @@ function autoCamera(t){
       c = {...c, tx:lerp(c.tx,bc.x,bump), ty:lerp(c.ty,bc.y,bump), tz:lerp(c.tz,bc.z,bump), d:c.d*(1-bump*0.45)};
     }
     c.az += 0.035*Math.sin(t*0.35);
+    if(REAL3 && !REDUCE && QS0.get('shake') !== '0'){     // 🎬 실사 3차 ⑧ 손으로 들고 찍은 듯한 아주 작은 흔들림 (동작 줄이기 설정이면 없음)
+      c.az += 0.0032*Math.sin(t*1.7+1.3) + 0.0016*Math.sin(t*4.3);
+      c.el += 0.0026*Math.sin(t*1.3+0.4) + 0.0013*Math.sin(t*3.7+2.0);
+      c.tx += 0.0030*Math.sin(t*0.9+2.2); c.ty += 0.0024*Math.sin(t*1.15); }
   }
   tgt.set(c.tx,c.ty,c.tz);
   camera.position.set(Math.sin(c.az)*Math.cos(c.el), Math.sin(c.el), Math.cos(c.az)*Math.cos(c.el)).multiplyScalar(c.d).add(tgt);
   controls.target.copy(tgt); camera.lookAt(tgt);
+}
+// 초점 — 세척 중에는 물이 닿는 곳, 그 밖에는 화면 중심. 결과 점검·요약 때는 전부 또렷하게(남는 오염이 흐려지면 안 됨)
+const focusP = new THREE.Vector3(); let focusD = 2, dofAmt = 0;
+function updateFocus(dt){
+  if(!dof.enabled) return;
+  const s = state.svc; let want = 0;
+  if(s && !state.sum && state.phase !== 'title'){ want = state.phase === 'clean' ? 2.3 : 1.5; want *= 1 - clamp01(state.resW*1.6); }
+  if(state.cleanIdx >= 0) focusP.copy(sprayState.aim); else focusP.copy(controls.target);
+  const d = Math.max(camera.position.distanceTo(focusP), 0.3), k = 1 - Math.exp(-dt*5);
+  focusD = lerp(focusD, d, dt > 0 ? k : 1); dofAmt = lerp(dofAmt, want, dt > 0 ? k : 1);
+  dof.uniforms.uFocus.value = focusD; dof.uniforms.uAmt.value = dofAmt;
+  dof.uniforms.uNear.value = camera.near; dof.uniforms.uFar.value = camera.far;
 }
 
 /* =============== UI =============== */
@@ -1676,6 +1949,22 @@ function updateResult(s){
     e.style.opacity = v.z<1 && sy < rTop ? vis : 0;
   });
 }
+// 🌡️ 온도 카드 — 온도계 옆(PC) / 온도계 아래 가운데(휴대폰), 아래 재생 막대를 가리지 않게
+function updateTemp(){
+  const el = $('tchip'), tp = state.temp;
+  if(!tp || tp.a < 0.5){ el.style.opacity = 0; return; }
+  if(!el.dataset.ok){ el.dataset.ok = '1';
+    $('tmT').textContent = L('작동 확인 · 온도 측정 (예시)', 'Test run · temperature check (example)');
+    $('tmInL').textContent = L('흡입', 'Intake'); $('tmOutL').textContent = L('토출', 'Outlet'); $('tmDL').textContent = L('온도차', 'Difference'); }
+  $('tmIn').textContent = tp.tin.toFixed(1)+'°C'; $('tmOut').textContent = tp.tout.toFixed(1)+'°C';
+  $('tmD').textContent = (tp.tin - tp.tout).toFixed(1)+'°C' + (tp.done ? ' ✓' : '');
+  METER.anchor.getWorldPosition(v); v.project(camera);
+  const sx = (v.x*0.5+0.5)*innerWidth, sy = (-v.y*0.5+0.5)*innerHeight, w = el.offsetWidth, h = el.offsetHeight;
+  let x = MOBILE ? (innerWidth - w)/2 : sx + 52, y = MOBILE ? sy + 40 : sy - h/2;
+  x = Math.max(8, Math.min(x, innerWidth - w - 8));
+  y = Math.max(8, Math.min(y, document.querySelector('.bar').getBoundingClientRect().top - h - (MOBILE ? 64 : 10)));   // 휴대폰은 재생 막대 위 진행 설명글 자리도 비움
+  el.style.transform = `translate(${Math.round(x)}px,${Math.round(y)}px)`; el.style.opacity = v.z < 1 ? 1 : 0;
+}
 const PH = {
   dis:['분해 중','Disassembling'], clean:['세척 중','Cleaning'], res:['남는 오염 확인','Checking leftover dirt'], reasm:['재조립','Reassembling'], run:['작동 확인 · 세척 완료','Test run · Done'],
 };
@@ -1691,7 +1980,7 @@ function updateUI(t){
     x.tab.classList.toggle('on', x===s);
     x.tab.querySelector('.pg').style.width = (clamp01((t-x.t0)/x.len)*100)+'%';
   });
-  if(!s){ $('tcard').style.opacity=0; $('phase').style.opacity=0; $('callout').style.opacity=0; updateResult(null); return; }
+  if(!s){ $('tcard').style.opacity=0; $('phase').style.opacity=0; $('callout').style.opacity=0; updateResult(null); $('tchip').style.opacity = 0; return; }
   if(shownSvc !== s.i){ renderPanel(s); shownSvc = s.i; }
   const lt = state.lt;
   const tc = $('tcard');
@@ -1705,7 +1994,7 @@ function updateUI(t){
     const key = s.items[i][2]; let a, b;
     if(key==='dis'){ a = TITLE; b = s.exEnd; }
     else if(key==='res'){ a = s.rsA; b = s.rsA + RESL*0.55; }
-    else if(key==='run'){ a = s.reA; b = s.reB + 0.6; }
+    else if(key==='run'){ a = s.reA; b = s.reB + (REAL3 ? RUN*0.68 : 0.6); }
     else { const w = s.clean.filter(c=>c.fx===key); a = w.length? w[0].a : s.clA; b = w.length? w[w.length-1].b : s.clB; }
     li.classList.toggle('show', lt >= a - 0.05);
     li.classList.toggle('done', lt >= b - 0.05);
@@ -1737,6 +2026,7 @@ function updateUI(t){
     co.style.left = x+'px'; co.style.top = y+'px'; co.style.opacity = ok?1:0;
   } else co.style.opacity = 0;
   updateResult(s);
+  updateTemp();
   $('scrub').value = Math.round(t/T*1000);
   $('tlabel').textContent = Math.floor(t)+'s';
 }
@@ -1764,6 +2054,7 @@ addEventListener('keydown', e=>{ if(e.code==='Space'){ e.preventDefault(); $('pl
 function resize(){
   renderer.setSize(innerWidth, innerHeight, false);
   composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight);
+  dof.uniforms.uPx.value.set(1/innerWidth, 1/innerHeight);
   lens.uniforms.uAsp.value = innerWidth/innerHeight;
   fxMats.forEach(m=>m.uniforms.uH.value = innerHeight*renderer.getPixelRatio());
   camera.aspect = innerWidth/innerHeight;
@@ -1785,7 +2076,7 @@ function frame(now){
   if(auto) autoCamera(time); else controls.update();
   if(state.svc !== lastSvc){ clearFX(); lastSvc = state.svc; }
   if(playing){ emit(dt*speed); for(const f of Object.values(FX)) stepFX(f, dt*speed); }
-  draw(); adaptQuality(now - last0); last0 = now;
+  updateFocus(dt); draw(); adaptQuality(now - last0); last0 = now;
   updateUI(time);
   requestAnimationFrame(frame);
 }
@@ -1796,10 +2087,10 @@ window.__preview = (t)=>{
   // simulate ~0.6s of particles leading up to t so stills show the spray
   clearFX();
   for(let k=0;k<70;k++){ applyTime(t-2.1+k*0.03); emit(0.03); for(const f of Object.values(FX)) stepFX(f,0.03); }
-  applyTime(t); lastSvc = state.svc; if(auto) autoCamera(t); draw(); updateUI(t);
+  applyTime(t); lastSvc = state.svc; if(auto) autoCamera(t); updateFocus(0); draw(); updateUI(t);
 };
-if(new URLSearchParams(location.search).has('fxhq')) window.__fx = {gtao, lens, composer, renderer, wall, setQ:(q)=>{FXQ=q}};
-window.__frame = (t)=>{ playing=false; time=t; clearFX(); applyTime(t); lastSvc = state.svc; if(auto) autoCamera(t); draw(); updateUI(t); };
+if(new URLSearchParams(location.search).has('fxhq')) window.__fx = {gtao, lens, dof, composer, renderer, wall, camera, controls, key, setQ:(q)=>{FXQ=q}, setAuto:(v)=>{auto=v}, redraw:()=>{ updateFocus(0); draw(); }};
+window.__frame = (t)=>{ playing=false; time=t; clearFX(); applyTime(t); lastSvc = state.svc; if(auto) autoCamera(t); updateFocus(0); draw(); updateUI(t); };
 window.__T = {T, SUM_A, svc: SVC.map(s=>({t0:s.t0, rsA:s.rsA, rsB:s.rsB, exEnd:s.exEnd, clA:s.clA, clB:s.clB, reB:s.reB, len:s.len, clean:s.clean.map(c=>({p:c.p,fx:c.fx,a:c.a,b:c.b}))}))};
 </script>
 </body>
