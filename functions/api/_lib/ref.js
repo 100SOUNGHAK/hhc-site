@@ -25,6 +25,8 @@ export function refCfg(ps){
     pts:    num(p.ref_pts, REF_DEF.pts),
     newOn:  p.ref_new_on !== false,
     newPts: num(p.ref_new_pts, REF_DEF.newPts),
+    revOn:  p.rev_on !== false,                    // ⭐ 리뷰 이벤트 적립 (2026-11-27) — 고객관리 「⭐ 리뷰 보상 → 금액 설정」
+    revPts: num(p.rev_pts, 10),
   };
 }
 export async function loadRefCfg(env){

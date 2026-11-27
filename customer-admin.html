@@ -1613,6 +1613,7 @@ body{font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',-apple-system
     <span class="sp"></span>
     <button class="btn pnl-hb" id="pnl-hb" onclick="caPnLog()" title="앱 알림 이력">🔔<span class="rft"> 알림 이력</span><span class="crf-n" id="pnl-n" hidden></span></button>
     <button class="btn crf-hb" id="crf-hb" onclick="caRefOpen()" title="추천 보상">🤝<span class="rft"> 추천 보상</span><span class="crf-n" id="crf-n" hidden></span></button>
+    <button class="btn crf-hb" id="rvb-hb" onclick="caRvOpen()" title="리뷰 보상">⭐<span class="rft"> 리뷰 보상</span><span class="crf-n" id="rvb-n" hidden></span></button>
     <button class="btn rf" onclick="loadAll(true)" title="새로고침" aria-label="새로고침">↻<span class="rft"> 새로고침</span></button>
     <button class="btn p nw" onclick="openNewModal()">＋ 신규<span class="nwt"> 고객</span></button>
   </div>
@@ -2134,7 +2135,7 @@ const CA_KK_IMG={basic:'og-my.jpg',bill:'og-invoice.jpg',rebill:'og-invoice.jpg'
   bk:'og-booking.jpg',bkc:'og-confirmed.jpg',revisit:'og-booking.jpg',rq:'og-received.jpg',mmv:'og-confirmed.jpg',install:'og-app.jpg',
   rqf:'og-reqform.jpg',care3:'og-care.jpg',care6:'og-care.jpg',wp:'og-permit.jpg',evi:'og-voucher.jpg',pti:'og-points.jpg',
   pacc:'og-pay.jpg',vfee:'og-visitfee.jpg',ipr:'og-received-repair.jpg',ipv:'og-confirmed.jpg',fee:'og-fees.jpg',   // 점검 접수·점검 방문·추가비용 (2026-11-21)
-  mvo:'og-move.jpg',mem:'og-mem.jpg',jnt:'og-joint.jpg',trf:'og-contract.jpg',tk:'og-thanks.jpg'};   // 🙏 작업 완료 감사 · 청구 (2026-11-25)
+  mvo:'og-move.jpg',mem:'og-mem.jpg',jnt:'og-joint.jpg',trf:'og-contract.jpg',rfr:'og-refer.jpg',tk:'og-thanks.jpg'};   // 🙏 작업 완료 감사 · 청구 (2026-11-25)
 // 카드 제목 = 문구의 첫 *굵은 글씨* 줄(없으면 인사 다음 첫 줄) · 설명 = 그 아래 안내 줄(주소·서명 제외)
 function caKkAuto(m){
   const lead=x=>String(x||'').replace(/\*([^*\n]+)\*/g,'$1').replace(/^[\s -⯿☀-➿️‍\u{1F000}-\u{1FAFF}·•:\-–—]+/u,'').replace(/\s+/g,' ').trim();
@@ -2337,6 +2338,7 @@ let _rbTimer=null;
 function scheduleRebuild(){clearTimeout(_rbTimer);_rbTimer=setTimeout(rebuildAndPaint,250);}
 function rebuildAndPaint(){
   setTimeout(()=>{try{caRefBadge();}catch(e){}},0);   // 🤝 추천 보상 대기 건수
+  setTimeout(()=>{try{rvSubscribe();caRvBadge();}catch(e){}},0);   // ⭐ 리뷰 보상 대기 건수 (2026-11-27)
   // 상세 화면이 열려 있으면 같은 고객으로 다시 그린다.
   // 목록 순서가 바뀌어도, 수정 과정에서 연락처·이름이 바뀌어도 놓치지 않도록
   // 「고객 문서 id → 연락처 → 이름」 순서로 다시 찾습니다.
@@ -5397,6 +5399,156 @@ window.caRefCfgSave=async function(){
     caRefOpen();caRefBadge();
   }catch(err){toast('저장 실패: '+err.message);}
 };
+// ═══ ⭐ 리뷰 보상 (2026-11-27) ═══════════════════════════════════════════════
+//  홈페이지 리뷰 작성 창 「🎁 해피포인트 적립 받기」에 적은 콘도명 · 동호수 · 전화번호(관리자 전용 review_claims,
+//  서버 창구 functions/api/rvclaim.js 가 저장)를 고객 정보와 교차검증해서 보여 주고, 지급은 대표님이 「지급」을 눌러서.
+//  · ✅ 지급 가능: 전화번호 + 콘도·동호수가 모두 같은 고객 1명 · 마지막 리뷰 보상 뒤에 받은 서비스가 있음
+//  · ⚠️ 확인 필요: 한쪽만 맞음 · 여러 고객 · 서비스 기록 없음 · 이번 서비스 보상 이미 지급 → 후보 고객을 골라 지급 또는 제외
+//  · ❌ 고객 없음: 전화번호도 주소도 맞는 고객이 없음 → 제외(또는 고객을 확인한 뒤 「다시 판정」)
+//  · 규칙: 서비스를 받을 때마다 1회 — 고객 pt_adj 의 리뷰 보상(rv 표시) 날짜 뒤에 서비스 기록(인보이스·보고서·작업완료 예약)이 있어야 함
+//  · 지급: 고객 pt_adj 에 {amount, memo:'리뷰 작성 보상', rv:신청ID} → review_claims 에 status:'paid' → 💎 적립 안내 발송 창
+//  · 금액·켜기: settings/points 의 rev_on · rev_pts (functions/api/_lib/ref.js 와 같은 기본값)
+const RVC={list:[],ready:false,started:false};
+function revCfg(){const p=REF_RAW||{},n=parseFloat(p.rev_pts);return {on:p.rev_on!==false,pts:isFinite(n)&&n>=0?Math.round(n):10};}
+window.rvSubscribe=function(){
+  if(RVC.started||!db)return;RVC.started=true;
+  onSnapshot(collection(db,'review_claims'),s=>{RVC.list=s.docs.map(d=>Object.assign({__id:d.id},d.data()||{}));RVC.ready=true;caRvBadge();
+    const t=document.getElementById('rvb-body');if(t)caRvOpen();},err=>console.warn('review_claims',err.message));
+};
+function rvSvcDates(e){
+  const a=[];
+  e.docs.invoices.forEach(x=>{if(x.status!=='draft'&&x.date)a.push(String(x.date).slice(0,10));});
+  e.docs.inspections.forEach(x=>{if(x.date)a.push(String(x.date).slice(0,10));});
+  e.docs.bookings.forEach(x=>{const d=x.booking_date||x.date;if(x.status==='done'&&d)a.push(String(d).slice(0,10));});
+  return a.sort();
+}
+function rvLastPaid(e){
+  const l=((e.master&&e.master.pt_adj)||[]).filter(a=>a&&a.rv);
+  return l.map(a=>String(a.date||a.at||'').slice(0,10)).sort().pop()||'';
+}
+function rvRows(){
+  const out=[];
+  RVC.list.forEach(c=>{
+    const pc=pn(c.phone),tail=pc.slice(-8);
+    const P=pc.length>=7?entries.filter(e=>{const q=pn(e.phone);return q&&(q===pc||(q.length>=8&&q.slice(-8)===tail));}):[];
+    const u=crfCN(c.unit),w=String(c.condo||'').toUpperCase().split(/[^A-Z0-9가-힣]+/).filter(t=>t.length>=3).map(crfCN);
+    const A=(u.length>=2&&w.length)?entries.filter(e=>{const h=crfAddrHay(e);return h.indexOf(u)>=0&&w.some(t=>h.indexOf(t)>=0);}):[];
+    const both=P.filter(e=>A.indexOf(e)>=0);
+    const cands=both.length?both:P.concat(A.filter(e=>P.indexOf(e)<0));
+    const r={c,cands,P,A,both,e:null,st:'',why:'',svc:'',last:''};
+    const pick=c.cust_id?entries.find(e=>e.master&&e.master.__id===c.cust_id):null;
+    if(c.status==='paid'){r.st='paid';r.e=pick||both[0]||null;}
+    else if(c.status==='excluded'){r.st='excluded';r.why=c.why||'대표님이 제외';}
+    else{
+      const e=pick||(both.length===1?both[0]:null);
+      if(e){
+        r.e=e;const ds=rvSvcDates(e),last=rvLastPaid(e);r.last=last;
+        const after=ds.filter(d=>!last||d>last);r.svc=ds[ds.length-1]||'';
+        if(!ds.length){r.st='check';r.why='서비스 기록이 없는 고객';}
+        else if(!after.length){r.st='check';r.why='마지막 서비스('+r.svc+') 리뷰 보상 이미 지급 ('+last+')';}
+        else if(!pick&&!(P.indexOf(e)>=0&&A.indexOf(e)>=0)){r.st='check';r.why='일부만 일치';}
+        else{r.st='ready';}
+      }else if(cands.length){
+        r.st='check';
+        r.why=both.length>1?'전화번호 + 주소가 맞는 고객이 '+both.length+'명':(P.length&&!A.length)?'전화번호만 일치 (콘도 · 동호수 다름)':(!P.length&&A.length)?'콘도 · 동호수만 일치 (전화번호 다름)':'여러 고객과 일부 일치';
+      }else{r.st='none';r.why='등록된 고객 정보와 맞는 고객이 없음';}
+    }
+    out.push(r);
+  });
+  const RK={ready:0,check:1,none:2,paid:3,excluded:4};
+  return out.sort((a,b)=>(RK[a.st]-RK[b.st])||String(b.c.created_at||'').localeCompare(String(a.c.created_at||'')));
+}
+window.caRvBadge=function(){
+  const n=document.getElementById('rvb-n');if(!n)return;
+  const k=(revCfg().on&&RVC.ready)?rvRows().filter(r=>r.st==='ready'||r.st==='check'||r.st==='none').length:0;
+  n.hidden=!k;n.textContent=k;
+};
+window.caRvOpen=function(){
+  rvSubscribe();
+  const C=revCfg(),rows=rvRows();
+  const ST={ready:['✅ 지급 가능','ok'],check:['⚠️ 확인 필요','warn'],none:['❌ 고객 없음','bad'],paid:['지급 완료','ok'],excluded:['제외','bad']};
+  const fd=v=>String(v||'').slice(0,10);
+  const nm=e=>esc(e.name||(e.master&&e.master.name)||'(이름 없음)');
+  const go=e=>'<a href="#" onclick="document.getElementById(\'ca-doc-mask\').remove();openDrawer('+entries.indexOf(e)+');return false">'+nm(e)+'</a>';
+  let b='<div class="crf-top"><div><b>리뷰 1건 RM '+C.pts+'</b> · 서비스마다 1회'+(C.on?'':' · <span style="color:var(--bad)">리뷰 적립 꺼짐</span>')+'</div>'+
+    '<button class="btn sm" onclick="caRvCfg()">⚙️ 금액 설정</button></div><div id="rvb-body">';
+  if(!RVC.ready)b+='<div class="crf-emp">불러오는 중...</div>';
+  else if(!rows.length)b+='<div class="crf-emp">아직 적립 신청이 있는 리뷰가 없습니다.<br>홈페이지 리뷰 작성 창의 「🎁 해피포인트 적립 받기」 칸을 채운 리뷰가 여기에 나타납니다.</div>';
+  else rows.forEach(r=>{
+    const c=r.c,id=esc(c.__id),s=ST[r.st];
+    const stars='★★★★★'.slice(0,Math.max(0,Math.min(5,c.rating|0)));
+    let act='<span class="pill '+s[1]+'">'+s[0]+'</span>';
+    if(r.st==='ready')act='<button class="btn p sm" onclick="caRvPay(\''+id+'\')">지급</button><div class="crf-am">RM '+C.pts+'</div>';
+    else if(r.st==='check'||r.st==='none')act='<span class="pill '+s[1]+'">'+s[0]+'</span><button class="btn sm" onclick="caRvSet(\''+id+'\',\'excluded\')">제외</button>';
+    else if(r.st==='excluded')act+='<button class="btn sm" onclick="caRvSet(\''+id+'\',\'pending\')">다시 판정</button>';
+    let who='';
+    if(r.st==='paid')who='<div class="crf-s">'+fd(c.paid_at)+' 지급 · RM '+(c.paid_pts||0)+' → '+(r.e?go(r.e):esc(c.cust_name||''))+'</div>';
+    else if(r.e)who='<div class="crf-s">일치 고객: '+go(r.e)+(r.e.phone?' · '+esc(r.e.phone):'')+(r.svc?' · 최근 서비스 '+esc(r.svc):'')+(r.last?' · 지난 리뷰 보상 '+esc(r.last):'')+'</div>';
+    if(r.st==='check'&&r.e)
+      who+='<div class="crf-s"><button class="btn sm" style="padding:2px 8px;font-size:11px" onclick="caRvPay(\''+id+'\','+entries.indexOf(r.e)+')">확인했어요 · 지급</button></div>';
+    else if((r.st==='check'||r.st==='none')&&r.cands.length)
+      who+='<div class="crf-s">후보: '+r.cands.slice(0,4).map(e=>go(e)+(e.phone?' ('+esc(e.phone)+')':'')+' <button class="btn sm" style="padding:2px 8px;font-size:11px" onclick="caRvPay(\''+id+'\','+entries.indexOf(e)+')">이 고객에게 지급</button>').join(' · ')+'</div>';
+    b+='<div class="crf-r"><div class="crf-l">'+
+      '<div class="crf-nm">'+esc(c.name||'(이름 없음)')+' <span style="color:#C9A44C">'+stars+'</span></div>'+
+      '<div class="crf-s">「'+esc(String(c.text||'').slice(0,70))+(String(c.text||'').length>70?'…':'')+'」'+(c.photos?' · 📷'+c.photos:'')+'</div>'+
+      '<div class="crf-s">'+fd(c.created_at)+' · 입력: '+esc(c.condo||'')+' '+esc(c.unit||'')+' · '+esc(c.phone||'')+'</div>'+
+      who+(r.why?'<div class="crf-s" style="color:var(--warn)">'+esc(r.why)+'</div>':'')+'</div>'+
+      '<div class="crf-a">'+act+'</div></div>';
+  });
+  b+='</div>';
+  genericModal('⭐ 리뷰 보상',b,'<button class="btn" onclick="document.getElementById(\'ca-doc-mask\').remove()">닫기</button>');
+};
+window.caRvSet=async function(id,st){
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  let why='';
+  if(st==='excluded'){why=prompt('제외 사유 (선택)','')||'';}
+  try{
+    await updateDoc(doc(db,'review_claims',id),{status:st,why:why,set_at:new Date().toISOString()});
+    toast(st==='excluded'?'리뷰 보상에서 제외했습니다':'다시 판정합니다');
+  }catch(err){toast('저장 실패: '+err.message);}
+};
+window.caRvPay=async function(id,idx){
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  const C=revCfg(),r=rvRows().find(v=>v.c.__id===id);
+  if(!r||r.st==='paid'||r.st==='excluded'){toast('지급 대상이 아닙니다 — 새로고침 후 다시 확인해 주세요');return;}
+  const e=(idx!=null&&entries[idx])?entries[idx]:r.e;
+  if(!e){toast('지급할 고객을 골라 주세요');return;}
+  if(!confirm('리뷰 보상을 지급할까요?\n\n· '+(e.name||'')+(e.phone?' ('+e.phone+')':'')+' → 해피포인트 RM '+C.pts+'\n· 리뷰: '+(r.c.name||'')+' 「'+String(r.c.text||'').slice(0,40)+'」\n\n지급하면 고객 마이페이지 포인트에 바로 반영됩니다.'))return;
+  const now=new Date().toISOString(),today=caToday();
+  try{
+    const fresh=await getDoc(doc(db,'review_claims',id));
+    if(fresh.exists()&&(fresh.data()||{}).status==='paid'){toast('이미 지급된 건입니다');return;}
+    let mid=e.master&&e.master.__id,list=[];
+    if(!mid){
+      const ref=await addDoc(collection(db,'customers'),{id:'c'+Date.now(),name:e.name,phone:e.phone||'',member:e.member||'',email:'',addr:e.addr||'',memo:'',aliases:e.aliases||[],created_at:now,updated_at:now});
+      mid=ref.id;
+    }else{const md=await getDoc(doc(db,'customers',mid));list=((md.exists()&&md.data().pt_adj)||[]).slice();}
+    list.push({amount:C.pts,date:today,memo:'리뷰 작성 보상',at:now,ref:id,rv:1});
+    await updateDoc(doc(db,'customers',mid),{pt_adj:list,updated_at:now});
+    await updateDoc(doc(db,'review_claims',id),{status:'paid',paid_at:now,paid_pts:C.pts,cust_id:mid,cust_name:e.name||''});
+    toast('⭐ 리뷰 보상이 지급되었습니다');
+    const mk=document.getElementById('ca-doc-mask');if(mk)mk.remove();
+    await loadAll(true);
+    // 💎 적립 안내 발송 창 — 리뷰 감사 문구 · 그림으로 열림
+    const ni=entries.findIndex(x=>x.master&&x.master.__id===mid);
+    if(ni>=0)setTimeout(()=>caSendModal(ni,{tpl:'cmp',amt:C.pts,memo:'리뷰 작성 보상'}),300);
+  }catch(err){toast('지급 실패: '+err.message);}
+};
+window.caRvCfg=function(){
+  const C=revCfg();
+  genericModal('⚙️ 리뷰 보상 금액 설정',
+    '<label class="crf-row"><div><b>리뷰 적립 사용</b><span>끄면 「⭐ 리뷰 보상」 대기 숫자가 표시되지 않습니다</span></div><input type="checkbox" id="rvb-on"'+(C.on?' checked':'')+'></label>'+
+    '<div class="crf-row"><div><b>리뷰 1건 적립금</b><span>서비스를 받을 때마다 1회 · 확인 후 지급</span></div><div class="crf-amt"><i>RM</i><input type="number" min="0" step="1" id="rvb-pts" value="'+C.pts+'"></div></div>'+
+    '<div class="crf-note">· 금액을 바꾸면 리뷰 이벤트 안내장(/review)의 금액도 함께 바뀝니다. 링크 미리보기 그림(og-review.jpg)의 「RM 10」은 따로 고쳐야 합니다.<br>· 이미 지급한 건은 그대로입니다.<br>· 해피포인트는 누적 RM 10 이상부터 사용 가능합니다.</div>',
+    '<button class="btn" onclick="caRvOpen()">← 목록</button><button class="btn p" onclick="caRvCfgSave()">저장</button>');
+};
+window.caRvCfgSave=async function(){
+  if(!db){toast('Firebase 연결 중입니다');return;}
+  const g=id=>document.getElementById(id);
+  const v={rev_on:g('rvb-on').checked,rev_pts:Math.max(0,Math.round(parseFloat(g('rvb-pts').value)||0)),updated_at:new Date().toISOString()};
+  try{await setDoc(doc(db,'settings','points'),v,{merge:true});Object.assign(REF_RAW,v);toast('✓ 리뷰 보상 설정이 저장되었습니다');caRvOpen();caRvBadge();}
+  catch(err){toast('저장 실패: '+err.message);}
+};
 // ── 📜 포인트 내역 펼쳐보기 / 닫기 ──
 window.caPtHist=function(btn){
   const l=document.getElementById('pt-hist-ls');if(!l)return;
@@ -5941,6 +6093,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     {t:'trf',     lb:'🔁 양도 · 상품권 전환', n:0, need:false},   // 귀국·이주 시 잔액 양도 · 상품권 전환 안내장 + 신청서(/transfer) — 계약 정보 미리 채움 (2026-11-23)
     {t:'evi',     lb:'🎁 전자상품권 안내', n:0, need:false},
     {t:'pti',     lb:'💎 적립포인트 안내', n:0, need:false},
+    {t:'rfr',     lb:'🤝 친구 소개 안내', n:0, need:false},   // 친구 소개(지인 추천) 안내장(/refer) — 보상 금액은 추천 보상 설정을 따름 (2026-11-27)
     {t:'cmp',     lb:'💎 적립 안내', n:0, need:false},   // 포인트 「➕ 적립 추가」 직후에만 열림(목록에는 없음) — 적립 이름·금액 반영 · 마이페이지 적립금 카드 강조 (2026-11-17)
     {t:'fee',     lb:'💡 추가비용 안내', n:0, need:false},
     {t:'vfee',    lb:'🧰 출장점검/진단 안내', n:0, need:false},
@@ -5965,7 +6118,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     {g:'💰 청구 · 결제',  ts:['tk','pacc']},   // 2026-11-25 청구 안내 · 청구 재요청 · 결제 확인 · 작업후 안내는 「🙏 작업완료 감사·청구」로 합침 (코드는 남겨 둠)
     {g:'📅 예약 · 의뢰',  ts:['bk','bkc','rq','ipr','ipv','mmv','rqf','revisit']},
     {g:'🌿 정기관리 알림', ts:['care3','care6']},
-    {g:'📢 안내 · 소개',  ts:['nc','rev','basic','mem','jnt','trf','evi','pti','fee','vfee','mvo','wp','install']},
+    {g:'📢 안내 · 소개',  ts:['nc','rev','basic','mem','jnt','trf','evi','pti','rfr','fee','vfee','mvo','wp','install']},
     {g:'📘 에어컨 안내장', ts:['gd_all','gd_avoid','gd_leak','gd_cool','gd_odour','gd_gas','gd_outdoor','gd_insp']}
   ];
   const _cpSpan=(CPG.length&&CPD.length)?'':'grid-column:1/-1;';
@@ -5989,7 +6142,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     pacc:'계좌번호 + 복사 안내장',bk:'방문 날짜 골라 달라는 요청',bkc:'확정된 방문 일시 안내',rq:'의뢰 잘 받았다는 안내',
     ipr:'출장점검 접수 완료 안내',ipv:'점검 방문 일정 안내',mmv:'수리요청 출장방문 안내',rqf:'의뢰서 작성 요청',revisit:'다시 방문 · 예약 권유',
     care3:'3개월 정기관리 시기 알림',care6:'6개월 정기관리 시기 알림',nc:'전자명함 보내기',rev:'리뷰 이벤트 참여 안내',
-    basic:'마이페이지 링크만 보내기',mem:'멤버십 패키지 소개',jnt:'가족 · 이웃과 함께 가입 (골드 이상)',trf:'귀국 · 이주 시 잔액 양도 · 상품권 신청',evi:'전자상품권 상품 소개',pti:'해피포인트 적립 소개',
+    basic:'마이페이지 링크만 보내기',mem:'멤버십 패키지 소개',jnt:'가족 · 이웃과 함께 가입 (골드 이상)',trf:'귀국 · 이주 시 잔액 양도 · 상품권 신청',evi:'전자상품권 상품 소개',rfr:'친구 소개하면 해피포인트 적립',pti:'해피포인트 적립 소개',
     fee:'최소청구 · 주차 · 보증금 안내',vfee:'우리 집 출장점검비 확인',mvo:'이사 나갈 때 서비스 2가지',wp:'작업방문등록 정보 전달',
     install:'마이페이지 앱 설치 방법',cmp:'방금 적립한 포인트 안내',gd_all:'안내장 7종 — 고객이 골라 봄'};
   const tSplit=function(lb){const m=String(lb).match(/^(\S+)\s+(.*)$/);return m?[m[1],m[2]]:['',String(lb)];};
@@ -6210,6 +6363,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     // 👥 공동계약 안내 — 공동계약 패키지 안내장. 영문 발송은 미리보기 카드까지 영어로 나오도록 joint-en.html 을 거칩니다 (2026-11-20)
     if(state.tpl==='jnt')return BASE+(state.en?'/joint-en.html?lang=en':'/joint');
     if(state.tpl==='trf')return trfLink();
+    if(state.tpl==='rfr')return BASE+'/refer'+(state.en?'?lang=en':'');   // 🤝 친구 소개 안내장 (2026-11-27)
     if(state.tpl==='tk')return tkLink();
     // 📍 의뢰 접수 · 예약 신청 · 예약 확정 → 고객 진행 안내장(/go) 하나로 (2026-11-25)
     if(state.tpl==='rq'||state.tpl==='bk'||state.tpl==='bkc'){const g=goLink(state.tpl);if(g)return g;}
@@ -6224,7 +6378,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     //   · ?r=0 — 회사가 직접 보낸 명함이라 받는 폰에 남은 추천인(지인 소개 띠·의뢰서 추천 코드)을 지웁니다 (2026-11-16)
     if(state.tpl==='nc')return BASE+(state.en?'/nce':'/nc')+'?r=0&v=2';   // v=2: 새 명함 미리보기 그림 (2026-11-22)
     // ⭐ 리뷰 이벤트 — 홈페이지 리뷰 섹션으로 바로 갑니다 (주소를 줄이지 않고 그대로 보냅니다)
-    if(state.tpl==='rev')return BASE+'/home?wm=0'+(state.en?'&lang=en':'')+'#reviews';   // wm=0: 관리자 발송 — 워터마크 없음 (2026-11-24)
+    if(state.tpl==='rev')return BASE+'/review'+(state.en?'?lang=en':'');   // ⭐ 리뷰 이벤트 안내장 (2026-11-27) — 안내장의 「리뷰 쓰러 가기」가 홈페이지 리뷰 작성 창을 바로 엽니다
     if(state.tpl==='evi')return BASE+'/evoucher.html'+(state.en?'?lang=en':'');
     // 📘 에어컨 안내장 — 홈페이지를 열면 그 안내장이 팝업으로 바로 뜹니다 (home.html ?g=)
     if((GDS[state.tpl]||{}).fee){const q=new URLSearchParams();if(e.addr)q.set('a',e.addr);if(mid)q.set('c',mid);if(state.en)q.set('lang','en');
@@ -6433,6 +6587,9 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     }
     if(state.tpl==='jnt'){
       return '\n\n'+(en?'👥 JOINT MEMBERSHIP':'👥 공동계약 안내장')+'\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
+    }
+    if(state.tpl==='rfr'){
+      return '\n\n'+(en?'🤝 REFER A FRIEND':'🤝 친구 소개 안내장')+'\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
     }
     if(state.tpl==='trf'){
       return '\n\n'+(en?'🔁 TRANSFER · E-VOUCHER':'🔁 양도 · 상품권 전환 안내')+'\n🔗 '+dLink()+'\n\nHappy Home Care 📞 +60 17-247 2774';
@@ -6694,10 +6851,10 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   }
   // ⭐ 리뷰 이벤트 — 카드 이미지(review-event-ko/en.png) + 아래 두 줄 문구를 함께 보냅니다
   function revMsg(en){
-    const nm=e.name||'';
+    const nm=e.name||'',_rp=revCfg().pts;   // 금액은 ⭐ 리뷰 보상 설정 (2026-11-27)
     return en
-      ?(sHi(en,nm)+'\n\n⭐ *Leave a review, get RM 10*\nWrite a review and we\'ll give you RM 10 in Happy Points.\n\n👉 Just leave a star rating and a short comment at the link.'+sLk('⭐ Write a review'))
-      :(sHi(en,nm)+'\n\n⭐ *리뷰 남기고 RM 10 받으세요*\n이용 후기를 남겨 주시면 해피포인트 RM 10을 드립니다.\n\n👉 링크에서 별점과 한 줄 후기만 남겨 주세요.'+sLk('⭐ 리뷰 쓰기'));
+      ?(sHi(en,nm)+'\n\n⭐ *Leave a review, get RM '+_rp+'*\nWrite a review and we\'ll add RM '+_rp+' in Happy Points once checked.\n\n👉 Leave stars and one line, then fill in the condo, unit and phone you booked with.'+sLk('⭐ Review event'))
+      :(sHi(en,nm)+'\n\n⭐ *리뷰 남기고 RM '+_rp+' 받으세요*\n이용 후기를 남겨 주시면 확인 후 해피포인트 RM '+_rp+'을 드립니다.\n\n👉 별점과 한 줄 후기, 그리고 등록하신 콘도명 · 동호수 · 전화번호를 적어 주세요.'+sLk('⭐ 리뷰 이벤트 안내'));
   }
   const revImgUrl=en=>BASE+'/review-event-'+(en?'en':'ko')+'.png';
   // 📱 휴대폰 공유창은 「누른 순간」에 바로 열어야 하므로 카드 이미지를 미리 받아 둡니다
@@ -6898,6 +7055,14 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
         :(hi+'👥 *함께 가입하면 한 단계 위 등급으로*\n가족 · 이웃 · 지인과 함께하는 공동계약 패키지 (골드 이상)\n혜택은 각자 똑같이 · 적립금은 나눠서 각자 사용\n'+
           (JE.on?'\n🎉 지금 가입 시 무상적립 '+JE.mult+'배 ('+jTag[0]+' · 기간 한정)':'')+'\n\n👉 등급과 인원을 고르면 1인 금액을 바로 확인할 수 있어요.'+sLk('👥 공동계약 안내장 보기'));
     }
+    if(state.tpl==='rfr'){
+      // 🤝 친구 소개 안내 (2026-11-27) — 금액은 🤝 추천 보상 설정(REF_RAW)을 따름
+      const _rc=(typeof refCfg==='function')?refCfg():{on:true,pts:10,newOn:true,newPts:5};
+      const _p=_rc.pts||10,_n=(_rc.newOn&&_rc.newPts)?_rc.newPts:0;
+      return en
+        ?(hi+'🤝 *Refer a friend, get RM '+_p+' in Happy Points*\nWhen a friend you refer has their first service and pays, we add RM '+_p+' to your points'+(_n?' — and your friend gets RM '+_n+' too':'')+'.\n(New customers only)\n\n👉 Send it from the "Refer a friend" card on My Page.'+sLk('🤝 How referrals work'))
+        :(hi+'🤝 *친구 소개하면 해피포인트 RM '+_p+' 적립*\n소개받은 친구가 첫 서비스를 받고 결제하면 RM '+_p+'를 적립해 드려요'+(_n?'. 친구도 RM '+_n+'를 받아요':'')+'.\n(처음 이용하시는 신규 고객만 해당)\n\n👉 마이페이지 「지인 추천」 카드에서 바로 보내실 수 있어요.'+sLk('🤝 친구 소개 안내장 보기'));
+    }
     if(state.tpl==='trf'){
       // 🔁 양도 · 상품권 전환 안내 (2026-11-23) — 링크에 계약자 정보(n·c·p·no)와 남은 잔액(b)이 붙어
       //    안내장 카드에 고객 이름 · 잔액이 보이고, 「양도 · 전환 신청하기」를 누르면 신청서가 미리 채워져 열립니다.
@@ -7050,7 +7215,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     // 💼 전자명함도 명함 주소를 보내므로 마이페이지 노출 항목과 무관합니다.
     // ⭐ 리뷰 이벤트도 홈페이지 주소를 보내므로 마찬가지입니다.
     // 💡 추가비용 안내도 안내장 주소(/fees.html)를 보내므로 마찬가지입니다.
-    const _isMem=(state.tpl==='mem'||state.tpl==='jnt'||state.tpl==='trf'||state.tpl==='evi'||state.tpl==='pti'||state.tpl==='fee'||state.tpl==='pacc'||state.tpl==='vfee'||state.tpl==='mvo'||state.tpl==='nc'||state.tpl==='rev'||!!GDS[state.tpl]);
+    const _isMem=(state.tpl==='mem'||state.tpl==='jnt'||state.tpl==='trf'||state.tpl==='rfr'||state.tpl==='evi'||state.tpl==='pti'||state.tpl==='fee'||state.tpl==='pacc'||state.tpl==='vfee'||state.tpl==='mvo'||state.tpl==='nc'||state.tpl==='rev'||!!GDS[state.tpl]);
     const os=mk.querySelector('#cs-optsec');
     if(os)os.style.display=_isMem?'none':'';
     const w=mk.querySelector('#cs-warn');
@@ -7448,6 +7613,9 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
       :(state.tpl==='ct')
       ?{t:(en?'[Happy Home Care] Thank you for joining Happy Membership':'[Happy Home Care] 해피 멤버십 가입 감사 안내'),
         btn:(en?'View thank-you note':'감사 안내 보기')}
+      :(state.tpl==='rfr')
+      ?{t:(en?'[Happy Home Care] Refer a friend':'[Happy Home Care] 친구 소개 안내'),
+        btn:(en?'How referrals work':'친구 소개 안내 보기')}
       :(state.tpl==='trf')
       ?{t:(en?'[Happy Home Care] Balance Transfer · E-voucher':'[Happy Home Care] 잔액 양도 · 상품권 전환 안내'),
         btn:(en?'Open guide & form':'안내 · 신청서 열기')}
@@ -7506,7 +7674,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   mk.querySelector('#cs-pv').addEventListener('click',()=>{window.caView(link(),'👁 고객 발송 화면 미리보기 — '+(e.name||''));});
   mk.querySelector('#cs-copylink').addEventListener('click',async()=>{
     if(state.tpl==='rev'){   // ⭐ 리뷰 이벤트 주소는 줄이지 않고 그대로
-      navigator.clipboard.writeText(link()).then(()=>toast('🔗 홈페이지 리뷰 주소가 복사되었습니다'))
+      navigator.clipboard.writeText(link()).then(()=>toast('🔗 리뷰 이벤트 안내장 주소가 복사되었습니다'))
         .catch(()=>prompt('복사해서 사용하세요:',link()));
       return;
     }
@@ -7514,6 +7682,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     navigator.clipboard.writeText(_sl).then(()=>toast(
       state.tpl==='mem'?'🔗 멤버십 안내장 주소가 복사되었습니다'
       :state.tpl==='jnt'?'🔗 공동계약 안내장 주소가 복사되었습니다'
+      :state.tpl==='rfr'?'🔗 친구 소개 안내장 주소가 복사되었습니다'
       :state.tpl==='trf'?'🔗 양도 · 상품권 전환 안내장 주소가 복사되었습니다 (계약 정보 포함)'
       :state.tpl==='evi'?'🔗 전자상품권 안내장 주소가 복사되었습니다'
       :state.tpl==='pti'?'🔗 적립포인트 안내장 주소가 복사되었습니다'
