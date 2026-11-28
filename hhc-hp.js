@@ -4,6 +4,7 @@
    · 소개 보상 금액·켜기/끄기는 관리자 고객관리 「🤝 추천 보상 → 금액 설정」을 따른다 (/api/refcfg)
    · 추천 보상을 끄면 「결제할 때마다 1% 자동 적립」 카드로 바뀐다
    · 모양(CSS)은 각 화면의 e3hp 블록에 있다
+   · 2026-11-28 : 카드 맨 아래 「📖 N가지 한눈에 보기」 → 통합 안내장 /hp-guide
    · 2026-11-27 : 「해피포인트 모으는 3가지 방법」 카드로 바꿈 — ① 결제마다 1%(/points) ② 친구 소개(/refer) ③ 리뷰 쓰기(/review), 꺼진 이벤트는 빠짐
    ───────────────────────────────────────────────────────────── */
 (function(){
@@ -45,6 +46,8 @@
     '.e3p3-c.ev .go{background:#173a5e;box-shadow:0 3px 0 #08172b}',
     '.e3p3-ex{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;margin-top:12px;padding:10px 12px;border-radius:14px;font-size:12.5px;font-weight:700;color:#5a4614;background:rgba(255,255,255,.55);border:1px dashed rgba(143,111,40,.45)}',
     '.e3p3-ex b{color:#1b1503;font-weight:900}.e3p3-ex .eq{font-size:15px;color:#0b5f59;font-weight:900}',
+    '.e3p3-all{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:12px;padding:13px 16px;border-radius:14px;text-decoration:none;font-size:14.5px;font-weight:900;letter-spacing:-.02em;color:#fff;background:#0f2540;box-shadow:0 3px 0 #08172b,0 0 0 3px rgba(20,149,138,.45);transition:transform .15s}',
+    '.e3p3-all b{color:#e3c98a;font-size:20px;line-height:1}.e3p3-all:hover{transform:translateY(-2px)}.e3p3-all:active{transform:translateY(1px)}',
     '@container (max-width:560px){',
     ' .e3p3-g{grid-template-columns:1fr;gap:8px}',
     ' .e3p3-c{display:grid;grid-template-columns:40px 1fr auto;column-gap:12px;align-items:center;padding:12px}',
@@ -53,12 +56,12 @@
     ' .e3p3-c .d{grid-column:2;grid-row:3}.e3p3-c .go{grid-column:3;grid-row:3;justify-self:end;align-self:center;margin:0;padding:4px 10px;font-size:11px;box-shadow:0 2px 0 #073f3b;white-space:nowrap}',
     ' .e3p3-c.ev .go{box-shadow:0 2px 0 #08172b}',
     ' .e3p3-tt b{font-size:18px}}',
-    '@media (prefers-reduced-motion:reduce){.e3p3-coin>i{animation:none}.e3p3-c{transition:none}}'
+    '@media (prefers-reduced-motion:reduce){.e3p3-coin>i{animation:none}.e3p3-c,.e3p3-all{transition:none}}'
     ].join('');
     (document.head||document.documentElement).appendChild(st);}catch(e){}})();
   function card(ko,href){
     var ref=C.on&&C.pts>0,nw=ref&&C.newOn&&C.newPts>0,rv=R.on&&R.pts>0;
-    var H=String(href),hPt=H,hRf=H.replace(/points(\.html)?/,'refer'),hRv=H.replace(/points(\.html)?/,'review');
+    var H=String(href),hPt=H,hRf=H.replace(/points(\.html)?/,'refer'),hRv=H.replace(/points(\.html)?/,'review'),hGd=H.replace(/points(\.html)?/,'hp-guide');
     function tile(cls,ic,tg,lb,v,t,d,go,h){
       return '<a class="e3p3-c'+cls+'" href="'+h+'"><span class="ic" aria-hidden="true">'+ic+'</span><span class="tg'+(cls?' ev':'')+'">'+tg+'</span>'+
         '<span class="lb">'+lb+'</span><span class="v">'+v+'</span><span class="t">'+t+'</span><span class="d">'+d+'</span><span class="go">'+go+' ›</span></a>';}
@@ -75,7 +78,9 @@
     return '<div class="e3p3"><div class="e3p3-hd"><span class="e3p3-coin" aria-hidden="true"><i>P</i></span>'+
       '<div class="e3p3-tt"><small>'+(ko?'해피포인트':'HAPPY POINTS')+'</small><b>'+(ko?'해피포인트 <em>모으는 '+tiles.length+'가지 방법</em>':'<em>'+tiles.length+' ways</em> to collect Happy Points')+'</b></div>'+
       '<div class="e3p3-ck"><span>💵 '+(ko?'현금처럼 사용':'Use like cash')+'</span><span>♾️ '+(ko?'유효기간 없음':'No expiry')+'</span><span>🎯 '+(ko?'RM 10부터 사용':'From RM 10')+'</span></div></div>'+
-      '<div class="e3p3-g" style="--n:'+tiles.length+'">'+tiles.join('')+'</div>'+ex+'</div>';
+      '<div class="e3p3-g" style="--n:'+tiles.length+'">'+tiles.join('')+'</div>'+ex+
+      /* 📖 통합 안내장 /hp-guide (2026-11-28) */
+      '<a class="e3p3-all" href="'+hGd+'"><span>📖 '+(ko?tiles.length+'가지 한눈에 보기':'See all '+tiles.length+' ways')+'</span><b aria-hidden="true">›</b></a></div>';
   }
   /* 관리자 설정 읽기 — 값이 바뀌었을 때만 화면을 다시 그리도록 cb 를 부른다 */
   function load(cb){
