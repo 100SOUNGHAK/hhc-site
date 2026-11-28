@@ -3898,6 +3898,10 @@ window.saveEditList=async function(id){
         updated.unconfirmed_at=new Date().toISOString();
       }
     }
+    // 🗓 확정 예약의 날짜·시간을 바로 바꾸면 원래 일정을 prev_slot 에 남깁니다 → 📨 변경 안내장 「기존 일정」 자동 (2026-11-28)
+    {const _p0=allBookings.find(x=>x.__id===id);
+     if(!nxMulti&&_p0&&_p0.status==='confirmed'&&_p0.booking_date&&(String(bdate||'')!==String(_p0.booking_date||'')||String(btime||'')!==String(_p0.booking_time||'')))
+       updated.prev_slot={date:_p0.booking_date,time:_p0.booking_time||'',at:new Date().toISOString()};}
     await updateDoc(doc(db,'bookings',id),updated);
     if(window.HHCC_upsert)HHCC_upsert(name,phone,{addr:addr||''});
     // 이미 확정된 예약이면 일정 미러도 함께 갱신 — 그렇지 않으면 예약일 변경 시
@@ -3915,6 +3919,12 @@ window.saveEditList=async function(id){
     renderList();
     showLoading(false);
     showToast('✓ 저장됨');
+    // 📨 확정 예약 날짜·시간을 바꿨으면 바로 변경 안내장을 보낼지 묻습니다 (기존 일정 자동) (2026-11-28)
+    if(updated.prev_slot&&existing){
+      Object.assign(existing,updated);
+      const _ps=updated.prev_slot,_md=d=>{const x=new Date(d+'T00:00:00');return (x.getMonth()+1)+'월 '+x.getDate()+'일('+'일월화수목금토'[x.getDay()]+')';};
+      showModal('일정 변경 안내',`확정 일정을 바꿨습니다.\n${_md(_ps.date)} ${String(_ps.time||'').split('|')[0]} → ${_md(bdate)} ${String(btime||'').split('|')[0]}\n\n지금 고객에게 「📨 일정 변경 안내장」을 보낼까요?\n(기존 일정은 자동으로 들어갑니다)`,true,()=>window.bkChgOpen(id));
+    }
     // ✅ 고객과 통화 등으로 일정을 정한 경우 — 그 날짜·시간으로 바로 확정할 수 있게 묻습니다
     if(!nxMulti&&bdate&&existing&&existing.status!=='confirmed'){
       Object.assign(existing,updated);                      // 방금 저장한 날짜·시간으로 확정되도록
@@ -4401,6 +4411,7 @@ window.confirmBooking=async function(id,force){
   try{
     // 📍 예약에 위치가 없으면 고객관리에 등록한 고객 위치를 함께 저장 (직원 길 안내 · 확정 메시지에 쓰임)
     if(!(b.customer_loc&&isFinite(b.customer_loc.lat))){const _cu=bkCustLocFor(b.customer_phone,b.customer_name);if(_cu)b.customer_loc=_cu;}
+    if(b.resched_from&&b.resched_from.date)b.prev_slot={date:b.resched_from.date,time:b.resched_from.time||'',at:new Date().toISOString()};   // 📨 변경 안내장 「기존 일정」 자동 (2026-11-28)
     b.resched_from=null;   // 🔁 취소·재안내 표시는 다시 확정하면 지움
     await updateDoc(doc(db,'bookings',id),{...b,status:'confirmed'});
     // schedules 컬렉션에 자동 등록 (기존 미러 제거 후 1건만 유지)
@@ -4924,7 +4935,9 @@ window.bkChgOpen=function(id){
   document.querySelectorAll('details.rmore[open]').forEach(d=>d.removeAttribute('open'));
   const rf=b.resched_from&&b.resched_from.date?b.resched_from:null;
   const useRf=rf&&b.status!=='confirmed';
-  Object.assign(BKCHG,{id,k:'g',w:'c',od:useRf?rf.date:(b.booking_date||''),ot:useRf?(rf.time||''):(b.booking_time||''),dp:'0',amt:320});
+  // 확정 예약에 바뀌기 전 일정(prev_slot)이 있으면 그것이 「기존 일정」 (2026-11-28)
+  const ps=!useRf&&b.status==='confirmed'&&b.prev_slot&&b.prev_slot.date&&(b.prev_slot.date!==b.booking_date||String(b.prev_slot.time||'')!==String(b.booking_time||''))?b.prev_slot:null;
+  Object.assign(BKCHG,{id,k:'g',w:'c',od:useRf?rf.date:ps?ps.date:(b.booking_date||''),ot:useRf?(rf.time||''):ps?(ps.time||''):(b.booking_time||''),dp:'0',amt:320});
   let ov=document.getElementById('bkchg-ov');
   if(!ov){
     ov=document.createElement('div');ov.id='bkchg-ov';
