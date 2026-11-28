@@ -139,6 +139,13 @@ async function metaFor(env, origin, target){
     return { title: cut(t.searchParams.get('pt'), 80), desc: cut(t.searchParams.get('pd'), 160),
       image: `${SITE}/og-${/^(bill|due|paid|cr)$/.test(t.searchParams.get('ts') || '') ? 'tk-' + t.searchParams.get('ts') : 'thanks'}${en ? '-en' : ''}.jpg`, w: '1200', h: '630' };   // 발송 내용별 그림 (2026-11-26)
   }
+  // 🔁 예약 변경 · 취소 안내장 — 취소(k=x)는 「예약 취소」, 변경은 「일정 변경」 그림 (2026-11-28)
+  if (/^\/change(\.html)?$/i.test(t.pathname)) {
+    const x = t.searchParams.get('k') === 'x';
+    const C = x ? ['cancel', '예약 취소 안내 | Happy Home Care', 'Booking Cancelled | Happy Home Care', '예약이 취소되었습니다 · 취소 내용과 보증금 정산을 확인하세요', 'Your booking has been cancelled · see the details']
+                : ['change', '예약 일정 변경 안내 | Happy Home Care', 'Booking Rescheduled | Happy Home Care', '예약 일정이 변경되었습니다 · 바뀐 일정과 보증금 정산을 확인하세요', 'Your booking has been rescheduled · see the new date'];
+    return { title: en ? C[2] : C[1], desc: en ? C[4] : C[3], image: `${SITE}/og-${C[0]}${en ? '-en' : ''}.jpg`, w: '1200', h: '630' };
+  }
   for (const [re, img, tk, te, dk, de] of TYPES) {
     if (re.test(t.pathname)) return { title: en ? te : tk, desc: en ? de : dk,
       image: `${SITE}/og-${img}${en ? '-en' : ''}.jpg`, w: '1200', h: '630' };   // 영어 발송은 영어 그림(og-*-en.jpg)

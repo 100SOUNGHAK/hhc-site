@@ -36,7 +36,7 @@ const DOC = {
   'admin': ['contract', '계약서 · 이용내역', 'Contract & usage'], 'customer': ['contract', '계약서 · 이용내역', 'Contract & usage'],
   'booking': ['booking', '예약서', 'Booking'], 'hhc-invoice': ['invoice', '인보이스', 'Invoice'], 'inv': ['invoice', '인보이스', 'Invoice'],
   'go': ['received', '진행 안내', 'Progress'],   // 📍 진행 안내장 (2026-11-25)
-  'change': ['booking', '예약 변경 · 취소 안내', 'Booking change notice'],   // 🔁 예약 변경 · 취소 안내장 (2026-11-28)
+  'change': ['change', '예약 변경 · 취소 안내', 'Booking change notice'],   // 🔁 예약 변경 · 취소 안내장 (2026-11-28)
   'thanks': ['thanks', '작업 완료 감사 안내', 'Thank you for your service'],   // 🙏 작업 완료 감사 · 청구 안내장 (2026-11-25)
   'repair': ['repair', '방문 결과 보고서', 'Service visit report'],
   'my': ['my', 'MY PAGE', 'MY PAGE'], 'my-en': ['my', 'MY PAGE', 'MY PAGE'], 'mypage': ['my', 'MY PAGE', 'MY PAGE'],
@@ -55,6 +55,8 @@ async function docPreview(context, url, key){
   let img = base;
   // 🙏 감사·청구 안내장 — 발송 내용(ts=)에 따라 그림: 청구 · 결제 확인 부탁 · 결제 완료 · 적립금 차감 (2026-11-26)
   if (key === 'thanks' && /^(bill|due|paid|cr)$/.test(q.get('ts') || '')) img = 'tk-' + q.get('ts');
+  // 🔁 예약 변경 · 취소 안내장 — 취소(k=x) / 변경 그림 (2026-11-28)
+  if (key === 'change') img = q.get('k') === 'x' ? 'cancel' : 'change';
   if (base === 'my'){ const f = q.get('f') || ''; img = MY_F[f] || 'my'; if (f === 'rw' && PK[q.get('pk')]) img = PK[q.get('pk')]; const VI = { '1':'remind', tm:'remind-tmr', td:'remind-today', mv:'onway', dt:'delay', dw:'delayw', ar:'arrive' }; if ((f === 'bk' || f === 'mm') && VI[q.get('vi')]) img = VI[q.get('vi')]; if (f === 'ct' && q.get('vi') === 'aw') img = 'aftwork'; if ((f === 'bk' || f === 'mm') && q.get('vi') === 'pd') img = /^(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(q.get('vd') || '') ? 'd/' + q.get('vd') : 'remind'; }
   // 📅 예약 확정·신청 날짜 / ⏱ 00분 후 도착 / ⚡ 지금 방문 / 🔧 점검 접수 — 예약서(id) 조회는 미리보기 로봇일 때만 (고객 화면은 느려지지 않게)
   let W = '1200', H = '630';
@@ -66,7 +68,10 @@ async function docPreview(context, url, key){
   const src = `${SITE}/og-${img}${en ? '-en' : ''}.jpg`, title = (en ? te : tk) + ' | Happy Home Care';
   let hasTitle = false, hasSite = false;
   // 🙏 감사 안내장(/thanks) — 발송 창이 붙인 카드 문구(pt · pd)를 미리보기 제목 · 설명으로 (2026-11-25)
-  const pt = key === 'thanks' ? String(q.get('pt') || '').slice(0, 80) : '', pd = pt ? String(q.get('pd') || '').slice(0, 160) : '';
+  const CX = key === 'change' ? (q.get('k') === 'x'
+    ? [en ? 'Booking Cancelled | Happy Home Care' : '예약 취소 안내 | Happy Home Care', en ? 'Your booking has been cancelled · see the details' : '예약이 취소되었습니다 · 취소 내용과 보증금 정산을 확인하세요']
+    : [en ? 'Booking Rescheduled | Happy Home Care' : '예약 일정 변경 안내 | Happy Home Care', en ? 'Your booking has been rescheduled · see the new date' : '예약 일정이 변경되었습니다 · 바뀐 일정과 보증금 정산을 확인하세요']) : null;   // 🔁 변경 · 취소 안내장 (2026-11-28)
+  const pt = key === 'thanks' ? String(q.get('pt') || '').slice(0, 80) : CX ? CX[0] : '', pd = CX ? CX[1] : pt ? String(q.get('pd') || '').slice(0, 160) : '';
   const drop = { element(el){ el.remove(); } };
   return new HTMLRewriter()
     .on('meta[property="og:image"], meta[property="og:image:width"], meta[property="og:image:height"], meta[property="og:image:type"], meta[name="twitter:image"], meta[name="twitter:card"]', drop)
