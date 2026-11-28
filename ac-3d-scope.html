@@ -620,6 +620,107 @@ if(REAL3){
   wall.material.needsUpdate = true;
 }
 
+/* 🏷️ 브랜드 벽 (2026-11-28)
+   ① 에어컨 위 벽에 새긴 상호 — 벽과 같은 색, 빛과 그림자로만 보임(세척 과정을 가리지 않게). 집 모양만 금박.
+   ② 작동 확인이 끝나는 순간 벽에 금색 「세척 완료」 인증 도장이 찍힘.
+   위치·크기는 BRAND / STAMP 두 줄만 고치면 됨. 주소에 ?brand=0 을 붙이면 둘 다 끔(비교용). */
+const BRAND_ON = QS0.get('brand') !== '0', BEN = QS0.get('lang') === 'en';
+const BRAND = {cx:-0.02, cy:0.226, lw:0.46, W:2048, H:400}; BRAND.lh = BRAND.lw*BRAND.H/BRAND.W;
+const STAMP = {x:0.36, y:0.228, r:0.088, rot:-0.16};
+function bwCanvas(w, h){ const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+function bwHouse(x, cx, cy, sc, hole){          // 해피홈케어 집 모양 (홈페이지 로고와 같은 모양)
+  x.save(); x.translate(cx, cy); x.scale(sc, sc);
+  x.beginPath(); x.moveTo(-46,4); x.lineTo(0,-40); x.lineTo(46,4); x.lineTo(36,4); x.lineTo(36,42); x.lineTo(-36,42); x.lineTo(-36,4); x.closePath(); x.fill();
+  if(hole){ const f = x.fillStyle; x.fillStyle = hole; x.beginPath(); x.arc(0,18,13,0,7); x.fill(); x.fillStyle = f; }
+  x.restore();
+}
+function boxBlur(a, w, h, r){
+  const t = new Float32Array(a.length), o = new Float32Array(a.length), k = 1/(2*r+1);
+  for(let y=0;y<h;y++){ const row = y*w; let sm = 0;
+    for(let i=-r;i<=r;i++) sm += a[row + Math.min(w-1, Math.max(0, i))];
+    for(let x=0;x<w;x++){ t[row+x] = sm*k; sm += a[row + Math.min(w-1, x+r+1)] - a[row + Math.max(0, x-r)]; } }
+  for(let x=0;x<w;x++){ let sm = 0;
+    for(let i=-r;i<=r;i++) sm += t[Math.min(h-1, Math.max(0, i))*w + x];
+    for(let y=0;y<h;y++){ o[y*w+x] = sm*k; sm += t[Math.min(h-1, y+r+1)*w + x] - t[Math.max(0, y-r)*w + x]; } }
+  return o;
+}
+const BRANDTX = {n:bwCanvas(BRAND.W, BRAND.H), aux:bwCanvas(BRAND.W, BRAND.H), gold:bwCanvas(BRAND.W, BRAND.H)};
+for(const k of ['n','aux','gold']){ const t = new THREE.CanvasTexture(BRANDTX[k]); t.anisotropy = 8; BRANDTX[k+'T'] = t; }
+function buildBrand(){
+  const W = BRAND.W, H = BRAND.H, FF = '"Noto Sans KR", "Helvetica Neue", Arial, sans-serif';
+  // 새길 모양(흰색 = 파인 곳)
+  const sc = bwCanvas(W, H), x = sc.getContext('2d');
+  x.fillStyle = '#000'; x.fillRect(0,0,W,H); x.fillStyle = '#fff';
+  bwHouse(x, 150, 200, 3.3, '#000');
+  let fs = 176; do { x.font = `800 ${fs}px ${FF}`; fs -= 2; } while(x.measureText('HAPPY HOME CARE').width > 1640 && fs > 60);
+  x.textBaseline = 'alphabetic'; x.fillText('HAPPY HOME CARE', 330, 222);
+  x.font = `600 60px ${FF}`; try{ x.letterSpacing = '9px'; }catch(_){}
+  x.fillText(BEN ? 'PROFESSIONAL CLEANING  ·  SINCE 2016' : '해피홈케어  ·  에어컨 전문 세척  ·  SINCE 2016', 338, 334);
+  const d = x.getImageData(0,0,W,H).data, m = new Float32Array(W*H);
+  for(let i=0;i<m.length;i++) m[i] = d[i*4]/255;
+  const h1 = boxBlur(boxBlur(m, W, H, 3), W, H, 3);           // 파인 가장자리의 경사
+  const h2 = boxBlur(boxBlur(m, W, H, 7), W, H, 7);           // 이 판이 보이는 범위(글자 둘레까지만 — 나머지는 원래 벽 그대로)
+  const nx = BRANDTX.n.getContext('2d'), ni = nx.createImageData(W, H), nd = ni.data;
+  const ax = BRANDTX.aux.getContext('2d'), ai = ax.createImageData(W, H), ad = ai.data, AMP = 7;
+  for(let y=0;y<H;y++) for(let xx=0;xx<W;xx++){ const i = y*W + xx, k = i*4;
+    const gx = (h1[y*W + Math.min(W-1, xx+1)] - h1[y*W + Math.max(0, xx-1)])*0.5*AMP;     // 높이 = 1 - h1 (파인 곳이 낮음)
+    const gr = (h1[Math.min(H-1, y+1)*W + xx] - h1[Math.max(0, y-1)*W + xx])*0.5*AMP;
+    const vx = gx, vy = -gr, l = Math.hypot(vx, vy, 1);
+    nd[k] = (vx/l*0.5+0.5)*255; nd[k+1] = (vy/l*0.5+0.5)*255; nd[k+2] = (1/l*0.5+0.5)*255; nd[k+3] = 255;
+    ad[k] = (1 - 0.28*h1[i])*255; ad[k+1] = Math.min(1, h2[i]*4)*255; ad[k+2] = 0; ad[k+3] = 255; }   // R = 파인 안쪽 그늘 · G = 보이는 범위
+  nx.putImageData(ni, 0, 0); ax.putImageData(ai, 0, 0);
+  const gx2 = BRANDTX.gold.getContext('2d'); gx2.fillStyle = '#000'; gx2.fillRect(0,0,W,H); gx2.fillStyle = '#fff'; bwHouse(gx2, 150, 200, 3.12, '#000');
+  BRANDTX.nT.needsUpdate = BRANDTX.auxT.needsUpdate = BRANDTX.goldT.needsUpdate = true;
+}
+const brandWall = new THREE.Group(); brandWall.visible = BRAND_ON; scene.add(brandWall);
+if(BRAND_ON){
+  buildBrand(); document.fonts && document.fonts.ready.then(buildBrand);
+  const g = new THREE.PlaneGeometry(BRAND.lw, BRAND.lh);
+  const wm = wall.material;
+  const carve = new THREE.MeshStandardMaterial({color:wm.color.clone(), roughness:0.5, metalness:0, envMapIntensity:0.7,
+    normalMap:BRANDTX.nT, normalScale:new THREE.Vector2(1.5,1.5), alphaMap:BRANDTX.auxT, aoMap:BRANDTX.auxT, aoMapIntensity:1,
+    transparent:true, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-2});
+  if(wm.map){ const mt = wm.map.clone(); mt.repeat.set(BRAND.lw/40, BRAND.lh/24); mt.offset.set((BRAND.cx - BRAND.lw/2 + 20)/40, (BRAND.cy - BRAND.lh/2 + 12)/24); mt.needsUpdate = true; carve.map = mt; }   // 벽의 빛 번짐을 그대로 이어 받음
+  const c1 = new THREE.Mesh(g, carve); c1.position.set(BRAND.cx, BRAND.cy, 0.0008); c1.receiveShadow = true; brandWall.add(c1);
+  const gold = new THREE.MeshStandardMaterial({color:0xd4ae5a, metalness:0.9, roughness:0.3, envMapIntensity:1.25, alphaMap:BRANDTX.goldT,
+    transparent:true, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-3});
+  const c2 = new THREE.Mesh(g, gold); c2.position.set(BRAND.cx, BRAND.cy, 0.0011); c2.receiveShadow = true; brandWall.add(c2);
+}
+// ② 「세척 완료」 인증 도장 — 서비스 이름이 들어가므로 서비스가 바뀔 때만 다시 그림
+const stampCv = bwCanvas(512, 512), stampTex = new THREE.CanvasTexture(stampCv); stampTex.colorSpace = THREE.SRGBColorSpace; stampTex.anisotropy = 8;
+const stampMesh = new THREE.Mesh(new THREE.PlaneGeometry(STAMP.r*2, STAMP.r*2), new THREE.MeshStandardMaterial({map:stampTex, transparent:true, opacity:0,
+  roughness:0.36, metalness:0.55, envMapIntensity:1.15, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-4}));
+stampMesh.position.set(STAMP.x, STAMP.y, 0.0014); stampMesh.rotation.z = STAMP.rot; stampMesh.receiveShadow = true; stampMesh.visible = false; scene.add(stampMesh);
+let stampKey = '';
+function drawStamp(name){
+  if(stampKey === name) return; stampKey = name;
+  const x = stampCv.getContext('2d'), FF = '"Noto Sans KR", "Helvetica Neue", Arial, sans-serif', ink = '#8a6415';
+  x.clearRect(0,0,512,512); x.save(); x.translate(256,256); x.strokeStyle = ink; x.fillStyle = ink;
+  x.lineWidth = 13; x.beginPath(); x.arc(0,0,238,0,7); x.stroke();
+  x.lineWidth = 4;  x.beginPath(); x.arc(0,0,196,0,7); x.stroke();
+  // 둘레 글자
+  const ring = 'HAPPY HOME CARE  ★  SINCE 2016  ★  ', txt = ring + ring; x.font = `800 27px ${FF}`; x.textAlign = 'center'; x.textBaseline = 'middle';
+  const ws = [...txt].map(ch=>x.measureText(ch).width), tot = ws.reduce((a,b)=>a+b, 0); let ang = -Math.PI/2;
+  [...txt].forEach((ch,i)=>{ const a = ang + ws[i]/tot*Math.PI; x.save(); x.rotate(a + Math.PI/2); x.fillText(ch, 0, -217); x.restore(); ang += ws[i]/tot*Math.PI*2; });
+  // 가운데
+  bwHouse(x, 0, -112, 0.9, null);
+  x.globalCompositeOperation = 'destination-out'; x.beginPath(); x.arc(0, -112 + 18*0.9, 13*0.9, 0, 7); x.fill(); x.globalCompositeOperation = 'source-over';
+  let fs = 78; const main = BEN ? 'CLEANED' : '세척 완료'; do { x.font = `900 ${fs}px ${FF}`; fs -= 2; } while(x.measureText(main).width > 300);
+  x.fillText(main, 0, -8);
+  x.lineWidth = 4; x.beginPath(); x.moveTo(-128, 52); x.lineTo(128, 52); x.stroke();
+  fs = 36; do { x.font = `700 ${fs}px ${FF}`; fs -= 1; } while(x.measureText(name).width > 270 && fs > 18);
+  x.fillText(name, 0, 92);
+  x.font = `700 21px ${FF}`; try{ x.letterSpacing = '4px'; }catch(_){} x.fillText(BEN ? 'TEST RUN CHECKED' : '작동 확인 완료', 0, 136); try{ x.letterSpacing = '0px'; }catch(_){}
+  x.restore();
+  // 실제 도장처럼 잉크가 군데군데 덜 묻은 자국
+  x.globalCompositeOperation = 'destination-out';
+  for(let i=0;i<900;i++){ x.fillStyle = `rgba(0,0,0,${0.25+Math.random()*0.6})`; x.beginPath(); x.arc(Math.random()*512, Math.random()*512, 0.6+Math.random()*2.2, 0, 7); x.fill(); }
+  for(let i=0;i<7;i++){ const yy = Math.random()*512; x.fillStyle = 'rgba(0,0,0,.22)'; x.fillRect(0, yy, 512, 1+Math.random()*3); }
+  x.globalCompositeOperation = 'source-over';
+  stampTex.needsUpdate = true;
+}
+document.fonts && document.fonts.ready.then(()=>{ const k = stampKey; stampKey = ''; if(k) drawStamp(k); });
+
 /* ---------------- procedural textures (실사 질감) ---------------- */
 function cvTex(w, h, draw, {srgb=false, rep=[1,1]}={}){
   const c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -1225,7 +1326,7 @@ SVC.forEach((s,i)=>{ s.res = RES[i];
   s.items.splice(s.items.length-1, 0, it); });
 
 /* =============== timeline =============== */
-const TITLE = 2.4, PART = 1.75, UNITP = 2.2, REASM = 2.6, RUN = REAL3 ? 3.4 : 1.6, GAP = 0.3, SUMMARY = 9, RESL = 6.4;   // 3차: 작동 확인 장면을 온도 숫자를 읽을 수 있게 1.6초 → 3.4초
+const TITLE = 2.4, PART = 1.75, UNITP = 2.2, REASM = 2.6, RUN = REAL3 ? 5.0 : 1.6, GAP = 0.3, SUMMARY = 9, RESL = 6.4;   // 3차: 작동 확인 장면을 온도 숫자를 읽을 수 있게 1.6초 → 3.4초
 let acc = 0.6;
 SVC.forEach((s,i)=>{
   s.i = i; s.t0 = acc;
@@ -1670,7 +1771,7 @@ function applyTime(t){
   Object.keys(DIRT).forEach(id=>{ setDirt(id, state.sum?0.0:1); setGlow(id, 0); }); state.sparkle = [];
   sprayState.on = false; gun.visible = false; brush.visible = false; state.cur = null; state.cleanIdx = -1; sprayCone.visible = false; runSheet.visible = false;
   setPatch('evapBack',0); setPatch('chassisTop',0); state.resU = -1; state.resW = 0; state.face = -1; state.fullGlow = 0;
-  for(const k in WET) WET[k] = 0; state.dirtNow = null; meter.visible = false; state.temp = null;
+  for(const k in WET) WET[k] = 0; state.dirtNow = null; meter.visible = false; state.temp = null; stampMesh.visible = false; state.stampA = 0; state.stampCam = 0;
   unghostAll();
   let flap = 0.75, led = 1;
   if(state.sum){ flap = 0.75; led = 1;
@@ -1784,6 +1885,13 @@ function applyTime(t){
     const tin = TEMP_SVC[s.i][0], tout = lerp(tin, TEMP_SVC[s.i][1], k);
     meter.visible = a > 0.01; meter.position.set(-0.16, -0.214 - (1-a)*0.10, 0.224 + (1-a)*0.08); meter.rotation.set(-0.22, 0.10, 0);
     drawMeter(tin, tout); state.temp = {a, u, tin, tout, done:k >= 0.999};
+    if(BRAND_ON){                                          // 🏷️ 세척 완료 인증 도장
+      const p = clamp01((u - 0.70)/0.05), sa = ease(clamp01((u - 0.70)/0.035)) * (1 - ease(clamp01((u - 0.955)/0.045)));
+      stampMesh.visible = sa > 0.01; stampMesh.material.opacity = sa;
+      stampMesh.scale.setScalar(REDUCE ? 1 : 1 + 0.5*(1 - ease(p))); stampMesh.rotation.z = STAMP.rot + (REDUCE ? 0 : 0.12*(1 - ease(p)));
+      if(sa > 0) drawStamp(L(s.k, s.e));
+      state.stampA = sa; state.stampCam = ease(clamp01((u - 0.60)/0.14)) * (1 - ease(clamp01((u - 0.94)/0.06)));
+    }
   }
   // phase name
   state.phase = lt < TITLE ? 'title' : lt < s.exEnd ? 'dis' : lt < s.clB ? 'clean' : lt < s.rsB ? 'res' : lt < s.reB ? 'reasm' : 'run';
@@ -1853,7 +1961,8 @@ function autoCamera(t){
       c = mixCam(c, rc, state.resW);
     }
     if(state.temp && state.temp.a > 0){                    // 🌡️ 온도 측정 — 토출구 쪽으로 살짝 다가감(아래에 온도계·온도 카드 자리 확보)
-      c = mixCam(c, {...A0, tx:-0.05, ty:MOBILE ? -0.02 : -0.085, tz:0.14, az:A0.az*0.8, d:A0.d*(MOBILE ? 0.84 : 0.9)}, state.temp.a); }
+      c = mixCam(c, {...A0, tx:-0.05, ty:MOBILE ? -0.02 : (BRAND_ON ? -0.05 : -0.085), tz:0.14, az:A0.az*0.8, d:A0.d*(MOBILE ? 0.84 : (BRAND_ON ? 0.96 : 0.9))}, state.temp.a);
+      if(state.stampCam > 0) c = mixCam(c, {...c, tx:MOBILE ? c.tx : 0.05, ty:MOBILE ? c.ty + 0.09 : 0.055, d:c.d*(MOBILE ? 1.0 : LAND ? 1.12 : 1.08)}, state.stampCam); }
     if(state.cleanIdx>=0){
       const cl = s.clean[state.cleanIdx];
       const w = clamp01((lt-cl.a)/(cl.b-cl.a)), bump = Math.sin(w*Math.PI)*0.3;
@@ -2128,6 +2237,8 @@ function resize(){
   renderer.setSize(innerWidth, innerHeight, false);
   composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight);
   dof.uniforms.uPx.value.set(1/innerWidth, 1/innerHeight);
+  if(resize.done){ const old = gtao.normalRenderTarget; gtao.setGBuffer(); gtao.setSize(gtao.width, gtao.height); old.dispose(); dof.uniforms.tDepth.value = gtao.depthTexture; }   // 2026-11-28
+  resize.done = true;
   lens.uniforms.uAsp.value = innerWidth/innerHeight;
   fxMats.forEach(m=>m.uniforms.uH.value = innerHeight*renderer.getPixelRatio());
   /* 🖥️📱 화면 맞춤 (2026-11-28) — 화면 종류를 정하고, 3D 그림은 「가려지지 않는 빈 자리」에 맞춰 크기·위치를 잡음(applyProj) */
