@@ -3410,6 +3410,7 @@ function renderList(){
         ${extra||''}
         <div class="sep"></div>
         ${b.status==='confirmed'&&!isDoneBooking(b)?`<button onclick="reschedBooking('${b.__id}')"><i>🔁</i>일정 취소 · 새 일정 안내</button>`:''}
+        <button onclick="bkChgOpen('${b.__id}')"><i>📨</i>변경 · 취소 안내장</button>
         ${b.status!=='waiting'?`<button onclick="toWaitingBooking('${b.__id}')"><i>⏳</i>대기중으로 변경</button><div class="sep"></div>`:''}
         <button class="dgr" onclick="deleteBooking('${b.__id}')"><i>🗑</i>예약 삭제</button>
       </div>
@@ -4909,6 +4910,88 @@ async function showConfirmMsgModal(b,goCust){
   const _cb=document.getElementById('confirm-cust-btn');
   if(_cb)_cb.addEventListener('click',()=>closeConfirmMsg(true));
   modal.addEventListener('click',e=>{if(e.target===modal)closeConfirmMsg(true);});
+}
+
+// ── 📨 예약 변경 · 취소 안내장 (/change) 보내기 — 2026-11-28 ─────────────────────
+//  ⋮ 메뉴 「📨 변경 · 취소 안내장」 → 누가(고객 요청 · 회사 사정) · 변경/취소 · 기존 일정 · 보증금 고르기 → 왓츠앱 / 복사
+//  · 이 창은 안내만 보냅니다. 예약 일정 변경(✏️ · 🔁)이나 삭제는 기존 방법대로 — 취소는 안내를 보낸 뒤 삭제해도 안내장은 열립니다.
+//  · 보증금 규정은 change.html RATE · tier() 와 같게 (업무 기본 정보: 2주 초과 70% · 3일~2주 40% · 3일 이내 20% · 1일 이내 0%)
+function bkChgRate(d){return d>14?70:d>=3?40:d>1?20:0;}
+function bkChgLead(od){const t=new Date(Date.now()+8*3600e3).toISOString().slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(od||''))return 0;return Math.round((new Date(od+'T00:00:00')-new Date(t+'T00:00:00'))/864e5);}
+const BKCHG={};
+window.bkChgOpen=function(id){
+  const b=allBookings.find(x=>x.__id===id);if(!b)return;
+  document.querySelectorAll('details.rmore[open]').forEach(d=>d.removeAttribute('open'));
+  const rf=b.resched_from&&b.resched_from.date?b.resched_from:null;
+  const useRf=rf&&b.status!=='confirmed';
+  Object.assign(BKCHG,{id,k:'g',w:'c',od:useRf?rf.date:(b.booking_date||''),ot:useRf?(rf.time||''):(b.booking_time||''),dp:'0',amt:320});
+  let ov=document.getElementById('bkchg-ov');
+  if(!ov){
+    ov=document.createElement('div');ov.id='bkchg-ov';
+    ov.innerHTML='<style>#bkchg-ov{position:fixed;inset:0;z-index:9000;background:rgba(15,23,42,.5);display:flex;align-items:flex-end;justify-content:center}'+
+      '#bkchg-ov .bc-in{width:100%;max-width:520px;max-height:92vh;overflow:auto;background:#fff;border-radius:18px 18px 0 0;padding:18px 16px calc(16px + env(safe-area-inset-bottom));box-shadow:0 -10px 40px rgba(0,0,0,.25)}'+
+      '@media(min-width:700px){#bkchg-ov{align-items:center}#bkchg-ov .bc-in{border-radius:18px}}'+
+      '#bkchg-ov h3{font-size:17px;font-weight:800;margin:0 0 2px}#bkchg-ov .bc-s{font-size:12.5px;color:#64748b;margin:0 0 12px}'+
+      '#bkchg-ov .bc-r{margin-top:12px}#bkchg-ov .bc-l{font-size:12.5px;font-weight:800;color:#475569;margin-bottom:6px}'+
+      '#bkchg-ov .bc-seg{display:flex;flex-wrap:wrap;gap:6px}#bkchg-ov .bc-seg button{min-height:40px;padding:0 14px;border-radius:10px;border:1.5px solid #e2e8f0;background:#fff;font:inherit;font-size:14px;font-weight:700;color:#334155;cursor:pointer}'+
+      '#bkchg-ov .bc-seg button.on{background:#0f2540;border-color:#0f2540;color:#fff}'+
+      '#bkchg-ov input{min-height:40px;padding:0 10px;border-radius:10px;border:1.5px solid #e2e8f0;font:inherit;font-size:15px}'+
+      '#bkchg-ov .bc-pv{margin-top:14px;padding:12px;border-radius:12px;background:#f8fafc;font-size:13.5px;line-height:1.6;color:#334155;white-space:pre-line}'+
+      '#bkchg-ov .bc-pv b{color:#0f2540}#bkchg-ov .bc-hint{margin-top:10px;font-size:12px;color:#92400e;background:#fffbeb;border-radius:10px;padding:9px 11px;line-height:1.5}'+
+      '#bkchg-ov .bc-f{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:8px;margin-top:14px}#bkchg-ov .bc-f button{min-height:46px;border-radius:12px;border:0;font:inherit;font-size:14px;font-weight:800;cursor:pointer}'+
+      '#bkchg-ov .bc-wa{background:#16a34a;color:#fff}#bkchg-ov .bc-cp{background:#fde68a;color:#422006}#bkchg-ov .bc-x{background:#e2e8f0;color:#334155}</style>'+
+      '<div class="bc-in" id="bkchg-in"></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+  }
+  bkChgDraw();
+};
+function bkChgDraw(){
+  const b=allBookings.find(x=>x.__id===BKCHG.id);const box=document.getElementById('bkchg-in');if(!b||!box)return;
+  const seg=(k,opts)=>'<div class="bc-seg">'+opts.map(([v,t])=>`<button type="button" data-k="${k}" data-v="${v}" class="${BKCHG[k]===v?'on':''}">${t}</button>`).join('')+'</div>';
+  const n=bkChgLead(BKCHG.od),a=BKCHG.dp==='p'?Math.max(0,Math.round(+BKCHG.amt||0)):0;
+  let dep='보증금 없음 — 정산 칸에 「해당 없음」';
+  if(BKCHG.dp==='m')dep='회원 면제 — 정산 칸에 「골드 이상 면제」';
+  else if(BKCHG.dp==='p'){
+    if(BKCHG.w==='o')dep=BKCHG.k==='g'?`회사 사정 — RM ${a} 전액 새 일정에 적용`:`회사 사정 — RM ${a} 전액 돌려드림`;
+    else if(BKCHG.k==='x')dep=`고객 취소 — RM ${a} 환불 불가`;
+    else{const r=bkChgRate(n);dep=`방문일 ${n<=1?'1일 이내':n+'일'} 전 → 환급 ${r}% · 돌려드릴 금액 RM ${Math.round(a*r/100)}`;}
+  }
+  const st=String(b.status||''),nw=BKCHG.k==='x'?'—':st==='confirmed'?'확정된 새 일정을 보여 줌':st==='booked'?'고객이 신청한 일정(확인 중)을 보여 줌':'「새 일정 고르기」 버튼을 보여 줌';
+  box.innerHTML=`<h3>📨 변경 · 취소 안내장</h3><p class="bc-s">${escHtml(b.customer_name||'')} · 고객은 링크로 바뀐 일정 · 보증금 정산 · 규정을 봅니다</p>
+    <div class="bc-r"><div class="bc-l">무엇을</div>${seg('k',[['g','🔁 일정 변경'],['x','❌ 예약 취소']])}</div>
+    <div class="bc-r"><div class="bc-l">누구 사정</div>${seg('w',[['c','고객 요청'],['o','회사 사정 (사과 문구)']])}</div>
+    <div class="bc-r"><div class="bc-l">${BKCHG.k==='x'?'취소되는 일정':'기존 일정'}</div><div style="display:flex;gap:6px;flex-wrap:wrap"><input type="date" id="bkchg-od" value="${escAttr(BKCHG.od)}"><input id="bkchg-ot" value="${escAttr(BKCHG.ot)}" placeholder="시간 (예: 10:00)" style="flex:1;min-width:120px"></div></div>
+    <div class="bc-r"><div class="bc-l">예약보증금</div>${seg('dp',[['0','없음'],['p','받음'],['m','회원 면제']])}${BKCHG.dp==='p'?`<div style="margin-top:6px;display:flex;align-items:center;gap:6px">RM <input id="bkchg-amt" type="number" min="0" inputmode="numeric" value="${escAttr(BKCHG.amt)}" style="width:110px"></div>`:''}</div>
+    <div class="bc-pv"><b>고객 화면</b>\n· 새 일정: ${nw}\n· 보증금: ${dep}</div>
+    ${BKCHG.k==='g'&&st!=='confirmed'&&st!=='booked'&&!(b.schedule_dates&&b.schedule_dates!=='[]')?'<div class="bc-hint">⚠ 새 후보 일정이 아직 없습니다. ✏️ 수정에서 후보 일정을 먼저 저장하거나 확정한 뒤 보내 주세요.</div>':''}
+    ${BKCHG.k==='x'?'<div class="bc-hint">ℹ 안내를 보낸 뒤 예약을 삭제해도 안내장은 그대로 열립니다(품목 · 장소 칸만 빠짐).</div>':''}
+    <div class="bc-f"><button type="button" class="bc-wa" id="bkchg-wa">💬 WhatsApp</button><button type="button" class="bc-cp" id="bkchg-cp">📋 복사</button><button type="button" class="bc-x" id="bkchg-x">닫기</button></div>`;
+  box.querySelectorAll('.bc-seg button').forEach(x=>x.onclick=()=>{bkChgRead();BKCHG[x.dataset.k]=x.dataset.v;bkChgDraw();});
+  ['bkchg-od','bkchg-amt'].forEach(i=>{const e=document.getElementById(i);if(e)e.onchange=()=>{bkChgRead();bkChgDraw();};});
+  document.getElementById('bkchg-x').onclick=()=>document.getElementById('bkchg-ov').remove();
+  document.getElementById('bkchg-wa').onclick=async()=>{bkChgRead();const w=window.open('about:blank','_blank');const m=await bkChgMsg(b);const u='https://wa.me/?text='+encodeURIComponent(m);if(w&&!w.closed){try{w.location.href=u;}catch(e){window.open(u,'_blank');}}else window.open(u,'_blank');};
+  document.getElementById('bkchg-cp').onclick=async()=>{bkChgRead();const m=await bkChgMsg(b);try{await navigator.clipboard.writeText(m);showToast('✓ 안내 메시지 복사됨 · 카카오톡에 붙여넣기 하세요');}catch(e){showModal('복사',m,false);}};
+}
+function bkChgRead(){const od=document.getElementById('bkchg-od'),ot=document.getElementById('bkchg-ot'),am=document.getElementById('bkchg-amt');
+  if(od)BKCHG.od=od.value;if(ot)BKCHG.ot=ot.value.trim();if(am)BKCHG.amt=am.value;}
+async function bkChgMsg(b){
+  const en=(b.customer_lang||'ko')==='en',nm=b.customer_name||(en?'Customer':'고객');
+  let cid='';try{const list=(typeof hccLoad==='function')?await hccLoad():[];const pn=hccPN(b.customer_phone),nn=hccNN(b.customer_name);let m=null;if(pn)m=list.find(c=>hccPN(c.phone)===pn)||null;if(!m&&nn)m=list.find(c=>hccNameHit(c,nn))||null;if(m&&m._docId)cid=m._docId;}catch(e){}
+  const a=BKCHG.dp==='p'?Math.max(0,Math.round(+BKCHG.amt||0)):0,dp=BKCHG.dp==='m'?'m':String(a);
+  let u=BASE_URL+'change?b='+encodeURIComponent(b.__id)+'&k='+BKCHG.k+'&w='+BKCHG.w+(BKCHG.od?'&od='+BKCHG.od:'')+(BKCHG.ot?'&ot='+encodeURIComponent(BKCHG.ot):'')+'&dp='+dp+'&dd='+bkChgLead(BKCHG.od)+(cid?'&c='+encodeURIComponent(cid):'')+(en?'&lang=en':'');
+  try{u=await hhcShortUrl(u);}catch(e){}
+  const d=BKCHG.od?new Date(BKCHG.od+'T00:00:00'):null,tk=String(BKCHG.ot||'').split('|')[0].trim(),te=String(BKCHG.ot||'').split('|')[1]||tk;
+  const ko=d?(d.getMonth()+1)+'월 '+d.getDate()+'일('+'일월화수목금토'[d.getDay()]+')'+(tk?' '+tk:''):'';
+  const enD=d?['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]+' '+d.getDate()+' ('+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]+')'+(te?', '+te.trim():''):'';
+  const cx=BKCHG.k==='x',co=BKCHG.w==='o',dep=BKCHG.dp==='p';
+  const SIG='📞 +60 17-247 2774 · Happy Home Care';
+  if(en)return 'Hello, '+nm+' 😊\n\n'+(cx?'❌ *Booking cancelled*':'🔁 *Booking date changed*')+'\n'+(enD?'Your booking on '+enD+' has been '+(cx?'cancelled':'changed')+'.':'Your booking has been '+(cx?'cancelled':'changed')+'.')+
+    (co?'\nThis is due to our circumstances — we sincerely apologise 🙏':'')+(dep?'\n💰 Your booking deposit settlement is included.':'')+
+    '\n\n👉 Please open the link to see the '+(cx?'details':'new date')+'.\n\n📄 View notice 👉 '+u+'\n'+SIG;
+  return '안녕하세요, '+nm+' 고객님 😊\n\n'+(cx?'❌ *예약 취소 안내*':'🔁 *예약 일정 변경 안내*')+'\n'+(ko?'기존 예약 '+ko+' 일정이 '+(cx?'취소':'변경')+'되었습니다.':'예약이 '+(cx?'취소':'변경')+'되었습니다.')+
+    (co?'\n당사 사정으로 불편을 드려 진심으로 죄송합니다 🙏':'')+(dep?'\n💰 예약보증금 정산 내용도 함께 확인해 주세요.':'')+
+    '\n\n👉 링크를 열고 '+(cx?'취소 내용':'바뀐 일정')+'을 확인해 주세요.\n\n📄 안내 보기 👉 '+u+'\n'+SIG;
 }
 
 window.deleteBooking=function(id){

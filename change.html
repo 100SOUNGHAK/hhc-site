@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>예약 변경 · 취소 안내 | 해피홈케어</title>
+<meta name="format-detection" content="telephone=no">
+<meta name="theme-color" content="#0f2540">
+<meta name="robots" content="noindex">
+<!-- ══════════════════════════════════════════════════════════════
+     🔁 예약 변경 · 취소 안내장 (/change) — 2026-11-28
+       · 예약관리 ⋮ 「📨 변경 · 취소 안내장」에서 보냅니다 (booking-admin.html bkChg*)
+       · 주소: /change?b=예약ID&k=g(변경)|x(취소)&w=c(고객 요청)|o(회사 사정)&od=기존날짜&ot=기존시간
+               &dp=보증금(RM 숫자 · 0=없음 · m=회원 면제)&dd=방문일까지 남은 일수(보낼 때 기준)[&c=고객ID][&lang=en]
+       · 자료: GET /api/booking?id= — 지금 예약 상태로 새 일정(확정 · 확인 중 · 고르는 중)을 보여 줍니다.
+         예약을 지운 뒤에도(취소) 주소에 담긴 기존 일정 · 보증금으로 그대로 열립니다.
+       · 보증금 규정(업무 기본 정보): 고객 변경 = 2주 초과 70% · 3일~2주 40% · 3일 이내 20% · 1일 이내 0%
+                                     고객 취소 = 환불 불가 · 회사 사정 = 전액(변경은 새 일정에 적용, 취소는 돌려드림)
+         규정이 바뀌면 이 파일 RATE · tier() 와 booking-admin.html bkChgRate() 를 함께 고칠 것
+     ══════════════════════════════════════════════════════════════ -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="해피홈케어 Happy Home Care">
+<meta property="og:title" content="예약 변경 · 취소 안내 — 해피홈케어">
+<meta property="og:description" content="바뀐 일정과 예약보증금 정산 내용을 확인하세요.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230f2540'/%3E%3Cg fill='%23e3c98a' transform='translate(20 20) scale(0.6)'%3E%3Crect x='15' y='14' width='19' height='74' rx='3.5'/%3E%3Crect x='66' y='14' width='19' height='74' rx='3.5'/%3E%3Cpath d='M8 50 L50 22 L92 50 L84 58 L50 36 L16 58Z'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@700&display=swap" rel="stylesheet">
+<style>
+
+:root{--n9:#08172b;--n8:#0f2540;--n7:#173a5e;--g5:#c9a44c;--g3:#e3c98a;--g0:#fbf5e6;--g7:#8f6f28;--ink:#161d27;--ink7:#333d4b;--ink6:#4d5866;--ink4:#8891a0;--line:#e8e2d4;--paper:#fdfcf9;--cream:#f6f2e9;--ok:#0E9B63;--tl:#0f766e;--red:#DC2626;--amb:#F0B429;
+  --e2:0 1px 2px rgba(11,24,51,.10),0 8px 16px -4px rgba(11,24,51,.16),0 26px 44px -14px rgba(11,24,51,.34);--ease:cubic-bezier(.22,.61,.36,1)}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{-webkit-text-size-adjust:100%}
+body{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',sans-serif;background:#e9ebf0;color:var(--ink);line-height:1.55;font-size:16px;letter-spacing:-.01em;word-break:keep-all;-webkit-font-smoothing:antialiased}
+button{font:inherit;border:0;background:none;color:inherit;cursor:pointer}
+a{color:inherit;text-decoration:none}
+.num{font-variant-numeric:tabular-nums}
+
+
+.cw{max-width:560px;margin:0 auto;background:var(--cream);min-height:100vh;box-shadow:0 0 60px rgba(8,23,43,.1);padding-bottom:calc(90px + env(safe-area-inset-bottom));overflow:hidden}
+
+/* 히어로 */
+.hero{color:#fff;padding:calc(16px + env(safe-area-inset-top)) 18px 24px;border-radius:0 0 30px 30px;background:radial-gradient(120% 70% at 50% 0%,#1d4573 0%,var(--n8) 55%,var(--n9) 100%)}
+.brand{display:flex;align-items:center;gap:10px}
+.logo{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:rgba(255,255,255,.08);border:1px solid rgba(227,201,138,.35)}
+.logo svg{width:22px;height:22px}
+.brand b{display:block;font-size:17px;font-weight:800;line-height:1.2}
+.brand small{display:block;font-size:11.5px;font-weight:700;color:var(--g3);letter-spacing:.06em}
+.lang{margin-left:auto;display:flex;padding:3px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.16)}
+.lang button{min-width:44px;padding:6px 11px;border-radius:999px;font-size:12px;font-weight:800;color:rgba(255,255,255,.7)}
+.lang button.on{background:#fff;color:var(--n8)}
+.kick{margin-top:22px;text-align:center;font-size:13px;font-weight:800;letter-spacing:.08em;color:var(--g3)}
+.h1{margin-top:6px;text-align:center;font-family:'Noto Serif KR',serif;font-size:25px;line-height:1.4;letter-spacing:-.04em;text-wrap:balance}
+.sub{margin:8px auto 0;max-width:340px;text-align:center;font-size:15px;color:rgba(255,255,255,.76);text-wrap:balance}
+
+/* 일정 바뀜 표시 (히어로 안) */
+.sw{margin:18px auto 0;max-width:380px;display:grid;grid-template-columns:1fr 30px 1fr;align-items:center;gap:6px}
+.sw.one{grid-template-columns:1fr;max-width:220px}
+.dt{border-radius:18px;padding:11px 8px 12px;text-align:center;background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}
+.dt small{display:block;font-size:11.5px;font-weight:800;color:rgba(255,255,255,.6)}
+.dt b{display:block;margin-top:3px;font-size:20px;font-weight:900;letter-spacing:-.03em;line-height:1.2}
+.dt span{display:block;margin-top:2px;font-size:13.5px;font-weight:700;color:rgba(255,255,255,.75)}
+.dt.old b,.dt.old span{text-decoration:line-through;text-decoration-color:rgba(255,120,120,.9);text-decoration-thickness:2px;color:rgba(255,255,255,.55)}
+.dt.new{background:linear-gradient(150deg,rgba(255,255,255,.2),rgba(255,255,255,.08));box-shadow:inset 0 0 0 1.5px var(--g3),0 14px 26px -14px rgba(0,0,0,.6)}
+.dt.new small{color:var(--g3)}
+.dt.wait{box-shadow:inset 0 0 0 1.5px dashed rgba(227,201,138,.7);background:rgba(227,201,138,.1)}
+.dt.wait b{font-size:17px;color:var(--g3)}
+.dt.cx small{color:#ffb4b4}
+.ar{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--g3);color:var(--n9);font-weight:900;font-size:15px}
+
+/* 사유 띠 */
+.why{margin:16px auto 0;max-width:380px;display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:16px;background:rgba(255,255,255,.08);font-size:14px;line-height:1.5;color:rgba(255,255,255,.86);text-align:left}
+.why .e{flex:none;font-size:18px;line-height:1.3}
+.why b{color:#fff}
+
+/* 카드 */
+.sec{padding:18px 14px 0}
+.card{background:var(--paper);border-radius:22px;box-shadow:var(--e2);overflow:hidden;padding:16px}
+.card+.card{margin-top:12px}
+.ct{display:flex;align-items:center;gap:8px;font-size:16.5px;font-weight:850;letter-spacing:-.02em}
+.ct .tg{margin-left:auto;flex:none;font-size:12px;font-weight:850;padding:4px 10px;border-radius:999px;background:var(--g0);color:var(--g7)}
+.ct .tg.ok{background:#e3f4ec;color:var(--ok)}
+.ct .tg.no{background:#fdecec;color:var(--red)}
+.cs{margin-top:2px;font-size:13.5px;color:var(--ink4);font-weight:600}
+.kv{margin-top:12px;display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:15px;padding-top:12px;border-top:1px dashed var(--line)}
+.kv span{color:var(--ink4);font-weight:700;white-space:nowrap}
+.kv b{text-align:right;font-weight:700;overflow-wrap:anywhere}
+.kv b s{color:var(--ink4);font-weight:600;margin-right:6px}
+
+/* 보증금 정산 */
+.dep{margin-top:12px;border-radius:18px;padding:14px 16px;background:linear-gradient(150deg,var(--n7),var(--n9));color:#fff}
+.dep .l{display:flex;justify-content:space-between;align-items:baseline;font-size:14px;color:rgba(255,255,255,.72);padding:3px 0}
+.dep .l b{color:#fff;font-size:15px;font-weight:800}
+.dep .l.mn b{color:#ffb4b4}
+.dep hr{border:0;border-top:1px solid rgba(255,255,255,.16);margin:8px 0}
+.dep .tot{display:flex;justify-content:space-between;align-items:baseline}
+.dep .tot span{font-size:14px;font-weight:800;color:var(--g3)}
+.dep .tot b{font-size:28px;font-weight:900;letter-spacing:-.03em}
+.dep .tot b small{font-size:15px;font-weight:800;margin-right:3px;color:rgba(255,255,255,.8)}
+.dep p{margin-top:8px;font-size:13px;line-height:1.5;color:rgba(255,255,255,.7)}
+.note{margin-top:12px;display:flex;gap:10px;padding:12px 13px;border-radius:14px;background:var(--g0);font-size:14.5px;line-height:1.55;color:var(--ink7)}
+.note.ok{background:#e9f7f0}
+
+/* 규정표 */
+.rt{margin-top:12px;display:grid;gap:6px}
+.rr{display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:13px;background:#f3f0e8;font-size:14.5px;transition:background .16s}
+.rr span{flex:1;font-weight:700;color:var(--ink7)}
+.rr b{flex:none;font-size:16px;font-weight:900;color:var(--n8)}
+.rr.z b{color:var(--red)}
+.rr.me{background:var(--n8);color:#fff;box-shadow:0 10px 20px -12px rgba(8,23,43,.8)}
+.rr.me span{color:#fff}.rr.me b{color:var(--g3)}
+.rr .me-t{flex:none;font-size:11px;font-weight:900;padding:2px 7px;border-radius:999px;background:var(--g3);color:var(--n9)}
+.rl{margin-top:12px;list-style:none;display:grid;gap:7px;font-size:14px;color:var(--ink6);line-height:1.55}
+.rl li{display:flex;gap:8px}
+.rl li::before{content:'·';font-weight:900;color:var(--g5)}
+.fold{display:flex;align-items:center;width:100%;text-align:left;gap:8px}
+.fold .cv{margin-left:auto;font-size:13px;font-weight:800;color:var(--ink4)}
+.card.shut .fb{display:none}
+
+/* 버튼 */
+.pbtn{margin-top:14px;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:56px;padding:8px 14px;border-radius:15px;font-size:16px;font-weight:850;color:#fff;background:linear-gradient(145deg,var(--n7),var(--n9));box-shadow:0 10px 20px -10px rgba(8,23,43,.75);transition:transform .14s var(--ease)}
+.sbtn{margin-top:10px;display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:48px;border-radius:13px;font-size:15px;font-weight:850;color:var(--n8);background:#fff;border:1.5px solid var(--line);transition:transform .14s var(--ease)}
+.pbtn:active,.sbtn:active{transform:scale(.97)}
+.sorry{margin-top:12px;padding:16px;border-radius:18px;background:linear-gradient(135deg,#f8ebc0,var(--g5) 70%,#b8913d);color:var(--n9)}
+.sorry b{display:block;font-size:16.5px;font-weight:900}
+.sorry span{display:block;margin-top:3px;font-size:14.5px;font-weight:700;opacity:.85;line-height:1.5}
+.foot{padding:20px 16px 6px;text-align:center;font-size:12px;color:var(--ink4)}
+
+/* 하단 */
+.dock{position:fixed;left:0;right:0;bottom:0;z-index:20;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(246,242,233,.94);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-top:1px solid #e6dfcf}
+.dock .in{max-width:536px;margin:0 auto;display:grid;grid-template-columns:1.4fr 1fr;gap:8px}
+.dock a,.dock button{display:flex;align-items:center;justify-content:center;gap:5px;min-height:52px;border-radius:14px;font-size:15.5px;font-weight:850;white-space:nowrap}
+.dock .a{color:var(--n9);background:linear-gradient(145deg,#f4e5b4,var(--g5));box-shadow:inset 0 1px 0 rgba(255,255,255,.7),0 8px 18px -8px rgba(201,164,76,.7)}
+.dock .b{color:var(--ink7);background:#ece7da}
+@media (max-width:370px){.h1{font-size:22px}.dt b{font-size:18px}.dock a,.dock button{font-size:14px}}
+@media (prefers-reduced-motion:no-preference){.dt.new{animation:pop .5s var(--ease) both .15s}@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.96)}}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+/* 불러오기 · 오류 */
+.msgb{padding:100px 28px 40px;text-align:center}
+.msgb .ic{width:76px;height:76px;margin:0 auto;border-radius:50%;display:grid;place-items:center;font-size:34px;background:var(--paper);box-shadow:var(--e2)}
+.msgb h3{margin-top:18px;font-size:20px;font-weight:850}
+.msgb p{margin-top:8px;font-size:15px;color:var(--ink6)}
+.spin{width:34px;height:34px;margin:0 auto;border-radius:50%;border:3px solid var(--line);border-top-color:var(--n8);animation:rot .9s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.dock[hidden]{display:none}
+.its{margin:0;padding:0;list-style:none;text-align:right}
+</style>
+<script src="/hhc-sendmsg.js"></script>
+<script src="/hhc-protect.js"></script>
+</head>
+<body>
+<div class="cw" id="app"><div class="msgb"><div class="spin"></div><p>예약 안내를 불러오는 중…</p></div></div>
+<div class="dock" id="dock" hidden><div class="in" id="dockin"></div></div>
+<script>
+(function(){
+  var TEL='60172472774';
+  var q=new URLSearchParams(location.search);
+  var BID=(q.get('b')||'').trim();if(!/^[A-Za-z0-9_-]{4,80}$/.test(BID))BID='';
+  var CID=(q.get('c')||'').trim();if(!/^[A-Za-z0-9_-]{4,60}$/.test(CID))CID='';
+  var KIND=q.get('k')==='x'?'cancel':'change';
+  var WHO=q.get('w')==='o'?'co':'cust';
+  var OD=/^\d{4}-\d{2}-\d{2}$/.test(q.get('od')||'')?q.get('od'):'';
+  var OT=String(q.get('ot')||'').slice(0,40);
+  var DPq=String(q.get('dp')||'').trim();
+  var DEP=DPq==='m'?'ex':(+DPq>0?'paid':'none');
+  var AMT=DEP==='paid'?Math.min(100000,Math.round(+DPq)):0;
+  var DD=q.has('dd')&&q.get('dd')!==''&&isFinite(+q.get('dd'))?+q.get('dd'):null;
+  var M=window.HHCMsg||null;
+  var S={lang:q.get('lang')==='en'?'en':'ko',bk:null,ok:false,err:false};
+  try{if(!q.get('lang')){var sl=localStorage.getItem('hhc_chg_lang');if(sl==='en'||sl==='ko')S.lang=sl;}}catch(e){}
+
+  var T={ko:{
+    kick_change:'예약 변경 안내',kick_cancel:'예약 취소 안내',
+    h_set:'예약 일정이 변경되었습니다',h_wait:'새 일정을 확인하고 있습니다',h_pick:'새 일정을 골라 주세요',h_cancel:'예약이 취소되었습니다',
+    s_cust_change:'요청하신 대로 일정을 바꿨습니다.',s_cust_cancel:'요청하신 예약을 취소했습니다.',
+    s_co_change:'당사 사정으로 일정을 바꾸게 되어 죄송합니다.',s_co_cancel:'당사 사정으로 예약을 취소하게 되어 죄송합니다.',
+    old:'기존 일정',nu:'새 일정',nuw:'신청하신 일정',pick:'새 일정',pickb:'고르는 중',cxd:'취소된 일정',
+    why_cust:'<b>고객님 요청</b>으로 처리되었습니다.',why_co:'<b>당사 사정</b>으로 처리되었습니다. 불편을 드려 진심으로 죄송합니다.',
+    c_detail:'예약 내용',k_name:'예약자',k_place:'방문 장소',k_items:'의뢰 품목',k_date:'방문 일정',k_state:'상태',
+    st_set:'확정',st_wait:'확정 확인 중',st_pick:'새 일정 선택 대기',st_cx:'취소',
+    c_dep:'예약보증금 정산',dep_paid:'보증금',dep_rate:'환급 비율',dep_keep:'공제',dep_back:'돌려드릴 금액',dep_carry:'새 일정에 그대로 적용',
+    dep_p_change:'변경 요청 시점: 방문 예정일 {n} 전',dep_p_cancel:'예약 취소 시 보증금은 환불되지 않습니다.',dep_p_co:'당사 사정이므로 보증금은 공제 없이 전액 그대로입니다.',
+    dep_none:'이 예약은 보증금을 받지 않았습니다. 정산할 금액이 없습니다.',dep_ex:'멤버십 회원(골드 이상)은 예약보증금이 면제되어 정산할 금액이 없습니다.',
+    tg_back:'환급',tg_none:'해당 없음',tg_no:'환불 불가',tg_full:'전액',
+    back_how:'💳 돌려받으실 계좌(은행 · 예금주 · 계좌번호)를 왓츠앱으로 보내 주시면 송금해 드립니다.',
+    carry_how:'✅ 보증금 RM {a}은 새 일정에 그대로 적용됩니다. 따로 하실 일은 없습니다.',
+    co_back_how:'💳 취소된 예약의 보증금 RM {a}은 전액 돌려드립니다. 돌려받으실 계좌를 왓츠앱으로 보내 주세요.',
+    c_next:'다음 할 일',
+    nx_set:'새 일정이 확정되었습니다. 콘도 관리실 작업방문등록만 새 날짜로 다시 해 주세요.',
+    nx_wait:'신청하신 일정을 확인한 뒤 확정 안내를 드리겠습니다. 다른 날짜로 바꾸셔도 됩니다.',
+    nx_pick:'아래 버튼을 눌러 가능하신 날짜와 시간을 골라 주세요.',
+    nx_cancel:'다시 필요하실 때 언제든 의뢰해 주세요.',
+    b_set:'📍 예약 상세 · 작업방문등록',b_wait:'📍 진행 안내 보기',b_pick:'📅 새 일정 고르기',b_again:'📥 다시 의뢰하기',
+    sorry_t:'다시 한번 사과드립니다',sorry_s:'바뀐 일정에 맞춰 더 꼼꼼히 준비하겠습니다. 불편하신 점은 언제든 말씀해 주세요.',
+    sorry_cx:'다음에 더 좋은 서비스로 보답하겠습니다. 불편하신 점은 언제든 말씀해 주세요.',
+    c_rule:'예약 취소 · 변경 규정',rule_s:'예약보증금을 받은 예약에 적용됩니다',open:'펼치기',close:'접기',
+    r_head:'일정 변경 시 보증금 환급 (방문 예정일 기준)',
+    r1:'2주 넘게 남았을 때',r2:'3일 ~ 2주 남았을 때',r3:'3일 이내',r4:'1일 이내',r_me:'지금',
+    rl1:'예약보증금(RM 320)은 2주 이후 일정을 예약할 때 받습니다.',
+    rl2:'예약을 취소하시면 보증금은 환불되지 않습니다.',
+    rl3:'당사 사정으로 취소 · 변경할 때는 공제 없이 전액 돌려드리거나 새 일정에 그대로 적용합니다.',
+    rl4:'멤버십 골드 이상 회원은 예약보증금이 면제됩니다.',
+    d_unit:'일',d_half:'1일 이내',hon:' 고객님',
+    wa:'💬 왓츠앱 문의',my:'🏠 마이페이지',home:'🏠 홈페이지',
+    waT:function(x){return '안녕하세요, 예약 변경 · 취소 안내 관련 문의드립니다.'+x;},
+    loading:'예약 안내를 불러오는 중…',errH:'안내를 열 수 없습니다',errP:'링크가 잘못되었거나 만료되었습니다. 왓츠앱으로 문의해 주시면 다시 보내 드리겠습니다.',
+    ft:'해피홈케어 · HAPPY WORKS SERVICES SDN. BHD. · +60 17-247 2774'
+  },en:{
+    kick_change:'Booking change notice',kick_cancel:'Booking cancellation notice',
+    h_set:'Your booking has been rescheduled',h_wait:'We are checking your new date',h_pick:'Please choose a new date',h_cancel:'Your booking has been cancelled',
+    s_cust_change:'We have changed the date as you requested.',s_cust_cancel:'We have cancelled the booking as you requested.',
+    s_co_change:'We are sorry to reschedule due to our circumstances.',s_co_cancel:'We are sorry to cancel due to our circumstances.',
+    old:'Previous',nu:'New date',nuw:'Your chosen date',pick:'New date',pickb:'Choosing',cxd:'Cancelled',
+    why_cust:'Processed at <b>your request</b>.',why_co:'Processed due to <b>our circumstances</b>. We sincerely apologise for the inconvenience.',
+    c_detail:'Booking details',k_name:'Name',k_place:'Location',k_items:'Service',k_date:'Visit',k_state:'Status',
+    st_set:'Confirmed',st_wait:'Being confirmed',st_pick:'Awaiting your new date',st_cx:'Cancelled',
+    c_dep:'Booking deposit',dep_paid:'Deposit',dep_rate:'Refund rate',dep_keep:'Deducted',dep_back:'Refund to you',dep_carry:'Applied to the new date',
+    dep_p_change:'Change requested {n} before the visit date',dep_p_cancel:'The deposit is not refundable when a booking is cancelled.',dep_p_co:'As this is due to us, your full deposit is kept with no deduction.',
+    dep_none:'No deposit was taken for this booking. Nothing to settle.',dep_ex:'Membership (Gold and above) is exempt from the booking deposit. Nothing to settle.',
+    tg_back:'Refund',tg_none:'N/A',tg_no:'Non-refundable',tg_full:'Full',
+    back_how:'💳 Please send your bank, account name and account number on WhatsApp and we will transfer it.',
+    carry_how:'✅ Your RM {a} deposit is applied to the new date. Nothing else to do.',
+    co_back_how:'💳 Your RM {a} deposit will be refunded in full. Please send your bank details on WhatsApp.',
+    c_next:'What to do next',
+    nx_set:'Your new date is confirmed. Please re-register the work visit with your condo management for the new date.',
+    nx_wait:'We will confirm your chosen date shortly. You can still pick another date.',
+    nx_pick:'Tap the button below to choose a date and time that suits you.',
+    nx_cancel:'Whenever you need us again, just send us a request.',
+    b_set:'📍 Booking details · work permit',b_wait:'📍 View progress',b_pick:'📅 Choose a new date',b_again:'📥 Request again',
+    sorry_t:'Our sincere apologies again',sorry_s:'We will prepare even more carefully for the new date. Please let us know anytime if anything is inconvenient.',
+    sorry_cx:'We hope to make it up to you with even better service next time. Please let us know anytime if anything is inconvenient.',
+    c_rule:'Cancellation & change policy',rule_s:'Applies to bookings with a deposit',open:'Show',close:'Hide',
+    r_head:'Deposit refund on date change (from the visit date)',
+    r1:'More than 2 weeks before',r2:'3 days – 2 weeks before',r3:'Within 3 days',r4:'Within 1 day',r_me:'Now',
+    rl1:'A RM 320 deposit is taken for bookings more than 2 weeks ahead.',
+    rl2:'The deposit is not refundable if you cancel the booking.',
+    rl3:'If we cancel or change for our own reasons, the deposit is refunded in full or applied to the new date.',
+    rl4:'Gold members and above are exempt from the deposit.',
+    d_unit:'days',d_half:'within 1 day',hon:'',
+    wa:'💬 WhatsApp us',my:'🏠 MY PAGE',home:'🏠 Home',
+    waT:function(x){return 'Hello, I have a question about my booking change / cancellation notice.'+x;},
+    loading:'Loading your booking notice…',errH:'This notice cannot be opened',errP:'The link may be wrong or expired. Message us on WhatsApp and we will send it again.',
+    ft:'Happy Home Care · HAPPY WORKS SERVICES SDN. BHD. · +60 17-247 2774'
+  }};
+  function L(){return T[S.lang];}
+  function en(){return S.lang==='en';}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function fmt(s,o){return s.replace(/\{(\w+)\}/g,function(_,k){return o[k];});}
+  var W=[['일','Sun'],['월','Mon'],['화','Tue'],['수','Wed'],['목','Thu'],['금','Fri'],['토','Sat']],MN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function ymdD(s){var m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(s||''));return m?new Date(+m[1],m[2]-1,+m[3]):null;}
+  function fD(s){var t=ymdD(s);if(!t)return '';return en()?W[t.getDay()][1]+', '+t.getDate()+' '+MN[t.getMonth()]:(t.getMonth()+1)+'월 '+t.getDate()+'일 ('+W[t.getDay()][0]+')';}
+  /* 시간 글자 — 「09:00 전후|Around 09:00」 (go.html fT 와 같은 규칙) */
+  function fT(t){t=String(t||'');if(!t)return '';if(t.indexOf('|')>=0){var p=t.split('|');return en()?(p[1]||p[0]):(p[0]||t);}
+    return en()?(t.replace('전후','').trim().replace(/^(\d{2}:\d{2})$/,'Around $1')||t):t;}
+  function myToday(){return new Date(Date.now()+8*3600e3).toISOString().slice(0,10);}
+
+  /* 보증금 규정 — 방문 예정일까지 남은 일수 */
+  var RATE=[70,40,20,0];
+  function tier(d){if(d>14)return 0;if(d>=3)return 1;if(d>1)return 2;return 3;}
+  function lead(){if(DD!=null)return DD;var a=ymdD(OD),b=ymdD(myToday());return a&&b?Math.round((a-b)/864e5):0;}
+  function daysTxt(n){return n<=1?L().d_half:(en()?n+' '+L().d_unit:n+L().d_unit);}
+
+  /* 지금 예약 상태 → 새 일정 */
+  function state(){
+    if(KIND==='cancel')return 'cancel';
+    var b=S.bk;if(!b)return 'pick';
+    var st=String(b.status||'');
+    if(st==='confirmed'&&b.booking_date)return 'set';
+    if(st==='booked'&&b.booking_date)return 'wait';
+    return 'pick';
+  }
+  function goUrl(){return '/go?j=b:'+encodeURIComponent(BID)+(CID?'&c='+encodeURIComponent(CID):'')+(en()?'&lang=en':'');}
+  function myUrl(){return CID?(en()?'/my-en.html':'/my.html')+'?c='+encodeURIComponent(CID)+'&lang='+S.lang:'/home'+(en()?'?lang=en':'');}
+  function items(){var b=S.bk||{};var a=String(b.booking_items||'').split(/\n|,\s*/).map(function(x){return x.trim();}).filter(Boolean);
+    if(en()&&M&&M.sEnIt)a=a.map(M.sEnIt);return a;}
+  function oldD(){return OD||(S.bk&&S.bk.resched_from&&S.bk.resched_from.date)||'';}
+  function oldT(){return OT||(S.bk&&S.bk.resched_from&&S.bk.resched_from.time)||'';}
+  function waUrl(){var x='';if(oldD())x+='\n· '+(en()?'Previous date: ':'기존 일정: ')+fD(oldD())+' '+fT(oldT());var b=S.bk||{};if(b.customer_name)x+='\n· '+(en()?'Name: ':'예약자: ')+b.customer_name;
+    return 'https://wa.me/'+TEL+'?text='+encodeURIComponent(L().waT(x));}
+
+  function depBox(){
+    var t=L(),a=AMT;
+    if(DEP==='none')return {tag:'<span class="tg">'+t.tg_none+'</span>',body:'<div class="note">'+t.dep_none+'</div>'};
+    if(DEP==='ex')return {tag:'<span class="tg ok">'+t.tg_none+'</span>',body:'<div class="note ok">👑 '+t.dep_ex+'</div>'};
+    if(WHO==='co'){var carry=KIND==='change';
+      return {tag:'<span class="tg ok">'+t.tg_full+'</span>',body:'<div class="dep num"><div class="l"><span>'+t.dep_paid+'</span><b>RM '+a+'</b></div>'+
+        '<div class="l"><span>'+t.dep_keep+'</span><b>RM 0</b></div><hr><div class="tot"><span>'+(carry?t.dep_carry:t.dep_back)+'</span><b><small>RM</small>'+a+'</b></div>'+
+        '<p>'+t.dep_p_co+'</p></div><div class="note ok">'+fmt(carry?t.carry_how:t.co_back_how,{a:a})+'</div>'};}
+    if(KIND==='cancel')return {tag:'<span class="tg no">'+t.tg_no+'</span>',body:'<div class="dep num"><div class="l"><span>'+t.dep_paid+'</span><b>RM '+a+'</b></div>'+
+        '<div class="l mn"><span>'+t.dep_keep+'</span><b>− RM '+a+'</b></div><hr><div class="tot"><span>'+t.dep_back+'</span><b><small>RM</small>0</b></div><p>'+t.dep_p_cancel+'</p></div>'};
+    var n=lead(),r=RATE[tier(n)],back=Math.round(a*r/100);
+    return {tag:'<span class="tg'+(r?'':' no')+'">'+t.tg_back+' '+r+'%</span>',body:'<div class="dep num"><div class="l"><span>'+t.dep_paid+'</span><b>RM '+a+'</b></div>'+
+      '<div class="l"><span>'+t.dep_rate+'</span><b>'+r+'%</b></div><div class="l mn"><span>'+t.dep_keep+'</span><b>− RM '+(a-back)+'</b></div><hr>'+
+      '<div class="tot"><span>'+t.dep_back+'</span><b><small>RM</small>'+back+'</b></div><p>'+fmt(t.dep_p_change,{n:daysTxt(n)})+'</p></div>'+
+      (back?'<div class="note">'+t.back_how+'</div>':'')};
+  }
+
+  var ruleOpen=false;
+  function langBtns(){return '<div class="lang"><button data-l="ko" class="'+(en()?'':'on')+'">한국어</button><button data-l="en" class="'+(en()?'on':'')+'">EN</button></div>';}
+  function brand(){return '<div class="brand"><div class="logo"><svg viewBox="0 0 100 100" fill="#e3c98a"><rect x="15" y="14" width="19" height="74" rx="3.5"/><rect x="66" y="14" width="19" height="74" rx="3.5"/><path d="M8 50 L50 22 L92 50 L84 58 L50 36 L16 58Z"/></svg></div>'+
+    '<div><b>'+(en()?'Happy Home Care':'해피홈케어')+'</b><small>HAPPY WORKS SERVICES</small></div>'+langBtns()+'</div>';}
+  function bind(){
+    [].forEach.call(document.querySelectorAll('.lang button'),function(b){b.onclick=function(){S.lang=b.getAttribute('data-l');try{localStorage.setItem('hhc_chg_lang',S.lang);}catch(e){}render();};});
+    var rf=document.getElementById('rf');if(rf)rf.onclick=function(){ruleOpen=!ruleOpen;render();};
+  }
+  function render(){
+    var t=L(),app=document.getElementById('app'),dock=document.getElementById('dock');
+    document.documentElement.lang=S.lang;
+    document.title=(en()?'Booking change notice':'예약 변경 · 취소 안내')+' | '+(en()?'Happy Home Care':'해피홈케어');
+    if(!S.ok){
+      app.innerHTML=S.err
+        ?'<header class="hero" style="padding-bottom:18px">'+brand()+'</header><div class="msgb" style="padding-top:60px"><div class="ic">🔗</div><h3>'+t.errH+'</h3><p>'+t.errP+'</p></div>'
+        :'<div class="msgb"><div class="spin"></div><p>'+t.loading+'</p></div>';
+      if(S.err){dock.hidden=false;document.getElementById('dockin').innerHTML='<a class="a" href="'+waUrl()+'" target="_blank" rel="noopener">'+t.wa+'</a><a class="b" href="'+myUrl()+'">'+(CID?t.my:t.home)+'</a>';bind();}
+      return;
+    }
+    var st=state(),ch=KIND==='change',co=WHO==='co',b=S.bk||{};
+    var h1=st==='cancel'?t.h_cancel:st==='set'?t.h_set:st==='wait'?t.h_wait:t.h_pick;
+    var od=oldD(),ot=oldT();
+    var oldBox='<div class="dt old'+(ch?'':' cx')+'"><small>'+(ch?t.old:t.cxd)+'</small><b>'+(fD(od)||'—')+'</b><span>'+esc(fT(ot)||' ')+'</span></div>';
+    var newBox=st==='pick'?'<div class="dt wait"><small>'+t.pick+'</small><b>'+t.pickb+'</b><span>…</span></div>'
+      :'<div class="dt new"><small>'+(st==='wait'?t.nuw:t.nu)+'</small><b>'+fD(b.booking_date)+'</b><span>'+esc(fT(b.booking_time)||' ')+'</span></div>';
+    var sw=ch?'<div class="sw">'+oldBox+'<div class="ar">→</div>'+newBox+'</div>':'<div class="sw one">'+oldBox+'</div>';
+    var D=depBox();
+    var n=lead(),me=(!co&&ch&&DEP==='paid')?tier(n):-1;
+    var rows=[t.r1,t.r2,t.r3,t.r4].map(function(x,i){return '<div class="rr'+(RATE[i]?'':' z')+(i===me?' me':'')+'"><span>'+x+'</span>'+(i===me?'<i class="me-t" style="font-style:normal">'+t.r_me+'</i>':'')+'<b>'+RATE[i]+'%</b></div>';}).join('');
+    var stTxt=st==='cancel'?t.st_cx:st==='set'?t.st_set:st==='wait'?t.st_wait:t.st_pick;
+    var stCol=st==='cancel'?'var(--red)':st==='set'?'var(--ok)':'var(--g7)';
+    var dateVal=st==='cancel'?'<s>'+fD(od)+' '+esc(fT(ot))+'</s>':st==='pick'?(od?'<s>'+fD(od)+'</s>':'')+t.pickb:(od?'<s>'+fD(od)+'</s>':'')+fD(b.booking_date)+' '+esc(fT(b.booking_time));
+    var it=items();
+    var kv='';
+    if(b.customer_name)kv+='<span>'+t.k_name+'</span><b>'+esc(b.customer_name)+(en()?'':t.hon)+'</b>';
+    if(b.customer_address&&b.customer_address!==b.customer_name)kv+='<span>'+t.k_place+'</span><b>'+esc(b.customer_address)+'</b>';
+    if(it.length)kv+='<span>'+t.k_items+'</span><b>'+it.map(esc).join('<br>')+'</b>';
+    kv+='<span>'+t.k_date+'</span><b>'+dateVal+'</b><span>'+t.k_state+'</span><b style="color:'+stCol+'">'+stTxt+'</b>';
+    var nx=st==='cancel'?t.nx_cancel:st==='set'?t.nx_set:st==='wait'?t.nx_wait:t.nx_pick;
+    var nxBtn=st==='cancel'?'<a class="pbtn" href="/request.html'+(en()?'?lang=en':'')+'">'+t.b_again+'</a>'
+      :BID?'<a class="pbtn" href="'+goUrl()+'">'+(st==='set'?t.b_set:st==='wait'?t.b_wait:t.b_pick)+'</a>':'';
+    app.innerHTML='<header class="hero">'+brand()+
+      '<div class="kick">'+(ch?t.kick_change:t.kick_cancel)+'</div><h1 class="h1">'+h1+'</h1><p class="sub">'+t['s_'+WHO+'_'+KIND]+'</p>'+sw+
+      '<div class="why"><span class="e">'+(co?'🙏':'🗓️')+'</span><span>'+(co?t.why_co:t.why_cust)+'</span></div></header>'+
+      '<section class="sec">'+
+      '<div class="card"><div class="ct">📋 '+t.c_detail+'</div><div class="kv">'+kv+'</div></div>'+
+      '<div class="card"><div class="ct">💰 '+t.c_dep+D.tag+'</div>'+D.body+'</div>'+
+      '<div class="card"><div class="ct">👉 '+t.c_next+'</div><div class="note" style="background:#f3f0e8">'+nx+'</div>'+nxBtn+
+        (co?'<div class="sorry"><b>'+t.sorry_t+'</b><span>'+(ch?t.sorry_s:t.sorry_cx)+'</span></div>':'')+'</div>'+
+      (DEP==='paid'?'<div class="card'+(ruleOpen?'':' shut')+'"><button class="fold" id="rf"><span class="ct" style="flex:1">📜 '+t.c_rule+'</span><span class="cv">'+(ruleOpen?t.close+' ▲':t.open+' ▼')+'</span></button>'+
+        '<div class="cs">'+t.rule_s+'</div><div class="fb"><div class="cs" style="margin-top:12px;font-weight:800;color:var(--ink6)">'+t.r_head+'</div><div class="rt num">'+rows+'</div>'+
+        '<ul class="rl"><li>'+t.rl1+'</li><li>'+t.rl2+'</li><li>'+t.rl3+'</li><li>'+t.rl4+'</li></ul></div></div>':'')+
+      '</section><div class="foot">'+t.ft+'</div>';
+    dock.hidden=false;
+    document.getElementById('dockin').innerHTML='<a class="a" href="'+waUrl()+'" target="_blank" rel="noopener">'+t.wa+'</a><a class="b" href="'+myUrl()+'">'+(CID?t.my:t.home)+'</a>';
+    bind();
+  }
+
+  function getJ(u,n){return fetch(u,{cache:'no-store'}).then(function(r){if(r.status>=500)throw new Error('5xx');return r.json();})
+    .catch(function(e){if((n||0)<2)return new Promise(function(res){setTimeout(res,800);}).then(function(){return getJ(u,(n||0)+1);});throw e;});}
+  function load(){
+    if(!BID&&!OD){S.err=true;render();return;}
+    if(!BID){S.ok=true;render();return;}
+    getJ('/api/booking?id='+encodeURIComponent(BID)).then(function(j){
+      if(j&&j.ok&&j.doc)S.bk=j.doc;
+      if(!S.bk&&!OD){S.err=true;}else S.ok=true;   // 예약을 지웠어도(취소) 주소의 기존 일정으로 엽니다
+      render();
+    }).catch(function(){if(OD){S.ok=true;}else S.err=true;render();});
+  }
+  render();load();
+  // 다른 창에서 날짜를 고르고 돌아오면 새 일정 다시 읽기
+  document.addEventListener('visibilitychange',function(){if(!document.hidden&&S.ok&&BID&&KIND==='change')getJ('/api/booking?id='+encodeURIComponent(BID)).then(function(j){if(j&&j.ok&&j.doc){S.bk=j.doc;render();}}).catch(function(){});});
+})();
+</script>
+</body>
+</html>

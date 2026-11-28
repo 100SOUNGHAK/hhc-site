@@ -36,6 +36,7 @@ const DOC = {
   'admin': ['contract', '계약서 · 이용내역', 'Contract & usage'], 'customer': ['contract', '계약서 · 이용내역', 'Contract & usage'],
   'booking': ['booking', '예약서', 'Booking'], 'hhc-invoice': ['invoice', '인보이스', 'Invoice'], 'inv': ['invoice', '인보이스', 'Invoice'],
   'go': ['received', '진행 안내', 'Progress'],   // 📍 진행 안내장 (2026-11-25)
+  'change': ['booking', '예약 변경 · 취소 안내', 'Booking change notice'],   // 🔁 예약 변경 · 취소 안내장 (2026-11-28)
   'thanks': ['thanks', '작업 완료 감사 안내', 'Thank you for your service'],   // 🙏 작업 완료 감사 · 청구 안내장 (2026-11-25)
   'repair': ['repair', '방문 결과 보고서', 'Service visit report'],
   'my': ['my', 'MY PAGE', 'MY PAGE'], 'my-en': ['my', 'MY PAGE', 'MY PAGE'], 'mypage': ['my', 'MY PAGE', 'MY PAGE'],
