@@ -4930,14 +4930,15 @@ async function showConfirmMsgModal(b,goCust){
 function bkChgRate(d){return d>14?70:d>=3?40:d>1?20:0;}
 function bkChgLead(od){const t=new Date(Date.now()+8*3600e3).toISOString().slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(od||''))return 0;return Math.round((new Date(od+'T00:00:00')-new Date(t+'T00:00:00'))/864e5);}
 const BKCHG={};
-window.bkChgOpen=function(id){
+window.bkChgOpen=function(id,opt){
   const b=allBookings.find(x=>x.__id===id);if(!b)return;
   document.querySelectorAll('details.rmore[open]').forEach(d=>d.removeAttribute('open'));
   const rf=b.resched_from&&b.resched_from.date?b.resched_from:null;
   const useRf=rf&&b.status!=='confirmed';
   // 확정 예약에 바뀌기 전 일정(prev_slot)이 있으면 그것이 「기존 일정」 (2026-11-28)
   const ps=!useRf&&b.status==='confirmed'&&b.prev_slot&&b.prev_slot.date&&(b.prev_slot.date!==b.booking_date||String(b.prev_slot.time||'')!==String(b.booking_time||''))?b.prev_slot:null;
-  Object.assign(BKCHG,{id,k:'g',w:'c',od:useRf?rf.date:ps?ps.date:(b.booking_date||''),ot:useRf?(rf.time||''):ps?(ps.time||''):(b.booking_time||''),dp:'0',amt:320});
+  Object.assign(BKCHG,{id,k:'g',w:'c',od:useRf?rf.date:ps?ps.date:(b.booking_date||''),ot:useRf?(rf.time||''):ps?(ps.time||''):(b.booking_time||''),dp:'0',amt:320,del:!!(opt&&opt.del)});
+  if(BKCHG.del)BKCHG.k='x';   // 🗑 삭제에서 열면 취소 안내로 고정
   let ov=document.getElementById('bkchg-ov');
   if(!ov){
     ov=document.createElement('div');ov.id='bkchg-ov';
@@ -4971,20 +4972,24 @@ function bkChgDraw(){
     else{const r=bkChgRate(n);dep=`방문일 ${n<=1?'1일 이내':n+'일'} 전 → 환급 ${r}% · 돌려드릴 금액 RM ${Math.round(a*r/100)}`;}
   }
   const st=String(b.status||''),nw=BKCHG.k==='x'?'—':st==='confirmed'?'확정된 새 일정을 보여 줌':st==='booked'?'고객이 신청한 일정(확인 중)을 보여 줌':'「새 일정 고르기」 버튼을 보여 줌';
-  box.innerHTML=`<h3>📨 변경 · 취소 안내장</h3><p class="bc-s">${escHtml(b.customer_name||'')} · 고객은 링크로 바뀐 일정 · 보증금 정산 · 규정을 봅니다</p>
-    <div class="bc-r"><div class="bc-l">무엇을</div>${seg('k',[['g','🔁 일정 변경'],['x','❌ 예약 취소']])}</div>
+  box.innerHTML=`<h3>${BKCHG.del?'🗑 예약 삭제 · ❌ 취소 안내':'📨 변경 · 취소 안내장'}</h3><p class="bc-s">${escHtml(b.customer_name||'')} · 고객은 링크로 바뀐 일정 · 보증금 정산 · 규정을 봅니다</p>
+    ${BKCHG.del?'':`<div class="bc-r"><div class="bc-l">무엇을</div>${seg('k',[['g','🔁 일정 변경'],['x','❌ 예약 취소']])}</div>`}
     <div class="bc-r"><div class="bc-l">누구 사정</div>${seg('w',[['c','고객 요청'],['o','회사 사정 (사과 문구)']])}</div>
     <div class="bc-r"><div class="bc-l">${BKCHG.k==='x'?'취소되는 일정':'기존 일정'}</div><div style="display:flex;gap:6px;flex-wrap:wrap"><input type="date" id="bkchg-od" value="${escAttr(BKCHG.od)}"><input id="bkchg-ot" value="${escAttr(BKCHG.ot)}" placeholder="시간 (예: 10:00)" style="flex:1;min-width:120px"></div></div>
     <div class="bc-r"><div class="bc-l">예약보증금</div>${seg('dp',[['0','없음'],['p','받음'],['m','회원 면제']])}${BKCHG.dp==='p'?`<div style="margin-top:6px;display:flex;align-items:center;gap:6px">RM <input id="bkchg-amt" type="number" min="0" inputmode="numeric" value="${escAttr(BKCHG.amt)}" style="width:110px"></div>`:''}</div>
     <div class="bc-pv"><b>고객 화면</b>\n· 새 일정: ${nw}\n· 보증금: ${dep}</div>
     ${BKCHG.k==='g'&&st!=='confirmed'&&st!=='booked'&&!(b.schedule_dates&&b.schedule_dates!=='[]')?'<div class="bc-hint">⚠ 새 후보 일정이 아직 없습니다. ✏️ 수정에서 후보 일정을 먼저 저장하거나 확정한 뒤 보내 주세요.</div>':''}
-    ${BKCHG.k==='x'?'<div class="bc-hint">ℹ 안내를 보낸 뒤 예약을 삭제해도 안내장은 그대로 열립니다(품목 · 장소 칸만 빠짐).</div>':''}
-    <div class="bc-f"><button type="button" class="bc-wa" id="bkchg-wa">💬 WhatsApp</button><button type="button" class="bc-cp" id="bkchg-cp">📋 복사</button><button type="button" class="bc-x" id="bkchg-x">닫기</button></div>`;
+    ${BKCHG.del?'<div class="bc-hint">🗑 WhatsApp 또는 복사를 누르면 취소 안내가 나가고 <b>이 예약이 자동으로 삭제</b>됩니다(캘린더 일정 포함). 삭제 후에도 고객 안내장은 열립니다.</div>':BKCHG.k==='x'?'<div class="bc-hint">ℹ 안내를 보낸 뒤 예약을 삭제해도 안내장은 그대로 열립니다(품목 · 장소 칸만 빠짐).</div>':''}
+    <div class="bc-f"><button type="button" class="bc-wa" id="bkchg-wa">💬 WhatsApp${BKCHG.del?' · 삭제':''}</button><button type="button" class="bc-cp" id="bkchg-cp">📋 복사${BKCHG.del?' · 삭제':''}</button><button type="button" class="bc-x" id="bkchg-x">${BKCHG.del?'삭제 안 함':'닫기'}</button></div>
+    ${BKCHG.del?'<button type="button" id="bkchg-nodel" style="margin-top:8px;width:100%;min-height:42px;border-radius:12px;border:1.5px solid #fecaca;background:#fff;color:#b91c1c;font:inherit;font-size:13.5px;font-weight:800;cursor:pointer">🗑 안내 없이 삭제만</button>':''}`;
   box.querySelectorAll('.bc-seg button').forEach(x=>x.onclick=()=>{bkChgRead();BKCHG[x.dataset.k]=x.dataset.v;bkChgDraw();});
   ['bkchg-od','bkchg-amt'].forEach(i=>{const e=document.getElementById(i);if(e)e.onchange=()=>{bkChgRead();bkChgDraw();};});
   document.getElementById('bkchg-x').onclick=()=>document.getElementById('bkchg-ov').remove();
-  document.getElementById('bkchg-wa').onclick=async()=>{bkChgRead();const w=window.open('about:blank','_blank');const m=await bkChgMsg(b);const u='https://wa.me/?text='+encodeURIComponent(m);if(w&&!w.closed){try{w.location.href=u;}catch(e){window.open(u,'_blank');}}else window.open(u,'_blank');};
-  document.getElementById('bkchg-cp').onclick=async()=>{bkChgRead();const m=await bkChgMsg(b);try{await navigator.clipboard.writeText(m);showToast('✓ 안내 메시지 복사됨 · 카카오톡에 붙여넣기 하세요');}catch(e){showModal('복사',m,false);}};
+  // 🗑 삭제에서 연 창 — 안내를 보낸 뒤 예약 삭제 (2026-11-28)
+  const _afterSend=async()=>{if(!BKCHG.del)return;const ov=document.getElementById('bkchg-ov');if(ov)ov.remove();await bkDoDelete(b.__id,b);};
+  document.getElementById('bkchg-wa').onclick=async()=>{bkChgRead();const w=window.open('about:blank','_blank');const m=await bkChgMsg(b);const u='https://wa.me/?text='+encodeURIComponent(m);if(w&&!w.closed){try{w.location.href=u;}catch(e){window.open(u,'_blank');}}else window.open(u,'_blank');await _afterSend();};
+  document.getElementById('bkchg-cp').onclick=async()=>{bkChgRead();const m=await bkChgMsg(b);let ok=true;try{await navigator.clipboard.writeText(m);showToast('✓ 안내 메시지 복사됨 · 카카오톡에 붙여넣기 하세요');}catch(e){ok=false;showModal('복사',m,false);}if(ok)await _afterSend();};
+  {const nd=document.getElementById('bkchg-nodel');if(nd)nd.onclick=()=>{document.getElementById('bkchg-ov').remove();showModal('삭제 확인',`'${b.customer_name||''}' 예약을 안내 없이 삭제하시겠습니까? (연결된 캘린더 일정도 함께 삭제됩니다)`,true,()=>bkDoDelete(b.__id,b));};}
 }
 function bkChgRead(){const od=document.getElementById('bkchg-od'),ot=document.getElementById('bkchg-ot'),am=document.getElementById('bkchg-amt');
   if(od)BKCHG.od=od.value;if(ot)BKCHG.ot=ot.value.trim();if(am)BKCHG.amt=am.value;}
@@ -5009,8 +5014,23 @@ async function bkChgMsg(b){
     '\n\n👉 링크를 열고 '+(cx?'취소 내용':'바뀐 일정')+'을 확인해 주세요.\n\n📄 안내 보기 👉 '+u+wp+'\n'+SIG;
 }
 
+// 🗑 예약 삭제 → 취소 안내장 자동 (2026-11-28) — 고객이 아직 기다리는 예약(대기 · 신청 · 방문 전 확정)이면
+//   삭제 전에 「❌ 예약 취소 안내장」 창이 먼저 열립니다. WhatsApp/복사를 누르면 안내가 나가고 예약이 자동으로 삭제됩니다.
+//   「안내 없이 삭제」도 있습니다. 방문이 끝난 예약 · 일정이 없는 예약은 예전처럼 바로 삭제 확인만.
+async function bkDoDelete(id,b){
+  showLoading(true);
+  try{
+    const n=await removeBookingMirror(id,b);   // 삭제 전에 일정부터 정리 (예약 정보가 필요합니다)
+    await deleteDoc(doc(db,'bookings',id));
+    showToast(n?'✓ 삭제되었습니다 (캘린더 일정 '+n+'건 포함)':'✓ 삭제되었습니다');
+  }
+  catch(e){showModal('오류',e.message,false);}
+  showLoading(false);
+}
 window.deleteBooking=function(id){
   const b=allBookings.find(x=>x.__id===id);
+  const _slot=b&&(b.booking_date||(b.resched_from&&b.resched_from.date));
+  if(b&&_slot&&!isDoneBooking(b)&&(b.status==='waiting'||b.status==='booked'||b.status==='confirmed')){window.bkChgOpen(id,{del:true});return;}
   showModal('삭제 확인',`'${b?.customer_name||''}' 예약을 삭제하시겠습니까? (연결된 캘린더 일정도 함께 삭제됩니다)`,true,async()=>{
     showLoading(true);
     try{
