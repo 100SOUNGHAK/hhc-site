@@ -1825,8 +1825,8 @@ async function hhcShortUrl(url){
 // 이미 단축해 둔 주소만 즉시 치환 (미리보기용 · 통신 없음)
 function hhcShortSync(text){
   text=String(text==null?'':text);
-  for(const k in _hhcShortCache)text=text.split(k).join(_hhcShortCache[k]);
-  return text;
+  // 주소 전체가 같을 때만 바꿉니다 — 예전에는 앞부분만 같은 주소(…/workpermit.html 과 …/workpermit.html?bk=1&…)도 바꿔 「r?k=abcd?bk=1…」처럼 보였습니다 (2026-11-28)
+  return text.replace(/https:\/\/(?:www\.)?happyhomecare\.com\.my\/[^\s'"<>)\]]+/g,u=>_hhcShortCache[u]||u);
 }
 // 문구 전체에서 긴 주소를 찾아 모두 짧은 주소로 (실패한 주소는 원문 유지)
 async function hhcShortLinks(text){
@@ -2082,8 +2082,9 @@ async function kkSend(title,desc,url,en,btn,img,btn2){
 // 안내 문구가 뜰 틈도 없이 화면이 넘어가 버립니다. 그래서 안내부터 띄운 뒤 공유를 시작합니다.
 // 💛 카카오 카드 두 번째 버튼 — 본문의 「이름 👉 주소」 줄 가운데 마이페이지(카드 기본 버튼)가 아닌 주소를 찾습니다.
 //    카카오 본문에서는 주소 줄이 빠지므로, 이 주소가 버튼이 되어야 고객이 열 수 있습니다.
-function kkExtraBtn(message,url,en){
-  const main=[url,_hhcShortCache[url]].filter(Boolean);
+function kkExtraBtn(message,url,en,url0){
+  // url0 = 짧게 바꾸기 전 원래 주소 — 문구 속 링크 줄이 아직 긴 주소면 같은 링크로 봐야 버튼이 두 번 생기지 않습니다 (2026-11-28)
+  const main=[url,_hhcShortCache[url],url0,url0&&_hhcShortCache[url0]].filter(Boolean);
   const L=String(message||'').split('\n');
   for(const ln of L){
     const m=/^(.*?)\s*\u{1F449}\s*(https?:\/\/\S+)\s*$/u.exec(ln.trim());
@@ -2109,6 +2110,7 @@ function kkCardSpec(name,message,url,en,title,img){
   return {kind:'text',img:'',t:'',d:desc,btns};
 }
 async function kkShareMsg(name,message,url,en,title,img){
+  const url0=url;   // 짧게 바꾸기 전 주소 (kkExtraBtn 이 같은 링크로 알아보게)
   // 🔗 카드 링크는 짧은 주소로 (2026-11-26) — 감사·청구 안내장(/thanks?…&pt=…&pd=…)처럼 주소가 길면 카카오가 「잘못된 요청」으로 거절합니다
   if(url&&url.length>80&&!/\/r(\.html)?\?k=/.test(url)){try{url=_hhcShortCache[url]||await hhcShortUrl(url);}catch(_){}}
   // 클립보드에는 왓츠앱과 같은 간략한 내용(주소 포함)을 넣어, 손으로 붙여 보낼 때도 동일하게 나갑니다
@@ -2125,7 +2127,7 @@ async function kkShareMsg(name,message,url,en,title,img){
   }
   const ok=await kkSend((title&&title.t)||(en?('[Happy Home Care] Notice for '+(name||'Customer'))
                           :('[Happy Home Care] '+(name||'고객')+'님 안내')),
-                        kkText(message,!!img),url,en,(title&&title.btn)||'',img,kkExtraBtn(message,url,en));
+                        kkText(message,!!img),url,en,(title&&title.btn)||'',img,kkExtraBtn(message,url,en,url0));
   return ok;
 }
 // 🖼 발송 종류별 카카오 그림 카드 (2026-11-20) — 링크 미리보기(functions/r.js)와 같은 그림을 씁니다
@@ -7191,13 +7193,17 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
       // 📨 변경 · 취소 안내장 — 예약관리 「📨 변경 · 취소 안내장」(bkChgMsg)과 같은 문구 (2026-11-28)
       const c=chgInit(),cx=c.k==='x',co=c.w==='o',dep=c.dp==='p'&&chgAmt()>0;
       const w=c.od?sWhen(c.od,c.ot,en):'';
+      // 🔁 변경: 「예약일정이 변경되었습니다. (안내보기 참고)」 + 안내 보기 아래 🪪 작업방문등록 정보 줄(카톡 두 번째 버튼) (2026-11-28 대표님 문구)
+      const _b=BKALL.find(x=>x.__id===c.bid)||null,_wb=_b&&_b.status==='confirmed'?_b:null;
+      const wpl=cx?'':'\n'+(en?'🪪 Work permit details':'🪪 작업방문등록 정보')+' 👉 '+HHCMsg.wpLink(_wb,nm,en);
+      const sl=lb=>sLk(lb).replace('\n'+SIG,wpl+'\n'+SIG);
       return en
-        ?(hi+(cx?'❌ *Booking cancelled*':'🔁 *Booking date changed*')+'\n'+(w?'Your booking on '+w+' has been '+(cx?'cancelled':'changed')+'.':'Your booking has been '+(cx?'cancelled':'changed')+'.')+
+        ?(hi+(cx?'❌ *Booking cancelled*':'🔁 *Booking date changed*')+'\n'+(cx?(w?'Your booking on '+w+' has been cancelled.':'Your booking has been cancelled.'):'Your booking date has been changed. (see the notice)')+
           (co?'\nThis is due to our circumstances — we sincerely apologise 🙏':'')+(dep?'\n💰 Your booking deposit settlement is included.':'')+
-          '\n\n👉 Please open the link to see the '+(cx?'details':'new date')+'.'+sLk('📄 View notice'))
-        :(hi+(cx?'❌ *예약 취소 안내*':'🔁 *예약 일정 변경 안내*')+'\n'+(w?'기존 예약 '+w+' 일정이 '+(cx?'취소':'변경')+'되었습니다.':'예약이 '+(cx?'취소':'변경')+'되었습니다.')+
+          '\n\n👉 Please open the link to see the '+(cx?'details':'new date')+'.'+sl('📄 View notice'))
+        :(hi+(cx?'❌ *예약 취소 안내*':'🔁 *예약 일정 변경 안내*')+'\n'+(cx?(w?'기존 예약 '+w+' 일정이 취소되었습니다.':'예약이 취소되었습니다.'):'예약일정이 변경되었습니다. (안내보기 참고)')+
           (co?'\n당사 사정으로 불편을 드려 진심으로 죄송합니다 🙏':'')+(dep?'\n💰 예약보증금 정산 내용도 함께 확인해 주세요.':'')+
-          '\n\n👉 링크를 열고 '+(cx?'취소 내용':'바뀐 일정')+'을 확인해 주세요.'+sLk('📄 안내 보기'));
+          '\n\n👉 링크를 열고 '+(cx?'취소 내용':'바뀐 일정')+'을 확인해 주세요.'+sl('📄 안내 보기'));
     }
     if(state.tpl==='bk'){
       let bi=BKP[0]&&BKP[0].booking_items?String(BKP[0].booking_items):'';
