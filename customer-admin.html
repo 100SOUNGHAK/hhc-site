@@ -2135,7 +2135,7 @@ const CA_KK_IMG={basic:'og-my.jpg',bill:'og-invoice.jpg',rebill:'og-invoice.jpg'
   bk:'og-booking.jpg',bkc:'og-confirmed.jpg',revisit:'og-booking.jpg',rq:'og-received.jpg',mmv:'og-confirmed.jpg',install:'og-app.jpg',
   rqf:'og-reqform.jpg',care3:'og-care.jpg',care6:'og-care.jpg',wp:'og-permit.jpg',evi:'og-voucher.jpg',pti:'og-points.jpg',
   pacc:'og-pay.jpg',vfee:'og-visitfee.jpg',ipr:'og-received-repair.jpg',ipv:'og-confirmed.jpg',fee:'og-fees.jpg',   // 점검 접수·점검 방문·추가비용 (2026-11-21)
-  mvo:'og-move.jpg',mem:'og-mem.jpg',jnt:'og-joint.jpg',trf:'og-contract.jpg',rfr:'og-refer.jpg',tk:'og-thanks.jpg'};   // 🙏 작업 완료 감사 · 청구 (2026-11-25)
+  mvo:'og-move.jpg',mem:'og-mem.jpg',rsc:'og-change.jpg',chg:'og-change.jpg',jnt:'og-joint.jpg',trf:'og-contract.jpg',rfr:'og-refer.jpg',tk:'og-thanks.jpg'};   // 🙏 작업 완료 감사 · 청구 (2026-11-25)
 // 카드 제목 = 문구의 첫 *굵은 글씨* 줄(없으면 인사 다음 첫 줄) · 설명 = 그 아래 안내 줄(주소·서명 제외)
 function caKkAuto(m){
   const lead=x=>String(x||'').replace(/\*([^*\n]+)\*/g,'$1').replace(/^[\s -⯿☀-➿️‍\u{1F000}-\u{1FAFF}·•:\-–—]+/u,'').replace(/\s+/g,' ').trim();
@@ -2152,7 +2152,7 @@ function caKkAuto(m){
 // 영어 발송은 영어 그림 — og-*-en.jpg (안내장 그림 멤버십·공동계약·이사 안내도 영어판 있음) (2026-11-21)
 // 💎 적립 안내는 적립 이름(문구)에 따라 — 불편 보상 · 지인 추천 보상 · 리뷰 감사 (2026-11-21)
 function caPtKind(m){const s=String(m||'');return /사과|불편|apolog/i.test(s)?'sorry':/추천|referr/i.test(s)?'referral':/리뷰|review/i.test(s)?'review':'';}
-const CA_KK_EN=/^og-(pt-sorry|pt-referral|pt-review|quote|invoice|contract|booking|my|voucher|pay|permit|visitfee|points|svcreport|received|paid|care|app|repair|reqform|confirmed|moveout|joint|membership|mem|move|fees|aftwork|received-repair|thanks)\.(jpg|png)$/;
+const CA_KK_EN=/^og-(pt-sorry|pt-referral|pt-review|quote|invoice|contract|booking|my|voucher|pay|permit|visitfee|points|svcreport|received|paid|care|app|repair|reqform|confirmed|moveout|joint|membership|mem|move|fees|aftwork|received-repair|thanks|change|cancel)\.(jpg|png)$/;
 function caKkImg(tpl,m,en,hint){   // hint = 적립 안내의 적립 이름 (그림 고르기에만 씀)
   let f=CA_KK_IMG[tpl]||((typeof GDS!=='undefined'&&GDS[tpl])?'og-ac-guides.jpg':'');
   const pk=tpl==='cmp'?caPtKind(m+' '+String(hint||'')):'';
@@ -5988,6 +5988,11 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     if(d<_tdy)return false;
     return _bkMin(x.booking_time)>_nowMin;
   }).sort((a,b)=>(_msT(b.confirmed_at||b.updated_at||b.created_at)-_msT(a.confirmed_at||a.updated_at||a.created_at))||String(a.booking_date||'').localeCompare(String(b.booking_date||'')));
+  // 🔁 일정 취소 · 새 일정 — 확정 일정을 취소하고 새 후보를 저장한 대기 예약(resched_from) (2026-11-28)
+  const BKR=BKP.filter(x=>x.resched_from&&x.resched_from.date);
+  // 📨 변경 · 취소 안내장 — 고를 수 있는 예약(대기 · 신청 · 확정), 최근 순 (2026-11-28)
+  const BKALL=(D.bookings||[]).filter(x=>x&&x.__id&&(x.status==='waiting'||x.status==='booked'||x.status==='confirmed'))
+    .sort((a,b)=>_msT(b.updated_at||b.unconfirmed_at||b.confirmed_at||b.created_at)-_msT(a.updated_at||a.unconfirmed_at||a.confirmed_at||a.created_at));
   //  (2026-11-25) 방문 전 확정 예약이 여러 건이면 「가장 최근에 확정한 예약」이 [0] — 예약 확정 안내가 방금 확정한 건을 보냅니다
   // 접수된 서비스 의뢰 (「의뢰 접수 안내」 발송용) — 최근 접수 순
   // 접수 「이후에 만들어진」 확정 예약이 있는 의뢰는 이미 처리된 건이므로 목록에서 제외합니다
@@ -6062,7 +6067,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     cpi:{cpg:0,cpd:0,ins:0,ct:0,qt:0,mmv:0,ipv:0,tk:(_auto&&_auto.tpl==='tk')?_auto.i:0},
     payDate:_td.getFullYear()+'-'+_p2(_td.getMonth()+1)+'-'+_p2(_td.getDate()),
     careDate:careLastAc(e),
-    cmpAmt:(opt&&opt.amt)||'',cmpMemo:(opt&&opt.memo)||''};   // 💎 적립 안내 — 포인트 「적립 추가」에서 넘어온 금액 · 이름
+    cmpAmt:(opt&&opt.amt)||'',cmpMemo:(opt&&opt.memo)||'',chg:null};   // 💎 적립 안내 — 포인트 「적립 추가」에서 넘어온 금액 · 이름
   // 발송 메시지 종류를 항상 모두 표시합니다.
   //  need:true 인 항목은 해당 자료(예약·상품권·점검보고서 등)가 있어야 발송할 수 있어
   //  0건이면 흐리게 표시하고 선택을 막습니다.
@@ -6072,6 +6077,8 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     {t:'bk',      lb:'📅 예약 신청',    n:BKP.length,  need:false},
     // ✅ 예약 확정 : 방문이 끝난 예약도 다시 보낼 수 있게 전체 확정 예약을 셉니다
     {t:'bkc',     lb:'✅ 예약 확정',    n:BKC.length,  need:true},
+    {t:'rsc',     lb:'🔁 일정 취소 · 새 일정', n:BKR.length, need:true},   // 확정 일정 취소 + 새 날짜 고르기 (예약관리 🔁 와 같은 문구) (2026-11-28)
+    {t:'chg',     lb:'📨 변경 · 취소 안내장', n:BKALL.length, need:false},   // /change — 바뀐 일정 · 취소 · 예약보증금 정산 (2026-11-28)
     {t:'rq',      lb:'📥 의뢰 접수',    n:RQP.length,  need:true},
     {t:'ipr',     lb:'🔍 점검접수완료',  n:0, need:false},
     {t:'ipv',     lb:'🚗 점검방문 안내',  n:MMV.length,  need:true},
@@ -6116,7 +6123,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   const TGRP=[
     {g:'📄 문서 보내기', ts:['ins','ct','qt','cpg','cpd']},
     {g:'💰 청구 · 결제',  ts:['tk','pacc']},   // 2026-11-25 청구 안내 · 청구 재요청 · 결제 확인 · 작업후 안내는 「🙏 작업완료 감사·청구」로 합침 (코드는 남겨 둠)
-    {g:'📅 예약 · 의뢰',  ts:['bk','bkc','rq','ipr','ipv','mmv','rqf','revisit']},
+    {g:'📅 예약 · 의뢰',  ts:['bk','bkc','rsc','chg','rq','ipr','ipv','mmv','rqf','revisit']},
     {g:'🌿 정기관리 알림', ts:['care3','care6']},
     {g:'📢 안내 · 소개',  ts:['nc','rev','basic','mem','jnt','trf','evi','pti','rfr','fee','vfee','mvo','wp','install']},
     {g:'📘 에어컨 안내장', ts:['gd_all','gd_avoid','gd_leak','gd_cool','gd_odour','gd_gas','gd_outdoor','gd_insp']}
@@ -6128,7 +6135,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   //  · 「지금 보낼 수 있는 것」 = 이 고객에게 자료가 있는 안내만 먼저
   //  · 휴대폰에서는 종류 묶음을 탭으로 나눠 한 묶음씩 보여 줍니다 (컴퓨터는 전부 펼침)
   //  · 발송 버튼과 「지금 고른 안내 · 언어」는 창 아래에 늘 고정
-  const REC_ORDER=['bk','bkc','rq','ipv','mmv','tk','ins','ct','qt','cpg','cpd'];
+  const REC_ORDER=['bk','rsc','bkc','rq','ipv','mmv','tk','ins','ct','qt','cpg','cpd'];
   const REC=REC_ORDER.map(function(t){return TPLS.find(function(o){return o.t===t;});})
     .filter(function(o){return o&&o.n>0;});
   if(state.tpl&&!REC.some(function(o){return o.t===state.tpl;})){
@@ -6139,7 +6146,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   // 📱 휴대폰 목록에서 이름 아래 한 줄로 보여 주는 설명 (2026-11-17) — 컴퓨터 화면에서는 숨김
   const TDESC={tk:'감사 인사 · 청구 · 인보이스/보고서 링크',ins:'점검보고서 링크 보내기',ct:'계약서 · 잔액 확인 링크',aw:'작업 후 이용내역 안내',qt:'견적서 보내고 선택 받기',
     cpg:'전자상품권 보내기',cpd:'할인권 보내기',bill:'미결제 금액 결제 요청',rebill:'입금 안 된 건 다시 요청',pay:'입금 확인 · 감사 인사',
-    pacc:'계좌번호 + 복사 안내장',bk:'방문 날짜 골라 달라는 요청',bkc:'확정된 방문 일시 안내',rq:'의뢰 잘 받았다는 안내',
+    pacc:'계좌번호 + 복사 안내장',bk:'방문 날짜 골라 달라는 요청',rsc:'확정 일정 취소 + 새 날짜 고르기',chg:'바뀐 일정 · 취소 · 보증금 정산 안내장',bkc:'확정된 방문 일시 안내',rq:'의뢰 잘 받았다는 안내',
     ipr:'출장점검 접수 완료 안내',ipv:'점검 방문 일정 안내',mmv:'수리요청 출장방문 안내',rqf:'의뢰서 작성 요청',revisit:'다시 방문 · 예약 권유',
     care3:'3개월 정기관리 시기 알림',care6:'6개월 정기관리 시기 알림',nc:'전자명함 보내기',rev:'리뷰 이벤트 참여 안내',
     basic:'마이페이지 링크만 보내기',mem:'멤버십 패키지 소개',jnt:'가족 · 이웃과 함께 가입 (골드 이상)',trf:'귀국 · 이주 시 잔액 양도 · 상품권 신청',evi:'전자상품권 상품 소개',rfr:'친구 소개하면 해피포인트 적립',pti:'해피포인트 적립 소개',
@@ -6154,6 +6161,8 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
       '<small class="smc-d">'+(off?'이 고객은 자료 없음':tDesc(o.t))+'</small>'+
       ((o.need||o.n>0)?'<i>'+o.n+'</i>':'')+'</span>';
   };
+  // 🔁 자동 선택이 「예약 신청」인데 그 신청서가 확정 일정을 취소하고 보낸 새 후보면 「일정 취소 · 새 일정」으로 (2026-11-28)
+  if(state.tpl==='bk'&&BKP[0]&&BKP[0].resched_from&&BKP[0].resched_from.date){state.tpl='rsc';if(_auto&&_auto.tpl==='bk'){_auto.tpl='rsc';_auto.why='일정 취소 · 새 후보 일정';}}
   if(opt&&opt.tpl==='cmp'){state.tpl='cmp';state.iv=true;}
   if(opt&&(opt.tpl==='care3'||opt.tpl==='care6'))state.tpl=opt.tpl;   // 🌿 청소 후 3개월 경과 목록의 「📤 보내기」 (2026-11-23)
   const _g0=Math.max(0,TGRP.findIndex(function(G){return G.ts.indexOf(state.tpl)>=0;}));
@@ -6190,6 +6199,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
           '<div class="sm-opt" id="cs-care"><span>마지막 관리일 <small style="font-weight:700">(안내장에 표시)</small></span>'+
             '<input type="date" id="cs-caredate"></div>'+
           '<div class="sm-cmp" id="cs-cmp"><div style="min-width:0"><div class="k">💎 방금 적립한 내역</div><div class="m" id="cs-cmpm"></div></div><div class="v" id="cs-cmpv"></div></div>'+
+          '<div id="cs-chg" style="display:none;margin-top:8px;padding:10px 11px;border-radius:11px;background:var(--bg);border:1px solid var(--bdr)"></div>'+   // 📨 변경 · 취소 안내장 선택 (2026-11-28)
           '<div class="sm-opt" id="cs-pay"><span>결제 완료일</span>'+
             '<input type="date" id="cs-paydate"></div>'+
           '<div id="cs-bwarn" style="display:none;background:var(--warn-bg);color:var(--warn);border-radius:9px;padding:8px 11px;font-size:10.5px;font-weight:800;margin-top:7px">⚠️ 잔여 결제금액이 남은 청구중 · 연체 인보이스가 없어 청구금액이 0 입니다</div>'+
@@ -6291,7 +6301,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   //    (페이지는 이 값을 쓰지 않습니다 · 마이페이지/짧은 링크(/r)는 해당 없음)
   function link(){
     const u=link0();
-    if(!/\/(pay|points|workpermit|evoucher|fees|visit-fee|moveout|membership|joint|smart|transfer|thanks)(\.html|-en\.html)?(\?|$)/.test(u)||/[?&]pv=/.test(u))return u;
+    if(!/\/(pay|points|workpermit|evoucher|fees|visit-fee|moveout|membership|joint|smart|transfer|thanks|change)(\.html|-en\.html)?(\?|$)/.test(u)||/[?&]pv=/.test(u))return u;
     const i=u.indexOf('#'),h=i>=0?u.slice(i):'',b=i>=0?u.slice(0,i):u;
     return b+(b.indexOf('?')>=0?'&':'?')+'pv=2'+h;
   }
@@ -6341,6 +6351,37 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     const vd=caBkDate(t),vi=t==='rq'?'&vi=rq':(vd?'&vi='+(t==='bkc'?'bc':'bq')+'&vd='+vd:'');
     return BASE+'/go?j='+j+(mid?'&c='+encodeURIComponent(mid):'')+(state.en?'&lang=en':'')+vi;
   }
+  // 🔁 일정 취소 · 새 일정 — 그 예약의 진행 안내장(날짜 고르기) · 첫 후보일 그림 (2026-11-28)
+  function rscLink(){
+    const b=BKR[0];if(!b||!b.__id)return '';
+    let a=[];try{a=JSON.parse(b.schedule_dates||'[]');}catch(_){}
+    a=(Array.isArray(a)?a:[]).map(String).filter(x=>/^\d{4}-\d{2}-\d{2}/.test(x)).sort();
+    const m=/^\d{4}-(\d{2})-(\d{2})/.exec(a[0]||'');
+    return BASE+'/go?j=b:'+b.__id+(mid?'&c='+encodeURIComponent(mid):'')+(state.en?'&lang=en':'')+(m?'&vi=bq&vd='+m[1]+m[2]:'');
+  }
+  // 📨 변경 · 취소 안내장 (/change) — 선택: 예약 · 변경/취소 · 고객/회사 사정 · 기존 일정 · 보증금 (2026-11-28)
+  //  보증금 규칙은 change.html RATE · tier() / booking-admin bkChgRate() 와 같게
+  function chgInit(){
+    if(state.chg)return state.chg;
+    const b=BKR[0]||BKCU[0]||BKALL[0]||null;
+    const c={bid:b?b.__id:'',k:'g',w:'c',od:'',ot:'',dp:'0',amt:320};
+    chgPickBk(c,b);return (state.chg=c);
+  }
+  function chgPickBk(c,b){
+    c.bid=b?b.__id:'';
+    const rf=b&&b.resched_from&&b.resched_from.date&&b.status!=='confirmed'?b.resched_from:null;
+    c.od=rf?rf.date:(b&&b.booking_date)||'';c.ot=rf?(rf.time||''):(b&&b.booking_time)||'';
+  }
+  function chgLead(od){const t=new Date(Date.now()+8*3600e3).toISOString().slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(od||''))return 0;return Math.round((new Date(od+'T00:00:00')-new Date(t+'T00:00:00'))/864e5);}
+  function chgAmt(){const c=chgInit();return c.dp==='p'?Math.max(0,Math.round(+c.amt||0)):0;}
+  function chgLink(){
+    const c=chgInit(),q=new URLSearchParams();
+    if(c.bid)q.set('b',c.bid);q.set('k',c.k);q.set('w',c.w);
+    if(c.od)q.set('od',c.od);if(c.ot)q.set('ot',c.ot);
+    q.set('dp',c.dp==='m'?'m':String(chgAmt()));q.set('dd',String(chgLead(c.od)));
+    if(mid)q.set('c',mid);if(state.en)q.set('lang','en');
+    return BASE+'/change?'+q.toString().replace(/%3A/g,':');
+  }
   function tkLink(){
     const x=curCoupon();if(!x)return BASE+'/my.html?c='+encodeURIComponent(mid);
     const iid=String(x.id||x.__id||''),keys=[iid,String(x.__id||'')].filter(Boolean);
@@ -6365,6 +6406,8 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     if(state.tpl==='trf')return trfLink();
     if(state.tpl==='rfr')return BASE+'/refer'+(state.en?'?lang=en':'');   // 🤝 친구 소개 안내장 (2026-11-27)
     if(state.tpl==='tk')return tkLink();
+    if(state.tpl==='rsc'){const g=rscLink();if(g)return g;}   // 🔁 일정 취소 · 새 일정 → 진행 안내장 날짜 고르기 (2026-11-28)
+    if(state.tpl==='chg')return chgLink();   // 📨 변경 · 취소 안내장 (2026-11-28)
     // 📍 의뢰 접수 · 예약 신청 · 예약 확정 → 고객 진행 안내장(/go) 하나로 (2026-11-25)
     if(state.tpl==='rq'||state.tpl==='bk'||state.tpl==='bkc'){const g=goLink(state.tpl);if(g)return g;}
     // 📑 계약서 발송 → 💌 패키지 가입 감사 안내장(/welcome) — 안내장 맨 아래 「계약서 보기」가 계약서 · 이용내역을 엽니다 (2026-11-24)
@@ -7132,6 +7175,28 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
         ?(hi+'📲 *Install your My Page like an app*\nOne tap to open.\n\n👉 Open the link, then\n🍎 iPhone: Share (⬆️) → Add to Home Screen\n🤖 Android: menu (⋮) → Add to Home screen'+sLk('📱 Open My Page'))
         :(hi+'📲 *마이페이지를 앱처럼 설치하세요*\n아이콘 하나로 바로 열립니다.\n\n👉 링크를 연 뒤\n🍎 아이폰: 공유(⬆️) → 홈 화면에 추가\n🤖 안드로이드: 메뉴(⋮) → 홈 화면에 추가'+sLk('📱 마이페이지 열기'));
     }
+    if(state.tpl==='rsc'){
+      // 🔁 일정 취소 · 새 일정 — 예약관리 「일정 취소 · 새 일정 안내」(bkResendMsg)와 같은 문구 (2026-11-28)
+      const b=BKR[0]||{},rf=b.resched_from||{};
+      let il=bkItemLines(b.booking_items?String(b.booking_items):'',false);
+      if(en&&il)il=il.split('\n').map(sEnIt).join('\n');
+      const w=sWhen(rf.date,rf.time,en);
+      return en
+        ?(hi+'🔁 *Your visit schedule has changed*\nYour booking on '+w+' has been cancelled.'+(il?'\n'+il:'')+'\n\n👉 Please open the link and choose a new available date & time.\nSorry for the inconvenience 🙏'+sLk('📅 Choose a new date'))
+        :(hi+'🔁 *방문 일정 변경 안내*\n기존 예약 '+w+' 일정이 취소되었습니다.'+(il?'\n'+il:'')+'\n\n👉 링크를 열고 새로 가능한 날짜·시간을 골라 주세요.\n불편을 드려 죄송합니다 🙏'+sLk('📅 새 날짜 고르기'));
+    }
+    if(state.tpl==='chg'){
+      // 📨 변경 · 취소 안내장 — 예약관리 「📨 변경 · 취소 안내장」(bkChgMsg)과 같은 문구 (2026-11-28)
+      const c=chgInit(),cx=c.k==='x',co=c.w==='o',dep=c.dp==='p'&&chgAmt()>0;
+      const w=c.od?sWhen(c.od,c.ot,en):'';
+      return en
+        ?(hi+(cx?'❌ *Booking cancelled*':'🔁 *Booking date changed*')+'\n'+(w?'Your booking on '+w+' has been '+(cx?'cancelled':'changed')+'.':'Your booking has been '+(cx?'cancelled':'changed')+'.')+
+          (co?'\nThis is due to our circumstances — we sincerely apologise 🙏':'')+(dep?'\n💰 Your booking deposit settlement is included.':'')+
+          '\n\n👉 Please open the link to see the '+(cx?'details':'new date')+'.'+sLk('📄 View notice'))
+        :(hi+(cx?'❌ *예약 취소 안내*':'🔁 *예약 일정 변경 안내*')+'\n'+(w?'기존 예약 '+w+' 일정이 '+(cx?'취소':'변경')+'되었습니다.':'예약이 '+(cx?'취소':'변경')+'되었습니다.')+
+          (co?'\n당사 사정으로 불편을 드려 진심으로 죄송합니다 🙏':'')+(dep?'\n💰 예약보증금 정산 내용도 함께 확인해 주세요.':'')+
+          '\n\n👉 링크를 열고 '+(cx?'취소 내용':'바뀐 일정')+'을 확인해 주세요.'+sLk('📄 안내 보기'));
+    }
     if(state.tpl==='bk'){
       let bi=BKP[0]&&BKP[0].booking_items?String(BKP[0].booking_items):'';
       // 아이콘은 한글 원본 기준으로 고른 뒤, 영문 발송이면 줄마다 영문으로 바꿉니다
@@ -7215,7 +7280,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     // 💼 전자명함도 명함 주소를 보내므로 마이페이지 노출 항목과 무관합니다.
     // ⭐ 리뷰 이벤트도 홈페이지 주소를 보내므로 마찬가지입니다.
     // 💡 추가비용 안내도 안내장 주소(/fees.html)를 보내므로 마찬가지입니다.
-    const _isMem=(state.tpl==='mem'||state.tpl==='jnt'||state.tpl==='trf'||state.tpl==='rfr'||state.tpl==='evi'||state.tpl==='pti'||state.tpl==='fee'||state.tpl==='pacc'||state.tpl==='vfee'||state.tpl==='mvo'||state.tpl==='nc'||state.tpl==='rev'||!!GDS[state.tpl]);
+    const _isMem=(state.tpl==='rsc'||state.tpl==='chg'||state.tpl==='mem'||state.tpl==='jnt'||state.tpl==='trf'||state.tpl==='rfr'||state.tpl==='evi'||state.tpl==='pti'||state.tpl==='fee'||state.tpl==='pacc'||state.tpl==='vfee'||state.tpl==='mvo'||state.tpl==='nc'||state.tpl==='rev'||!!GDS[state.tpl]);
     const os=mk.querySelector('#cs-optsec');
     if(os)os.style.display=_isMem?'none':'';
     const w=mk.querySelector('#cs-warn');
@@ -7223,7 +7288,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     mk.querySelector('#cs-link').textContent=link();
     const pw=mk.querySelector('#cs-pay');
     if(pw)pw.style.display=(state.tpl==='pay')?'flex':'none';
-    cmpPaint();
+    cmpPaint();chgPaint();
     const _isCareT=(state.tpl==='care3'||state.tpl==='care6');
     const crw=mk.querySelector('#cs-care');
     if(crw)crw.style.display=_isCareT?'flex':'none';
@@ -7415,6 +7480,38 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
   mk.querySelector('#cs-back').addEventListener('click',()=>smStep(false));
   const _cps=mk.querySelector('#cs-cp-pick');
   if(_cps)_cps.addEventListener('change',()=>{state.cpi[state.tpl]=parseInt(_cps.value,10)||0;paint();});
+  // 📨 변경 · 취소 안내장 선택 칸 (2026-11-28) — 예약 · 무엇을 · 누구 사정 · 기존 일정 · 보증금 → 고객 화면 요약
+  function chgPaint(){
+    const w=mk.querySelector('#cs-chg');if(!w)return;
+    const on=state.tpl==='chg';w.style.display=on?'block':'none';if(!on)return;
+    const c=chgInit(),ae=document.activeElement;if(ae&&w.contains(ae)&&ae.tagName==='INPUT')return;   // 입력 중에는 다시 그리지 않음
+    const seg=(k,o)=>'<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:4px">'+o.map(([v,t])=>'<button type="button" data-ck="'+k+'" data-cv="'+v+'" style="min-height:34px;padding:0 11px;border-radius:9px;font:inherit;font-size:12.5px;font-weight:800;cursor:pointer;border:1.5px solid '+(c[k]===v?'var(--pri)':'var(--bdr)')+';background:'+(c[k]===v?'var(--pri)':'#fff')+';color:'+(c[k]===v?'#fff':'var(--ink2)')+'">'+t+'</button>').join('')+'</div>';
+    const L=(t)=>'<div style="font-size:11px;font-weight:800;color:var(--ink3);margin-top:9px">'+t+'</div>';
+    const stK={waiting:'대기',booked:'신청',confirmed:'확정'};
+    const opts=BKALL.map(b=>'<option value="'+esc(b.__id)+'"'+(c.bid===b.__id?' selected':'')+'>'+esc((stK[b.status]||'')+' · '+(b.booking_date||(b.resched_from&&b.resched_from.date?'취소 '+b.resched_from.date:'날짜 미정'))+(b.booking_items?' · '+String(b.booking_items).split(/\n|,/)[0].slice(0,24):''))+'</option>').join('')+
+      '<option value=""'+(c.bid?'':' selected')+'>예약 없음 (이미 삭제함)</option>';
+    const n=chgLead(c.od),a=chgAmt(),st=(BKALL.find(b=>b.__id===c.bid)||{}).status||'';
+    let dep='없음 — 「정산할 금액 없음」';
+    if(c.dp==='m')dep='회원 면제 — 「골드 이상 면제」';
+    else if(c.dp==='p'){if(c.w==='o')dep=c.k==='g'?'회사 사정 — RM '+a+' 전액 새 일정에 적용':'회사 사정 — RM '+a+' 전액 돌려드림';
+      else if(c.k==='x')dep='고객 취소 — RM '+a+' 환불 불가';
+      else{const r=n>14?70:n>=3?40:n>1?20:0;dep='방문일 '+(n<=1?'1일 이내':n+'일')+' 전 → 환급 '+r+'% · 돌려드릴 금액 RM '+Math.round(a*r/100);}}
+    const nw=c.k==='x'?'—':st==='confirmed'?'확정된 새 일정':st==='booked'?'고객이 신청한 일정(확인 중)':'「새 일정 고르기」 버튼';
+    w.innerHTML='<div style="font-size:12.5px;font-weight:900;color:var(--pri)">📨 변경 · 취소 안내장</div>'+
+      L('예약')+'<select id="cs-chg-bk" style="width:100%;margin-top:4px;min-height:36px;border-radius:9px;border:1.5px solid var(--bdr);font:inherit;font-size:13px;padding:0 8px">'+opts+'</select>'+
+      L('무엇을')+seg('k',[['g','🔁 일정 변경'],['x','❌ 예약 취소']])+
+      L('누구 사정')+seg('w',[['c','고객 요청'],['o','회사 사정 (사과 문구)']])+
+      L(c.k==='x'?'취소되는 일정':'기존 일정')+'<div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap"><input type="date" id="cs-chg-od" value="'+esc(c.od)+'" style="min-height:36px;border-radius:9px;border:1.5px solid var(--bdr);font:inherit;font-size:13px;padding:0 6px"><input id="cs-chg-ot" value="'+esc(c.ot)+'" placeholder="시간 (예: 13:30)" style="flex:1;min-width:110px;min-height:36px;border-radius:9px;border:1.5px solid var(--bdr);font:inherit;font-size:13px;padding:0 8px"></div>'+
+      L('예약보증금')+seg('dp',[['0','없음'],['p','받음'],['m','회원 면제']])+
+      (c.dp==='p'?'<div style="margin-top:5px;font-size:13px;font-weight:700">RM <input id="cs-chg-amt" type="number" min="0" inputmode="numeric" value="'+esc(c.amt)+'" style="width:96px;min-height:34px;border-radius:9px;border:1.5px solid var(--bdr);font:inherit;font-size:13px;padding:0 8px"></div>':'')+
+      '<div style="margin-top:9px;padding:8px 10px;border-radius:9px;background:#fff;font-size:12px;line-height:1.6;color:var(--ink2)"><b style="color:var(--pri)">고객 화면</b><br>· 새 일정: '+nw+'<br>· 보증금: '+dep+'</div>'+
+      (c.k==='g'&&st!=='confirmed'&&st!=='booked'&&!(c.bid&&BKR.some(b=>b.__id===c.bid))?'<div style="margin-top:7px;font-size:11.5px;font-weight:700;color:var(--warn);background:var(--warn-bg);border-radius:9px;padding:7px 9px">⚠ 새 후보 · 확정 일정이 없습니다. 예약관리에서 먼저 일정을 바꾼 뒤 보내 주세요.</div>':'')+
+      (c.k==='x'?'<div style="margin-top:7px;font-size:11.5px;font-weight:700;color:var(--ink3)">ℹ 이 창은 안내만 보냅니다. 예약 삭제는 보낸 뒤 예약관리에서 — 삭제해도 안내장은 열립니다.</div>':'');
+    w.querySelectorAll('[data-ck]').forEach(x=>x.onclick=()=>{c[x.dataset.ck]=x.dataset.cv;paint();});
+    const bk=w.querySelector('#cs-chg-bk');if(bk)bk.onchange=()=>{chgPickBk(c,BKALL.find(b=>b.__id===bk.value)||null);paint();};
+    [['cs-chg-od','od'],['cs-chg-ot','ot'],['cs-chg-amt','amt']].forEach(([i,k])=>{const el=w.querySelector('#'+i);if(!el)return;
+      el.oninput=()=>{c[k]=el.value;};el.onchange=()=>{c[k]=el.value;el.blur();paint();};});
+  }
   // 💎 적립 안내 — 방금 적립한 이름·금액을 발송 창 위에 보여 줍니다 (2026-11-17)
   function cmpPaint(){
     const w=mk.querySelector('#cs-cmp');if(!w)return;
@@ -7642,6 +7739,10 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
         btn:(en?'View move-out guide':'이사 안내 보기')}
       :((state.tpl==='rq'||state.tpl==='bk'||state.tpl==='bkc')&&goLink(state.tpl))   // 📍 진행 안내장으로 열리는 버튼 이름 (2026-11-25)
       ?{t:'',btn:state.tpl==='bk'?(en?'Pick a date':'날짜 고르기'):state.tpl==='bkc'?(en?'Progress & booking':'진행 안내 · 예약'):(en?'Check progress':'진행 안내 보기')}
+      :(state.tpl==='rsc')
+      ?{t:'',btn:(en?'Choose a new date':'새 날짜 고르기')}
+      :(state.tpl==='chg')
+      ?{t:'',btn:(en?'View notice':'안내 보기')}
       :(state.tpl==='rqf')
       ?{t:(en?'[Happy Home Care] Service Request Form':'[Happy Home Care] 서비스 의뢰 요청서'),
         btn:(en?'Open My Page':'마이페이지 열기')}
@@ -7665,6 +7766,7 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
     // 💛 예약 확정은 카톡 카드 문구만 짧게 — 「날짜·시간 + 작업방문등록 필수 요망.」 (위치 확인 문구 제외 · 2026-11-23)
     // 📥 의뢰 접수는 카톡 카드 본문만 「담당자가 확인 후 안내드리겠습니다.」 (품목 목록 대신 · 2026-11-23)
     // 📅 예약 신청은 카톡 카드 본문만 「아래 링크 클릭 후 일정 확정 부탁드립니다.」 (품목 목록 대신 · 2026-11-23)
+    if(kkImg&&state.tpl==='chg'&&chgInit().k==='x')kkImg.u='https://happyhomecare.com.my/og-cancel'+(en?'-en':'')+'.jpg';   // 📨 취소 안내는 취소 그림 (2026-11-28)
     if(kkImg&&state.tpl==='bk'&&HHCMsg.bkqKk)kkImg.d=HHCMsg.bkqKk(en);
     if(kkImg&&state.tpl==='rq'&&HHCMsg.rqKk){kkImg.t=en?'Your request has been received':'의뢰가 접수되었습니다';kkImg.d=HHCMsg.rqKk(en);}
     if(kkImg&&state.tpl==='bkc'&&HHCMsg.bkcKk){const _b=BKCU[0]||BKC[0];if(_b){const _k=HHCMsg.bkcKk(_b,en);kkImg.t=_k.t;kkImg.d=_k.d;}}
@@ -7692,7 +7794,8 @@ window.caSendModal=async function(idx,opt){   // opt = {tpl:'cmp',amt,memo} — 
       :state.tpl==='mvo'?'🔗 이사 나갈 때 안내장 주소가 복사되었습니다'
       :state.tpl==='nc'?'🔗 전자명함 주소가 복사되었습니다'
       :GDS[state.tpl]?(GDS[state.tpl].all?'🔗 안내장 전체(고객 선택) 주소가 복사되었습니다':'🔗 안내장 주소가 복사되었습니다')
-      :((state.tpl==='rq'||state.tpl==='bk'||state.tpl==='bkc')&&goLink(state.tpl))?'🔗 진행 안내장 주소가 복사되었습니다'
+      :state.tpl==='chg'?'🔗 변경 · 취소 안내장 주소가 복사되었습니다'
+      :(state.tpl==='rsc'||((state.tpl==='rq'||state.tpl==='bk'||state.tpl==='bkc')&&goLink(state.tpl)))?'🔗 진행 안내장 주소가 복사되었습니다'
       :'🔗 마이페이지 주소가 복사되었습니다'))
       .catch(()=>prompt('복사해서 사용하세요:',link()));
   });
