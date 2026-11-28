@@ -11536,6 +11536,8 @@ body.m38q .cu-item .m30-box,body.m38q #insp-progress-box,body.m38q #section-nav,
 .m38-qhd{display:none;margin:0 2px 12px;font-size:12.5px;line-height:1.6;color:#5A6478}
 .m38-qhd b{color:#0E2350}
 body.m38q .m38-qhd{display:block}
+/* 2026-11-28 빠른 보고서의 기타/문제 사진 칸 — 드레인 불량 사진 줄(드레인 카드에서 관리)은 숨김 */
+body.m38q #problem-rows .unit-item[data-m38d]{display:none!important}
 .m38-drain{display:none}
 body.m38q .m38-drain{display:block}
 .m38-dr{border-radius:12px;background:#F7F9FD;box-shadow:inset 0 0 0 1px #E4E9F2;padding:10px 12px;margin-bottom:8px}
@@ -11920,11 +11922,11 @@ body.m38q .m38-drain{display:block}
   mode.innerHTML='<button type="button" class="q" data-q="1"><b>⚡ 빠른 보고서</b><small>문제 없음 · 한 화면</small></button><button type="button" class="d" data-q="0"><b>📋 자세히 작성</b><small>6단계 · 문제 있을 때</small></button>';
   nav.parentNode.insertBefore(mode,nav);
   var qhd=document.createElement('div');qhd.className='m38-qhd';
-  qhd.innerHTML='⚡ <b>빠른 보고서</b> — 설비 · 온도 사진 · 드레인 · 세척 사진만 넣고 저장하세요. 항목별 결과 · 판정(🟢 정상)은 자동으로 채워집니다. 다른 문제가 있으면 <b>📋 자세히 작성</b>으로.';
+  qhd.innerHTML='⚡ <b>빠른 보고서</b> — 설비 · 온도 사진 · 드레인 · 기타/문제 사진 · 세척 사진만 넣고 저장하세요. 항목별 결과 · 판정(🟢 정상)은 자동으로 채워집니다. 다른 문제가 있으면 <b>📋 자세히 작성</b>으로.';
   body.insertBefore(qhd,body.firstChild);
 
   function cardOf(id){var el=$(id);return el&&el.closest('.card');}
-  var QIDS=['f-client','equip-rows','cool-units','work-photos','clean-before-photos','f-opinion'];
+  var QIDS=['f-client','equip-rows','cool-units','problem-rows','work-photos','clean-before-photos','f-opinion'];   /* problem-rows: 2026-11-28 빠른 보고서에서도 기타/문제 사진 */
   function markCards(){QIDS.forEach(function(id){var c=cardOf(id);if(c)c.setAttribute('data-m38q','1');});}
 
   /* 💧 드레인 카드 */
@@ -12070,9 +12072,9 @@ body.m38q .m38-drain{display:block}
     setQuick(q);window.scrollTo({top:0,behavior:'smooth'});});
   /* 이미 결함 · 실외기 측정 등을 넣은 보고서를 빠른 보고서로 바꾸면 숨은 칸에 남는다는 것을 알림 */
   function quickOk(){
-    var n=(typeof m30Rows==='function'?m30Rows('defect').length:0)+document.querySelectorAll('#problem-rows .unit-item').length;
+    var n=(typeof m30Rows==='function'?m30Rows('defect').length:0);   /* 2026-11-28 기타/문제 사진은 빠른 보고서에서도 보이므로 결함만 셈 */
     if(!n)return true;
-    return confirm('결함 · 문제 사진이 '+n+'개 들어 있습니다.\n빠른 보고서에서는 이 칸들이 숨지만 내용은 그대로 저장됩니다. 바꿀까요?');
+    return confirm('결함이 '+n+'개 들어 있습니다.\n빠른 보고서에서는 이 칸들이 숨지만 내용은 그대로 저장됩니다. 바꿀까요?');
   }
 
   /* 새 보고서 · 보고서 종류 바꾸기 · 저장된 보고서 열기 */
@@ -12133,7 +12135,10 @@ const ban=document.createElement('div');ban.className='m38-site';ban.setAttribut
 let SHOWN=[],PICK=null,DONE={};   /* PICK = 「일정 고르기」로 고른 일정(자료 그대로) */
 /* 2026-11-26 중복 방지: 한 번 가져온 사진(imported_at 또는 이 화면에서 가져온 것)은 다시 넣지 않음 — 새로 올린 사진만 */
 const IMP=new Set();
-const isNew=p=>!p.imported_at&&!IMP.has(p.id);
+/* 2026-11-28 저장해야 「가져온 사진」 — 가져온 뒤 저장 안 함(imported_pending) · 보고서 삭제 = 다시 새 사진으로.
+   PEND = 지금 화면에 넣었지만 아직 저장 안 한 사진 id. 예전에 가져온 사진(imported_pending 없음)은 그대로 「가져온 사진」 */
+const PEND=new Set();
+const isNew=p=>!IMP.has(p.id)&&!(p.imported_at&&!p.imported_pending);
 function cnt(ph){const c={temp:0,before:0,after:0,etc:0};ph.forEach(p=>{if(c[p.cat]!=null)c[p.cat]++;});return c;}
 function cntTxt(c){return ['temp','before','after','etc'].filter(k=>c[k]).map(k=>CN[k]+' '+c[k]).join(' · ');}
 async function check(){
@@ -12163,9 +12168,9 @@ async function check(){
 let _t=null;function later(ms){clearTimeout(_t);_t=setTimeout(check,ms||700);}
 ['f-client','f-phone','f-date','if-client','if-phone','if-date','w-client','w-phone','w-date'].forEach(id=>{const el=$(id);if(el){el.addEventListener('input',()=>{PICK=null;later(900);});el.addEventListener('change',()=>{PICK=null;later(300);});}});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden){for(const k in CACHE)delete CACHE[k];later(400);}});
-const _nr=window.newReport;if(typeof _nr==='function')window.newReport=function(){const r=_nr.apply(this,arguments);PICK=null;DONE={};later(500);return r;};
+const _nr=window.newReport;if(typeof _nr==='function')window.newReport=function(){dropPend();const r=_nr.apply(this,arguments);PICK=null;DONE={};later(500);return r;};
 const _sw=window.switchReportType;if(typeof _sw==='function')window.switchReportType=function(){const r=_sw.apply(this,arguments);later(300);return r;};
-const _lf=window.loadIntoForm;if(typeof _lf==='function')window.loadIntoForm=function(){const r=_lf.apply(this,arguments);PICK=null;later(600);return r;};
+const _lf=window.loadIntoForm;if(typeof _lf==='function')window.loadIntoForm=function(){dropPend();const r=_lf.apply(this,arguments);PICK=null;later(600);return r;};
 setTimeout(check,2500);
 
 ban.addEventListener('click',async e=>{
@@ -12181,6 +12186,9 @@ function reSheet(){
   const sel=new Set();
   function draw(){
     S.body().innerHTML='<p class="m38-p">이미 가져온 사진입니다. <b>다시 쓸 사진만 눌러 고르세요.</b><br>보고서에 아직 있는 사진을 고르면 두 장이 됩니다.</p>'+
+      /* 2026-11-28 전체 선택 / 전체 해제 */
+      `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:2px 0 8px"><span style="font-size:12.5px;font-weight:700;color:#5A6478">${sel.size} / ${old.length}장 선택</span>`+
+      `<button type="button" data-rall="1" style="border:0;cursor:pointer;font:inherit;font-size:13px;font-weight:800;padding:8px 14px;border-radius:999px;background:${sel.size===old.length?'#E9EEF6':'#0E2350'};color:${sel.size===old.length?'#0E2350':'#fff'};box-shadow:0 4px 10px -6px rgba(14,35,80,.6)">${sel.size===old.length?'✕ 전체 해제':'☑ 전체 선택'}</button></div>`+
       '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:4px 0 12px">'+
       old.map((p,i)=>{const on=sel.has(i);return `<button type="button" data-ri="${i}" style="position:relative;border:0;padding:0;border-radius:12px;overflow:hidden;cursor:pointer;aspect-ratio:1;background:#E9EEF6;box-shadow:${on?'0 0 0 3px #0E2350,0 6px 12px -6px rgba(14,35,80,.5)':'inset 0 0 0 1px #D5DCEA'}">`+
         `<img src="${esc(p.t||p.url)}" alt="" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block;opacity:${on?1:.8}">`+
@@ -12191,6 +12199,7 @@ function reSheet(){
   S.open('↩ 가져온 사진 다시 고르기','사진 '+old.length+'장 · 지운 사진을 골라 다시 넣을 수 있습니다',' ');draw();
   const bd=S.body();
   bd.onclick=ev=>{
+    if(ev.target.closest('[data-rall]')){if(sel.size===old.length)sel.clear();else old.forEach((_,i)=>sel.add(i));draw();return;}
     const b=ev.target.closest('[data-ri]');if(b){const i=+b.dataset.ri;sel.has(i)?sel.delete(i):sel.add(i);draw();return;}
     if(ev.target.closest('[data-rx]')){bd.onclick=null;S.close();return;}
     if(ev.target.closest('[data-rok]')&&sel.size){const ids=new Set([...sel].map(i=>old[i].id));bd.onclick=null;S.close();
@@ -12431,11 +12440,11 @@ async function importNow(jobs,again){
       if(box)window.ingestPhotos(box,E.map(x=>x.f));
     }
     const now=new Date().toISOString();
-    jobs.forEach(j=>{DONE[j.key]=1;j.ph.forEach(p=>{IMP.add(p.id);p.imported_at=p.imported_at||now;updateDoc(doc(db(),'site_photos',p.id),{imported_at:now}).catch(()=>{});});});
+    jobs.forEach(j=>{DONE[j.key]=1;j.ph.forEach(p=>{IMP.add(p.id);PEND.add(p.id);p.imported_at=now;p.imported_pending=true;updateDoc(doc(db(),'site_photos',p.id),{imported_at:now,imported_pending:true,imported_to:null}).catch(()=>{});});});
     /* 넣은 뒤 8초 「되돌리기」 — 세척 사진 정리 창이 열려 있으면 닫힌 뒤에 */
     const showUndo=()=>{delete window.__m38stepHTML;
       undoBar('📥 직원 사진 '+ph.length+'장을 넣었습니다',()=>{undo();
-        jobs.forEach(j=>{delete DONE[j.key];j.ph.forEach(p=>{IMP.delete(p.id);p.imported_at=null;updateDoc(doc(db(),'site_photos',p.id),{imported_at:null}).catch(()=>{});});});
+        jobs.forEach(j=>{delete DONE[j.key];j.ph.forEach(p=>{IMP.delete(p.id);PEND.delete(p.id);p.imported_at=null;p.imported_pending=null;updateDoc(doc(db(),'site_photos',p.id),{imported_at:null,imported_pending:null,imported_to:null}).catch(()=>{});});});
         if(typeof toast==='function')toast('되돌렸습니다 — 가져오기 전 상태입니다');check();});};
     if(document.querySelector('.m35-ov')){const mo=new MutationObserver(()=>{if(!document.querySelector('.m35-ov')){mo.disconnect();showUndo();}});mo.observe(document.body,{childList:true});}
     else showUndo();
@@ -12443,6 +12452,48 @@ async function importNow(jobs,again){
   }catch(err){w.remove();alert('가져오지 못했습니다: '+(err.message||err));}
 }
 window.__m38site={check,importNow};
+/* ══ 2026-11-28 저장 안 한 · 삭제한 보고서의 직원 사진 → 다시 「새 사진」 (신규 작성 때처럼 가져오기)
+   되돌리기: 이 블록 + 위 PEND · isNew 줄 · importNow/되돌리기의 imported_pending · newReport/loadIntoForm 의 dropPend() 를 지우면 예전 방식 */
+function allPh(){const L=[];Object.values(CACHE).forEach(c=>c.v.forEach(j=>j.ph.forEach(p=>L.push(p))));SHOWN.forEach(j=>j.ph.forEach(p=>L.push(p)));return L;}
+function setLocal(ids,o){allPh().forEach(p=>{if(ids.has(p.id))Object.assign(p,o);});}
+/* 저장하지 않고 새 보고서 · 다른 보고서로 넘어감 → 넣었던 사진 다시 풀기 */
+function dropPend(){
+  if(!PEND.size)return;const ids=new Set(PEND);PEND.clear();
+  ids.forEach(id=>{IMP.delete(id);updateDoc(doc(db(),'site_photos',id),{imported_at:null,imported_pending:null,imported_to:null}).catch(()=>{});});
+  setLocal(ids,{imported_at:null,imported_pending:null,imported_to:null});
+}
+/* 저장 성공(보내기 창이 뜸) → 이 보고서에 가져간 사진으로 확정 */
+(function wrapSave(){
+  const sv=window.saveReport;if(typeof sv!=='function'){setTimeout(wrapSave,300);return;}
+  window.saveReport=async function(){
+    const sm=$('send-modal');if(sm)sm.style.display='none';
+    const r=await sv.apply(this,arguments);
+    const ok=sm&&sm.style.display==='flex',rid=window.currentEditId;
+    if(ok&&rid&&PEND.size){const ids=new Set(PEND);PEND.clear();
+      ids.forEach(id=>updateDoc(doc(db(),'site_photos',id),{imported_pending:false,imported_to:rid}).catch(()=>{}));
+      setLocal(ids,{imported_pending:false,imported_to:rid});}
+    return r;
+  };
+})();
+/* 보고서 삭제 → 그 보고서에 가져갔던 직원 사진을 다시 「새 사진」으로 */
+(function wrapDel(){
+  const dl=window.delReport;if(typeof dl!=='function'){setTimeout(wrapDel,300);return;}
+  window.delReport=async function(id){
+    const r=await dl.apply(this,arguments);
+    try{
+      const s=await getDoc(doc(db(),'inspections',id));if(s.exists())return r;   /* 취소했거나 삭제 실패 */
+      const q=await getDocs(query(collection(db(),'site_photos'),where('imported_to','==',id)));
+      const ids=new Set();q.forEach(d=>ids.add(d.id));
+      ids.forEach(pid=>{IMP.delete(pid);PEND.delete(pid);updateDoc(doc(db(),'site_photos',pid),{imported_at:null,imported_pending:null,imported_to:null}).catch(()=>{});});
+      if(ids.size){setLocal(ids,{imported_at:null,imported_pending:null,imported_to:null});for(const k in CACHE)delete CACHE[k];
+        if(typeof toast==='function')toast('📷 직원 사진 '+ids.size+'장은 다시 가져올 수 있습니다');}
+      if(window.currentEditId===id){PICK=null;DONE={};}
+      later(400);
+    }catch(e){}
+    return r;
+  };
+})();
+/* 화면을 저장 없이 닫은 경우는 따로 할 일 없음 — 다음에 열면 imported_pending 사진은 다시 「새 사진」으로 보임 */
 </script>
 
 
