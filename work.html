@@ -393,6 +393,10 @@ html,body{background:#EEF2F8}
   background:linear-gradient(160deg,#2BD366,#128C4A);box-shadow:inset 0 1px 0 rgba(255,255,255,.3),0 12px 20px -10px rgba(18,140,74,.7)}
 .wk-eta-go[disabled]{opacity:.4}
 .wk-eta-go svg{width:21px;height:21px}
+.wk-geo-p{font-size:15px;line-height:1.6;color:var(--ink2);margin:2px 2px 4px}
+.wk-geo-y{display:block;width:100%;margin-top:14px;border:0;border-radius:15px;padding:15px;font:inherit;font-size:16.5px;font-weight:800;color:#fff;cursor:pointer;
+  background:linear-gradient(160deg,#24468A,#0E2350);box-shadow:inset 0 1px 0 rgba(255,255,255,.2),0 12px 20px -10px rgba(14,35,80,.7)}
+.wk-geo-y:active{transform:scale(.98)}
 .wk-eta-re{display:block;margin:10px auto 0;border:0;background:none;color:var(--ink2);font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;text-decoration:underline}
 /* 지난번 받은 일정으로 먼저 보여 줄 때 */
 .wk-foot .upd-ing:before{content:'';display:inline-block;width:9px;height:9px;margin-right:6px;border:2px solid var(--line);border-top-color:var(--n);border-radius:50%;vertical-align:-1px;animation:wkspin .8s linear infinite}
@@ -429,6 +433,13 @@ html,body{background:#EEF2F8}
 </div>
 
 <!-- ⏱ 도착예상 (2026-11-28) -->
+<!-- 📍 출발·도착 위치 기록 동의 (2026-11-28) — 처음 한 번만 -->
+<div class="wk-eta" id="wk-geo" aria-hidden="true"><div class="wk-eta-b" role="dialog" aria-modal="true">
+  <div class="wk-eta-h"><i>📍</i><div><b id="wk-geo-t">Allow location?</b></div></div>
+  <p class="wk-geo-p" id="wk-geo-p"></p>
+  <button class="wk-geo-y" id="wk-geo-y">Allow</button>
+  <button class="wk-eta-re" id="wk-geo-n">Not now</button>
+</div></div>
 <div class="wk-eta" id="wk-eta" aria-hidden="true"><div class="wk-eta-b" role="dialog" aria-modal="true">
   <div class="wk-eta-h"><i>⏱</i><div><b id="wk-eta-t">ETA</b><small id="wk-eta-p"></small></div><button id="wk-eta-x" aria-label="Close">×</button></div>
   <div class="wk-eta-r ld" id="wk-eta-r"></div>
@@ -834,11 +845,13 @@ var ST_T={
   en:{dp:'Depart',ar:'Arrived',et:'ETA',etS:'to boss',etT:'Arrival time (ETA)',calc:'Finding your location…',route:'Checking Google Maps…',
       min:'min',arr:'Arrive around',send:'Send on WhatsApp',re:'Calculate again',
       eGeo:'Location is off. Allow location for this app and try again.',eNo:'No address for this job. Ask the office to add the location.',
-      eNet:'Could not get the travel time. Check the internet and try again.',sub:'Sends to the office WhatsApp'},
+      eNet:'Could not get the travel time. Check the internet and try again.',sub:'Sends to the office WhatsApp',
+      gT:'Allow location?',gP:'When you tap Depart or Arrived, your location and time are saved to this job for the office. Nothing is recorded at other times.',gY:'Allow',gN:'Not now'},
   ko:{dp:'출발',ar:'도착',et:'도착예상',etS:'대표에게',etT:'도착 예상 시간',calc:'지금 위치 확인 중…',route:'구글맵 소요시간 확인 중…',
       min:'분',arr:'예상 도착',send:'왓츠앱으로 보내기',re:'다시 계산',
       eGeo:'위치 사용이 꺼져 있습니다. 이 앱의 위치 사용을 허용한 뒤 다시 눌러 주세요.',eNo:'이 일정에 주소가 없습니다. 관리자에게 위치 등록을 요청해 주세요.',
-      eNet:'소요시간을 받지 못했습니다. 인터넷을 확인한 뒤 다시 눌러 주세요.',sub:'회사 왓츠앱으로 보냅니다'}
+      eNet:'소요시간을 받지 못했습니다. 인터넷을 확인한 뒤 다시 눌러 주세요.',sub:'회사 왓츠앱으로 보냅니다',
+      gT:'위치 기록을 허용할까요?',gP:'「출발」·「도착」을 누를 때만 그 순간의 위치와 시각이 이 일정에 저장되어 사무실에 전달됩니다. 다른 때에는 기록하지 않습니다.',gY:'허용',gN:'나중에'}
 };
 function stT(){return ST_T[L]||ST_T.en;}
 function stHM(ts){var d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
@@ -851,8 +864,8 @@ function stSet(j,k,ts){var m=stLoad(),key=stKey(j);m[key]=Object.assign({},m[key
 function stBar(j,inSheet){
   if(!DATA||DATA.mode==='yesterday'||DATA.mode==='soon')return '';
   var t=stT(),s=stGet(j),id=esc(j.id);
-  return `<div class="wk-st${inSheet?' in':''}"><button type="button" class="dp${s.dep?' ok':''}" data-st="dep" data-id="${id}"><b>🚗 ${t.dp}</b><small>${s.dep?stHM(s.dep):'WhatsApp'}</small></button>`+
-    `<button type="button" class="ar${s.arr?' ok':''}" data-st="arr" data-id="${id}"><b>📍 ${t.ar}</b><small>${s.arr?stHM(s.arr):'WhatsApp'}</small></button>`+
+  return `<div class="wk-st${inSheet?' in':''}"><button type="button" class="dp${s.dep?' ok':''}" data-st="dep" data-id="${id}"><b>🚗 ${t.dp}</b><small>${s.dep?stHM(s.dep)+(s.depG?' · 📍':''):'WhatsApp'}</small></button>`+
+    `<button type="button" class="ar${s.arr?' ok':''}" data-st="arr" data-id="${id}"><b>📍 ${t.ar}</b><small>${s.arr?stHM(s.arr)+(s.arrG?' · 📍':''):'WhatsApp'}</small></button>`+
     `<button type="button" class="et" data-st="eta" data-id="${id}"><b>⏱ ${t.et}</b><small>${s.eta?stHM(s.eta)+' · '+s.etm+t.min:t.etS}</small></button></div>`;
 }
 // 대표님이 받는 문구 — 한글 기준 + 영어 한 단어(직원이 무엇을 보내는지 알 수 있게)
@@ -875,9 +888,50 @@ function stClick(e){
   var j=stJob(b.dataset.id);if(!j)return true;
   var k=b.dataset.st,now=Date.now();
   if(k==='eta'){etaOpen(j);return true;}
+  var g=geoPref();
+  if(!g&&geoOn()){geoAsk(j,k);return true;}   // 처음 한 번: 동의 창 → 고르면 그 누름으로 왓츠앱을 엶
+  stGo(j,k,g==='y');
+  return true;
+}
+function stGo(j,k,track){
+  var now=Date.now();
   stOpenWa(stMsg(k,j,now));   // 누른 그 순간 바로 열어야 휴대폰이 막지 않음
   stSet(j,k,now);stRedraw();
-  return true;
+  if(track&&geoOn())stTrack(j,k);
+}
+
+// ══ 📍 출발·도착 위치 기록 (2026-11-28) ══
+//  · 「출발」·「도착」을 누른 순간 한 번만 휴대폰 위치를 받아 /api/work?op=track 으로 저장 → 관리자 「직원 일정표 → 📍 이동 기록」
+//  · 계속 따라다니지 않음. 처음 한 번 동의 창(hhc_work_geo = y|n). 「나중에」를 골라도 왓츠앱은 그대로
+//  · 방문 위치(j.loc)가 있으면 그곳까지 거리(m)를 함께 보냄. 관리자 미리보기(&d=)·어제·준비 중에는 기록 안 함
+function geoPref(){try{return localStorage.getItem('hhc_work_geo')||'';}catch(e){return '';}}
+function geoOn(){return !!(navigator.geolocation&&DATA&&DATA.mode!=='pick'&&window.__WK);}
+var GEO={j:null,k:null};
+function geoAsk(j,k){
+  var t=stT(),ov=document.getElementById('wk-geo');GEO.j=j;GEO.k=k;
+  document.getElementById('wk-geo-t').textContent=t.gT;document.getElementById('wk-geo-p').textContent=t.gP;
+  document.getElementById('wk-geo-y').textContent=t.gY;document.getElementById('wk-geo-n').textContent=t.gN;
+  ov.classList.add('on');ov.setAttribute('aria-hidden','false');
+}
+function geoDone(yes){
+  var ov=document.getElementById('wk-geo');ov.classList.remove('on');ov.setAttribute('aria-hidden','true');
+  try{localStorage.setItem('hhc_work_geo',yes?'y':'n');}catch(e){}
+  if(GEO.j)stGo(GEO.j,GEO.k,yes);GEO.j=null;
+}
+document.getElementById('wk-geo-y').addEventListener('click',function(){geoDone(true);});
+document.getElementById('wk-geo-n').addEventListener('click',function(){geoDone(false);});
+function geoDist(a,b){var R=6371000,r=Math.PI/180,dl=(b.lat-a.lat)*r,dg=(b.lng-a.lng)*r;
+  var x=Math.sin(dl/2)*Math.sin(dl/2)+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dg/2)*Math.sin(dg/2);return 2*R*Math.asin(Math.sqrt(x));}
+function stTrack(j,k){
+  var date=DATA&&DATA.date;if(!date)return;
+  navigator.geolocation.getCurrentPosition(function(p){
+    var pt={lat:p.coords.latitude,lng:p.coords.longitude},l=j.loc&&isFinite(j.loc.lat)?{lat:+j.loc.lat,lng:+j.loc.lng}:null;
+    fetch('/api/work?k='+encodeURIComponent(window.__WK)+'&op=track',{method:'POST',headers:{'content-type':'application/json'},
+      body:JSON.stringify({job:j.id,date:date,kind:k,lat:pt.lat,lng:pt.lng,acc:p.coords.accuracy||0,dist:l?Math.round(geoDist(pt,l)):-1})})
+      .then(function(r){return r.json();}).then(function(d){if(d&&d.ok){var m=stLoad(),key=(date+'|'+j.id);m[key]=Object.assign({},m[key]||{});m[key][k+'G']=1;
+        try{localStorage.setItem('hhc_work_st',JSON.stringify(m));}catch(e){}stRedraw();}}).catch(function(){});
+  },function(e){if(e&&e.code===1){try{localStorage.setItem('hhc_work_geo','n');}catch(x){}}},
+  {enableHighAccuracy:true,timeout:20000,maximumAge:30000});
 }
 document.getElementById('wk-main').addEventListener('click',function(e){if(stClick(e))e.stopImmediatePropagation();},true);
 document.getElementById('wk-sh-bd').addEventListener('click',function(e){if(stClick(e))e.stopImmediatePropagation();},true);

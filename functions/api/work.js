@@ -32,6 +32,12 @@
 //      직원 화면에는 url · t · cat · mine(내가 올린 것)만. 고객 연락처(cphone)는 관리자 화면에서 고객을 찾을 때만 씀.
 //  · 📅 날짜 고르기 (2026-11-25): &day=-1|0|1 → 오늘(말레이시아) 기준 어제 · 오늘 · 내일 (직원 열쇠도 가능)
 //      내일은 18:00~18:59 에만 준비 중(soon). 응답에 today(오늘 날짜) · auto(자동으로 보여 주는 날짜)를 함께 보냄.
+//  · 📍 출발·도착 위치 기록 (2026-11-28) — 직원이 「출발」·「도착」을 누른 순간의 위치와 시각
+//      POST /api/work?k={열쇠}&op=track  (JSON {job,date,kind:'dep'|'arr',lat,lng,acc,dist})
+//      · 버튼을 누를 때만 한 번 기록(계속 따라다니지 않음). 직원이 위치 허용을 안 하면 기록 없음(왓츠앱은 그대로)
+//      · dist = 직원 휴대폰이 계산한 「방문 위치까지 거리(m)」 (방문 위치가 없으면 -1)
+//      자료: work_track/{자동ID} {date,job,kind,lat,lng,acc,dist,by,bk,at,del} — 90일 뒤 자동 삭제
+//      관리자 &raw=1 응답에 track:{작업ID:[{kind,lat,lng,acc,dist,by,at}]} 로 내려감 (직원 화면에는 안 보냄)
 //  · 속도 (2026-11-17): 열쇠 확인과 그날 일정 조회를 동시에, 의뢰 위치·고객 위치 조회도 동시에.
 //      고객 위치 목록은 서버 인스턴스에 10분간 기억(고객 전체를 매번 훑지 않음).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -191,6 +197,7 @@ async function custLocIndex(env){
 // ── 📷 직원 현장 사진 ──
 const SITE_CATS = ['temp', 'before', 'after', 'etc'];   // etc = 🧾 기타 사진 (2026-11-25)
 const KEEP_DAYS = 30;
+const TRACK_DAYS = 90;   // 📍 출발·도착 위치 기록 보관 기간 (2026-11-28)
 async function keyHash(k){ const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('hhc-site|' + k)); return Array.from(new Uint8Array(d)).slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join(''); }
 function siteOut(p, bk){ return { id: p.__id, cat: String(p.cat || ''), url: String(p.url || ''), t: String(p.t || p.url || ''), by: String(p.by || ''), at: String(p.at || ''), mine: !!(bk && p.bk === bk) }; }
 function siteByJob(rows, bk){
@@ -210,7 +217,18 @@ async function cleanup(env){
       await Promise.all([stgDel(env, p.path), stgDel(env, p.tpath)]).catch(() => {});
       await deleteDoc(env, 'site_photos', p.__id).catch(() => {});
     }
+    const tr = await queryEq(env, 'work_track', 'del', addDays(today, -i), 200).catch(() => []);
+    for (const t of tr) await deleteDoc(env, 'work_track', t.__id).catch(() => {});
   }
+}
+function trackByJob(rows){
+  const m = {};
+  for (const t of (rows || [])){
+    if (!t || !t.job || (t.kind !== 'dep' && t.kind !== 'arr')) continue;
+    (m[t.job] = m[t.job] || []).push({ kind: t.kind, lat: +t.lat, lng: +t.lng, acc: +t.acc || 0, dist: (t.dist === undefined || t.dist === null) ? -1 : +t.dist, by: String(t.by || ''), at: String(t.at || '') });
+  }
+  for (const k in m) m[k].sort((a, b) => a.at.localeCompare(b.at));
+  return m;
 }
 // 사진을 올린 일정의 고객 · 장소 (관리자 보고서 화면에서 고객을 찾는 데 씀)
 async function jobInfo(env, date, job){
@@ -268,6 +286,21 @@ export async function onRequestPost(context){
       if (p.imported_at) return fail('imported', 409);   // 이미 보고서에 가져간 사진은 그대로
       await patchDoc(env, 'site_photos', id, { cat });
       return json({ ok: true, cat });
+    }
+    if (op === 'track'){                                 // 📍 출발·도착 위치 한 번 기록 (2026-11-28)
+      let b = null; try{ b = await request.json(); }catch(e){}
+      if (!b) return fail('bad-input');
+      const job = String(b.job || '').slice(0, 80), date = String(b.date || ''), kind = String(b.kind || '');
+      const lat = +b.lat, lng = +b.lng;
+      if (!job || !/^[A-Za-z0-9_-]+$/.test(job) || (kind !== 'dep' && kind !== 'arr') || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return fail('bad-input');
+      if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return fail('bad-loc');
+      const tdy = ymd(myNow());
+      if (!who.admin && date !== tdy && date !== addDays(tdy, -1) && date !== addDays(tdy, 1)) return fail('bad-date', 403);
+      const dist = isFinite(+b.dist) && +b.dist >= 0 ? Math.round(+b.dist) : -1;
+      const rec = { date, job, kind, lat: +lat.toFixed(6), lng: +lng.toFixed(6), acc: Math.max(0, Math.round(+b.acc || 0)), dist,
+        by: who.name, bk, at: new Date().toISOString(), del: addDays(tdy, TRACK_DAYS) };
+      await createDoc(env, 'work_track', rec);
+      return json({ ok: true });
     }
     if (op !== 'up') return fail('bad-op');
     const job = String(q.get('job') || '').slice(0, 80), date = String(q.get('date') || ''), cat = String(q.get('cat') || '');
@@ -334,12 +367,14 @@ export async function onRequestGet(context){
     const auto0 = pickDay();
     const auto = /^(-1|0|1)$/.test(dn) ? pickOff(parseInt(dn, 10)) : auto0;
     const ext = { today: ymd(myNow()), auto: auto0.date };
+    const wantRaw = !!q.get('raw');
     const fetchDay = date => Promise.all([
       queryEq(env, 'schedules', 'date', date, 200),
       queryEq(env, 'bookings', 'booking_date', date, 200),
       getDoc(env, 'work_edits', date),
       getDoc(env, 'settings', 'work_places').catch(() => null),
-      queryEq(env, 'site_photos', 'date', date, 400).catch(() => [])
+      queryEq(env, 'site_photos', 'date', date, 400).catch(() => []),
+      wantRaw ? queryEq(env, 'work_track', 'date', date, 400).catch(() => []) : []   // 📍 관리자 화면에서만
     ]);
     const first = pick || auto;
     const dayP = first.mode === 'soon' ? null : fetchDay(first.date);
@@ -354,7 +389,7 @@ export async function onRequestGet(context){
     const day = (isAdmin && pick) ? pick : auto;          // 날짜 지정(&d=)은 관리자 열쇠만
     if (day.mode === 'soon') return json(Object.assign({ ok: true, date: day.date, mode: 'soon', at: Date.now(), staff: who, jobs: [] }, ext));
 
-    const [sRows, bRows, ed, wp, sp] = await ((day === first && dayP) ? dayP : fetchDay(day.date));
+    const [sRows, bRows, ed, wp, sp, tk] = await ((day === first && dayP) ? dayP : fetchDay(day.date));
     // 고객이 의뢰신청서에서 확정한 위치 — 이 날 확정 예약으로 전환된 의뢰만
     const bkIds = bRows.filter(b => b && b.status === 'confirmed').map(b => b.__id);
     const reqLoc = {};
@@ -399,7 +434,7 @@ export async function onRequestGet(context){
     if (context.waitUntil) context.waitUntil(cleanup(env).catch(() => {}));
     if (isAdmin && q.get('raw')){
       base.forEach(j => { if (reqLoc[j.id]) j.rloc = reqLoc[j.id]; });
-      return json({ ok: true, date: day.date, mode: day.mode, at: Date.now(), base, edits, added, locs, places, photos, site });
+      return json({ ok: true, date: day.date, mode: day.mode, at: Date.now(), base, edits, added, locs, places, photos, site, track: trackByJob(tk) });
     }
     const locOf = j => {
       const own = locs[j.id];
