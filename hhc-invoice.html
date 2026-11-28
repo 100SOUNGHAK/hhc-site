@@ -2919,7 +2919,8 @@ function vpLoad(d){
 }
 
 // ── ⚖️ 최소청구 (2026-11-18) ─────────────────────────────────────────
-//    · 서비스 소계 + 세금 + 직접입력 조정(할인 −, 주차비 + …) 금액이 RM 320 미만이면 차액을 자동 반영
+//    · 서비스 소계 + 세금 + 직접입력 조정(할인 −, 추가비용 + …) 금액이 RM 320 미만이면 차액을 자동 반영
+//    · 주차비(조정 줄 이름에 「주차」·「Parking」)는 이 계산에서 빼고, 최소청구 뒤에 별도로 더함 (2026-11-28)
 //    · 회원정보가 「패키지 …」 등급이면 적용하지 않음
 //    · 인보이스별로 끌 수 있음 (minAuto:false) · 계산된 차액은 예전처럼 minCharge 에 저장 → 고객 문서·마이페이지 그대로
 var MIN_FLOOR=320;
@@ -2933,9 +2934,11 @@ function renderMinBox(mi,minC){
   else if(minC>0.005)msg='현재 <b>'+fmtAmt(mi.base)+'</b> → 최소청구 RM '+MIN_FLOOR+'까지 <b class="up">+'+fmtAmt(minC)+'</b> 자동 반영';
   else if(mi.base>0.005)msg='현재 <b>'+fmtAmt(mi.base)+'</b> — RM '+MIN_FLOOR+' 이상이라 해당 없음';
   else msg='품목을 담으면 RM '+MIN_FLOOR+' 미만일 때 차액이 자동 반영됩니다';
+  if(!mi.pkg&&mi.on&&mi.park>0.005)msg+='<br><span style="opacity:.8">🅿️ 주차비 '+fmtAmt(mi.park)+'는 최소청구와 별도로 추가 합산</span>';
   b.className='minc-box'+(mi.pkg?' pk':(!mi.on?' off':(minC>0.005?' act':'')));
   b.innerHTML='<div class="minc-t"><span>⚖️ 최소청구</span>'+(mi.pkg?'':sw)+'</div><div class="minc-m">'+msg+'</div>';
 }
+function _isParkAdj(x){return /주차|parking/i.test(String((x&&x.name)||''));}
 window.toggleMinAuto=function(){window._minAuto=(window._minAuto===false);App.upPrev();};
 // 예전 인보이스(할인·주차비용·최소청구·추가비용 칸에 값이 있던 것)를 불러올 때
 //  → 그 값을 직접입력 조정 줄로 옮기고 숨김 칸은 0 으로 비웁니다 (합계는 그대로)
@@ -4208,10 +4211,12 @@ function calcTotals(inv){
   // ⚖️ 최소청구 : 할인·조정 반영 금액이 RM 320 미만이면 차액을 자동으로 더합니다 (패키지 회원 제외)
   var minInfo=null;
   if(!inv){
-    var _mBase=_adjR2(sub+tax-disc+park+extra+adjSum),_mPkg=isPkgMember(),_mOn=window._minAuto!==false;
+    // 🅿️ 주차비는 최소청구 계산에서 빼고 별도로 더합니다 (2026-11-28) — 직접입력 조정 줄 이름에 「주차」·「Parking」이 있으면 주차비
+    var _mPark=park+adjRows.reduce(function(a,x){return a+(x.val>0&&_isParkAdj(x)?x.val:0);},0);
+    var _mBase=_adjR2(sub+tax-disc+park+extra+adjSum-_mPark),_mPkg=isPkgMember(),_mOn=window._minAuto!==false;
     minC=(_mOn&&!_mPkg&&_mBase>0.005&&_mBase<MIN_FLOOR-0.005)?_adjR2(MIN_FLOOR-_mBase):0;
     setVal('min-charge',minC);
-    minInfo={base:_mBase,pkg:_mPkg,on:_mOn};
+    minInfo={base:_mBase,pkg:_mPkg,on:_mOn,park:_adjR2(_mPark)};
   }
   var rawGrand=sub+tax-disc+park+extra+adjSum-credit-voucher-ptsUse;
   var grand=rawGrand+minC;
